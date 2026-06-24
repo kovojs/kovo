@@ -17,7 +17,7 @@ import { CrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { CRM_DEMO_USER_ID } from './model.js';
-import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
+import { addContact, authed, closeDeal, createDeal, moveDeal } from './mutations.js';
 import {
   activityListQuery,
   contactDealCountQuery,
@@ -55,11 +55,16 @@ const demoSession = {
   user: { id: CRM_DEMO_USER_ID, roles: ['sales'] as const },
 };
 
+// Every CRM route shows the seeded owner's pipeline/contacts, so the layouts carry
+// the session-presence guard each child route inherits as its access decision (KV436,
+// SPEC §10.2). The guarded mutations already require the same session.
 const PipelineLayout = layout({
+  guard: authed,
   render: (_queries, _state, { children }) => <CrmShell active="pipeline">{children}</CrmShell>,
 });
 
 const ContactsLayout = layout({
+  guard: authed,
   render: (_queries, _state, { children }) => <CrmShell active="contacts">{children}</CrmShell>,
 });
 

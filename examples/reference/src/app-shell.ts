@@ -2,6 +2,7 @@ import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
+  publicAccess,
   route,
   toNodeHandler,
   type CsrfValidationOptions,
@@ -56,6 +57,8 @@ const shellReferenceAuthCsrf: CsrfValidationOptions<Request> = {
 };
 
 export const referencePublicRoute = route('/', {
+  // Unauthenticated landing page — its KV436 access decision is public (SPEC §10.2).
+  access: publicAccess('unauthenticated landing page'),
   meta: {
     description: 'A public Kovo reference app shell exported through synthetic replay.',
     title: 'Kovo Reference Public Shell',
@@ -76,6 +79,9 @@ export const referencePublicRoute = route('/', {
 });
 
 export const referenceLoginRoute = route('/login', {
+  // The sign-in page must be reachable before authentication — public by design
+  // (KV436 access decision, SPEC §10.2).
+  access: publicAccess('sign-in page reachable before authentication'),
   meta: {
     description: 'Sign in to the Kovo reference app.',
     title: 'Kovo Reference Sign In',

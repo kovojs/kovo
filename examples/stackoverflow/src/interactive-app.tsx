@@ -8,6 +8,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   layout,
+  publicAccess,
   route,
   s,
   stylesheet,
@@ -56,8 +57,12 @@ const soStaticQuestionPaths = Array.from(
 
 // One layout per nav section so the shell can highlight the active sidebar item
 // without threading the request URL through the render slots.
+// Every section route is public Q&A browsing — visitors get an auto-provisioned demo
+// session, so reads have no auth wall. The layouts carry the public access decision
+// each child route inherits (KV436, SPEC §10.2); writes (votes/posts) stay guarded.
 const soLayout = (active: NavSection) =>
   layout({
+    access: publicAccess('public Q&A browsing'),
     render: (_queries, _state, { children }) => <SoShell active={active}>{children}</SoShell>,
   });
 const QuestionsLayout = soLayout('questions');

@@ -74,7 +74,12 @@ export const crmCsrf = {
   },
 };
 
-const authed = guards.authed<CrmRequest>();
+/**
+ * The CRM's session-presence guard. Exported so the interactive app's layouts can
+ * carry it as their route guard — every CRM page reads the seeded owner's data, so
+ * each route is an authenticated surface (its KV436 access decision, SPEC §10.2).
+ */
+export const authed = guards.authed<CrmRequest>();
 
 const duplicateEmailError = s.object({ email: s.string() });
 const contactOwnershipError = s.object({ contactId: s.string() });

@@ -1,13 +1,21 @@
+import { guards } from '@kovojs/server';
 import { count, eq, sql } from 'drizzle-orm';
 
 import type { CrmDb } from './db.js';
+import type { CrmRequest } from './mutations.js';
 import { activities, contacts, deals } from './schema.js';
 
 // Small query factory for the demo. Drizzle reads are extracted from each loader
 // and exposed as generated query-read registries during tests/runtime.
 type CrmQueryLoadContext = CrmDb | { db?: CrmDb; request?: { db?: CrmDb } };
 
+// Every CRM read returns the signed-in owner's pipeline/contacts, so each query is
+// an authenticated surface — the factory attaches the session-presence guard that is
+// its KV436 access decision (SPEC §10.2), matching the guarded mutations and routes.
+const crmRead = guards.authed<CrmRequest>();
+
 interface QueryDefinition<Key extends string, Value> {
+  guard: typeof crmRead;
   key: Key;
   load: (input: unknown, context: CrmQueryLoadContext) => Promise<Value>;
 }
@@ -19,6 +27,7 @@ function query<const Key extends string, Value>(
   },
 ): QueryDefinition<Key, Value> {
   return {
+    guard: crmRead,
     key,
     load(input, context) {
       return definition.load(input, crmQueryDb(context));

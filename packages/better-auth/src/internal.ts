@@ -1,4 +1,4 @@
-import type { CsrfValidationOptions, Domain, Guard } from '@kovojs/server';
+import type { AccessDecision, CsrfValidationOptions, Domain, Guard } from '@kovojs/server';
 import type { MutationRegistry } from '@kovojs/server/internal/execution';
 import {
   betterAuthAuthDomain,
@@ -123,7 +123,9 @@ export {
  * Options for the credential mutations (`betterAuthSignInEmailMutation`,
  * `betterAuthSignUpEmailMutation`, `betterAuthSignOutMutation`). `csrf` wires
  * in CSRF validation (default-on per SPEC.md §6.6), `guard` runs an authorization/rate-limit
- * guard, `defaultRedirectTo` sets the post-mutation redirect target, `key` overrides the
+ * guard, `access` declares the KV436 default-deny access decision (SPEC.md §10.2) for a
+ * credential mutation that has no `guard` (sign-in/sign-up run before authentication),
+ * `defaultRedirectTo` sets the post-mutation redirect target, `key` overrides the
  * mutation key, and `registry`/`transaction` integrate with the app's mutation registry and
  * transaction boundary.
  */
@@ -132,6 +134,7 @@ export interface BetterAuthCredentialMutationOptions<
   Request extends BetterAuthRequestLike,
   GuardedRequest extends Request,
 > {
+  access?: AccessDecision;
   csrf?: CsrfValidationOptions<Request> | false;
   defaultRedirectTo?: string;
   guard?: Guard<Request, GuardedRequest>;

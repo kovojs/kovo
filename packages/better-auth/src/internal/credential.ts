@@ -385,7 +385,7 @@ export function redirectPath(value: string | undefined, fallback: string): strin
   return value;
 }
 
-/** @internal Build the shared `csrf`/`guard`/`registry`/`transaction` options for the credential mutations. */
+/** @internal Build the shared `access`/`csrf`/`guard`/`registry`/`transaction` options for the credential mutations. */
 export function credentialMutationDefinitionOptions<
   Key extends string,
   Request extends BetterAuthRequestLike,
@@ -395,9 +395,12 @@ export function credentialMutationDefinitionOptions<
   touches: readonly Domain[],
 ): Pick<
   MutationDefinition<Key, never, never, Request, never, GuardedRequest>,
-  'csrf' | 'guard' | 'registry' | 'transaction'
+  'access' | 'csrf' | 'guard' | 'registry' | 'transaction'
 > {
   return {
+    // SPEC.md §10.2: a credential mutation with no `guard` (sign-in/sign-up run
+    // before authentication) declares its KV436 access decision via `access:`.
+    ...(options.access === undefined ? {} : { access: options.access }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(options.guard === undefined ? {} : { guard: options.guard }),
     registry: {

@@ -1,4 +1,12 @@
-import { csrfField, csrfToken, mutationFormAttributes, route, s, session } from '@kovojs/server';
+import {
+  csrfField,
+  csrfToken,
+  mutationFormAttributes,
+  publicAccess,
+  route,
+  s,
+  session,
+} from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import {
   authed,
@@ -167,6 +175,9 @@ export function createReferenceAuth(auth: ReferenceBetterAuth) {
     })),
   );
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', ReferenceRequest>(auth, {
+    // Sign-in runs before authentication, so its KV436 access decision is public
+    // (SPEC §10.2); CSRF still applies.
+    access: publicAccess('sign-in runs before authentication'),
     csrf: referenceAuthCsrf,
     defaultRedirectTo: '/account',
   });

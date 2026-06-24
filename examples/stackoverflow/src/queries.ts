@@ -1,4 +1,4 @@
-import { query, s, type QueryLoadContext } from '@kovojs/server';
+import { publicAccess, query, s, type QueryLoadContext } from '@kovojs/server';
 import { and, asc, eq, sum } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
@@ -12,7 +12,13 @@ type SoQueryLoadContext = QueryLoadContext<SoRequest> & { db?: SoDb };
 
 // The list is ordered by stable id so a vote changes the score without reshuffling
 // rows while a fragment response is being applied.
+//
+// Reads are public Q&A browsing (KV436 access decision, SPEC §10.2): every visitor
+// gets an auto-provisioned demo session, so there is no authentication wall on reads.
+const PUBLIC_QA_READ = 'public Q&A browsing';
+
 export const questionList = query('questionList', {
+  access: publicAccess(PUBLIC_QA_READ),
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
     const sessionId = context?.request?.session?.id;
@@ -41,6 +47,7 @@ export const questionList = query('questionList', {
 
 // All answers, ordered by stable id.
 export const answerList = query('answerList', {
+  access: publicAccess(PUBLIC_QA_READ),
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
     const sessionId = context?.request?.session?.id;
@@ -62,6 +69,7 @@ export const answerList = query('answerList', {
 });
 
 export const questionDetail = query('questionDetail', {
+  access: publicAccess(PUBLIC_QA_READ),
   args: s.object({ id: s.string() }),
   load: async (
     input: { id: string },
@@ -92,6 +100,7 @@ export const questionDetail = query('questionDetail', {
 });
 
 export const questionAnswers = query('questionAnswers', {
+  access: publicAccess(PUBLIC_QA_READ),
   args: s.object({ questionId: s.string() }),
   load: async (
     input: { questionId: string },
@@ -121,6 +130,7 @@ export const questionAnswers = query('questionAnswers', {
 
 // Total score across all question votes.
 export const questionScore = query('questionScore', {
+  access: publicAccess(PUBLIC_QA_READ),
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
     const sessionId = context?.request?.session?.id;
