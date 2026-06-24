@@ -14,6 +14,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isMutationDeclarations(value.mutations) &&
     isQueryDeclarations(value.queries) &&
     isRouteDeclarations(value.routes) &&
+    isAppCapabilities(value.capabilities) &&
     isAppDocumentOptions(value.document) &&
     isAppEgressOptions(value.egress) &&
     isAppErrorShellOptions(value.errorShells) &&
@@ -28,6 +29,23 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isOptionalFunction(value.sessionProvider) &&
     isStylesheets(value.stylesheets) &&
     isOptionalCsrfOptions(value.csrf)
+  );
+}
+
+function isAppCapabilities(value: unknown): value is KovoApp['capabilities'] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (capability) =>
+        isRecord(capability) &&
+        (capability.kind === 'capabilityUrl' ||
+          capability.kind === 'cspAllow' ||
+          capability.kind === 'egressAllowInternal') &&
+        typeof capability.site === 'string' &&
+        (capability.detail === undefined || typeof capability.detail === 'string') &&
+        (capability.reason === undefined || typeof capability.reason === 'string') &&
+        (capability.source === undefined || typeof capability.source === 'string'),
+    )
   );
 }
 

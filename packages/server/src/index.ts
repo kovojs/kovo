@@ -43,6 +43,7 @@ export type {
 } from './capability-url.js';
 export type {
   AppDiagnostic,
+  AppCapabilityExplainFact,
   AppDocumentOptions,
   AppEgressOptions,
   AppErrorShellOptions,

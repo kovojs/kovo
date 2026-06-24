@@ -534,11 +534,18 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
         credential provider → mitigate by freezing the dispatcher/`net`/`dns`/`tls` prototypes early at
         bootstrap and detecting re-patching (hardening, not proof); worker threads/child processes don't inherit
         the hooks (install in every worker bootstrap); GCP/Azure provider-shape drift is ongoing maintenance.
-  - [ ] Audit: `kovo explain --capabilities` lists `allowInternal` (the internal-reachability holes — the
+  - [x] Audit: `kovo explain --capabilities` lists `allowInternal` (the internal-reachability holes — the
         high-value question); external egress is unrestricted, so there is nothing to enumerate.
+
+        Evidence: `packages/server/src/app-capabilities.ts` derives `egressAllowInternal` facts from normalized
+        `createApp({ egress: { allowInternal } })`; `vp exec vitest --run packages/server/src/app.test.ts
+        packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the
+        app-level fact and the `CAPABILITIES` renderer.
+
   - [ ] Out of scope (documented): external data exfiltration (needs a full egress allowlist — an infra/network
         concern) and confused-deputy proxying. Optional typed-client sugar (`egress('https://api.stripe.com')`)
         may remain as convenience but is not a security boundary.
+
 - [ ] **Read-only `query()` handle (KV433).**
       Decision (2026-06-23): two stages, **both required for plan completion** — the runtime safe-default is a
       backstop, not a stopping point. Sequenced (not optional): Stage 1 now; Stage 2 lands with the shared §11.1
@@ -791,16 +798,16 @@ packages/browser/src/inline-loader-build.test.ts` covers CSP emission/opt-out an
     `packages/server/src/document-core.ts` adds `X-Content-Type-Options: nosniff` to document responses.
     Verified with `vp exec vitest --run packages/server/src/document.test.ts packages/server/src/app-dispatch.test.ts
 packages/server/src/static-export-manifest.test.ts packages/server/src/static-export-replay.test.ts`.
-- [ ] Third-party allowlist config (`script-src`/`frame-src` extras for analytics/payments/widgets), surfaced
+- [x] Third-party allowlist config (`script-src`/`frame-src` extras for analytics/payments/widgets), surfaced
       in `kovo explain --capabilities`. Required precisely because there is no report-only ramp — a third-party
       embed is denied until declared (fail-closed).
-  - Partial evidence: `createApp({ document: { csp: { allow } } })` now accepts additive HTTPS-origin
+  - Evidence: `createApp({ document: { csp: { allow } } })` accepts additive HTTPS-origin
     `scripts`/`frames` allowlists, `packages/server/src/csp.ts` emits them as `script-src`/`frame-src` without
-    weakening non-overridable hardening directives, and `packages/cli/src/graph-output.ts` renders `cspAllow`
-    capability facts. Verified by
-    `vp exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts`,
-    `vp check packages/core/src packages/server/src packages/cli/src`, and `pnpm run check:api-surface`.
-    Remaining gap: automatic graph emission from app config into `kovo explain --capabilities`.
+    weakening non-overridable hardening directives, `packages/server/src/app-capabilities.ts` derives
+    `cspAllow` facts from normalized app config, and `packages/cli/src/graph-output.ts` renders those facts in
+    the `CAPABILITIES` table. Verified by `vp exec vitest --run packages/server/src/app.test.ts
+packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.test.ts`, touched-file
+    `vp check`, and `pnpm run check:api-surface`.
 - [x] KV431 is a **completeness** gate (every referenced client module is listed/allowed), not byte-integrity —
       browser `import()` has no SRI. Label any integrity manifest advisory; the real module-tamper defense is
       immutable versioned URLs + same-origin + the CSP `'self'` restriction, not SRI. Do not claim a swapped

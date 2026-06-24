@@ -5,6 +5,7 @@ import {
   routePrefetchGuardDiagnostics,
   routeTableDiagnostics,
 } from './app-diagnostics.js';
+import { capabilityFactsFromApp } from './app-capabilities.js';
 import { accessFactsFromApp } from './access-graph.js';
 import { isKovoApp } from './app-guards.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
@@ -113,19 +114,29 @@ export function createApp<
     queries,
     routes,
   });
+  const appCapabilityUrls =
+    options.capabilityUrls === undefined || options.capabilityUrls === false
+      ? undefined
+      : options.capabilityUrls;
+  const document = normalizeAppDocumentOptions(options.document);
+  const egress = normalizeAppEgressOptions(options.egress);
+  const capabilities = capabilityFactsFromApp({
+    ...(appCapabilityUrls === undefined ? {} : { capabilityUrls: appCapabilityUrls }),
+    document,
+    egress,
+  });
 
   return {
-    ...(options.capabilityUrls === undefined || options.capabilityUrls === false
-      ? {}
-      : { capabilityUrls: options.capabilityUrls }),
+    ...(appCapabilityUrls === undefined ? {} : { capabilityUrls: appCapabilityUrls }),
+    capabilities,
     clientModules,
     diagnostics: [
       ...routeTableDiagnostics(routes),
       ...routePrefetchGuardDiagnostics(routes),
       ...missingAccessDiagnostics(accessFacts),
     ],
-    document: normalizeAppDocumentOptions(options.document),
-    egress: normalizeAppEgressOptions(options.egress),
+    document,
+    egress,
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},
     liveTargetRenderers,

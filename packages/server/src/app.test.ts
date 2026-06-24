@@ -56,6 +56,7 @@ describe('server createApp request shell', () => {
     expect(app.queries).toEqual([productQuery]);
     expect(app.mutations).toEqual([]);
     expect(app.stylesheets).toEqual([appStylesheet]);
+    expect(app.capabilities).toEqual([]);
     expect(app.egress.allowInternal).toEqual([]);
     expect(app.diagnostics).toEqual([]);
     expect(app.sessionProvider).toBe(sessionProvider);
@@ -87,6 +88,48 @@ describe('server createApp request shell', () => {
     await expect(handler(new Request('https://app.example/egress'))).resolves.toMatchObject({
       status: 200,
     });
+  });
+
+  it('derives app-config capability facts for explain output', () => {
+    const app = createApp({
+      capabilityUrls: { path: '/download', secret: 'test-secret' },
+      document: {
+        csp: {
+          allow: {
+            frames: ['https://checkout.example.test'],
+            scripts: ['https://analytics.example.test'],
+          },
+        },
+      },
+      egress: { allowInternal: ['LOCALHOST:11434'] },
+    });
+
+    expect(app.capabilities).toEqual([
+      {
+        detail: 'path=/download,storage=no,oneTime=no',
+        kind: 'capabilityUrl',
+        site: 'app.ts#capabilityUrls',
+        source: 'createApp.capabilityUrls',
+      },
+      {
+        detail: 'directive=scripts,index=0',
+        kind: 'cspAllow',
+        site: 'app.ts#document.csp.allow.scripts[0]',
+        source: 'https://analytics.example.test',
+      },
+      {
+        detail: 'directive=frames,index=0',
+        kind: 'cspAllow',
+        site: 'app.ts#document.csp.allow.frames[0]',
+        source: 'https://checkout.example.test',
+      },
+      {
+        detail: 'host=localhost:11434',
+        kind: 'egressAllowInternal',
+        site: 'app.ts#egress.allowInternal[0]',
+        source: 'localhost:11434',
+      },
+    ]);
   });
 
   it('uses compiler-registered live target renderers when createApp does not receive explicit wiring', () => {

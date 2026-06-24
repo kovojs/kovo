@@ -198,6 +198,21 @@ export interface AppDiagnostic {
   start?: { column: number; line: number };
 }
 
+/**
+ * App-config capability fact surfaced through `kovo explain --capabilities`.
+ *
+ * These facts describe dangerous powers the app aggregate intentionally holds:
+ * internal-network egress allowlist entries, third-party document CSP allowlists,
+ * and framework-owned capability URL verification (secure-by-construction Phase 5/7).
+ */
+export interface AppCapabilityExplainFact {
+  detail?: string;
+  kind: 'capabilityUrl' | 'cspAllow' | 'egressAllowInternal';
+  reason?: string;
+  site: string;
+  source?: string;
+}
+
 /** The assembled app aggregate returned by `createApp`; request dispatch starts here. */
 export interface KovoApp<
   _SessionValue = unknown,
@@ -205,6 +220,7 @@ export interface KovoApp<
   _RawRequest extends globalThis.Request = globalThis.Request,
   _AppRequest = any,
 > {
+  capabilities: readonly AppCapabilityExplainFact[];
   clientModules: VersionedClientModuleRegistry;
   capabilityUrls?: AppCapabilityUrlOptions;
   csrf?: CsrfValidationOptions<any>;
