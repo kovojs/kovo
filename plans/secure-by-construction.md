@@ -203,13 +203,16 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
 
 ## Explicit Non-Goals
 
-- [ ] Do not duplicate `plans/sql-injection.md` (executable SQL text) or `plans/sources-sinks.md` (the
+- [x] Do not duplicate `plans/sql-injection.md` (executable SQL text) or `plans/sources-sinks.md` (the
       source/sink inventory). SQL stays there; the `--capabilities` surface here composes with `--trust`.
-- [ ] Do not claim by-construction safety carried by a branded type alone (Settled Decisions).
-- [ ] Do not ship per-module SRI as content-integrity: browser `import()` has no integrity gate, so SRI is
+- [x] Do not claim by-construction safety carried by a branded type alone (Settled Decisions).
+- [x] Do not ship per-module SRI as content-integrity: browser `import()` has no integrity gate, so SRI is
       a completeness/provenance audit only (Phase 4), not byte-enforcement.
-- [ ] Do not take ownership of session storage identity in v1 beyond what `sessionProvider` already owns;
+- [x] Do not take ownership of session storage identity in v1 beyond what `sessionProvider` already owns;
       cookie/session work ships as safe-defaults + audit, not a framework session store (Phase 5).
+  - Evidence: `SPEC.md` §6.6 labels brands as defense-in-depth only, SPEC §11.3 keeps SQL/source-sink codes
+    separate from this plan's capability rows, KV431 is documented as a completeness gate, and
+    `packages/server/src/guards.ts` documents session fixation as an app/auth-layer rotation obligation.
 
 ## Phase 0: Shared symbol-provenance engine (foundation — PREREQUISITE GATE)
 
@@ -937,6 +940,9 @@ packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.tes
       `kovo explain --capabilities`/`--trust` in §11.4; new KV codes in §11.3 with the
       ceiling-note correction. Holding these avoids SPEC promising behavior that is not yet built (CLAUDE.md
       plan/SPEC-conflict rule).
+  - Partial evidence: SPEC §11.3 now lists KV427-KV436, including KV428-KV434 rows with severities matching
+    `packages/core/src/diagnostics.ts`. Still open: broader typed-surface/outbound-egress/capability normative
+    prose after remaining implementation gates finish.
 
 ## Latest Verification
 
