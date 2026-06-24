@@ -28,9 +28,9 @@ const routes: SiteRoute[] = [
     layout: SiteRouteLayout,
     meta: siteRouteData.landing.meta,
     stylesheets: siteStylesheetsForRoute('/'),
-    page() {
+    page: siteRoutePage('/', function landingRoute() {
       return <LandingRoutePage clients={clientHrefs} />;
-    },
+    }),
   }) as SiteRoute,
   ...siteRouteData.pages.map((page) => docsRoute(page)),
 ];
@@ -52,28 +52,32 @@ function docsRoute(page: SiteRoutePage): SiteRoute {
     meta: page.meta,
     modulepreloads,
     stylesheets: siteStylesheetsForRoute(page.routePath),
-    page: defineCompiledRoutePage(
-      {
-        components: [],
-        fileName: 'site/src/app.tsx',
-        navigationSegments: [
-          {
-            id: 'layout:SiteRouteLayout',
-            kind: 'layout',
-            localName: 'SiteRouteLayout',
-          },
-          {
-            components: [],
-            id: `page:${page.routePath}`,
-            kind: 'page',
-            localName: 'page',
-          },
-        ],
-        route: page.routePath,
-      },
-      function pageRoute() {
-        return <DocsRoutePage clients={clientHrefs} page={page.body} />;
-      },
-    ),
+    page: siteRoutePage(page.routePath, function pageRoute() {
+      return <DocsRoutePage clients={clientHrefs} page={page.body} />;
+    }),
   }) as SiteRoute;
+}
+
+function siteRoutePage<Page extends (...args: never[]) => unknown>(routePath: string, page: Page) {
+  return defineCompiledRoutePage(
+    {
+      components: [],
+      fileName: 'site/src/app.tsx',
+      navigationSegments: [
+        {
+          id: 'layout:SiteRouteLayout',
+          kind: 'layout',
+          localName: 'SiteRouteLayout',
+        },
+        {
+          components: [],
+          id: `page:${routePath}`,
+          kind: 'page',
+          localName: 'page',
+        },
+      ],
+      route: routePath,
+    },
+    page,
+  );
 }
