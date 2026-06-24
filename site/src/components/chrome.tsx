@@ -471,17 +471,34 @@ const chromeStyles = style.create(
       color: 'var(--faint)',
       fontFamily: 'inherit',
     },
-    sideGroup: {
-      marginBottom: '1.9rem',
+    sideGroupDisclosure: {
+      marginBottom: '1.1rem',
     },
     sideGroupHeading: {
+      alignItems: 'center',
       color: 'var(--faint)',
+      cursor: 'pointer',
+      display: 'flex',
       fontFamily: 'var(--font-mono)',
       fontSize: '0.64rem',
       fontWeight: 600,
+      gap: '0.45rem',
+      justifyContent: 'space-between',
       letterSpacing: '0.2em',
       marginBottom: '0.7rem',
+      padding: '0.1rem 0',
       textTransform: 'uppercase',
+      '::-webkit-details-marker': {
+        display: 'none',
+      },
+      ':hover': {
+        color: 'var(--ink)',
+      },
+    },
+    sideGroupHeadingArrow: {
+      color: 'var(--faint)',
+      fontSize: '0.58rem',
+      letterSpacing: 0,
     },
     sideGroupLink: {
       borderLeftColor: 'transparent',
@@ -719,26 +736,35 @@ export interface DocsSidebarProps {
 export const DocsSidebar = component({
   render: ({ activePath = '', groups }: DocsSidebarProps) => (
     <nav style={chromeStyles.docSidebar} aria-label="Documentation">
-      {groups.map((group) => (
-        <section style={chromeStyles.sideGroup}>
-          <h2 style={chromeStyles.sideGroupHeading}>{group.title}</h2>
-          <ul style={chromeStyles.sideGroupList}>
-            {group.pages.map((page) => (
-              <li>
-                <a
-                  href={page.url}
-                  style={[
-                    chromeStyles.sideGroupLink,
-                    page.url === activePath && chromeStyles.sideLinkActive,
-                  ]}
-                >
-                  {page.title}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {groups.map((group) => {
+        const activeGroup = group.pages.some((page) => page.url === activePath);
+        return (
+          <details style={chromeStyles.sideGroupDisclosure} open={activeGroup ? true : undefined}>
+            <summary style={chromeStyles.sideGroupHeading}>
+              <span>{group.title}</span>
+              <span aria-hidden="true" style={chromeStyles.sideGroupHeadingArrow}>
+                ▾
+              </span>
+            </summary>
+            <ul style={chromeStyles.sideGroupList}>
+              {group.pages.map((page) => (
+                <li>
+                  <a
+                    href={page.url}
+                    style={[
+                      chromeStyles.sideGroupLink,
+                      page.url === activePath && chromeStyles.sideLinkActive,
+                    ]}
+                    aria-current={page.url === activePath ? 'page' : undefined}
+                  >
+                    {page.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+      })}
     </nav>
   ),
 });
