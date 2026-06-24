@@ -1494,6 +1494,72 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('derives nested relational query shapes from static with columns projections', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'post.queries.ts',
+          source: `
+          export const users = pgTable("users", {
+            apiToken: text("api_token"),
+            id: text("id").primaryKey(),
+            passwordHash: text("password_hash").notNull(),
+          }, kovo({ domain: "user", key: "id", secret: ["passwordHash", "apiToken"] }));
+          export const posts = pgTable("posts", {
+            id: text("id").primaryKey(),
+          }, kovo({ domain: "post", key: "id" }));
+          export const postsRelations = relations(posts, ({ one }) => ({
+            author: one(users),
+          }));
+
+          export const postsQuery = query("posts", {
+            load(_input, db: PgDatabase) {
+              return db.query.posts.findMany({
+                columns: {
+                  id: true,
+                },
+                with: {
+                  author: {
+                    columns: {
+                      apiToken: true,
+                      passwordHash: true,
+                    },
+                  },
+                },
+              });
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'posts',
+        reads: ['post'],
+        shape: {
+          author: {
+            apiToken: {
+              kind: 'nullable',
+              shape: {
+                kind: 'secret',
+                shape: 'string',
+              },
+            },
+            passwordHash: {
+              kind: 'secret',
+              shape: 'string',
+            },
+          },
+          id: 'string',
+        },
+        site: 'post.queries.ts:14',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('keeps static element-access relational API reads visible as KV406 query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

@@ -120,19 +120,12 @@ import {
   if (!call) return null;
 
   const table = relationalQueryTableName(call);
-  const columns = relationalQueryColumns(call);
-  if (!table || columns.length === 0) return null;
+  const projection = relationalQueryProjection(call);
+  if (!table || !projection || !relationalProjectionIsFullyStatic(projection)) return null;
 
   const shape: Record<string, QueryShape> = {};
   const unresolvedPaths: string[] = [];
-  for (const column of columns) {
-    const columnShape = columnShapes[`${table}.${column}`];
-    if (columnShape) {
-      shape[column] = columnShape;
-    } else {
-      unresolvedPaths.push(column);
-    }
-  }
+  appendRelationalProjectionShape(shape, unresolvedPaths, table, projection, columnShapes);
 
   return {
     hasTablelessScalar: false,
@@ -141,6 +134,44 @@ import {
     scalarTables: new Set([table]),
     unresolvedPaths,
   };
+}
+
+interface RelationalProjection {
+  columns: readonly string[];
+  relations: Readonly<Record<string, RelationalProjection | null>>;
+}
+
+function appendRelationalProjectionShape(
+  shape: Record<string, QueryShape>,
+  unresolvedPaths: string[],
+  table: string,
+  projection: RelationalProjection,
+  columnShapes: Readonly<Record<string, QueryShape>>,
+): void {
+  for (const column of projection.columns) {
+    const columnShape = columnShapes[`${table}.${column}`];
+    if (columnShape) {
+      shape[column] = columnShape;
+    } else {
+      unresolvedPaths.push(column);
+    }
+  }
+
+  for (const [relation, relationProjection] of Object.entries(projection.relations)) {
+    if (!relationProjection) continue;
+
+    const relationShape: Record<string, QueryShape> = {};
+    const relationUnresolvedPaths: string[] = [];
+    appendRelationalProjectionShape(
+      relationShape,
+      relationUnresolvedPaths,
+      relation,
+      relationProjection,
+      columnShapes,
+    );
+    shape[relation] = relationShape;
+    unresolvedPaths.push(...relationUnresolvedPaths.map((path) => `${relation}.${path}`));
+  }
 }
 
 /** @internal */ export function queryBodyHasTimeVolatileWhere(
@@ -350,9 +381,10 @@ function relationalQueryCallsWithoutStaticProjection(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
 ): CallExpression[] {
-  return relationalQueryCalls(body, receiverReferences).filter(
-    (call) => relationalQueryColumns(call).length === 0,
-  );
+  return relationalQueryCalls(body, receiverReferences).filter((call) => {
+    const projection = relationalQueryProjection(call);
+    return !projection || !relationalProjectionIsFullyStatic(projection);
+  });
 }
 
 function relationalQueryCalls(
@@ -380,10 +412,18 @@ function relationalQueryTableName(call: CallExpression): string | undefined {
   return tableAccess ? staticAccessName(tableAccess) : undefined;
 }
 
-function relationalQueryColumns(call: CallExpression): string[] {
+function relationalQueryProjection(call: CallExpression): RelationalProjection | null {
   const config = call.getArguments()[0];
-  if (!config || !Node.isObjectLiteralExpression(config)) return [];
+  if (!config || !Node.isObjectLiteralExpression(config)) return null;
 
+  const columns = relationalQueryColumns(config);
+  const relations = relationalQueryRelations(config);
+  if (columns.length === 0 && Object.keys(relations).length === 0) return null;
+
+  return { columns, relations };
+}
+
+function relationalQueryColumns(config: ObjectLiteralExpression): string[] {
   const columnsProperty = config.getProperty('columns');
   if (!columnsProperty || !Node.isPropertyAssignment(columnsProperty)) return [];
 
@@ -396,6 +436,43 @@ function relationalQueryColumns(call: CallExpression): string[] {
     if (!value || value.getKind() !== SyntaxKind.TrueKeyword) return [];
     return propertyNameText(property.getNameNode()) ?? [];
   });
+}
+
+function relationalQueryRelations(
+  config: ObjectLiteralExpression,
+): Record<string, RelationalProjection | null> {
+  const withProperty = config.getProperty('with');
+  if (!withProperty || !Node.isPropertyAssignment(withProperty)) return {};
+
+  const withObject = withProperty.getInitializer();
+  if (!withObject || !Node.isObjectLiteralExpression(withObject)) return {};
+
+  const relations: Record<string, RelationalProjection | null> = {};
+  for (const property of withObject.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+
+    const relation = propertyNameText(property.getNameNode());
+    if (!relation) continue;
+
+    const initializer = property.getInitializer();
+    relations[relation] =
+      initializer && Node.isObjectLiteralExpression(initializer)
+        ? {
+            columns: relationalQueryColumns(initializer),
+            relations: relationalQueryRelations(initializer),
+          }
+        : null;
+  }
+
+  return relations;
+}
+
+function relationalProjectionIsFullyStatic(projection: RelationalProjection): boolean {
+  if (projection.columns.length === 0) return false;
+
+  return Object.values(projection.relations).every(
+    (relation) => relation !== null && relationalProjectionIsFullyStatic(relation),
+  );
 }
 
 /** @internal */ export function unclassifiedQueryReceiverDiagnostics(
