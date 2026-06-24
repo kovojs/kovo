@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "emit:interactive-gallery": "node scripts/emit-interactive-gallery.mjs",
     "test": "vitest --run",
     "test:browser": "vitest --config vitest.browser.config.ts --run"
   },

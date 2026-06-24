@@ -4,7 +4,7 @@
  * The index is fetched once, on open — zero JS, zero network before that.
  *
  * The ⌘K keyboard shortcut itself is NOT bound here — it lives as an always-on
- * inline listener in the document shell (document-template.ts), because this
+ * inline listener in the document shell (document-template.tsx), because this
  * module only loads on first interaction and a shortcut inside it could never
  * fire on a cold page. This module owns opening via the header button and the
  * search query/render once a keystroke has lazy-loaded it.

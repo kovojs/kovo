@@ -168,6 +168,29 @@ const runtime = () => import('@kovojs/browser/generated');
     ]);
   });
 
+  it('fails stale explicit exceptions in the real repo check', async () => {
+    const rootDir = await fixtureRoot();
+    await writeFixture(
+      rootDir,
+      'examples/demo/src/app.ts',
+      "import { createApp } from '@kovojs/server';\n",
+    );
+
+    await expect(
+      collectImportBoundaryViolations({
+        checkStaleExceptions: true,
+        rootDir,
+        roots: ['examples'],
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          staleException: true,
+        }),
+      ]),
+    );
+  });
+
   it('detects committed generated artifacts in app-local roots only', () => {
     expect(
       trackedGeneratedViolations([

@@ -22,7 +22,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         fileName: 'question.domain.ts',
         source: [
           'import { and, eq } from "drizzle-orm";',
-          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
           '',
           'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
@@ -34,7 +34,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '',
           'kovoAnalyzerSummary(requireSessionId, { returns: { kind: "session", path: "id" } });',
           '',
-          'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+          'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
           '  const sessionId = requireSessionId(request);',
           '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
           '}',
@@ -79,11 +79,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'question.domain.ts',
           source: [
             'import { and, eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  const sessionId = request.session?.id;',
             '  const observed = sessionId;',
             '  if (!sessionId) throw new Error("auth required");',
@@ -114,7 +114,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         fileName: 'question.domain.ts',
         source: [
           'import { and, eq } from "drizzle-orm";',
-          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
           'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
           '',
@@ -123,7 +123,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '  return request.session.id;',
           '}',
           '',
-          'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+          'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
           '  const sessionId = requireSessionId(request);',
           '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
           '}',
@@ -165,12 +165,12 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'question.domain.ts',
           source: [
             'import { and, eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'declare function audit(value: string): void;',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  const sessionId = request.session?.id;',
             '  if (!sessionId) throw new Error("auth required");',
             '  audit(sessionId);',
@@ -202,12 +202,12 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'question.domain.ts',
           source: [
             'import { and, eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'declare function normalize(value: string): Promise<string>;',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  const sessionId = request.session?.id;',
             '  if (!sessionId) throw new Error("auth required");',
             '  await normalize(sessionId);',
@@ -238,7 +238,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         fileName: 'ticket.domain.ts',
         source: [
           'import { and, eq } from "drizzle-orm";',
-          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
           '',
           'export const tickets = pgTable("tickets", {}, kovo({ domain: "ticket", key: "tenantId,id" }));',
@@ -250,7 +250,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '',
           'kovoAnalyzerSummary(tenantId, { returns: { kind: "tenant", path: "id" } });',
           '',
-          'export async function closeTicket(db: PgDatabase, request: { tenant?: { id?: string } | null }, targetId: string) {',
+          'export async function closeTicket(db: PgAsyncDatabase<any, any>, request: { tenant?: { id?: string } | null }, targetId: string) {',
           '  const currentTenantId = tenantId(request);',
           '  await db.update(tickets).set({ status: "closed" }).where(and(eq(tickets.tenantId, currentTenantId), eq(tickets.id, targetId)));',
           '}',
@@ -295,11 +295,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'question.domain.ts',
           source: [
             'import { and, eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  let sessionId = request.session?.id;',
             '  if (!sessionId) return;',
             '  sessionId += "";',
@@ -331,11 +331,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'question.domain.ts',
           source: [
             'import { and, eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  const sessionId = request.session?.id;',
             '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
             '}',
@@ -365,11 +365,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'question.domain.ts',
           source: [
             'import { and, eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  let sessionId = request.session?.id;',
             '  if (!sessionId) return;',
             '  sessionId = targetId;',
@@ -401,11 +401,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'product.domain.ts',
           source: [
             'import { eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             '',
-            'export async function syncProduct(db: PgDatabase) {',
+            'export async function syncProduct(db: PgAsyncDatabase<any, any>) {',
             '  const randomLocal = "p1";',
             '  await db.update(products).set({ reserved: true }).where(eq(products.id, randomLocal));',
             '}',
@@ -449,12 +449,12 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'product.domain.ts',
           source: [
             'import { gt } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
             'export const prices = pgTable("prices", {}, kovo({ domain: "price", key: "productId" }));',
             '',
-            'export async function syncProduct(db: PgDatabase, productId: string) {',
+            'export async function syncProduct(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  await db.update(products).set({ reserved: true }).where(gt(products.id, productId));',
             '  await db.update(products).set({ price: prices.amount }).from(prices).where(gt(prices.productId, productId));',
             '}',
@@ -511,7 +511,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'packages/drizzle/src/product.domain.ts',
           source: [
             'import { eq, gt } from "drizzle-orm";',
-            'import { alias, integer, pgTable, text, type PgDatabase } from "drizzle-orm/pg-core";',
+            'import { alias, integer, pgTable, text, type PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const prices = pgTable("prices", {',
             '  amount: integer("amount").notNull(),',
@@ -523,7 +523,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'const priceAlias = alias(prices, "pr");',
             'const productAlias = alias(products, "p");',
             '',
-            'export async function syncProduct(db: PgDatabase<any, any, any>, productId: string) {',
+            'export async function syncProduct(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  await db.update(productAlias).set({ reserved: true }).where(eq(productAlias.id, productId));',
             '  await db.update(products).set({ price: priceAlias.amount }).from(priceAlias).where(gt(priceAlias.productId, productId));',
             '}',
@@ -589,10 +589,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'product.domain.ts',
           source: [
             'import { eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'import * as schema from "./cart.schema";',
             '',
-            'export async function syncProduct(db: PgDatabase, productId: string) {',
+            'export async function syncProduct(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  await db.update(schema.hiddenProducts).set({ reserved: true }).where(eq(schema.hiddenProducts.id, productId));',
             '}',
           ].join('\n'),
@@ -637,11 +637,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.domain.ts',
           source: `
-            import type { PgDatabase } from "drizzle-orm/pg-core";
+            import type { PgAsyncDatabase } from "drizzle-orm/pg-core";
             import { products as importedProducts } from "./schema";
             import { productTable } from "./tables";
 
-            export async function syncProduct(db: PgDatabase, productId: string) {
+            export async function syncProduct(db: PgAsyncDatabase<any, any>, productId: string) {
               await db.update(importedProducts).set({ reserved: true }).where(eq(importedProducts.id, productId));
               await db.delete(productTable).where(eq(productTable.id, productId));
             }
@@ -687,11 +687,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.domain.ts',
           source: `
-            import type { PgDatabase } from "drizzle-orm/pg-core";
+            import type { PgAsyncDatabase } from "drizzle-orm/pg-core";
             const quoted = "import { products as importedProducts } from './schema';";
             // import * as schema from "./schema";
 
-            export async function syncProduct(db: PgDatabase, productId: string) {
+            export async function syncProduct(db: PgAsyncDatabase<any, any>, productId: string) {
               const templated = \`import * as schema from "./schema";\`;
               await db.update(schema.products).set({ reserved: true }).where(eq(schema.products.id, productId));
               await db.update(importedProducts).set({ reserved: false }).where(eq(importedProducts.id, productId));

@@ -19,13 +19,13 @@ describe('Drizzle pinned subset conformance', () => {
           fileName: 'conformance/drizzle-pin/src/product.domain.ts',
           source: [
             "import { eq, gt, sql } from 'drizzle-orm';",
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             "export const products = pgTable('products', {}, kovo({ domain: 'product', key: 'id' }));",
             "export const prices = pgTable('prices', {}, kovo({ domain: 'price', key: 'productId' }));",
             "export const snapshots = pgTable('product_snapshots', {}, kovo({ domain: 'snapshot', key: 'productId' }));",
             '',
-            'export async function syncSnapshots(db: PgDatabase<any, any, any>, productId: string) {',
+            'export async function syncSnapshots(db: PgAsyncDatabase<any, any>, productId: string) {',
             "  await db.insert(snapshots).select(db.select().from((products as any)).where(gt(sql.raw('.from(prices)'), 0)));",
             '  await db.update(products).set({ price: prices.productId }).from(prices!).where(eq(products.id, productId));',
             '}',
@@ -78,7 +78,7 @@ describe('Drizzle pinned subset conformance', () => {
         fileName: 'conformance/drizzle-pin/src/product.domain.ts',
         source: [
           "import { eq } from 'drizzle-orm';",
-          "import { alias, integer, pgTable, text, type PgDatabase } from 'drizzle-orm/pg-core';",
+          "import { alias, integer, pgTable, text, type PgAsyncDatabase } from 'drizzle-orm/pg-core';",
           '',
           "export const products = pgTable('products', {",
           "  id: text('id').primaryKey(),",
@@ -86,13 +86,13 @@ describe('Drizzle pinned subset conformance', () => {
           "}, kovo({ domain: 'product', key: 'id' }));",
           "const productAlias = alias(products, 'p');",
           '',
-          'export async function syncProduct(db: PgDatabase<any, any, any>, productId: string) {',
+          'export async function syncProduct(db: PgAsyncDatabase<any, any>, productId: string) {',
           '  await db.update(productAlias).set({ stock: 1 }).where(eq(productAlias.id, productId));',
           '  await db.select({ stock: productAlias.stock }).from(productAlias);',
           '}',
           '',
           "export const productQuery = query('product/alias', {",
-          '  load(input, db: PgDatabase<any, any, any>) {',
+          '  load(input, db: PgAsyncDatabase<any, any>) {',
           '    return db.select({ stock: productAlias.stock }).from(productAlias).where(eq(productAlias.id, input.id));',
           '  },',
           '});',
@@ -145,7 +145,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/users.domain.ts',
           source: `
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
             import { boolean, pgTable, text } from 'drizzle-orm/pg-core';
 
             export const users = pgTable('users', {
@@ -153,7 +153,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'user', key: 'id' }));
 
-            export async function loadActiveUsers(db: PgDatabase<any, any, any>) {
+            export async function loadActiveUsers(db: PgAsyncDatabase<any, any>) {
               return db.query.users.findMany({ where: eq(users.active, true) });
             }
           `,
@@ -184,9 +184,9 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/users.domain.ts',
           source: `
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
 
-            export async function loadActiveUsers(db: PgDatabase<any, any, any>, tableName: string) {
+            export async function loadActiveUsers(db: PgAsyncDatabase<any, any>, tableName: string) {
               return db.query[tableName].findMany();
             }
           `,
@@ -235,13 +235,13 @@ describe('Drizzle pinned subset conformance', () => {
             import { items } from './cart.schema';
 
             export const cartQuery = query('cart', {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({ id: items.id }).from(items).where(eq(items.id, input.id));
               },
             });
 
             export const cartCountQuery = query('cart/count', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.select({ count: sql<number>\`count(*)\` }).from(items);
               },
             });
@@ -298,14 +298,14 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/product.queries.ts',
           source: `
-            import { pgTable, text, type PgDatabase } from 'drizzle-orm/pg-core';
+            import { pgTable, text, type PgAsyncDatabase } from 'drizzle-orm/pg-core';
 
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product/with-read', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 const active = db.$with('active_products').as(db.select({ id: products.id }).from(products));
                 return db.with(active).select({ id: products.id }).from(products);
               },
@@ -361,7 +361,7 @@ describe('Drizzle pinned subset conformance', () => {
             import * as cartSchema from './cart.schema';
 
             export const cartProductQuery = query('cart/product', {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({
                   id: cartSchema.products.id,
                 }).from(cartSchema.products).where(eq(cartSchema.products.id, input.id));
@@ -405,7 +405,7 @@ describe('Drizzle pinned subset conformance', () => {
             import * as cartSchema from './cart.schema';
 
             export const cartProductQuery = query('cart/product', {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({
                   id: cartSchema['products'].id,
                 }).from(cartSchema['products']).where(eq(cartSchema['products'].id, input.id));
@@ -464,7 +464,7 @@ describe('Drizzle pinned subset conformance', () => {
             import * as schema from './schema';
 
             export const cartProductQuery = query('cart/product', {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({
                   id: schema['cartProducts'].id,
                 }).from(schema.cartProducts).where(eq(schema.cartProducts.id, input.id));
@@ -509,13 +509,13 @@ describe('Drizzle pinned subset conformance', () => {
             import { products } from './product.schema';
 
             export const distinctProducts = query('products/distinct', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.selectDistinct({ name: products.name }).from(products);
               },
             });
 
             export const firstProductNames = query('products/distinct-on', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.selectDistinctOn([products.id], { id: products.id, name: products.name }).from(products);
               },
             });
@@ -566,7 +566,7 @@ describe('Drizzle pinned subset conformance', () => {
             import { products } from './product.schema';
 
             export const productQuery = query('product', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.select({
                   note: products.note,
                   stock: products.stock,
@@ -621,7 +621,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, kovo({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.select({
                   id: products.id,
                   location: products.location,
@@ -667,7 +667,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, kovo({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 const fixture = ".from(auditLog) db.query.auditLog.findMany(";
                 // return db.query.auditLog.findMany({ where: eq(auditLog.productId, products.id) });
                 return db.select({ name: products.name }).from(products);
@@ -710,7 +710,7 @@ describe('Drizzle pinned subset conformance', () => {
             function tableFor<T>(table: T): T { return table; }
 
             export const productQuery = query('product', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.select({ id: products.id }).from(tableFor(products));
               },
             });
@@ -746,7 +746,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/catalog.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             '',
             "export const products = pgTable('products', { id: text('id') }, kovo({ domain: 'product', key: 'id' }));",
@@ -754,7 +754,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             'function tableFor<T>(table: T): T { return table; }',
             '',
-            'export async function syncCatalog(db: PgDatabase<any, any, any>) {',
+            'export async function syncCatalog(db: PgAsyncDatabase<any, any>) {',
             '  await db.insert(tableFor(products)).select(db.select().from(products));',
             '  await db.update(tableFor(products)).set({ refreshed: true }).from(vendors);',
             '}',
@@ -805,7 +805,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/catalog.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             '',
             "export const products = pgTable('products', { id: text('id') }, kovo({ domain: 'product', key: 'id' }));",
@@ -813,7 +813,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             'function tableFor<T>(name: string): T { return name as T; }',
             '',
-            'export async function syncCatalog(db: PgDatabase<any, any, any>) {',
+            'export async function syncCatalog(db: PgAsyncDatabase<any, any>) {',
             "  await db.insert(snapshots).select(db.select().from(tableFor('products')));",
             "  await db.update(products).set({ refreshed: true }).from(tableFor('vendors'));",
             '}',
@@ -887,7 +887,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/raw', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.execute(sql\`select * from users\`);
               },
             });
@@ -915,7 +915,7 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('does not promote PgDatabase-like query receiver names under real Drizzle imports', () => {
+  it('does not promote PgAsyncDatabase-like query receiver names under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -955,7 +955,7 @@ describe('Drizzle pinned subset conformance', () => {
             type FakeDb = Record<string, (query: unknown) => Promise<void>>;
 
             export const usersQuery = query('users/computed-raw', {
-              load(_input, db: PgDatabase, fake: FakeDb) {
+              load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {
                 const method = 'execute';
                 db[method](sql\`select * from users\`);
                 fake[method](sql\`select * from users\`);
@@ -995,14 +995,14 @@ describe('Drizzle pinned subset conformance', () => {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: `
             import { sql } from 'drizzle-orm';
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
 
             interface FakeDb {
               execute(query: unknown): Promise<void>;
             }
 
             export const usersQuery = query('users/bound-raw', {
-              load(_input, db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {
+              load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb, method: string) {
                 const execute = db.execute.bind(db);
                 const computed = db[method].bind(db);
                 const fakeExecute = fake.execute.bind(fake);
@@ -1104,14 +1104,14 @@ describe('Drizzle pinned subset conformance', () => {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: `
             import { sql } from 'drizzle-orm';
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
 
             interface FakeDb {
               execute(query: unknown): Promise<void>;
             }
 
             export const usersQuery = query('users/array-detached-raw', {
-              load(_input, db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {
+              load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb, method: string) {
                 const [execute, computed] = [db.execute, db[method]];
                 const [fakeExecute] = [fake.execute];
                 let assignedExecute;
@@ -1169,7 +1169,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             '',
             "export const users = pgTable('users', {",
@@ -1183,7 +1183,7 @@ describe('Drizzle pinned subset conformance', () => {
             '}',
             '',
             "export const usersQuery = query('users/carrier-direct', {",
-            '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '  async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '    const carrier = { db, fake };',
             '    await carrier.db.execute(sql`select * from users`);',
             '    await carrier.db.update(users).set({ id: "u1" });',
@@ -1241,7 +1241,7 @@ describe('Drizzle pinned subset conformance', () => {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: `
             import { sql } from 'drizzle-orm';
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
 
             export const auditLog = pgTable('audit_log', {
               id: text('id').primaryKey(),
@@ -1251,11 +1251,11 @@ describe('Drizzle pinned subset conformance', () => {
             }, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/non-loader-callback', {
-              guard(_input, db: PgDatabase<any, any, any>) {
+              guard(_input, db: PgAsyncDatabase<any, any>) {
                 db.execute(sql\`select * from audit_log\`);
                 return db.select({ id: auditLog.id }).from(auditLog);
               },
-              load(_input, db: PgDatabase<any, any, any>) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.select({ id: users.id }).from(users);
               },
             });
@@ -1283,14 +1283,14 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: `
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
 
             export const users = pgTable('users', {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/transaction-write', {
-              async load(_input, db: PgDatabase<any, any, any>) {
+              async load(_input, db: PgAsyncDatabase<any, any>) {
                 await db.transaction(async (tx) => {
                   await tx.update(users).set({ id: 'u1' });
                 });
@@ -1334,7 +1334,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: `
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
 
             export const auditLog = pgTable('audit_log', {
               id: text('id').primaryKey(),
@@ -1344,12 +1344,12 @@ describe('Drizzle pinned subset conformance', () => {
             }, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/nested-helper', {
-              load(_input, db: PgDatabase<any, any, any>) {
-                function readAudit(reader: PgDatabase<any, any, any>) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
+                function readAudit(reader: PgAsyncDatabase<any, any>) {
                   return reader.select({ id: auditLog.id }).from(auditLog);
                 }
 
-                function readUsers(reader: PgDatabase<any, any, any>) {
+                function readUsers(reader: PgAsyncDatabase<any, any>) {
                   return reader.select({ id: users.id }).from(users);
                 }
 
@@ -1380,7 +1380,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.query['users']['findMany']({ where: eq(users.active, true) });
               },
             });
@@ -1417,7 +1417,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/template-access', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.query[\`users\`][\`findFirst\`]({ where: eq(users.active, true) });
               },
             });
@@ -1451,7 +1451,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/user.queries.ts',
           source: `
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
             import { boolean, pgTable, text } from 'drizzle-orm/pg-core';
 
             const users = pgTable('users', {
@@ -1460,7 +1460,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/shadowed-relational', {
-              load(_input, db: PgDatabase<any, any, any>, fake: { users: unknown }) {
+              load(_input, db: PgAsyncDatabase<any, any>, fake: { users: unknown }) {
                 {
                   const { users } = fake;
                   void users;
@@ -1501,7 +1501,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users', {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.query.archivedUsers.findMany({ where: eq(users.active, true) });
               },
             });
@@ -1549,7 +1549,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, kovo({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
-              load(_input, reader: PgDatabase) {
+              load(_input, reader: PgAsyncDatabase<any, any>) {
                 const fixture = { query: { auditLog: { findMany() { return []; } } } };
                 fixture.query.auditLog.findMany();
                 return reader.select({ name: products.name }).from(products);

@@ -595,6 +595,7 @@ export function LandingRoutePage({ clients }: LandingPageProps): string {
         <HowItWorks />
         <StaleUiSection />
         <InstantLoad />
+        <BatteriesIncluded />
         <Credibility />
       </div>
       {SiteFooter.definition.render()}
@@ -1617,6 +1618,110 @@ const pageStyles = style.create(
       whiteSpace: 'nowrap',
     },
     ghMark: { height: 15, width: 15 },
+
+    // Batteries included -- "database to DOM" rendered as a literal layer stack.
+    batGrid: {
+      alignItems: 'start',
+      display: 'grid',
+      gap: '3rem',
+      gridTemplateColumns: '1fr 1.1fr',
+      margin: 0,
+      '@media (max-width: 62rem)': { gap: '2rem', gridTemplateColumns: '1fr' },
+    },
+    batKey: {
+      color: 'var(--faint)',
+      display: 'flex',
+      flexWrap: 'wrap',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.62rem',
+      gap: '0.5rem 1.4rem',
+      letterSpacing: '0.1em',
+      margin: '1.8rem 0 0',
+      textTransform: 'uppercase',
+    },
+    batKeyItem: { alignItems: 'center', display: 'inline-flex', gap: '0.45rem' },
+    // Legend swatches mirror the stack's left rail: a solid accent bar for
+    // shipped dependencies, a dashed one for borrowed approaches.
+    batKdot: { background: 'var(--accent)', display: 'inline-block', height: '0.85rem', width: 2 },
+    batKdotInsp: {
+      background: 'repeating-linear-gradient(to bottom, var(--accent) 0 3px, transparent 3px 6px)',
+    },
+    batStack: {
+      background: 'var(--card)',
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      position: 'relative',
+    },
+    // Per-row left rail. Solid = a shipped dependency; dashed = a borrowed
+    // approach. Absolutely positioned so it never claims a grid column.
+    batRailSeg: {
+      background: 'var(--accent)',
+      bottom: 0,
+      left: 0,
+      position: 'absolute',
+      top: 0,
+      width: 2,
+    },
+    batRailDashed: {
+      background: 'repeating-linear-gradient(to bottom, var(--accent) 0 4px, transparent 4px 8px)',
+    },
+    batCap: {
+      background: 'var(--panel)',
+      color: 'var(--faint)',
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.58rem',
+      justifyContent: 'space-between',
+      letterSpacing: '0.14em',
+      padding: '0.5rem 1.1rem 0.5rem 1.4rem',
+      position: 'relative',
+      textTransform: 'uppercase',
+    },
+    batCapBot: { borderTopColor: 'var(--edge)', borderTopStyle: 'solid', borderTopWidth: 1 },
+    batRow: {
+      alignItems: 'center',
+      borderBottomColor: 'var(--edge-soft)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      display: 'grid',
+      gap: '0.95rem',
+      gridTemplateColumns: '1.9rem 9rem 1fr',
+      padding: '0.72rem 1.1rem 0.72rem 1.4rem',
+      position: 'relative',
+      '@media (max-width: 30rem)': { gap: '0.7rem', gridTemplateColumns: '1.6rem 6.5rem 1fr' },
+    },
+    batRowLast: { borderBottomWidth: 0 },
+    batLogo: {
+      alignItems: 'center',
+      color: 'var(--ink)',
+      display: 'flex',
+      height: '1.45rem',
+      justifyContent: 'center',
+      width: '1.45rem',
+    },
+    batLogoInsp: { opacity: 0.7 },
+    batLogoSvg: { display: 'block', height: '100%', width: '100%' },
+    batMeta: { minWidth: 0 },
+    batKick: {
+      color: 'var(--faint)',
+      display: 'block',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.58rem',
+      letterSpacing: '0.13em',
+      marginBottom: '0.12rem',
+      textTransform: 'uppercase',
+    },
+    batKickInsp: { color: 'var(--accent)' },
+    batName: {
+      color: 'var(--ink)',
+      fontFamily: 'var(--font-display)',
+      fontSize: '1.12rem',
+      fontWeight: 600,
+      letterSpacing: '-0.01em',
+      lineHeight: 1.05,
+    },
+    batDesc: { color: 'var(--dim)', fontSize: '0.86rem', lineHeight: 1.4 },
   },
   { namespace: 'site-page', source: 'site/src/components/landing.tsx' },
 );
@@ -1708,6 +1813,187 @@ function Faq({ q, children }: { q: string; children: unknown }): string {
       </summary>
       <p style={pageStyles.faqA}>{children}</p>
     </details>
+  );
+}
+
+// Each row is a real layer of the stack, from the DOM the browser receives down
+// to the database the data lives in. Drizzle / Better Auth / TypeScript are
+// dependencies Kovo ships and verifies; shadcn/ui and StyleX are approaches it
+// borrows (own-your-source components; compile-time atomic CSS -- the same
+// idiom this very page is built on via style.create). Logos are inlined
+// single-color marks so they inherit --ink and read in both themes. The brand
+// marks are reproduced from each project's official SVG.
+function BatLogo({
+  kind,
+  inspired,
+}: {
+  kind: 'dom' | 'shadcn' | 'stylex' | 'typescript' | 'betterauth' | 'drizzle';
+  inspired?: boolean;
+}): string {
+  const box = inspired ? [pageStyles.batLogo, pageStyles.batLogoInsp] : pageStyles.batLogo;
+  return (
+    <span style={box}>
+      {kind === 'dom' ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.1"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style={pageStyles.batLogoSvg}
+          aria-hidden="true"
+        >
+          <path d="M8.5 8 4.5 12l4 4M15.5 8l4 4-4 4" />
+        </svg>
+      ) : kind === 'shadcn' ? (
+        <svg viewBox="0 0 24 24" fill="currentColor" style={pageStyles.batLogoSvg} aria-hidden="true">
+          <path d="M22.219 11.784 11.784 22.219c-.407.407-.407 1.068 0 1.476.407.407 1.068.407 1.476 0L23.695 13.26c.407-.408.407-1.069 0-1.476-.408-.407-1.069-.407-1.476 0ZM20.132.305.305 20.132c-.407.407-.407 1.068 0 1.476.408.407 1.069.407 1.476 0L21.608 1.781c.407-.407.407-1.068 0-1.476-.408-.407-1.069-.407-1.476 0Z" />
+        </svg>
+      ) : kind === 'stylex' ? (
+        <svg viewBox="0 0 180 180" fill="currentColor" style={pageStyles.batLogoSvg} aria-hidden="true">
+          <path d="M123.054863,93.4254443 C124.041858,95.7626109 128.450105,105.044084 129.355779,107.321152 C123.84289,116.561307 122.549601,118.95899 111.024753,133.60593 C64.1232983,182.705627 27.9371992,190.639891 5.76263041,167.701852 C3.59627766,165.361764 1.67512566,162.319274 0,158.574382 C0.471825684,159.433291 1.09514745,160.379843 1.86996531,161.414039 L6.49038953,166.771159 C33.8818726,191.84228 61.2048315,170.332834 98.3027967,128.773838 C103.902786,122.190123 112.153337,110.407464 123.054863,93.4254443 Z M137.380118,14.1032604 C154.739423,29.1884191 154.739423,52.5968124 141.717364,86.0295639 C140.719637,83.5713654 136.323774,73.7444144 135.221609,71.226952 C145.472981,42.8320467 145.710752,29.3332399 130.967334,15.8715774 C122.485617,8.12762615 116.462513,7.80876984 104.995043,9.69477985 L92.9145722,12.0507273 L92.9145722,12.0340333 L93.1139526,11.9605794 C111.260459,5.27670019 126.843916,4.74249067 137.380118,14.1032604 Z" />
+          <path d="M125.890167,63.5141248 C153.449324,115.583313 155.188797,143.75817 146.009025,163.468062 C142.702042,170.570383 134.455253,175.478804 130.907687,177.387749 C122.003636,182.178957 103.568032,179.793293 87.0876824,174.955283 L84.6173661,173.901615 C92.8984649,176.570162 110.89548,180.056296 120.598168,177.387749 C152.463016,168.623747 148.671973,130.669324 116.64467,71.0621007 C84.6173661,11.4548774 49.5757474,-4.8960329 21.9537585,6.3426811 C19.3015581,7.42161421 16.9891503,8.8960871 15,10.7226111 L16.282696,9.38854448 C19.3635641,6.29215141 22.5576963,3.87542408 25.8493845,2.76294257 C50.8282672,-5.6788289 93.7099159,2.71324123 125.890167,63.5141248 Z" />
+        </svg>
+      ) : kind === 'typescript' ? (
+        <svg viewBox="0 0 24 24" fill="currentColor" style={pageStyles.batLogoSvg} aria-hidden="true">
+          <path d="M1.125 0C.502 0 0 .502 0 1.125v21.75C0 23.498.502 24 1.125 24h21.75c.623 0 1.125-.502 1.125-1.125V1.125C24 .502 23.498 0 22.875 0zm17.363 9.75c.612 0 1.154.037 1.627.111a6.38 6.38 0 0 1 1.306.34v2.458a3.95 3.95 0 0 0-.643-.361 5.093 5.093 0 0 0-.717-.26 5.453 5.453 0 0 0-1.426-.2c-.3 0-.573.028-.819.086a2.1 2.1 0 0 0-.623.242c-.17.104-.3.229-.393.374a.888.888 0 0 0-.14.49c0 .196.053.373.156.529.104.156.252.304.443.444s.423.276.696.41c.273.135.582.274.926.416.47.197.892.407 1.266.628.374.222.695.473.963.753.268.279.472.598.614.957.142.359.214.776.214 1.253 0 .657-.125 1.21-.373 1.656a3.033 3.033 0 0 1-1.012 1.085 4.38 4.38 0 0 1-1.487.596c-.566.12-1.163.18-1.79.18a9.916 9.916 0 0 1-1.84-.164 5.544 5.544 0 0 1-1.512-.493v-2.63a5.033 5.033 0 0 0 3.237 1.2c.333 0 .624-.03.872-.09.249-.06.456-.144.623-.25.166-.108.29-.234.373-.38a1.023 1.023 0 0 0-.074-1.089 2.12 2.12 0 0 0-.537-.5 5.597 5.597 0 0 0-.807-.444 27.72 27.72 0 0 0-1.007-.436c-.918-.383-1.602-.852-2.053-1.405-.45-.553-.676-1.222-.676-2.005 0-.614.123-1.141.369-1.582.246-.441.58-.804 1.004-1.089a4.494 4.494 0 0 1 1.47-.629 7.536 7.536 0 0 1 1.77-.201zm-15.113.188h9.563v2.166H9.506v9.646H6.789v-9.646H3.375z" />
+        </svg>
+      ) : kind === 'betterauth' ? (
+        // Official Better Auth mark: a right half-disc, centered with a translate
+        // so it balances against the other logos in the 1.45rem box.
+        <svg viewBox="0 0 32 32" fill="currentColor" style={pageStyles.batLogoSvg} aria-hidden="true">
+          <path
+            transform="translate(-6.667 0)"
+            d="M16 2.66667V29.3333C19.5362 29.3333 22.9276 27.9286 25.4281 25.4281C27.9286 22.9276 29.3333 19.5362 29.3333 16C29.3333 12.4638 27.9286 9.07239 25.4281 6.57191C22.9276 4.07142 19.5362 2.66667 16 2.66667Z"
+          />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="currentColor" style={pageStyles.batLogoSvg} aria-hidden="true">
+          <path d="M5.353 11.823a1.036 1.036 0 0 0-.395-1.422 1.063 1.063 0 0 0-1.437.399L.138 16.702a1.035 1.035 0 0 0 .395 1.422 1.063 1.063 0 0 0 1.437-.398l3.383-5.903Zm11.216 0a1.036 1.036 0 0 0-.394-1.422 1.064 1.064 0 0 0-1.438.399l-3.382 5.902a1.036 1.036 0 0 0 .394 1.422c.506.283 1.15.104 1.438-.398l3.382-5.903Zm7.293-4.525a1.036 1.036 0 0 0-.395-1.422 1.062 1.062 0 0 0-1.437.399l-3.383 5.902a1.036 1.036 0 0 0 .395 1.422 1.063 1.063 0 0 0 1.437-.399l3.383-5.902Zm-11.219 0a1.035 1.035 0 0 0-.394-1.422 1.064 1.064 0 0 0-1.438.398l-3.382 5.903a1.036 1.036 0 0 0 .394 1.422c.506.282 1.15.104 1.438-.399l3.382-5.902Z" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+// One layer of the stack. The left rail segment is the legend made literal: a
+// solid accent rail marks a shipped dependency, a dashed rail marks a borrowed
+// approach (shadcn/ui, StyleX). The rail is an absolutely positioned child so it
+// does not take a grid column.
+function BatRow({
+  kind,
+  kicker,
+  name,
+  desc,
+  inspired,
+  last,
+}: {
+  kind: 'dom' | 'shadcn' | 'stylex' | 'typescript' | 'betterauth' | 'drizzle';
+  kicker: string;
+  name: unknown;
+  desc: unknown;
+  inspired?: boolean;
+  last?: boolean;
+}): string {
+  return (
+    <div style={last ? [pageStyles.batRow, pageStyles.batRowLast] : pageStyles.batRow}>
+      <span style={inspired ? [pageStyles.batRailSeg, pageStyles.batRailDashed] : pageStyles.batRailSeg}></span>
+      <BatLogo kind={kind} inspired={inspired} />
+      <span style={pageStyles.batMeta}>
+        <span style={inspired ? [pageStyles.batKick, pageStyles.batKickInsp] : pageStyles.batKick}>
+          {kicker}
+        </span>
+        <span style={pageStyles.batName}>{name}</span>
+      </span>
+      <span style={pageStyles.batDesc}>{desc}</span>
+    </div>
+  );
+}
+
+function BatteriesIncluded(): string {
+  return (
+    <section style={pageStyles.section}>
+      <div style={pageStyles.batGrid}>
+        <div>
+          <p style={pageStyles.eyebrow}>Batteries included</p>
+          <h2 style={pageStyles.title}>Everything from the database to the DOM.</h2>
+          <p style={pageStyles.lead}>
+            Kovo owns the whole path: a Drizzle row becomes a DOM node, and the types follow it the
+            entire way. It does not reinvent the foundations. It stands on libraries you already
+            trust and type-checks the seams between them.
+          </p>
+          <div style={pageStyles.batKey}>
+            <span style={pageStyles.batKeyItem}>
+              <i style={pageStyles.batKdot}></i> Built on &middot; shipped
+            </span>
+            <span style={pageStyles.batKeyItem}>
+              <i style={[pageStyles.batKdot, pageStyles.batKdotInsp]}></i> Inspired by &middot;
+              borrowed
+            </span>
+          </div>
+        </div>
+
+        <div style={pageStyles.batStack}>
+          <div style={pageStyles.batCap}>
+            <span style={pageStyles.batRailSeg}></span>
+            <span>top of stack</span>
+            <span>what the browser gets</span>
+          </div>
+
+          <BatRow
+            kind="dom"
+            kicker="DOM"
+            name="Real HTML"
+            desc="Server-rendered, interactive at first paint. No hydration, no client router."
+          />
+          <BatRow
+            kind="shadcn"
+            inspired
+            kicker="Components · inspired"
+            name="shadcn/ui"
+            desc="You own the component source. Copy it in, read it, change it."
+          />
+          <BatRow
+            kind="stylex"
+            inspired
+            kicker="Styles · inspired"
+            name="StyleX"
+            desc="Atomic CSS compiled at build time, zero runtime. This page ships its styles the same way."
+          />
+          <BatRow
+            kind="typescript"
+            kicker="Compiler"
+            name="TypeScript"
+            desc={
+              <span>
+                No new language to learn. <span style={pageStyles.mono}>tsc</span> is the engine
+                every guarantee runs on.
+              </span>
+            }
+          />
+          <BatRow
+            kind="betterauth"
+            kicker="Auth"
+            name={'Better Auth'}
+            desc="Sessions, accounts, providers. Kovo traces ownership into every query."
+          />
+          <BatRow
+            kind="drizzle"
+            last
+            kicker="Database"
+            name="Drizzle"
+            desc="Your schema and queries, fully typed. The same types feed the compiler."
+          />
+
+          <div style={[pageStyles.batCap, pageStyles.batCapBot]}>
+            <span style={pageStyles.batRailSeg}></span>
+            <span>bottom of stack</span>
+            <span>where the data lives</span>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

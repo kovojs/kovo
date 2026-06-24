@@ -39,7 +39,7 @@ export const EXAMPLES = [
       'src/components/cart-badge.tsx',
       'src/components/order-history.tsx',
       'src/queries.ts',
-      'scripts/emit-graph.mjs',
+      'src/domain.ts',
     ],
   },
   {
@@ -60,7 +60,7 @@ export const EXAMPLES = [
       'src/components/deal-detail.tsx',
       'src/queries.ts',
       'src/mutations.ts',
-      'scripts/emit-graph.mjs',
+      'src/graph.ts',
     ],
   },
   {
@@ -80,7 +80,7 @@ export const EXAMPLES = [
       'src/components/question-detail.tsx',
       'src/queries.ts',
       'src/mutations.ts',
-      'scripts/emit-graph.mjs',
+      'src/graph.ts',
     ],
   },
 ];

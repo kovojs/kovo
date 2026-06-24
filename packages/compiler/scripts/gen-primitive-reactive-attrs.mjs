@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 // Resolve workspace `.ts` sources behind `.js` specifiers so this script can
 // import headless-ui primitive source directly in the monorepo (matching
-// site/scripts/emit-ui-css.mjs). Node strips the TS types natively.
+// site/scripts/export-static.mjs). Node strips the TS types natively.
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {

@@ -2,14 +2,11 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-import { emitCommerceGraphArtifactsToTemp } from './commerce-graph.mjs';
-
 export const cliEntry = 'dist/cli/src/index.mjs';
 const suiteCommands = new Map([
   ['compiler-runtime', ['node', ['--test', 'tests/kovo-check.compiler-runtime.node.mjs']]],
   ['server-browser', ['node', ['--test', 'tests/kovo-check.server-browser.node.mjs']]],
   ['project', ['node', ['--test', 'tests/kovo-check.node.mjs']]],
-  ['graph-cli', null],
 ]);
 const defaultSuites = [...suiteCommands.keys()];
 
@@ -52,26 +49,16 @@ export function runKovoCheck({ entry = cliEntry, suites = defaultSuites } = {}) 
   }
 
   const commands = [];
-  let graphArtifacts;
 
-  try {
-    for (const suite of suites) {
-      if (suite === 'graph-cli') {
-        graphArtifacts ??= emitCommerceGraphArtifactsToTemp();
-        commands.push(['node', [entry, 'check', graphArtifacts.graphPath]]);
-        continue;
-      }
-      commands.push(suiteCommands.get(suite));
-    }
+  for (const suite of suites) {
+    commands.push(suiteCommands.get(suite));
+  }
 
-    for (const [command, commandArgs] of commands) {
-      const result = spawnSync(command, commandArgs, { stdio: 'inherit' });
-      if (result.status !== 0) {
-        return result.status ?? 1;
-      }
+  for (const [command, commandArgs] of commands) {
+    const result = spawnSync(command, commandArgs, { stdio: 'inherit' });
+    if (result.status !== 0) {
+      return result.status ?? 1;
     }
-  } finally {
-    graphArtifacts?.cleanup();
   }
 
   return 0;

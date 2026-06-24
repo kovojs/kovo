@@ -25,14 +25,14 @@ const factsForCartKey = (cartKey: string) =>
       {
         fileName: 'cart.queries.ts',
         source: [
-          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
           `export const cartItems = pgTable("cart_items", { cartId: text("cart_id").notNull(), productId: text("product_id").notNull(), qty: integer("qty").notNull() }, kovo({ domain: "cart", key: ${cartKey} }));`,
           'export const products = pgTable("products", { id: text("id").primaryKey() }, kovo({ domain: "product", key: "id" }));',
           '',
           'export const cartQuery = query("cart", {',
           '  output: s.object({ count: s.number() }),',
-          '  async load(input, db: PgDatabase<any, any, any>) {',
+          '  async load(input, db: PgAsyncDatabase<any, any>) {',
           '    return db',
           '      .select({ count: sql<number>`count(*)`, productId: products.id })',
           '      .from(cartItems)',

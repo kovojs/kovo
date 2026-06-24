@@ -6,8 +6,6 @@
   "scripts": {
     "build": "vp build",
     "dev": "vp dev",
-    "emit-components": "node scripts/emit-components.mjs",
-    "emit-graph": "node scripts/emit-graph.mjs",
     "start": "node scripts/serve.mjs",
     "test": "vitest --run"
   },
@@ -19,7 +17,7 @@
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*",
     "@kovojs/ui": "workspace:*",
-    "drizzle-orm": "0.45.2"
+    "drizzle-orm": "1.0.0-rc.3"
   },
   "devDependencies": {
     "@kovojs/cli": "workspace:*",

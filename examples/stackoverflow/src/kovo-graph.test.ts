@@ -1,20 +1,24 @@
 import '../../../tests/example-generated-graphs.setup.js';
 
-import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 import { kovoCheck } from '@kovojs/cli';
 import { describe, expect, it } from 'vitest';
 
-const soRoot = fileURLToPath(new URL('..', import.meta.url));
-const soGraph = JSON.parse(
-  execFileSync(process.execPath, [join(soRoot, 'scripts/emit-graph.mjs'), '--print-graph-json'], {
-    cwd: soRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }),
+import { createSoGraph } from './graph.js';
+
+const soGraph = createSoGraph(
+  {
+    postAnswer: touch('answer', 'question'),
+    postQuestion: touch('question'),
+    voteUp: touch('vote', 'question'),
+  },
+  [
+    { domains: ['question'], query: 'questionList' },
+    { domains: ['answer'], query: 'answerList' },
+    { domains: ['question'], query: 'questionDetail' },
+    { domains: ['answer'], query: 'questionAnswers' },
+    { domains: ['vote', 'question'], query: 'questionScore' },
+  ],
 ) as KovoExplainInput;
 
 describe('stackoverflow graph', () => {
@@ -37,3 +41,16 @@ describe('stackoverflow graph', () => {
     expect(result.output).toBe('kovo-check/v1\nOK\n');
   });
 });
+
+function touch(...domains: string[]) {
+  return {
+    reads: [],
+    touches: domains.map((domain) => ({
+      domain,
+      keys: null,
+      site: `examples/stackoverflow/src/mutations.ts:1`,
+      via: domain,
+    })),
+    unresolved: [],
+  };
+}

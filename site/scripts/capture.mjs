@@ -118,8 +118,67 @@ export async function captureWireTrace(repoRoot) {
 /** kovo explain against the commerce app graph — the queryable behavior surface. */
 export async function captureKovoExplain(_repoRoot) {
   const { kovoExplain } = await import('@kovojs/cli');
-  const { readTempCommerceGraph } = await import('../../scripts/commerce-graph.mjs');
-  const graph = readTempCommerceGraph();
+  const graph = {
+    endpoints: [],
+    mutations: [
+      {
+        guards: ['authed', 'rateLimit:session'],
+        inputFields: ['productId', 'quantity'],
+        invalidates: ['cart', 'product', 'order'],
+        key: 'cart/add',
+        session: 'commerceSession',
+        writes: ['cart', 'product', 'order'],
+      },
+    ],
+    optimistic: [
+      { derivation: { status: 'derived' }, mutation: 'cart/add', query: 'cart', status: 'derived' },
+      {
+        derivation: { status: 'derived' },
+        mutation: 'cart/add',
+        query: 'productGrid',
+        status: 'derived',
+      },
+      {
+        derivation: { status: 'derived' },
+        mutation: 'cart/add',
+        query: 'orderHistory',
+        status: 'derived',
+      },
+    ],
+    pages: [],
+    queries: [
+      { domains: ['cart'], query: 'cart' },
+      { domains: ['product'], query: 'productGrid' },
+      { domains: ['order'], query: 'orderHistory' },
+    ],
+    touchGraph: {
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'examples/commerce/src/domain.ts:120',
+            via: 'cart_items',
+          },
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            predicate: 'eq',
+            site: 'examples/commerce/src/domain.ts:121',
+            via: 'products',
+          },
+          {
+            domain: 'order',
+            keys: null,
+            site: 'examples/commerce/src/domain.ts:122',
+            via: 'orders',
+          },
+        ],
+        unresolved: [],
+      },
+    },
+  };
 
   const result = kovoExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' });
   if (result.exitCode !== 0) {

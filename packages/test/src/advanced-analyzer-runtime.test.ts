@@ -14,12 +14,13 @@ function pgDatabaseTypes(methods: readonly string[]): SourceFileInput {
   return {
     fileName: 'drizzle-types.d.ts',
     source: [
+      'import "drizzle-orm/pg-core";',
       'declare module "drizzle-orm/pg-core" {',
-      '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      '  export interface PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> {',
       ...methods.map((method) => `    ${method}`),
       '  }',
       '}',
-      'type PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/pg-core").PgDatabase<TQueryResultHKT, TFullSchema, TSchema>;',
+      'type PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> = import("drizzle-orm/pg-core").PgAsyncDatabase<TQueryResultHKT, TFullSchema>;',
     ].join('\n'),
   };
 }
@@ -33,7 +34,7 @@ const scopedTicketFiles: SourceFileInput[] = [
     fileName: 'ticket.pipeline.ts',
     source: [
       'import { and, eq } from "drizzle-orm";',
-      'import type { PgDatabase } from "drizzle-orm/pg-core";',
+      'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
       'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
       '',
       'export const tickets = pgTable("tickets", {',
@@ -49,7 +50,7 @@ const scopedTicketFiles: SourceFileInput[] = [
       'kovoAnalyzerSummary(currentTenantId, { returns: { kind: "tenant", path: "id" } });',
       '',
       'export const openTickets = query("openTickets", {',
-      '  async load(_input: {}, db: PgDatabase<any, any, any>, context: { request?: { session?: { tenantId?: string } | null } }) {',
+      '  async load(_input: {}, db: PgAsyncDatabase<any, any>, context: { request?: { session?: { tenantId?: string } | null } }) {',
       '    const tenantId = currentTenantId(context);',
       '    return {',
       '      items: await db.select({ id: tickets.id, status: tickets.status }).from(tickets).where(eq(tickets.tenantId, tenantId)),',
@@ -57,7 +58,7 @@ const scopedTicketFiles: SourceFileInput[] = [
       '  },',
       '});',
       '',
-      'export async function closeTicket(db: PgDatabase<any, any, any>, context: { request?: { session?: { tenantId?: string } | null } }, ticketId: string) {',
+      'export async function closeTicket(db: PgAsyncDatabase<any, any>, context: { request?: { session?: { tenantId?: string } | null } }, ticketId: string) {',
       '  const tenantId = currentTenantId(context);',
       '  await db.update(tickets).set({ status: "closed" }).where(and(eq(tickets.tenantId, tenantId), eq(tickets.id, ticketId)));',
       '}',

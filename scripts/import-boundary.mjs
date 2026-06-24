@@ -15,54 +15,24 @@ const appFacingRoots = [
 const checkedExtensions = new Set(['.js', '.jsx', '.mjs', '.md', '.ts', '.tsx']);
 
 const explicitlyAllowedInternalImports = new Set([
-  'examples/commerce/src/app.ts -> @kovojs/server/internal/html',
-  'examples/commerce/src/app.ts -> @kovojs/server/internal/wire',
-  'examples/commerce/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
-  'examples/commerce/scripts/emit-graph.mjs -> @kovojs/server/internal/execution',
-  'examples/commerce/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
   'examples/stackoverflow/src/interactive-app.tsx -> @kovojs/server/internal/wire',
-  'examples/commerce/src/graph.ts -> @kovojs/core/internal/graph',
-  'examples/crm/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
-  'examples/crm/scripts/emit-graph.mjs -> @kovojs/server/internal/execution',
-  'examples/crm/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
-  'examples/crm/scripts/emit-graph.mjs -> @kovojs/core/internal/derivation',
   'examples/crm/src/graph.ts -> @kovojs/core/internal/graph',
-  'examples/stackoverflow/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
-  'examples/stackoverflow/scripts/emit-graph.mjs -> @kovojs/server/internal/execution',
-  'examples/stackoverflow/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
-  'examples/stackoverflow/scripts/materialize-demo-css.mjs -> @kovojs/compiler/internal',
-  'examples/stackoverflow/scripts/materialize-demo-css.mjs -> @kovojs/compiler/package-styles',
   'examples/reference/src/app.ts -> @kovojs/core/internal/graph',
   'examples/stackoverflow/src/graph.ts -> @kovojs/core/internal/graph',
-  'site/content/guides/components.md -> @kovojs/server/internal/html',
   'site/scripts/capture.mjs -> @kovojs/browser/internal/inline-loader',
-  'site/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
   'site/scripts/export-static.mjs -> @kovojs/compiler/package-styles',
-  'site/src/app.tsx -> @kovojs/server/internal/route',
-  'site/src/components/chrome.tsx -> @kovojs/server/internal/html',
-  'site/src/components/docs-layout.tsx -> @kovojs/server/internal/html',
-  'site/src/components/example-split.tsx -> @kovojs/server/internal/html',
-  'site/src/components/gallery.tsx -> @kovojs/server/internal/html',
-  'site/src/document-template.ts -> @kovojs/server/internal/html',
-  'site/tutorial/steps/04-mutations/src/app.ts -> @kovojs/server/internal/wire',
-  'site/tutorial/steps/05-optimistic/src/app.ts -> @kovojs/server/internal/wire',
-  'site/tutorial/steps/06-streaming/src/app.ts -> @kovojs/server/internal/wire',
-  'site/tutorial/steps/07-verification/src/app.ts -> @kovojs/server/internal/wire',
 ]);
 
-// The create-kovo starter `client.ts` is the canonical app entry. It applies
-// deferred `<kovo-defer>` streams via `applyDeferredStreamResponseToRuntime`, the
-// app-facing helper published on the runtime's compiler-ABI `./generated` subpath
-// (the same module emitted client bootstraps import). This is the one sanctioned
-// app-level read of `@kovojs/browser/generated` (see plans/api-cleanup.md §runtime
-// `./client` facade-shrink; SPEC §§4.4, 9.1).
+// Temporary docs exception for the streaming guide's programmatic deferred-stream
+// snippet. App-authored client entries should use the public `@kovojs/browser/client`
+// surface; `@kovojs/browser/generated` remains compiler-emitted ABI.
 const explicitlyAllowedGeneratedImports = new Set([
-  'packages/create-kovo/templates/src/client.ts -> @kovojs/browser/generated',
   'site/content/guides/streaming.md -> @kovojs/browser/generated',
 ]);
 
 export async function collectImportBoundaryViolations({
   rootDir = repoRootFromScript(),
+  checkStaleExceptions = path.resolve(rootDir) === repoRootFromScript(),
   roots = appFacingRoots,
 } = {}) {
   const files = [];
@@ -72,6 +42,7 @@ export async function collectImportBoundaryViolations({
   }
 
   const violations = [];
+  const matchedExceptions = new Set();
   for (const filePath of files) {
     const relativePath = slash(path.relative(rootDir, filePath));
     if (!shouldCheckFile(relativePath)) continue;
@@ -85,6 +56,7 @@ export async function collectImportBoundaryViolations({
       if (tier === 'internal' && isTestFile(relativePath)) continue;
       const allowKey = `${relativePath} -> ${specifier}`;
       const allowed = allowedImportBoundaryException(tier, allowKey);
+      if (allowed) matchedExceptions.add(allowKey);
       if (!allowed) {
         violations.push({
           fileName: relativePath,
@@ -92,6 +64,18 @@ export async function collectImportBoundaryViolations({
           tier,
         });
       }
+    }
+  }
+
+  if (checkStaleExceptions) {
+    for (const exception of explicitImportBoundaryExceptions()) {
+      if (matchedExceptions.has(exception.allowKey)) continue;
+      violations.push({
+        fileName: exception.fileName,
+        specifier: exception.specifier,
+        staleException: true,
+        tier: exception.tier,
+      });
     }
   }
 
@@ -125,6 +109,28 @@ function allowedImportBoundaryException(tier, allowKey) {
   if (tier === 'generated') return explicitlyAllowedGeneratedImports.has(allowKey);
   if (tier === 'app-local-generated') return false;
   return false;
+}
+
+function explicitImportBoundaryExceptions() {
+  return [
+    ...[...explicitlyAllowedInternalImports].map((allowKey) =>
+      explicitImportBoundaryException('internal', allowKey),
+    ),
+    ...[...explicitlyAllowedGeneratedImports].map((allowKey) =>
+      explicitImportBoundaryException('generated', allowKey),
+    ),
+  ];
+}
+
+function explicitImportBoundaryException(tier, allowKey) {
+  const separator = ' -> ';
+  const separatorIndex = allowKey.indexOf(separator);
+  return {
+    allowKey,
+    fileName: separatorIndex === -1 ? allowKey : allowKey.slice(0, separatorIndex),
+    specifier: separatorIndex === -1 ? '' : allowKey.slice(separatorIndex + separator.length),
+    tier,
+  };
 }
 
 export function importSpecifiers(source) {
@@ -191,7 +197,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (violations.length > 0) {
     console.error('import-boundary: app-facing code imports non-public Kovo subpaths:');
     for (const violation of violations) {
-      console.error(`- ${violation.fileName}: ${violation.specifier} (${violation.tier})`);
+      const reason = violation.staleException
+        ? `stale ${violation.tier} exception`
+        : violation.tier;
+      console.error(`- ${violation.fileName}: ${violation.specifier} (${reason})`);
     }
     process.exitCode = 1;
   }

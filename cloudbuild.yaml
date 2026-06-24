@@ -35,6 +35,8 @@ substitutions:
   _MAX_SESSIONS: '40'
   _WARM_SESSIONS: '10'
   _IDLE_MS: '1200000' # 20 min idle TTL per session
+  _COMMERCE_CSRF_SECRET_NAME: 'commerce-csrf-secret'
+  _COMMERCE_AUTH_CSRF_SECRET_NAME: 'commerce-auth-csrf-secret'
   _COMMERCE_WEBHOOK_SECRET_NAME: 'commerce-webhook-secret'
 
 options:
@@ -76,7 +78,7 @@ steps:
             AFFINITY_FLAGS=(--no-session-affinity)
           fi
           if [[ "$$EX" == "commerce" ]]; then
-            SECRET_FLAGS=(--set-secrets "COMMERCE_WEBHOOK_SECRET=${_COMMERCE_WEBHOOK_SECRET_NAME}:latest")
+            SECRET_FLAGS=(--set-secrets "KOVO_COMMERCE_CSRF_SECRET=${_COMMERCE_CSRF_SECRET_NAME}:latest,KOVO_COMMERCE_AUTH_CSRF_SECRET=${_COMMERCE_AUTH_CSRF_SECRET_NAME}:latest,COMMERCE_WEBHOOK_SECRET=${_COMMERCE_WEBHOOK_SECRET_NAME}:latest")
           fi
           gcloud run deploy kovo-$$EX \
             --project ${_PROJECT_ID} \

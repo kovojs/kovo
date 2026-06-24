@@ -1,7 +1,7 @@
 import type { KovoExplainInput, OptimisticCoverage, TouchGraph } from '@kovojs/core/internal/graph';
 
-// Static graph declarations for the CRM demo. scripts/emit-graph.mjs adds the
-// extracted touch graph and optimistic coverage from the source files.
+// Static graph declarations for the CRM demo. Tests provide source-owned touch
+// graph and optimistic coverage fixtures without committing generated artifacts.
 interface InvalidationQueryInput {
   domains: readonly string[];
   query: string;

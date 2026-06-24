@@ -1,8 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 
-import * as schema from './schema.js';
-
 // SPEC.md §14 / §11.5: the commerce reference app runs on real Postgres semantics
 // via the in-process PGlite driver wrapped by Drizzle (the same engine the pglite
 // test harness uses). `createCommerceDb()` returns a fresh, seeded instance — used
@@ -12,8 +10,8 @@ import * as schema from './schema.js';
 // `exec`s without awaiting (they enqueue before any later query) lets module-level
 // app/shell construction stay synchronous while reads/writes remain async.
 
-/** The commerce runtime database: Drizzle over PGlite, typed by the schema. */
-export type CommerceDb = PgliteDatabase<typeof schema>;
+/** The commerce runtime database: Drizzle over PGlite. */
+export type CommerceDb = PgliteDatabase;
 
 const SCHEMA_DDL = [
   "CREATE TABLE products (id text PRIMARY KEY, name text NOT NULL DEFAULT 'Sample Product', category text NOT NULL DEFAULT 'General', emoji text NOT NULL DEFAULT '📦', stock integer NOT NULL, unit_price integer NOT NULL);",
@@ -34,5 +32,5 @@ export function createCommerceDb(): CommerceDb {
   // before any later select/insert without blocking construction.
   void client.exec(SCHEMA_DDL);
   void client.exec(SEED_PRODUCTS);
-  return drizzle(client, { schema });
+  return drizzle({ client });
 }

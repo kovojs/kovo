@@ -171,7 +171,7 @@ describe('@kovojs/test generated module fixtures', () => {
       await writeFile(
         join(root, 'generated/cart-badge.tsx'),
         [
-          '// @kovojs-ir — lowered from examples/commerce/src/components/cart-badge.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.',
+          '// @kovojs-ir — lowered from examples/commerce/src/components/cart-badge.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit by hand.',
           '<cart-badge kovo-deps="cart"><span data-bind="cart.count">{cart.count}</span></cart-badge>',
         ].join('\n'),
       );

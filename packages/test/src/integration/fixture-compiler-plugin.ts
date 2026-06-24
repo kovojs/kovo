@@ -1,12 +1,11 @@
 // Vite plugin that compiles a fixture's authored Kovo components to their lowered
-// IR (fixpoint) form — the same form `emit-components` commits and real apps import.
+// IR (fixpoint) form on demand for integration fixtures.
 //
 // The stock `kovoVitePlugin` emits the `renderSource()` server module (a zero-arg
 // HTML string used for the render-equivalence gate), which drops the authored
 // `export const Foo = component(...)`. Fixtures instead need the *lowered* module
 // that preserves `component()` so a route page can call `Foo.definition.render(data)`
-// with live query results (SPEC §5.2; commerce does exactly this with its
-// src/generated/*.tsx artifacts).
+// with live query results (SPEC §5.2).
 import { compileComponentModule } from '@kovojs/compiler';
 import {
   CompileCache,

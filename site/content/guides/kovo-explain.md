@@ -15,12 +15,11 @@ the Network panel.
 
 ## The graph workflow
 
-Everything runs off one generated artifact, `graph.json` — components, queries, mutations, pages,
-optimistic coverage, and the touch graph (the derived map of which writes refresh which queries). The
-starter wires the loop:
+Everything runs off the app graph — components, queries, mutations, pages, optimistic coverage, and
+the touch graph (the derived map of which writes refresh which queries). When you materialize that
+graph for CI or tooling, the commands read the graph file:
 
 ```sh
-vp run emit-graph                                 # regenerate graph.json from app facts
 kovo check graph.json                               # semantic gates (KV310, KV311, audits)
 kovo explain query cart graph.json                  # read one node of the graph
 kovo explain mutation cart/add --optimistic graph.json
@@ -29,8 +28,8 @@ kovo explain component CartBadge graph.json
 kovo explain --unguarded graph.json
 ```
 
-`graph.json` is committed, so graph changes show up as reviewable diffs — adding a write to a
-mutation appears as a changed invalidation set in the same PR.
+Prefer deriving or constructing the graph in tests instead of committing generated graph artifacts;
+the output is stable and diffable, so CI can still assert product rules directly.
 
 ## Read the output
 

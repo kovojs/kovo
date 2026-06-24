@@ -15,7 +15,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));',
             '',
@@ -25,7 +25,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '  update(table: unknown): { set(value: unknown): Promise<void> };',
             '}',
             '',
-            'export async function sync(db: PgDatabase, fake: FakeDb) {',
+            'export async function sync(db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '  const carrier = { db, fake };',
             '  await carrier.db.execute("select 1");',
             '  await carrier.db.update(users).set({});',
@@ -80,7 +80,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));',
             '',
@@ -90,7 +90,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '  update(table: unknown): { set(value: unknown): Promise<void> };',
             '}',
             '',
-            'export async function sync(db: PgDatabase, fake: FakeDb) {',
+            'export async function sync(db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '  const carrier = { db, fake };',
             '  const spread = { ...carrier };',
             '  const overwritten = { ...carrier, db: fake };',
@@ -147,7 +147,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));',
             '',
@@ -157,7 +157,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '  update(table: unknown): { set(value: unknown): Promise<void> };',
             '}',
             '',
-            'export async function sync(db: PgDatabase, fake: FakeDb) {',
+            'export async function sync(db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '  const carrier = { db, fake };',
             '  const nested = { inner: carrier };',
             '  const overwritten = { ...nested, inner: { db: fake } };',
@@ -234,12 +234,12 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       files: [
         pgDatabaseTypes([
           'insert(table: unknown): { values(value: unknown): Promise<void> };',
-          'transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;',
+          'transaction<T>(callback: (tx: PgAsyncDatabase<TQueryResultHKT, TFullSchema>) => Promise<T>): Promise<T>;',
         ]),
         {
           fileName: 'cart.domain.ts',
           source: `
-            import type { PgDatabase } from "drizzle-orm/pg-core";
+            import type { PgAsyncDatabase } from "drizzle-orm/pg-core";
 
             interface FakeDb {
               insert(table: unknown): { values(value: unknown): Promise<void> };
@@ -249,7 +249,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
             export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));
 
-            export async function addItem(db: PgDatabase, fake: FakeDb, queue: FakeDb[], productId: string) {
+            export async function addItem(db: PgAsyncDatabase<any, any>, fake: FakeDb, queue: FakeDb[], productId: string) {
               await db.transaction(async (writer) => {
                 await writer.insert(cartItems).values({ productId });
                 queue.forEach(async (writer) => {
@@ -290,21 +290,21 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         pgDatabaseTypes([
           'delete(table: unknown): { where(value: unknown): Promise<void> };',
           'insert(table: unknown): { values(value: unknown): Promise<void> };',
-          'transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;',
+          'transaction<T>(callback: (tx: PgAsyncDatabase<TQueryResultHKT, TFullSchema>) => Promise<T>): Promise<T>;',
           'update(table: unknown): { set(value: unknown): Promise<void> };',
         ]),
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function saveItem(writer: PgDatabase, productId: string) {',
+            'function saveItem(writer: PgAsyncDatabase<any, any>, productId: string) {',
             '  return writer.insert(cartItems).values({ productId });',
             '}',
             '',
-            'export async function addItems(db: PgDatabase, productIds: string[]) {',
+            'export async function addItems(db: PgAsyncDatabase<any, any>, productIds: string[]) {',
             '  await Promise.all(productIds.map(async (productId) => db.insert(cartItems).values({ productId })));',
             '  productIds.forEach((productId) => db.update(cartItems).set({ productId }));',
             '  await db.transaction(async (tx) => {',
@@ -386,7 +386,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'interface FakeDb {',
             '  update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
@@ -395,7 +395,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
             'export const cart = domain({',
-            '  addItem: write(async (writer: PgDatabase, db: FakeDb, productId: string) => {',
+            '  addItem: write(async (writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) => {',
             '    await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
             '    await db.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
             '  }),',
@@ -429,7 +429,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -437,7 +437,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function addItem(writer: PgDatabase, db: FakeDb, productId: string) {',
+            'function addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '  writer.insert(cartItems).values({ productId });',
             '  db.insert(cartItems).values({ productId });',
             '}',
@@ -486,11 +486,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  return db.insert(cartItems).values({ productId });',
             '}',
             '',
@@ -552,7 +552,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -561,7 +561,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
             'const callbacks = {',
-            '  addItem(writer: PgDatabase, db: FakeDb, productId: string) {',
+            '  addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '    writer.insert(cartItems).values({ productId });',
             '    db.insert(cartItems).values({ productId });',
             '  },',
@@ -599,7 +599,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -607,7 +607,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function addItem(writer: PgDatabase, db: FakeDb, productId: string) {',
+            'function addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '  writer.insert(cartItems).values({ productId });',
             '  db.insert(cartItems).values({ productId });',
             '}',
@@ -677,11 +677,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function addItem(db: PgDatabase, productId: string) {',
+            'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  return db.insert(cartItems).values({ productId });',
             '}',
             '',
@@ -741,11 +741,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function addItem(db: PgDatabase, productId: string) {',
+            'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  return db.insert(cartItems).values({ productId });',
             '}',
             '',
@@ -756,7 +756,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const cart = domain({',
             '  addItem: addAction,',
             '  dynamic: dynamicAction,',
-            '  method(db: PgDatabase) {',
+            '  method(db: PgAsyncDatabase<any, any>) {',
             '    return db.insert(cartItems).values({});',
             '  },',
             '  ...aliasActions,',
@@ -846,12 +846,12 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
             'declare const externalActions: {',
-            '  addItem(db: PgDatabase, productId: string): Promise<void>;',
+            '  addItem(db: PgAsyncDatabase<any, any>, productId: string): Promise<void>;',
             '};',
             '',
             'export const cart = domain({',
@@ -884,7 +884,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
@@ -923,7 +923,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -931,7 +931,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function addItem(writer: PgDatabase, db: FakeDb, productId: string) {',
+            'function addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '  writer.insert(cartItems).values({ productId });',
             '  db.insert(cartItems).values({ productId });',
             '}',
@@ -1033,10 +1033,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'callbacks.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'import { cartItems } from "./schema";',
             '',
-            'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            'export async function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  await db.insert(cartItems).values({ productId });',
             '}',
           ].join('\n'),
@@ -1089,11 +1089,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  return db.insert(cartItems).values({ productId });',
             '}',
             '',
@@ -1155,11 +1155,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  return db.insert(cartItems).values({ productId });',
             '}',
             '',
@@ -1223,10 +1223,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'actions.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'import { cartItems } from "./schema";',
             '',
-            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  return db.insert(cartItems).values({ productId });',
             '}',
             '',
@@ -1301,10 +1301,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'callbacks.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'import { cartItems } from "./schema";',
             '',
-            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  return db.insert(cartItems).values({ productId });',
             '}',
             '',

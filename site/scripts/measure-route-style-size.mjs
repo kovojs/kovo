@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createServer } from 'vite-plus';
 
 import { runContentPipeline } from './content-pipeline.mjs';
-import { emitSiteUiCss } from './emit-ui-css.mjs';
+import { buildSiteUiCss } from './export-static.mjs';
 
 const defaultSiteRoot = fileURLToPath(new URL('../', import.meta.url));
 const options = parseArgs(process.argv.slice(2));
@@ -17,7 +17,6 @@ const routes =
   options.routes.length > 0 ? options.routes : ['/', '/docs/quickstart', '/guides/styling'];
 
 await runContentPipeline();
-emitSiteUiCss();
 rmSync(distCssRoot, { force: true, recursive: true });
 const buildStart = performance.now();
 execFileSync('corepack', ['pnpm', '--dir', siteRoot, 'run', 'build:css'], {
@@ -27,10 +26,7 @@ execFileSync('corepack', ['pnpm', '--dir', siteRoot, 'run', 'build:css'], {
 const buildMs = Math.round(performance.now() - buildStart);
 
 mkdirSync(path.join(distCssRoot, 'assets'), { recursive: true });
-copyFileSync(
-  path.join(siteRoot, 'src/generated/kovo-ui.css'),
-  path.join(distCssRoot, 'assets/kovo-ui.css'),
-);
+await buildSiteUiCss(path.join(distCssRoot, 'assets/kovo-ui.css'));
 
 const cssFiles = [
   path.join(distCssRoot, 'assets/site.css'),

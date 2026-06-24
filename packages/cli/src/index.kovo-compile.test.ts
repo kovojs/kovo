@@ -566,7 +566,7 @@ export const addToCart = mutation('cart/add', {
               {
                 fileName: 'catalog.domain.ts',
                 source: [
-                  'import { pgMaterializedView, text, type PgDatabase } from "drizzle-orm/pg-core";',
+                  'import { pgMaterializedView, text, type PgAsyncDatabase } from "drizzle-orm/pg-core";',
                   'import { kovo } from "@kovojs/drizzle";',
                   '',
                   'export const productSearch = pgMaterializedView(',
@@ -575,7 +575,7 @@ export const addToCart = mutation('cart/add', {
                   '  kovo({ view: { of: "product", refresh: "async" } }),',
                   ');',
                   '',
-                  'export async function refreshCatalog(db: PgDatabase<any, any, any>) {',
+                  'export async function refreshCatalog(db: PgAsyncDatabase<any, any>) {',
                   '  await db.refreshMaterializedView(productSearch);',
                   '}',
                 ].join('\n'),
@@ -630,18 +630,19 @@ export const addToCart = mutation('cart/add', {
               {
                 fileName: 'drizzle-types.d.ts',
                 source: [
+                  'import "drizzle-orm/pg-core";',
                   'declare module "drizzle-orm/pg-core" {',
-                  '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+                  '  export interface PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> {',
                   '    select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
                   '  }',
                   '}',
-                  'type PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/pg-core").PgDatabase<TQueryResultHKT, TFullSchema, TSchema>;',
+                  'type PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> = import("drizzle-orm/pg-core").PgAsyncDatabase<TQueryResultHKT, TFullSchema>;',
                 ].join('\n'),
               },
               {
                 fileName: 'user.queries.ts',
                 source: [
-                  'import type { PgDatabase } from "drizzle-orm/pg-core";',
+                  'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
                   'import { trustedReveal } from "@kovojs/core";',
                   '',
                   'export const users = pgTable("users", {',
@@ -650,7 +651,7 @@ export const addToCart = mutation('cart/add', {
                   '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
                   '',
                   'export const userDetail = query("user", {',
-                  '  load(_input, db: PgDatabase) {',
+                  '  load(_input, db: PgAsyncDatabase<any, any>) {',
                   '    return db.select({',
                   '      passwordDigest: trustedReveal(users.passwordHash, {',
                   '        justification: "one-way digest shown to admins",',

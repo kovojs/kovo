@@ -252,12 +252,12 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
       },
     ],
     examples: [
-      'kovo compile component src/components/cart.tsx --out src/generated/cart.tsx --check',
-      'kovo compile route src/app-shell.tsx --out src/generated/app-shell.kovo-route.tsx --rewrite Cart=./cart.js',
-      'kovo compile mutation-inputs src/app.ts --out src/generated/mutation-inputs.json',
-      'kovo compile drizzle-static src/generated/drizzle-static-input.json --out src/generated/drizzle-static-facts.json',
-      'kovo compile drizzle-optimistic src/generated/cart-add.optimistic.json --out src/generated/optimistic/cart-add.ts',
-      'kovo compile package-css @kovojs/ui --entry src/app.ts --out src/generated/kovo-ui.css',
+      'kovo compile component src/components/cart.tsx --out dist/kovo/cart.tsx --check',
+      'kovo compile route src/app-shell.tsx --out dist/kovo/app-shell.kovo-route.tsx --rewrite Cart=./cart.js',
+      'kovo compile mutation-inputs src/app.ts --out dist/kovo/mutation-inputs.json',
+      'kovo compile drizzle-static dist/kovo/drizzle-static-input.json --out dist/kovo/drizzle-static-facts.json',
+      'kovo compile drizzle-optimistic dist/kovo/cart-add.optimistic.json --out dist/kovo/optimistic/cart-add.ts',
+      'kovo compile package-css @kovojs/ui --entry src/app.ts --out dist/assets/kovo-ui.css',
     ],
   },
   {

@@ -265,19 +265,18 @@ in-process via PGlite, the same engine the [test harness](/guides/testing/) uses
 // db.ts — verified against examples/commerce/src/db.ts
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
-import * as schema from './schema.js';
 
-export type CommerceDb = PgliteDatabase<typeof schema>;
+export type CommerceDb = PgliteDatabase;
 
 export function createCommerceDb(): CommerceDb {
   const client = new PGlite();
   void client.exec(SCHEMA_DDL); // PGlite runs operations FIFO, so DDL lands first
   void client.exec(SEED_PRODUCTS);
-  return drizzle(client, { schema });
+  return drizzle({ client });
 }
 ```
 
-Swapping PGlite for a hosted Postgres is a driver change — `drizzle(pool, { schema })` over
+Swapping PGlite for a hosted Postgres is a driver change — `drizzle({ client: pool })` over
 `drizzle-orm/node-postgres` — with the schema, domains, writes, queries, and the entire derived graph
 unchanged. The request shell resolves the `db` provider once per request before any guard runs
 (SPEC §9.5).
@@ -292,7 +291,8 @@ import * as schema from './schema.js';
 export type AppDb = BetterSQLite3Database<typeof schema>;
 
 export function createAppDb(filename = ':memory:'): AppDb {
-  return drizzle(new Database(filename), { schema });
+  const client = new Database(filename);
+  return drizzle({ client, schema });
 }
 ```
 

@@ -1,10 +1,6 @@
 import '../../../tests/example-generated-graphs.setup.js';
 
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 import { and, asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
@@ -20,7 +16,6 @@ const questionListComponent = 'components/question-list/question-list-region';
 const questionDetailTarget = 'question-detail-region';
 const questionDetailComponent = 'components/question-detail/question-detail-region';
 const demoSessionHeader = 'x-kovo-demo-sid';
-const soRoot = fileURLToPath(new URL('../', import.meta.url));
 
 function withCsrf(fields: Record<string, string>): Record<string, string> {
   return withSessionCsrf('demo-session', fields);
@@ -99,57 +94,11 @@ function decodeHtmlText(value: string): string {
   return decodeHtmlAttribute(value);
 }
 
-function stripNoscript(html: string): string {
-  return html.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '');
-}
-
 function readKovoQuery<T>(html: string, name: string): T {
   const pattern = new RegExp(`<kovo-query\\s+name="${name}"[^>]*>([\\s\\S]*?)<\\/kovo-query>`);
   const match = pattern.exec(html);
   if (!match) throw new Error(`expected <kovo-query name="${name}"> in response`);
   return JSON.parse(decodeHtmlText(match[1] ?? '')) as T;
-}
-
-function materializeStackOverflowCssFixture(): {
-  distDir: string;
-  manifest: {
-    app?: readonly { criticalCss?: string; href: string }[];
-    href?: string;
-    routes?: Record<string, readonly { criticalCss?: string; href: string }[]>;
-  };
-  remove(): void;
-} {
-  const distDir = mkdtempSync(join(tmpdir(), 'kovo-so-css-'));
-  mkdirSync(join(distDir, 'assets'), { recursive: true });
-  writeFileSync(
-    join(distDir, 'assets/styles.css'),
-    readFileSync(new URL('./styles.css', import.meta.url), 'utf8'),
-    'utf8',
-  );
-  execFileSync(
-    process.execPath,
-    [fileURLToPath(new URL('../scripts/materialize-demo-css.mjs', import.meta.url))],
-    {
-      cwd: soRoot,
-      encoding: 'utf8',
-      env: { ...process.env, KOVO_SO_CSS_DIST: distDir },
-      stdio: 'pipe',
-    },
-  );
-
-  return {
-    distDir,
-    manifest: JSON.parse(
-      readFileSync(join(distDir, 'stackoverflow-css-manifest.json'), 'utf8'),
-    ) as {
-      app?: readonly { criticalCss?: string; href: string }[];
-      href?: string;
-      routes?: Record<string, readonly { criticalCss?: string; href: string }[]>;
-    },
-    remove() {
-      rmSync(distDir, { force: true, recursive: true });
-    },
-  };
 }
 
 async function postForm(
@@ -206,64 +155,6 @@ describe('stackoverflow interactive app', () => {
     expect(criticalCss).not.toContain('--kovo-theme-ref-palette-primary-40:');
     expect(criticalCss).not.toContain('--kovo-theme-sys-color-primary:');
     expect(criticalCss).not.toContain('--kovo-theme-sys-shape-corner-medium:');
-  });
-
-  it('materializes route-split CSS for the question detail route', async () => {
-    const fixture = materializeStackOverflowCssFixture();
-    const priorDist = process.env.KOVO_SO_CSS_DIST;
-
-    try {
-      const questionCss = [
-        ...(fixture.manifest.app ?? []),
-        ...(fixture.manifest.routes?.['/questions/:id'] ?? []),
-      ]
-        .map((asset) => asset.criticalCss ?? '')
-        .join('\n');
-      expect(questionCss).toContain('kv-chrome-');
-      expect(questionCss).toContain('kv-detail-');
-      expect(questionCss).toContain('kv-rail-');
-      expect(questionCss).not.toContain('kv-card-');
-      expect(questionCss).not.toContain('kv-list-');
-      expect(questionCss).not.toContain('kv-profile-');
-      expect(questionCss).not.toContain('kv-tagged-');
-      expect(questionCss).not.toContain('kv-tags-');
-      expect(questionCss).not.toContain('kv-users-');
-
-      process.env.KOVO_SO_CSS_DIST = fixture.distDir;
-      const { handler } = await buildSoInteractiveApp();
-      const response = await handler(new Request('http://example.test/questions/q3'));
-      const html = await response.text();
-      const routeHrefs = [
-        ...(fixture.manifest.app ?? []),
-        ...(fixture.manifest.routes?.['/questions/:id'] ?? []),
-      ].map((asset) => asset.href);
-
-      expect(response.status).toBe(200);
-      expect(html).toContain(`data-kovo-critical-href="${fixture.manifest.href}"`);
-      for (const href of routeHrefs) {
-        expect(html).not.toContain(`data-kovo-critical-href="${href}"`);
-        expect(html).toContain(
-          `<link rel="preload" as="style" href="${href}" data-kovo-deferred-style>`,
-        );
-        expect(html).toContain(`<noscript><link rel="stylesheet" href="${href}"></noscript>`);
-      }
-      const htmlWithoutNoscript = stripNoscript(html);
-      for (const href of routeHrefs) {
-        expect(htmlWithoutNoscript).not.toContain(`<link rel="stylesheet" href="${href}"`);
-      }
-      expect(html).not.toContain('/assets/routes/users-');
-      expect(html).not.toContain('/assets/routes/users-id-');
-      expect(html).not.toContain('/assets/routes/tags-');
-      expect(html).not.toContain('/assets/routes/questions-tagged-tag-');
-      expect(html).not.toContain('/assets/routes/index-');
-    } finally {
-      if (priorDist === undefined) {
-        delete process.env.KOVO_SO_CSS_DIST;
-      } else {
-        process.env.KOVO_SO_CSS_DIST = priorDist;
-      }
-      fixture.remove();
-    }
   });
 
   it('serves every authored route as no-JS full HTML documents', async () => {

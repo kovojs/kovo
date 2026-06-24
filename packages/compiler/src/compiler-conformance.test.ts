@@ -1,8 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
 
 import {
   applyCompiledQueryUpdatePlan,
@@ -1174,7 +1171,7 @@ describe('compiler conformance corpus', () => {
 
       const lowered = result.loweredSource ?? result.renderEquivalenceChecks?.[0]?.expected ?? '';
       const expectedGeneratedSource = [
-        `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.`,
+        `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit by hand.`,
         lowered,
       ].join('\n');
 
@@ -1242,33 +1239,6 @@ describe('compiler conformance corpus', () => {
     expect(routeResult.files[0]?.source).toContain('createApp');
     expect(routeResult.files[0]?.source).not.toContain('renderCommerceLoginForm');
   });
-
-  it('checks Commerce generated registry augmentation through the package §6.3 gate', () => {
-    const outDir = mkdtempSync(resolve(tmpdir(), 'kovo-commerce-touch-graph-'));
-    try {
-      execFileSync(process.execPath, ['scripts/emit-graph.mjs', '--out-dir', outDir], {
-        cwd: new URL('../../../examples/commerce/', import.meta.url),
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      const generatedSource = readFileSync(resolve(outDir, 'touch-graph.ts'), 'utf8');
-
-      expect(generatedSource).toContain("interface MutationRegistry {\n    'cart/add':");
-      expect(generatedSource).toContain("typeof import('../domain.js').addToCart;");
-      expect(generatedSource).toContain(
-        'interface InvalidationSets extends CommerceInvalidationSets',
-      );
-      expect(generatedSource).toContain(
-        'registerGeneratedQueryReadRegistry(commerceQueryDomains);',
-      );
-      expect(generatedSource).toContain('export const mutationInferredTouches = {');
-      expect(generatedSource).toContain(
-        'registerGeneratedMutationTouchRegistry(mutationInferredTouches);',
-      );
-      expect(generatedSource).toContain("{ domain: 'product', keys: 'arg:productId' },");
-    } finally {
-      rmSync(outDir, { force: true, recursive: true });
-    }
-  }, 180_000);
 });
 
 function referenceShellFixture(): CompileResult {

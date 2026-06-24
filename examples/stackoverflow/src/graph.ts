@@ -17,8 +17,10 @@ const DERIVED_OPTIMISTIC = [
 
 const AWAIT_FRAGMENT_OPTIMISTIC = [
   { mutation: 'postQuestion', query: 'questionDetail' },
+  { mutation: 'postQuestion', query: 'questionScore' },
   { mutation: 'postAnswer', query: 'questionAnswers' },
   { mutation: 'postAnswer', query: 'questionDetail' },
+  { mutation: 'postAnswer', query: 'questionScore' },
   { mutation: 'voteUp', query: 'questionDetail' },
 ] as const;
 

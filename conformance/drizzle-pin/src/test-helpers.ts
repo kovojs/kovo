@@ -9,12 +9,15 @@ export function pgDatabaseTypes(methods: readonly string[] = []): SourceFileInpu
   return {
     fileName: 'conformance/drizzle-pin/src/drizzle-types.d.ts',
     source: [
+      'import "drizzle-orm/pg-core";',
       'declare module "drizzle-orm/pg-core" {',
-      '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      '  export interface PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> {',
       ...methods.map((method) => `    ${method}`),
       '  }',
       '}',
-      'type PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/pg-core").PgDatabase<TQueryResultHKT, TFullSchema, TSchema>;',
+      'declare global {',
+      '  type PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> = import("drizzle-orm/pg-core").PgAsyncDatabase<any, any>;',
+      '}',
     ].join('\n'),
   };
 }
@@ -34,7 +37,7 @@ export function withPgDatabaseTypes(options: TouchGraphProjectOptions): TouchGra
 }
 
 function importsPgDatabase(source: string): boolean {
-  return /import\s+(?:type\s+)?[\s\S]*\bPgDatabase\b[\s\S]*from\s+['"]drizzle-orm\/pg-core['"]/.test(
+  return /import\s+(?:type\s+)?[\s\S]*\bPgAsyncDatabase\b[\s\S]*from\s+['"]drizzle-orm\/pg-core['"]/.test(
     source,
   );
 }

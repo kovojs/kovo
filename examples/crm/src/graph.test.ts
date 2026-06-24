@@ -1,20 +1,40 @@
 import '../../../tests/example-generated-graphs.setup.js';
 
-import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 import { kovoCheck, kovoExplain } from '@kovojs/cli';
 import { describe, expect, it } from 'vitest';
 
-const crmRoot = fileURLToPath(new URL('..', import.meta.url));
-const graph = JSON.parse(
-  execFileSync(process.execPath, [join(crmRoot, 'scripts/emit-graph.mjs'), '--print-graph-json'], {
-    cwd: crmRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }),
+import { createCrmGraph } from './graph.js';
+
+const graph = createCrmGraph(
+  {
+    addContact: touch('contact'),
+    closeDeal: touch('deal'),
+    createDeal: touch('contact', 'deal'),
+    moveDeal: touch('deal'),
+  },
+  [
+    optimistic('createDeal', 'contactDealCount', 'hand-written'),
+    optimistic('createDeal', 'contactList', 'hand-written'),
+    optimistic('createDeal', 'dealList', 'hand-written'),
+    optimistic('createDeal', 'openDeals', 'hand-written'),
+    optimistic('createDeal', 'pipelineByStage', 'hand-written'),
+    optimistic('addContact', 'contactDealCount', 'await-fragment'),
+    optimistic('addContact', 'contactList', 'await-fragment'),
+    optimistic('closeDeal', 'dealList', 'await-fragment'),
+    optimistic('closeDeal', 'openDeals', 'await-fragment'),
+    optimistic('closeDeal', 'pipelineByStage', 'await-fragment'),
+    optimistic('moveDeal', 'dealList', 'await-fragment'),
+    optimistic('moveDeal', 'openDeals', 'await-fragment'),
+    optimistic('moveDeal', 'pipelineByStage', 'await-fragment'),
+  ],
+  [
+    { domains: ['contact'], query: 'contactDealCount' },
+    { domains: ['contact'], query: 'contactList' },
+    { domains: ['deal'], query: 'dealList' },
+    { domains: ['deal'], query: 'openDeals' },
+    { domains: ['deal'], query: 'pipelineByStage' },
+  ],
 ) as KovoExplainInput;
 
 describe('CRM generated graph', () => {
@@ -52,4 +72,21 @@ function statusesFor(mutation: string): Record<string, string> {
       .filter((entry) => entry.mutation === mutation)
       .map((entry) => [entry.query, entry.status]),
   );
+}
+
+function optimistic(mutation: string, query: string, status: 'await-fragment' | 'hand-written') {
+  return { mutation, query, status };
+}
+
+function touch(...domains: string[]) {
+  return {
+    reads: [],
+    touches: domains.map((domain) => ({
+      domain,
+      keys: null,
+      site: `examples/crm/src/mutations.ts:1`,
+      via: domain,
+    })),
+    unresolved: [],
+  };
 }

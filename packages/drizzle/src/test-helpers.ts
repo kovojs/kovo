@@ -13,12 +13,15 @@ export function pgDatabaseTypes(methods: readonly string[]): SourceFileInput {
   return {
     fileName: 'drizzle-types.d.ts',
     source: [
+      'import "drizzle-orm/pg-core";',
       'declare module "drizzle-orm/pg-core" {',
-      '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      '  export interface PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> {',
       ...methods.map((method) => `    ${method}`),
       '  }',
       '}',
-      'type PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/pg-core").PgDatabase<TQueryResultHKT, TFullSchema, TSchema>;',
+      'declare global {',
+      '  type PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> = import("drizzle-orm/pg-core").PgAsyncDatabase<any, any>;',
+      '}',
     ].join('\n'),
   };
 }
@@ -27,12 +30,15 @@ export function sqliteDatabaseTypes(methods: readonly string[]): SourceFileInput
   return {
     fileName: 'sqlite-drizzle-types.d.ts',
     source: [
+      'import "drizzle-orm/sqlite-core";',
       'declare module "drizzle-orm/sqlite-core" {',
-      '  export class BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      '  export interface BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {',
       ...methods.map((method) => `    ${method}`),
       '  }',
       '}',
-      'type BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/sqlite-core").BaseSQLiteDatabase<TResultKind, TRunResult, TFullSchema, TSchema>;',
+      'declare global {',
+      '  type BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/sqlite-core").BaseSQLiteDatabase<any, any, any, any>;',
+      '}',
     ].join('\n'),
   };
 }

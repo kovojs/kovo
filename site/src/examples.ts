@@ -61,11 +61,11 @@ mutation.
 | \`examples/commerce/src/db.ts\` | Drizzle/PGlite setup and seeded demo data. |
 | \`examples/commerce/src/queries.ts\` | Product grid, cart count, and order-history reads. |
 | \`examples/commerce/src/components/*.tsx\` | TSX regions that render those reads and forms. |
-| \`examples/commerce/scripts/emit-graph.mjs\` | Graph emission used by docs/devtool workflows. |
+| \`examples/commerce/src/domain.ts\` | Mutations, forms, sessions, and transactional writes. |
 
-The generated files under \`src/generated/**\` are artifacts. Inspect them when you need to verify a
-lowered component, client handler, optimistic transform, or graph edge, but keep authored code in
-TS/TSX. SPEC section 5.2 makes hand-authored lowered IR invalid.
+Kovo examples no longer commit generated artifacts. Keep authored code in TS/TSX and let the
+compiler/build commands materialize lowered output outside version control. SPEC section 5.2 makes
+hand-authored lowered IR invalid.
 
 Commerce sits at the auth/transaction end of the optimism spectrum. Add-to-cart writes through a
 transaction, runs under the authenticated request, and lets the compiler derive the visible cart
@@ -77,7 +77,6 @@ pnpm --filter @kovojs/example-commerce test
 pnpm --filter @kovojs/example-commerce build
 pnpm --filter @kovojs/example-commerce start
 pnpm --filter @kovojs/example-commerce run build:demo
-node examples/commerce/scripts/emit-graph.mjs
 \`\`\`
 `,
   crm: `
@@ -118,9 +117,7 @@ pnpm --filter @kovojs/example-crm dev
 pnpm --filter @kovojs/example-crm test
 pnpm --filter @kovojs/example-crm build
 pnpm --filter @kovojs/example-crm start
-pnpm --filter @kovojs/example-crm run emit-graph
 pnpm --filter @kovojs/example-crm test -- src/graph.test.ts
-kovo explain mutation deal/move --optimistic graph.json
 \`\`\`
 `,
   stackoverflow: `
@@ -160,9 +157,7 @@ pnpm --filter @kovojs/example-stackoverflow dev
 pnpm --filter @kovojs/example-stackoverflow test
 pnpm --filter @kovojs/example-stackoverflow build
 pnpm --filter @kovojs/example-stackoverflow start
-pnpm --filter @kovojs/example-stackoverflow run emit-graph
 pnpm --filter @kovojs/example-stackoverflow test -- src/kovo-graph.test.ts
-kovo explain mutation answer/create --optimistic graph.json
 \`\`\`
 `,
 };

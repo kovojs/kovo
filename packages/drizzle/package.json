@@ -40,10 +40,10 @@
     "ts-morph": "^28.0.0"
   },
   "devDependencies": {
-    "drizzle-orm": "0.45.2",
+    "drizzle-orm": "1.0.0-rc.3",
     "vitest": "4.1.8"
   },
   "peerDependencies": {
-    "drizzle-orm": ">=0.45.2 <1"
+    "drizzle-orm": ">=1.0.0-rc.3 <2"
   }
 }

@@ -1,12 +1,10 @@
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 
-import * as schema from './schema.js';
-
 // The demo runs against an in-process PGlite database wrapped by Drizzle.
 
-/** The Stack Overflow runtime database: Drizzle over PGlite, typed by the schema. */
-export type SoDb = PgliteDatabase<typeof schema>;
+/** The Stack Overflow runtime database: Drizzle over PGlite. */
+export type SoDb = PgliteDatabase;
 
 // The presentational columns carry SQL DEFAULTs (mirroring the Drizzle
 // `.default(...)` in schema.ts) so inserts that omit them — the demo seed and
@@ -23,5 +21,5 @@ export async function createSoDb(): Promise<SoDb> {
   const client = new PGlite();
   await client.waitReady;
   await client.exec(SCHEMA_DDL);
-  return drizzle(client, { schema });
+  return drizzle({ client });
 }

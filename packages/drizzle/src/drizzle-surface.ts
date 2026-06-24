@@ -6,7 +6,7 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
   'BunSQLiteDatabase',
   'LibSQLDatabase',
   'NodePgDatabase',
-  'PgDatabase',
+  'PgAsyncDatabase',
   'PgliteDatabase',
   'PostgresJsDatabase',
   'SQLJsDatabase',

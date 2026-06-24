@@ -105,7 +105,6 @@ export interface StarterTemplateAcceptanceFact {
   ciRunCommands: readonly string[];
   cssLayers: readonly string[];
   devDependencyCoverage: StarterTemplateDevDependencyCoverage;
-  emittedGraph: StarterTemplateExecutionResult;
   graph: StarterTemplateGraphFact;
   graphAssertionsOutput: string;
   graphCheck: KovoCheckOkAssertionFact;
@@ -113,7 +112,6 @@ export interface StarterTemplateAcceptanceFact {
   package: {
     dependencies: readonly string[];
     scripts: {
-      emitGraph: unknown;
       kovoCheck: unknown;
       graphAssertions: unknown;
     };
@@ -244,7 +242,7 @@ export async function loadStarterTemplateFacts(
     readFile(join(templateRoot, 'index.html'), 'utf8'),
     readFile(join(templateRoot, 'vite.config.ts'), 'utf8'),
   ]);
-  const graphSource = await emitStarterTemplateGraphSource(paths);
+  const graphSource = await readFile(join(templateRoot, 'graph.json'), 'utf8');
 
   return starterTemplateFacts({
     appSource,
@@ -290,7 +288,6 @@ export async function starterTemplateAcceptanceFact(
     runStarterTemplateViteTaskCommand(kovoCheckTask?.command, options, options.kovoOutputs),
     runStarterTemplateViteTaskCommand(graphAssertionsTask?.command, options, options.kovoOutputs),
   ]);
-  const emittedGraph = await runStarterTemplateEmitGraph(options);
   const graphAssertionsOutput = await runStarterTemplateGraphAssertions(
     options,
     options.kovoOutputs,
@@ -303,7 +300,7 @@ export async function starterTemplateAcceptanceFact(
   options.assertRenderEquivalence(appCompile);
 
   // SPEC.md §5.2: starter app code is authored as TSX/JS; this acceptance
-  // projection verifies generated graph and runtime behavior without
+  // projection verifies graph and runtime behavior without
   // asserting lowered source text in the kovo-check monolith.
   return {
     appCompile: {
@@ -317,7 +314,6 @@ export async function starterTemplateAcceptanceFact(
       starterFacts.package,
       options.expectedDevDependencies,
     ),
-    emittedGraph,
     explain: {
       cartAdd: kovoExplainMutationAssertionFact(
         options.kovoExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' }),
@@ -345,7 +341,6 @@ export async function starterTemplateAcceptanceFact(
     package: {
       dependencies: starterFacts.package.dependencies,
       scripts: {
-        emitGraph: starterFacts.package.scripts['emit-graph'],
         kovoCheck: starterFacts.package.scripts['kovo-check'],
         graphAssertions: starterFacts.package.scripts['graph-assertions'],
       },
@@ -367,23 +362,6 @@ export async function starterTemplateAcceptanceFact(
 const compilerModuleUrlFor = (paths: StarterTemplateFixturePaths): string =>
   paths.compilerModuleUrl ??
   pathToFileURL(join(pathFrom(paths.projectRoot), 'dist/compiler/src/index.mjs')).href;
-
-async function emitStarterTemplateGraphSource(paths: StarterTemplateFixturePaths): Promise<string> {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'kovo-template-graph-source-'));
-
-  try {
-    await cp(paths.templateRoot, fixtureRoot, { recursive: true });
-    await writeCompilerShim(fixtureRoot, compilerModuleUrlFor(paths));
-    execFileSync('node', ['scripts/emit-graph.mjs'], {
-      cwd: fixtureRoot,
-      encoding: 'utf8',
-      env: { ...process.env, CI: '1' },
-    });
-    return readFile(join(fixtureRoot, 'graph.json'), 'utf8');
-  } finally {
-    await rm(fixtureRoot, { force: true, recursive: true });
-  }
-}
 
 const writeCompilerShim = async (fixtureRoot: string, compilerModuleUrl: string): Promise<void> => {
   const compilerShimRoot = join(fixtureRoot, 'node_modules/@kovojs/compiler');
@@ -441,28 +419,6 @@ export async function runStarterTemplateGraphAssertions(
       encoding: 'utf8',
       env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH ?? ''}` },
     });
-  } finally {
-    await rm(fixtureRoot, { force: true, recursive: true });
-  }
-}
-
-export async function runStarterTemplateEmitGraph(
-  paths: StarterTemplateFixturePaths,
-): Promise<StarterTemplateExecutionResult> {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'kovo-template-emit-graph-'));
-
-  try {
-    await cp(paths.templateRoot, fixtureRoot, { recursive: true });
-    await writeCompilerShim(fixtureRoot, compilerModuleUrlFor(paths));
-
-    const output = execFileSync('node', ['scripts/emit-graph.mjs'], {
-      cwd: fixtureRoot,
-      encoding: 'utf8',
-      env: { ...process.env, CI: '1' },
-    });
-    const graph = JSON.parse(await readFile(join(fixtureRoot, 'graph.json'), 'utf8')) as unknown;
-
-    return { graph, output };
   } finally {
     await rm(fixtureRoot, { force: true, recursive: true });
   }
