@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
@@ -15,6 +16,7 @@ describe('server app mutation request boundary', () => {
   it('resolves mutation response options from exact-key policies', async () => {
     const seen: string[] = [];
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -47,6 +49,7 @@ describe('server app mutation request boundary', () => {
 
   it('uses mutation-level defaultRedirectTo without an app-authored response switch', async () => {
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       defaultRedirectTo: '/cart',
       input: s.object({ productId: s.string() }),
@@ -70,6 +73,7 @@ describe('server app mutation request boundary', () => {
 
   it('uses mutation-level dynamic redirectTo without an app-authored response switch', async () => {
     const signIn = mutation('auth/sign-in', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ next: s.string() }),
       redirectTo: (result) => (result.value as { redirectTo: string }).redirectTo,
@@ -99,10 +103,12 @@ describe('server app mutation request boundary', () => {
   it('inherits app and source-route stylesheets into enhanced live-target fragments', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       reads: [cart],
       load: () => ({ count: 1 }),
     });
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       registry: {
@@ -114,6 +120,7 @@ describe('server app mutation request boundary', () => {
       },
     });
     const cartRoute = route('/cart', {
+      access: publicAccess('test fixture'),
       page: () => trustedHtml('<main>Cart</main>'),
       stylesheets: [stylesheet('./cart.css')],
     });
@@ -154,6 +161,7 @@ describe('server app mutation request boundary', () => {
 
   it('inherits app and source-route stylesheets into enhanced failure fragments', async () => {
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ quantity: s.number().int().min(1) }),
       handler(input) {
@@ -161,6 +169,7 @@ describe('server app mutation request boundary', () => {
       },
     });
     const cartRoute = route('/cart', {
+      access: publicAccess('test fixture'),
       page: () => trustedHtml('<main>Cart</main>'),
       stylesheets: [stylesheet('./cart.css')],
     });
@@ -199,6 +208,7 @@ describe('server app mutation request boundary', () => {
     const seen: string[] = [];
     let sessionReads = 0;
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       guard: guards.authed(),
       input: s.object({ productId: s.string() }),
@@ -248,6 +258,7 @@ describe('server app mutation request boundary', () => {
   it('H1: returns 422 for a malformed JSON body without calling onError', async () => {
     const onError = vi.fn();
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -280,6 +291,7 @@ describe('server app mutation request boundary', () => {
       },
     };
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf,
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -311,6 +323,7 @@ describe('server app mutation request boundary', () => {
   it('H1: returns 422 for a text/plain Content-Type body without calling onError', async () => {
     const onError = vi.fn();
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input) {

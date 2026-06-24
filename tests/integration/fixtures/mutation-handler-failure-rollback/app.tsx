@@ -12,7 +12,9 @@ type TxLike = {
 };
 
 export const failAfterWrite = mutation('rollback/fail-after-write', {
-  access: publicAccess('integration fixture mutation rollback/fail-after-write has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation rollback/fail-after-write has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ note: s.string() }),
   transaction: async (request: KovoFixtureRequest, run) =>

@@ -7,8 +7,8 @@ import {
   s,
   stream,
   type QueryLoadContext,
-
-  publicAccess,} from '@kovojs/server';
+  publicAccess,
+} from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 

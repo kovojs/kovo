@@ -6,8 +6,8 @@ import {
   route,
   s,
   type QueryLoadContext,
-
-  publicAccess,} from '@kovojs/server';
+  publicAccess,
+} from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 

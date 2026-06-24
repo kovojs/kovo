@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 
 import { csrfField, csrfToken, renderMutationCsrfField, validateCsrfToken } from './csrf.js';
@@ -86,6 +87,7 @@ describe('mutation CSRF enforcement', () => {
     };
     let guardCalls = 0;
     const addToCart = defineMutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf,
       guard() {
         guardCalls += 1;
@@ -125,6 +127,7 @@ describe('mutation CSRF enforcement', () => {
       },
     };
     const addToCart = defineMutation('cart/add', {
+      access: publicAccess('test fixture'),
       input: s.object({ productId: s.string() }),
       handler(input, _request: typeof request) {
         return input.productId;
@@ -152,6 +155,7 @@ describe('mutation CSRF enforcement', () => {
   it('fails closed before handlers when csrf is omitted and no default options are provided', async () => {
     let writes = 0;
     const addToCart = defineMutation('cart/add', {
+      access: publicAccess('test fixture'),
       input: s.object({ productId: s.string() }),
       handler(input) {
         writes += 1;
@@ -169,6 +173,7 @@ describe('mutation CSRF enforcement', () => {
 
   it('preserves legacy mutation execution when csrf is explicitly false', async () => {
     const addToCart = defineMutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -208,6 +213,7 @@ describe('mutation CSRF enforcement', () => {
       set() {},
     };
     const addToCart = defineMutation('cart/add', {
+      access: publicAccess('test fixture'),
       input: s.object({ productId: s.string() }),
       handler(input, _request: typeof request) {
         writes += 1;
@@ -256,6 +262,7 @@ describe('mutation CSRF enforcement', () => {
       },
     };
     const addToCart = defineMutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf,
       guard: () => {
         guardRuns += 1;

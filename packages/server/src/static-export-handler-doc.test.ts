@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -26,6 +27,7 @@ describe('server static export', () => {
       },
       routes: [
         route('/about', {
+          access: publicAccess('test fixture'),
           meta: { title: 'About' },
           page: () => trustedHtml('<main>About Kovo</main>'),
         }),
@@ -57,9 +59,7 @@ describe('server static export', () => {
         return `<main data-url="${new URL(context.request.url).pathname}">${String(value)}</main>`;
       },
       routes: [
-        route('/', {
-          page: () => trustedHtml('from-page'),
-        }),
+        route('/', { access: publicAccess('test fixture'), page: () => trustedHtml('from-page') }),
       ],
     });
     const handler = createRequestHandler(app);
@@ -88,10 +88,9 @@ describe('server static export', () => {
           return `<main data-route="${context.route.path}">${String(value)}</main>`;
         },
         routes: [
-          route('/', {
-            page: () => trustedHtml('home'),
-          }),
+          route('/', { access: publicAccess('test fixture'), page: () => trustedHtml('home') }),
           route('/docs/intro', {
+            access: publicAccess('test fixture'),
             page: () => trustedHtml('intro'),
           }),
         ],

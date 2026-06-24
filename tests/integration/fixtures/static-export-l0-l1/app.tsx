@@ -1,5 +1,10 @@
 // SPEC.md §9.5: static export replays L0/L1 routes through the app shell.
-import { createApp, createMemoryVersionedClientModuleRegistry, publicAccess, route } from '@kovojs/server';
+import {
+  createApp,
+  createMemoryVersionedClientModuleRegistry,
+  publicAccess,
+  route,
+} from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 export interface StaticExportRenderCounter {

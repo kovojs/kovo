@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mutation, s } from '@kovojs/server';
+import { mutation, s, publicAccess } from '@kovojs/server';
 import { assertMutationError, propertyTest } from './assertions.js';
 import { createKovoTestHarness } from './harness.js';
 
@@ -96,6 +96,7 @@ describe('@kovojs/test assertions', () => {
 
   it('asserts typed mutation error paths without rendering a browser', async () => {
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       errors: {
         OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
@@ -132,6 +133,7 @@ describe('@kovojs/test assertions', () => {
 
   it('reports mutation error-path assertion mismatches', async () => {
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       errors: {
         OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
@@ -170,6 +172,7 @@ describe('@kovojs/test assertions', () => {
 
   it('compares mutation error payloads structurally without dropping undefined fields', async () => {
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       errors: {
         OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@kovojs/server';
+import { mutation, s, publicAccess } from '@kovojs/server';
 
 import { createKovoTestHarness } from './harness.js';
 import { createFakeDb } from './test-fixtures.js';
@@ -8,6 +8,7 @@ import { createFakeDb } from './test-fixtures.js';
 describe('@kovojs/test harness context', () => {
   it('executes mutations against the provided db context', async () => {
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: { cart: string[] } }) {
@@ -27,6 +28,7 @@ describe('@kovojs/test harness context', () => {
 
   it('merges request fixtures into mutation exec context', async () => {
     const guarded = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       guard(request: { db: { cart: string[] }; session?: { user?: { id: string } | null } }) {
         return Boolean(request.session?.user);
@@ -50,6 +52,7 @@ describe('@kovojs/test harness context', () => {
 
   it('lets exec override request fixtures per assertion while keeping harness db authoritative', async () => {
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       guard(request: { db: { cart: string[] }; session?: { user?: { id: string } | null } }) {
         return Boolean(request.session?.user);
@@ -102,6 +105,7 @@ describe('@kovojs/test harness context', () => {
     harness.dbHandle().cart.push('direct');
 
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: { cart: string[] } }) {

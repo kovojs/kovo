@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { domain, mutation, query, s } from '@kovojs/server';
+import { domain, mutation, query, s, publicAccess } from '@kovojs/server';
 import type { QueryLoadContext } from '@kovojs/server';
 
 import {
@@ -34,10 +34,12 @@ const graph = {
 const cart = domain('cart');
 const product = domain('product');
 const cartQuery = query('cart', {
+  access: publicAccess('test fixture'),
   load: () => ({ count: 1 }),
   reads: [cart],
 });
 const productGridQuery = query('productGrid', {
+  access: publicAccess('test fixture'),
   load: (input: unknown, context?: QueryLoadContext<unknown>) => {
     const pageInput = input as { after?: string; limit?: number };
     const db = (context?.request as { db?: FixtureDb } | undefined)?.db;
@@ -57,6 +59,7 @@ const productGridQuery = query('productGrid', {
 });
 
 const addToCart = mutation('cart/add', {
+  access: publicAccess('test fixture'),
   csrf: false,
   handler(input: { productId: string; quantity: number }, request: { db: FixtureDb }) {
     request.db.write('cart_items', { productId: input.productId, qty: input.quantity });

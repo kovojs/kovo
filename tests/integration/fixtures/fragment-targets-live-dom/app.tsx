@@ -30,7 +30,9 @@ async function renderDynamic(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const advance = mutation('fragment-targets-live-dom/advance', {
-  access: publicAccess('integration fixture mutation fragment-targets-live-dom/advance has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation fragment-targets-live-dom/advance has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest) => {

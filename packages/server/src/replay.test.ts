@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { csrfToken } from './csrf.js';
@@ -65,6 +66,7 @@ describe('server mutation response replay', () => {
     const replayStore = createMemoryMutationReplayStore();
     let writes = 0;
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: writes }),
       reads: [cart],
     });
@@ -113,6 +115,7 @@ describe('server mutation response replay', () => {
     const handlerRelease = deferred();
     let writes = 0;
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: writes }),
       reads: [cart],
     });
@@ -229,6 +232,7 @@ describe('server mutation response replay', () => {
     const handlerRelease = deferred();
     let writes = 0;
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: writes }),
       reads: [cart],
     });
@@ -293,6 +297,7 @@ describe('server mutation response replay', () => {
     let writes = 0;
     let loads = 0;
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       async load() {
         loads += 1;
         queryStarted.resolve();
@@ -607,6 +612,7 @@ describe('server mutation response replay', () => {
     let writes = 0;
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: (_input, context: { request: { session: { id: string } } }) => ({
         count: writes,
         session: context.request.session.id,
@@ -658,6 +664,7 @@ describe('server mutation response replay', () => {
     let writes = 0;
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: (_input, context: { request: { session: { id: string } } }) => ({
         count: writes,
         session: context.request.session.id,

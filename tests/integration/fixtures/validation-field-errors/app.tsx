@@ -7,8 +7,8 @@ import {
   s,
   type MutationFail,
   type ValidationFailurePayload,
-
-  publicAccess,} from '@kovojs/server';
+  publicAccess,
+} from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const reserve = mutation('validation/reserve', {

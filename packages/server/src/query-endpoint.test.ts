@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedReveal, type Secret } from '@kovojs/core';
 
@@ -24,6 +25,7 @@ describe('query endpoints', () => {
     }
 
     const catalogQuery = query('catalog', {
+      access: publicAccess('test fixture'),
       load(): CatalogQueryResult {
         return {
           meta: { page: 1, source: null },
@@ -33,6 +35,7 @@ describe('query endpoints', () => {
       reads: [],
     });
     const revealedSecretQuery = query('revealed-secret-query', {
+      access: publicAccess('test fixture'),
       load: () => ({
         passwordDigest: trustedReveal('hash-1' as unknown as Secret<string>, {
           justification: 'one-way digest shown to admins',
@@ -42,11 +45,20 @@ describe('query endpoints', () => {
     });
     const assertNonJsonQueryResultsRejected = () => {
       // @ts-expect-error SPEC §10.2 query values are JsonValue-bound client wire payloads.
-      query('bad-date-query', { load: () => ({ createdAt: new Date() }), reads: [] });
+      query('bad-date-query', {
+        access: publicAccess('test fixture'),
+        load: () => ({ createdAt: new Date() }),
+        reads: [],
+      });
       // @ts-expect-error SPEC §10.2 query values cannot carry functions to the client wire.
-      query('bad-function-query', { load: () => ({ format() {} }), reads: [] });
+      query('bad-function-query', {
+        access: publicAccess('test fixture'),
+        load: () => ({ format() {} }),
+        reads: [],
+      });
       // @ts-expect-error SPEC §10.2 secret values cannot enter query JSON.
       query('bad-secret-query', {
+        access: publicAccess('test fixture'),
         load: () => ({ passwordHash: 'hash-1' as unknown as Secret<string> }),
         reads: [],
       });
@@ -59,6 +71,7 @@ describe('query endpoints', () => {
 
   it('defaults omitted query reads to an empty derived-read placeholder', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load: () => ({ id: 'p1' }),
     });
 
@@ -75,6 +88,7 @@ describe('query endpoints', () => {
     type ProductQueryRequest = { session?: { userId?: string } | null };
 
     const productQuery = query('productDetail', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string(), max: s.number().int().default(10) }),
       guard: (request: ProductQueryRequest) => request.session?.userId === 'u1',
       instanceKey: (input) => `product:${(input as { id: string }).id}`,
@@ -127,6 +141,7 @@ describe('query endpoints', () => {
 
   it('keeps parameterized query args parseable while supporting component prop bindings', () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       load(input: { id: string }) {
         return { id: input.id };
@@ -148,6 +163,7 @@ describe('query endpoints', () => {
     const onError = vi.fn();
     const request = {};
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load() {
         throw thrown;
       },
@@ -173,6 +189,7 @@ describe('query endpoints', () => {
 
   it('renders structurally recognized args schema failures as safe 422 JSON', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       args: alienValidationSchema<{ id: string }>('Expected string', ['id']),
       load(input: { id: string }) {
         return { id: input.id };
@@ -194,6 +211,7 @@ describe('query endpoints', () => {
 
   it('validates query output schemas before rendering typed read wire HTML', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load() {
         return { id: 'p1', stock: 3 };
       },
@@ -219,6 +237,7 @@ describe('query endpoints', () => {
 
   it('reports query output schema drift as safe KV410 JSON', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load() {
         return { id: 'p1', stock: 'three' };
       },
@@ -248,6 +267,7 @@ describe('query endpoints', () => {
 
   it('dispatches typed read endpoints through a query registry', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       instanceKey: (input) => `product:${(input as { id: string }).id}`,
       load(input: { id: string }) {
@@ -287,6 +307,7 @@ describe('query endpoints', () => {
 
   it('H3: stamps Cache-Control + Vary on /_q/ 422 args-validation failure', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       args: alienValidationSchema<{ id: string }>('Expected string', ['id']),
       load(input: { id: string }) {
         return { id: input.id };
@@ -303,6 +324,7 @@ describe('query endpoints', () => {
 
   it('H3: stamps Cache-Control + Vary on /_q/ 500 load exception', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load() {
         throw new Error('db down');
       },
@@ -318,6 +340,7 @@ describe('query endpoints', () => {
 
   it('H3: stamps Cache-Control + Vary on /_q/ 403 guard-failure forbidden response', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       guard: () => ({ kind: 'forbidden' as const }),
       load: () => ({ id: 'p1' }),
       reads: [],
@@ -336,6 +359,7 @@ describe('query endpoints', () => {
 
   it('H3: stamps Cache-Control + Vary on /_q/ 303 unauthenticated guard-failure redirect', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       guard: () => ({ kind: 'unauthenticated' as const }),
       load: () => ({ id: 'p1' }),
       reads: [],
@@ -356,6 +380,7 @@ describe('query endpoints', () => {
 
   it('D2: stamps Kovo-Build on /_q/ 200 read response when buildToken is provided', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load: () => ({ id: 'p1' }),
       reads: [],
     });
@@ -371,6 +396,7 @@ describe('query endpoints', () => {
 
   it('D2: omits Kovo-Build from /_q/ 200 read response when buildToken is absent', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load: () => ({ id: 'p1' }),
       reads: [],
     });
@@ -384,26 +410,31 @@ describe('query endpoints', () => {
   it('AUD-006: stamps Kovo-Build on every /_q/ non-200 response when buildToken is provided', async () => {
     const buildToken = 'sha256-aud006';
     const forbiddenQuery = query('forbidden', {
+      access: publicAccess('test fixture'),
       guard: () => ({ kind: 'forbidden' as const }),
       load: () => ({ id: 'p1' }),
       reads: [],
     });
     const redirectQuery = query('redirect', {
+      access: publicAccess('test fixture'),
       guard: () => ({ kind: 'unauthenticated' as const }),
       load: () => ({ id: 'p1' }),
       reads: [],
     });
     const rateLimitedQuery = query('rateLimited', {
+      access: publicAccess('test fixture'),
       guard: () => ({ kind: 'rateLimited' as const, retryAfter: 7 }),
       load: () => ({ id: 'p1' }),
       reads: [],
     });
     const validationQuery = query('validation', {
+      access: publicAccess('test fixture'),
       args: alienValidationSchema<{ id: string }>('Expected string', ['id']),
       load: (input: { id: string }) => input,
       reads: [],
     });
     const throwingQuery = query('throwing', {
+      access: publicAccess('test fixture'),
       load() {
         throw new Error('db down');
       },
@@ -439,6 +470,7 @@ describe('query endpoints', () => {
 
   it('L3: a bigint column resolves to 200 with a serialized value (no throw, headers intact)', async () => {
     const totalsQuery = query('totals', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 10n }),
       reads: [],
     });
@@ -461,6 +493,7 @@ describe('query endpoints', () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     const brokenQuery = query('broken', {
+      access: publicAccess('test fixture'),
       load: () => circular,
       reads: [],
     });

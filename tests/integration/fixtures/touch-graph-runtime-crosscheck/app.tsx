@@ -13,7 +13,9 @@ function renderCartCount(count: number): string {
 }
 
 const addCartItem = mutation('touch-graph-runtime-crosscheck/add', {
-  access: publicAccess('integration fixture mutation touch-graph-runtime-crosscheck/add has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation touch-graph-runtime-crosscheck/add has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ productId: s.string() }),
   async handler(input, request: KovoFixtureRequest, context) {
@@ -24,7 +26,9 @@ const addCartItem = mutation('touch-graph-runtime-crosscheck/add', {
 });
 
 const smuggleAuditWrite = mutation('touch-graph-runtime-crosscheck/smuggle', {
-  access: publicAccess('integration fixture mutation touch-graph-runtime-crosscheck/smuggle has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation touch-graph-runtime-crosscheck/smuggle has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ productId: s.string() }),
   async handler(input, request: KovoFixtureRequest, context) {

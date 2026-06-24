@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -22,6 +23,7 @@ import {
 describe('server wire fixture contracts', () => {
   it('matches the typed read wire fixture response byte-for-byte', async () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       instanceKey: (input) => `product:${(input as { id: string }).id}`,
       load(input: { id: string }) {
@@ -136,6 +138,7 @@ describe('server wire fixture contracts', () => {
       },
     });
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       instanceKey: (input) => `product:${(input as { id: string }).id}`,
       load: () => ({ name: 'Mug', stock: 4 }),

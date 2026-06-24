@@ -6,8 +6,8 @@ import {
   route,
   s,
   type QueryLoadContext,
-
-  publicAccess,} from '@kovojs/server';
+  publicAccess,
+} from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -40,7 +40,9 @@ async function renderPresence(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 const publishPresence = mutation('broadcast-channel-sync/publish', {
-  access: publicAccess('integration fixture mutation broadcast-channel-sync/publish has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation broadcast-channel-sync/publish has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {

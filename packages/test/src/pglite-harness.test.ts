@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@kovojs/server';
+import { mutation, s, publicAccess } from '@kovojs/server';
 
 import { createKovoTestHarness } from './harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
@@ -15,6 +15,7 @@ describe('@kovojs/test PGlite harness integration', () => {
       await db.exec('create table cart_items (product_id text primary key, qty integer not null)');
 
       const addToCart = mutation('cart/add', {
+        access: publicAccess('test fixture'),
         csrf: false,
         input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
         async handler(input, request: { db: typeof db }) {
@@ -53,6 +54,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
   it('verifies direct db.query calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'query'> }) {
@@ -90,6 +92,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
   it('verifies direct db.exec calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'exec'> }) {
@@ -129,6 +132,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
   it('verifies engine-side cascade writes against the static touch graph', async () => {
     const deleteProduct = mutation('product/delete', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'exec'> }) {
@@ -173,6 +177,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
   it('verifies raw pglite handle calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'pglite'> }) {
@@ -212,6 +217,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
   it('verifies raw pglite transaction handle calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'pglite'> }) {

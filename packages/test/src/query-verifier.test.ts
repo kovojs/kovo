@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { domain, mutation, query, s, type QueryLoadContext } from '@kovojs/server';
+import { domain, mutation, query, s, type QueryLoadContext, publicAccess } from '@kovojs/server';
 
 import { createDbVerifier } from './verifier.js';
 import {
@@ -194,6 +194,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load(_input, context: { request: { db: FakeDb; session?: { cartId: string } } }) {
         return {
           cartId: context.request.session?.cartId,
@@ -221,6 +222,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load(_input, context?: { db: FakeDb; request: { db: FakeDb } }) {
         expect(context?.db).toBe(context?.request.db);
         expect(context?.db).toBe(harness.dbHandle());
@@ -250,6 +252,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const productQuery = query('product/page', {
+      access: publicAccess('test fixture'),
       load(input: unknown, context?: QueryLoadContext<{ db: FakeDb }> & { db: FakeDb }) {
         const { after = null, limit = 2 } = input as { after?: string | null; limit?: number };
         const products = context?.db.read('products') ?? [];
@@ -275,6 +278,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load() {
         harness.db.read('cart_items');
         return { count: 2 };
@@ -297,6 +301,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load() {
         harness.db.read('cart_items');
         return { count: 'two' };
@@ -321,6 +326,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const productQuery = query('product/list', {
+      access: publicAccess('test fixture'),
       load() {
         harness.db.read('products');
         return { items: [{ id: 7 }] };
@@ -346,6 +352,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load() {
         harness.db.read('products');
         return harness.db.read('cart_items');
@@ -368,6 +375,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load() {
         harness.db.sql('select * from audit_log');
         return harness.db.read('cart_items');
@@ -393,12 +401,14 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load() {
         return harness.db.read('products');
       },
       reads: [product],
     });
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load() {
         return harness.db.read('cart_items');
       },
@@ -434,6 +444,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: FakeDb }) {
@@ -446,6 +457,7 @@ describe('@kovojs/test query verifier', () => {
       },
     });
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       async load() {
         await mutationStarted.promise;
         releaseMutation.resolve(undefined);

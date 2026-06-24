@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -87,8 +88,8 @@ describe('server app shell Vite manifest planning', () => {
   });
 
   it('normalizes route-to-Vite-entry build facts in app route order', () => {
-    const cartRoute = route('/cart', {});
-    const accountRoute = route('/account', {});
+    const cartRoute = route('/cart', { access: publicAccess('test fixture') });
+    const accountRoute = route('/account', { access: publicAccess('test fixture') });
     const entries = kovoAppShellViteRouteEntries(
       {
         '/account': 'src/account.client.ts',
@@ -119,7 +120,7 @@ describe('server app shell Vite manifest planning', () => {
         {
           '/missing': 'src/missing.client.ts',
         },
-        { routes: [route('/cart', {})] },
+        { routes: [route('/cart', { access: publicAccess('test fixture') })] },
       ),
     ).toThrow('App shell route build entry does not match an app route: /missing');
 
@@ -134,7 +135,7 @@ describe('server app shell Vite manifest planning', () => {
               file: 'assets/other.js',
             },
           },
-          routes: [route('/cart', {})],
+          routes: [route('/cart', { access: publicAccess('test fixture') })],
         },
       ),
     ).toThrow(

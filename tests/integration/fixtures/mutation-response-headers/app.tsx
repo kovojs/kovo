@@ -10,7 +10,9 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const touchHeaders = mutation('mutation-response-headers/touch', {
-  access: publicAccess('integration fixture mutation mutation-response-headers/touch has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation mutation-response-headers/touch has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {

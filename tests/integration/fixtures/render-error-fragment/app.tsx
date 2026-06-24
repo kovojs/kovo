@@ -5,7 +5,9 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/in
 const receiptDomain = domain('receipt');
 
 export const createReceipt = mutation('render-error-fragment/create', {
-  access: publicAccess('integration fixture mutation render-error-fragment/create has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation render-error-fragment/create has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ id: s.string(), secret: s.string() }),
   handler: async (input: { id: string; secret: string }, request: KovoFixtureRequest, context) => {

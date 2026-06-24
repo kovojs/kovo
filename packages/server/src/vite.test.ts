@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -75,6 +76,7 @@ describe('public Kovo Vite plugin', () => {
           default: createApp({
             routes: [
               route('/cart', {
+                access: publicAccess('test fixture'),
                 page: () => trustedHtml('<main>Cart</main>'),
               }),
             ],
@@ -171,9 +173,11 @@ export const LoginCard = component({
             default: createApp({
               routes: [
                 route('/', {
+                  access: publicAccess('test fixture'),
                   page: () => trustedHtml('<main>Home</main>'),
                 }),
                 route('/login', {
+                  access: publicAccess('test fixture'),
                   page: () => trustedHtml('<main>Login</main>'),
                 }),
               ],

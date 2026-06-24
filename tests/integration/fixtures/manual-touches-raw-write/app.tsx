@@ -23,7 +23,9 @@ function renderCartCount(count: number): string {
 }
 
 const addOpaqueCartItem = mutation('manual-touches-raw-write/add', {
-  access: publicAccess('integration fixture mutation manual-touches-raw-write/add has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation manual-touches-raw-write/add has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ productId: s.string() }),
   registry: {

@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component, form } from '@kovojs/core';
@@ -46,11 +47,13 @@ describe('server mutation primitives', () => {
     const cart = domain('cart');
     const account = domain('account');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 2 }),
       reads: [cart],
     });
     const accountLoad = vi.fn(() => ({ name: 'Ada' }));
     const accountQuery = query('account', {
+      access: publicAccess('test fixture'),
       load: accountLoad,
       reads: [account],
     });
@@ -110,6 +113,7 @@ describe('server mutation primitives', () => {
   it('auto-renders affected live target descriptors from generated renderers', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 2 }),
       reads: [cart],
     });
@@ -170,6 +174,7 @@ describe('server mutation primitives', () => {
   it('does not let generated live target descriptors bypass the submitted live DOM targets', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 2 }),
       reads: [cart],
     });
@@ -214,6 +219,7 @@ describe('server mutation primitives', () => {
     const product = domain('product');
     const productLoad = vi.fn((input) => ({ id: (input as { id: string }).id }));
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       instanceKey: (input) => `product:${(input as { id: string }).id}`,
       load: productLoad,
       reads: [product],
@@ -273,6 +279,7 @@ describe('server mutation primitives', () => {
   it('does not match broad query deps for instance-specific live target invalidations', async () => {
     const product = domain('product');
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       instanceKey: (input) => `product:${(input as { id: string }).id}`,
       load: (input) => ({ id: (input as { id: string }).id }),
       reads: [product],
@@ -325,6 +332,7 @@ describe('server mutation primitives', () => {
     const question = domain('question');
     const questionLoad = vi.fn((input) => ({ id: (input as { id: string }).id }));
     const questionDetail = query('questionDetail', {
+      access: publicAccess('test fixture'),
       instanceKey: (input) => `question:${(input as { id: string }).id}`,
       load: questionLoad,
       reads: [question],
@@ -382,6 +390,7 @@ describe('server mutation primitives', () => {
   it('renders generated live target error boundaries per affected descriptor', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 2 }),
       reads: [cart],
     });
@@ -438,6 +447,7 @@ describe('server mutation primitives', () => {
   it('uses component-local error boundaries for generated live-target fragment failures', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 2 }),
       reads: [cart],
     });
@@ -494,6 +504,7 @@ describe('server mutation primitives', () => {
   it('bypasses success selection on failures and rerenders the submitted form target', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 2 }),
       reads: [cart],
     });
@@ -627,6 +638,7 @@ describe('server mutation primitives', () => {
   it('renders a defined error when a post-commit rerun query fails', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       guard: () => false,
       load: () => ({ count: 1 }),
       reads: [cart],
@@ -679,6 +691,7 @@ describe('server mutation primitives', () => {
   it('renders append fragment mode for pagination fragments', async () => {
     const product = domain('product');
     const productQuery = query('productGrid', {
+      access: publicAccess('test fixture'),
       load: () => ({ items: [{ id: 'p3' }], nextCursor: null }),
       reads: [product],
     });
@@ -717,6 +730,7 @@ describe('server mutation primitives', () => {
   it('renders enhanced mutation responses from schema-coerced mutation input', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: (input) => ({ count: (input as { quantity: number }).quantity }),
       reads: [cart],
     });
@@ -765,6 +779,7 @@ describe('server mutation primitives', () => {
   it('routes manual invalidation reruns from schema-coerced mutation input', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       instanceKey: (input) => `cart:${(input as { cartId: number }).cartId}`,
       load: (input) => ({
         cartId: (input as { cartId: number }).cartId,
@@ -1044,6 +1059,7 @@ describe('server mutation primitives', () => {
   it('streams mutation chunks after validation and reconciles with final server truth', async () => {
     const chat = domain('chat');
     const chatQuery = query('chat', {
+      access: publicAccess('test fixture'),
       load: () => ({ messages: 2 }),
       reads: [chat],
     });
@@ -1126,6 +1142,7 @@ describe('server mutation primitives', () => {
   it('keeps the buffered enhanced mutation path when Kovo-Stream is absent', async () => {
     const chat = domain('chat-buffered');
     const chatQuery = query('chatBuffered', {
+      access: publicAccess('test fixture'),
       load: () => ({ messages: 1 }),
       reads: [chat],
     });
@@ -1201,6 +1218,7 @@ describe('server mutation primitives', () => {
   it('does not invoke mutation streams for CSRF failures', async () => {
     const streamSpy = vi.fn();
     const sendMessage = defineMutation('chat/send-csrf', {
+      access: publicAccess('test fixture'),
       input: s.object({ body: s.string() }),
       handler(input) {
         return input;

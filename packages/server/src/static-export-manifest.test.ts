@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -48,6 +49,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           modulepreloads: [cartHref],
           page: () => trustedHtml('<main>Home</main>'),
         }),
@@ -120,6 +122,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/', {
+            access: publicAccess('test fixture'),
             modulepreloads: [cartHref],
             page: () => trustedHtml('<main>Home</main>'),
           }),
@@ -191,10 +194,12 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           modulepreloads: [cartHref],
           page: () => trustedHtml('<main>Home</main>'),
         }),
         route('/docs/intro', {
+          access: publicAccess('test fixture'),
           stylesheets: ['/assets/docs.css'],
           page: () => trustedHtml('<main>Intro</main>'),
         }),

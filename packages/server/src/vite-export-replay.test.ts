@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -28,6 +29,7 @@ describe('server app shell Vite plugin', () => {
         app: createApp({
           routes: [
             route('/cart', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main>Cart</main>');
               },
@@ -102,6 +104,7 @@ describe('server app shell Vite plugin', () => {
         app: createApp({
           routes: [
             route('/cart', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main class="cart">Cart</main>');
               },
@@ -183,6 +186,7 @@ describe('server app shell Vite plugin', () => {
         app: createApp({
           routes: [
             route('/cart', {
+              access: publicAccess('test fixture'),
               modulepreloads: ['/c/cart.client.js?v=cart-v1'],
               page() {
                 return renderedHtml('<main class="cart">Cart</main>');
@@ -293,6 +297,7 @@ describe('server app shell Vite plugin', () => {
           app: createApp({
             routes: [
               route('/cart', {
+                access: publicAccess('test fixture'),
                 page() {
                   rendered = true;
                   return renderedHtml('<main class="cart">Cart</main>');
@@ -341,6 +346,7 @@ describe('server app shell Vite plugin', () => {
         createApp({
           routes: [
             route('/cart', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml(
                   [

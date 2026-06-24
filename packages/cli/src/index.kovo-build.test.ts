@@ -22,7 +22,7 @@ import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createApp, route } from '@kovojs/server';
+import { createApp, route, publicAccess } from '@kovojs/server';
 import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
@@ -910,6 +910,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   domain,
   mutation,
+  publicAccess,
   query,
   route,
   s,
@@ -931,10 +932,12 @@ clientModules.put({
   version: 'cart-v1',
 });
 const cartQuery = query('cart', {
+  access: publicAccess('build test cart query'),
   load: () => ({ count: db.count }),
   reads: [cart],
 });
 const addToCart = mutation('cart/add', {
+  access: publicAccess('build test cart mutation'),
   csrf: false,
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
   registry: {
@@ -953,6 +956,7 @@ export default createApp({
   queries: [cartQuery],
   routes: [
     route('/cart', {
+      access: publicAccess('build test cart page'),
       page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
   ],
@@ -966,6 +970,7 @@ import {
   createApp,
   domain,
   mutation,
+  publicAccess,
   query,
   route,
   s,
@@ -981,10 +986,12 @@ const trustedHtml = (value) => ({
 const cart = domain('cart');
 const db = { count: 0 };
 const cartQuery = query('cart', {
+  access: publicAccess('dynamic build test cart query'),
   load: () => ({ count: db.count }),
   reads: [cart],
 });
 const addToCart = mutation('cart/add', {
+  access: publicAccess('dynamic build test cart mutation'),
   csrf: false,
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
   registry: {
@@ -1002,6 +1009,7 @@ export default createApp({
   queries: [cartQuery],
   routes: [
     route('/cart', {
+      access: publicAccess('dynamic build test cart page'),
       page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
   ],
@@ -1034,7 +1042,7 @@ function writeRetentionProofConfig(root: string): void {
 
 function staticAppModuleSource(): string {
   return `
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 
 const trustedHtml = (value) => ({
   __kovoTrustedHtml: true,
@@ -1046,6 +1054,7 @@ const trustedHtml = (value) => ({
 export default createApp({
   routes: [
     route('/', {
+      access: publicAccess('static build test page'),
       page: () => trustedHtml('<main>Static Home</main>'),
     }),
   ],
@@ -1056,12 +1065,13 @@ export default createApp({
 function staticStylesheetRouteComponentAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp, route, stylesheet } from '@kovojs/server';
+import { createApp, publicAccess, route, stylesheet } from '@kovojs/server';
 import { AutoCssCard } from './src/auto-css-card.js';
 
 export default createApp({
   routes: [
     route('/', {
+      access: publicAccess('stylesheet build test page'),
       page: () => <AutoCssCard />,
     }),
   ],
@@ -1073,7 +1083,7 @@ export default createApp({
 function splitStylesheetRouteAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp, route, stylesheet } from '@kovojs/server';
+import { createApp, publicAccess, route, stylesheet } from '@kovojs/server';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
@@ -1081,9 +1091,11 @@ import { SharedCard } from './src/shared-card.js';
 export default createApp({
   routes: [
     route('/', {
+      access: publicAccess('split stylesheet home page'),
       page: () => <><SharedCard /><HomePanel /></>,
     }),
     route('/login', {
+      access: publicAccess('split stylesheet login page'),
       page: () => <><SharedCard /><LoginPanel /></>,
     }),
   ],
@@ -1095,7 +1107,7 @@ export default createApp({
 function splitSrcStylesheetRouteAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp, route, stylesheet } from '@kovojs/server';
+import { createApp, publicAccess, route, stylesheet } from '@kovojs/server';
 import { HomePanel } from './home-panel.js';
 import { LoginPanel } from './login-panel.js';
 import { SharedCard } from './shared-card.js';
@@ -1103,9 +1115,11 @@ import { SharedCard } from './shared-card.js';
 export default createApp({
   routes: [
     route('/', {
+      access: publicAccess('split source stylesheet home page'),
       page: () => <><SharedCard /><HomePanel /></>,
     }),
     route('/login', {
+      access: publicAccess('split source stylesheet login page'),
       page: () => <><SharedCard /><LoginPanel /></>,
     }),
   ],
@@ -1117,7 +1131,7 @@ export default createApp({
 function mutationFragmentStylesheetAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp, domain, mutation, query, route, s, stylesheet } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s, stylesheet } from '@kovojs/server';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
@@ -1131,10 +1145,12 @@ const trustedHtml = (value) => ({
 
 const home = domain('home');
 const homeQuery = query('home', {
+  access: publicAccess('fragment stylesheet home query'),
   load: () => ({ ok: true }),
   reads: [home],
 });
 const touchHome = mutation('home/touch', {
+  access: publicAccess('fragment stylesheet touch mutation'),
   csrf: false,
   input: s.object({}),
   registry: {
@@ -1158,9 +1174,11 @@ export default createApp({
   queries: [homeQuery],
   routes: [
     route('/', {
+      access: publicAccess('fragment stylesheet home page'),
       page: () => <><SharedCard /><HomePanel /></>,
     }),
     route('/login', {
+      access: publicAccess('fragment stylesheet login page'),
       page: () => <><SharedCard /><LoginPanel /></>,
     }),
   ],
@@ -1171,7 +1189,7 @@ export default createApp({
 
 function databaseEnvAppModuleSource(): string {
   return `
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 
 const trustedHtml = (value) => ({
   __kovoTrustedHtml: true,
@@ -1183,6 +1201,7 @@ const trustedHtml = (value) => ({
 export default createApp({
   routes: [
     route('/db', {
+      access: publicAccess('database env build test page'),
       page: () => trustedHtml('<main>') + (process.env.DATABASE_URL ?? 'missing') + '</main>',
     }),
   ],
@@ -1193,11 +1212,12 @@ export default createApp({
 function blockedCloudflareApiAppModuleSource(): string {
   return `
 import { spawnSync } from 'node:child_process';
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 
 export default createApp({
   routes: [
     route('/blocked', {
+      access: publicAccess('blocked cloudflare build test page'),
       page: () => {
         spawnSync('true');
         return '<main>Blocked</main>';
@@ -1422,9 +1442,11 @@ async function devRouteDocument(root: string, appPath: string): Promise<string> 
         default: createApp({
           routes: [
             route('/', {
+              access: publicAccess('test fixture'),
               page: () => renderedHtml('<main>Home</main>'),
             }),
             route('/login', {
+              access: publicAccess('test fixture'),
               page: () => renderedHtml('<main>Login</main>'),
             }),
           ],
@@ -1528,7 +1550,7 @@ function readBuildJson(filePath: string): unknown {
 
 function typescriptAppModuleSource(): string {
   return `
-import { createApp, domain, query, route } from '@kovojs/server';
+import { createApp, domain, publicAccess, query, route } from '@kovojs/server';
 
 const trustedHtml = (value) => ({
   __kovoTrustedHtml: true,
@@ -1540,6 +1562,7 @@ const trustedHtml = (value) => ({
 const db: { count: number } = { count: 4 };
 const typed = domain('typed');
 const typedQuery = query('typed', {
+  access: publicAccess('typescript build test query'),
   load: () => ({ count: db.count }),
   reads: [typed],
 });
@@ -1548,6 +1571,7 @@ export default createApp({
   queries: [typedQuery],
   routes: [
     route('/typed', {
+      access: publicAccess('typescript build test page'),
       page: () => trustedHtml('<main>Typed Cart ') + db.count + '</main>',
     }),
   ],

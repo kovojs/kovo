@@ -1,5 +1,12 @@
 /** @jsxImportSource @kovojs/server */
-import { createApp, createRequestHandler, layout, route, toNodeHandler } from '@kovojs/server';
+import {
+  createApp,
+  createRequestHandler,
+  layout,
+  publicAccess,
+  route,
+  toNodeHandler,
+} from '@kovojs/server';
 import { defineCompiledRoutePage } from '@kovojs/server/internal/route';
 
 import { buildSiteRouteData, type SiteRoutePage } from './app-data.js';
@@ -25,6 +32,7 @@ const SiteRouteLayout = layout({
 
 const routes: SiteRoute[] = [
   route('/', {
+    access: publicAccess('public documentation landing page'),
     layout: SiteRouteLayout,
     meta: siteRouteData.landing.meta,
     stylesheets: siteStylesheetsForRoute('/'),
@@ -48,6 +56,7 @@ export default siteStaticExportApp;
 function docsRoute(page: SiteRoutePage): SiteRoute {
   const modulepreloads = [...(page.modulepreloads ?? []), clientHrefs.sidebar];
   return route(page.routePath, {
+    access: publicAccess('public documentation content page'),
     layout: SiteRouteLayout,
     meta: page.meta,
     modulepreloads,

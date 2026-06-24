@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
@@ -26,14 +27,16 @@ const rawTextResponse = {
 
 describe('server createApp request shell', () => {
   it('stores the closed app registries and options without adding middleware', () => {
-    const productRoute = route('/products/:id', {});
+    const productRoute = route('/products/:id', { access: publicAccess('test fixture') });
     const statusEndpoint = endpoint('/status', {
+      access: publicAccess('test fixture'),
       handler: () => new Response('ok'),
       method: 'GET',
       reason: 'status endpoint registry test',
       response: rawTextResponse,
     });
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load: () => ({ id: 'p1' }),
       reads: [],
     });
@@ -83,18 +86,22 @@ describe('server createApp request shell', () => {
   it('derives the app query registry from generated live target renderers and layouts', () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 1 }),
       reads: [cart],
     });
     const explicitCartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 2 }),
       reads: [cart],
     });
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load: () => ({ id: 'p1' }),
       reads: [],
     });
     const profileQuery = query('profile', {
+      access: publicAccess('test fixture'),
       load: () => ({ name: 'Ada' }),
       reads: [],
     });
@@ -116,6 +123,7 @@ describe('server createApp request shell', () => {
       queries: [explicitCartQuery],
       routes: [
         route('/account', {
+          access: publicAccess('test fixture'),
           layout: accountLayout,
           page: () => trustedHtml('<section>Account</section>'),
         }),
@@ -128,6 +136,7 @@ describe('server createApp request shell', () => {
   it('injects compiler-registered mutation touch sites into app mutations', () => {
     const cart = domain('generated-cart-fallback');
     const addToCart = mutation('generated/cart/add-app', {
+      access: publicAccess('test fixture'),
       input: s.object({ productId: s.string() }),
       registry: { touches: [cart] },
       handler: (input) => input,
@@ -151,10 +160,12 @@ describe('server createApp request shell', () => {
   // declaration. createApp must fail closed rather than silently shadow the second handler.
   it('rejects duplicate mutation keys at createApp build time (KV421 runtime sibling)', () => {
     const firstAdd = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       input: s.object({ productId: s.string() }),
       handler: (input) => input,
     });
     const secondAdd = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       input: s.object({ orderId: s.string() }),
       handler: (input) => input,
     });
@@ -166,10 +177,12 @@ describe('server createApp request shell', () => {
 
   it('accepts distinct mutation keys at createApp build time', () => {
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       input: s.object({ productId: s.string() }),
       handler: (input) => input,
     });
     const removeFromCart = mutation('cart/remove', {
+      access: publicAccess('test fixture'),
       input: s.object({ productId: s.string() }),
       handler: (input) => input,
     });
@@ -180,6 +193,7 @@ describe('server createApp request shell', () => {
 
   it('injects compiler-registered query reads into app queries', () => {
     const catalogQuery = query('generatedCatalog', {
+      access: publicAccess('test fixture'),
       load: () => ({ items: [] as string[] }),
     });
 
@@ -211,7 +225,9 @@ describe('server createApp request shell', () => {
   });
 
   it('rejects malformed compatibility shells before request dispatch', () => {
-    const app = createApp({ routes: [route('/products/:id', {})] });
+    const app = createApp({
+      routes: [route('/products/:id', { access: publicAccess('test fixture') })],
+    });
     const rawHandler = async () => new Response('<main>compat</main>');
 
     expect(() =>
@@ -231,6 +247,7 @@ describe('server createApp request shell', () => {
     const app = createApp({
       endpoints: [
         endpoint('/status', {
+          access: publicAccess('test fixture'),
           handler: () => new Response('ok'),
           method: 'GET',
           reason: 'status endpoint registry test',
@@ -239,12 +256,18 @@ describe('server createApp request shell', () => {
       ],
       mutations: [
         mutation('cart/add', {
+          access: publicAccess('test fixture'),
           handler: () => ({ ok: true }),
           input: s.object({ productId: s.string() }),
         }),
       ],
-      queries: [query('cart', { reads: [domain('cart')] })],
-      routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>') })],
+      queries: [query('cart', { access: publicAccess('test fixture'), reads: [domain('cart')] })],
+      routes: [
+        route('/cart', {
+          access: publicAccess('test fixture'),
+          page: () => trustedHtml('<main>Cart</main>'),
+        }),
+      ],
     });
 
     for (const malformedApp of [
@@ -261,6 +284,7 @@ describe('server createApp request shell', () => {
 
   it('dispatches a matched route through Request to document Response', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       meta: { title: 'Product' },
       page({ params, search }) {
         return renderedHtml(`<main>${params.id}:${search.tab}</main>`);
@@ -281,6 +305,7 @@ describe('server createApp request shell', () => {
       createApp({
         routes: [
           route('/products/:id', {
+            access: publicAccess('test fixture'),
             meta: { title: 'Product' },
             params: s.object({ id: s.string() }),
             page({ params }) {
@@ -321,7 +346,9 @@ describe('server createApp request shell', () => {
   });
 
   it('normalizes trailing slashes before dispatching routes', async () => {
-    const handler = createRequestHandler(createApp({ routes: [route('/products/:id', {})] }));
+    const handler = createRequestHandler(
+      createApp({ routes: [route('/products/:id', { access: publicAccess('test fixture') })] }),
+    );
 
     const response = await handler(new Request('https://example.test/products/p1/?tab=details'));
 
@@ -331,7 +358,9 @@ describe('server createApp request shell', () => {
   });
 
   it('returns stable 404 and page-method responses', async () => {
-    const handler = createRequestHandler(createApp({ routes: [route('/products/:id', {})] }));
+    const handler = createRequestHandler(
+      createApp({ routes: [route('/products/:id', { access: publicAccess('test fixture') })] }),
+    );
 
     const missing = await handler(new Request('https://example.test/missing'));
     expect(missing.status).toBe(404);
@@ -348,8 +377,14 @@ describe('server createApp request shell', () => {
   it('blocks ambiguous route tables with KV228 before declaration-order dispatch', async () => {
     const app = createApp({
       routes: [
-        route('/products/:id', { page: () => trustedHtml('<main>Param</main>') }),
-        route('/products/new', { page: () => trustedHtml('<main>New</main>') }),
+        route('/products/:id', {
+          access: publicAccess('test fixture'),
+          page: () => trustedHtml('<main>Param</main>'),
+        }),
+        route('/products/new', {
+          access: publicAccess('test fixture'),
+          page: () => trustedHtml('<main>New</main>'),
+        }),
       ],
     });
 
@@ -430,6 +465,7 @@ describe('server createApp request shell', () => {
     const shellError = new Error('private 500 shell detail');
     const onError = vi.fn();
     const statusEndpoint = endpoint('/status', {
+      access: publicAccess('test fixture'),
       handler() {
         throw endpointError;
       },
@@ -479,6 +515,7 @@ describe('server createApp request shell', () => {
       createApp({
         endpoints: [
           endpoint('/upload', {
+            access: publicAccess('test fixture'),
             csrf: false,
             csrfJustification: 'test machine endpoint',
             handler: endpointHandler,
@@ -515,6 +552,7 @@ describe('server createApp request shell', () => {
   it('rate-limits mutation requests before parsing or running the handler', async () => {
     const mutationHandler = vi.fn(() => ({ ok: true }));
     const addToCart = mutation('cart/add-rate-limited', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ quantity: s.number().default(1) }),
       handler: mutationHandler,
@@ -553,6 +591,7 @@ describe('server createApp request shell', () => {
   it('rate-limits query requests before loading the query', async () => {
     const queryLoad = vi.fn(() => ({ count: 1 }));
     const cartQuery = query('cart-rate-limited', {
+      access: publicAccess('test fixture'),
       load: queryLoad,
       reads: [],
     });
@@ -582,6 +621,7 @@ describe('server createApp request shell', () => {
 
   it('dispatches endpoints before routes and strips ambient session from endpoint requests', async () => {
     const statusEndpoint = endpoint('/status', {
+      access: publicAccess('test fixture'),
       handler(request) {
         expect('session' in request).toBe(false);
         return new Response('endpoint');
@@ -593,7 +633,12 @@ describe('server createApp request shell', () => {
     const handler = createRequestHandler(
       createApp({
         endpoints: [statusEndpoint],
-        routes: [route('/status', { page: () => trustedHtml('route') })],
+        routes: [
+          route('/status', {
+            access: publicAccess('test fixture'),
+            page: () => trustedHtml('route'),
+          }),
+        ],
         sessionProvider: () => ({ user: { id: 'u1' } }),
       }),
     );
@@ -608,6 +653,7 @@ describe('server createApp request shell', () => {
     const thrown = new Error('private endpoint detail');
     const onError = vi.fn();
     const statusEndpoint = endpoint('/status', {
+      access: publicAccess('test fixture'),
       handler() {
         throw thrown;
       },
@@ -634,6 +680,7 @@ describe('server createApp request shell', () => {
   it('resolves session once for a guarded route request', async () => {
     let sessionReads = 0;
     const adminRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
       page(_context, request) {
         return renderedHtml(`admin:${request.session.user.id}`);
@@ -671,6 +718,7 @@ describe('server createApp request shell', () => {
     const db: AppDb = { count: 1, reads: [], writes: [] };
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load(_input, context?: { request: AppRequest }) {
         context?.request.db.reads.push(context.request.session?.user.id ?? 'anonymous');
         return { count: context?.request.db.count ?? 0 };
@@ -678,6 +726,7 @@ describe('server createApp request shell', () => {
       reads: [cart],
     });
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ quantity: s.number().int().min(1).default(1) }),
       registry: {
@@ -695,6 +744,7 @@ describe('server createApp request shell', () => {
         db: () => db,
         endpoints: [
           endpoint('/webhook', {
+            access: publicAccess('test fixture'),
             csrf: false,
             csrfJustification: 'signed provider test endpoint',
             handler(request) {
@@ -721,6 +771,7 @@ describe('server createApp request shell', () => {
         queries: [cartQuery],
         routes: [
           route('/cart', {
+            access: publicAccess('test fixture'),
             page(_context, request: AppRequest) {
               return renderedHtml(`<main>${request.db.count}:${request.session?.user.id}</main>`);
             },
@@ -776,10 +827,12 @@ describe('server createApp request shell', () => {
     const cart = domain('cart');
     const db = { count: 1 };
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: db.count }),
       reads: [cart],
     });
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({}),
       registry: {
@@ -804,6 +857,7 @@ describe('server createApp request shell', () => {
         queries: [cartQuery],
         routes: [
           route('/cart', {
+            access: publicAccess('test fixture'),
             layout: CartLayout,
             page: () => trustedHtml('<section>Cart</section>'),
           }),
@@ -838,6 +892,7 @@ describe('server createApp request shell', () => {
     const app = createApp({
       queries: [
         query('cart', {
+          access: publicAccess('test fixture'),
           args: s.object({ id: s.string() }),
           load: (input: { id: string }) => ({ id: input.id, total: 42 }),
           reads: [],
@@ -868,10 +923,12 @@ describe('server createApp request shell', () => {
   it('dispatches mutation POSTs through the reserved app shell path', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 1 }),
       reads: [cart],
     });
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
       registry: {
@@ -937,10 +994,12 @@ describe('server createApp request shell', () => {
   it('dispatches enhanced mutation fragments through app live target renderers', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 1 }),
       reads: [cart],
     });
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       registry: {

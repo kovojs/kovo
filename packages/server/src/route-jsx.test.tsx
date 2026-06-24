@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { publicAccess } from './access.js';
 import { component, ErrorBoundary, FieldError, form, FormError } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -19,6 +20,7 @@ describe('route JSX pages', () => {
       },
     });
     const productRoute = route('/products', {
+      access: publicAccess('test fixture'),
       page: () => (
         <ErrorBoundary fallback={<section role="alert">Products are unavailable.</section>}>
           <ProductGrid />
@@ -35,6 +37,7 @@ describe('route JSX pages', () => {
   it('loads direct component queries from the route request context', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load(_input: unknown, { request }: { request: { count: number } }) {
         return { count: request.count };
       },
@@ -45,6 +48,7 @@ describe('route JSX pages', () => {
       render: ({ cart }: { cart: { count: number } }) => <cart-badge>{cart.count}</cart-badge>,
     });
     const cartRoute = route('/cart', {
+      access: publicAccess('test fixture'),
       page: () => <CartBadge />,
     });
 
@@ -57,6 +61,7 @@ describe('route JSX pages', () => {
   it('loads prop-bound component queries from route params', async () => {
     const product = domain('product');
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       load(input: { id: string }, { request }: { request: { locale: string } }) {
         return { id: input.id, label: `${request.locale}:${input.id}` };
@@ -81,6 +86,7 @@ describe('route JSX pages', () => {
       ),
     });
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       params: s.object({ id: s.string() }),
       page: ({ params }) => <ProductDetail productId={params.id} />,
     });
@@ -97,6 +103,7 @@ describe('route JSX pages', () => {
     const product = domain('product');
     const inventory = domain('inventory');
     const productQuery = query('productById', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       load(input: { id: string }) {
         return { id: input.id, label: `Product ${input.id}` };
@@ -104,6 +111,7 @@ describe('route JSX pages', () => {
       reads: [product],
     });
     const inventoryQuery = query('inventoryStatus', {
+      access: publicAccess('test fixture'),
       load: () => ({ available: true }),
       reads: [inventory],
     });
@@ -127,6 +135,7 @@ describe('route JSX pages', () => {
     });
     ProductDetail.name = 'components/products/product-detail/product-detail';
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       params: s.object({ id: s.string() }),
       page: ({ params }) => <ProductDetail productId={params.id} />,
     });
@@ -142,6 +151,7 @@ describe('route JSX pages', () => {
   it('stamps repeated source-served component instances with distinct live target identities', async () => {
     const product = domain('product');
     const productQuery = query('productById', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       load(input: { id: string }) {
         return { id: input.id, label: `Product ${input.id}` };
@@ -159,6 +169,7 @@ describe('route JSX pages', () => {
     });
     ProductDetail.name = 'components/products/product-detail/product-detail';
     const productRoute = route('/products', {
+      access: publicAccess('test fixture'),
       page: () => (
         <main>
           <ProductDetail key="featured" productId="p1" />
@@ -188,6 +199,7 @@ describe('route JSX pages', () => {
   it('forwards JSX component props into render slots', async () => {
     const products = domain('product');
     const productsQuery = query('products', {
+      access: publicAccess('test fixture'),
       load: () => ({ items: ['p1'] }),
       reads: [products],
     });
@@ -200,6 +212,7 @@ describe('route JSX pages', () => {
       ),
     });
     const productRoute = route('/products', {
+      access: publicAccess('test fixture'),
       page: () => <ProductGrid readOnly />,
     });
 
@@ -211,6 +224,7 @@ describe('route JSX pages', () => {
 
   it('injects CSRF and submitted mutation failure state into route JSX forms', async () => {
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
       errors: { OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }) },
       handler(input) {
@@ -239,6 +253,7 @@ describe('route JSX pages', () => {
       ),
     });
     const productRoute = route('/products/p1', {
+      access: publicAccess('test fixture'),
       page: () => jsx(AddToCartForm, {}),
     });
     const request = { session: { id: 's1' } };
@@ -273,6 +288,7 @@ describe('route JSX pages', () => {
 
   it('stamps compiler-derived page navigation segment metadata on route JSX roots', async () => {
     const productRoute = route('/products', {
+      access: publicAccess('test fixture'),
       page: defineCompiledRoutePage(
         {
           components: [
@@ -309,10 +325,12 @@ describe('route JSX pages', () => {
       render: (_queries, _state, { children }) => <main>{children}</main>,
     });
     const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
       layout: sharedLayout,
       page: () => <section>Home</section>,
     });
     const cartRoute = route('/cart', {
+      access: publicAccess('test fixture'),
       layout: sharedLayout,
       page: () => <section>Cart</section>,
     });
@@ -367,6 +385,7 @@ describe('route JSX pages', () => {
   it('wraps route JSX with nested layouts and loads layout queries from the request', async () => {
     const viewer = domain('viewer');
     const viewerQuery = query('viewer', {
+      access: publicAccess('test fixture'),
       load(_input: unknown, { request }: { request: { userId: string } }) {
         return { id: request.userId };
       },
@@ -381,6 +400,7 @@ describe('route JSX pages', () => {
       render: (_queries, _state, { children }) => <section data-admin>{children}</section>,
     });
     const adminRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       layout: AdminLayout,
       page: () => <h1>Admin</h1>,
     });
@@ -398,6 +418,7 @@ describe('route JSX pages', () => {
   it('stamps compiler-derived layout navigation segment metadata on nested layout roots', async () => {
     const viewer = domain('viewer');
     const viewerQuery = query('viewer', {
+      access: publicAccess('test fixture'),
       load(_input: unknown, { request }: { request: { userId: string } }) {
         return { id: request.userId };
       },
@@ -412,6 +433,7 @@ describe('route JSX pages', () => {
       render: (_queries, _state, { children }) => <section data-admin>{children}</section>,
     });
     const adminRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       layout: AdminLayout,
       page: defineCompiledRoutePage(
         {
@@ -478,6 +500,7 @@ describe('route JSX pages', () => {
       render: (_queries, _state, { children }) => <main>{children}</main>,
     });
     const adminRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       layout: AdminLayout,
       page: () => <h1>Admin</h1>,
     });
@@ -500,6 +523,7 @@ describe('route JSX pages', () => {
       render: (_queries, _state, { children }) => <section>{children}</section>,
     });
     const missingRoute = route('/admin/missing', {
+      access: publicAccess('test fixture'),
       layout: AdminLayout,
       page: () => notFound(),
     });
@@ -522,6 +546,7 @@ describe('route JSX pages', () => {
       render: (_queries, _state, { children }) => <section>{children}</section>,
     });
     const adminRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       layout: AdminLayout,
       page: () => <h1>Admin</h1>,
     });
@@ -546,6 +571,7 @@ describe('route JSX pages', () => {
       },
     });
     const adminRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       layout: AdminLayout,
       page: () => <h1>Admin</h1>,
     });

@@ -2,6 +2,7 @@
  * Tests for change-record-scoped query delta selection in mutation responses
  * (SPEC §9.1.1) and the Kovo-Build header on 200 responses (SPEC §5.1).
  */
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
@@ -35,6 +36,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
   it('emits a delta query chunk when delta is smaller than full value', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       delta: largeCartDeltaMeta(),
       load: () => ({
         ...largeCartValue(),
@@ -84,6 +86,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
   it('emits a full query chunk when change records have no scoped keys (delta unsound)', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       delta: largeCartDeltaMeta(),
       load: () => largeCartValue(),
       reads: [cart],
@@ -116,6 +119,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     // A short full value: one item. Delta for one item is larger than the value itself.
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       delta: [{ domain: 'cart', key: 'productId', path: 'items' }],
       load: () => ({ items: [{ productId: 'p1', qty: 2 }] }),
       reads: [cart],
@@ -149,6 +153,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
   it('emits a full query chunk when query has no delta meta', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       // No delta field → always full regardless of change record scoping.
       load: () => ({ count: 1 }),
       reads: [cart],

@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 
 import { route } from './route.js';
@@ -5,7 +6,7 @@ import { findRouteAmbiguities, matchRoute, normalizePathname } from './match.js'
 
 describe('server route matching', () => {
   it('normalizes trailing slashes before route matching with 308 metadata', () => {
-    const product = route('/products/:id', {});
+    const product = route('/products/:id', { access: publicAccess('test fixture') });
 
     const match = matchRoute([product], '/products/p1/');
 
@@ -23,15 +24,15 @@ describe('server route matching', () => {
   });
 
   it('prefers static segments over params at each depth', () => {
-    const product = route('/products/:id', {});
-    const productNew = route('/products/new', {});
+    const product = route('/products/:id', { access: publicAccess('test fixture') });
+    const productNew = route('/products/new', { access: publicAccess('test fixture') });
 
     expect(matchRoute([product, productNew], '/products/new')?.route).toBe(productNew);
     expect(matchRoute([productNew, product], '/products/p1')?.route).toBe(product);
   });
 
   it('URL-decodes param segments so typed links round-trip (I2 ROUTING-NAV-2)', () => {
-    const product = route('/products/:id/files/:file', {});
+    const product = route('/products/:id/files/:file', { access: publicAccess('test fixture') });
 
     // %2F decodes to '/' — a valid decoded segment value.
     expect(matchRoute([product], '/products/sku%2F1/files/readme.md')?.params).toEqual({
@@ -39,7 +40,7 @@ describe('server route matching', () => {
       id: 'sku/1',
     });
     // Space encoded as %20 must round-trip to the human value.
-    const users = route('/users/:id', {});
+    const users = route('/users/:id', { access: publicAccess('test fixture') });
     expect(matchRoute([users], '/users/john%20doe')?.params).toEqual({ id: 'john doe' });
     // Malformed percent-sequence → no match (404).
     expect(matchRoute([users], '/users/bad%ZZid')).toBeUndefined();
@@ -98,7 +99,7 @@ describe('server route matching', () => {
     // Backslash runs collapse too (no smuggle via `/orders/\items`).
     expect(normalizePathname('/a/\\/b').pathname).toBe('/a/b');
 
-    const files = route('/files/:a/:b', {});
+    const files = route('/files/:a/:b', { access: publicAccess('test fixture') });
     // The empty middle segment must NOT produce a match with `a=''`; the canonical
     // form `/files/etc` has only one interior segment so the two-param route no
     // longer matches it.
@@ -112,7 +113,7 @@ describe('server route matching', () => {
   // literal param value (a traversal primitive). Aligns with the static-export check
   // (static-export-route-plan.ts) which already rejects decoded `.`/`..` segments.
   it('removes dot-segments and rejects decoded `.`/`..` param values (L2-route-matcher-2)', () => {
-    const file = route('/files/:name', {});
+    const file = route('/files/:name', { access: publicAccess('test fixture') });
 
     // Literal dot-segments are removed during normalization (RFC-3986 §5.2.4).
     expect(normalizePathname('/files/../etc').pathname).toBe('/etc');
@@ -137,11 +138,11 @@ describe('server route matching', () => {
   it('reports KV228 ambiguities when two route patterns can match one pathname', () => {
     expect(
       findRouteAmbiguities([
-        route('/products/:id', {}),
-        route('/products/new', {}),
-        route('/products/:sku/reviews', {}),
-        route('/products/:id/reviews', {}),
-        route('/cart', {}),
+        route('/products/:id', { access: publicAccess('test fixture') }),
+        route('/products/new', { access: publicAccess('test fixture') }),
+        route('/products/:sku/reviews', { access: publicAccess('test fixture') }),
+        route('/products/:id/reviews', { access: publicAccess('test fixture') }),
+        route('/cart', { access: publicAccess('test fixture') }),
       ]),
     ).toEqual([
       {

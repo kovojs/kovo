@@ -5,7 +5,9 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/in
 const auditRecord = domain('audit-record');
 
 export const saveSecret = mutation('sanitized-kovo-changes/save', {
-  access: publicAccess('integration fixture mutation sanitized-kovo-changes/save has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation sanitized-kovo-changes/save has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ id: s.string(), secret: s.string() }),
   handler: async (input: { id: string; secret: string }, request: KovoFixtureRequest, context) => {

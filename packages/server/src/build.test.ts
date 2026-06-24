@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -54,6 +55,7 @@ describe('server build-time deployment API', () => {
         app: createApp({
           routes: [
             route('/cart', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml(
                   '<main>Cart <button on:click="/c/__v/cart-v1/cart.client.js#Cart$click">Click</button></main>',
@@ -189,6 +191,7 @@ describe('server build-time deployment API', () => {
         app: createApp({
           routes: [
             route('/', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main class="route-shell">Home</main>');
               },
@@ -257,6 +260,7 @@ describe('server build-time deployment API', () => {
         createApp({
           routes: [
             route('/', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main>Home</main>');
               },
@@ -312,6 +316,7 @@ describe('server build-time deployment API', () => {
         app: createApp({
           routes: [
             route('/', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main>Home</main>');
               },
@@ -347,6 +352,7 @@ describe('server build-time deployment API', () => {
     const app = createApp({
       routes: [
         route('/app', {
+          access: publicAccess('test fixture'),
           page() {
             return renderedHtml('<main>App</main>');
           },
@@ -430,6 +436,7 @@ describe('server build-time deployment API', () => {
         app: createApp({
           routes: [
             route('/hello', {
+              access: publicAccess('test fixture'),
               guard: () => true,
               page() {
                 return renderedHtml('<main>Hello</main>');
@@ -527,6 +534,7 @@ export default async function handler(request) {
         app: createApp({
           routes: [
             route('/', {
+              access: publicAccess('test fixture'),
               guard: () => true,
               page() {
                 return renderedHtml('<main>Home</main>');
@@ -581,6 +589,7 @@ export default async function handler(request) {
         app: createApp({
           routes: [
             route('/hello', {
+              access: publicAccess('test fixture'),
               guard: () => true,
               page() {
                 return renderedHtml('<main>Hello</main>');
@@ -700,6 +709,7 @@ export default async function handler(request) {
         app: createApp({
           routes: [
             route('/', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main>Static Home</main>');
               },
@@ -786,11 +796,13 @@ export default async function handler(request) {
         app: createApp({
           routes: [
             route('/static', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main>Static Route</main>');
               },
             }),
             route('/dynamic', {
+              access: publicAccess('test fixture'),
               guard: () => true,
               page() {
                 return renderedHtml('<main>Dynamic Route</main>');
@@ -977,6 +989,7 @@ export default async function handler(request) {
         app: createApp({
           routes: [
             route('/hello', {
+              access: publicAccess('test fixture'),
               guard: () => true,
               page() {
                 return renderedHtml('<main>Hello</main>');
@@ -1087,6 +1100,7 @@ export default async function handler(request) {
         app: createApp({
           routes: [
             route('/db', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main>DB</main>');
               },

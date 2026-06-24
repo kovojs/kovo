@@ -329,30 +329,28 @@ reasons live in a reviewed snapshot (a new public surface is a code-review diff)
 endpoints use `access: verified`; the migration **assigns a real decision at every call site — no
 `public('TODO')` stubs**. The build staying red until every surface genuinely decides is the migration's value.
 
-- [ ] Make `access:` a **required** field on every query, mutation, route, endpoint, and webhook; omission is
+- [x] Make `access:` a **required** field on every query, mutation, route, endpoint, and webhook; omission is
       a blocking diagnostic (KV436). Inhabitants: a guard chain, `public('reason')`, or `access: verified`
       (signature-verified machine endpoints). No default; never auto-inject `authed` (Constitution #2 — silent
       behavior-at-a-distance).
-  - Foundation evidence: `packages/core/src/graph.ts` defines structured `AccessExplainFact` rows,
-    `packages/cli/src/graph-output.ts` adds `kovo explain --access` from explicit facts plus legacy
-    guard/auth derivation, and `packages/core/src/diagnostics.ts` assigns KV436 so explicit missing-access
-    facts fail `kovo check`.
-  - Current partial evidence: `packages/server/src/{query.ts,mutation/definition.ts,route.ts,endpoint.ts,webhook.ts}`
-    require `access:` in public definition types; `packages/server/src/access.ts` exposes `publicAccess`,
-    `verifiedAccess`, and `guardAccess`; `packages/server/src/access-graph.ts` treats missing explicit
-    access as KV436 even when legacy guards/auth exist. Verified by
-    `vp check packages/server/src packages/better-auth/src`,
-    `vp exec vitest --run packages/server/src/access.test.ts packages/server/src/access-graph.test.ts packages/server/src/app-diagnostics.test.ts`,
-    `pnpm run check:api-surface`, `pnpm run check:exports`, and `git diff --check`.
-  - Remaining gap: broad app/example/site/fixture call sites are still being migrated to real decisions.
+  - Evidence: `packages/server/src/{query.ts,mutation/definition.ts,route.ts,endpoint.ts,webhook.ts}`
+    require `access:` in public definition types; `packages/server/src/access-graph.ts` emits KV436 for
+    missing explicit access even when legacy guard/auth posture exists. Verified by `vp check`, `vp test`,
+    `vp run integration`, `pnpm run check:api-surface`, and
+    `access-declaration-scan/v1 misses=0`.
 - [ ] Keep the missing-access diagnostic orthogonal to correctness: it proves a decision _exists_, never that it is _correct_ (a
       no-op `return true` guard satisfies it). Retain KV414 (IDOR) and record every `public()` in a reviewed
       `kovo explain --access` snapshot so each public surface is a diff, not an invisible default.
-- [ ] Migrate by updating call sites with real decisions, not stubs.
+- [x] Migrate by updating call sites with real decisions, not stubs.
   - Mechanically port existing `guard: X` → `access: X`. For every currently-unguarded surface, assign the
     correct decision by hand — a real guard or `public('<genuine reason>')`. **No `public('TODO')` placeholder
     debt.** Touches every surface type, all fixtures, and `runGuard`; amend SPEC §10.2 and follow
     `rules/api-surface.md`.
+  - Evidence: `examples/**`, `site/**`, `packages/create-kovo/templates/**`, `conformance/**`,
+    `tests/integration/**`, repo-local test/helper fixtures, and generated graph inputs now carry explicit
+    decisions; `SPEC.md` §6.4/§10.2/§10.3 documents explicit access. Verified by `vp check`, `vp test`,
+    `vp run integration`, `node site/tutorial/run-steps.mjs`, `vp run typecheck-examples`, and
+    `access-declaration-scan/v1 misses=0`.
   - Open risk: `public()` reasons are greppable intent leakage (legibility-as-confidentiality footgun);
     reasons must not carry sensitive operational detail.
 

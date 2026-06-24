@@ -1,4 +1,5 @@
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import { publicAccess } from '@kovojs/server';
 
 export const account = { key: 'slot_account' };
 
@@ -15,6 +16,7 @@ export async function readBalance(db: KovoFixtureRequest['db']): Promise<Balance
 }
 
 export const balanceQuery = {
+  access: publicAccess('integration fixture manual balance query has no runtime guard'),
   key: 'slotBalance',
   load: (_input: unknown, context: { request: KovoFixtureRequest }) =>
     readBalance(context.request.db),

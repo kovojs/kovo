@@ -49,7 +49,9 @@ export const boardQuery = query('board', {
 });
 
 export const reorderBoard = mutation('stamp-list-reorder/reorder', {
-  access: publicAccess('integration fixture mutation stamp-list-reorder/reorder has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation stamp-list-reorder/reorder has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   registry: {

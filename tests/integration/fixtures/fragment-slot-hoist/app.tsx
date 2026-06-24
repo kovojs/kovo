@@ -5,7 +5,9 @@ import { renderBalanceShell } from './balance-shell';
 import { account, balanceQuery } from './shared';
 
 export const deposit = mutation('fragment-slot-hoist/deposit', {
-  access: publicAccess('integration fixture mutation fragment-slot-hoist/deposit has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation fragment-slot-hoist/deposit has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ amount: s.number().int().min(1) }),
   registry: {

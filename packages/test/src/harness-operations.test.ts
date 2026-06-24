@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { domain, mutation, query, s } from '@kovojs/server';
+import { domain, mutation, query, s, publicAccess } from '@kovojs/server';
 import {
   executeHarnessMutation,
   executeHarnessQuery,
@@ -30,6 +30,7 @@ describe('@kovojs/test harness operations', () => {
     ];
     const state = createRecordingOperationVerifier(observed);
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb; session?: { user?: { id: string } } }) {
@@ -70,6 +71,7 @@ describe('@kovojs/test harness operations', () => {
     ];
     const state = createRecordingOperationVerifier(observed);
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb; session?: { user?: { id: string } } }) {
@@ -114,6 +116,7 @@ describe('@kovojs/test harness operations', () => {
     ];
     const state = createRecordingOperationVerifier(observed);
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load() {
         return { count: 'two' };
       },
@@ -144,6 +147,7 @@ describe('@kovojs/test harness operations', () => {
     ];
     const state = createRecordingOperationVerifier(observed);
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load(
         _input,
         context?: { db: FakeDb; request: { db: FakeDb; session?: { cartId: string } } },

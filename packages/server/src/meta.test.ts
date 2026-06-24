@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 
 import { renderPageHints } from './hints.js';
@@ -34,6 +35,7 @@ describe('server route meta and i18n hints', () => {
 
   it('derives typed route meta from query results', () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load: (_input: { id: string }) => ({
         id: 'p1',
         name: 'Coffee',
@@ -116,6 +118,7 @@ describe('server route meta and i18n hints', () => {
     // product row surfacing `javascript:alert(1)`) must be sanitized to `#` before escaping,
     // while an http(s) origin URL is preserved verbatim.
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load: (_input: { id: string }) => ({ id: 'p1', image: '/products/p1.png' }),
       reads: [domain('product')],
     });
@@ -144,6 +147,7 @@ describe('server route meta and i18n hints', () => {
 
   it('reports invalid query-derived meta declarations early', () => {
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       load: (_input: { id: string }) => ({ id: 'p1', name: 'Coffee' }),
       reads: [domain('product')],
     });

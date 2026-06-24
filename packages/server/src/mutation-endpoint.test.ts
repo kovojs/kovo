@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
@@ -73,6 +74,7 @@ describe('server mutation endpoint routing', () => {
   it('routes mutation endpoints with Kovo-Fragment through enhanced fragment wire responses', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 1 }),
       reads: [cart],
     });
@@ -120,11 +122,13 @@ describe('server mutation endpoint routing', () => {
   it('rerenders only matching keyed query instances in enhanced mutation responses', async () => {
     const product = domain('product');
     const productP1 = query('productDetail', {
+      access: publicAccess('test fixture'),
       instanceKey: 'product:p1',
       load: () => ({ id: 'p1', stock: 0 }),
       reads: [product],
     });
     const productP2 = query('productDetail', {
+      access: publicAccess('test fixture'),
       instanceKey: 'product:p2',
       load: () => ({ id: 'p2', stock: 10 }),
       reads: [product],
@@ -161,11 +165,13 @@ describe('server mutation endpoint routing', () => {
     const cart = domain('generated-direct-cart-fallback');
     const product = domain('generated-direct-product');
     const productP1 = query('generatedProductDetail', {
+      access: publicAccess('test fixture'),
       instanceKey: 'generated-direct-product:p1',
       load: () => ({ id: 'p1', stock: 0 }),
       reads: [product],
     });
     const productP2 = query('generatedProductDetail', {
+      access: publicAccess('test fixture'),
       instanceKey: 'generated-direct-product:p2',
       load: () => ({ id: 'p2', stock: 10 }),
       reads: [product],
@@ -214,6 +220,7 @@ describe('server mutation endpoint routing', () => {
   it('uses compiler-registered query reads for direct enhanced responses', async () => {
     const cart = domain('generated-query-read-cart-fallback');
     const catalogQuery = query('generatedCatalogRead', {
+      access: publicAccess('test fixture'),
       load: () => ({ items: ['p1'] }),
     });
     const refreshCatalog = mutation('generated/catalog/refresh', {

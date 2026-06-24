@@ -21,7 +21,9 @@ async function renderPanel(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 const refreshParent = mutation('morph-nested-island-state/refresh', {
-  access: publicAccess('integration fixture mutation morph-nested-island-state/refresh has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation morph-nested-island-state/refresh has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest) => {

@@ -4,7 +4,9 @@ import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 export const revealRecommendation = mutation('late-fragment-static-css/reveal', {
-  access: publicAccess('integration fixture mutation late-fragment-static-css/reveal has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation late-fragment-static-css/reveal has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   handler: () => ({ ok: true }),

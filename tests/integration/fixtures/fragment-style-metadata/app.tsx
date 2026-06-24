@@ -18,7 +18,9 @@ const lateCardStylesheets =
       : [];
 
 export const revealLateCard = mutation('fragment-style-metadata/reveal', {
-  access: publicAccess('integration fixture mutation fragment-style-metadata/reveal has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation fragment-style-metadata/reveal has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   handler: () => ({ ok: true }),

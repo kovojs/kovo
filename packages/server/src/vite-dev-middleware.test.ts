@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
@@ -18,7 +19,12 @@ import { renderedHtml } from './html.js';
 describe('server app shell Vite plugin', () => {
   it('owns the app-shell dev plugin option matrix for generated module loading', async () => {
     const app = createApp({
-      routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>') })],
+      routes: [
+        route('/cart', {
+          access: publicAccess('test fixture'),
+          page: () => trustedHtml('<main>Cart</main>'),
+        }),
+      ],
     });
     const plugin = kovoAppShellViteDevPlugin({
       appExportName: 'shopApp',
@@ -84,6 +90,7 @@ describe('server app shell Vite plugin', () => {
 
   it('registers dev middleware that serves shell requests and passes source assets onward', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       meta: { title: 'Product' },
       page({ params }) {
         return renderedHtml(`<main>${params.id}</main>`);
@@ -142,6 +149,7 @@ describe('server app shell Vite plugin', () => {
 
   it('registers dev middleware that loads the routed app shell through Vite', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       page({ params }) {
         return renderedHtml(`<main>${params.id}</main>`);
       },
@@ -214,6 +222,7 @@ describe('server app shell Vite plugin', () => {
       version: 'product-v1',
     });
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       modulepreloads: [clientHref],
       page({ params }) {
         return renderedHtml(`<main>${params.id}</main>`);
@@ -281,7 +290,7 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('keeps explicit dev node handler exports strict', async () => {
-    const app = createApp({ routes: [route('/cart', {})] });
+    const app = createApp({ routes: [route('/cart', { access: publicAccess('test fixture') })] });
     const plugin = kovoAppShellViteDevPlugin({
       nodeHandlerExportName: 'shopNodeHandler',
     });
@@ -338,6 +347,7 @@ describe('server app shell Vite plugin', () => {
       ),
     });
     const cartRoute = route('/cart', {
+      access: publicAccess('test fixture'),
       modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
       page() {
         return renderedHtml('<main>Cart</main>');

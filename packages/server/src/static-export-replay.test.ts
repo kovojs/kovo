@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
@@ -21,10 +22,12 @@ describe('server static export app replay boundary', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           page: () =>
             trustedHtml(`<main><button on:click="${href}#Cart$open">Open</button></main>`),
         }),
         route('/downloads/orders.pdf', {
+          access: publicAccess('test fixture'),
           page: () =>
             respond.file('%PDF-1.7\n', {
               contentType: 'application/pdf',
@@ -85,6 +88,7 @@ describe('server static export app replay boundary', () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
+          access: publicAccess('test fixture'),
           page(context) {
             const params = context.params as { id: string };
             return renderedHtml(`<main data-product="${params.id}">Product ${params.id}</main>`);
@@ -114,6 +118,7 @@ describe('server static export app replay boundary', () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
+          access: publicAccess('test fixture'),
           page(context) {
             const params = context.params as { id: string };
             if (params.id === 'download') {
@@ -148,6 +153,7 @@ describe('server static export app replay boundary', () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
+          access: publicAccess('test fixture'),
           page: () => trustedHtml('<main>Product</main>'),
         }),
       ],
@@ -169,11 +175,13 @@ describe('server static export app replay boundary', () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
+          access: publicAccess('test fixture'),
           page() {
             throw new Error('ambiguous route replay should not run');
           },
         }),
         route('/products/new', {
+          access: publicAccess('test fixture'),
           page: () => trustedHtml('<main>New</main>'),
         }),
       ],

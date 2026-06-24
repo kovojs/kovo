@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
@@ -57,6 +58,7 @@ describe('server static export synthetic request boundary', () => {
       app: createApp({
         routes: [
           route('/context', {
+            access: publicAccess('test fixture'),
             page: () => trustedHtml('<main>context shell</main>'),
           }),
         ],
@@ -77,6 +79,7 @@ describe('server static export synthetic request boundary', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           page: () => trustedHtml('<main>Home</main>'),
         }),
       ],

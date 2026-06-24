@@ -33,7 +33,9 @@ async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const removeIsland = mutation('morph-remove-aborts/remove', {
-  access: publicAccess('integration fixture mutation morph-remove-aborts/remove has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation morph-remove-aborts/remove has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   handler: async (_input, request: KovoFixtureRequest) => {

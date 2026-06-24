@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -46,6 +47,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/', {
+            access: publicAccess('test fixture'),
             page: () => {
               rendered = true;
               return renderedHtml('<main>Home</main>');
@@ -83,6 +85,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           page: () => {
             rendered = true;
             return renderedHtml('<main>Home</main>');
@@ -117,6 +120,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/', {
+            access: publicAccess('test fixture'),
             page: () => {
               rendered = true;
               return renderedHtml('<main>Home</main>');
@@ -152,12 +156,14 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/docs/intro', {
+          access: publicAccess('test fixture'),
           page: () => {
             replayed = true;
             return renderedHtml('<main>Intro</main>');
           },
         }),
         route('/docs/intro/', {
+          access: publicAccess('test fixture'),
           page: () => trustedHtml('<main>Duplicate intro</main>'),
         }),
       ],
@@ -182,6 +188,7 @@ describe('server static export', () => {
     const guardedApp = createApp({
       routes: [
         route('/account', {
+          access: publicAccess('test fixture'),
           guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
           page: () => trustedHtml('<main>Account</main>'),
         }),
@@ -200,7 +207,12 @@ describe('server static export', () => {
     });
 
     const sessionApp = createApp({
-      routes: [route('/profile', { page: () => trustedHtml('<main>Profile</main>') })],
+      routes: [
+        route('/profile', {
+          access: publicAccess('test fixture'),
+          page: () => trustedHtml('<main>Profile</main>'),
+        }),
+      ],
       sessionProvider: () => ({ user: { id: 'u1' } }),
     });
 
@@ -222,6 +234,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/products/:id', {
+            access: publicAccess('test fixture'),
             page(context) {
               const params = context.params as { id: string };
               return renderedHtml(`<main data-product="${params.id}">Product ${params.id}</main>`);
@@ -255,6 +268,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/products/:id', {
+            access: publicAccess('test fixture'),
             page: () => trustedHtml('<main>Product</main>'),
             staticPaths: [
               'products/p1',
@@ -304,6 +318,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/products/:id', {
+            access: publicAccess('test fixture'),
             page: () => {
               rendered = true;
               return renderedHtml('<main>Product</main>');
@@ -334,6 +349,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
+          access: publicAccess('test fixture'),
           page: () => trustedHtml('<main>Product</main>'),
         }),
       ],
@@ -368,9 +384,11 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           page: () => trustedHtml('<main>Home</main>'),
         }),
         route('/downloads/orders.pdf', {
+          access: publicAccess('test fixture'),
           page: () =>
             respond.file('%PDF-1.7\n', {
               contentType: 'application/pdf',

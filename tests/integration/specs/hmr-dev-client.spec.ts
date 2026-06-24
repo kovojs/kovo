@@ -21,8 +21,8 @@ import {
   query,
   route,
   s,
-
-  publicAccess,} from '@kovojs/server';
+  publicAccess,
+} from '@kovojs/server';
 import {
   createKovoAppShellDevDiagnosticLedger,
   type KovoAppShellViteMiddleware,

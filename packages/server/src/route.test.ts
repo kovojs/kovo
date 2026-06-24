@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it, vi } from 'vitest';
 import { redirect } from '@kovojs/core';
 
@@ -18,6 +19,7 @@ describe('route primitives', () => {
   it('rejects raw string route pages and layout renders', () => {
     const assertRawStringPageRejected = () => {
       route('/raw-page', {
+        access: publicAccess('test fixture'),
         // @ts-expect-error SPEC §4.1/§9.1: route page markup must be TSX/JSX or an explicit trust boundary.
         page: () => '<main>Raw</main>',
       });
@@ -35,6 +37,7 @@ describe('route primitives', () => {
 
   it('declares route schemas, route-owned hints, and typed PRG redirects', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       meta: meta({ title: 'Product detail' }),
       page(context) {
         const id: string = context.params.id;
@@ -85,6 +88,7 @@ describe('route primitives', () => {
 
   it('runs route pages through guards and notFound page outcomes', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       guard: (request: { session?: { userId?: string } | null }) =>
         request.session?.userId === 'u1',
       page(context, request: { session: { userId: string } }) {
@@ -149,6 +153,7 @@ describe('route primitives', () => {
     // so we construct the { location, status: 303 } shape to match the Redirect interface).
     const redirectValue: ReturnType<typeof redirect> = { location: '/new-home', status: 303 };
     const homeRoute = route('/home', {
+      access: publicAccess('test fixture'),
       page: () => redirectValue,
     });
 
@@ -161,6 +166,7 @@ describe('route primitives', () => {
 
   it('escapes default route string returns as text', async () => {
     const unsafeStringRoute = route('/unsafe', {
+      access: publicAccess('test fixture'),
       page: (() => '<img src=x onerror=alert(1)>') as any,
     });
 
@@ -176,11 +182,13 @@ describe('route primitives', () => {
     const onError = vi.fn();
     const request = {};
     const throwingPage = route('/products/:id', {
+      access: publicAccess('test fixture'),
       page() {
         throw loadError;
       },
     });
     const throwingRenderer = route('/cart', {
+      access: publicAccess('test fixture'),
       page() {
         return renderedHtml('cart');
       },

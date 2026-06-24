@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 
 import { respond } from './response.js';
@@ -6,6 +7,7 @@ import { renderRoutePageResponse, route } from './route.js';
 describe('route responses', () => {
   it('renders route file and stream outcomes without passing through the HTML renderer', async () => {
     const fileRoute = route('/downloads/orders.pdf', {
+      access: publicAccess('test fixture'),
       page() {
         return respond.file('%PDF-1.7\n', {
           contentType: 'application/pdf',
@@ -15,6 +17,7 @@ describe('route responses', () => {
       },
     });
     const streamRoute = route('/attachments/:id', {
+      access: publicAccess('test fixture'),
       page(context) {
         return respond.stream(new ReadableStream<Uint8Array>(), {
           contentType: 'application/octet-stream',

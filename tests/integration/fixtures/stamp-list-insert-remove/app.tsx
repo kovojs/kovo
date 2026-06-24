@@ -49,7 +49,9 @@ export const cartQuery = query('cart', {
 });
 
 export const changeCart = mutation('stamp-list-insert-remove/change', {
-  access: publicAccess('integration fixture mutation stamp-list-insert-remove/change has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation stamp-list-insert-remove/change has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ mode: s.string() }),
   registry: {

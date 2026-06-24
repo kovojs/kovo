@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
@@ -20,7 +21,10 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
     // SPEC §5.2.1 rule 2(b): every full page render must carry the build token.
     // Before the fix, buildToken() returned '' for apps with no client modules,
     // and the meta was omitted entirely.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
     const app = createApp({ routes: [homeRoute] });
 
     const response = await renderAppRouteDocumentResponse({
@@ -42,7 +46,10 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
   it('render-plan fingerprint flows through registry into the kovo-build meta (D1)', async () => {
     // Two identical apps whose registries differ only by renderPlanFingerprint must
     // emit different kovo-build meta content values.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
 
     const makeApp = (fingerprint: string) => {
       const registry = createMemoryVersionedClientModuleRegistry({
@@ -92,6 +99,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     // SPEC §9.3: fingerprint must be derived from session identity, not full cookie header.
     // Before the fix, any CSRF/theme cookie churn produced a different fingerprint.
     const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
       page: () => trustedHtml('<main>Home</main>'),
     });
 
@@ -144,7 +152,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('different session ids produce different fingerprints (K3)', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
 
     const makeReq = (sessionId: string) =>
       new Request('https://example.test/', {
@@ -188,7 +199,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('stamps fingerprints from non-cookie sessions resolved by the lifecycle request', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
     const app = createApp({
       routes: [homeRoute],
       sessionProvider(request) {
@@ -225,7 +239,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('uses a resolved second-cookie session instead of collapsing on an identical first cookie', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
     const sessionProvider = (request: Request) => {
       const cookie = request.headers.get('cookie') ?? '';
       const match = cookie.match(/(?:^|; )sid=([^;]+)/);
@@ -261,7 +278,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('anonymous request (no cookies) produces no kovo-session meta (K3)', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
     const app = createApp({ routes: [homeRoute] });
 
     const response = await renderAppRouteDocumentResponse({
@@ -279,6 +299,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
 describe('server app document boundary', () => {
   it('assembles matched route documents through app render options', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       page({ params }) {
         return { id: params.id };
       },
@@ -313,6 +334,7 @@ describe('server app document boundary', () => {
 
   it('streams after-paint deferred route regions after the initial document shell', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       async page({ params }) {
         return renderedHtml(
           `<main><h1>Product ${params.id}</h1>` +
@@ -356,6 +378,7 @@ describe('server app document boundary', () => {
 
   it('streams visible deferred route regions for viewport-gated browser apply', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       async page({ params }) {
         return renderedHtml(
           `<main><h1>Product ${params.id}</h1>` +
@@ -397,6 +420,7 @@ describe('server app document boundary', () => {
 
   it('renders critical regions immediately without a deferred stream', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       async page({ params }) {
         return renderedHtml(
           await defer({
@@ -429,6 +453,7 @@ describe('server app document boundary', () => {
       criticalCss: ':root{--brand:blue}',
     });
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       stylesheets: [stylesheet('./product.css'), appStylesheet],
       page: () => trustedHtml('<main>Product</main>'),
     });
@@ -503,6 +528,7 @@ describe('server app document boundary', () => {
 
   it('renders route notFound outcomes through the configured 404 shell', async () => {
     const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
       page() {
         return notFound();
       },
@@ -537,6 +563,7 @@ describe('server app document boundary', () => {
     const routeError = new Error('private route detail');
     const onError = vi.fn();
     const brokenRoute = route('/broken', {
+      access: publicAccess('test fixture'),
       page() {
         throw routeError;
       },
@@ -576,6 +603,7 @@ describe('server app document boundary', () => {
 
   it('renders route guard forbidden failures through the configured 403 shell', async () => {
     const adminRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       guard: guards.role<Request & { session?: { user: { roles: readonly string[] } } }>('admin'),
       page: () => trustedHtml('<main data-secret>Admin</main>'),
     });
@@ -626,10 +654,12 @@ describe('server app document boundary', () => {
         trustedHtml(`<section>${String(children)}</section>`),
     });
     const missingRoute = route('/admin/missing', {
+      access: publicAccess('test fixture'),
       layout: NotFoundLayout,
       page: () => notFound(),
     });
     const forbiddenRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       layout: AdminLayout,
       page: () => trustedHtml('<main data-secret>Admin</main>'),
     });
@@ -684,7 +714,10 @@ describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
     // response so a continuously-active user's session actually extends. Before this fix the
     // GET document path never passed `onSessionSetCookie`, so the refresh cookies were dropped
     // and the session was silently hard-logged-out at the original boundary.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
     const app = createApp({
       routes: [homeRoute],
       sessionProvider: () => ({
@@ -714,7 +747,10 @@ describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
   });
 
   it('emits no Set-Cookie when the session provider returns a plain value (no refresh)', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
     const app = createApp({
       routes: [homeRoute],
       sessionProvider: () => ({ user: { id: 'u1' } }),
@@ -745,7 +781,10 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     // loading the public unguarded `/` got a CACHEABLE response carrying their `Set-Cookie` → a
     // shared CDN/proxy caches it and replays the session cookie to other anonymous visitors
     // (cross-principal session-token leak / takeover).
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
     expect(homeRoute.guard).toBeUndefined();
 
     const app = createApp({
@@ -776,7 +815,10 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
   it('an unguarded route with a plain-value session provider (no Set-Cookie) stays cacheable', async () => {
     // Negative: no per-principal cookie emitted → no forced no-store. An unguarded, anonymous
     // document remains shared-cacheable; we must not over-broadly disable caching.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
     const app = createApp({
       routes: [homeRoute],
       sessionProvider: () => ({ user: { id: 'u1' } }),

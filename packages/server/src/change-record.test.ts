@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { validateHeaderValue } from 'node:http';
 import { describe, expect, it } from 'vitest';
 
@@ -125,16 +126,19 @@ describe('server change records', () => {
     // Canonical per-row identity of domain `catalog` is `catalog:<key>` (name == domain).
     const catalog = domain('catalog');
     const catalogP1 = query('catalog', {
+      access: publicAccess('test fixture'),
       instanceKey: 'catalog:p1',
       reads: [catalog],
     });
     const catalogP2 = query('catalog', {
+      access: publicAccess('test fixture'),
       instanceKey: 'catalog:p2',
       reads: [catalog],
     });
     // A differently-named reader of the same domain is NOT a provable single-row
     // identity → it over-invalidates (reruns) on any keyed catalog change.
     const priceP2 = query('priceDetail', {
+      access: publicAccess('test fixture'),
       instanceKey: 'priceDetail:p2',
       reads: [catalog],
     });
@@ -174,12 +178,14 @@ describe('server change records', () => {
     const catalog = domain('catalog');
     // Sibling per-row instance `catalog:p2` must NOT rerun when `p1` is touched.
     const catalogP2 = query('catalog', {
+      access: publicAccess('test fixture'),
       instanceKey: 'catalog:p2',
       load: () => ({ id: 'p2', title: 'Catalog p2' }),
       reads: [catalog],
     });
     // Non-row reader of the domain reruns (over-invalidate).
     const priceP2 = query('priceDetail', {
+      access: publicAccess('test fixture'),
       instanceKey: 'priceDetail:p2',
       load: () => ({ id: 'p2', amount: 25 }),
       reads: [catalog],
@@ -215,6 +221,7 @@ describe('server change records', () => {
     // A list reader keyed `orderList:active` reads the `order` domain but is not a
     // single-row identity; today it is silently excluded and renders stale data.
     const orderList = query('orderList', {
+      access: publicAccess('test fixture'),
       instanceKey: 'orderList:active',
       load: () => ({ orders: ['o1', 'o2'] }),
       reads: [order],
@@ -249,8 +256,11 @@ describe('server change records', () => {
   it('emits manual invalidate escape-hatch records from mutation context', async () => {
     const cart = domain('cart');
     const product = domain('product');
-    const cartQuery = query('cart', { reads: [cart] });
-    const productQuery = query('product', { reads: [product] });
+    const cartQuery = query('cart', { access: publicAccess('test fixture'), reads: [cart] });
+    const productQuery = query('product', {
+      access: publicAccess('test fixture'),
+      reads: [product],
+    });
     const syncInventory = mutation('inventory/sync', {
       input: s.object({ productId: s.string() }),
       registry: {

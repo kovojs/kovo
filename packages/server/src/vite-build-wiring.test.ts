@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +20,7 @@ import { renderedHtml } from './html.js';
 describe('server app shell Vite plugin', () => {
   it('wires build manifest hints and compiled client modules through the app shell', async () => {
     const cartRoute = route('/cart', {
+      access: publicAccess('test fixture'),
       modulepreloads: ['/c/manual.client.js?v=manual'],
       page() {
         return renderedHtml('<main><cart-badge>1</cart-badge></main>');
@@ -98,6 +100,7 @@ describe('server app shell Vite plugin', () => {
 
   it('wires a route-entry map through the Vite build helper before route hints are applied', async () => {
     const accountRoute = route('/account', {
+      access: publicAccess('test fixture'),
       page() {
         return renderedHtml('<main>Account</main>');
       },
@@ -141,7 +144,7 @@ describe('server app shell Vite plugin', () => {
   it('rejects stale route-entry maps through the Vite build helper', () => {
     expect(() =>
       createKovoAppShellViteBuild({
-        app: createApp({ routes: [route('/cart', {})] }),
+        app: createApp({ routes: [route('/cart', { access: publicAccess('test fixture') })] }),
         manifest: {
           'src/account.client.ts': {
             file: 'assets/account.js',
@@ -158,7 +161,10 @@ describe('server app shell Vite plugin', () => {
     expect(() =>
       createKovoAppShellViteBuild({
         app: createApp({
-          routes: [route('/products/:id', {}), route('/products/new', {})],
+          routes: [
+            route('/products/:id', { access: publicAccess('test fixture') }),
+            route('/products/new', { access: publicAccess('test fixture') }),
+          ],
         }),
         manifest: {
           'src/products.client.ts': {
@@ -176,7 +182,7 @@ describe('server app shell Vite plugin', () => {
 
   it('creates a build from a Vite output bundle manifest', () => {
     const build = createKovoAppShellViteBuildFromBundle({
-      app: createApp({ routes: [route('/cart', {})] }),
+      app: createApp({ routes: [route('/cart', { access: publicAccess('test fixture') })] }),
       bundle: {
         '.vite/manifest.json': {
           fileName: '.vite/manifest.json',
@@ -225,7 +231,7 @@ describe('server app shell Vite plugin', () => {
       );
 
       const build = await createKovoAppShellViteBuildFromManifestFile({
-        app: createApp({ routes: [route('/cart', {})] }),
+        app: createApp({ routes: [route('/cart', { access: publicAccess('test fixture') })] }),
         manifestFile: join(distDir, '.vite/manifest.json'),
         routeEntryMap: {
           '/cart': 'src/cart.client.ts',
@@ -252,7 +258,7 @@ describe('server app shell Vite plugin', () => {
 
   it('applies Vite base paths to build route hints and asset planning', () => {
     const build = createKovoAppShellViteBuild({
-      app: createApp({ routes: [route('/cart', {})] }),
+      app: createApp({ routes: [route('/cart', { access: publicAccess('test fixture') })] }),
       base: '/shop/',
       manifest: {
         'src/cart.client.ts': {
@@ -285,7 +291,7 @@ describe('server app shell Vite plugin', () => {
 
     try {
       const build = createKovoAppShellViteBuild({
-        app: createApp({ routes: [route('/', {})] }),
+        app: createApp({ routes: [route('/', { access: publicAccess('test fixture') })] }),
         clientModules: [
           {
             path: '/c/cart.client.js',
@@ -325,24 +331,27 @@ describe('server app shell Vite plugin', () => {
     const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-'));
     const built: KovoAppShellBuild[] = [];
     const outputs: KovoAppShellViteBuildOutput[] = [];
-    const plugin = kovoAppShellVitePlugin(createApp({ routes: [route('/cart', {})] }), {
-      build: {
-        clientModules: [
-          {
-            path: '/c/cart.client.js',
-            source: 'export const cart = true;',
-            version: 'cart-v1',
+    const plugin = kovoAppShellVitePlugin(
+      createApp({ routes: [route('/cart', { access: publicAccess('test fixture') })] }),
+      {
+        build: {
+          clientModules: [
+            {
+              path: '/c/cart.client.js',
+              source: 'export const cart = true;',
+              version: 'cart-v1',
+            },
+          ],
+          onBuild(build, output) {
+            built.push(build);
+            outputs.push(output);
           },
-        ],
-        onBuild(build, output) {
-          built.push(build);
-          outputs.push(output);
-        },
-        routeEntryMap: {
-          '/cart': 'src/cart.client.ts',
+          routeEntryMap: {
+            '/cart': 'src/cart.client.ts',
+          },
         },
       },
-    });
+    );
 
     try {
       await plugin.writeBundle?.(

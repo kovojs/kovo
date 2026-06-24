@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@kovojs/server';
+import { mutation, s, publicAccess } from '@kovojs/server';
 
 import { createKovoTestHarness } from './harness.js';
 import { createSqliteTestDb, type SqliteTestDb } from './sqlite.js';
@@ -14,6 +14,7 @@ describe('@kovojs/test SQLite harness integration', () => {
       db.exec('create table cart_items (product_id text primary key, qty integer not null)');
 
       const addToCart = mutation('cart/add', {
+        access: publicAccess('test fixture'),
         csrf: false,
         input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
         handler(input, request: { db: SqliteTestDb }) {
@@ -53,6 +54,7 @@ describe('@kovojs/test SQLite harness integration', () => {
 
   it('verifies raw better-sqlite3 handle calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: Pick<SqliteTestDb, 'sqlite'> }) {

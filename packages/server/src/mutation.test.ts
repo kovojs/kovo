@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 import type { Secret } from '@kovojs/core';
 
@@ -429,8 +430,11 @@ describe('server mutation lifecycle', () => {
   it('derives post-commit rerun queries from declared touches', async () => {
     const cart = domain('cart');
     const product = domain('product');
-    const cartQuery = query('cart', { reads: [cart] });
-    const productQuery = query('product', { reads: [product] });
+    const cartQuery = query('cart', { access: publicAccess('test fixture'), reads: [cart] });
+    const productQuery = query('product', {
+      access: publicAccess('test fixture'),
+      reads: [product],
+    });
     const addToCart = mutation('cart/add', {
       input: s.object({
         productId: s.string(),
@@ -461,6 +465,7 @@ describe('server mutation lifecycle', () => {
     const state = { committed: 0, pending: 0 };
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: state.committed }),
       reads: [cart],
     });
@@ -502,6 +507,7 @@ describe('server mutation lifecycle', () => {
 
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       instanceKey: (_input) => 'cart:c1',
       load(_input, context: { request: RequestContext }) {
         const cartId: string = context.request.session.cartId;
@@ -535,8 +541,11 @@ describe('server mutation lifecycle', () => {
   it('derives post-commit rerun queries from inferred touch sites when touches are absent or empty', async () => {
     const cart = domain('cart');
     const product = domain('product');
-    const cartQuery = query('cart', { reads: [cart] });
-    const productQuery = query('product', { reads: [product] });
+    const cartQuery = query('cart', { access: publicAccess('test fixture'), reads: [cart] });
+    const productQuery = query('product', {
+      access: publicAccess('test fixture'),
+      reads: [product],
+    });
     const addToCart = mutation('cart/add', {
       input: s.object({
         productId: s.string(),
@@ -598,10 +607,12 @@ describe('server mutation lifecycle', () => {
     // matcher over-invalidated every sibling instance).
     const product = domain('product');
     const productP1 = query('product', {
+      access: publicAccess('test fixture'),
       instanceKey: 'product:p1',
       reads: [product],
     });
     const productP2 = query('product', {
+      access: publicAccess('test fixture'),
       instanceKey: 'product:p2',
       reads: [product],
     });
@@ -637,8 +648,11 @@ describe('server mutation lifecycle', () => {
   it('preserves manual invalidations when inferred touch sites are active', async () => {
     const cart = domain('cart');
     const product = domain('product');
-    const cartQuery = query('cart', { reads: [cart] });
-    const productQuery = query('product', { reads: [product] });
+    const cartQuery = query('cart', { access: publicAccess('test fixture'), reads: [cart] });
+    const productQuery = query('product', {
+      access: publicAccess('test fixture'),
+      reads: [product],
+    });
     const addToCart = mutation('cart/add', {
       input: s.object({
         productId: s.string(),
@@ -679,8 +693,11 @@ describe('server mutation lifecycle', () => {
   it('keeps inferred touch sites authoritative over declared fallback touches', async () => {
     const cart = domain('cart');
     const product = domain('product');
-    const cartQuery = query('cart', { reads: [cart] });
-    const productQuery = query('product', { reads: [product] });
+    const cartQuery = query('cart', { access: publicAccess('test fixture'), reads: [cart] });
+    const productQuery = query('product', {
+      access: publicAccess('test fixture'),
+      reads: [product],
+    });
     const addToCart = mutation('cart/add', {
       input: s.object({
         productId: s.string(),
@@ -710,7 +727,10 @@ describe('server mutation lifecycle', () => {
 
   it('uses flat tags as the low-ceremony domain on-ramp', async () => {
     const pricing = tag('pricing');
-    const pricingQuery = query('pricing', { reads: [pricing] });
+    const pricingQuery = query('pricing', {
+      access: publicAccess('test fixture'),
+      reads: [pricing],
+    });
     const recalculate = mutation('pricing/recalculate', {
       input: s.object({ productId: s.string() }),
       registry: {

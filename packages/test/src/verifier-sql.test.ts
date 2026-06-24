@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { domain, mutation, s } from '@kovojs/server';
+import { domain, mutation, s, publicAccess } from '@kovojs/server';
 
 import { createKovoTestHarness } from './harness.js';
 import { createDbVerifier } from './verifier.js';
@@ -14,6 +14,7 @@ import {
 describe('@kovojs/test SQL verifier integration', () => {
   it('verifies insert-select SQL as a target write plus source reads', async () => {
     const productImport = mutation('product/import', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       registry: {
@@ -94,6 +95,7 @@ describe('@kovojs/test SQL verifier integration', () => {
 
   it('fails mutation exec when insert-select reads are missing from the touch graph', async () => {
     const productImport = mutation('product/import', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       registry: {
@@ -146,6 +148,7 @@ describe('@kovojs/test SQL verifier integration', () => {
 
   it('does not let unscoped KV406 cover missing mutation read domains', async () => {
     const productImport = mutation('product/import', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(_input, request: { db: FakeDb }) {
@@ -201,6 +204,7 @@ describe('@kovojs/test SQL verifier integration', () => {
 
   it('scopes mutation-read verification to the executed mutation graph entry', async () => {
     const productImport = mutation('product/import', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(_input, request: { db: FakeDb }) {

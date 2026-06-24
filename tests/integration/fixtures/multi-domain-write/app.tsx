@@ -29,7 +29,9 @@ function renderStock(stock: number): string {
 
 // Writes cart_items (cart) AND products (product); declares BOTH (touchGraph below).
 const addBoth = mutation('multi-domain-write/add-both', {
-  access: publicAccess('integration fixture mutation multi-domain-write/add-both has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation multi-domain-write/add-both has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
@@ -44,7 +46,9 @@ const addBoth = mutation('multi-domain-write/add-both', {
 // Writes both domains but the touchGraph DECLARES ONLY cart — product is the
 // silently-stale domain KV402 must catch.
 const addPartial = mutation('multi-domain-write/add-partial', {
-  access: publicAccess('integration fixture mutation multi-domain-write/add-partial has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation multi-domain-write/add-partial has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   async handler(_input: unknown, request: KovoFixtureRequest, context) {

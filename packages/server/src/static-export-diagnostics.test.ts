@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -45,6 +46,7 @@ describe('server static export diagnostic boundary', () => {
       const app = createApp({
         routes: [
           route('/', {
+            access: publicAccess('test fixture'),
             page() {
               throw new Error('route replay should not run');
             },
@@ -86,11 +88,13 @@ describe('server static export diagnostic boundary', () => {
       const app = createApp({
         routes: [
           route('/products/:id', {
+            access: publicAccess('test fixture'),
             page() {
               throw new Error('ambiguous route replay should not run');
             },
           }),
           route('/products/new', {
+            access: publicAccess('test fixture'),
             page: () => trustedHtml('<main>New</main>'),
           }),
         ],
@@ -116,6 +120,7 @@ describe('server static export diagnostic boundary', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           page: () => trustedHtml('<main>Home</main>'),
         }),
       ],

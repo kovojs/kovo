@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +28,7 @@ describe('server app shell Vite plugin build boundary', () => {
         app: createApp({
           routes: [
             route('/cart', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml(
                   [

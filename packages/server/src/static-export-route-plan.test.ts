@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
@@ -12,9 +13,11 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/docs/intro/', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Intro</main>'),
             }),
             route('/products/:id', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Product</main>'),
               staticPaths: ['/products/p1/', '/products/p2'],
             }),
@@ -37,13 +40,16 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/admin', {
+              access: publicAccess('test fixture'),
               guard: () => true,
               page: () => trustedHtml('<main>Admin</main>'),
             }),
             route('/products/:id', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Product</main>'),
             }),
             route('/orders/:id', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Order</main>'),
               staticPaths: ['/orders/:id', '/cart'],
             }),
@@ -85,16 +91,20 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/docs/intro', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Intro</main>'),
             }),
             route('/docs/intro/', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Duplicate intro</main>'),
             }),
             route('/products/:id', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Product</main>'),
               staticPaths: ['/products/p1', '/products/p1/'],
             }),
             route('/docs/:slug', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Docs</main>'),
               staticPaths: ['/docs/intro'],
             }),
@@ -138,9 +148,11 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/docs/%2e%2e', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Unsafe docs</main>'),
             }),
             route('/products/:id', {
+              access: publicAccess('test fixture'),
               page: () => trustedHtml('<main>Product</main>'),
               staticPaths: ['/products/%2f', '/products/%E0%A4%A'],
             }),

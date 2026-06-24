@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -28,6 +29,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/cart', {
+          access: publicAccess('test fixture'),
           page: () =>
             trustedHtml(`<main><button on:click="${cartHref}#Cart$add">Add</button></main>`),
         }),
@@ -69,6 +71,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/cart', {
+            access: publicAccess('test fixture'),
             modulepreloads: [cartHref],
             page: () =>
               trustedHtml(
@@ -125,6 +128,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/cart', {
+            access: publicAccess('test fixture'),
             modulepreloads: [cartUrl],
             page: () =>
               trustedHtml(
@@ -162,6 +166,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/', {
+            access: publicAccess('test fixture'),
             modulepreloads: ['/c/cart.client.js?v=cart-1'],
             page: () => trustedHtml('<main>Home</main>'),
           }),
@@ -219,6 +224,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/unsafe', {
+            access: publicAccess('test fixture'),
             modulepreloads: [badHref],
             page: () => trustedHtml('<main>Unsafe module path</main>'),
           }),

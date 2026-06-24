@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@kovojs/server';
+import { mutation, s, publicAccess } from '@kovojs/server';
 
 import {
   createFakeDb,
@@ -51,6 +51,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
 
     it('surfaces KV403 through the harness verificationDiagnostics() integration seam', async () => {
       const cartMutation = mutation('cart/add', {
+        access: publicAccess('test fixture'),
         csrf: false,
         input: s.object({ productId: s.string() }),
         handler(input, request: { db: FakeDb }) {
@@ -130,6 +131,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
       // The handler only writes the unconditional `cart` line; the declared
       // `stock-reserve` branch on `products` is never observed → KV405 + KV403.
       const cartMutation = mutation('cart/add', {
+        access: publicAccess('test fixture'),
         csrf: false,
         input: s.object({ productId: s.string(), reserve: s.boolean() }),
         handler(input, request: { db: FakeDb }) {
@@ -187,6 +189,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
 
     it('clears KV405 when the conditional arm runs under instrumentation', async () => {
       const cartMutation = mutation('cart/add', {
+        access: publicAccess('test fixture'),
         csrf: false,
         input: s.object({ productId: s.string(), reserve: s.boolean() }),
         handler(input, request: { db: FakeDb }) {
@@ -258,6 +261,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
 
     it('fires KV408 through the harness mutation exec seam', async () => {
       const reserveMutation = mutation('stock/reserve', {
+        access: publicAccess('test fixture'),
         csrf: false,
         input: s.object({ productId: s.string() }),
         handler(input, request: { db: FakeDb }) {

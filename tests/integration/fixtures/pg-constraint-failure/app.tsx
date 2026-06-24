@@ -14,7 +14,9 @@ type TxLike = {
 };
 
 export const duplicateCharge = mutation('pg-constraint-failure/charge', {
-  access: publicAccess('integration fixture mutation pg-constraint-failure/charge has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation pg-constraint-failure/charge has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ id: s.string() }),
   transaction: async (request: KovoFixtureRequest, run) =>

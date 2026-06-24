@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@kovojs/server';
+import { mutation, s, publicAccess } from '@kovojs/server';
 
 import { createKovoTestHarness } from './harness.js';
 import {
@@ -13,6 +13,7 @@ import {
 describe('@kovojs/test mutation verifier', () => {
   it('fails verification for writes to domains outside the static graph', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -43,6 +44,7 @@ describe('@kovojs/test mutation verifier', () => {
 
   it('scopes harness write verification to the executed mutation graph entry', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -79,6 +81,7 @@ describe('@kovojs/test mutation verifier', () => {
 
   it('uses explicit harness touch graph keys when mutation keys differ from graph entries', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -111,6 +114,7 @@ describe('@kovojs/test mutation verifier', () => {
 
   it('keeps scoped KV406 coverage tied to the executed mutation graph entry', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -152,6 +156,7 @@ describe('@kovojs/test mutation verifier', () => {
 
   it('allows scoped writes covered by same-entry KV406 annotations', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -191,6 +196,7 @@ describe('@kovojs/test mutation verifier', () => {
 
   it('checks only writes observed during the current mutation exec', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -226,6 +232,7 @@ describe('@kovojs/test mutation verifier', () => {
 
   it('fails verification for writes to unmapped tables', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {

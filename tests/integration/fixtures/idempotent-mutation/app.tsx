@@ -6,8 +6,8 @@ import {
   mutation,
   route,
   s,
-
-  publicAccess,} from '@kovojs/server';
+  publicAccess,
+} from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const csrf = {
@@ -23,7 +23,9 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const recordEntry = mutation('idempotent-mutation/record', {
-  access: publicAccess('integration fixture mutation idempotent-mutation/record has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation idempotent-mutation/record has no runtime guard',
+  ),
   input: s.object({ note: s.string() }),
   handler: async (input: { note: string }, request: KovoFixtureRequest) => {
     await request.db.exec(

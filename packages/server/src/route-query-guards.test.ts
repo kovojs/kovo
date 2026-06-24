@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
@@ -32,6 +33,7 @@ describe('route and query guard responses', () => {
     expect(assertBadProvider).toBeTypeOf('function');
 
     const adminRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       guard(request: AppRequest) {
         events.push(`route-guard:${request.session?.user.id ?? 'anonymous'}`);
         return guards.role<AppRequest>('admin')(request);
@@ -42,6 +44,7 @@ describe('route and query guard responses', () => {
       },
     });
     const accountQuery = query('account', {
+      access: publicAccess('test fixture'),
       guard(request: AppRequest) {
         events.push(`query-guard:${request.session?.user.id ?? 'anonymous'}`);
         return guards.authed<AppRequest>()(request);
@@ -104,6 +107,7 @@ describe('route and query guard responses', () => {
       user: { id: 'u1' },
     }));
     const inspectedRoute = route('/inspect', {
+      access: publicAccess('test fixture'),
       page(_context, request: AppRequest) {
         const descriptor = Object.getOwnPropertyDescriptor(request, 'session');
         return {
@@ -152,6 +156,7 @@ describe('route and query guard responses', () => {
   it('maps route and query guard failures to login redirects and 403 shells', async () => {
     type AppRequest = { session?: { user?: { roles?: readonly string[] } | null } | null };
     const authedRoute = route('/account', {
+      access: publicAccess('test fixture'),
       guard: guards.authed<AppRequest>(),
       onUnauthenticated({ next }) {
         return { location: `/signin?continue=${encodeURIComponent(next)}`, status: 303 };
@@ -160,14 +165,17 @@ describe('route and query guard responses', () => {
       search: s.object({ tab: s.string() }),
     });
     const adminRoute = route('/admin', {
+      access: publicAccess('test fixture'),
       guard: guards.role<AppRequest>('admin'),
       page: () => trustedHtml('admin'),
     });
     const accountQuery = query('account', {
+      access: publicAccess('test fixture'),
       guard: guards.authed<AppRequest>(),
       reads: [domain('user')],
     });
     const adminQuery = query('adminStats', {
+      access: publicAccess('test fixture'),
       guard: guards.role<AppRequest>('admin'),
       reads: [domain('admin')],
     });

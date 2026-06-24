@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@kovojs/server';
+import { mutation, s, publicAccess } from '@kovojs/server';
 
 import {
   createVerifiedFakeHarness,
@@ -13,6 +13,7 @@ import {
 describe('@kovojs/test harness verifier integration', () => {
   it('verifies observed writes against the static touch graph after exec', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -42,6 +43,7 @@ describe('@kovojs/test harness verifier integration', () => {
 
   it('exposes verification diagnostics through the harness context', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -101,6 +103,7 @@ describe('@kovojs/test harness verifier integration', () => {
 
   it('verifies raw SQL writes against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -131,6 +134,7 @@ describe('@kovojs/test harness verifier integration', () => {
 
   it('fails verification when raw SQL writes outside KV406 coverage', async () => {
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -170,6 +174,7 @@ describe('@kovojs/test harness verifier integration', () => {
       await bothWritten.promise;
     };
     const cartMutation = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: FakeDb }) {
@@ -181,6 +186,7 @@ describe('@kovojs/test harness verifier integration', () => {
       },
     });
     const auditMutation = mutation('audit/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ event: s.string() }),
       async handler(input, request: { db: FakeDb }) {

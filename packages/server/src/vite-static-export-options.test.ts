@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +28,7 @@ describe('server app shell Vite static export options boundary', () => {
         app: createApp({
           routes: [
             route('/shop', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main>Shop</main>');
               },
@@ -112,6 +114,7 @@ describe('server app shell Vite static export options boundary', () => {
         app: createApp({
           routes: [
             route('/cart', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main>Cart</main>');
               },
@@ -179,6 +182,7 @@ describe('server app shell Vite static export options boundary', () => {
       const app = createApp({
         routes: [
           route('/docs', {
+            access: publicAccess('test fixture'),
             page() {
               return renderedHtml('<main>Docs</main>');
             },
@@ -249,6 +253,7 @@ describe('server app shell Vite static export options boundary', () => {
       const app = createApp({
         routes: [
           route('/preview', {
+            access: publicAccess('test fixture'),
             page() {
               return renderedHtml('<main>Preview</main>');
             },
@@ -316,6 +321,7 @@ describe('server app shell Vite static export options boundary', () => {
         app: createApp({
           routes: [
             route('/plugin', {
+              access: publicAccess('test fixture'),
               page() {
                 return renderedHtml('<main>Plugin</main>');
               },

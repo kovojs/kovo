@@ -36,7 +36,9 @@ function submittedValue(rawInput: FormData, name: string): string {
 }
 
 export const submitOrder = mutation('enhanced-submit-controls/submit', {
-  access: publicAccess('integration fixture mutation enhanced-submit-controls/submit has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation enhanced-submit-controls/submit has no runtime guard',
+  ),
   csrf: false,
   input: s.object({
     includeGift: s.boolean(),

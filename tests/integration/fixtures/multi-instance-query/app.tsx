@@ -42,7 +42,9 @@ async function renderCard(db: KovoFixtureRequest['db'], id: string): Promise<str
 }
 
 export const restockProduct = mutation('multi-instance-query/restock', {
-  access: publicAccess('integration fixture mutation multi-instance-query/restock has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation multi-instance-query/restock has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ id: s.string(), restock: s.number().int().min(1) }),
   registry: {

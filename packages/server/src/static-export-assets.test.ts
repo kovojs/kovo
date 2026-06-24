@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -18,6 +19,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           page: () => {
             rendered = true;
             return renderedHtml('<main>Home</main>');
@@ -60,6 +62,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/', {
+            access: publicAccess('test fixture'),
             stylesheets: ['/assets/app.css'],
             page: () => trustedHtml('<main>Home</main>'),
           }),
@@ -112,6 +115,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           stylesheets: ['/assets/app.css'],
           page: () => trustedHtml('<main>Home</main>'),
         }),
@@ -143,6 +147,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           stylesheets: [stylesheet('./home.css')],
           page: () => trustedHtml('<main>Home</main>'),
         }),
@@ -164,7 +169,12 @@ describe('server static export', () => {
 
   it('rejects duplicate static asset paths during dry-run inventory planning', async () => {
     const app = createApp({
-      routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+      routes: [
+        route('/', {
+          access: publicAccess('test fixture'),
+          page: () => trustedHtml('<main>Home</main>'),
+        }),
+      ],
     });
 
     await expect(
@@ -195,7 +205,12 @@ describe('server static export', () => {
       const source = path.join(sourceDir, 'app.css');
       await writeFile(source, 'body {}\n', 'utf8');
       const app = createApp({
-        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+        routes: [
+          route('/', {
+            access: publicAccess('test fixture'),
+            page: () => trustedHtml('<main>Home</main>'),
+          }),
+        ],
       });
 
       await expect(
@@ -227,7 +242,12 @@ describe('server static export', () => {
       const source = path.join(sourceDir, 'index.html');
       await writeFile(source, '<p>asset</p>', 'utf8');
       const app = createApp({
-        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+        routes: [
+          route('/', {
+            access: publicAccess('test fixture'),
+            page: () => trustedHtml('<main>Home</main>'),
+          }),
+        ],
       });
 
       await expect(
@@ -263,7 +283,12 @@ describe('server static export', () => {
       await writeFile(firstSource, 'body { color: red; }\n', 'utf8');
       await writeFile(secondSource, 'body { color: blue; }\n', 'utf8');
       const app = createApp({
-        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+        routes: [
+          route('/', {
+            access: publicAccess('test fixture'),
+            page: () => trustedHtml('<main>Home</main>'),
+          }),
+        ],
       });
 
       await expect(
@@ -299,7 +324,12 @@ describe('server static export', () => {
     try {
       const missingSource = path.join(sourceDir, 'missing.css');
       const app = createApp({
-        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+        routes: [
+          route('/', {
+            access: publicAccess('test fixture'),
+            page: () => trustedHtml('<main>Home</main>'),
+          }),
+        ],
       });
 
       await expect(

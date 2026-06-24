@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
@@ -39,8 +40,14 @@ describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
 
   it('ROUTING-NAV-4: strips an unrecognized in-app path to "/" when routes are supplied', () => {
     const routes = [
-      route('/home', { page: () => trustedHtml('<h1>Home</h1>') }),
-      route('/account', { page: () => trustedHtml('<h1>Account</h1>') }),
+      route('/home', {
+        access: publicAccess('test fixture'),
+        page: () => trustedHtml('<h1>Home</h1>'),
+      }),
+      route('/account', {
+        access: publicAccess('test fixture'),
+        page: () => trustedHtml('<h1>Account</h1>'),
+      }),
     ];
 
     expect(sanitizeNext('/totally-unknown', routes)).toBe('/');
@@ -49,13 +56,23 @@ describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
   });
 
   it('ROUTING-NAV-4: keeps query/hash on a matched route path', () => {
-    const routes = [route('/account', { page: () => trustedHtml('<h1>Account</h1>') })];
+    const routes = [
+      route('/account', {
+        access: publicAccess('test fixture'),
+        page: () => trustedHtml('<h1>Account</h1>'),
+      }),
+    ];
 
     expect(sanitizeNext('/account?tab=orders#section', routes)).toBe('/account?tab=orders#section');
   });
 
   it('ROUTING-NAV-4: preserves existing open-redirect protection when routes are supplied', () => {
-    const routes = [route('/home', { page: () => trustedHtml('<h1>Home</h1>') })];
+    const routes = [
+      route('/home', {
+        access: publicAccess('test fixture'),
+        page: () => trustedHtml('<h1>Home</h1>'),
+      }),
+    ];
 
     expect(sanitizeNext('//evil.example', routes)).toBe('/');
     expect(sanitizeNext('/\\evil.example', routes)).toBe('/');
@@ -688,7 +705,7 @@ describe('server guard and session primitives', () => {
           onUnauthenticated({ next }) {
             return { location: `/signin?continue=${encodeURIComponent(next)}`, status: 303 };
           },
-          routes: [route('/signin')],
+          routes: [route('/signin', { access: publicAccess('test fixture') })],
         },
       ),
     ).resolves.toEqual({

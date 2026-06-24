@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { EventEmitter } from 'node:events';
 import { Agent, request as httpRequest, createServer } from 'node:http';
 import type {
@@ -301,10 +302,12 @@ describe('server node adapter', () => {
     const cart = domain('cart');
     const db = { count: 0 };
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: db.count }),
       reads: [cart],
     });
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ quantity: s.number().int().min(1).default(1) }),
       registry: {
@@ -321,6 +324,7 @@ describe('server node adapter', () => {
       queries: [cartQuery],
       routes: [
         route('/cart', {
+          access: publicAccess('test fixture'),
           modulepreloads: [],
           page: () => trustedHtml(`<main>Cart ${db.count}</main>`),
         }),

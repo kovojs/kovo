@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import type { IncomingMessage } from 'node:http';
 import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -22,7 +23,7 @@ describe('server app shell Vite dev seam', () => {
   it('derives request ownership from the app-shell dispatch table', () => {
     const app = createApp({
       mutations: [{ key: 'cart/add' }],
-      routes: [route('/products/:id', {})],
+      routes: [route('/products/:id', { access: publicAccess('test fixture') })],
     });
 
     expect(
@@ -84,6 +85,7 @@ describe('server app shell Vite dev seam', () => {
       createApp({
         routes: [
           route('/cart', {
+            access: publicAccess('test fixture'),
             modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
           }),
         ],
@@ -131,6 +133,7 @@ describe('server app shell Vite dev seam', () => {
           shopApp: createApp({
             routes: [
               route('/cart', {
+                access: publicAccess('test fixture'),
                 modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
                 page: () => trustedHtml('<main>Cart</main>'),
               }),
@@ -293,6 +296,7 @@ describe('server app shell Vite dev seam', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           modulepreloads: [moduleHref],
           page() {
             return renderedHtml('<main>dev app shell</main>');
@@ -387,12 +391,14 @@ describe('server app shell Vite dev seam', () => {
     const app = createApp({
       routes: [
         route('/', {
+          access: publicAccess('test fixture'),
           layout: ShellLayout,
           page() {
             return renderedHtml('<main>styled dev app shell</main>');
           },
         }),
         route('/login', {
+          access: publicAccess('test fixture'),
           page() {
             return renderedHtml('<main>login</main>');
           },
@@ -478,8 +484,14 @@ describe('server app shell Vite dev seam', () => {
   it('serves KV228 route-table diagnostics through the default dev handler', async () => {
     const app = createApp({
       routes: [
-        route('/products/:id', { page: () => trustedHtml('<main>Param</main>') }),
-        route('/products/new', { page: () => trustedHtml('<main>New</main>') }),
+        route('/products/:id', {
+          access: publicAccess('test fixture'),
+          page: () => trustedHtml('<main>Param</main>'),
+        }),
+        route('/products/new', {
+          access: publicAccess('test fixture'),
+          page: () => trustedHtml('<main>New</main>'),
+        }),
       ],
     });
     let middleware: KovoAppShellViteMiddleware | undefined;
@@ -536,7 +548,7 @@ describe('server app shell Vite dev seam', () => {
   });
 
   it('keeps unversioned client modules on the Vite fallback even with a custom predicate', async () => {
-    const app = createApp({ routes: [route('/cart', {})] });
+    const app = createApp({ routes: [route('/cart', { access: publicAccess('test fixture') })] });
     let middleware: KovoAppShellViteMiddleware | undefined;
     let customPredicateCalls = 0;
     const plugin = kovoAppShellViteDevPlugin({
@@ -572,7 +584,12 @@ describe('server app shell Vite dev seam', () => {
 
   it('serves and injects the dev-only HMR client through Vite middleware', async () => {
     const app = createApp({
-      routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>') })],
+      routes: [
+        route('/cart', {
+          access: publicAccess('test fixture'),
+          page: () => trustedHtml('<main>Cart</main>'),
+        }),
+      ],
     });
     let middleware: KovoAppShellViteMiddleware | undefined;
     const plugin = kovoAppShellViteDevPlugin({
@@ -653,6 +670,7 @@ describe('server app shell Vite dev seam', () => {
     const app = createApp({
       routes: [
         route('/cart', {
+          access: publicAccess('test fixture'),
           page() {
             return renderedHtml('<main>Cart refresh</main>');
           },
@@ -726,6 +744,7 @@ describe('server app shell Vite dev seam', () => {
     const app = createApp({
       routes: [
         route('/cart', {
+          access: publicAccess('test fixture'),
           modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
           page() {
             return renderedHtml('<main>Cart refresh</main>');
@@ -867,6 +886,7 @@ describe('server app shell Vite dev seam', () => {
       createApp({
         routes: [
           route('/cart', {
+            access: publicAccess('test fixture'),
             page() {
               return renderedHtml('<main>Cart production page</main>');
             },
@@ -897,7 +917,7 @@ describe('server app shell Vite dev seam', () => {
   });
 
   it('rejects Request -> Response exports at the explicit node handler boundary', async () => {
-    const app = createApp({ routes: [route('/cart', {})] });
+    const app = createApp({ routes: [route('/cart', { access: publicAccess('test fixture') })] });
     let middleware: KovoAppShellViteMiddleware | undefined;
     const plugin = kovoAppShellViteDevPlugin({
       moduleId: '/src/app-shell.ts',

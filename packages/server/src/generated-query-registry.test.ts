@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
@@ -29,6 +30,7 @@ describe('queryWithGeneratedReads (SPEC §10.2:1018 — declared reads folded in
   // set to be FOLDED INTO (union) the compiler-derived read set.
   it('unions author-declared reads with compiler-registered reads (does not overwrite)', () => {
     const opaqueQuery = query('foldQuery', {
+      access: publicAccess('test fixture'),
       reads: [product, inventory],
       load: () => ({ rows: [] as unknown[] }),
     });
@@ -46,6 +48,7 @@ describe('queryWithGeneratedReads (SPEC §10.2:1018 — declared reads folded in
 
   it('populates an empty author read set from the registered reads', () => {
     const bareQuery = query('emptyQuery', {
+      access: publicAccess('test fixture'),
       load: () => ({ rows: [] as unknown[] }),
     });
     expect(readKeys(bareQuery.reads)).toEqual([]);
@@ -61,6 +64,7 @@ describe('queryWithGeneratedReads (SPEC §10.2:1018 — declared reads folded in
 
   it('dedupes domains shared by author and registered reads', () => {
     const overlapQuery = query('dedupeQuery', {
+      access: publicAccess('test fixture'),
       reads: [product, inventory],
       load: () => ({ rows: [] as unknown[] }),
     });
@@ -78,6 +82,7 @@ describe('queryWithGeneratedReads (SPEC §10.2:1018 — declared reads folded in
 
   it('returns the definition unchanged when the union adds nothing', () => {
     const coveredQuery = query('noopQuery', {
+      access: publicAccess('test fixture'),
       reads: [product, inventory],
       load: () => ({ rows: [] as unknown[] }),
     });

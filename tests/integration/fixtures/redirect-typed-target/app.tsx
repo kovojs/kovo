@@ -14,7 +14,9 @@ declare module '@kovojs/core' {
 }
 
 export const placeOrder = mutation('redirect-typed-target/place-order', {
-  access: publicAccess('integration fixture mutation redirect-typed-target/place-order has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation redirect-typed-target/place-order has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ id: s.string() }),
   handler: (input: { id: string }) =>

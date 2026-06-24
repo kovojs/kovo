@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { createHmac } from 'node:crypto';
 import { hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
@@ -39,6 +40,7 @@ describe('server app matched dispatch boundary', () => {
   it('owns SPEC §9.5 query endpoint dispatch with request/session wiring', async () => {
     let sessionReads = 0;
     const cart = query('cart', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       load(
         input: { id: string },
@@ -68,6 +70,7 @@ describe('server app matched dispatch boundary', () => {
 
   it('owns SPEC §9.5 raw endpoint dispatch without app session leakage', async () => {
     const status = endpoint('/status', {
+      access: publicAccess('test fixture'),
       handler(request) {
         return new Response(`session:${'session' in request}`);
       },
@@ -94,6 +97,7 @@ describe('server app matched dispatch boundary', () => {
     async (method) => {
       let handlerCalls = 0;
       const updateEmail = endpoint('/account/email', {
+        access: publicAccess('test fixture'),
         handler() {
           handlerCalls += 1;
           return new Response('updated');
@@ -123,6 +127,7 @@ describe('server app matched dispatch boundary', () => {
   it('allows default endpoint CSRF requests with a valid token', async () => {
     let handlerCalls = 0;
     const updateEmail = endpoint('/account/email', {
+      access: publicAccess('test fixture'),
       handler() {
         handlerCalls += 1;
         return new Response('updated');
@@ -157,6 +162,7 @@ describe('server app matched dispatch boundary', () => {
     });
     let handlerCalls = 0;
     const signedEndpoint = endpoint('/machine/signed', {
+      access: publicAccess('test fixture'),
       auth: { kind: 'verifier', name: verifier.resolved.scheme, verify: verifier },
       handler() {
         handlerCalls += 1;
@@ -201,6 +207,7 @@ describe('server app matched dispatch boundary', () => {
   it('preserves raw body dispatch for explicitly CSRF-exempt endpoints', async () => {
     let handlerCalls = 0;
     const signedWebhook = endpoint('/webhooks/signed', {
+      access: publicAccess('test fixture'),
       csrf: false,
       csrfJustification: 'signed webhook validates raw body',
       async handler(request) {
@@ -228,7 +235,7 @@ describe('server app matched dispatch boundary', () => {
   });
 
   it('owns SPEC §9.5 page method rejection after route matching', async () => {
-    const product = route('/products/:id', {});
+    const product = route('/products/:id', { access: publicAccess('test fixture') });
     const app = createApp({ routes: [product] });
     const request = new Request('https://shop.example.test/products/p1', { method: 'POST' });
 
@@ -242,6 +249,7 @@ describe('server app matched dispatch boundary', () => {
   it('shares mutation method rejection without replaying the mutation lifecycle', async () => {
     let handlerCalls = 0;
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -286,6 +294,7 @@ describe('server app matched dispatch boundary', () => {
   it('H2: rejects POST to /_q/<key> with 405 Allow:GET,HEAD without running the query', async () => {
     let loadCalls = 0;
     const cart = query('cart', {
+      access: publicAccess('test fixture'),
       load() {
         loadCalls += 1;
         return { count: 1 };
@@ -305,6 +314,7 @@ describe('server app matched dispatch boundary', () => {
   it('H2: rejects DELETE to /_q/<key> with 405 Allow:GET,HEAD without running the query', async () => {
     let loadCalls = 0;
     const cart = query('cart', {
+      access: publicAccess('test fixture'),
       load() {
         loadCalls += 1;
         return { count: 1 };

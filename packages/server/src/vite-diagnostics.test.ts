@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { request as httpRequest, createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
@@ -17,6 +18,7 @@ describe('server app shell Vite diagnostics', () => {
   it('gates page-route diagnostics red and green through the dev middleware ledger', async () => {
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     const cartRoute = route('/cart', {
+      access: publicAccess('test fixture'),
       modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
       page() {
         return renderedHtml('<main>Cart</main>');
@@ -108,6 +110,7 @@ describe('server app shell Vite diagnostics', () => {
     // SPEC §9.5: the Vite plugin requires a closed createApp() aggregate, so the
     // mutation must be a full declaration, not a bare { key } shell.
     const addToCart = mutation('cart/add', {
+      access: publicAccess('test fixture'),
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler() {

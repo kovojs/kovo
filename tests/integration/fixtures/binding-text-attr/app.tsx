@@ -23,7 +23,9 @@ function renderStateIsland(): string {
 }
 
 export const updateCard = mutation('binding-text-attr/update', {
-  access: publicAccess('integration fixture mutation binding-text-attr/update has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation binding-text-attr/update has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   registry: {

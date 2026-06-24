@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { createHmac } from 'node:crypto';
 import { customVerifier, hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
@@ -30,6 +31,7 @@ function signEndpointBody(body: string): string {
 describe('server endpoints', () => {
   it('declares raw endpoints with named CSRF exemptions and auth metadata', () => {
     const callback = endpoint('/auth/callback', {
+      access: publicAccess('test fixture'),
       auth: { justification: 'oauth provider callback', kind: 'none' },
       csrf: false,
       csrfJustification: 'oauth provider callback',
@@ -54,6 +56,7 @@ describe('server endpoints', () => {
     const assertCsrfNeedsJustification = () => {
       // @ts-expect-error SPEC §9.1 requires a named justification for endpoint CSRF exemption.
       endpoint('/bad/csrf', {
+        access: publicAccess('test fixture'),
         csrf: false,
         handler: () => new Response('bad'),
         method: 'POST',
@@ -64,12 +67,14 @@ describe('server endpoints', () => {
     const assertMissingAuditMetadataRejected = () => {
       // @ts-expect-error SPEC §9.1 requires explicit method/reason/response posture on raw endpoints.
       endpoint('/bad/metadata', {
+        access: publicAccess('test fixture'),
         handler: () => new Response('bad'),
       });
     };
     const assertPrefixMountNeedsJustification = () => {
       // @ts-expect-error SPEC §9.1 prefix endpoint mounts require a named mount justification.
       endpoint('/bad/prefix', {
+        access: publicAccess('test fixture'),
         handler: () => new Response('bad'),
         method: 'GET',
         mount: 'prefix',
@@ -92,6 +97,7 @@ describe('server endpoints', () => {
   it('runs endpoint handlers as raw Request to Response without consuming the body first', async () => {
     const seen: string[] = [];
     const inventoryWebhook = endpoint('/webhooks/inventory', {
+      access: publicAccess('test fixture'),
       auth: { kind: 'verifier', name: 'inventory-hmac' },
       csrf: false,
       csrfJustification: 'signed inventory webhook',
@@ -132,6 +138,7 @@ describe('server endpoints', () => {
     });
     let handlerCalls = 0;
     const inventoryWebhook = endpoint('/webhooks/inventory', {
+      access: publicAccess('test fixture'),
       auth: { kind: 'verifier', name: verifier.resolved.scheme, verify: verifier },
       csrf: false,
       csrfJustification: 'signed inventory webhook',
@@ -172,6 +179,7 @@ describe('server endpoints', () => {
 
   it('enforces custom endpoint verifiers and fails closed on verifier exceptions', async () => {
     const customEndpoint = endpoint('/machine/custom', {
+      access: publicAccess('test fixture'),
       auth: {
         kind: 'custom',
         name: 'static-token',
@@ -211,6 +219,7 @@ describe('server endpoints', () => {
     expect(rejected?.status).toBe(401);
 
     const throwingEndpoint = endpoint('/machine/throwing', {
+      access: publicAccess('test fixture'),
       auth: {
         kind: 'custom',
         name: 'throwing',
@@ -247,6 +256,7 @@ describe('server endpoints', () => {
       value: { id: 's1' },
     });
     const machineEndpoint = endpoint('/machine', {
+      access: publicAccess('test fixture'),
       csrf: false,
       csrfJustification: 'external machine caller',
       async handler(rawRequest) {
@@ -266,12 +276,14 @@ describe('server endpoints', () => {
 
   it('matches exact and prefix endpoint mounts without routing side effects', () => {
     const exact = endpoint('/downloads/orders.bin', {
+      access: publicAccess('test fixture'),
       handler: () => new Response('orders'),
       method: 'GET',
       reason: 'orders binary download',
       response: { appOwnedSafety: true, body: 'bytes', cache: 'private' },
     });
     const mounted = endpoint('/auth', {
+      access: publicAccess('test fixture'),
       csrf: false,
       csrfJustification: 'auth adapter owns callback subpaths',
       handler: () => new Response('auth'),

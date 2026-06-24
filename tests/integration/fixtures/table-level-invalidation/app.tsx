@@ -53,7 +53,9 @@ function renderInitialQueryScript(name: string, key: string, value: unknown): st
 }
 
 const bulkRestock = mutation('table-level-invalidation/restock', {
-  access: publicAccess('integration fixture mutation table-level-invalidation/restock has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation table-level-invalidation/restock has no runtime guard',
+  ),
   csrf: false,
   input: s.object({ category: s.string(), threshold: s.number().int().min(0) }),
   registry: {

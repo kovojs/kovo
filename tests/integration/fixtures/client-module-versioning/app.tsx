@@ -1,4 +1,9 @@
-import { createApp, createMemoryVersionedClientModuleRegistry, publicAccess, route } from '@kovojs/server';
+import {
+  createApp,
+  createMemoryVersionedClientModuleRegistry,
+  publicAccess,
+  route,
+} from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();

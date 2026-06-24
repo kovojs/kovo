@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { describe, expect, it } from 'vitest';
 
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
@@ -26,6 +27,7 @@ describe('server app shell dispatch table', () => {
 
   it('dispatches reserved namespaces before endpoints and routes', () => {
     const catchAllEndpoint = endpoint('/_m', {
+      access: publicAccess('test fixture'),
       handler: () => new Response('endpoint'),
       method: 'POST',
       mount: 'prefix',
@@ -33,7 +35,7 @@ describe('server app shell dispatch table', () => {
       reason: 'reserved namespace dispatch ordering fixture',
       response: rawTextResponse,
     });
-    const reservedRoute = route('/_m/:key', {});
+    const reservedRoute = route('/_m/:key', { access: publicAccess('test fixture') });
 
     expect(
       matchShellDispatch({
@@ -51,12 +53,14 @@ describe('server app shell dispatch table', () => {
 
   it('dispatches endpoint exact mounts before endpoint prefix mounts', () => {
     const exactEndpoint = endpoint('/auth/callback', {
+      access: publicAccess('test fixture'),
       handler: () => new Response('exact'),
       method: 'GET',
       reason: 'exact callback endpoint ordering fixture',
       response: rawTextResponse,
     });
     const prefixEndpoint = endpoint('/auth', {
+      access: publicAccess('test fixture'),
       csrf: false,
       csrfJustification: 'auth adapter owns callback subpaths',
       handler: () => new Response('prefix'),
@@ -81,12 +85,13 @@ describe('server app shell dispatch table', () => {
 
   it('dispatches routes after endpoints and records page method allowance', () => {
     const routeEndpoint = endpoint('/products/p1', {
+      access: publicAccess('test fixture'),
       handler: () => new Response('endpoint'),
       method: 'POST',
       reason: 'endpoint before route method fixture',
       response: rawTextResponse,
     });
-    const product = route('/products/:id', {});
+    const product = route('/products/:id', { access: publicAccess('test fixture') });
 
     expect(
       matchShellDispatch({

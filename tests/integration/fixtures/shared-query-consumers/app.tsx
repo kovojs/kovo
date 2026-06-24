@@ -17,7 +17,9 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const publishProfile = mutation('shared-query-consumers/publish', {
-  access: publicAccess('integration fixture mutation shared-query-consumers/publish has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation shared-query-consumers/publish has no runtime guard',
+  ),
   csrf: false,
   input: s.object({}),
   registry: {

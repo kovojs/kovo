@@ -3,7 +3,9 @@ import { createApp, mutation, publicAccess, route, s, type MutationFail } from '
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 export const subscribe = mutation('a11y-form-error/subscribe', {
-  access: publicAccess('integration fixture mutation a11y-form-error/subscribe has no runtime guard'),
+  access: publicAccess(
+    'integration fixture mutation a11y-form-error/subscribe has no runtime guard',
+  ),
   csrf: false,
   errors: { INVALID_EMAIL: s.object({ field: s.string() }) },
   input: s.object({ email: s.string() }),

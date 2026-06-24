@@ -164,9 +164,9 @@ for (const fact of effectFacts) {
 // touch sites, so only the known owner-helper KV406 entries are filtered here.
 const REQUEST_BOUND_OWNER_DIAGNOSTIC_SITES = new Set([
   'examples/crm/src/mutations.ts:99',
-  'examples/crm/src/mutations.ts:154',
-  'examples/crm/src/mutations.ts:235',
-  'examples/crm/src/mutations.ts:302',
+  'examples/crm/src/mutations.ts:155',
+  'examples/crm/src/mutations.ts:237',
+  'examples/crm/src/mutations.ts:305',
 ]);
 
 const crmTouchGraph = {};

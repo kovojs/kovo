@@ -18,7 +18,9 @@ function renderPanel(count: number): string {
 // A small delay before the atomic increment forces the two requests to overlap.
 function bump(key: string, amount: number) {
   return mutation(`concurrent-distinct-writes/${key}`, {
-    access: publicAccess('integration fixture mutation concurrent-distinct-writes/${key} has no runtime guard'),
+    access: publicAccess(
+      'integration fixture mutation concurrent-distinct-writes/${key} has no runtime guard',
+    ),
     csrf: false,
     input: s.object({}),
     handler: async (_input: unknown, request: KovoFixtureRequest, context) => {

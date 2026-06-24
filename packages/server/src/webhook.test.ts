@@ -1,3 +1,4 @@
+import { publicAccess } from './access.js';
 import { createHmac } from 'node:crypto';
 import { customVerifier, hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
@@ -39,6 +40,7 @@ describe('server webhook primitive', () => {
     });
 
     const providerWebhook = webhook('provider', {
+      access: publicAccess('test fixture'),
       handler: () => undefined,
       idempotency: (input) => input.id as string,
       input: s.object({ id: s.string() }),
@@ -85,6 +87,7 @@ describe('server webhook primitive', () => {
       { received: string },
       { id: string }
     >('stripe', {
+      access: publicAccess('test fixture'),
       async handler(input, context) {
         steps.push(`handler:${context.tx.id}`);
         expect('session' in context.request).toBe(false);
@@ -157,6 +160,7 @@ describe('server webhook primitive', () => {
     });
     let handled = 0;
     const stripeWebhook = webhook('stripe', {
+      access: publicAccess('test fixture'),
       handler() {
         handled += 1;
       },
@@ -178,6 +182,7 @@ describe('server webhook primitive', () => {
     const invoice = domain('invoice');
     const steps: string[] = [];
     const failingWebhook = webhook('billing', {
+      access: publicAccess('test fixture'),
       handler(input, context) {
         context.recordChange(invoice, { keys: [input.id] });
         return context.fail('IGNORED_EVENT', { id: input.id }, { status: 422 });
@@ -240,6 +245,7 @@ describe('server webhook primitive', () => {
     const assertNoneVerifierRequiresJustification = () => {
       // @ts-expect-error SPEC §9.1 requires a named justification for verify: 'none'.
       webhook('bad', {
+        access: publicAccess('test fixture'),
         handler: () => undefined,
         input: s.object({ id: s.string() }),
         path: '/webhooks/bad',
@@ -257,6 +263,7 @@ describe('server webhook primitive', () => {
     const replayStore = createMemoryWebhookReplayStore();
     let callCount = 0;
     const flakyWebhook = webhook('flaky', {
+      access: publicAccess('test fixture'),
       handler(input: { id: string }) {
         callCount += 1;
         if (callCount === 1) throw new Error('transient DB blip');
@@ -295,6 +302,7 @@ describe('server webhook primitive', () => {
   it('L10-1: a throwing custom verify() fails closed to 401, not a thrown 500', async () => {
     let handled = 0;
     const throwingWebhook = webhook('throwing-custom', {
+      access: publicAccess('test fixture'),
       handler() {
         handled += 1;
       },
@@ -339,6 +347,7 @@ describe('server webhook primitive', () => {
       secret: 'whsec_test',
     });
     const okWebhook = webhook('throwing-payload', {
+      access: publicAccess('test fixture'),
       handler(input: { id: string }) {
         handled += 1;
         return { received: input.id };
@@ -397,6 +406,7 @@ describe('server webhook primitive', () => {
     };
     let handled = 0;
     const emptyIdemWebhook = webhook('empty-idem', {
+      access: publicAccess('test fixture'),
       handler(input: { id: string }) {
         handled += 1;
         return { received: input.id };
@@ -442,6 +452,7 @@ describe('server webhook primitive', () => {
     const secret = 'DB dsn postgres://user:pw@db.internal:5432/prod';
     let handled = 0;
     const leakyWebhook = webhook('leaky-parse', {
+      access: publicAccess('test fixture'),
       handler() {
         handled += 1;
         return { ok: true };
@@ -478,6 +489,7 @@ describe('server webhook primitive', () => {
   // re-throw of internals does not regress the legitimate validation path.
   it('L2: a real validation error still maps to a typed 422', async () => {
     const validatingWebhook = webhook('validating', {
+      access: publicAccess('test fixture'),
       handler() {
         return { ok: true };
       },

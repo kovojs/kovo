@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { publicAccess } from './access.js';
 import { component, form } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
@@ -12,6 +13,7 @@ describe('generated component live target renderers', () => {
   it('loads declared queries from serialized props and renders the component', async () => {
     const product = domain('product');
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       load(input: { id: string }, { request }: { request: { locale: string } }) {
         return { id: input.id, label: `${request.locale}:${input.id}` };
@@ -56,6 +58,7 @@ describe('generated component live target renderers', () => {
 
   it('folds generated query reads into component-bound live target query definitions', async () => {
     const productQuery = query('generatedLiveProduct', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       load(input: { id: string }) {
         return { id: input.id };
@@ -82,6 +85,7 @@ describe('generated component live target renderers', () => {
   it('throws when a generated query reload fails', async () => {
     const product = domain('product');
     const productQuery = query('product', {
+      access: publicAccess('test fixture'),
       args: s.object({ id: s.string() }),
       load(input: { id: string }) {
         return { id: input.id };
@@ -111,6 +115,7 @@ describe('generated component live target renderers', () => {
     const cart = domain('cart');
     const addToCart = form('cart/add');
     const cartQuery = query('cart', {
+      access: publicAccess('test fixture'),
       load: () => ({ count: 1 }),
       reads: [cart],
     });
