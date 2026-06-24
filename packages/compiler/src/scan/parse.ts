@@ -29,6 +29,8 @@ import type {
   TemporalReadModel,
   ZeroArgArrowCallArgumentKind,
   ZeroArgArrowModel,
+  WireSchemaBudgetFact,
+  WireSchemaCollectionFact,
 } from './model.js';
 
 export type * from './model.js';
@@ -60,6 +62,8 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const mutationHandlers: MutationHandlerModel[] = [];
   const namedImports: NamedImportModel[] = [];
   const renderSourceReturns: StringRenderModel[] = [];
+  const schemaBindings = moduleScopeSchemaInitializers(sourceFile);
+  const wireSchemaBudgets: WireSchemaBudgetFact[] = [];
 
   const visit = (node: ts.Node): void => {
     const specifier = moduleSpecifierModel(node);
@@ -98,6 +102,9 @@ export function parseComponentModule(fileName: string, source: string): Componen
         mutationHandlers.push(...mutationHandlerModels(sourceFile, source, node));
       }
     }
+    if (ts.isCallExpression(node)) {
+      wireSchemaBudgets.push(...wireSchemaBudgetFactsFromCall(sourceFile, node, schemaBindings));
+    }
     if (isExportedRenderSourceFunction(node)) {
       renderSourceReturns.push(
         ...stringRenderReturnsFromFunctionBody(sourceFile, source, node.body),
@@ -121,6 +128,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
     namedImports,
     renderSourceReturns,
     sourceFile,
+    wireSchemaBudgets,
   };
   // FN7: keep the scanner's SourceFile non-enumerable so post-parse phases (StyleX extraction)
   // reuse it rather than re-parsing the component, while the model stays a serializable fact bag.
@@ -173,6 +181,171 @@ function namedImportModels(node: ts.Node): NamedImportModel[] {
     localName: element.name.text,
     moduleSpecifier,
   }));
+}
+
+function moduleScopeSchemaInitializers(
+  sourceFile: ts.SourceFile,
+): ReadonlyMap<string, ts.Expression> {
+  const bindings = new Map<string, ts.Expression>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
+      bindings.set(declaration.name.text, declaration.initializer);
+    }
+  }
+  return bindings;
+}
+
+function wireSchemaBudgetFactsFromCall(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  schemaBindings: ReadonlyMap<string, ts.Expression>,
+): WireSchemaBudgetFact[] {
+  const surfaceKind = wireSurfaceKind(node.expression);
+  if (!surfaceKind) return [];
+
+  const options = node.arguments[1];
+  if (!options) return [];
+  const optionsObject = unwrapExpression(options);
+  if (!ts.isObjectLiteralExpression(optionsObject)) return [];
+
+  return wireSurfaceSchemaRoles(surfaceKind).flatMap((schemaRole) => {
+    const schema = objectPropertyExpression(optionsObject, schemaRole);
+    if (!schema) return [];
+    const collections = wireSchemaCollections(sourceFile, schema, schemaBindings);
+    if (collections.length === 0) return [];
+    return [
+      {
+        collections,
+        schemaRole,
+        surfaceKind,
+        surfaceName: wireSurfaceName(node, surfaceKind),
+      },
+    ];
+  });
+}
+
+function wireSurfaceKind(
+  expression: ts.LeftHandSideExpression,
+): WireSchemaBudgetFact['surfaceKind'] | null {
+  const callee = unwrapExpression(expression);
+  if (!ts.isIdentifier(callee)) return null;
+  if (
+    callee.text === 'endpoint' ||
+    callee.text === 'mutation' ||
+    callee.text === 'query' ||
+    callee.text === 'route' ||
+    callee.text === 'webhook'
+  ) {
+    return callee.text;
+  }
+  return null;
+}
+
+function wireSurfaceSchemaRoles(
+  surfaceKind: WireSchemaBudgetFact['surfaceKind'],
+): readonly WireSchemaBudgetFact['schemaRole'][] {
+  if (surfaceKind === 'query') return ['args'];
+  if (surfaceKind === 'route') return ['params', 'search'];
+  return ['input'];
+}
+
+function wireSurfaceName(
+  node: ts.CallExpression,
+  surfaceKind: WireSchemaBudgetFact['surfaceKind'],
+): string {
+  const [firstArg] = node.arguments;
+  if (firstArg && ts.isStringLiteralLike(firstArg)) return firstArg.text;
+  const declaration = node.parent;
+  if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
+    return declaration.name.text;
+  }
+  return surfaceKind;
+}
+
+function objectPropertyExpression(
+  object: ts.ObjectLiteralExpression,
+  propertyName: string,
+): ts.Expression | null {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.name) === propertyName) return property.initializer;
+  }
+  return null;
+}
+
+function wireSchemaCollections(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  schemaBindings: ReadonlyMap<string, ts.Expression>,
+): WireSchemaCollectionFact[] {
+  const collections: WireSchemaCollectionFact[] = [];
+  const seenBindings = new Set<string>();
+
+  const visit = (node: ts.Node, boundedByCollectionMax = false): void => {
+    if (ts.isExpression(node)) {
+      const unwrapped = unwrapExpression(node);
+      if (unwrapped !== node) {
+        visit(unwrapped, boundedByCollectionMax);
+        return;
+      }
+    }
+
+    if (ts.isIdentifier(node)) {
+      if (!isReferenceIdentifier(node)) return;
+      const binding = schemaBindings.get(node.text);
+      if (!binding || seenBindings.has(node.text)) return;
+      seenBindings.add(node.text);
+      visit(binding, boundedByCollectionMax);
+      seenBindings.delete(node.text);
+      return;
+    }
+
+    if (ts.isCallExpression(node)) {
+      if (isSchemaHelperCall(node, 'lazy')) return;
+
+      if (isSchemaCollectionCall(node, 'array') || isSchemaCollectionCall(node, 'record')) {
+        collections.push({
+          bounded: boundedByCollectionMax,
+          end: node.expression.getEnd(),
+          kind: schemaCollectionKind(node),
+          start: node.expression.getStart(sourceFile),
+        });
+        node.arguments.forEach((argument) => visit(argument, false));
+        return;
+      }
+
+      if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'max') {
+        visit(node.expression.expression, true);
+        node.arguments.forEach((argument) => visit(argument, false));
+        return;
+      }
+    }
+
+    ts.forEachChild(node, (child) => visit(child, boundedByCollectionMax));
+  };
+
+  visit(expression);
+  return collections;
+}
+
+function isSchemaCollectionCall(
+  node: ts.CallExpression,
+  kind: WireSchemaCollectionFact['kind'],
+): boolean {
+  return isSchemaHelperCall(node, kind);
+}
+
+function schemaCollectionKind(node: ts.CallExpression): WireSchemaCollectionFact['kind'] {
+  return isSchemaCollectionCall(node, 'record') ? 'record' : 'array';
+}
+
+function isSchemaHelperCall(node: ts.CallExpression, methodName: string): boolean {
+  const callee = unwrapExpression(node.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== methodName) return false;
+  const receiver = unwrapExpression(callee.expression);
+  return ts.isIdentifier(receiver) && receiver.text === 's';
 }
 
 function moduleScopeBindingModels(

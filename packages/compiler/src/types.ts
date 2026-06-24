@@ -173,7 +173,14 @@ export interface CompileDependencyReads {
  */
 export type RegistryGraphInput = Pick<
   CoreGraph.KovoExplainInput,
-  'capabilities' | 'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
+  | 'capabilities'
+  | 'components'
+  | 'diagnostics'
+  | 'lints'
+  | 'mutations'
+  | 'packageComponentPrefixes'
+  | 'pages'
+  | 'queries'
 >;
 
 /** @internal Optional mutation/query type maps threaded into registry-fact derivation. */
@@ -186,6 +193,7 @@ export interface CompileAppGraphOptions {
   components?: readonly {
     capabilities?: readonly CapabilityGraphFact[];
     componentGraphFacts: readonly ComponentGraphFact[];
+    diagnostics?: readonly CompilerDiagnostic[];
   }[];
   graph?: RegistryGraphInput;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];

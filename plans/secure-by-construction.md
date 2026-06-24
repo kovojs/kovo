@@ -680,9 +680,15 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
         Evidence: `packages/server/src/schema.ts` exposes immutable `s.array(...).max(n)`/`s.string().max(n)`
         chains plus scoped `withSchemaInputBudget(...)`; `vp exec vitest --run packages/server/src/schema.test.ts`
         covers sync/async budget overrides and invalid ceilings.
-  - [ ] KV430 **lint** (not error): flag an unbounded `s.array()`/`s.record()` on a wire-reachable schema with
+  - [x] KV430 **lint** (not error): flag an unbounded `s.array()`/`s.record()` on a wire-reachable schema with
         no `.max()`; surface in `kovo explain`. Lint because the runtime default already protects — this just
         makes the bound explicit/auditable. Recursive (`s.lazy`) depth is runtime-only.
+        Evidence: `packages/compiler/src/scan/parse.ts` derives wire-schema budget facts for mutation/query
+        args, route params/search, webhook input, and future endpoint input; `packages/compiler/src/validate/schema-budgets.ts`
+        emits KV430 with registry lint severity, and `packages/compiler/src/app-graph.ts` threads compiler
+        lint diagnostics into the explain graph's `lints`. `vp exec vitest --run packages/compiler/src/schema-budgets.test.ts`
+        covers unbounded array/record positives, `.max()` negatives, query-output exclusion, `s.lazy`
+        runtime-only depth, and explain-graph surfacing; `vp check packages/compiler/src` passed.
 - [ ] **File-upload inline-XSS gate (KV428).**
       Decision (2026-06-23): **default to `Content-Disposition: attachment` + `nosniff` for everything**; inline
       rendering is a **branded opt-in requiring verified-safe bytes** (deep sniff, or framework re-encode). The

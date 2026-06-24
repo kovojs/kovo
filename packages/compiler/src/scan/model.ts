@@ -238,6 +238,20 @@ export interface StringRenderModel {
   start: number;
 }
 
+export interface WireSchemaBudgetFact {
+  collections: readonly WireSchemaCollectionFact[];
+  schemaRole: 'args' | 'input' | 'params' | 'search';
+  surfaceKind: 'endpoint' | 'mutation' | 'query' | 'route' | 'webhook';
+  surfaceName: string;
+}
+
+export interface WireSchemaCollectionFact {
+  bounded: boolean;
+  end: number;
+  kind: 'array' | 'record';
+  start: number;
+}
+
 export interface ModuleSpecifierModel {
   end: number;
   specifier: string;
@@ -278,6 +292,7 @@ export interface ComponentModuleModel {
   mutationHandlers: readonly MutationHandlerModel[];
   namedImports: readonly NamedImportModel[];
   renderSourceReturns: readonly StringRenderModel[];
+  wireSchemaBudgets: readonly WireSchemaBudgetFact[];
   /**
    * @internal FN7: the scanner's own parsed `ts.SourceFile`, retained so phases like StyleX
    * extraction reuse it instead of re-parsing the component. Non-enumerable so the model stays a

@@ -52,13 +52,30 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.capabilities ?? []),
     ...(options.components ?? []).flatMap((component) => component.capabilities ?? []),
   ];
+  const compilerDiagnostics = (options.components ?? []).flatMap(
+    (component) => component.diagnostics ?? [],
+  );
+  const diagnostics = [
+    ...(options.graph?.diagnostics ?? []),
+    ...compilerDiagnostics
+      .filter((diagnostic) => diagnostic.severity !== 'lint')
+      .map(compilerStaticDiagnosticFact),
+  ];
+  const lints = [
+    ...(options.graph?.lints ?? []),
+    ...compilerDiagnostics
+      .filter((diagnostic) => diagnostic.severity === 'lint')
+      .map(compilerSemanticLintFact),
+  ];
   const graph: RegistryGraphInput = {
     ...options.graph,
     ...(capabilities.length > 0 ? { capabilities } : {}),
     components,
+    ...(diagnostics.length > 0 ? { diagnostics } : {}),
     ...(derivedRoutePages.length > 0 || (options.graph?.pages?.length ?? 0) > 0
       ? { pages: mergeGraphPages(options.graph?.pages ?? [], derivedRoutePages) }
       : {}),
+    ...(lints.length > 0 ? { lints } : {}),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
   };
 
@@ -96,6 +113,10 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
     .flatMap((component) => component.capabilities ?? [])
     .map((fact) => factHash(fact))
     .sort();
+  const diagnosticHashes = (options.components ?? [])
+    .flatMap((component) => component.diagnostics ?? [])
+    .map((fact) => factHash(fact))
+    .sort();
   const routeHashes = (options.routePages ?? [])
     .flatMap((routePage) => routePage.routePageFacts)
     .map((fact) => factHash(fact))
@@ -104,11 +125,40 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
   return factHash({
     capabilities: capabilityHashes,
     components: componentHashes,
+    diagnostics: diagnosticHashes,
     graph: options.graph ?? null,
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
     registryTypes: options.registryTypes ?? null,
     routes: routeHashes,
   });
+}
+
+function compilerStaticDiagnosticFact(
+  diagnostic: CompilerDiagnostic,
+): CoreGraph.StaticDiagnosticFact {
+  return {
+    code: diagnostic.code,
+    ...(diagnostic.length === undefined ? {} : { length: diagnostic.length }),
+    message: diagnostic.message,
+    severity: diagnostic.severity,
+    site: diagnostic.fileName,
+    ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+  };
+}
+
+function compilerSemanticLintFact(diagnostic: CompilerDiagnostic): CoreGraph.SemanticLint {
+  return {
+    code: diagnostic.code,
+    detail: diagnostic.message,
+    site: compilerDiagnosticSite(diagnostic),
+  };
+}
+
+function compilerDiagnosticSite(diagnostic: CompilerDiagnostic): string {
+  const start = diagnostic.start;
+  return start === undefined
+    ? diagnostic.fileName
+    : `${diagnostic.fileName}:${start.line}:${start.column}`;
 }
 
 /**

@@ -44,6 +44,7 @@ import {
   validateUntrackedClockReadsInDerives,
 } from './temporal.js';
 import { validateStringPatterns } from './redos-validators.js';
+import { validateWireSchemaBudgets } from './schema-budgets.js';
 
 interface ValidatorContext {
   componentName: string;
@@ -96,6 +97,8 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateSecretQueryWire(originalDiagnostics, originalModel, options),
   ({ originalDiagnostics, originalModel }) =>
     validateStringPatterns(originalDiagnostics, originalModel),
+  ({ originalDiagnostics, originalModel }) =>
+    validateWireSchemaBudgets(originalDiagnostics, originalModel),
   ({ loweredDiagnostics, model, options }) =>
     validateDataBindings(loweredDiagnostics, model, options),
   ({ originalDiagnostics, originalModel, options }) =>
