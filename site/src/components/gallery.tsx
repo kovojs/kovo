@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { trustedHtml } from '@kovojs/browser';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 // Gallery page chrome (SPEC §4.5): the eyebrow header, the component switcher
@@ -193,15 +192,15 @@ function galleryUrl(routePath: string): string {
 export function GalleryPage({ input }: { input: GalleryPageInput }): string {
   const { component, demoHtml, interactive, route, routes, source, summary } = input;
   const blurb = interactive
-    ? `Live compiled demo for the ${escapeHtml(route.title)} component contract.`
-    : `Static fixture output for the ${escapeHtml(route.title)} component contract.`;
+    ? `Live compiled demo for the ${route.title} component contract.`
+    : `Static fixture output for the ${route.title} component contract.`;
   const importPath = `@kovojs/ui/${component}`;
 
   return (
     <div style={galleryStyles.page}>
       <header style={galleryStyles.head}>
         <p style={galleryStyles.headEyebrow}>Components</p>
-        <h1 style={galleryStyles.headTitle}>{escapeHtml(route.title)}</h1>
+        <h1 style={galleryStyles.headTitle}>{route.title}</h1>
         <p style={galleryStyles.headBlurb}>{blurb}</p>
       </header>
       <nav style={galleryStyles.nav} aria-label="Components">
@@ -214,24 +213,24 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
               candidate.path === route.path ? galleryStyles.navLinkCurrent : null,
             ]}
           >
-            {escapeHtml(candidate.title)}
+            {candidate.title}
           </a>
         ))}
       </nav>
       <div style={galleryStyles.demo} data-gallery-demo-shell rawHtml={trustedHtml(demoHtml)} />
-      <section style={galleryStyles.detail} aria-label={`${escapeHtml(route.title)} usage`}>
+      <section style={galleryStyles.detail} aria-label={`${route.title} usage`}>
         <div>
           <h2 style={galleryStyles.detailHeading}>Usage</h2>
-          <p style={galleryStyles.detailText}>{escapeHtml(summary || blurb)}</p>
+          <p style={galleryStyles.detailText}>{summary || blurb}</p>
           <ul style={galleryStyles.detailList}>
             <li>
               Import the versioned component from{' '}
-              <code style={galleryStyles.inlineCode}>{escapeHtml(importPath)}</code>.
+              <code style={galleryStyles.inlineCode}>{importPath}</code>.
             </li>
             <li>
               Copy the source into your app with{' '}
-              <code style={galleryStyles.inlineCode}>{`kovo add ${escapeHtml(component)}`}</code>{' '}
-              when product code should own the implementation.
+              <code style={galleryStyles.inlineCode}>{`kovo add ${component}`}</code> when product
+              code should own the implementation.
             </li>
           </ul>
         </div>
@@ -241,16 +240,15 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
             <ul style={galleryStyles.detailList}>
               <li>
                 Package source:{' '}
-                <code style={galleryStyles.inlineCode}>{escapeHtml(source.packageSource)}</code>
+                <code style={galleryStyles.inlineCode}>{source.packageSource}</code>
               </li>
               <li>
-                Gallery fixture:{' '}
-                <code style={galleryStyles.inlineCode}>{escapeHtml(source.fixture)}</code>
+                Gallery fixture: <code style={galleryStyles.inlineCode}>{source.fixture}</code>
               </li>
               {source.interactiveDemo ? (
                 <li>
                   Interactive demo:{' '}
-                  <code style={galleryStyles.inlineCode}>{escapeHtml(source.interactiveDemo)}</code>
+                  <code style={galleryStyles.inlineCode}>{source.interactiveDemo}</code>
                 </li>
               ) : null}
             </ul>

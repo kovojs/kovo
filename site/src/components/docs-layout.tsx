@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { trustedHtml } from '@kovojs/browser';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 import { SECTION_INTROS } from '../content.js';
@@ -285,7 +284,7 @@ export function DocsPageRegion({ page }: { page: DocsRoutePageData }): string {
           <summary style={docsLayoutStyles.mobileSummary}>Menu</summary>
           <div style={docsLayoutStyles.mobileBody}>{mobileSidebar}</div>
         </details>
-        {eyebrow ? <p style={docsLayoutStyles.pageEyebrow}>{escapeHtml(eyebrow)}</p> : ''}
+        {eyebrow ? <p style={docsLayoutStyles.pageEyebrow}>{eyebrow}</p> : ''}
         <DocsRouteContentView content={content} />
         {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
       </main>

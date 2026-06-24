@@ -4,10 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp build && node scripts/materialize-demo-css.mjs",
+    "build": "vp build",
     "dev": "vp dev",
-    "emit-components": "node scripts/emit-components.mjs",
-    "emit-graph": "node scripts/emit-graph.mjs",
     "start": "node scripts/serve.mjs",
     "test": "vitest --run"
   },

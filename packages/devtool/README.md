@@ -5,9 +5,9 @@ trace its queries-in and mutations-out, with syntax-highlighted source previews)
 and an **MCP agent surface**, both rendering the _same_ graph cards (SPEC §5.3 —
 "agents consume the same artifact humans read").
 
-The package is **data-free**. A host provides its own `KovoExplainInput` graph
-(`generated/graph.json`) plus its source root; the package derives the dataflow
-graph, renders the UI, serves the MCP tool, and mounts at a path.
+The package is **data-free**. A host provides its own `KovoExplainInput` graph plus
+its source root; the package derives the dataflow graph, renders the UI, serves the
+MCP tool, and mounts at a path.
 
 ## Use it in a host app
 
@@ -20,7 +20,7 @@ import { createDevtoolApp } from '@kovojs/devtool/app';
 const bundle = buildBundle({
   app: 'my-app',
   label: 'My App',
-  graph: JSON.parse(readFileSync('./src/generated/graph.json', 'utf8')),
+  graph: JSON.parse(readFileSync('./graph.json', 'utf8')),
   srcRoot: './src',
 });
 export const { app, nodeHandler } = createDevtoolApp({ bundles: [bundle] });
@@ -41,7 +41,7 @@ export default {
 The agent surface (MCP) over the same cards:
 
 ```bash
-kovo-devtool mcp --graph ./src/generated/graph.json --src ./src --label "My App"
+kovo-devtool mcp --graph ./graph.json --src ./src --label "My App"
 ```
 
 `kovo_explain({ query, app?, limit? })` resolves exact node names precisely, else
@@ -63,4 +63,4 @@ The package is self-contained: the stylesheet and the two web fonts are inlined
 (base64) into the page and the pan/zoom island is registered as a `/c/` client
 module, so a host serves nothing but the handler.
 
-See `examples/devtool` for a working consumer that wires three example apps.
+See `examples/devtool` for a minimal consumer.

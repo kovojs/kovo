@@ -11,8 +11,6 @@
     "build:css": "vp build",
     "check:links": "node scripts/check-links.mjs",
     "content": "node scripts/content-pipeline.mjs",
-    "emit-ui-css": "node scripts/emit-ui-css.mjs",
-    "emit-routes": "node scripts/emit-routes.mjs",
     "serve": "node scripts/serve.mjs",
     "serve:static": "node scripts/serve-static.mjs",
     "smoke:navigation": "node scripts/navigation-smoke.mjs",

@@ -1,13 +1,24 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { cp, mkdir, rm } from 'node:fs/promises';
+import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createServer } from 'vite-plus';
 
 import { runContentPipeline } from './content-pipeline.mjs';
-import { emitSiteUiCss } from './emit-ui-css.mjs';
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
+      if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
 
 // SPEC §9.5: the docs site's static export uses the command facade for route
 // replay, /c/ client modules, and Vite manifest assets. This script only owns
@@ -17,6 +28,7 @@ const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const cssDistDir = path.join(siteRoot, 'dist-css');
 const publicDir = path.join(siteRoot, 'public');
 const defaultDistDir = path.join(siteRoot, 'dist');
+const uiStylesheetPath = path.join(cssDistDir, 'assets/kovo-ui.css');
 
 // The global served stylesheet carries site-global CSS, theme tokens, and the
 // extracted app atoms. The gallery's @kovojs/ui atoms are copied separately to
@@ -59,8 +71,89 @@ export function assertServedUiStylesheetContent(css, stylesheetPath) {
     `site export: the gallery stylesheet ${stylesheetPath} is missing required component atoms ` +
       `(${missingAtoms.join(', ')}). The gallery would render unstyled. This usually means ` +
       `@kovojs/ui's component CSS was not extracted — check that site/node_modules/@kovojs/{ui,headless-ui} ` +
-      `are valid workspace symlinks (run \`pnpm install\` at the repo root) and that emit-ui-css ran.`,
+      `are valid workspace symlinks (run \`pnpm install\` at the repo root).`,
   );
+}
+
+export function assertExtractedComponentCss(componentCss) {
+  const missingAtoms = SITE_CSS_REQUIRED_ATOMS.filter((atom) => !componentCss.includes(atom));
+  if (missingAtoms.length > 0) {
+    throw new Error(
+      `site export: extracted @kovojs/ui component CSS is empty or missing required atoms ` +
+        `(${missingAtoms.join(', ')}); it would ship the gallery unstyled. ` +
+        `Got ${componentCss.length} bytes from \`kovo compile package-css\`. ` +
+        `Check that site/node_modules/@kovojs/{ui,headless-ui} are valid workspace symlinks ` +
+        `(run \`pnpm install\` at the repo root).`,
+    );
+  }
+}
+
+export async function buildSiteUiCss(outPath = uiStylesheetPath) {
+  const missingDepHint = (dep, cause) =>
+    new Error(
+      `site export: cannot resolve "${dep}". The gallery's component CSS (kv-button-/kv-switch-/` +
+        `kv-dialog- atoms) comes from this package; without it the site ships an unstyled gallery. ` +
+        `This usually means the workspace symlink site/node_modules/${dep} is missing. ` +
+        `Run \`pnpm install\` (or \`corepack pnpm install\`) at the repo root to restore it.` +
+        (cause ? `\nUnderlying error: ${cause}` : ''),
+    );
+
+  try {
+    import.meta.resolve('@kovojs/ui');
+  } catch (error) {
+    throw missingDepHint('@kovojs/ui', error?.message ?? error);
+  }
+
+  const { siteThemeCss } = await import('../src/theme.js');
+  const tempRoot = mkdtempSync(path.resolve(tmpdir(), 'kovo-site-ui-css-'));
+  const componentCssPath = path.resolve(tempRoot, 'kovo-ui-components.css');
+
+  try {
+    let output;
+    try {
+      output = execFileSync(
+        'kovo',
+        [
+          'compile',
+          'package-css',
+          '@kovojs/ui',
+          '--entry',
+          path.resolve(siteRoot, 'src/app.tsx'),
+          '--out',
+          componentCssPath,
+        ],
+        { cwd: siteRoot, encoding: 'utf8' },
+      );
+    } catch (error) {
+      throw new Error(
+        'site export: `kovo compile package-css @kovojs/ui` failed; the gallery component CSS ' +
+          '(kv-button-/kv-switch-/kv-dialog- atoms) could not be extracted. Ensure the workspace ' +
+          'symlinks site/node_modules/@kovojs/{ui,cli} exist (run `pnpm install` at the repo root).' +
+          `\nUnderlying error: ${error?.stderr || error?.message || error}`,
+      );
+    }
+
+    const warnedFiles = [...output.matchAll(/^WARN package-css file=("[^"]+")/gm)].map((match) =>
+      JSON.parse(match[1]),
+    );
+    for (const fileName of warnedFiles) {
+      console.warn(`site export: ${fileName}: package component CSS extraction warning`);
+    }
+
+    const componentCss = readFileSync(componentCssPath, 'utf8');
+    assertExtractedComponentCss(componentCss);
+
+    const banner =
+      '/* GENERATED during site export - do not edit.\n' +
+      '   @kovojs/ui design tokens + component StyleX CSS (SPEC §6.1.1, §13.1). */\n';
+    const css = `${banner}\n${siteThemeCss}\n\n${componentCss}\n`;
+
+    mkdirSync(path.dirname(outPath), { recursive: true });
+    writeFileSync(outPath, css);
+    return { css, outPath };
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
 }
 
 // Resolve the bundled stylesheet from the Vite manifest.
@@ -100,10 +193,7 @@ function assertServedStylesheet() {
   }
 
   assertServedStylesheetContent(css, stylesheetPath);
-  assertServedUiStylesheetContent(
-    readFileSync(path.join(siteRoot, 'src/generated/kovo-ui.css'), 'utf8'),
-    path.join(siteRoot, 'src/generated/kovo-ui.css'),
-  );
+  assertServedUiStylesheetContent(readFileSync(uiStylesheetPath, 'utf8'), uiStylesheetPath);
 }
 
 export function assertExtractedSiteAppCss(css) {
@@ -154,9 +244,9 @@ export async function exportSiteStaticApp({
   // so removed pages cannot linger (the W9 link gate would otherwise pass on
   // orphaned files). dist-css holds the Vite manifest and is left untouched.
   await rm(outDir, { force: true, recursive: true });
-  emitSiteUiCss();
   execFileSync('vp', ['build'], { cwd: siteRoot, stdio: 'inherit' });
   await appendSiteAppCssToBuiltStylesheet();
+  await buildSiteUiCss();
   // Fail loudly if the bundled stylesheet is short or missing app atoms,
   // rather than shipping an unstyled docs shell (SPEC §6.1.1, §13.1).
   assertServedStylesheet();
@@ -206,10 +296,7 @@ export async function exportSiteStaticApp({
   // outside the manifest; copy it alongside the replayed documents.
   await cp(publicDir, outDir, { recursive: true });
   await mkdir(path.join(outDir, 'assets'), { recursive: true });
-  await cp(
-    path.join(siteRoot, 'src/generated/kovo-ui.css'),
-    path.join(outDir, 'assets/kovo-ui.css'),
-  );
+  await cp(uiStylesheetPath, path.join(outDir, 'assets/kovo-ui.css'));
 
   // Agent/static-host surface (search index, llms.txt, raw .md mirrors, 404)
   // and the embedded example apps the iframes point at.

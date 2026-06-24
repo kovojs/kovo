@@ -90,15 +90,13 @@ assert each behavior.
 
 ## The graph workflow
 
-The starter no longer asks you to hand-maintain a root `graph.json`. The app facts live in the
-authored modules above; the Kovo compiler/build tools derive the graph from those facts. For larger
-apps, add an explicit graph-emission script like the example apps do:
+The starter no longer asks you to hand-maintain or commit a root `graph.json`. The app facts live in
+the authored modules above; derive or construct the graph in tests when a product rule needs CI
+coverage:
 
 ```sh
 pnpm --filter @kovojs/example-commerce run build:demo
-pnpm --filter @kovojs/example-crm run emit-graph
-kovo explain query cart graph.json
-kovo explain mutation cart/add --optimistic graph.json
+pnpm --filter @kovojs/example-crm test -- src/graph.test.ts
 ```
 
 `kovo explain` output is stable and diffable by design. When a product rule matters, assert it in a

@@ -83,7 +83,7 @@ interface ResolvedPackage {
  * package's `exports` map. Returns deduped CSS ready to serve as one stylesheet
  * asset, plus coverage diagnostics for files whose styles could not be lowered.
  *
- * Public first-party build API for example/app `emit-ui-css` scripts.
+ * Public first-party build API for package CSS extraction in app/site build scripts.
  */
 export function extractPackageComponentCss(
   packageName: string,

@@ -1,21 +1,15 @@
 # Kovo Dataflow Devtools (example)
 
-A thin consumer of [`@kovojs/devtool`](../../packages/devtool). It wires three
-sibling example apps' own emitted graphs (commerce, crm, stackoverflow) into the
-reusable devtool — select any node and trace the **queries that go into it** and
-the **mutations that go out**, with syntax-highlighted source previews. All the
-logic (graph derivation, rendering, MCP, mount) lives in the package; this example
-emits each app's gitignored `generated/graph.json`, reads it, and hands it to
-`createDevtoolApp`.
+A thin consumer of [`@kovojs/devtool`](../../packages/devtool). It wires app graph
+JSON into the reusable devtool — select any node and trace the **queries that go
+into it** and the **mutations that go out**, with syntax-highlighted source
+previews. All the logic (graph derivation, rendering, MCP, mount) lives in the
+package; this example no longer generates sibling app graphs as a setup step.
 
 ## Run
 
 ```bash
-pnpm --filter @kovojs/example-devtool dev          # http://localhost:5173/?app=commerce
-pnpm --filter @kovojs/example-devtool dev:mounted   # http://localhost:5173/__kovo (prefix mount)
-pnpm --filter @kovojs/example-devtool mcp           # stdio MCP server (kovo_explain)
-pnpm --filter @kovojs/example-devtool test:mcp      # stdio round-trip smoke test
-pnpm --filter @kovojs/example-devtool conformance   # MCP cards ≡ graph edges (same-artifact)
+pnpm --filter @kovojs/example-devtool test
 ```
 
 The graph state lives in the URL (`?app`, `?sel`, `?q`), so the core is

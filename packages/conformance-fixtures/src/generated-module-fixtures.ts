@@ -177,7 +177,7 @@ export function generatedComponentCommittedIrFacts<
 
     const lowered = result.loweredSource ?? result.renderEquivalenceChecks?.[0]?.expected ?? '';
     const expectedGeneratedSource = [
-      `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.`,
+      `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit by hand.`,
       lowered,
     ].join('\n');
 

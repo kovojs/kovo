@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { trustedHtml } from '@kovojs/browser';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 // Two-pane example page (ported from scripts/examples.mjs renderExampleSplit): a
@@ -9,8 +8,7 @@ import * as style from '@kovojs/style';
 // `:checked` sibling rules), so the page works with JavaScript disabled — the
 // docs degradation contract (SPEC §8). `files` carry pre-highlighted code windows
 // (rendered through the shared markdown/Shiki pipeline by the caller); their
-// `html` is spliced in as a verbatim child string (the server JSX runtime inserts
-// child strings as written).
+// `html` is spliced in through Kovo's explicit raw-HTML sink.
 
 const exampleSplitStyles = style.create(
   {
@@ -186,8 +184,8 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
     <div style={exampleSplitStyles.page}>
       <header style={exampleSplitStyles.head}>
         <p style={exampleSplitStyles.headEyebrow}>Examples</p>
-        <h1 style={exampleSplitStyles.headTitle}>{escapeHtml(title)}</h1>
-        <p style={exampleSplitStyles.headBlurb}>{escapeHtml(blurb)}</p>
+        <h1 style={exampleSplitStyles.headTitle}>{title}</h1>
+        <p style={exampleSplitStyles.headBlurb}>{blurb}</p>
       </header>
       <style rawHtml={trustedHtml(tabStyle)} />
       <div style={exampleSplitStyles.split}>
@@ -234,7 +232,7 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
                 data-example-tab
                 title={file.name}
               >
-                {escapeHtml(file.name.split('/').pop()!)}
+                {file.name.split('/').pop()!}
               </label>
             ))}
           </div>

@@ -8,7 +8,6 @@ import {
   executeStarterClientTemplate,
   loadStarterTemplateFacts,
   runPnpmFilterTaskCommand,
-  runStarterTemplateEmitGraph,
   runStarterTemplateGraphAssertions,
   runStarterTemplateViteTaskCommand,
   starterClientTemplateBehaviorFact,
@@ -36,7 +35,7 @@ describe('@kovojs/test starter template fixtures', () => {
       packageJsonSource: JSON.stringify({
         dependencies: { '@kovojs/core': 'workspace:*' },
         devDependencies: { typescript: '^5.9.0', vite: '^7.0.0' },
-        scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
+        scripts: { 'kovo-check': 'kovo check graph.json' },
       }),
       stylesSource: ':root { color-scheme: light; }\n',
       viteConfigSource: [
@@ -45,9 +44,8 @@ describe('@kovojs/test starter template fixtures', () => {
         '  run: {',
         '    tasks: {',
         "      'kovo-check': {",
-        "        command: 'node scripts/emit-graph.mjs && kovo check graph.json',",
-        "        input: [{ pattern: 'src/**/*', base: 'workspace' }],",
-        "        output: ['graph.json'],",
+        "        command: 'kovo check graph.json',",
+        "        input: [{ pattern: 'graph.json', base: 'workspace' }],",
         '      },',
         '    },',
         '  },',
@@ -72,13 +70,12 @@ describe('@kovojs/test starter template fixtures', () => {
       package: {
         dependencies: ['@kovojs/core'],
         devDependencies: ['typescript', 'vite'],
-        scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
+        scripts: { 'kovo-check': 'kovo check graph.json' },
       },
       viteTasks: {
         'kovo-check': {
-          command: 'node scripts/emit-graph.mjs && kovo check graph.json',
-          input: [{ base: 'workspace', pattern: 'src/**/*' }],
-          output: ['graph.json'],
+          command: 'kovo check graph.json',
+          input: [{ base: 'workspace', pattern: 'graph.json' }],
         },
       },
     });
@@ -96,7 +93,6 @@ describe('@kovojs/test starter template fixtures', () => {
 
     try {
       await mkdir(join(root, '.github/workflows'), { recursive: true });
-      await mkdir(join(root, 'scripts'), { recursive: true });
       await mkdir(join(root, 'src'), { recursive: true });
       await writeFile(
         join(root, '.github/workflows/ci.yml'),
@@ -112,16 +108,12 @@ describe('@kovojs/test starter template fixtures', () => {
         JSON.stringify({
           dependencies: { '@kovojs/core': 'workspace:*' },
           devDependencies: { kovo: 'workspace:*', vite: '^7.0.0' },
-          scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
+          scripts: { 'kovo-check': 'kovo check graph.json' },
         }),
       );
       await writeFile(join(root, 'src/app.tsx'), 'export const app = "loaded";');
       await writeFile(join(root, 'src/client.ts'), 'export const client = "loaded";');
       await writeFile(join(root, 'src/styles.css'), ':root { color-scheme: light; }\n');
-      await writeFile(
-        join(root, 'scripts/emit-graph.mjs'),
-        'import { writeFileSync } from \'node:fs\';\nwriteFileSync(\'graph.json\', \'{"pages":[{"route":"/"}]}\');\n',
-      );
       await writeFile(
         join(root, 'vite.config.ts'),
         [
@@ -142,7 +134,7 @@ describe('@kovojs/test starter template fixtures', () => {
         package: {
           dependencies: ['@kovojs/core'],
           devDependencies: ['kovo', 'vite'],
-          scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
+          scripts: { 'kovo-check': 'kovo check graph.json' },
         },
         viteTasks: {},
       });
@@ -310,16 +302,7 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
         `export const graphFixture = ${JSON.stringify(graph)};\n`,
         'utf8',
       );
-      await writeFile(
-        join(templateRoot, 'scripts/emit-graph.mjs'),
-        [
-          "import { writeFileSync } from 'node:fs';",
-          "import { graphFixture } from '@kovojs/compiler';",
-          "writeFileSync('graph.json', JSON.stringify(graphFixture));",
-          "process.stdout.write('emit-graph/v1\\nOK\\n');",
-        ].join('\n'),
-        'utf8',
-      );
+      await writeFile(join(templateRoot, 'graph.json'), JSON.stringify(graph), 'utf8');
       await writeFile(
         join(templateRoot, 'scripts/graph-assertions.mjs'),
         [
@@ -344,19 +327,11 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
         },
       ];
 
-      await expect(runStarterTemplateEmitGraph(paths)).resolves.toEqual({
-        graph,
-        output: 'emit-graph/v1\nOK\n',
-      });
       await expect(
-        runStarterTemplateViteTaskCommand(
-          'node scripts/emit-graph.mjs && kovo check graph.json',
-          paths,
-          kovoOutputs,
-        ),
+        runStarterTemplateViteTaskCommand('kovo check graph.json', paths, kovoOutputs),
       ).resolves.toEqual({
         graph,
-        output: 'emit-graph/v1\nOK\nkovo-check/v1\nOK\n',
+        output: 'kovo-check/v1\nOK\n',
       });
       await expect(runStarterTemplateGraphAssertions(paths, kovoOutputs)).resolves.toBe(
         'graph-assertions/v1\nOK\n',
@@ -445,7 +420,10 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
         JSON.stringify({
           dependencies: { '@kovojs/core': 'workspace:*', '@kovojs/browser': 'workspace:*' },
           devDependencies: { '@kovojs/compiler': 'workspace:*', kovo: 'workspace:*' },
-          scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
+          scripts: {
+            'kovo-check': 'kovo check graph.json',
+            'graph-assertions': 'node scripts/graph-assertions.mjs',
+          },
         }),
       );
       await writeFile(
@@ -454,19 +432,10 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
           "import { defineConfig } from 'vite-plus';",
           'export default defineConfig({',
           '  run: { tasks: {',
-          "    'kovo-check': { command: 'node scripts/emit-graph.mjs && kovo check graph.json', input: [{ pattern: 'src/**/*', base: 'workspace' }], output: ['graph.json'] },",
-          "    'graph-assertions': { command: 'node scripts/emit-graph.mjs && node scripts/graph-assertions.mjs', input: [{ pattern: 'graph.json', base: 'workspace' }] },",
+          "    'kovo-check': { command: 'kovo check graph.json', input: [{ pattern: 'graph.json', base: 'workspace' }] },",
+          "    'graph-assertions': { command: 'node scripts/graph-assertions.mjs', input: [{ pattern: 'graph.json', base: 'workspace' }] },",
           '  } },',
           '});',
-        ].join('\n'),
-      );
-      await writeFile(
-        join(templateRoot, 'scripts/emit-graph.mjs'),
-        [
-          "import { writeFileSync } from 'node:fs';",
-          "import { graphFixture } from '@kovojs/compiler';",
-          "writeFileSync('graph.json', JSON.stringify(graphFixture));",
-          "process.stdout.write('emit-graph/v1\\nOK\\n');",
         ].join('\n'),
       );
       await writeFile(
@@ -551,7 +520,6 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
           missing: [],
           present: ['@kovojs/compiler', 'kovo'],
         },
-        emittedGraph: { graph, output: 'emit-graph/v1\nOK\n' },
         graph: {
           components: ['CartBadge'],
           mutations: graph.mutations,
@@ -561,11 +529,14 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
         graphCheck: { exitCode: 0, issueCount: 0, status: 'ok', version: 'kovo-check/v1' },
         package: {
           dependencies: ['@kovojs/browser', '@kovojs/core'],
-          scripts: { emitGraph: 'node scripts/emit-graph.mjs' },
+          scripts: {
+            kovoCheck: 'kovo check graph.json',
+            graphAssertions: 'node scripts/graph-assertions.mjs',
+          },
         },
         taskOutputs: [
-          { graph, output: 'emit-graph/v1\nOK\nkovo-check/v1\nOK\n' },
-          { graph, output: 'emit-graph/v1\nOK\ngraph-assertions/v1\nOK\n' },
+          { graph, output: 'kovo-check/v1\nOK\n' },
+          { graph, output: 'graph-assertions/v1\nOK\n' },
         ],
       });
     } finally {

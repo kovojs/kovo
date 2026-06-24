@@ -7,8 +7,6 @@
     "build": "kovo build ./src/app.tsx --preset node",
     "build:demo": "vp build",
     "dev": "vp dev",
-    "emit-components": "node scripts/emit-components.mjs",
-    "emit-graph": "node scripts/emit-graph.mjs",
     "start": "node dist/server/server.mjs",
     "serve:demo": "pnpm run build:demo && node scripts/demo-serve.mjs",
     "serve:dev": "node scripts/serve.mjs",

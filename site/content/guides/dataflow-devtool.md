@@ -10,23 +10,19 @@ order: 6.2
 `kovo_explain`. Both render the same graph cards, so the page a developer reads and the artifact an
 agent consumes stay aligned. SPEC section 5.3
 
-## Generate graphs
+## Provide Graphs
 
-Example apps emit their own graph artifacts before the devtool consumes them:
+The devtool consumes graph JSON but does not require generated files to live under `src/generated`.
+Example apps keep graph assertions in tests:
 
 ```sh
 pnpm --filter @kovojs/example-commerce run build:demo
-pnpm --filter @kovojs/example-crm run emit-graph
-pnpm --filter @kovojs/example-stackoverflow run emit-graph
+pnpm --filter @kovojs/example-crm test -- src/graph.test.ts
+pnpm --filter @kovojs/example-stackoverflow test -- src/kovo-graph.test.ts
 ```
 
-The devtool example wires those outputs into one multi-app bundle:
-
-```sh
-pnpm --filter @kovojs/example-devtool dev
-```
-
-Open `http://localhost:5173/?app=commerce` and switch apps from the URL/query controls.
+For a visual devtool host, pass the graph object or a build-produced graph file into
+`buildBundle()`.
 
 ## Mount under an app prefix
 
@@ -59,7 +55,7 @@ import { createDevtoolApp } from '@kovojs/devtool/app';
 const bundle = buildBundle({
   app: 'my-app',
   label: 'My App',
-  graph: JSON.parse(readFileSync('./src/generated/graph.json', 'utf8')),
+  graph: JSON.parse(readFileSync('./graph.json', 'utf8')),
   srcRoot: './src',
 });
 
@@ -75,9 +71,7 @@ cards, lanes, source previews, and edges from that input.
 Run the MCP server over the same graph:
 
 ```sh
-kovo-devtool mcp --graph ./src/generated/graph.json --src ./src --label "My App"
-pnpm --filter @kovojs/example-devtool mcp
-pnpm --filter @kovojs/example-devtool test:mcp
+kovo-devtool mcp --graph ./graph.json --src ./src --label "My App"
 ```
 
 `kovo_explain({ query, app?, limit? })` resolves exact node names when possible, then falls back to
@@ -86,10 +80,10 @@ content for agents.
 
 ## Conformance
 
-Use the example conformance check to prove the MCP cards and graph edges are the same artifact:
+Use a conformance check to prove the MCP cards and graph edges are the same artifact:
 
 ```sh
-pnpm --filter @kovojs/example-devtool conformance
+kovo-devtool mcp --graph ./graph.json --src ./src --label "My App"
 ```
 
 When a graph assertion fails, fix the app facts first: route, query, mutation, domain, or generated
