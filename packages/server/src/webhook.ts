@@ -611,10 +611,9 @@ function webhookReplayScope(name: string): string {
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.getPrototypeOf(value) === Object.prototype
-  );
+  const prototype =
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? Object.getPrototypeOf(value)
+      : undefined;
+  return prototype === Object.prototype || prototype === null;
 }
