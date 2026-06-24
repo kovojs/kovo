@@ -584,7 +584,7 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
         `source: "query.elevated"` / `sink: "db.write"`; `vp exec vitest --run
 packages/server/src/query-endpoint.test.ts` verifies default query writes still fail, elevated query writes
         succeed, non-empty reasons are required, and the audit fact is recorded.
-- [ ] **Cookie safe-defaults + class-derived floor (KV432).**
+- [x] **Cookie safe-defaults + class-derived floor (KV432).**
       Decision (2026-06-23): ship the **reduced form (i)** — a sound cookie-attribute floor by construction;
       **fixation-as-compile-error is cut** (no `rotateSession` primitive exists, "authenticating mutation" is not
       soundly recognizable, and `better-auth` runs login inside the package so app code shows nothing to analyze).
@@ -614,10 +614,13 @@ packages/server/src/query-endpoint.test.ts` verifies default query writes still 
       `verifyAppDataCookie(...)` rejects tampered/wrong-name/malformed values; verified with
       `pnpm exec vitest run src/cookies.test.ts` in `packages/server` and
       `pnpm exec vitest run src/index.kovo-explain.test.ts` in `packages/cli`.
-  - [ ] Fixation: **documented obligation** (app/auth layer rotates the session id on login; `better-auth`
+  - [x] Fixation: **documented obligation** (app/auth layer rotates the session id on login; `better-auth`
         already does) + an OPTIONAL advisory lint flagging a mutation writing `req.session.user` with no visible
         rotate (hint, not KV-error — recognition is unsound, better-auth is opaque). A real `rotateSession()`
         helper is **deferred** to a possible later session-ownership item (Kovo does not own session identity, §6.5).
+    - Evidence: `packages/server/src/guards.ts` documents the `SessionProvider` fixation boundary: Kovo
+      normalizes/forwards cookies but auth adapters and app-owned login flows must rotate the session id on
+      successful authentication. Verified by `vp check packages/server/src/guards.ts plans/secure-by-construction.md`.
 - [x] **Capability-URL primitive.**
       Decision (2026-06-23): typed `ctx.signUrl({ key, method, scope?, expiresIn, oneTime? })` dual to the cookie
       builder. **By-construction at the verify sink** (an object is un-dereferenceable without a valid token —

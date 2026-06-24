@@ -140,7 +140,14 @@ export interface SessionProviderResult<SessionValue> {
   value: SessionValue | null | undefined;
 }
 
-/** A function that resolves the session value from a raw request (or null). */
+/**
+ * A function that resolves the session value from a raw request (or null).
+ *
+ * Kovo normalizes and forwards session cookies but does not own the backing
+ * session identity. Auth adapters and app-owned login flows must rotate the
+ * session id when authentication succeeds so a pre-login id cannot be fixed and
+ * reused after login (SPEC §6.5).
+ */
 export type SessionProvider<RawRequest, SessionValue> = (
   request: RawRequest,
 ) =>
