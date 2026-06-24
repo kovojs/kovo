@@ -99,7 +99,7 @@ export const s = {
 
         for (const [index, value] of arrayValues(input).entries()) {
           try {
-            output.push(await parseSchemaAsync(item, value));
+            output.push(await parseSchemaAsync(item, value, true));
           } catch (error) {
             throw validationErrorFrom(error, [String(index)]);
           }
@@ -172,7 +172,7 @@ export const s = {
 
         for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
           try {
-            output[key] = (await parseSchemaAsync(schema, record[String(key)])) as InferSchema<
+            output[key] = (await parseSchemaAsync(schema, record[String(key)], true)) as InferSchema<
               Shape[keyof Shape]
             >;
           } catch (error) {
@@ -448,7 +448,83 @@ function isAsyncSchema<T>(schema: Schema<T>): schema is AsyncSchema<T> {
   return typeof (schema as Partial<AsyncSchema<T>>).parseAsync === 'function';
 }
 
-export async function parseSchemaAsync<T>(schema: Schema<T>, input: unknown): Promise<T> {
+/**
+ * Bounds on the shape of untrusted wire input (KV430, SPEC §6.6/§9.5). The default
+ * stops the small-body-huge-shape DoS class the byte+rate limiter cannot see; apps with
+ * legitimately large bulk inputs widen it via {@link configureShapeBudget}.
+ */
+export interface ShapeBudget {
+  readonly maxDepth: number;
+  readonly maxBreadth: number;
+  readonly maxNodes: number;
+}
+
+const DEFAULT_SHAPE_BUDGET: ShapeBudget = { maxDepth: 64, maxBreadth: 10_000, maxNodes: 200_000 };
+let activeShapeBudget: ShapeBudget = DEFAULT_SHAPE_BUDGET;
+
+/**
+ * Raise or lower the global input-shape budget (KV430). The default stops the
+ * small-body-huge-shape DoS class; an app with legitimately large bulk imports widens
+ * it here (the declare-once global ceiling). Per-schema `.max()` overrides are a follow-up.
+ */
+export function configureShapeBudget(budget: Partial<ShapeBudget>): void {
+  activeShapeBudget = { ...activeShapeBudget, ...budget };
+}
+
+/** Container children to descend; non-plain objects (File/Blob/Date/Map) are leaves. */
+function descendableChildren(value: object): readonly unknown[] | undefined {
+  if (Array.isArray(value)) return value;
+  const proto = Object.getPrototypeOf(value);
+  if (proto === Object.prototype || proto === null) {
+    return Object.values(value as Record<string, unknown>);
+  }
+  return undefined;
+}
+
+/**
+ * KV430 (SPEC §6.6/§9.5): bound the depth/breadth/node-count of untrusted wire input
+ * BEFORE the schema descends, so a small body cannot drive unbounded parser work the
+ * byte+rate limiter cannot see (a 4000-deep array, a million-key object). Iterative —
+ * an explicit stack, never recursion — so a deeply-nested attack input cannot itself
+ * overflow the call stack while being checked. Fail-closed runtime floor (SPEC §6.6),
+ * not a by-construction proof; covers JSON nesting and parsed object/array shape.
+ */
+export function assertShapeWithinBudget(input: unknown, budget: ShapeBudget = activeShapeBudget): void {
+  if (input === null || typeof input !== 'object') return;
+  let nodes = 1;
+  const stack: Array<readonly [value: object, depth: number]> = [[input, 0]];
+  while (stack.length > 0) {
+    const entry = stack.pop();
+    if (entry === undefined) break;
+    const [value, depth] = entry;
+    if (depth > budget.maxDepth) {
+      throw validationError(`Input nesting exceeds the maximum depth of ${budget.maxDepth}.`);
+    }
+    const children = descendableChildren(value);
+    if (children === undefined) continue;
+    if (children.length > budget.maxBreadth) {
+      throw validationError(
+        `Input container of ${children.length} entries exceeds the maximum breadth of ${budget.maxBreadth}.`,
+      );
+    }
+    nodes += children.length;
+    if (nodes > budget.maxNodes) {
+      throw validationError(`Input exceeds the maximum node count of ${budget.maxNodes}.`);
+    }
+    for (const child of children) {
+      if (child !== null && typeof child === 'object') stack.push([child, depth + 1]);
+    }
+  }
+}
+
+export async function parseSchemaAsync<T>(
+  schema: Schema<T>,
+  input: unknown,
+  // Internal recursion (s.array/s.object item parsing) passes `true`: the top-level
+  // wire entry already bounded the whole input, so subtrees are not re-walked.
+  skipShapeBudget = false,
+): Promise<T> {
+  if (!skipShapeBudget) assertShapeWithinBudget(input);
   return isAsyncSchema(schema) ? schema.parseAsync(input) : schema.parse(input);
 }
 
