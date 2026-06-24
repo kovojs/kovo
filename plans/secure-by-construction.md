@@ -303,11 +303,11 @@ design.
 - [x] Cover Drizzle **relational** queries (`with: { author: { columns: { passwordHash: true } } }`) — a
       different AST shape than `db.select({})` and a primary leak vector. In scope for v1, not a follow-on.
   - Evidence: `packages/drizzle/src/static/query-shapes.ts` recursively derives static
-    `db.query.<table>.findMany({ columns, with: { relation: { columns } } })` shapes, and
-    `packages/drizzle/src/static/schema.ts` maps Drizzle `relations(...)` property names to target table column
-    shapes so secret wrappers survive nested projections. Verified with
-    `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts` and
-    `vp exec vitest --run packages/drizzle/src`.
+    `db.query.<table>.findMany({ columns, with: { relation: { columns } } })` shapes and emits structured
+    secret-selection facts, while `packages/drizzle/src/static/schema.ts` maps aliases, re-imports, and
+    Drizzle `relations(...)` property names to target table column shapes so secret wrappers survive nested
+    projections. Verified with `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts` and
+    the broad focused lane listed in Phase 9.
 - [x] Escape hatch (fork in Open Design Questions: fixed verifiable redactor set vs arbitrary `fn` behind
       `trustedReveal`): surface every reveal in `kovo explain --revealed`; arbitrary-`fn` reveals are
       audit-grade, not proof-grade. Prefer a server-side projection that never selects the secret.
@@ -907,10 +907,19 @@ packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.tes
 - [ ] One negative + one positive test per phase (the dangerous source is rejected/neutralized; the blessed
       path still works without forcing the raw escape hatch). Seed the confidentiality, mass-assignment, and
       egress corpora with the alias/destructure/helper bypasses Phase 0 must defeat.
+  - Partial evidence: the current focused security lane covers 512 tests across compiler/CLI/core/server/Drizzle,
+    including relational secret rejection and access/endpoint/webhook acceptance. Still open: final TOCTOU
+    lifecycle/static-gate acceptance before this can close.
 - [ ] Acceptance: every new gate fails closed on `Unknown` provenance, and the bypass corpus (aliasing,
       re-import, destructuring, `globalThis.fetch`, relational `with:` selection) is green.
+  - Partial evidence: `packages/drizzle/src/index.query-shapes.test.ts` covers relational `with:`, renamed import,
+    and Drizzle alias secret-selection KV435 cases; `packages/server/src/egress.test.ts` covers
+    `globalThis.fetch`/Node egress interposition. Still open: imported/node_modules KV429 helper summaries.
 - [ ] Acceptance: existing security lanes stay green — `plans/fix-security.md` focused suites, the SQL corpus
       once landed, endpoint/webhook conformance, and `git diff --check`.
+  - Latest partial gate: `vp exec vitest --run packages/compiler/src/cloud-sdk-credentials.test.ts packages/compiler/src/schema-budgets.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/handler-lowering.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/server/src/schema.test.ts packages/server/src/response.test.ts packages/server/src/app.test.ts packages/server/src/app-document.test.ts packages/server/src/capability-url.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/egress.test.ts packages/server/src/cookies.test.ts packages/server/src/access-graph.test.ts packages/drizzle/src/index.symbol-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/runtime-surface.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`
+    passed 23 files / 512 tests; `vp check packages/compiler packages/server packages/cli packages/core packages/drizzle/src SPEC.md plans/secure-by-construction.md docs/egress-security.md`, `pnpm run check:api-surface`, and
+    `git diff --check` passed.
 - [ ] Acceptance (completion gate): the shared §11.1 write-reachability pass is built AND every by-construction
       stage built on it lands — mass-assignment, KV429 (TOCTOU), KV433 (read-only query). The
       runtime/primitive safe-defaults are backstops, not completion; the plan is not green until these static
