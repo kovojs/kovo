@@ -232,9 +232,13 @@ until Phase 1, accepted deliberately so every gate is sound on arrival.
   - `queryInputKeyOperand` (`summaries.ts:652`) fails open (fine for read-side IDOR, where the WHERE clause
     is separately audited). The write/leak gates must **prove server-provenance** and reject all else.
 - [ ] Conformance test the bypass corpus before declaring Phase 0 done (the gate criterion).
-  - Aliasing (`alias(users,'u')`), renamed import (`users as accounts`), intermediate binding (`const t =
-users`), destructuring (`const { ownerId } = input`), and helper-returned values must each resolve to the
-    correct symbol or fail closed — no spelling defeats a check. Phases 1–6 do not begin until this is green.
+  - [x] Cover Drizzle aliasing (`alias(users, "u")`), renamed import (`users as accounts`),
+        intermediate table binding (`const t = users`), and destructured input provenance in the symbolic
+        write-effect corpus.
+    - Evidence: `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts` passed 4
+      tests on local `main` at `d8c52437`.
+  - [ ] Cover helper-returned values and any remaining namespace/static-member or conditional table cases;
+        each must resolve to the correct symbol or fail closed. Phases 1-6 do not begin until this is green.
 
 ## Phase 1: Confidentiality field boundary (the dual of XSS) — KV422/KV423
 
