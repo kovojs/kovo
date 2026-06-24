@@ -433,9 +433,12 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
     client payload. Verified by `vp exec vitest --run packages/core/src/index.test.ts`,
     `vp check packages/core/src/index.ts packages/core/src/secret.ts packages/core/src/index.test.ts`, and
     `pnpm run check:api-surface`.
-- [ ] Separate concern (NOT this phase): "don't bundle server code/deps into the client" is a module-graph
+- [x] Separate concern (NOT this phase): "don't bundle server code/deps into the client" is a module-graph
       property, not a secret. If needed, handle via inference (flag a client-reachable import of a module
       transitively using Node builtins) as a small lint; Kovo's existing component split already covers most.
+  - Evidence: Phase 4 shipped per-binding secret provenance only, SPEC §6.6 separates static provenance from
+    defense-in-depth/runtime floors, and KV431 covers client-module manifest completeness without claiming
+    server-dependency bundling proof in this phase.
 
 ## Phase 5: Least authority — capabilities you only hold if you declared them
 
