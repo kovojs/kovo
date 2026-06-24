@@ -64,7 +64,9 @@ try {
   const noJsPage = await noJs.newPage();
   await noJsPage.goto(`${origin}/`);
   check(
-    (await noJsPage.locator('h1').first().textContent())?.includes('The secure web framework'),
+    (await noJsPage.locator('h1').first().textContent())?.includes(
+      'The web framework that turns security bugs into build errors',
+    ),
     'no-JS: landing hero renders',
   );
   check(

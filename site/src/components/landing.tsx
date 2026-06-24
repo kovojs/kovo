@@ -109,7 +109,26 @@ const heroStyles = style.create(
       margin: 0,
       textWrap: 'balance',
     },
-    alt: { color: 'var(--accent)', fontStyle: 'italic', fontWeight: 500 },
+    bugPhrase: {
+      color: 'var(--red)',
+      fontStyle: 'italic',
+      fontWeight: 600,
+      textDecorationColor: 'color-mix(in srgb, var(--red) 70%, transparent)',
+      textDecorationLine: 'underline',
+      textDecorationStyle: 'wavy',
+      textDecorationThickness: '0.08em',
+      textUnderlineOffset: '0.12em',
+    },
+    buildPhrase: {
+      background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+      borderBottom: '0.1em solid var(--accent)',
+      boxDecorationBreak: 'clone',
+      color: 'var(--accent)',
+      fontStyle: 'normal',
+      fontWeight: 650,
+      padding: '0 0.06em',
+      WebkitBoxDecorationBreak: 'clone',
+    },
     lede: {
       color: 'var(--ink)',
       fontFamily: 'var(--font-display)',
@@ -536,7 +555,8 @@ function SecurityHero({ clients }: { clients: ClientHrefs }): string {
     <section style={heroStyles.hero}>
       <div>
         <h1 style={heroStyles.h1}>
-          The <em style={heroStyles.alt}>secure</em> web framework.
+          The web framework that turns <em style={heroStyles.bugPhrase}>security bugs</em> into{' '}
+          <em style={heroStyles.buildPhrase}>build errors</em>
         </h1>
         <p style={heroStyles.lede}>Make security holes a build error -- not a 2AM incident.</p>
         <p style={heroStyles.sub}>
