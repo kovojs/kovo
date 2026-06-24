@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Node, Project, SyntaxKind } from 'ts-morph';
 
 import {
+  UNRESOLVED_READ_SOURCE_EXPRESSION,
   extractSymbolicEffectsFromProject,
   joinSymbolProvenance,
   provenServerProvenanceForExpression,
@@ -184,6 +185,75 @@ describe('@kovojs/drizzle symbol provenance', () => {
         op: 'update',
         sets: { ownerId: { kind: 'param', path: 'ownerId' } },
         table: 'users',
+      },
+    ]);
+  });
+
+  it('keeps conditional table bindings exact enough for symbolic write effects', () => {
+    const effects = extractSymbolicEffectsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'account.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const accounts = pgTable("accounts", {}, kovo({ domain: "account", key: "id" }));',
+            'export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));',
+            'const accountTable = useAccounts ? accounts : users;',
+            '',
+            'export async function saveAccount(db: PgDatabase, input: { id: string; ownerId: string }) {',
+            '  const id = input.id;',
+            '  const { ownerId } = input;',
+            '  await db.update(accountTable).set({ ownerId }).where(eq(accountTable.id, id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    }).map((fact) => fact.effect);
+
+    expect(effects).toEqual([
+      {
+        match: { expr: 'eq(accountTable.id, id)', kind: 'opaque' },
+        op: 'update',
+        sets: { ownerId: { kind: 'param', path: 'ownerId' } },
+        table: UNRESOLVED_READ_SOURCE_EXPRESSION,
+      },
+    ]);
+  });
+
+  it('fails closed when helper-returned input values reach symbolic write effects', () => {
+    const effects = extractSymbolicEffectsFromProject({
+      files: [
+        pgDatabaseTypes(['update(table: unknown): { set(value: unknown): Promise<void> };']),
+        {
+          fileName: 'account.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const accounts = pgTable("accounts", {}, kovo({ domain: "account", key: "id" }));',
+            '',
+            'function ownerFromInput(input: { ownerId: string }) {',
+            '  return input.ownerId;',
+            '}',
+            '',
+            'export async function saveAccount(db: PgDatabase, input: { ownerId: string }) {',
+            '  await db.update(accounts).set({ ownerId: ownerFromInput(input) });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    }).map((fact) => fact.effect);
+
+    expect(effects).toEqual([
+      {
+        match: { eq: [], kind: 'keys' },
+        op: 'update',
+        sets: { ownerId: { expr: 'unsummarized-helper:ownerFromInput', kind: 'opaque' } },
+        table: 'accounts',
       },
     ]);
   });
