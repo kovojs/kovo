@@ -12,6 +12,7 @@ export { kovoCheck, kovoExplain, runKovoCommand } from './index.js';
 export type {
   ExplainKind,
   KovoAccessExplainOptions,
+  KovoCapabilitiesExplainOptions,
   KovoCheckFamily,
   KovoCheckInput,
   KovoCheckResult,
