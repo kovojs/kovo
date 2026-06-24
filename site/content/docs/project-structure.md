@@ -96,7 +96,7 @@ coverage:
 
 ```sh
 pnpm --filter @kovojs/example-commerce run build:demo
-pnpm --filter @kovojs/example-crm test -- src/graph.test.ts
+pnpm --filter @kovojs/example-crm test -- src/interactive-app.test.ts
 ```
 
 `kovo explain` output is stable and diffable by design. When a product rule matters, assert it in a

@@ -2,7 +2,7 @@ import { kovo } from '@kovojs/server/vite';
 import { defineConfig } from 'vite-plus';
 import { fileURLToPath } from 'node:url';
 
-import { exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
+import { exampleDrizzleRegistryPlugin, exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
 import { kovoExampleServeTask } from '../vite-plus-tasks.js';
 
 const exampleGeneratedGraphsGlobalSetup = fileURLToPath(
@@ -24,21 +24,28 @@ export const soViteConfig = defineConfig({
       },
     },
   },
-  // KOVO_DEMO_MULTITENANT (scripts/demo-serve.mjs) mounts its own per-session request dispatch,
-  // so drop the singleton app-shell dev plugin and enable the compiler pre-plugin for SPEC
-  // §4.8/§5.2 output escaping. Source-mode dev/tests keep their existing app-shell plugin path.
+  // SPEC §5.2 / §9.1: query-backed regions run through the real component
+  // compiler so their live-target renderers are compiler-emitted artifacts, not
+  // hand-authored app code. KOVO_DEMO_MULTITENANT still only controls the
+  // singleton app-shell plugin because scripts/demo-serve.mjs mounts its own
+  // per-session request dispatch.
   plugins: [
-    ...(process.env.KOVO_DEMO_MULTITENANT
-      ? [
-          exampleKovoCompilerPlugin({
-            include: [
-              'src/components/question-card.tsx',
-              'src/components/question-detail.tsx',
-              'src/components/question-list.tsx',
-            ],
-          }),
-        ]
-      : []),
+    exampleDrizzleRegistryPlugin({
+      appEntries: ['src/app-shell.ts', 'src/interactive-app.tsx'],
+      mutationTouchGraphKeys: {
+        postAnswer: 'postAnswer',
+        postQuestion: 'postQuestion',
+        voteUp: 'voteUp',
+      },
+      sourceRoot: 'src',
+    }),
+    exampleKovoCompilerPlugin({
+      include: [
+        'src/components/question-card.tsx',
+        'src/components/question-detail.tsx',
+        'src/components/question-list.tsx',
+      ],
+    }),
     ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app-shell.ts' })]),
   ],
   // PGlite (WASM) makes the build/dev paths slow; give the tests room.

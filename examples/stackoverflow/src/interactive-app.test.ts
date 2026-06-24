@@ -282,8 +282,10 @@ describe('stackoverflow interactive app', () => {
         body: 'A fresh demo answer.',
         authorId: 'demo-viewer',
       }),
-      `${questionDetailTarget}=questionAnswers questionDetail`,
-      liveHeader(questionDetailTarget, questionDetailComponent, { questionId: question.id }),
+      `${questionDetailTarget}:${question.id}=questionAnswers questionDetail`,
+      liveHeader(`${questionDetailTarget}:${question.id}`, questionDetailComponent, {
+        questionId: question.id,
+      }),
     );
 
     expect(status).toBe(200);

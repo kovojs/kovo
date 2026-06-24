@@ -209,7 +209,7 @@ export function assertExtractedSiteAppCss(css) {
 
 async function appendSiteAppCssToBuiltStylesheet() {
   const appModulePath = path.join(siteRoot, 'src/app.tsx');
-  const { extractAppComponentCss } = await import('@kovojs/compiler/package-styles');
+  const { extractAppComponentCss } = await import('@kovojs/compiler');
   const result = extractAppComponentCss({
     fileName: appModulePath,
     packagePrefixDiscoveryRoot: path.dirname(appModulePath),

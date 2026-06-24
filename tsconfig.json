@@ -21,6 +21,7 @@
   "include": [
     "packages/**/*.ts",
     "packages/icons/src/*.tsx",
+    "examples/drizzle-registry-runtime.ts",
     "examples/vite-kovo-compiler.ts",
     "vite.config.ts"
   ],

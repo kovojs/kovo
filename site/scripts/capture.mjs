@@ -7,6 +7,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
+import { createServer } from 'vite-plus';
+
 /**
  * Artifact-capture harness (plan W3). Every landing/docs visual is regenerated
  * from the real toolchain on every build; a capture whose source cannot
@@ -203,7 +205,30 @@ export async function captureKovoExplain(_repoRoot) {
 
 /** The inline loader budget, measured from the artifact that actually ships. */
 export async function captureLoaderBudget() {
-  const { kovoLoaderSource } = await import('@kovojs/browser/internal/inline-loader');
+  const viteServer = await createServer({
+    appType: 'custom',
+    logLevel: 'error',
+    root: siteRoot,
+    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
+  });
+  let kovoLoaderSource;
+  try {
+    const [{ trustedHtml }, { createApp, createRequestHandler, route }] = await Promise.all([
+      viteServer.ssrLoadModule('@kovojs/browser'),
+      viteServer.ssrLoadModule('@kovojs/server'),
+    ]);
+    const app = createApp({
+      routes: [
+        route('/', {
+          page: () => trustedHtml('<main>loader budget</main>'),
+        }),
+      ],
+    });
+    const response = await createRequestHandler(app)(new Request('https://kovo.test/'));
+    kovoLoaderSource = inlineLoaderSourceFromDocument(await response.text());
+  } finally {
+    await viteServer.close();
+  }
   const rawBytes = Buffer.byteLength(kovoLoaderSource, 'utf8');
   const gzipBytes = gzipSync(kovoLoaderSource).byteLength;
   if (gzipBytes > LOADER_BUDGET_BYTES) {
@@ -212,6 +237,18 @@ export async function captureLoaderBudget() {
     );
   }
   return { budget: LOADER_BUDGET_BYTES, gzipBytes, rawBytes };
+}
+
+function inlineLoaderSourceFromDocument(html) {
+  const scripts = html.matchAll(/<script(?<attrs>[^>]*)>(?<source>[\s\S]*?)<\/script>/g);
+  for (const match of scripts) {
+    const attrs = match.groups?.attrs ?? '';
+    const source = match.groups?.source ?? '';
+    if (/\bsrc\s*=/.test(attrs)) continue;
+    if (source.includes('installInlineKovoBootstrap')) return source;
+  }
+
+  throw new Error('capture: rendered document did not include the inline Kovo loader');
 }
 
 /**

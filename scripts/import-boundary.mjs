@@ -14,23 +14,12 @@ const appFacingRoots = [
 
 const checkedExtensions = new Set(['.js', '.jsx', '.mjs', '.md', '.ts', '.tsx']);
 
-const explicitlyAllowedInternalImports = new Set([
-  'examples/stackoverflow/src/interactive-app.tsx -> @kovojs/server/internal/wire',
-  'examples/crm/src/graph.ts -> @kovojs/core/internal/graph',
-  'examples/reference/src/app.ts -> @kovojs/core/internal/graph',
-  'examples/stackoverflow/src/graph.ts -> @kovojs/core/internal/graph',
-  'site/scripts/capture.mjs -> @kovojs/browser/internal/inline-loader',
-  'site/scripts/export-static.mjs -> @kovojs/compiler/package-styles',
-]);
-
-// Temporary docs exception for the streaming guide's programmatic deferred-stream
-// snippet. App-authored client entries should use the public `@kovojs/browser/client`
-// surface; `@kovojs/browser/generated` remains compiler-emitted ABI.
-const explicitlyAllowedGeneratedImports = new Set([
-  'site/content/guides/streaming.md -> @kovojs/browser/generated',
-]);
+const explicitlyAllowedInternalImports = new Set([]);
+const explicitlyAllowedGeneratedImports = new Set([]);
 
 export async function collectImportBoundaryViolations({
+  generatedExceptions = explicitlyAllowedGeneratedImports,
+  internalExceptions = explicitlyAllowedInternalImports,
   rootDir = repoRootFromScript(),
   checkStaleExceptions = path.resolve(rootDir) === repoRootFromScript(),
   roots = appFacingRoots,
@@ -55,7 +44,10 @@ export async function collectImportBoundaryViolations({
       if (tier === null) continue;
       if (tier === 'internal' && isTestFile(relativePath)) continue;
       const allowKey = `${relativePath} -> ${specifier}`;
-      const allowed = allowedImportBoundaryException(tier, allowKey);
+      const allowed = allowedImportBoundaryException(tier, allowKey, {
+        generatedExceptions,
+        internalExceptions,
+      });
       if (allowed) matchedExceptions.add(allowKey);
       if (!allowed) {
         violations.push({
@@ -68,7 +60,10 @@ export async function collectImportBoundaryViolations({
   }
 
   if (checkStaleExceptions) {
-    for (const exception of explicitImportBoundaryExceptions()) {
+    for (const exception of explicitImportBoundaryExceptions({
+      generatedExceptions,
+      internalExceptions,
+    })) {
       if (matchedExceptions.has(exception.allowKey)) continue;
       violations.push({
         fileName: exception.fileName,
@@ -88,9 +83,7 @@ export async function collectImportBoundaryViolations({
 }
 
 export function nonPublicKovoImportTier(specifier) {
-  if (specifier === '@kovojs/compiler' || specifier.startsWith('@kovojs/compiler/')) {
-    return 'internal';
-  }
+  if (specifier.startsWith('@kovojs/compiler/')) return 'internal';
   if (/^@kovojs\/[^/]+\/internal(?:\/|$)/.test(specifier)) return 'internal';
   if (/^@kovojs\/[^/]+\/generated(?:\/|$)/.test(specifier)) return 'generated';
   return null;
@@ -104,19 +97,19 @@ function importBoundaryTier(specifier) {
   return nonPublicKovoImportTier(specifier) ?? appLocalGeneratedImportTier(specifier);
 }
 
-function allowedImportBoundaryException(tier, allowKey) {
-  if (tier === 'internal') return explicitlyAllowedInternalImports.has(allowKey);
-  if (tier === 'generated') return explicitlyAllowedGeneratedImports.has(allowKey);
+function allowedImportBoundaryException(tier, allowKey, { generatedExceptions, internalExceptions }) {
+  if (tier === 'internal') return internalExceptions.has(allowKey);
+  if (tier === 'generated') return generatedExceptions.has(allowKey);
   if (tier === 'app-local-generated') return false;
   return false;
 }
 
-function explicitImportBoundaryExceptions() {
+function explicitImportBoundaryExceptions({ generatedExceptions, internalExceptions }) {
   return [
-    ...[...explicitlyAllowedInternalImports].map((allowKey) =>
+    ...[...internalExceptions].map((allowKey) =>
       explicitImportBoundaryException('internal', allowKey),
     ),
-    ...[...explicitlyAllowedGeneratedImports].map((allowKey) =>
+    ...[...generatedExceptions].map((allowKey) =>
       explicitImportBoundaryException('generated', allowKey),
     ),
   ];

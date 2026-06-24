@@ -30,7 +30,7 @@ const runtime = () => import('@kovojs/browser/generated');
   });
 
   it('classifies non-public Kovo import tiers', () => {
-    expect(nonPublicKovoImportTier('@kovojs/compiler')).toBe('internal');
+    expect(nonPublicKovoImportTier('@kovojs/compiler')).toBeNull();
     expect(nonPublicKovoImportTier('@kovojs/compiler/graph')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/compiler/package-styles')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/core/internal/graph')).toBe('internal');
@@ -179,6 +179,7 @@ const runtime = () => import('@kovojs/browser/generated');
     await expect(
       collectImportBoundaryViolations({
         checkStaleExceptions: true,
+        internalExceptions: new Set(['examples/demo/src/stale.ts -> @kovojs/core/internal/graph']),
         rootDir,
         roots: ['examples'],
       }),

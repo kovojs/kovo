@@ -60,7 +60,7 @@ export const EXAMPLES = [
       'src/components/deal-detail.tsx',
       'src/queries.ts',
       'src/mutations.ts',
-      'src/graph.ts',
+      'src/interactive-app.tsx',
     ],
   },
   {
@@ -80,7 +80,7 @@ export const EXAMPLES = [
       'src/components/question-detail.tsx',
       'src/queries.ts',
       'src/mutations.ts',
-      'src/graph.ts',
+      'src/interactive-app.tsx',
     ],
   },
 ];

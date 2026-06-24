@@ -83,7 +83,7 @@ describe('reference app shell HTTP entry', () => {
       expect(sourceModule.status, formatDevServerFailure(sourceModuleBody, devServerError)).toBe(
         200,
       );
-      expect(sourceModuleBody).toContain('referenceGraph');
+      expect(sourceModuleBody).toContain('referenceSignIn');
     } finally {
       await vite.close();
     }
