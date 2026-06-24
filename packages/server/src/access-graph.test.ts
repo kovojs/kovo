@@ -1,6 +1,7 @@
 import { hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
+import { publicAccess, verifiedAccess } from './access.js';
 import { accessFactsFromApp } from './access-graph.js';
 import { createApp } from './app.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
@@ -27,7 +28,11 @@ describe('app access graph extraction', () => {
   it('extracts access decisions from assembled app guard and auth posture', () => {
     const authed = guards.authed<{ session?: { user?: { id?: string } } }>();
     const guardedQuery = query('cart', { guard: authed, load: () => ({ count: 1 }) });
-    const publicQuery = query('catalog', { load: () => ({ items: [] }) });
+    const publicQuery = query('catalog', {
+      access: publicAccess('public product catalog'),
+      load: () => ({ items: [] }),
+    });
+    const missingQuery = query('drafts', { load: () => ({ items: [] }) });
     const guardedMutation = mutation('cart/add', {
       guard: authed,
       handler: () => ({ ok: true }),
@@ -38,6 +43,10 @@ describe('app access graph extraction', () => {
       input: s.object({}),
     });
     const guardedLayout = layout({ guard: authed });
+    const explicitGuardRoute = route('/admin', {
+      access: { guards: [{ name: 'admin' }], kind: 'guard-chain' },
+      page: () => '<main>admin</main>',
+    });
     const guardedRoute = route('/cart', { layout: guardedLayout, page: () => '<main>cart</main>' });
     const missingRoute = route('/public', { page: () => '<main>public</main>' });
     const health = endpoint('/healthz', {
@@ -48,6 +57,7 @@ describe('app access graph extraction', () => {
       response: rawTextResponse,
     });
     const api = endpoint('/api/sync', {
+      access: verifiedAccess,
       auth: { kind: 'custom', name: 'api-key' },
       handler: () => Response.json({ ok: true }),
       method: 'POST',
@@ -55,6 +65,7 @@ describe('app access graph extraction', () => {
       response: rawJsonResponse,
     });
     const signedWebhook = webhook('stripe', {
+      access: verifiedAccess,
       handler: () => ({}),
       input: s.object({ id: s.string() }),
       path: '/webhooks/stripe',
@@ -68,17 +79,18 @@ describe('app access graph extraction', () => {
     const app = createApp({
       endpoints: [health, api, signedWebhook],
       mutations: [guardedMutation, missingMutation],
-      queries: [guardedQuery, publicQuery],
-      routes: [guardedRoute, missingRoute],
+      queries: [guardedQuery, publicQuery, missingQuery],
+      routes: [guardedRoute, explicitGuardRoute, missingRoute],
     });
 
     expect(accessFactsFromApp(app)).toEqual([
       {
         decision: 'verified',
-        detail: 'method=POST path=/api/sync mount=exact auth=custom:api-key',
+        detail:
+          'access=verified-machine-auth method=POST path=/api/sync mount=exact auth=custom:api-key',
         kind: 'endpoint',
         name: '/api/sync',
-        source: 'auth',
+        source: 'access',
       },
       {
         decision: 'public',
@@ -104,6 +116,13 @@ describe('app access graph extraction', () => {
       },
       {
         decision: 'guard',
+        detail: 'access=guard-chain guards=admin',
+        kind: 'page',
+        name: '/admin',
+        source: 'access',
+      },
+      {
+        decision: 'guard',
         detail: 'guard=layout.guard',
         kind: 'page',
         name: '/cart',
@@ -124,18 +143,27 @@ describe('app access graph extraction', () => {
         source: 'legacy-guard',
       },
       {
+        decision: 'public',
+        detail: 'access=public',
+        justification: 'public product catalog',
+        kind: 'query',
+        name: 'catalog',
+        source: 'access',
+      },
+      {
         decision: 'missing',
         detail: 'guard=-',
         kind: 'query',
-        name: 'catalog',
+        name: 'drafts',
         source: 'legacy-guard',
       },
       {
         decision: 'verified',
-        detail: 'method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature',
+        detail:
+          'access=verified-machine-auth method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature',
         kind: 'webhook',
         name: 'stripe',
-        source: 'webhook',
+        source: 'access',
       },
     ]);
   });

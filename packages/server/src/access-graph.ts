@@ -1,5 +1,6 @@
 import type { AccessExplainFact } from '@kovojs/core/internal/graph';
 
+import type { AccessDecision } from './access.js';
 import type { AppMutationDeclaration, AppQueryDeclaration, KovoApp } from './app-types.js';
 import type {
   EndpointAuthDeclaration,
@@ -28,6 +29,9 @@ export function accessFactsFromApp(
 }
 
 function queryAccessFact(query: AppQueryDeclaration): AccessExplainFact {
+  const explicit = explicitAccessFact('query', query.key, query.access);
+  if (explicit) return explicit;
+
   const hasGuard = typeof query.guard === 'function';
   return {
     decision: hasGuard ? 'guard' : 'missing',
@@ -39,6 +43,9 @@ function queryAccessFact(query: AppQueryDeclaration): AccessExplainFact {
 }
 
 function mutationAccessFact(mutation: AppMutationDeclaration): AccessExplainFact {
+  const explicit = explicitAccessFact('mutation', mutation.key, mutation.access);
+  if (explicit) return explicit;
+
   const hasGuard = typeof mutation.guard === 'function';
   return {
     decision: hasGuard ? 'guard' : 'missing',
@@ -50,6 +57,10 @@ function mutationAccessFact(mutation: AppMutationDeclaration): AccessExplainFact
 }
 
 function routeAccessFact(route: RouteDeclaration<any, any, any, any, any, any>): AccessExplainFact {
+  const explicit =
+    explicitAccessFact('page', route.path, route.access) ?? explicitLayoutAccessFact(route);
+  if (explicit) return explicit;
+
   const guardSource = routeGuardSource(route);
   return {
     decision: guardSource === undefined ? 'missing' : 'guard',
@@ -69,6 +80,13 @@ function endpointAccessFact(
   const source = webhook ? 'webhook' : 'auth';
   const auth = endpoint.auth;
   const detail = endpointAccessDetail(endpoint, auth);
+  const explicit = explicitAccessFact(kind, name, endpoint.access);
+  if (explicit) {
+    return {
+      ...explicit,
+      detail: `${explicit.detail} ${detail}`,
+    };
+  }
 
   if (auth?.kind === 'none') {
     return {
@@ -110,6 +128,65 @@ function endpointAccessDetail(
     `mount=${endpoint.mount}`,
     `auth=${auth === undefined ? '-' : auth.kind === 'none' ? 'none' : `${auth.kind}:${auth.name}`}`,
   ].join(' ');
+}
+
+function explicitLayoutAccessFact(
+  route: RouteDeclaration<any, any, any, any, any, any>,
+): AccessExplainFact | undefined {
+  let layout: LayoutDeclaration<any, any, any> | undefined = route.layout;
+  while (layout !== undefined) {
+    const fact = explicitAccessFact('page', route.path, layout.access);
+    if (fact) {
+      return {
+        ...fact,
+        detail: `${fact.detail} source=layout.access`,
+      };
+    }
+    layout = layout.parent;
+  }
+
+  return undefined;
+}
+
+function explicitAccessFact(
+  kind: AccessExplainFact['kind'],
+  name: string,
+  access: AccessDecision | undefined,
+): AccessExplainFact | undefined {
+  if (access === undefined) return undefined;
+
+  if (access.kind === 'public') {
+    return {
+      decision: 'public',
+      detail: 'access=public',
+      justification: access.reason,
+      kind,
+      name,
+      source: 'access',
+    };
+  }
+
+  if (access.kind === 'verified-machine-auth') {
+    return {
+      decision: 'verified',
+      detail: 'access=verified-machine-auth',
+      kind,
+      name,
+      source: 'access',
+    };
+  }
+
+  return {
+    decision: 'guard',
+    detail: `access=guard-chain guards=${listAccessGuards(access)}`,
+    kind,
+    name,
+    source: 'access',
+  };
+}
+
+function listAccessGuards(access: Extract<AccessDecision, { kind: 'guard-chain' }>): string {
+  return access.guards.length === 0 ? '-' : access.guards.map((guard) => guard.name).join(',');
 }
 
 function routeGuardSource(
