@@ -155,6 +155,7 @@ function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtrac
           namespaceTableNames,
         );
         if (!synthetic) return undefined;
+        if (extraction.conditionalTableTargetsBySyntheticName.has(synthetic)) return undefined;
         return extraction.realTableNameBySynthetic.get(synthetic) ?? synthetic;
       };
 
