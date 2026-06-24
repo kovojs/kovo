@@ -680,6 +680,16 @@ export function kovoCheck(
       pushFinding(staticDiagnosticLine(diagnostic), diagnosticSeverity(diagnostic) === 'error');
     }
 
+    // SPEC §10.2/§11.2: KV422 SQL-injection findings from the static analyzer
+    // (analyzeSqlSafetyFromProject, @kovojs/drizzle/internal/static) gate `kovo check`. The analysis
+    // is by-construction over AST symbol-identity provenance (§6.6); an error-severity finding here
+    // means unproven/request-derived data could reach executable SQL text on a managed DB handle, so
+    // the check fails (nonzero exit). The diagnostics ride into the check graph as a
+    // `sqlSafetyDiagnostics` field assembled by the compile/build pipeline.
+    for (const diagnostic of sqlSafetyDiagnostics(graph)) {
+      pushFinding(sqlSafetyKv422Line(diagnostic), diagnosticSeverity(diagnostic) === 'error');
+    }
+
     for (const diagnostic of graph.verificationDiagnostics ?? []) {
       pushFinding(
         verificationDiagnosticLine(diagnostic),
@@ -1118,6 +1128,32 @@ function staticDiagnosticLine(diagnostic: CoreGraph.StaticDiagnosticFact): strin
   const definition = diagnosticDefinitions[diagnostic.code];
   const severity = diagnostic.severity ?? definition.severity;
   return `${severity.toUpperCase()} ${diagnostic.code} ${diagnosticSite(diagnostic)} ${diagnostic.message ?? definition.message}`;
+}
+
+/**
+ * SQL-safety (KV422) diagnostics carried into the check graph by the compile/build pipeline.
+ *
+ * `analyzeSqlSafetyFromProject` (@kovojs/drizzle/internal/static, SPEC §10.2/§11.2) returns
+ * `{ code, message, severity, site }` records — exactly {@link TouchGraphDiagnosticFact}. They are
+ * attached to the check graph as a `sqlSafetyDiagnostics` field (not part of the typed
+ * `KovoCheckInput` surface, so it is read defensively here).
+ */
+function sqlSafetyDiagnostics(graph: CoreGraph.KovoCheckInput): TouchGraphDiagnosticFact[] {
+  const raw = (graph as { sqlSafetyDiagnostics?: unknown }).sqlSafetyDiagnostics;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (diagnostic): diagnostic is TouchGraphDiagnosticFact =>
+      typeof diagnostic === 'object' &&
+      diagnostic !== null &&
+      typeof (diagnostic as { code?: unknown }).code === 'string' &&
+      typeof (diagnostic as { site?: unknown }).site === 'string',
+  );
+}
+
+function sqlSafetyKv422Line(diagnostic: TouchGraphDiagnosticFact): string {
+  const definition = diagnosticDefinitions[diagnostic.code];
+  const severity = diagnostic.severity ?? definition?.severity ?? 'error';
+  return `${severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message ?? definition?.message ?? ''}`.trimEnd();
 }
 
 function unregisteredSinkLine(sink: CoreGraph.UnregisteredSinkFact): string {

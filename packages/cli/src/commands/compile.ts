@@ -1291,7 +1291,57 @@ async function runCompileDrizzleStaticCommand(
           );
   }
 
-  return compileArtifactResult(options, `${JSON.stringify(output, null, 2)}\n`, 'drizzle-static');
+  const artifact = compileArtifactResult(
+    options,
+    `${JSON.stringify(output, null, 2)}\n`,
+    'drizzle-static',
+  );
+
+  // SPEC §10.2/§11.2: the SQL-safety analyzer is by-construction sound but, until now, gated
+  // nothing — unsafe raw SQL shipped green. An error-severity KV422 in `sqlSafetyDiagnostics` means
+  // request-derived/unproven data could reach executable SQL text on a managed DB handle, so the
+  // drizzle-static extraction MUST surface a nonzero exit. The artifact (facts JSON) is still
+  // written so the diagnostics flow downstream into the check graph; we override only the exit code
+  // and append the KV422 finding lines to the output. (`kovo check` independently re-gates these
+  // via the KV422 finding family once the facts ride into the graph JSON — see graph-output.ts.)
+  const sqlSafetyErrors = sqlSafetyDiagnosticErrors(output.sqlSafetyDiagnostics);
+  if (sqlSafetyErrors.length > 0 && artifact.exitCode === 0) {
+    const findingLines = sqlSafetyErrors.map(
+      (diagnostic) => `ERROR ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
+    );
+    return {
+      ...artifact,
+      exitCode: 1,
+      output: `${(artifact.output ?? '').replace(/\n+$/, '')}\n${findingLines.join('\n')}\n`,
+    };
+  }
+
+  return artifact;
+}
+
+interface SqlSafetyDiagnosticLike {
+  code: string;
+  message?: string;
+  severity?: string;
+  site: string;
+}
+
+/**
+ * SPEC §10.2/§11.2: extract the error-severity KV422 SQL-safety diagnostics produced by
+ * `analyzeSqlSafetyFromProject`. These are the by-construction findings that, when present, mean
+ * unproven data could reach executable SQL text on a managed DB handle and so must fail the build.
+ */
+function sqlSafetyDiagnosticErrors(value: unknown): SqlSafetyDiagnosticLike[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (diagnostic): diagnostic is SqlSafetyDiagnosticLike =>
+      typeof diagnostic === 'object' &&
+      diagnostic !== null &&
+      typeof (diagnostic as { code?: unknown }).code === 'string' &&
+      typeof (diagnostic as { site?: unknown }).site === 'string' &&
+      // Default to error when severity is absent: KV422 is an error-severity diagnostic (SPEC §10.2).
+      ((diagnostic as { severity?: unknown }).severity ?? 'error') === 'error',
+  );
 }
 
 interface DrizzleOptimisticCommandInput {

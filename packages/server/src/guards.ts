@@ -473,10 +473,15 @@ export async function renderHttpGuardFailureResponse<Request>(
 }
 
 function managedSqlSafetyMode(): SqlSafetyMode {
+  // SPEC §10.2/§744: the managed-SQL guard is the fail-closed runtime floor for KV422. An explicit
+  // `KOVO_SQL_GUARD` override is honored (an operator may set `warn`/`off` for a migration window),
+  // but the *default* — in every environment, production included — is `enforce`, so unproven raw
+  // SQL text throws rather than silently executing. (Static AST analysis remains the by-construction
+  // proof; this floor catches what cannot be proven statically.)
   const configured =
     typeof process === 'object' && process !== null ? process.env.KOVO_SQL_GUARD : undefined;
   if (configured === 'enforce' || configured === 'off' || configured === 'warn') return configured;
-  return process.env.NODE_ENV === 'production' ? 'warn' : 'enforce';
+  return 'enforce';
 }
 
 function wrapManagedDbForSqlSafety<DbValue>(db: DbValue, mode: SqlSafetyMode): DbValue {

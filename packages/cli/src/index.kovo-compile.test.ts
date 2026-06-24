@@ -697,7 +697,9 @@ export const addToCart = mutation('cart/add', {
     }
   });
 
-  it('writes SQL safety diagnostics through the Drizzle static CLI facade', async () => {
+  // SPEC §10.2/§11.2: drizzle-static SQL-safety extraction must FAIL (nonzero exit) when the
+  // by-construction analyzer reports an error-severity KV422 — unsafe raw SQL must not ship green.
+  it('fails the Drizzle static CLI when SQL safety diagnostics report KV422 errors', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-sql-safety-'));
     const inputPath = join(root, 'static.json');
     const outPath = join(root, 'static-facts.json');
@@ -732,11 +734,16 @@ export const addToCart = mutation('cart/add', {
         'utf8',
       );
 
+      // The command now exits 1 because the fixture contains unsafe raw SQL (KV422 errors).
       await expect(
         mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
-      ).resolves.toBe(0);
+      ).resolves.toBe(1);
 
-      expect(stderr).not.toHaveBeenCalled();
+      // The KV422 findings are surfaced on stderr (nonzero exit stream).
+      const stderrText = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(stderrText).toContain('ERROR KV422 products.ts:3');
+
+      // The facts file is still written so the diagnostics flow downstream into the check graph.
       const facts = JSON.parse(readFileSync(outPath, 'utf8'));
       expect(facts.sqlSafetyDiagnostics).toEqual(
         expect.arrayContaining([
@@ -747,6 +754,55 @@ export const addToCart = mutation('cart/add', {
         ]),
       );
       expect(facts.sqlSafetyDiagnostics).toHaveLength(5);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // SPEC §10.2: when the analyzed source is clean (branded sql`...`/staticSql/allowlisted only),
+  // drizzle-static extraction passes green and still writes the (empty) diagnostics.
+  it('passes the Drizzle static CLI when SQL safety diagnostics are clean', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-sql-safe-'));
+    const inputPath = join(root, 'static.json');
+    const outPath = join(root, 'static-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        inputPath,
+        JSON.stringify(
+          {
+            extract: ['sqlSafetyDiagnostics'],
+            files: [
+              {
+                fileName: 'products.ts',
+                source: [
+                  'import { sql, staticSql } from "@kovojs/drizzle";',
+                  'export async function load(input: { id: string; sort: string }, db: any) {',
+                  '  await db.execute(sql`select * from products where id = ${input.id}`);',
+                  '  await db.query(staticSql`select * from products`);',
+                  '  await db.exec(sql.identifier(input.sort, { allow: ["name", "created_at"] }));',
+                  '}',
+                ].join('\n'),
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const facts = JSON.parse(readFileSync(outPath, 'utf8'));
+      expect(facts.sqlSafetyDiagnostics).toEqual([]);
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `WRITE drizzle-static path=${JSON.stringify(outPath)}`,
       );

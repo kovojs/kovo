@@ -1,10 +1,15 @@
 import { diagnosticDefinitions } from './diagnostics.js';
 
-const parameterizedSqlBrand = Symbol.for('kovo.sql.parameterized');
-const staticSqlBrand = Symbol.for('kovo.sql.static');
-const trustedSqlBrand = Symbol.for('kovo.sql.trusted');
-const rawSqlChunkBrand = Symbol.for('kovo.sql.raw-chunk');
-const sqlSafetyMetadataBrand = Symbol.for('kovo.sql.metadata');
+// SPEC §6.6/§744: brands are defense-in-depth, not the enforcement mechanism, so they MUST NOT be
+// forgeable from outside this module. Module-private `Symbol()` instances cannot be reconstructed
+// via `Symbol.for('kovo.sql.*')` from app or attacker code; only the `stamp*` helpers exported here
+// can apply them. (The static AST analyzer of §11.1/§11.2 remains the by-construction proof; this
+// runtime guard is the fail-closed floor of §10.2.)
+const parameterizedSqlBrand = Symbol('kovo.sql.parameterized');
+const staticSqlBrand = Symbol('kovo.sql.static');
+const trustedSqlBrand = Symbol('kovo.sql.trusted');
+const rawSqlChunkBrand = Symbol('kovo.sql.raw-chunk');
+const sqlSafetyMetadataBrand = Symbol('kovo.sql.metadata');
 
 /** @internal */
 export type SqlSafetyMode = 'enforce' | 'off' | 'warn';
@@ -177,6 +182,18 @@ export function validateManagedSqlStatement(statement: unknown): SqlStatementVal
   if (isParameterizedSql(statement) || isStaticSql(statement)) return { ok: true };
   if (isSeparatedSqlCarrier(statement)) return { ok: true };
 
+  // SPEC §10.2: an object that exposes assembled SQL *text* (a `.text`/`.sql` string) but keeps it
+  // un-separated from bound parameters — no `values`/`params`/`args` array — and carries no Kovo
+  // brand is the forgeable raw-string escape in carrier clothing (e.g. `{ text: "select ..." + x }`).
+  // It would have been KV422 as a bare string; routing it through a `.text` field MUST NOT launder
+  // it. `isSeparatedSqlCarrier` already cleared genuinely parameterized carriers above, so reaching
+  // here with assembled text means the parameters are missing: reject fail-closed.
+  if (carriesUnseparatedSqlText(statement)) {
+    return unsafeSqlResult(
+      'an object carrying assembled SQL text ({ text }/{ sql }) without a separated values/params/args array is not accepted; supply parameters, or use sql`...`, staticSql`...`, or trustedSql(...).',
+    );
+  }
+
   // Drizzle builders and native SQL objects are object-shaped and intentionally accepted at
   // runtime; static analysis owns provenance for Drizzle-native raw poisoning.
   return { ok: true };
@@ -208,6 +225,15 @@ function isSeparatedSqlCarrier(value: object): boolean {
   if (!hasText && !hasSql) return false;
 
   return Array.isArray(record.values) || Array.isArray(record.params) || Array.isArray(record.args);
+}
+
+// True when the object exposes a `.text`/`.sql` *string* (assembled SQL text). Callers reach this
+// only after `isSeparatedSqlCarrier` rejected the value, so a `true` here means the text is present
+// without a separated parameter array — the unsafe shape KV422 must catch. Drizzle's native SQL
+// objects expose `.sql` as a method/getter and carry no `.text` string, so they do not trip this.
+function carriesUnseparatedSqlText(value: object): boolean {
+  const record = value as Record<PropertyKey, unknown>;
+  return typeof record.text === 'string' || typeof record.sql === 'string';
 }
 
 function stampSqlSafetyMetadata(value: object, metadata: SqlSafetyMetadata): void {

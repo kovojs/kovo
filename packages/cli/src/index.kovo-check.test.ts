@@ -62,6 +62,35 @@ describe('kovo check', () => {
     });
   });
 
+  // SPEC §10.2/§11.2: the by-construction SQL-safety analyzer (analyzeSqlSafetyFromProject) gates
+  // `kovo check` — an error-severity KV422 finding in `sqlSafetyDiagnostics` fails the check.
+  it('fails on KV422 SQL-safety diagnostics carried in the check graph', () => {
+    const result = kovoCheck({
+      // sqlSafetyDiagnostics rides into the check graph from `compile drizzle-static`; the field is
+      // not part of the typed KovoCheckInput surface, so it is cast through here.
+      sqlSafetyDiagnostics: [
+        {
+          code: 'KV422',
+          message:
+            'SQL text injection risk. execute() receives request-derived SQL text; use Kovo sql`...`, staticSql`...`, a separated parameter carrier, or trustedSql(...).',
+          severity: 'error',
+          site: 'products.ts:3',
+        },
+      ],
+    } as Parameters<typeof kovoCheck>[0]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain('ERROR KV422 products.ts:3');
+    expect(result.output).toContain('execute() receives request-derived SQL text');
+  });
+
+  it('passes when sqlSafetyDiagnostics is empty or absent', () => {
+    expect(
+      kovoCheck({ sqlSafetyDiagnostics: [] } as Parameters<typeof kovoCheck>[0]).exitCode,
+    ).toBe(0);
+    expect(kovoCheck({}).exitCode).toBe(0);
+  });
+
   it('fails on KV310 optimistic coverage gaps', () => {
     expect(
       kovoCheck({

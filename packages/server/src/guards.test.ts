@@ -282,12 +282,47 @@ describe('server guard and session primitives', () => {
     expect(calls).toHaveLength(3);
   });
 
-  it('keeps the production SQL guard in warn mode until the enforce ramp flips', async () => {
+  it('enforces the managed SQL guard by default in production (SPEC §10.2 fail-closed floor)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const previousNodeEnv = process.env.NODE_ENV;
     const previousGuard = process.env.KOVO_SQL_GUARD;
     process.env.NODE_ENV = 'production';
     delete process.env.KOVO_SQL_GUARD;
+
+    try {
+      const calls: unknown[] = [];
+      const request = await resolveLifecycleRequest(
+        {},
+        {
+          db: () => ({
+            execute(statement: unknown) {
+              calls.push(statement);
+              return 'ok';
+            },
+          }),
+        },
+      );
+
+      // Default (no KOVO_SQL_GUARD) is now `enforce` everywhere, production included: a raw string
+      // throws KV422 fail-closed rather than executing with a warning.
+      expect(() => request.db.execute('select 1')).toThrow(/KV422/);
+      expect(calls).toEqual([]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousGuard === undefined) delete process.env.KOVO_SQL_GUARD;
+      else process.env.KOVO_SQL_GUARD = previousGuard;
+      warn.mockRestore();
+    }
+  });
+
+  it('honors an explicit KOVO_SQL_GUARD=warn override for a migration window', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousGuard = process.env.KOVO_SQL_GUARD;
+    process.env.NODE_ENV = 'production';
+    process.env.KOVO_SQL_GUARD = 'warn';
 
     try {
       const calls: unknown[] = [];
