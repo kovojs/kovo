@@ -559,6 +559,36 @@ export const CartBadge = component({
     ]);
   });
 
+  it('threads accept.unverified upload capability facts into the app explain graph', () => {
+    const result = compileComponentModule({
+      fileName: 'components/profile/avatar.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { s } from '@kovojs/server';
+
+const avatar = s.file().accept.unverified(['image/png'], {
+  justification: 'legacy avatar intake still relies on client-side PNG filtering',
+});
+
+export const ProfileAvatar = component({
+  render: () => <input type="file" name="avatar" />,
+});
+`,
+    });
+
+    const derived = deriveAppGraph({ components: [result] });
+
+    expect(derived.graph.capabilities).toEqual([
+      expect.objectContaining({
+        detail: 'types=image/png',
+        kind: 'acceptUnverified',
+        reason: 'legacy avatar intake still relies on client-side PNG filtering',
+        site: expect.stringMatching(/^components\/profile\/avatar\.tsx#\d+$/),
+        source: "['image/png']",
+      }),
+    ]);
+  });
+
   it('derives page query facts from compiled route component usage', () => {
     const cartBadge = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',

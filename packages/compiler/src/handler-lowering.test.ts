@@ -336,6 +336,34 @@ export const CartBadge = component({
     }
   });
 
+  it('emits audited accept.unverified upload capability facts', () => {
+    const result = compileComponentModule({
+      fileName: 'profile-avatar.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { s } from '@kovojs/server';
+
+const avatar = s.file().accept.unverified(['image/png', 'application/pdf'], {
+  justification: 'legacy intake accepts reviewed PNG and PDF uploads before storage',
+});
+
+export const ProfileAvatar = component({
+  render: () => <input type="file" name="avatar" />,
+});
+`,
+    });
+
+    expect(result.capabilities).toEqual([
+      expect.objectContaining({
+        detail: 'types=image/png,application/pdf',
+        kind: 'acceptUnverified',
+        reason: 'legacy intake accepts reviewed PNG and PDF uploads before storage',
+        site: expect.stringMatching(/^profile-avatar\.tsx#\d+$/),
+        source: "['image/png', 'application/pdf']",
+      }),
+    ]);
+  });
+
   it('reports KV201 for imported data captures while preserving imported handler callees', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

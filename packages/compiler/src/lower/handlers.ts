@@ -382,7 +382,36 @@ export function publishToClientCapabilityFacts(
         },
       ];
     }),
+    ...model.calls.flatMap((call) => {
+      if (!isAcceptUnverifiedCapabilityCall(call.name)) return [];
+      const reason = justificationStringFromStaticValue(call.argumentStaticValues[1]);
+      if (!reason) return [];
+      const acceptedTypes = call.argumentStringLiteralArrayValues[0];
+      return [
+        {
+          ...(acceptedTypes && acceptedTypes.length > 0
+            ? { detail: `types=${acceptedTypes.join(',')}` }
+            : {}),
+          kind: 'acceptUnverified' as const,
+          reason,
+          site: `${fileName}#${call.start}`,
+          source: call.arguments[0] ?? '-',
+        },
+      ];
+    }),
   ];
+}
+
+function isAcceptUnverifiedCapabilityCall(name: string): boolean {
+  return name === 'accept.unverified' || name.endsWith('.accept.unverified');
+}
+
+function justificationStringFromStaticValue(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const justification = (value as { justification?: unknown }).justification;
+  return typeof justification === 'string' && justification.trim()
+    ? justification.trim()
+    : undefined;
 }
 
 function callableNamedImportReferences(

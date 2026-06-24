@@ -733,14 +733,15 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
     - Partial evidence: `s.file().store({ storage })` now defaults to an opaque `uploads/<uuid>` key and keeps
       the user filename in metadata only; `vp exec vitest --run packages/server/src/schema.test.ts` covers the
       generated key and prefix path. Gap: explicit `key` string/function overrides still exist.
-  - [ ] **Remove `.mime()`** (pre-release breaking change): the only verbatim-client-MIME path becomes the
+  - [x] **Remove `.mime()`** (pre-release breaking change): the only verbatim-client-MIME path becomes the
         explicit `accept.unverified()` opt-out, listed in `kovo explain --capabilities`.
-    - Partial evidence: `packages/server/src/schema.ts` removes `FileSchema.mime`/`FileSchemaOptions.mime` and
-      adds `s.file().accept.unverified(types, { justification })`; `packages/server/src/schema.test.ts` covers
-      required justification, client MIME lies, SVG rejection, and stored server-sniffed `contentType`. Verified
-      by `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/response.test.ts`,
-      `vp check packages/server/src`, `pnpm run check:api-surface`, and `git diff --check`. Remaining gap:
-      compiler extraction of `accept.unverified(...)` sites into `kovo explain --capabilities`.
+    - Evidence: `packages/server/src/schema.ts` removes `FileSchema.mime`/`FileSchemaOptions.mime` and adds
+      `s.file().accept.unverified(types, { justification })`; compiler extraction now records
+      `acceptUnverified` capability facts from those call sites in `packages/compiler/src/lower/handlers.ts`,
+      app graphs carry them through `packages/compiler/src/registry.test.ts`, and
+      `packages/cli/src/index.kovo-explain.test.ts` verifies the `CAPABILITIES` renderer. Verified by
+      `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-explain.test.ts`,
+      `vp check packages/compiler/src packages/cli/src packages/core/src`, and `git diff --check`.
   - Honest scope: the common `respond.storedFile(key)` path takes a bare string key, so the static
     `VerifiedContentType` brand degrades to a runtime sidecar-marker check (refuse-to-serve-inline if
     unverified — fail-closed). Attachment content-type confusion (a lying type on a _download_) is a lesser,

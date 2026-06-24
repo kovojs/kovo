@@ -729,6 +729,13 @@ describe('kovo explain', () => {
       {
         capabilities: [
           {
+            detail: 'types=image/png,image/webp',
+            kind: 'acceptUnverified',
+            reason: 'legacy upload picker still gates client-side image types before storage',
+            site: 'profile/avatar.ts:18',
+            source: "['image/png', 'image/webp']",
+          },
+          {
             column: 'role',
             kind: 'adminAssign',
             reason: 'support role correction',
@@ -804,11 +811,12 @@ describe('kovo explain', () => {
       CAPABILITY capability=publishToClient owner=confidentiality.client-module surface=client source="process.env.API_KEY.slice(0, 4)" sink="client-module" site=components/cart/cart-badge.tsx#KEY_PREFIX detail=- justification="prefix is intentionally public for support correlation"
       CAPABILITY capability=confidentialityReveal owner=confidentiality.query-wire surface=query source="users.email" sink="query:admin/users.emailDomain" site=app/queries/users.ts:18 detail="grade=proof,method=server-projection,selectedSecret=no" justification="server SQL projects only the email domain"
       CAPABILITY capability=capabilityUrl owner=file.storage.static-export surface=storage source="request.signUrl" sink="capability-url" site=reports/download.ts:42 detail="scope=reports/*,method=GET,oneTime=yes" justification="download link for a verified report recipient"
+      CAPABILITY capability=acceptUnverified owner=file.storage.static-export surface=upload source="['image/png', 'image/webp']" sink="upload.content-type" site=profile/avatar.ts:18 detail="types=image/png,image/webp" justification="legacy upload picker still gates client-side image types before storage"
       CAPABILITY capability=cspAllow owner=html.dom.output surface=document source="https://checkout.stripe.com" sink="csp-allowlist" site=app.ts#document.csp.allow.frames detail=- justification="Stripe checkout frame"
       CAPABILITY capability=unsafeCookie owner=http.header.cookie surface=response source="builder" sink="Set-Cookie:embed_sid" site=auth/embed.ts:12 detail="class=auth,floor=HttpOnly; Secure; SameSite=None,downgraded=sameSiteNone" justification="embedded checkout flow requires cross-site callback"
       CAPABILITY capability=egressAllowInternal owner=network.egress surface=egress source="otel:4318" sink="internal-network" site=app.ts#egress.allowInternal[0] detail="host=otel:4318" justification="local telemetry collector"
       CAPABILITY capability=unsafeRegex owner=resource.regex surface=schema source="/^([A-Z]+)+$/" sink="RegExp" site=schema/product.ts:21 detail=- justification="legacy SKU format reviewed for bounded input"
-      SUMMARY total=8
+      SUMMARY total=9
       "
     `);
   });
