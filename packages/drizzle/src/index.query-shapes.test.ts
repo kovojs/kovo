@@ -4,6 +4,7 @@ import {
   diagnosticsForQueryFacts,
   extractAlgebraicShapesFromProject,
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
+  revealFactsFromQueryFacts,
 } from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes, sqliteDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
 
@@ -818,11 +819,254 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.count is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or use an audited reveal/redaction surface once it lands.',
+          'Secret query value reaches the client wire. Query projection user.count is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
         severity: 'error',
         site: 'user.queries.ts:7',
       },
     ]);
+  });
+
+  it('recognizes audited trustedReveal calls imported from @kovojs/core', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import { trustedReveal } from "@kovojs/core";',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userDetail = query("user", {',
+            '  load(_input, db: PgDatabase) {',
+            '    return db.select({',
+            '      passwordDigest: trustedReveal(users.passwordHash, {',
+            '        justification: "one-way digest shown to admins",',
+            '        source: "users.passwordHash",',
+            '      }),',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(facts[0]?.shape).toMatchObject({
+      passwordDigest: {
+        kind: 'revealed',
+        reveal: {
+          grade: 'audit',
+          justification: 'one-way digest shown to admins',
+          method: 'arbitrary-fn',
+          selectedSecret: true,
+          site: 'user.queries.ts:11',
+          source: 'users.passwordHash',
+        },
+        shape: { kind: 'secret', shape: 'string' },
+      },
+    });
+    expect(revealFactsFromQueryFacts(facts)).toEqual([
+      {
+        grade: 'audit',
+        justification: 'one-way digest shown to admins',
+        method: 'arbitrary-fn',
+        path: 'passwordDigest',
+        query: 'user',
+        selectedSecret: true,
+        site: 'user.queries.ts:11',
+        source: 'users.passwordHash',
+      },
+    ]);
+  });
+
+  it('recognizes proof-grade namespace trustedReveal calls for structured non-secret projections', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import * as core from "@kovojs/core";',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userStats = query("user", {',
+            '  load(_input, db: PgDatabase) {',
+            '    return db.select({',
+            '      publicId: core.trustedReveal(users.id, {',
+            '        method: "server-projection",',
+            '        justification: "server projects a public identifier",',
+            '        source: "users.id",',
+            '      }),',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(facts[0]?.shape).toMatchObject({
+      publicId: {
+        kind: 'revealed',
+        reveal: {
+          grade: 'proof',
+          justification: 'server projects a public identifier',
+          method: 'server-projection',
+          selectedSecret: false,
+          site: 'user.queries.ts:11',
+          source: 'users.id',
+        },
+        shape: 'string',
+      },
+    });
+    expect(revealFactsFromQueryFacts(facts)).toEqual([
+      {
+        grade: 'proof',
+        justification: 'server projects a public identifier',
+        method: 'server-projection',
+        path: 'publicId',
+        query: 'user',
+        selectedSecret: false,
+        site: 'user.queries.ts:11',
+        source: 'users.id',
+      },
+    ]);
+  });
+
+  it('keeps trustedReveal sql projections audit-grade and subject to output-schema diagnostics', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import * as core from "@kovojs/core";',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userStats = query("user", {',
+            '  load(_input, db: PgDatabase) {',
+            '    return db.select({',
+            '      passwordDigest: core.trustedReveal(sql<string>`substr(password_hash, 1, 8)`, {',
+            '        method: "server-projection",',
+            '        justification: "server projects a digest prefix",',
+            '        source: "users.passwordHash",',
+            '      }),',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts[0]?.shape).toMatchObject({
+      passwordDigest: {
+        kind: 'revealed',
+        reveal: {
+          grade: 'audit',
+          justification: 'server projects a digest prefix',
+          method: 'server-projection',
+          selectedSecret: false,
+          site: 'user.queries.ts:11',
+          source: 'users.passwordHash',
+        },
+        shape: 'string',
+      },
+    });
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV410',
+        message:
+          'Opaque query projection requires a declared output schema. user.passwordDigest uses sql/raw projection without output.',
+        severity: 'error',
+        site: 'user.queries.ts:8',
+      },
+    ]);
+    expect(revealFactsFromQueryFacts(facts)).toEqual([
+      {
+        grade: 'audit',
+        justification: 'server projects a digest prefix',
+        method: 'server-projection',
+        path: 'passwordDigest',
+        query: 'user',
+        selectedSecret: false,
+        site: 'user.queries.ts:11',
+        source: 'users.passwordHash',
+      },
+    ]);
+  });
+
+  it('does not treat local functions named trustedReveal as audited reveal calls', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'function trustedReveal<T>(value: T): T { return value; }',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userDetail = query("user", {',
+            '  load(_input, db: PgDatabase) {',
+            '    return db.select({',
+            '      passwordDigest: trustedReveal(users.passwordHash),',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts[0]?.shape).not.toMatchObject({
+      passwordDigest: { kind: 'revealed' },
+    });
+    expect(revealFactsFromQueryFacts(facts)).toEqual([]);
+  });
+
+  it('requires a non-empty static trustedReveal justification before emitting reveal facts', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import { trustedReveal } from "@kovojs/core";',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userDetail = query("user", {',
+            '  load(_input, db: PgDatabase) {',
+            '    return db.select({',
+            '      passwordDigest: trustedReveal(users.passwordHash, { justification: "   " }),',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts[0]?.shape).toMatchObject({
+      passwordDigest: { kind: 'secret', shape: 'string' },
+    });
+    expect(revealFactsFromQueryFacts(facts)).toEqual([]);
   });
 
   it('reports KV435 for spread and computed-key projections from secret tables', () => {
@@ -857,14 +1101,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.computed:[displayKey] is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or use an audited reveal/redaction surface once it lands.',
+          'Secret query value reaches the client wire. Query projection user.computed:[displayKey] is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
         severity: 'error',
         site: 'user.queries.ts:8',
       },
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.spread:publicColumns is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or use an audited reveal/redaction surface once it lands.',
+          'Secret query value reaches the client wire. Query projection user.spread:publicColumns is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
         severity: 'error',
         site: 'user.queries.ts:8',
       },

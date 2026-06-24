@@ -613,6 +613,89 @@ export const addToCart = mutation('cart/add', {
     }
   });
 
+  it('writes trusted reveal facts through the Drizzle static CLI facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-revealed-'));
+    const inputPath = join(root, 'static.json');
+    const outPath = join(root, 'static-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        inputPath,
+        JSON.stringify(
+          {
+            extract: ['revealed'],
+            files: [
+              {
+                fileName: 'drizzle-types.d.ts',
+                source: [
+                  'declare module "drizzle-orm/pg-core" {',
+                  '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+                  '    select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+                  '  }',
+                  '}',
+                  'type PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/pg-core").PgDatabase<TQueryResultHKT, TFullSchema, TSchema>;',
+                ].join('\n'),
+              },
+              {
+                fileName: 'user.queries.ts',
+                source: [
+                  'import type { PgDatabase } from "drizzle-orm/pg-core";',
+                  'import { trustedReveal } from "@kovojs/core";',
+                  '',
+                  'export const users = pgTable("users", {',
+                  '  id: text("id").primaryKey(),',
+                  '  passwordHash: text("password_hash").notNull(),',
+                  '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+                  '',
+                  'export const userDetail = query("user", {',
+                  '  load(_input, db: PgDatabase) {',
+                  '    return db.select({',
+                  '      passwordDigest: trustedReveal(users.passwordHash, {',
+                  '        justification: "one-way digest shown to admins",',
+                  '        source: "users.passwordHash",',
+                  '      }),',
+                  '    }).from(users);',
+                  '  },',
+                  '});',
+                ].join('\n'),
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(JSON.parse(readFileSync(outPath, 'utf8')).revealed).toEqual([
+        {
+          grade: 'audit',
+          justification: 'one-way digest shown to admins',
+          method: 'arbitrary-fn',
+          path: 'passwordDigest',
+          query: 'user',
+          selectedSecret: true,
+          site: 'user.queries.ts:12',
+          source: 'users.passwordHash',
+        },
+      ]);
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `WRITE drizzle-static path=${JSON.stringify(outPath)}`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('writes SQL safety diagnostics through the Drizzle static CLI facade', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-sql-safety-'));
     const inputPath = join(root, 'static.json');

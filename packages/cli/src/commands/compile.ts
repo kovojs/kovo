@@ -1153,7 +1153,9 @@ interface DrizzleStaticCommandInput {
   extract?: readonly (
     | 'algebraicShapes'
     | 'materializedViewRefreshFacts'
+    | 'ownerAudit'
     | 'queryFacts'
+    | 'revealed'
     | 'sqlSafetyDiagnostics'
     | 'symbolicEffects'
     | 'touchGraph'
@@ -1185,6 +1187,7 @@ async function runCompileDrizzleStaticCommand(
     extractQueryFactsFromProject,
     extractSymbolicEffectsFromProject,
     extractTouchGraphFromProject,
+    revealFactsFromQueryFacts,
     serializeInvalidationRegistry,
     serializeMutationTouchRegistry,
     serializeTouchGraph,
@@ -1202,11 +1205,15 @@ async function runCompileDrizzleStaticCommand(
         'materializedViewRefreshFacts',
         'ownerAudit',
         'queryFacts',
+        'revealed',
         'sqlSafetyDiagnostics',
         'symbolicEffects',
         'touchGraph',
       ],
     );
+    let queryFacts: ReturnType<typeof extractQueryFactsFromProject> | undefined;
+    const getQueryFacts = () => (queryFacts ??= extractQueryFactsFromProject({ files }));
+
     if (extract.has('touchGraph')) output.touchGraph = extractTouchGraphFromProject({ files });
     if (extract.has('ownerAudit')) {
       // SPEC §10.1/§10.3: owner-domain facts + IDOR scope audits the graph emission
@@ -1221,9 +1228,11 @@ async function runCompileDrizzleStaticCommand(
       });
     }
     if (extract.has('queryFacts')) {
-      const queryFacts = extractQueryFactsFromProject({ files });
-      output.queryFacts = queryFacts;
-      output.queryDomains = queryDomainsFromStaticFacts(queryFacts);
+      output.queryFacts = getQueryFacts();
+      output.queryDomains = queryDomainsFromStaticFacts(getQueryFacts());
+    }
+    if (extract.has('revealed')) {
+      output.revealed = revealFactsFromQueryFacts(getQueryFacts());
     }
     if (extract.has('sqlSafetyDiagnostics')) {
       output.sqlSafetyDiagnostics = analyzeSqlSafetyFromProject({ files });

@@ -6,6 +6,7 @@ import {
   queryShapeRegistryTypeFacts,
   queryShapesFromFacts,
   queryShapeTypeExpression,
+  type QueryShape,
 } from './internal.js';
 
 describe('compiler query binding diagnostics', () => {
@@ -163,6 +164,14 @@ export const AccountCard = component({
       'revealed-secret',
       {
         kind: 'revealed',
+        reveal: {
+          grade: 'audit',
+          justification: 'one-way digest only',
+          method: 'arbitrary-fn',
+          selectedSecret: true,
+          site: 'queries/user.ts:18',
+          source: 'users.passwordHash',
+        },
         shape: { kind: 'nullable', shape: { kind: 'secret', shape: 'string' } },
       },
       'string | null',
@@ -429,6 +438,44 @@ export const UserCard = component({
     });
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV435')).toEqual([]);
+  });
+
+  it('reports KV435 for revealed query shape fields without reveal metadata', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      queryShapes: {
+        user: {
+          id: 'string',
+          passwordDigest: {
+            kind: 'revealed',
+            shape: {
+              kind: 'secret',
+              shape: 'string',
+            },
+          } as unknown as QueryShape,
+        },
+      },
+      source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span data-bind="user.passwordDigest">digest</span>
+    </user-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV435',
+          message:
+            'Secret query value reaches the client wire. query="user" path="user.passwordDigest"',
+        }),
+      ]),
+    );
   });
 
   it('does not report KV435 for secret shapes that are not component-declared queries', () => {

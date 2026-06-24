@@ -15,7 +15,12 @@ import type {
   SymbolicMatch,
   SymbolicValue,
 } from '@kovojs/core/internal/derivation';
-import type { ScopeAuditFact, TouchGraph, TouchGraphEntry } from '@kovojs/core/internal/graph';
+import type {
+  RevealExplainFact,
+  ScopeAuditFact,
+  TouchGraph,
+  TouchGraphEntry,
+} from '@kovojs/core/internal/graph';
 import {
   Node,
   Project,
@@ -163,18 +168,26 @@ export {
     };
 
 /** @internal */
-/** @internal */ export interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional' | 'revealed' | 'secret' | 'volatile-time';
-  reveal?: {
-    grade: 'audit' | 'proof';
-    justification?: string;
-    method: 'arbitrary-fn' | 'fixed-redactor' | 'server-projection';
-    selectedSecret?: boolean;
-    site?: string;
-    source?: string;
-  };
-  shape: QueryShape;
+/** @internal */ export interface QueryShapeReveal {
+  grade: 'audit' | 'proof';
+  justification?: string;
+  method: 'arbitrary-fn' | 'fixed-redactor' | 'server-projection';
+  selectedSecret?: boolean;
+  site?: string;
+  source?: string;
 }
+
+/** @internal */
+/** @internal */ export type QueryShapeWrapper =
+  | {
+      kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
+      shape: QueryShape;
+    }
+  | {
+      kind: 'revealed';
+      reveal: QueryShapeReveal;
+      shape: QueryShape;
+    };
 
 /** @internal */
 /** @internal */ export interface QueryFact {
@@ -196,6 +209,75 @@ export {
   sessionAnchoredReads?: readonly string[];
   shape: QueryShape;
   site: string;
+}
+
+/** @internal */ export function revealFactsFromQueryFacts(
+  facts: readonly QueryFact[],
+): RevealExplainFact[] {
+  return facts
+    .flatMap((fact) => revealFactsFromQueryShape(fact.query, fact.shape, fact.site))
+    .sort(compareRevealExplainFacts);
+}
+
+function revealFactsFromQueryShape(
+  query: string,
+  shape: QueryShape,
+  fallbackSite: string,
+  path: readonly string[] = [],
+): RevealExplainFact[] {
+  if (typeof shape !== 'object' || shape === null) return [];
+  if (Array.isArray(shape)) {
+    return shape.flatMap((item) => revealFactsFromQueryShape(query, item, fallbackSite, path));
+  }
+
+  if (isQueryShapeWrapper(shape)) {
+    if (shape.kind === 'revealed') {
+      return [
+        {
+          grade: shape.reveal.grade,
+          method: shape.reveal.method,
+          path: path.join('.') || '$',
+          query,
+          site: shape.reveal.site ?? fallbackSite,
+          ...(shape.reveal.justification === undefined
+            ? {}
+            : { justification: shape.reveal.justification }),
+          ...(shape.reveal.selectedSecret === undefined
+            ? {}
+            : { selectedSecret: shape.reveal.selectedSecret }),
+          ...(shape.reveal.source === undefined ? {} : { source: shape.reveal.source }),
+        },
+      ];
+    }
+    return revealFactsFromQueryShape(query, shape.shape, fallbackSite, path);
+  }
+
+  return Object.entries(shape).flatMap(([key, child]) =>
+    revealFactsFromQueryShape(query, child, fallbackSite, [...path, key]),
+  );
+}
+
+function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
+  return (
+    typeof shape === 'object' &&
+    shape !== null &&
+    !Array.isArray(shape) &&
+    'kind' in shape &&
+    'shape' in shape &&
+    (shape.kind === 'nullable' ||
+      shape.kind === 'optional' ||
+      shape.kind === 'secret' ||
+      shape.kind === 'volatile-time' ||
+      (shape.kind === 'revealed' && 'reveal' in shape))
+  );
+}
+
+function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplainFact): number {
+  return (
+    left.query.localeCompare(right.query) ||
+    left.path.localeCompare(right.path) ||
+    left.site.localeCompare(right.site)
+  );
 }
 
 /**
@@ -984,6 +1066,7 @@ function extractQueryFactsFromPreparedFiles(
           secretProjectionBackstopDiagnostics(
             query.query,
             [...query.opaquePaths, ...query.unresolvedPaths],
+            query.shape,
             query.tableExpressions,
             columnShapes,
             fileTables,
@@ -1034,12 +1117,14 @@ function extractQueryFactsFromPreparedFiles(
 function secretProjectionBackstopDiagnostics(
   query: string,
   projectionPaths: readonly string[],
+  shape: QueryShape,
   tableExpressions: readonly string[],
   columnShapes: Readonly<Record<string, QueryShape>>,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
   site: string,
 ): TouchGraphDiagnostic[] {
-  const paths = [...new Set(projectionPaths)].sort();
+  const revealedPaths = revealedQueryShapePaths(shape);
+  const paths = [...new Set(projectionPaths)].filter((path) => !revealedPaths.has(path)).sort();
   if (paths.length === 0) return [];
 
   const secretTables = tableExpressions
@@ -1055,10 +1140,33 @@ function secretProjectionBackstopDiagnostics(
   const tableList = [...new Set(secretTables)].join(', ');
   return paths.map((path) => ({
     code: 'KV435',
-    message: `${definition.message} Query projection ${query}.${path} is opaque or unresolved while reading secret-classified table(s): ${tableList}. Remove the opaque projection, select explicit non-secret columns, or use an audited reveal/redaction surface once it lands.`,
+    message: `${definition.message} Query projection ${query}.${path} is opaque or unresolved while reading secret-classified table(s): ${tableList}. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
     severity: definition.severity,
     site,
   }));
+}
+
+function revealedQueryShapePaths(
+  shape: QueryShape,
+  path: readonly string[] = [],
+  paths = new Set<string>(),
+): ReadonlySet<string> {
+  if (typeof shape !== 'object' || shape === null) return paths;
+  if (Array.isArray(shape)) {
+    for (const item of shape) revealedQueryShapePaths(item, path, paths);
+    return paths;
+  }
+
+  if (isQueryShapeWrapper(shape)) {
+    if (shape.kind === 'revealed') paths.add(path.join('.') || '$');
+    revealedQueryShapePaths(shape.shape, path, paths);
+    return paths;
+  }
+
+  for (const [key, child] of Object.entries(shape)) {
+    revealedQueryShapePaths(child, [...path, key], paths);
+  }
+  return paths;
 }
 
 function secretBackstopTableDisplayNames(

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Secret } from '@kovojs/core';
+import { trustedReveal, type Secret } from '@kovojs/core';
 
 import { domain } from './domain.js';
 import {
@@ -32,6 +32,14 @@ describe('query endpoints', () => {
       },
       reads: [],
     });
+    const revealedSecretQuery = query('revealed-secret-query', {
+      load: () => ({
+        passwordDigest: trustedReveal('hash-1' as unknown as Secret<string>, {
+          justification: 'one-way digest shown to admins',
+        }),
+      }),
+      reads: [],
+    });
     const assertNonJsonQueryResultsRejected = () => {
       // @ts-expect-error SPEC §10.2 query values are JsonValue-bound client wire payloads.
       query('bad-date-query', { load: () => ({ createdAt: new Date() }), reads: [] });
@@ -45,6 +53,7 @@ describe('query endpoints', () => {
     };
 
     expect(catalogQuery.key).toBe('catalog');
+    expect(revealedSecretQuery.key).toBe('revealed-secret-query');
     expect(assertNonJsonQueryResultsRejected).toBeTypeOf('function');
   });
 

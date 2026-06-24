@@ -31,7 +31,9 @@ import {
 } from './receiver-surface.js';
 import {
   type QueryReceiverReferences,
+  type QueryShapeReveal,
   type QueryShape,
+  type QueryShapeWrapper,
   type ReceiverParameterRequirement,
   type TouchGraphDiagnostic,
   DRIZZLE_SELECT_QUERY_METHODS,
@@ -61,6 +63,7 @@ import {
   typeHasOpaqueStringMembers,
   unwrappedStaticExpressionNode,
   unwrappedTsExpression,
+  DRIZZLE_STATIC_PROJECT_ROOT,
 } from '../static.js';
 
 /** @internal */ export interface QueryShapeSelection {
@@ -1820,6 +1823,8 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   columnShapes: Readonly<Record<string, QueryShape>> = {},
   nullableTables: ReadonlySet<string> = new Set(),
 ): QueryShape | null {
+  const revealShape = trustedRevealQueryShape(expression, columnShapes, nullableTables);
+  if (revealShape) return revealShape;
   const sqlShape = typedSqlProjectionShape(expression);
   if (sqlShape) return sqlShape;
   const columnPath = staticTsExpressionPath(expression);
@@ -1830,6 +1835,132 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
       : columnShape;
   }
   return null;
+}
+
+function trustedRevealQueryShape(
+  expression: ts.Expression,
+  columnShapes: Readonly<Record<string, QueryShape>>,
+  nullableTables: ReadonlySet<string>,
+): QueryShape | null {
+  const node = unwrappedTsExpression(expression);
+  if (!ts.isCallExpression(node) || !isTrustedRevealCall(node)) return null;
+
+  const value = node.arguments[0];
+  if (!value) return null;
+
+  const inner = scalarQueryShape(unwrappedTsExpression(value), columnShapes, nullableTables);
+  if (!inner) return null;
+
+  const reveal = trustedRevealMetadata(node, value, inner);
+  return reveal ? revealedShape(inner, reveal) : inner;
+}
+
+function isTrustedRevealCall(call: ts.CallExpression): boolean {
+  const imports = trustedRevealImports(call.getSourceFile());
+  const callee = unwrappedTsExpression(call.expression);
+
+  if (ts.isIdentifier(callee)) return imports.named.has(callee.text);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'trustedReveal') return false;
+
+  const receiver = unwrappedTsExpression(callee.expression);
+  return ts.isIdentifier(receiver) && imports.namespaces.has(receiver.text);
+}
+
+function trustedRevealImports(sourceFile: ts.SourceFile): {
+  named: ReadonlySet<string>;
+  namespaces: ReadonlySet<string>;
+} {
+  const named = new Set<string>();
+  const namespaces = new Set<string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const moduleSpecifier = statement.moduleSpecifier;
+    if (!ts.isStringLiteral(moduleSpecifier) || moduleSpecifier.text !== '@kovojs/core') continue;
+
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings) continue;
+    if (ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+      continue;
+    }
+
+    for (const specifier of bindings.elements) {
+      const imported = specifier.propertyName?.text ?? specifier.name.text;
+      if (imported === 'trustedReveal') named.add(specifier.name.text);
+    }
+  }
+
+  return { named, namespaces };
+}
+
+function trustedRevealMetadata(
+  call: ts.CallExpression,
+  value: ts.Expression,
+  shape: QueryShape,
+): QueryShapeReveal | undefined {
+  const options = call.arguments[1];
+  const object = options ? unwrappedTsExpression(options) : undefined;
+  if (!object || !ts.isObjectLiteralExpression(object)) return undefined;
+
+  const justification = staticStringProperty(object, 'justification')?.trim();
+  if (!justification) return undefined;
+
+  const requestedMethod = staticStringProperty(object, 'method');
+  const method = requestedMethod === 'server-projection' ? 'server-projection' : 'arbitrary-fn';
+  const selectedSecret = queryShapeContainsSecret(shape);
+  const opaque = isOpaqueProjection(value);
+  const source = staticStringProperty(object, 'source') ?? staticTsExpressionPath(value);
+
+  return {
+    grade: method === 'server-projection' && !selectedSecret && !opaque ? 'proof' : 'audit',
+    justification,
+    method,
+    selectedSecret,
+    site: sourcePosition(call),
+    ...(source === undefined ? {} : { source }),
+  };
+}
+
+function staticStringProperty(object: ts.ObjectLiteralExpression, key: string): string | undefined {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    if (projectionPropertyName(property.name) !== key) continue;
+
+    const value = unwrappedTsExpression(property.initializer);
+    if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) return value.text;
+  }
+  return undefined;
+}
+
+function revealedShape(shape: QueryShape, reveal: QueryShapeReveal): QueryShape {
+  if (isQueryShapeWrapper(shape) && shape.kind === 'revealed') return shape;
+  return { kind: 'revealed', reveal, shape };
+}
+
+function queryShapeContainsSecret(shape: QueryShape): boolean {
+  if (typeof shape !== 'object' || shape === null) return false;
+  if (Array.isArray(shape)) return shape.some(queryShapeContainsSecret);
+  if (isQueryShapeWrapper(shape)) {
+    if (shape.kind === 'secret') return true;
+    return queryShapeContainsSecret(shape.shape);
+  }
+  return Object.values(shape).some(queryShapeContainsSecret);
+}
+
+function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
+  return (
+    typeof shape === 'object' &&
+    shape !== null &&
+    !Array.isArray(shape) &&
+    'kind' in shape &&
+    'shape' in shape &&
+    (shape.kind === 'nullable' ||
+      shape.kind === 'optional' ||
+      shape.kind === 'secret' ||
+      shape.kind === 'volatile-time' ||
+      (shape.kind === 'revealed' && 'reveal' in shape))
+  );
 }
 
 /** @internal */ export function nullableShape(shape: QueryShape): QueryShape {
@@ -1903,11 +2034,21 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
 /** @internal */ export function scalarProjectionTable(
   expression: ts.Expression,
 ): string | undefined {
+  const revealValue = trustedRevealValueExpression(expression);
+  if (revealValue) return scalarProjectionTable(revealValue);
   const table = tableExpressionBase(expression);
   return table || undefined;
 }
 
+function trustedRevealValueExpression(expression: ts.Expression): ts.Expression | undefined {
+  const node = unwrappedTsExpression(expression);
+  if (!ts.isCallExpression(node) || !isTrustedRevealCall(node)) return undefined;
+  return node.arguments[0];
+}
+
 /** @internal */ export function isOpaqueProjection(expression: ts.Expression): boolean {
+  const revealValue = trustedRevealValueExpression(expression);
+  if (revealValue) return isOpaqueProjection(revealValue);
   const node = unwrappedTsExpression(expression);
   if (ts.isTaggedTemplateExpression(node)) return staticTsExpressionPath(node.tag) === 'sql';
   if (!ts.isCallExpression(node)) return false;
@@ -1944,6 +2085,16 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   if (!shape) return null;
   if (isTimeVolatileSqlProjection(expression)) return { kind: 'volatile-time', shape };
   return shape;
+}
+
+function sourcePosition(node: ts.Node): string {
+  const sourceFile = node.getSourceFile();
+  const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+  const prefix = `${DRIZZLE_STATIC_PROJECT_ROOT}/`;
+  const fileName = sourceFile.fileName.startsWith(prefix)
+    ? sourceFile.fileName.slice(prefix.length)
+    : sourceFile.fileName;
+  return `${fileName}:${position.line + 1}`;
 }
 
 /** @internal */ export function isTimeVolatileSqlProjection(expression: ts.Expression): boolean {

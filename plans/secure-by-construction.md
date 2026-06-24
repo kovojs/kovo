@@ -303,7 +303,7 @@ design.
     shapes so secret wrappers survive nested projections. Verified with
     `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts` and
     `vp exec vitest --run packages/drizzle/src`.
-- [ ] Escape hatch (fork in Open Design Questions: fixed verifiable redactor set vs arbitrary `fn` behind
+- [x] Escape hatch (fork in Open Design Questions: fixed verifiable redactor set vs arbitrary `fn` behind
       `trustedReveal`): surface every reveal in `kovo explain --revealed`; arbitrary-`fn` reveals are
       audit-grade, not proof-grade. Prefer a server-side projection that never selects the secret.
   - Foundation evidence: `packages/core/src/graph.ts` now defines `revealed` explain facts, `packages/cli/src/graph-output.ts`
@@ -311,8 +311,16 @@ design.
     recognizes an explicit `revealed` query-shape wrapper without weakening opaque/spread KV435 backstops. Verified with
     `vp exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` and
     `vp exec vitest --run packages/compiler/src/query-bindings.test.ts`.
-  - Remaining gap: no public `trustedReveal`/redactor API or Drizzle AST recognizer is landed yet, so real query loaders
-    cannot safely discharge KV435 through a database projection or audited arbitrary function in app code.
+  - Evidence: `packages/core/src/secret.ts` exposes `trustedReveal` with inline static option guidance,
+    `packages/drizzle/src/static/query-shapes.ts` recognizes direct and namespace imports from `@kovojs/core`,
+    `packages/drizzle/src/static.ts` emits reveal facts for `kovo explain --revealed`, and malformed
+    `revealed` wrappers without metadata fail closed in `packages/compiler/src/validate/confidentiality.ts`.
+    Verified with
+    `vp exec vitest --run packages/core/src/index.test.ts packages/server/src/query-endpoint.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/cli/src/index.kovo-compile.test.ts packages/compiler/src/query-bindings.test.ts`,
+    `vp check`, `pnpm run check:api-surface`, and `git diff --check`.
+  - Note: Drizzle relational `columns` remains fail-closed because that grammar has no expression slot; reveal
+    projections must use the analyzed `select({ ... })` path. Runtime-only `trustedReveal` calls outside the
+    Drizzle static projection analyzer are type-level escapes until a broader non-Drizzle scanner exists.
 
 ## Phase 2: Authorization completeness — default-deny (diagnostic code TBD)
 

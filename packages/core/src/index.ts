@@ -3,7 +3,13 @@ import type { JsonValue } from './json.js';
 
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type { JsonValue } from './json.js';
-export type { Secret } from './secret.js';
+export { trustedReveal } from './secret.js';
+export type {
+  Secret,
+  TrustedRevealMethod,
+  TrustedRevealOptions,
+  TrustedRevealValue,
+} from './secret.js';
 export type {
   ComponentMutationFormState,
   Form,

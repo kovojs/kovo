@@ -17,6 +17,8 @@ import {
   type FormValidationFailure,
   type JsonValue,
   type Secret,
+  trustedReveal,
+  type TrustedRevealValue,
 } from './index.js';
 import * as coreRoot from './index.js';
 import { event, type EventPayload } from './internal/event.js';
@@ -201,6 +203,20 @@ describe('core authoring APIs', () => {
     };
 
     expect(assertSecretRejected).toBeTypeOf('function');
+  });
+
+  it('requires an explicit audited reveal before a Secret can cross JsonValue boundaries', () => {
+    const revealed = trustedReveal('hash-1' as unknown as Secret<string>, {
+      justification: 'one-way digest shown to admins',
+    });
+    const assertRevealedString = (value: TrustedRevealValue<Secret<string>>) => value;
+    const jsonValue: JsonValue = revealed;
+
+    expect(assertRevealedString(revealed)).toBe('hash-1');
+    expect(jsonValue).toBe('hash-1');
+    expect(() =>
+      trustedReveal('hash-1' as unknown as Secret<string>, { justification: '   ' }),
+    ).toThrow('trustedReveal requires a non-empty justification.');
   });
 
   it('preserves query and form keys as typed authoring facts', () => {

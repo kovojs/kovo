@@ -61,6 +61,7 @@ import type {
   CompileDependencyFootprint,
   QueryUpdatePlanFact,
   QueryShape,
+  QueryShapeWrapper,
   StateDeriveFact,
   StateDeriveReferenceFact,
   RegistryFacts,
@@ -806,19 +807,16 @@ function stableQueryShapeSignature(shape: QueryShape): string {
     .join(',')}}`;
 }
 
-function isQueryShapeWrapper(shape: QueryShape): shape is {
-  kind: 'nullable' | 'optional' | 'revealed' | 'secret' | 'volatile-time';
-  shape: QueryShape;
-} {
+function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
   if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
   return (
     'kind' in shape &&
+    'shape' in shape &&
     (shape.kind === 'nullable' ||
       shape.kind === 'optional' ||
-      shape.kind === 'revealed' ||
       shape.kind === 'secret' ||
-      shape.kind === 'volatile-time') &&
-    'shape' in shape
+      shape.kind === 'volatile-time' ||
+      (shape.kind === 'revealed' && 'reveal' in shape))
   );
 }
 

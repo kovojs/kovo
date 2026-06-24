@@ -32,6 +32,11 @@ function secretQueryShapePaths(
 ): string[] {
   if (shape === undefined) return [];
 
+  const malformedRevealInner = malformedRevealInnerShape(shape);
+  if (malformedRevealInner) {
+    return secretQueryShapePaths(malformedRevealInner, path);
+  }
+
   if (isQueryShapeWrapper(shape)) {
     // SPEC §1.1/§2: a reveal is an explicit audited escape hatch. The shape fact
     // records that decision for `kovo explain --revealed`; KV435 remains the
@@ -47,6 +52,13 @@ function secretQueryShapePaths(
   return Object.entries(shape).flatMap(([key, child]) =>
     secretQueryShapePaths(child, [...path, key]),
   );
+}
+
+function malformedRevealInnerShape(shape: QueryShape): QueryShape | undefined {
+  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return undefined;
+  const record = shape as Record<string, unknown>;
+  if (record.kind !== 'revealed' || !('shape' in record) || 'reveal' in record) return undefined;
+  return record.shape as QueryShape;
 }
 
 function pathForDiagnostic(query: string, path: string): string {

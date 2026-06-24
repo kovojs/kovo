@@ -695,19 +695,27 @@ export type QueryShape =
       readonly [key: string]: QueryShape;
     };
 
-/** @internal A metadata wrapper around a {@link QueryShape}. In-repo use only. */
-export interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional' | 'revealed' | 'secret' | 'volatile-time';
-  reveal?: {
-    grade: 'audit' | 'proof';
-    justification?: string;
-    method: 'arbitrary-fn' | 'fixed-redactor' | 'server-projection';
-    selectedSecret?: boolean;
-    site?: string;
-    source?: string;
-  };
-  shape: QueryShape;
+/** @internal Explain metadata for an audited confidentiality reveal. In-repo use only. */
+export interface QueryShapeReveal {
+  grade: 'audit' | 'proof';
+  justification?: string;
+  method: 'arbitrary-fn' | 'fixed-redactor' | 'server-projection';
+  selectedSecret?: boolean;
+  site?: string;
+  source?: string;
 }
+
+/** @internal A metadata wrapper around a {@link QueryShape}. In-repo use only. */
+export type QueryShapeWrapper =
+  | {
+      kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
+      shape: QueryShape;
+    }
+  | {
+      kind: 'revealed';
+      reveal: QueryShapeReveal;
+      shape: QueryShape;
+    };
 
 /**
  * @internal A query-shape fact (query name, inferred {@link QueryShape}, source) threaded
@@ -945,12 +953,12 @@ export function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapp
   if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
   const record = shape as Record<string, unknown>;
   return (
+    'shape' in shape &&
     (record.kind === 'nullable' ||
       record.kind === 'optional' ||
-      record.kind === 'revealed' ||
       record.kind === 'secret' ||
-      record.kind === 'volatile-time') &&
-    'shape' in shape
+      record.kind === 'volatile-time' ||
+      (record.kind === 'revealed' && 'reveal' in shape))
   );
 }
 
