@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import { hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
-import { publicAccess, verifiedAccess, type AccessDecision } from './access.js';
+import { guardAccess, publicAccess, verifiedAccess } from './access.js';
 import { domain } from './domain.js';
 import { endpoint, runEndpointAuth } from './endpoint.js';
 import { guards } from './guards.js';
@@ -27,16 +27,13 @@ describe('structured access metadata', () => {
   it('defines public, verified machine, and guard-chain access decisions', () => {
     const publicDecision = publicAccess('marketing page');
     const machineDecision = verifiedAccess;
-    const guardChain = {
-      guards: [
-        { name: 'session' },
-        {
-          guard: guards.role<{ session?: { user?: { roles?: readonly string[] } } }>('admin'),
-          name: 'admin',
-        },
-      ],
-      kind: 'guard-chain',
-    } satisfies AccessDecision;
+    const guardChain = guardAccess([
+      { name: 'session' },
+      {
+        guard: guards.role<{ session?: { user?: { roles?: readonly string[] } } }>('admin'),
+        name: 'admin',
+      },
+    ]);
 
     expect(publicDecision).toEqual({ kind: 'public', reason: 'marketing page' });
     expect(machineDecision).toEqual({ kind: 'verified-machine-auth' });

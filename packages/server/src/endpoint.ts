@@ -42,7 +42,7 @@ export interface Endpoint<
   Method extends EndpointMethod = EndpointMethod,
   Mount extends EndpointMount = 'exact',
 > {
-  access?: AccessDecision;
+  access: AccessDecision;
   auth?: EndpointAuthDeclaration;
   csrf?: EndpointCsrfExemption;
   method: Method;
@@ -60,7 +60,7 @@ export type EndpointRequest = Request & { readonly session?: never };
 export type EndpointHandler = (request: EndpointRequest) => Promise<Response> | Response;
 
 interface EndpointDefinitionBase<Method extends EndpointMethod> {
-  access?: AccessDecision;
+  access: AccessDecision;
   auth?: EndpointAuthDeclaration;
   handler: EndpointHandler;
   method: Method;
@@ -112,10 +112,11 @@ export interface EndpointDeclaration<
  * pipeline, so every declaration carries audit metadata: explicit `method`,
  * endpoint-level `reason`/`purpose`, raw response posture, and a prefix mount
  * justification when `mount: 'prefix'` is used. CSRF is default-on — opt out
- * with `csrf: false` plus a justification (SPEC §6.6 and §9.1).
+ * with `csrf: false` plus a justification (SPEC §6.6 and §9.1). Every endpoint
+ * must carry an explicit access decision (SPEC §10.2/§11.3, KV436).
  *
  * @param path - The path the endpoint mounts at.
- * @param definition - The `handler`, method, audit metadata, optional `mount`, `auth`, and CSRF opt-out.
+ * @param definition - The `access` decision, `handler`, method, audit metadata, optional `mount`, `auth`, and CSRF opt-out.
  * @returns An `EndpointDeclaration`.
  * @example
  * import { endpoint } from '@kovojs/server';
@@ -141,7 +142,7 @@ export function endpoint<
   const reason = 'reason' in definition ? definition.reason : definition.purpose;
 
   return {
-    ...(definition.access === undefined ? {} : { access: definition.access }),
+    access: definition.access,
     ...(definition.auth === undefined ? {} : { auth: definition.auth }),
     ...(definition.csrf === false
       ? { csrf: { exempt: true, justification: definition.csrfJustification } }

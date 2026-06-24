@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import type { AccessExplainFact } from '@kovojs/core/internal/graph';
 import type { AppDiagnostic, KovoApp } from './app-types.js';
 import { findRouteAmbiguities, type RouteLike } from './match.js';
 
@@ -68,6 +69,19 @@ export function routePrefetchGuardDiagnostics(
       fileName: route.path ?? '(route)',
       help: diagnosticDefinitions.KV419.help,
       message: diagnosticDefinitions.KV419.message,
+    }));
+}
+
+export function missingAccessDiagnostics(
+  accessFacts: readonly AccessExplainFact[],
+): readonly AppDiagnostic[] {
+  return accessFacts
+    .filter((fact) => fact.decision === 'missing')
+    .map((fact) => ({
+      code: 'KV436' as const,
+      fileName: fact.site ?? fact.name,
+      help: diagnosticDefinitions.KV436.help,
+      message: diagnosticDefinitions.KV436.message,
     }));
 }
 

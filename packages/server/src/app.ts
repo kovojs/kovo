@@ -1,6 +1,11 @@
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { handleAppRequest } from './app-request.js';
-import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
+import {
+  missingAccessDiagnostics,
+  routePrefetchGuardDiagnostics,
+  routeTableDiagnostics,
+} from './app-diagnostics.js';
+import { accessFactsFromApp } from './access-graph.js';
 import { isKovoApp } from './app-guards.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
@@ -97,10 +102,20 @@ export function createApp<
   );
   const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
   ensureKovoLoaderRuntimeClientModule(clientModules);
+  const accessFacts = accessFactsFromApp({
+    endpoints: options.endpoints ?? [],
+    mutations,
+    queries,
+    routes,
+  });
 
   return {
     clientModules,
-    diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
+    diagnostics: [
+      ...routeTableDiagnostics(routes),
+      ...routePrefetchGuardDiagnostics(routes),
+      ...missingAccessDiagnostics(accessFacts),
+    ],
     document: options.document ?? {},
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},

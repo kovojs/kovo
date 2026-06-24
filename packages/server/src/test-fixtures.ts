@@ -1,4 +1,5 @@
 import { domain } from './domain.js';
+import { publicAccess } from './access.js';
 import {
   mutation as defineMutation,
   type MutationDefinition,
@@ -9,7 +10,11 @@ import { query } from './query.js';
 import { s, type Schema } from './schema.js';
 
 export const testMutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+  defineMutation(key, {
+    csrf: false,
+    ...definition,
+    access: definition.access ?? publicAccess('test mutation fixture'),
+  })) as typeof defineMutation;
 
 export const cartFixtureValue = {
   count: 1,
@@ -51,6 +56,7 @@ export function createCartQueryFixture(options: CartQueryFixtureOptions = {}) {
   const cartQuery = query('cart', {
     ...(options.instanceKey === undefined ? {} : { instanceKey: options.instanceKey }),
     ...(options.version === undefined ? {} : { version: options.version }),
+    access: publicAccess('test cart query fixture'),
     load: options.load ?? (() => cartFixtureValue),
     reads: [cart],
   });
@@ -67,6 +73,7 @@ export interface CartMutationFixtureOptions extends CartQueryFixtureOptions {
 export function createCartMutationFixture(options: CartMutationFixtureOptions = {}) {
   const { cart, cartQuery } = createCartQueryFixture(options);
   const addToCart = testMutation('cart/add', {
+    access: publicAccess('test cart mutation fixture'),
     input: options.input ?? s.object({ productId: s.string() }),
     registry: {
       ...options.registry,

@@ -1,4 +1,4 @@
-import { endpoint } from '@kovojs/server';
+import { endpoint, publicAccess, verifiedAccess } from '@kovojs/server';
 import type { EndpointAuthDeclaration, EndpointDeclaration, EndpointMethod } from '@kovojs/server';
 
 import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js';
@@ -41,9 +41,12 @@ export function mount<
   options: BetterAuthMountOptions<Method>,
 ): EndpointDeclaration<Path, Method, 'prefix'> {
   const handler = typeof auth === 'function' ? auth : auth.handler;
+  const endpointAuth = options.auth ?? { kind: 'custom' as const, name: 'better-auth' };
 
   return endpoint(path, {
-    auth: options.auth ?? { kind: 'custom', name: 'better-auth' },
+    access:
+      endpointAuth.kind === 'none' ? publicAccess(endpointAuth.justification) : verifiedAccess,
+    auth: endpointAuth,
     csrf: false,
     csrfJustification: options.csrfJustification ?? 'better-auth browser redirect protocol handler',
     handler(request) {

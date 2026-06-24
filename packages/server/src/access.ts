@@ -45,3 +45,12 @@ export function publicAccess(reason: string): PublicAccess {
  * Declare that a machine endpoint is covered by its verifier/auth scheme.
  */
 export const verifiedAccess: VerifiedMachineAccess = { kind: 'verified-machine-auth' };
+
+/**
+ * Declare that a surface is intentionally protected by the named runtime guard
+ * chain. The optional executable guard references are audit metadata only;
+ * runtime enforcement remains the declaration's `guard` field.
+ */
+export function guardAccess(guards: readonly GuardAccessStep[]): GuardChainAccess {
+  return { guards, kind: 'guard-chain' };
+}

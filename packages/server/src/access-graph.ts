@@ -13,9 +13,9 @@ import type { LayoutDeclaration, RouteDeclaration } from './route.js';
 /**
  * @internal Build the Phase 2 access ledger from an assembled app.
  *
- * This is intentionally additive: it records the current guard/auth posture so
- * graph emitters can opt into `kovo explain --access` before the public
- * `access:` declaration API becomes mandatory.
+ * Explicit `access:` metadata is the source of truth for Phase 2 completeness.
+ * Legacy guard/auth posture may appear in missing-fact details for migration
+ * help, but it never satisfies KV436.
  */
 export function accessFactsFromApp(
   app: Pick<KovoApp, 'endpoints' | 'mutations' | 'queries' | 'routes'>,
@@ -34,11 +34,11 @@ function queryAccessFact(query: AppQueryDeclaration): AccessExplainFact {
 
   const hasGuard = typeof query.guard === 'function';
   return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: hasGuard ? 'guard=query.guard' : 'guard=-',
+    decision: 'missing',
+    detail: hasGuard ? 'access=- legacyGuard=query.guard' : 'access=- guard=-',
     kind: 'query',
     name: query.key,
-    source: 'legacy-guard',
+    source: 'access',
   };
 }
 
@@ -48,26 +48,25 @@ function mutationAccessFact(mutation: AppMutationDeclaration): AccessExplainFact
 
   const hasGuard = typeof mutation.guard === 'function';
   return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: hasGuard ? 'guard=mutation.guard' : 'guard=-',
+    decision: 'missing',
+    detail: hasGuard ? 'access=- legacyGuard=mutation.guard' : 'access=- guard=-',
     kind: 'mutation',
     name: mutation.key,
-    source: 'legacy-guard',
+    source: 'access',
   };
 }
 
 function routeAccessFact(route: RouteDeclaration<any, any, any, any, any, any>): AccessExplainFact {
-  const explicit =
-    explicitAccessFact('page', route.path, route.access) ?? explicitLayoutAccessFact(route);
+  const explicit = explicitAccessFact('page', route.path, route.access);
   if (explicit) return explicit;
 
   const guardSource = routeGuardSource(route);
   return {
-    decision: guardSource === undefined ? 'missing' : 'guard',
-    detail: guardSource === undefined ? 'guard=-' : `guard=${guardSource}`,
+    decision: 'missing',
+    detail: guardSource === undefined ? 'access=- guard=-' : `access=- legacyGuard=${guardSource}`,
     kind: 'page',
     name: route.path,
-    source: 'legacy-guard',
+    source: 'access',
   };
 }
 
@@ -77,7 +76,6 @@ function endpointAccessFact(
   const webhook = isWebhookEndpoint(endpoint);
   const kind = webhook ? 'webhook' : 'endpoint';
   const name = webhook ? endpoint.name : endpoint.path;
-  const source = webhook ? 'webhook' : 'auth';
   const auth = endpoint.auth;
   const detail = endpointAccessDetail(endpoint, auth);
   const explicit = explicitAccessFact(kind, name, endpoint.access);
@@ -88,33 +86,12 @@ function endpointAccessFact(
     };
   }
 
-  if (auth?.kind === 'none') {
-    return {
-      decision: 'public',
-      detail,
-      justification: auth.justification,
-      kind,
-      name,
-      source,
-    };
-  }
-
-  if (auth?.kind === 'custom' || auth?.kind === 'verifier') {
-    return {
-      decision: 'verified',
-      detail,
-      kind,
-      name,
-      source,
-    };
-  }
-
   return {
     decision: 'missing',
-    detail,
+    detail: `access=- ${detail}`,
     kind,
     name,
-    source,
+    source: 'access',
   };
 }
 
@@ -128,24 +105,6 @@ function endpointAccessDetail(
     `mount=${endpoint.mount}`,
     `auth=${auth === undefined ? '-' : auth.kind === 'none' ? 'none' : `${auth.kind}:${auth.name}`}`,
   ].join(' ');
-}
-
-function explicitLayoutAccessFact(
-  route: RouteDeclaration<any, any, any, any, any, any>,
-): AccessExplainFact | undefined {
-  let layout: LayoutDeclaration<any, any, any> | undefined = route.layout;
-  while (layout !== undefined) {
-    const fact = explicitAccessFact('page', route.path, layout.access);
-    if (fact) {
-      return {
-        ...fact,
-        detail: `${fact.detail} source=layout.access`,
-      };
-    }
-    layout = layout.parent;
-  }
-
-  return undefined;
 }
 
 function explicitAccessFact(

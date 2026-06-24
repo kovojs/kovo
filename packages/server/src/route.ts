@@ -171,7 +171,7 @@ export interface RouteRequest<
   search: RouteSearchFor<SearchSchema>;
 }
 
-/** The body of a route passed to `route()`: `page`, param/search schemas, guards, and meta/hints. */
+/** The body of a route passed to `route()`: explicit access decision, `page`, param/search schemas, guards, and meta/hints. */
 export interface RouteDefinition<
   Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
@@ -180,7 +180,7 @@ export interface RouteDefinition<
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
 > extends PageHintOptions {
-  access?: AccessDecision;
+  access: AccessDecision;
   boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request, GuardedRequest>;
   layout?: LayoutDeclaration<any, any, any>;
@@ -250,7 +250,7 @@ export interface RouteFactory<Request = unknown> {
     Page extends RoutePageResult = RoutePageResult,
   >(
     path: Path,
-    definition?: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, Request>,
+    definition: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, Request>,
   ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, Request>;
 }
 
@@ -259,11 +259,12 @@ export interface RouteFactory<Request = unknown> {
  * `search` schema are parsed and passed to `page` as a typed context; `page`
  * returns the page value (rendered by `renderRoutePageResponse`), `notFound()`,
  * or a response outcome. Optional `guard`/`onUnauthenticated` gate access, and
- * meta/hint fields control the document head (SPEC §6.4). Pages are complete
+ * meta/hint fields control the document head (SPEC §6.4). Every route must carry
+ * an explicit access decision (SPEC §10.2/§11.3, KV436). Pages are complete
  * server-rendered documents — there is no client router.
  *
  * @param path - URL pattern; `:name` segments become typed params.
- * @param definition - The `page` handler plus optional `params`/`search` schemas, guards, and meta.
+ * @param definition - The `access` decision and `page` handler plus optional `params`/`search` schemas, guards, and meta.
  * @returns A `RouteDeclaration` carrying `path`.
  * @example
  * import { notFound, route, s } from '@kovojs/server';
@@ -271,6 +272,7 @@ export interface RouteFactory<Request = unknown> {
  * const catalog = new Map<string, { name: string }>();
  *
  * export const productRoute = route('/products/:id', {
+ *   access: publicAccess('public product catalog'),
  *   params: s.object({ id: s.string() }),
  *   page({ params }) {
  *     const product = catalog.get(params.id);
@@ -288,7 +290,7 @@ export function route<
   GuardedRequest extends Request = Request,
 >(
   path: Path,
-  definition: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> = {},
+  definition: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
 ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
   const declaration = { ...definition, path };
   const metadata =

@@ -1,6 +1,6 @@
 export { createApp, createRequestHandler } from './app.js';
 export { isKovoApp } from './app-guards.js';
-export { publicAccess, verifiedAccess } from './access.js';
+export { guardAccess, publicAccess, verifiedAccess } from './access.js';
 export type {
   AccessDecision,
   GuardAccessStep,

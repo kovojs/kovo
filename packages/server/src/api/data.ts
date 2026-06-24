@@ -1,5 +1,5 @@
 export type { Secret } from '@kovojs/core';
-export { publicAccess, verifiedAccess } from '../access.js';
+export { guardAccess, publicAccess, verifiedAccess } from '../access.js';
 export type {
   AccessDecision,
   GuardAccessStep,

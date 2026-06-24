@@ -199,7 +199,7 @@ export interface MutationDefinition<
   Value = unknown,
   GuardedRequest extends Request = Request,
 > {
-  access?: AccessDecision;
+  access: AccessDecision;
   csrf?: CsrfValidationOptions<Request> | false;
   /** Static/common POST-redirect-GET target for successful no-JS submissions (SPEC §9.1). */
   defaultRedirectTo?: string;

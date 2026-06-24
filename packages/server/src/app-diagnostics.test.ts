@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
+import { publicAccess } from './access.js';
 import { guards } from './guards.js';
 import { route } from './route.js';
 
@@ -12,14 +13,20 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
     const app = createApp({
       routes: [
         route('/admin', {
+          access: publicAccess('test admin page'),
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
           page: () => trustedHtml('<main>admin</main>'),
         }),
         // public + moderate is fine (idempotent, not session-dependent)
-        route('/public', { prefetch: 'moderate', page: () => trustedHtml('<main>public</main>') }),
+        route('/public', {
+          access: publicAccess('public test page'),
+          prefetch: 'moderate',
+          page: () => trustedHtml('<main>public</main>'),
+        }),
         // guarded + conservative is fine (no prerender)
         route('/account', {
+          access: publicAccess('test account page'),
           guard: guards.authed<SessionShape>(),
           prefetch: 'conservative',
           page: () => trustedHtml('<main>account</main>'),
@@ -36,7 +43,11 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
   it('produces no KV419 when no route mixes a guard with prefetch:"moderate"', () => {
     const app = createApp({
       routes: [
-        route('/', { prefetch: 'conservative', page: () => trustedHtml('<main>home</main>') }),
+        route('/', {
+          access: publicAccess('test home page'),
+          prefetch: 'conservative',
+          page: () => trustedHtml('<main>home</main>'),
+        }),
       ],
     });
     expect(app.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419')).toHaveLength(0);
@@ -47,6 +58,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
     const app = createApp({
       routes: [
         route('/admin', {
+          access: publicAccess('test admin page'),
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
           prefetchJustification: 'Route is read-only; render is safe for credentialed prerender.',
@@ -62,6 +74,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
     const app = createApp({
       routes: [
         route('/dashboard', {
+          access: publicAccess('test dashboard page'),
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
           page: () => trustedHtml('<main>dashboard</main>'),
@@ -81,6 +94,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
       routes: [
         // No guard, but in a real app this page might read session data internally.
         route('/feed', {
+          access: publicAccess('test public feed'),
           prefetch: 'moderate',
           page: () => trustedHtml('<main>public feed</main>'),
         }),
@@ -89,5 +103,20 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
     // Current implementation can only detect session-dependence via guard presence;
     // unguarded routes are not flagged even if they are session-dependent.
     expect(app.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419')).toHaveLength(0);
+  });
+
+  it('emits KV436 for missing explicit access decisions without using guards as a substitute', () => {
+    const app = createApp({
+      routes: [
+        route('/guarded-missing-access', {
+          guard: guards.authed<SessionShape>(),
+          page: () => trustedHtml('<main>guarded</main>'),
+        } as any),
+      ],
+    });
+
+    const kv436 = app.diagnostics.filter((diagnostic) => diagnostic.code === 'KV436');
+    expect(kv436).toHaveLength(1);
+    expect(kv436[0]?.fileName).toBe('/guarded-missing-access');
   });
 });

@@ -1,4 +1,4 @@
-import { mutation } from '@kovojs/server';
+import { guardAccess, mutation, publicAccess } from '@kovojs/server';
 import type { MutationDefinition } from '@kovojs/server';
 
 import {
@@ -51,6 +51,7 @@ export function betterAuthSignInEmailMutation<
       options,
       betterAuthCredentialMutationTouches.signInEmail,
     ),
+    access: publicAccess('Better Auth email sign-in credential endpoint'),
     errors: betterAuthCredentialMutationErrors,
     input: betterAuthSignInEmailInput,
     redirectTo: (result) => result.value.redirectTo,
@@ -113,6 +114,7 @@ export function betterAuthSignUpEmailMutation<
       options,
       betterAuthCredentialMutationTouches.signUpEmail,
     ),
+    access: publicAccess('Better Auth email sign-up credential endpoint'),
     errors: betterAuthCredentialMutationErrors,
     input: betterAuthSignUpEmailInput,
     redirectTo: (result) => result.value.redirectTo,
@@ -173,6 +175,10 @@ export function betterAuthSignOutMutation<
 > & { key: Key } {
   return mutation(options.key ?? ('auth/sign-out' as Key), {
     ...credentialMutationDefinitionOptions(options, betterAuthCredentialMutationTouches.signOut),
+    access:
+      options.guard === undefined
+        ? publicAccess('Better Auth sign-out endpoint without an app guard')
+        : guardAccess([{ guard: options.guard, name: 'better-auth-sign-out' }]),
     input: betterAuthSignOutInput,
     redirectTo: (result) => result.value.redirectTo,
     async handler(_input, request, context) {

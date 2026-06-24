@@ -108,7 +108,7 @@ type WebhookInputFor<InputSchema extends Schema<unknown>> = InferSchema<InputSch
   Record<string, unknown>;
 
 interface WebhookDefinitionBase<InputSchema extends Schema<unknown>, Value, Tx> {
-  access?: AccessDecision;
+  access: AccessDecision;
   handler: (
     input: WebhookInputFor<InputSchema>,
     context: WebhookHandlerContext<WebhookInputFor<InputSchema>, Tx>,
@@ -157,7 +157,6 @@ export interface WebhookDeclaration<
   Value = unknown,
   Tx = unknown,
 > extends EndpointDeclaration<Path, 'POST', 'exact'> {
-  access?: AccessDecision;
   name: Name;
   webhook: true;
   webhookDefinition: WebhookDefinition<InputSchema, Value, Tx>;
@@ -175,7 +174,8 @@ export interface WebhookRunResult<Input = unknown, Value = unknown> {
  * payload signature before parsing input, then runs a handler that can record
  * domain changes and is idempotent by construction. Pass a `WebhookVerifier`
  * built from generic helpers such as `hmacSignature`, or `verify: 'none'` with
- * a justification (SPEC §9.1).
+ * a justification (SPEC §9.1). Every webhook must carry an explicit access
+ * decision (SPEC §10.2/§11.3, KV436).
  *
  * @param name - The webhook's identifier.
  * @param definition - The `path`, `verify`, `input` schema, and `handler` (plus optional idempotency/transaction).
@@ -210,7 +210,7 @@ export function webhook<
     (await runWebhook(declaration, request)).response;
 
   declaration = {
-    ...(definition.access === undefined ? {} : { access: definition.access }),
+    access: definition.access,
     auth: webhookAuth(definition),
     csrf: {
       exempt: true,

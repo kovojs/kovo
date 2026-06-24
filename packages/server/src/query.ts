@@ -66,14 +66,14 @@ export interface QueryEndpointRegistry<Request = unknown> {
   queries: readonly QueryDefinition<string, unknown, unknown, Request>[];
 }
 
-/** The shape of a query: its key, `load`, `reads` domains, and optional args/output/guard/version. */
+/** The shape of a query: its key, explicit access decision, `load`, `reads` domains, and optional args/output/guard/version. */
 export interface QueryDefinition<
   Key extends string = string,
   Value = JsonValue,
   Input = unknown,
   Request = unknown,
 > {
-  access?: AccessDecision;
+  access: AccessDecision;
   args?: Schema<Input>;
   /**
    * Delta-eligible collections for this query. When present, the server can
@@ -111,6 +111,7 @@ type BivariantGuard<Request> = {
 }['call'];
 
 interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Request> {
+  access: AccessDecision;
   args: Schema<Input>;
   delta?: readonly QueryDeltaListMeta[];
   guard?: BivariantGuard<Request>;
@@ -140,7 +141,7 @@ type BivariantQueryVersion = {
 
 /** @internal */
 export interface RegisteredQueryDefinition {
-  access?: AccessDecision;
+  access: AccessDecision;
   args?: Schema<unknown>;
   /**
    * Delta-eligible collections for this query (SPEC §9.1.1). The compiler
@@ -161,7 +162,7 @@ export interface RegisteredQueryDefinition {
  * Query load values are checked against the public JSON boundary by `query()`.
  */
 export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue> {
-  access?: AccessDecision;
+  access: AccessDecision;
   args?: Schema<unknown>;
   /**
    * Delta-eligible collections for this query (SPEC §9.1.1). The compiler
@@ -214,13 +215,13 @@ export interface QueryFactory<Request = unknown> {
 
 /**
  * Declare a typed read. A query couples a stable key, a `load` function, and the
- * domains it `reads`. The read set is the entire invalidation declaration —
+ * domains it `reads`, and an explicit access decision. The read set is the entire invalidation declaration —
  * nothing else registers anywhere; when a mutation touches a domain in `reads`,
  * this query reruns (SPEC §10.2). Optional `args` validate inputs, `output`
  * validates results, and `version`/`instanceKey` control caching identity.
  *
  * @param key - The query's stable registry key.
- * @param definition - `load`, `reads`, and optional `args`/`output`/`guard`/`version`.
+ * @param definition - `access`, `load`, `reads`, and optional `args`/`output`/`guard`/`version`.
  * @returns A query definition carrying `key`.
  * @example
  * import { domain, query } from '@kovojs/server';
@@ -228,6 +229,7 @@ export interface QueryFactory<Request = unknown> {
  * const product = domain('product');
  *
  * export const productsQuery = query('products', {
+ *   access: publicAccess('public product catalog'),
  *   load: () => ({ items: [] as { id: string }[] }),
  *   reads: [product],
  * });

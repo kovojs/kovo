@@ -1,7 +1,7 @@
 import { hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
-import { publicAccess, verifiedAccess } from './access.js';
+import { guardAccess, publicAccess, verifiedAccess } from './access.js';
 import { accessFactsFromApp } from './access-graph.js';
 import { createApp } from './app.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
@@ -25,31 +25,35 @@ const rawTextResponse = {
 } satisfies EndpointResponsePosture;
 
 describe('app access graph extraction', () => {
-  it('extracts access decisions from assembled app guard and auth posture', () => {
+  it('extracts explicit access decisions and reports missing declarations separately from guard/auth posture', () => {
     const authed = guards.authed<{ session?: { user?: { id?: string } } }>();
-    const guardedQuery = query('cart', { guard: authed, load: () => ({ count: 1 }) });
+    const guardedQuery = query('cart', { guard: authed, load: () => ({ count: 1 }) } as any);
     const publicQuery = query('catalog', {
       access: publicAccess('public product catalog'),
       load: () => ({ items: [] }),
     });
-    const missingQuery = query('drafts', { load: () => ({ items: [] }) });
+    const missingQuery = query('drafts', { load: () => ({ items: [] }) } as any);
     const guardedMutation = mutation('cart/add', {
       guard: authed,
       handler: () => ({ ok: true }),
       input: s.object({ productId: s.string() }),
-    });
+    } as any);
     const missingMutation = mutation('cart/clear', {
       handler: () => ({ ok: true }),
       input: s.object({}),
-    });
+    } as any);
     const guardedLayout = layout({ guard: authed });
     const explicitGuardRoute = route('/admin', {
-      access: { guards: [{ name: 'admin' }], kind: 'guard-chain' },
+      access: guardAccess([{ name: 'admin' }]),
       page: () => '<main>admin</main>',
     });
-    const guardedRoute = route('/cart', { layout: guardedLayout, page: () => '<main>cart</main>' });
-    const missingRoute = route('/public', { page: () => '<main>public</main>' });
+    const guardedRoute = route('/cart', {
+      layout: guardedLayout,
+      page: () => '<main>cart</main>',
+    } as any);
+    const missingRoute = route('/public', { page: () => '<main>public</main>' } as any);
     const health = endpoint('/healthz', {
+      access: publicAccess('read-only health probe'),
       auth: { justification: 'read-only health probe', kind: 'none' },
       handler: () => new Response('ok'),
       method: 'GET',
@@ -94,25 +98,25 @@ describe('app access graph extraction', () => {
       },
       {
         decision: 'public',
-        detail: 'method=GET path=/healthz mount=exact auth=none',
+        detail: 'access=public method=GET path=/healthz mount=exact auth=none',
         justification: 'read-only health probe',
         kind: 'endpoint',
         name: '/healthz',
-        source: 'auth',
-      },
-      {
-        decision: 'guard',
-        detail: 'guard=mutation.guard',
-        kind: 'mutation',
-        name: 'cart/add',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'access=- legacyGuard=mutation.guard',
+        kind: 'mutation',
+        name: 'cart/add',
+        source: 'access',
+      },
+      {
+        decision: 'missing',
+        detail: 'access=- guard=-',
         kind: 'mutation',
         name: 'cart/clear',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'guard',
@@ -122,25 +126,25 @@ describe('app access graph extraction', () => {
         source: 'access',
       },
       {
-        decision: 'guard',
-        detail: 'guard=layout.guard',
+        decision: 'missing',
+        detail: 'access=- legacyGuard=layout.guard',
         kind: 'page',
         name: '/cart',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'access=- guard=-',
         kind: 'page',
         name: '/public',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
-        decision: 'guard',
-        detail: 'guard=query.guard',
+        decision: 'missing',
+        detail: 'access=- legacyGuard=query.guard',
         kind: 'query',
         name: 'cart',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'public',
@@ -152,10 +156,10 @@ describe('app access graph extraction', () => {
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'access=- guard=-',
         kind: 'query',
         name: 'drafts',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'verified',
