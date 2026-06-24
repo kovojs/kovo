@@ -12,6 +12,7 @@ import {
   type ObjectLiteralEntry,
 } from './scan/parse.js';
 import { queryBindingFromExpression } from './scan/query-binding.js';
+import type { CloudMetadataProvider } from './scan/model.js';
 import type {
   CompileAppGraphOptions,
   CompileAppGraphResult,
@@ -52,6 +53,11 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.capabilities ?? []),
     ...(options.components ?? []).flatMap((component) => component.capabilities ?? []),
   ];
+  const cloudMetadataProviders = uniqueSortedCloudMetadataProviders([
+    ...(options.graph?.capabilities ?? []).flatMap(cloudMetadataProvidersFromCapability),
+    ...(options.appShells ?? []).flatMap((appShell) => appShell.cloudMetadataProviders ?? []),
+    ...(options.components ?? []).flatMap((component) => component.cloudMetadataProviders ?? []),
+  ]);
   const compilerDiagnostics = (options.components ?? []).flatMap(
     (component) => component.diagnostics ?? [],
   );
@@ -79,7 +85,10 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
   };
 
-  const registryFacts = deriveRegistryFactsFromGraph(graph, options.registryTypes);
+  const registryFacts = {
+    ...deriveRegistryFactsFromGraph(graph, options.registryTypes),
+    ...(cloudMetadataProviders.length === 0 ? {} : { cloudMetadataProviders }),
+  };
 
   return {
     diagnostics: registryFacts.diagnostics ?? [],
@@ -105,6 +114,7 @@ export class IncrementalAppGraphCache {
 
 /** @internal Stable multiset hash of the facts that contribute to {@link deriveAppGraph}. */
 export function appGraphContributionHash(options: CompileAppGraphOptions): string {
+  const appShellHashes = (options.appShells ?? []).map((appShell) => factHash(appShell)).sort();
   const componentHashes = (options.components ?? [])
     .flatMap((component) => component.componentGraphFacts)
     .map((fact) => factHash(fact))
@@ -123,6 +133,7 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
     .sort();
 
   return factHash({
+    appShells: appShellHashes,
     capabilities: capabilityHashes,
     components: componentHashes,
     diagnostics: diagnosticHashes,
@@ -279,12 +290,16 @@ export function deriveRegistryFactsFromGraph(
   options: RegistryTypeFactOptions = {},
 ): RegistryFacts {
   const components = deriveComponentFactsFromGraph(graph);
+  const cloudMetadataProviders = uniqueSortedCloudMetadataProviders(
+    (graph.capabilities ?? []).flatMap(cloudMetadataProvidersFromCapability),
+  );
   const diagnostics = [...routeFactDiagnostics(graph), ...mutationFactDiagnostics(graph)];
   const fragmentTargets = deriveFragmentTargetsFromGraph(graph);
   const statefulComponents = deriveStatefulComponentsFromGraph(graph);
   const viewTransitions = deriveViewTransitionsFromGraph(graph);
 
   return {
+    ...(cloudMetadataProviders.length > 0 ? { cloudMetadataProviders } : {}),
     ...(components.length > 0 ? { components } : {}),
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
     domainKeys: deriveDomainKeysFromGraph(graph),
@@ -296,6 +311,22 @@ export function deriveRegistryFactsFromGraph(
     ...(statefulComponents.length > 0 ? { statefulComponents } : {}),
     ...(viewTransitions.length > 0 ? { viewTransitions } : {}),
   };
+}
+
+function cloudMetadataProvidersFromCapability(
+  capability: CoreGraph.CapabilityExplainFact,
+): CloudMetadataProvider[] {
+  if (capability.kind !== 'cloudMetadata') return [];
+  if (capability.source === 'aws' || capability.source === 'azure' || capability.source === 'gcp') {
+    return [capability.source];
+  }
+  return [];
+}
+
+function uniqueSortedCloudMetadataProviders(
+  providers: readonly CloudMetadataProvider[],
+): CloudMetadataProvider[] {
+  return [...new Set(providers)].sort((left, right) => left.localeCompare(right));
 }
 
 /**

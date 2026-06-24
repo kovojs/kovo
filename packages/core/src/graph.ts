@@ -122,6 +122,7 @@ export interface CapabilityExplainFact {
     | 'adminAssign'
     | 'allowInternal'
     | 'capabilityUrl'
+    | 'cloudMetadata'
     | 'cspAllow'
     | 'egress'
     | 'egressAllowInternal'

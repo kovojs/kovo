@@ -109,6 +109,25 @@ export interface AppRequestRateLimitOptions {
 }
 
 /**
+ * Cloud provider names accepted by `createApp({ cloud })` for metadata-backed
+ * credentials (SPEC §9.5 app aggregate, secure-by-construction Phase 5 egress floor).
+ */
+export type AppCloudMetadataProvider = 'aws' | 'azure' | 'gcp';
+
+/**
+ * Declared cloud metadata credential mode for an app shell. The declaration lets
+ * the compiler require framework-wrapped credentials at SDK construction sites.
+ */
+export type AppCloudMetadataMode = 'instance-role' | 'managed-identity' | 'metadata';
+
+/**
+ * App-wide cloud metadata credential declarations. Apps declare each provider once
+ * in `createApp({ cloud })`; component/server modules then pass the shared `cloud.*`
+ * credential wrapper to provider SDK clients.
+ */
+export type AppCloudOptions = Partial<Record<AppCloudMetadataProvider, AppCloudMetadataMode>>;
+
+/**
  * Request-shell load-shedding configuration. Defaults are filled in by
  * `createApp()` so every app has a printable/enforceable posture (SPEC §9.5).
  */
@@ -161,6 +180,7 @@ export interface CreateAppOptions<
    */
   clientModules?: VersionedClientModuleRegistry;
   capabilityUrls?: AppCapabilityUrlOptions | false;
+  cloud?: AppCloudOptions;
   csrf?: CsrfValidationOptions<AppRequest>;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   document?: AppDocumentOptions;
@@ -207,7 +227,7 @@ export interface AppDiagnostic {
  */
 export interface AppCapabilityExplainFact {
   detail?: string;
-  kind: 'capabilityUrl' | 'cspAllow' | 'egressAllowInternal';
+  kind: 'capabilityUrl' | 'cloudMetadata' | 'cspAllow' | 'egressAllowInternal';
   reason?: string;
   site: string;
   source?: string;
@@ -223,6 +243,7 @@ export interface KovoApp<
   capabilities: readonly AppCapabilityExplainFact[];
   clientModules: VersionedClientModuleRegistry;
   capabilityUrls?: AppCapabilityUrlOptions;
+  cloud: AppCloudOptions;
   csrf?: CsrfValidationOptions<any>;
   db?: DbProvider<any, any, any>;
   diagnostics: readonly AppDiagnostic[];

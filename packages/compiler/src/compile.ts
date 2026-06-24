@@ -42,6 +42,7 @@ import {
   parseComponentModule as parseComponentModuleModel,
   firstComponentModel,
   componentOptionObjectEntries,
+  type CloudMetadataProvider,
   type ComponentModuleModel,
   type ObjectLiteralEntry,
 } from './scan/parse.js';
@@ -199,6 +200,9 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ),
   ];
   const capabilities = publishToClientCapabilityFacts(model, options.fileName);
+  const cloudMetadataProviders = sortedUnique(
+    model.cloudMetadataProviderDeclarations.map((declaration) => declaration.provider),
+  ) as CloudMetadataProvider[];
   const cssAssets = cssSource
     ? [
         {
@@ -271,6 +275,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
 
   return {
     capabilities,
+    cloudMetadataProviders,
     componentGraphFacts,
     dependencyFootprint: compileDependencyFootprint(compileOptions, {
       fileName: options.fileName,

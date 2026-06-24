@@ -93,6 +93,7 @@ describe('server createApp request shell', () => {
   it('derives app-config capability facts for explain output', () => {
     const app = createApp({
       capabilityUrls: { path: '/download', secret: 'test-secret' },
+      cloud: { aws: 'instance-role', gcp: 'metadata' },
       document: {
         csp: {
           allow: {
@@ -110,6 +111,18 @@ describe('server createApp request shell', () => {
         kind: 'capabilityUrl',
         site: 'app.ts#capabilityUrls',
         source: 'createApp.capabilityUrls',
+      },
+      {
+        detail: 'mode=instance-role',
+        kind: 'cloudMetadata',
+        site: 'app.ts#cloud.aws',
+        source: 'aws',
+      },
+      {
+        detail: 'mode=metadata',
+        kind: 'cloudMetadata',
+        site: 'app.ts#cloud.gcp',
+        source: 'gcp',
       },
       {
         detail: 'directive=scripts,index=0',

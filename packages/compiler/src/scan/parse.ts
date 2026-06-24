@@ -5,6 +5,8 @@ import type { StaticLiteralValue } from './object.js';
 import type {
   ArrowFunctionPartsModel,
   CallExpressionModel,
+  CloudCredentialReferenceModel,
+  CloudMetadataProviderDeclarationModel,
   CloudMetadataProvider,
   CloudSdkClientConstructionModel,
   ComponentModel,
@@ -120,6 +122,8 @@ export function parseComponentModule(fileName: string, source: string): Componen
 
   const model: ComponentModuleModel = {
     calls,
+    cloudCredentialReferences: cloudCredentialReferenceModels(sourceFile),
+    cloudMetadataProviderDeclarations: cloudMetadataProviderDeclarationModels(sourceFile),
     cloudSdkClientConstructions: cloudSdkClientConstructionModels(sourceFile),
     components,
     jsxComments,
@@ -355,6 +359,89 @@ interface CloudSdkImportBinding {
   importedName: string;
   moduleSpecifier: string;
   provider: CloudMetadataProvider;
+}
+
+function cloudMetadataProviderDeclarationModels(
+  sourceFile: ts.SourceFile,
+): CloudMetadataProviderDeclarationModel[] {
+  const declarations: CloudMetadataProviderDeclarationModel[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && createAppCallExpression(node)) {
+      declarations.push(...cloudMetadataProviderDeclarationsFromCreateAppCall(sourceFile, node));
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return declarations;
+}
+
+function createAppCallExpression(node: ts.CallExpression): boolean {
+  const expression = unwrapExpression(node.expression);
+  return ts.isIdentifier(expression) && expression.text === 'createApp';
+}
+
+function cloudMetadataProviderDeclarationsFromCreateAppCall(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+): CloudMetadataProviderDeclarationModel[] {
+  const [options] = node.arguments;
+  const unwrappedOptions = options ? unwrapExpression(options) : undefined;
+  if (!unwrappedOptions || !ts.isObjectLiteralExpression(unwrappedOptions)) return [];
+
+  const cloudProperty = unwrappedOptions.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) && propertyNameText(property.name) === 'cloud',
+  );
+  if (!cloudProperty) return [];
+
+  const cloudConfig = unwrapExpression(cloudProperty.initializer);
+  if (!ts.isObjectLiteralExpression(cloudConfig)) return [];
+
+  return cloudConfig.properties.flatMap((property) => {
+    if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property))
+      return [];
+    const provider = cloudMetadataProviderFromName(propertyNameText(property.name));
+    if (!provider) return [];
+    return [
+      {
+        end: property.name.getEnd(),
+        provider,
+        start: property.name.getStart(sourceFile),
+      },
+    ];
+  });
+}
+
+function cloudCredentialReferenceModels(
+  sourceFile: ts.SourceFile,
+): CloudCredentialReferenceModel[] {
+  const references: CloudCredentialReferenceModel[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+      const provider = cloudMetadataProviderFromName(node.name.text);
+      if (node.expression.text === 'cloud' && provider) {
+        references.push({
+          end: node.getEnd(),
+          provider,
+          start: node.getStart(sourceFile),
+        });
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return references;
+}
+
+function cloudMetadataProviderFromName(name: string | null): CloudMetadataProvider | null {
+  if (name === 'aws' || name === 'azure' || name === 'gcp') return name;
+  return null;
 }
 
 function cloudSdkClientConstructionModels(

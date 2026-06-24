@@ -44,6 +44,9 @@ export type {
 export type {
   AppDiagnostic,
   AppCapabilityExplainFact,
+  AppCloudMetadataMode,
+  AppCloudMetadataProvider,
+  AppCloudOptions,
   AppDocumentOptions,
   AppEgressOptions,
   AppErrorShellOptions,

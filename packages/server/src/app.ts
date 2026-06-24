@@ -21,6 +21,9 @@ import { layout, route } from './route.js';
 export type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
+  AppCloudMetadataMode,
+  AppCloudMetadataProvider,
+  AppCloudOptions,
   AppDocumentOptions,
   AppErrorShellOptions,
   AppEgressOptions,
@@ -53,6 +56,7 @@ import type { LayoutDeclaration } from './route.js';
 import type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
+  AppCloudOptions,
   AppDocumentOptions,
   AppLifecycleRequest,
   AppMutationDeclaration,
@@ -120,8 +124,10 @@ export function createApp<
       : options.capabilityUrls;
   const document = normalizeAppDocumentOptions(options.document);
   const egress = normalizeAppEgressOptions(options.egress);
+  const cloud = normalizeAppCloudOptions(options.cloud);
   const capabilities = capabilityFactsFromApp({
     ...(appCapabilityUrls === undefined ? {} : { capabilityUrls: appCapabilityUrls }),
+    cloud,
     document,
     egress,
   });
@@ -130,6 +136,7 @@ export function createApp<
     ...(appCapabilityUrls === undefined ? {} : { capabilityUrls: appCapabilityUrls }),
     capabilities,
     clientModules,
+    cloud,
     diagnostics: [
       ...routeTableDiagnostics(routes),
       ...routePrefetchGuardDiagnostics(routes),
@@ -154,6 +161,15 @@ export function createApp<
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
+  };
+}
+
+function normalizeAppCloudOptions(options: CreateAppOptions['cloud']): AppCloudOptions {
+  if (options === undefined) return {};
+  return {
+    ...(options.aws === undefined ? {} : { aws: options.aws }),
+    ...(options.azure === undefined ? {} : { azure: options.azure }),
+    ...(options.gcp === undefined ? {} : { gcp: options.gcp }),
   };
 }
 

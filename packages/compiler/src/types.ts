@@ -192,8 +192,12 @@ export interface RegistryTypeFactOptions {
 }
 
 export interface CompileAppGraphOptions {
+  appShells?: readonly {
+    cloudMetadataProviders?: readonly CloudMetadataProvider[];
+  }[];
   components?: readonly {
     capabilities?: readonly CapabilityGraphFact[];
+    cloudMetadataProviders?: readonly CloudMetadataProvider[];
     componentGraphFacts: readonly ComponentGraphFact[];
     diagnostics?: readonly CompilerDiagnostic[];
   }[];
@@ -322,6 +326,7 @@ export interface CompileArtifactFileNames {
  */
 export interface CompileResult {
   capabilities: readonly CapabilityGraphFact[];
+  cloudMetadataProviders: readonly CloudMetadataProvider[];
   clientExports: readonly string[];
   componentGraphFacts: readonly ComponentGraphFact[];
   cssAssets: readonly ComponentCssAsset[];
@@ -509,6 +514,7 @@ export function elementParamNameFromAttribute(attributeName: string): string {
 export function createEmptyCompileResult(): CompileResult {
   return {
     capabilities: [],
+    cloudMetadataProviders: [],
     clientExports: [],
     componentGraphFacts: [],
     cssAssets: [],

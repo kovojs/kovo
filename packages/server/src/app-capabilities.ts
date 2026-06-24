@@ -7,10 +7,11 @@ import type { KovoApp } from './app-types.js';
  * auditable from the same graph surface as compiler-derived facts.
  */
 export function capabilityFactsFromApp(
-  app: Pick<KovoApp, 'capabilityUrls' | 'document' | 'egress'>,
+  app: Pick<KovoApp, 'capabilityUrls' | 'cloud' | 'document' | 'egress'>,
 ): KovoApp['capabilities'] {
   return [
     ...capabilityUrlFacts(app),
+    ...cloudMetadataFacts(app.cloud),
     ...cspAllowFacts(app.document.csp?.allow?.scripts ?? [], 'scripts'),
     ...cspAllowFacts(app.document.csp?.allow?.frames ?? [], 'frames'),
     ...app.egress.allowInternal.map((entry, index) => ({
@@ -20,6 +21,21 @@ export function capabilityFactsFromApp(
       source: entry,
     })),
   ];
+}
+
+function cloudMetadataFacts(cloud: KovoApp['cloud']): KovoApp['capabilities'] {
+  return (['aws', 'azure', 'gcp'] as const).flatMap((provider) => {
+    const mode = cloud[provider];
+    if (mode === undefined) return [];
+    return [
+      {
+        detail: `mode=${mode}`,
+        kind: 'cloudMetadata' as const,
+        site: `app.ts#cloud.${provider}`,
+        source: provider,
+      },
+    ];
+  });
 }
 
 /** @internal Append a runtime capability fact once per app aggregate. */
