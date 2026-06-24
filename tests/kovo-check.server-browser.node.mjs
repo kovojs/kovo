@@ -651,6 +651,7 @@ void test('Conformance suites are an explicit gate', async () => {
 
   const packageJson = await projectJsonFile(projectRootPath, 'package.json');
   const viteTasks = (await loadProjectVitePlusConfig()).run.tasks;
+  const ciWorkflowSource = await readProjectFile('.github/workflows/ci.yml');
   const conformanceFacts = conformanceGateFacts({
     expectedPackages: expectedConformancePackages,
     packageJson,
@@ -670,6 +671,15 @@ void test('Conformance suites are an explicit gate', async () => {
     'conformance task runs package tests through pnpm filters',
   );
   assert.equal(conformanceFacts.presentInAcceptance, true);
+  const workflowCommands = workflowStepCommands(ciWorkflowSource)
+    .map((step) => step.run)
+    .filter(Boolean);
+  assert.ok(
+    workflowCommands.includes('vp exec pnpm --filter @kovojs/conformance-${{ matrix.suite }} test'),
+  );
+  for (const suiteName of Object.keys(expectedConformancePackages)) {
+    assert.ok(ciWorkflowSource.includes(suiteName), `CI conformance matrix includes ${suiteName}`);
+  }
   assert.deepEqual(
     conformanceFacts.commands
       .map((entry) => entry.packageName)

@@ -238,6 +238,10 @@ jobs:
 
   conformance:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [drizzle-pin, better-auth-pin, auth-spike, webhook-spike, app-shell-spike]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
@@ -254,7 +258,7 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - run: vp run conformance
+      - run: vp exec pnpm --filter @kovojs/conformance-${{ matrix.suite }} test
 
   kovo-check:
     runs-on: ubuntu-latest
