@@ -660,8 +660,9 @@ Navigation is the inter-page wiring of an MPA, and it is typed with the same dec
 ```ts
 // products.routes.ts
 export const productRoute = route('/products/:id', {
+  access: guardAccess([{ guard: authed, name: 'authed' }]), // explicit audit decision (§10.2, KV436)
   params: s.object({ id: s.string() }), // coercion declared once, like FormData (§6.3)
-  guard: authed, // same combinators as mutations (§10.3); pages join the unguarded audit
+  guard: authed, // executable combinator chain (§10.3)
   search: s.object({ max: s.number().optional() }), // the §7 URL channel, typed
   prefetch: 'conservative', // Speculation Rules config lives here (§8)
   meta: ({ params }, queries) => ({
@@ -697,7 +698,7 @@ const f = form.get('/products');
 
 `redirect('/products/:id', { params })` types the POST-redirect-GET path (§9.1) the same way. Residual literal `href`s in hand-authored IR are validated against the route table at compile time (KV220); full-origin URLs and an `external` marker opt out. The propagation property of §6.2 holds for navigation too: renaming a route path turns every `<Link>`, GET form, and `redirect()` in the app red under `vp check`.
 
-Two more route-level affordances close the request shell: **guards** — `guard:` on a `route()` runs the same combinator chain as mutations (§10.3) before `page`, refines `req.session` identically, and enrolls the page in the `kovo explain --unguarded` audit; and **`notFound()`** — returning `notFound()` from `page` renders the app's 404 page with the correct status, so status codes stay part of the typed surface rather than ad-hoc response construction. `redirect()` and `notFound()` are the sanctioned non-200 page outcomes in v1.
+Two more route-level affordances close the request shell: **guards** — `guard:` on a `route()` runs the same combinator chain as mutations (§10.3) before `page`, refines `req.session` identically, and enrolls the page in the `kovo explain --unguarded` audit; and **`notFound()`** — returning `notFound()` from `page` renders the app's 404 page with the correct status, so status codes stay part of the typed surface rather than ad-hoc response construction. Every route still carries an explicit `access:` decision for the default-deny completeness audit (KV436); `access` records reviewed intent, while `guard` is the executable enforcement hook. `redirect()` and `notFound()` are the sanctioned non-200 page outcomes in v1.
 
 Routes may also return two sanctioned non-HTML 200/304 outcomes: `respond.file(body, { contentType, filename?, etag?, headers? })` and `respond.stream(body, { contentType, filename?, etag?, disposition?, headers? })`. These are still ordinary `route()`s: params/search schemas, guards, typed links, KV220 validation, the unguarded audit, and the `owner:`-powered `--unscoped` audit all apply before the body is served. `Content-Type` is required, `Content-Disposition` is declared (`respond.file()` defaults to attachment; `respond.stream()` defaults to attachment unless `inline` is requested), and a matching `If-None-Match` answers 304 without rendering HTML. Range/resumable downloads are out of scope for v1; large exports that exceed a request/response window belong to a later background-jobs design.
 
@@ -992,8 +993,9 @@ export const cartQuery = query('cart', (db, req) =>
 
 // product.queries.ts — parameterized: args declared once, schema-style
 export const productQuery = query('product', {
+  access: guardAccess([{ guard: authed, name: 'authed' }]), // required explicit decision (KV436)
   args: s.object({ id: s.string() }), // coerced wherever args arrive: props, route params, /_q/ search params (§9.4)
-  guard: authed, // optional — checked at page render AND at every typed read / live push
+  guard: authed, // checked at page render AND at every typed read / live push
   // guards receive the query's validated args/instance key (§10.3): guard: owns((a) => a.id, products.id)
   load: (db, args, req) =>
     db
@@ -1100,8 +1102,13 @@ This ordering closes the read-your-writes hazard: responses can never render pre
 **`owns()` ownership combinator.** `owns((args) => args.id, table.ownerColumn)` is the sanctioned ownership guard: it passes only when the principal (`req.session`, the column declared by the table's `owner:` annotation, §10.1) owns the row the key selects. `owns()` is composable with the other combinators (`all(authed, owns(...))`) and discharges the KV414 IDOR obligation for the key it covers. The shipped runtime contract is `guards.owns(keyOf, ownsRow)` where `ownsRow(req, key)` is an app-provided ownership predicate (so `@kovojs/server` stays decoupled from the data layer); the `table.ownerColumn` column-form above is the planned compile-time sugar that lowers to it.
 
 ```ts
-export const adminRefund = mutation('admin/refund', { guard: role('admin') /*…*/ });
+export const adminRefund = mutation('admin/refund', {
+  access: guardAccess([{ guard: role('admin'), name: 'admin' }]),
+  guard: role('admin'),
+  /* … */
+});
 export const orderQuery = query('order', {
+  access: guardAccess([{ name: 'authed' }, { name: 'owns:orders.id' }]),
   args: s.object({ id: s.string() }),
   guard: all(
     authed,
