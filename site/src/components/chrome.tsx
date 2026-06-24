@@ -206,6 +206,11 @@ const chromeStyles = style.create(
     },
     docSidebar: {
       fontSize: '0.84rem',
+      maxHeight: 'calc(100vh - 7rem)',
+      overflowY: 'auto',
+      position: 'sticky',
+      scrollbarWidth: 'thin',
+      top: '5.5rem',
       width: '15rem',
     },
     footer: {
@@ -751,7 +756,7 @@ export interface DocsSidebarProps {
 
 export const DocsSidebar = component({
   render: ({ activePath = '', groups, mode = 'desktop' }: DocsSidebarProps) => (
-    <nav style={chromeStyles.docSidebar} aria-label="Documentation">
+    <nav style={chromeStyles.docSidebar} aria-label="Documentation" data-docs-sidebar={mode}>
       {groups.map((group) => {
         const activeGroup =
           activePath === group.indexUrl ||
@@ -763,6 +768,7 @@ export const DocsSidebar = component({
         return (
           <details style={chromeStyles.sideGroupDisclosure} open={openGroup ? true : undefined}>
             <summary
+              data-current-section={activeSection ? 'true' : undefined}
               style={[
                 chromeStyles.sideGroupHeading,
                 activeSection && chromeStyles.sideGroupHeadingActive,
@@ -784,6 +790,7 @@ export const DocsSidebar = component({
                 <li>
                   <a
                     href={page.url}
+                    data-current-page={page.url === activePath ? 'true' : undefined}
                     style={[
                       chromeStyles.sideGroupLink,
                       page.url === activePath && chromeStyles.sideLinkActive,
