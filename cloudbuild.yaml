@@ -20,6 +20,13 @@
 #
 # Prerequisite (once): an Artifact Registry repo named by _REPO in _REGION:
 #   gcloud artifacts repositories create kovo --project=kovo-docs --repository-format=docker --location=us-central1
+#
+# Prerequisite (once): Secret Manager entries for the production demo CSRF/webhook secrets:
+#   printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create stackoverflow-csrf-secret --project=kovo-docs --data-file=-
+#   printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create crm-csrf-secret --project=kovo-docs --data-file=-
+#   printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create commerce-csrf-secret --project=kovo-docs --data-file=-
+#   printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create commerce-auth-csrf-secret --project=kovo-docs --data-file=-
+#   printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create commerce-webhook-secret --project=kovo-docs --data-file=-
 
 substitutions:
   _PROJECT_ID: kovo-docs
@@ -64,7 +71,12 @@ steps:
       - |
         set -euo pipefail
         IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/examples:${_TAG}
-        CID=$$(docker run -d -e EXAMPLE=stackoverflow -e PORT=8080 -e HOST=0.0.0.0 "$$IMAGE")
+        CID=$$(docker run -d \
+          -e EXAMPLE=stackoverflow \
+          -e PORT=8080 \
+          -e HOST=0.0.0.0 \
+          -e KOVO_STACKOVERFLOW_CSRF_SECRET=cloud-build-smoke-stackoverflow-csrf-secret \
+          "$$IMAGE")
         trap 'docker logs "$$CID" || true; docker rm -f "$$CID" >/dev/null 2>&1 || true' EXIT
 
         node_check='
