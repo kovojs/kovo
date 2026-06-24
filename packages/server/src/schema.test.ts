@@ -40,7 +40,11 @@ describe('server schemas', () => {
       type: 'text/plain',
     };
     const baseFile = s.file();
-    const imageFile = baseFile.mime(['image/png']).maxBytes(10);
+    const imageFile = baseFile.accept
+      .unverified(['image/png'], {
+        justification: 'legacy upload form accepts browser-declared PNG files',
+      })
+      .maxBytes(10);
 
     expect(baseFile.parse(file)).toBe(file);
     expect(() => imageFile.parse(file)).toThrow('Expected file <= 10 bytes');
@@ -221,7 +225,9 @@ describe('server schemas', () => {
   it('coerces multipart file fields through s.file()', async () => {
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
-        avatar: s.file({ maxBytes: 16, mime: ['image/png'] }),
+        avatar: s.file({ maxBytes: 16 }).accept.unverified(['image/png'], {
+          justification: 'avatar picker only permits PNG files before server storage',
+        }),
       }),
       handler(input) {
         return {
@@ -250,10 +256,15 @@ describe('server schemas', () => {
     const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
-        avatar: s.file({ maxBytes: 16, mime: ['image/png'] }).store({
-          key: (file) => `avatars/${file.name}`,
-          storage,
-        }),
+        avatar: s
+          .file({ maxBytes: 16 })
+          .accept.unverified(['image/png'], {
+            justification: 'avatar picker only permits PNG files before server storage',
+          })
+          .store({
+            key: (file) => `avatars/${file.name}`,
+            storage,
+          }),
       }),
       handler(input) {
         return {
@@ -290,10 +301,15 @@ describe('server schemas', () => {
 
   it('stores server-sniffed MIME instead of the client-declared file type', async () => {
     const storage = createMemoryStorage();
-    const upload = s.file().store({
-      key: 'uploads/report.pdf',
-      storage,
-    });
+    const upload = s
+      .file()
+      .accept.unverified(['image/png'], {
+        justification: 'legacy import filter keeps browser-declared image uploads',
+      })
+      .store({
+        key: 'uploads/report.pdf',
+        storage,
+      });
     const file = formDataFile(['%PDF-1.7\n'], 'report.pdf', 'image/png');
 
     await expect(parseSchemaAsync(upload, file)).resolves.toMatchObject({
@@ -356,16 +372,36 @@ describe('server schemas', () => {
     });
   });
 
-  it('does not trust SVG upload bytes as a safe inline image MIME', async () => {
+  it('keeps SVG bytes out of verified upload type validation', async () => {
     const svg = formDataFile(
       ['<svg><script>alert(1)</script></svg>'],
       'avatar.svg',
       'image/svg+xml',
     );
 
-    await expect(parseSchemaAsync(s.file().mime(['image/svg+xml']), svg)).rejects.toThrow(
-      'Expected file type image/svg+xml',
+    await expect(
+      parseSchemaAsync(
+        s.file().accept.unverified(['image/png'], {
+          justification: 'avatar uploads must be PNG before storage',
+        }),
+        svg,
+      ),
+    ).rejects.toThrow('Expected unverified client file type image/png');
+  });
+
+  it('requires justification for unverified upload accepts', () => {
+    const assertAcceptRequiresJustification = () => {
+      // @ts-expect-error KV428: accepting client MIME claims requires an audit reason.
+      s.file().accept.unverified(['image/png']);
+    };
+
+    expect(assertAcceptRequiresJustification).toBeTypeOf('function');
+    expect(() => s.file().accept.unverified(['image/png'], { justification: '   ' })).toThrow(
+      'accept.unverified requires a non-empty justification',
     );
+    expect(() =>
+      s.file().accept.unverified([], { justification: 'reviewed legacy upload form' }),
+    ).toThrow('accept.unverified requires at least one MIME type');
   });
 
   it('does not store invalid multipart file fields', async () => {
@@ -398,7 +434,9 @@ describe('server schemas', () => {
   it('returns validation failures with field paths for schema errors', async () => {
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
-        avatar: s.file().maxBytes(4).mime(['image/png']),
+        avatar: s.file().maxBytes(4).accept.unverified(['image/png'], {
+          justification: 'avatar picker only permits PNG files before server storage',
+        }),
       }),
       handler(input) {
         return input.avatar.name;
@@ -428,7 +466,9 @@ describe('server schemas', () => {
     await expect(runMutation(uploadAvatar, wrongType, {})).resolves.toEqual({
       error: {
         code: 'VALIDATION',
-        payload: { issues: [{ message: 'Expected file type image/png', path: ['avatar'] }] },
+        payload: {
+          issues: [{ message: 'Expected unverified client file type image/png', path: ['avatar'] }],
+        },
       },
       ok: false,
       status: 422,

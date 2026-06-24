@@ -52,6 +52,8 @@ export { s, SchemaValidationError, unsafeRegex, withSchemaInputBudget } from '..
 export type {
   ArraySchema,
   AsyncSchema,
+  FileAcceptSchema,
+  FileAcceptUnverifiedOptions,
   FileLike,
   FileSchema,
   FileSchemaOptions,

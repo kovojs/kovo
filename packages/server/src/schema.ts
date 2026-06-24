@@ -224,17 +224,45 @@ export interface FileLike {
   type: string;
 }
 
-/** File-upload schema produced by `s.file()`; chains size/MIME limits and `.store()` (SPEC.md §6). */
+/** File-upload schema produced by `s.file()`; chains size limits, audited accepts, and `.store()` (SPEC.md §6). */
 export interface FileSchema extends AsyncSchema<FileLike> {
+  /** Audited accept-list escapes for upload metadata that Kovo cannot verify as safe bytes. */
+  readonly accept: FileAcceptSchema;
   maxBytes(value: number): FileSchema;
-  mime(types: readonly string[]): FileSchema;
   store(options: StoredFileSchemaOptions): StoredFileSchema;
 }
 
-/** Size/MIME constraints captured by an `s.file()` schema (SPEC.md §6). */
+/** Audited upload accept-list builder. Client MIME claims are metadata, not proof (KV428). */
+export interface FileAcceptSchema {
+  /**
+   * Accept client-declared MIME types without treating them as verified-safe bytes.
+   *
+   * This is an audit-grade opt-out for compatibility with browser file pickers and
+   * legacy upload filters. Stored uploads still receive a server-sniffed
+   * `contentType`, and uploaded bytes remain attachment-only unless a separate
+   * verified inline path exists.
+   */
+  unverified(types: readonly string[], options: FileAcceptUnverifiedOptions): FileSchema;
+}
+
+/** Required justification for `s.file().accept.unverified(...)` (KV428). */
+export interface FileAcceptUnverifiedOptions {
+  justification: string;
+}
+
+interface FileAcceptUnverified {
+  justification: string;
+  types: readonly string[];
+}
+
+interface FileSchemaState {
+  maxBytes?: number;
+  unverifiedAccept?: FileAcceptUnverified;
+}
+
+/** Size constraints captured by an `s.file()` schema (SPEC.md §6). */
 export interface FileSchemaOptions {
   maxBytes?: number;
-  mime?: readonly string[];
 }
 
 /** Result of a stored upload produced by `s.file().store(...)` (SPEC.md §6). */
@@ -478,58 +506,55 @@ class NumberSchemaImpl implements NumberSchema {
 
 class FileSchemaImpl implements FileSchema {
   readonly #maxBytes: number | undefined;
-  readonly #mime: readonly string[] | undefined;
+  readonly #unverifiedAccept: FileAcceptUnverified | undefined;
 
-  constructor(options: FileSchemaOptions = {}) {
+  constructor(options: FileSchemaState = {}) {
     this.#maxBytes = options.maxBytes;
-    this.#mime = options.mime;
+    this.#unverifiedAccept = options.unverifiedAccept;
+  }
+
+  get accept(): FileAcceptSchema {
+    return {
+      unverified: (types, options) =>
+        new FileSchemaImpl({
+          ...(this.#maxBytes === undefined ? {} : { maxBytes: this.#maxBytes }),
+          unverifiedAccept: createFileAcceptUnverified(types, options),
+        }),
+    };
   }
 
   maxBytes(value: number): FileSchema {
     return new FileSchemaImpl({
       maxBytes: value,
-      ...(this.#mime === undefined ? {} : { mime: this.#mime }),
-    });
-  }
-
-  mime(types: readonly string[]): FileSchema {
-    return new FileSchemaImpl({
-      ...(this.#maxBytes === undefined ? {} : { maxBytes: this.#maxBytes }),
-      mime: types,
+      ...(this.#unverifiedAccept === undefined ? {} : { unverifiedAccept: this.#unverifiedAccept }),
     });
   }
 
   parse(input: unknown): FileLike {
-    const file = parseFileLike(input, createFileOptions(this.#maxBytes, undefined));
-    if (this.#mime !== undefined) {
-      throw validationError('File MIME validation requires async parsing');
-    }
-
+    const file = parseFileLike(input, createFileOptions(this.#maxBytes, this.#unverifiedAccept));
+    assertFileUnverifiedAccept(file, this.#unverifiedAccept);
     return file;
   }
 
   async parseAsync(input: unknown): Promise<FileLike> {
-    const file = parseFileLike(input, createFileOptions(this.#maxBytes, undefined));
-    if (this.#mime !== undefined) {
-      const contentType = sniffUploadContentType(new Uint8Array(await file.arrayBuffer()));
-      if (!this.#mime.includes(contentType)) {
-        throw validationError(`Expected file type ${this.#mime.join(', ')}`);
-      }
-    }
-
+    const file = parseFileLike(input, createFileOptions(this.#maxBytes, this.#unverifiedAccept));
+    assertFileUnverifiedAccept(file, this.#unverifiedAccept);
     return file;
   }
 
   store(options: StoredFileSchemaOptions): StoredFileSchema {
-    return new StoredFileSchemaImpl(createFileOptions(this.#maxBytes, this.#mime), options);
+    return new StoredFileSchemaImpl(
+      createFileOptions(this.#maxBytes, this.#unverifiedAccept),
+      options,
+    );
   }
 }
 
 class StoredFileSchemaImpl implements StoredFileSchema {
-  readonly #fileOptions: FileSchemaOptions;
+  readonly #fileOptions: FileSchemaState;
   readonly #storageOptions: StoredFileSchemaOptions;
 
-  constructor(fileOptions: FileSchemaOptions, storageOptions: StoredFileSchemaOptions) {
+  constructor(fileOptions: FileSchemaState, storageOptions: StoredFileSchemaOptions) {
     this.#fileOptions = fileOptions;
     this.#storageOptions = storageOptions;
   }
@@ -545,11 +570,9 @@ class StoredFileSchemaImpl implements StoredFileSchema {
 
   async parseAsync(input: unknown): Promise<StoredFileUpload> {
     const file = parseFileLike(input, this.#fileOptions);
+    assertFileUnverifiedAccept(file, this.#fileOptions.unverifiedAccept);
     const bytes = await file.arrayBuffer();
     const contentType = sniffUploadContentType(new Uint8Array(bytes));
-    if (this.#fileOptions.mime && !this.#fileOptions.mime.includes(contentType)) {
-      throw validationError(`Expected file type ${this.#fileOptions.mime.join(', ')}`);
-    }
 
     const key = await storedUploadKey(file, this.#storageOptions);
     const storage = await this.#storageOptions.storage.put(key, bytes, {
@@ -566,12 +589,41 @@ class StoredFileSchemaImpl implements StoredFileSchema {
 
 function createFileOptions(
   maxBytes: number | undefined,
-  mime: readonly string[] | undefined,
-): FileSchemaOptions {
+  unverifiedAccept: FileAcceptUnverified | undefined,
+): FileSchemaState {
   return {
     ...(maxBytes === undefined ? {} : { maxBytes }),
-    ...(mime === undefined ? {} : { mime }),
+    ...(unverifiedAccept === undefined ? {} : { unverifiedAccept }),
   };
+}
+
+function createFileAcceptUnverified(
+  types: readonly string[],
+  options: FileAcceptUnverifiedOptions,
+): FileAcceptUnverified {
+  if (!Array.isArray(types) || types.length === 0) {
+    throw new Error('accept.unverified requires at least one MIME type.');
+  }
+  if (
+    typeof options !== 'object' ||
+    options === null ||
+    typeof options.justification !== 'string' ||
+    !options.justification.trim()
+  ) {
+    throw new Error('accept.unverified requires a non-empty justification.');
+  }
+
+  return { justification: options.justification, types: [...types] };
+}
+
+function assertFileUnverifiedAccept(
+  file: FileLike,
+  accept: FileAcceptUnverified | undefined,
+): void {
+  if (accept === undefined) return;
+  if (!accept.types.includes(file.type)) {
+    throw validationError(`Expected unverified client file type ${accept.types.join(', ')}`);
+  }
 }
 
 async function storedUploadKey(file: FileLike, options: StoredFileSchemaOptions): Promise<string> {

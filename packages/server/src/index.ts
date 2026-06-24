@@ -116,6 +116,8 @@ export type {
   ArraySchema,
   AsyncSchema,
   Domain,
+  FileAcceptSchema,
+  FileAcceptUnverifiedOptions,
   FileLike,
   FileSchema,
   FileSchemaOptions,

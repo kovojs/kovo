@@ -686,9 +686,9 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
       of script.
   - [x] Mint stored-upload `Content-Type` from server-sniffed bytes for the common safe signatures, not the
         client-declared `file.type`; unknown bytes fall back to `application/octet-stream`.
-    - Evidence: `packages/server/src/schema.ts` derives stored upload `contentType` and async `.mime()`
-      validation from `sniffUploadContentType`; `packages/server/src/schema.test.ts` covers a client MIME lie,
-      real PNG/PDF signatures, and octet-stream fallback. Verified by
+    - Evidence: `packages/server/src/schema.ts` derives stored upload `contentType` from
+      `sniffUploadContentType`; `packages/server/src/schema.test.ts` covers a client MIME lie through the
+      audited `accept.unverified(...)` opt-out, real PNG/PDF signatures, and octet-stream fallback. Verified by
       `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/response.test.ts`,
       `vp check packages/server/src`, and `git diff --check`.
   - [x] Add a stored-file serving primitive that defaults attacker-controlled uploaded bytes to
@@ -702,9 +702,9 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
         are provably inert).
   - [x] **SVG: rasterize or force attachment, never sniff-and-trust** (SVG is XML+script; a prefix check is
         meaningless).
-    - Evidence: `packages/server/src/schema.test.ts` rejects `s.file().mime(['image/svg+xml'])` for SVG bytes,
-      and `packages/server/src/response.test.ts` proves `respond.storedFile(...)` serves a stored
-      `image/svg+xml` object as attachment with `nosniff`.
+    - Evidence: `packages/server/src/schema.test.ts` keeps SVG out of the safe upload-type path by requiring an
+      explicit `accept.unverified(...)` opt-out, and `packages/server/src/response.test.ts` proves
+      `respond.storedFile(...)` serves a stored `image/svg+xml` object as attachment with `nosniff`.
   - [ ] **Server-generated random/opaque storage keys** by construction; the user filename is sanitized
         metadata used only for the download `filename`, never the key — kills path traversal/overwrite.
     - Partial evidence: `s.file().store({ storage })` now defaults to an opaque `uploads/<uuid>` key and keeps
@@ -712,6 +712,12 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
       generated key and prefix path. Gap: explicit `key` string/function overrides still exist.
   - [ ] **Remove `.mime()`** (pre-release breaking change): the only verbatim-client-MIME path becomes the
         explicit `accept.unverified()` opt-out, listed in `kovo explain --capabilities`.
+    - Partial evidence: `packages/server/src/schema.ts` removes `FileSchema.mime`/`FileSchemaOptions.mime` and
+      adds `s.file().accept.unverified(types, { justification })`; `packages/server/src/schema.test.ts` covers
+      required justification, client MIME lies, SVG rejection, and stored server-sniffed `contentType`. Verified
+      by `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/response.test.ts`,
+      `vp check packages/server/src`, `pnpm run check:api-surface`, and `git diff --check`. Remaining gap:
+      compiler extraction of `accept.unverified(...)` sites into `kovo explain --capabilities`.
   - Honest scope: the common `respond.storedFile(key)` path takes a bare string key, so the static
     `VerifiedContentType` brand degrades to a runtime sidecar-marker check (refuse-to-serve-inline if
     unverified — fail-closed). Attachment content-type confusion (a lying type on a _download_) is a lesser,
