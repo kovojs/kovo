@@ -140,6 +140,21 @@ describe('server response adapters', () => {
     expect(response.headers['X-Content-Type-Options']).toBeUndefined();
   });
 
+  it('serves stored uploads as attachment-only with nosniff', () => {
+    const response = routeOutcomeResponse(
+      respond.storedFile({
+        body: new TextEncoder().encode('<svg><script>alert(1)</script></svg>'),
+        contentType: 'image/svg+xml',
+        metadata: { filename: 'avatar.svg' },
+      }),
+      { method: 'GET' },
+    );
+
+    expect(response.headers['Content-Type']).toBe('image/svg+xml');
+    expect(response.headers['Content-Disposition']).toBe('attachment; filename="avatar.svg"');
+    expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
+  });
+
   it('accepts concrete header sources without treating arbitrary objects as headers', () => {
     expect(isHeaderSource(new Headers({ 'Content-Type': 'text/html' }))).toBe(true);
     expect(isHeaderSource(new Map([['Content-Type', 'text/html']]))).toBe(true);

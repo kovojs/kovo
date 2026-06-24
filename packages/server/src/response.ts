@@ -1,3 +1,5 @@
+import type { StorageGetResult, StorageStreamResult } from '@kovojs/core';
+
 import type { DeferredStreamChunk } from './deferred-stream.js';
 import { serverErrorHeaders, type ServerErrorReport } from './diagnostics.js';
 
@@ -61,6 +63,16 @@ export interface RouteFileOptions {
 export interface RouteStreamOptions extends RouteFileOptions {
   disposition?: 'attachment' | 'inline';
 }
+
+/**
+ * Stored-object shape accepted by `respond.storedFile`. This is intentionally
+ * the read/stream result from a Kovo storage capability, not app-supplied bytes:
+ * uploaded bytes are served as attachment-only by default (SPEC §6.4).
+ */
+export type StoredFileResponseSource = Pick<
+  StorageGetResult | StorageStreamResult,
+  'body' | 'contentType' | 'etag' | 'metadata'
+>;
 
 /**
  * A fully rendered route HTTP response (status, headers, body). Headers use
@@ -195,6 +207,15 @@ export const respond = {
       disposition: 'attachment',
     });
   },
+  storedFile(file: StoredFileResponseSource) {
+    const filename = storedFilename(file);
+    return routeResponseOutcome(file.body, {
+      contentType: file.contentType ?? 'application/octet-stream',
+      ...(file.etag === undefined ? {} : { etag: file.etag }),
+      ...(filename === undefined ? {} : { filename }),
+      disposition: 'attachment',
+    });
+  },
   stream(body: RouteResponseBody, options: RouteStreamOptions) {
     return routeResponseOutcome(body, {
       ...options,
@@ -309,6 +330,11 @@ function routeOutcomeHeaders(outcome: RouteResponseOutcome): Record<string, stri
     ...(outcome.etag === undefined ? {} : { ETag: outcome.etag }),
     ...outcome.headers,
   };
+}
+
+function storedFilename(file: StoredFileResponseSource): string | undefined {
+  const filename = file.metadata?.['filename'];
+  return typeof filename === 'string' && filename.length > 0 ? filename : undefined;
 }
 
 function escapeHeaderValue(value: string): string {

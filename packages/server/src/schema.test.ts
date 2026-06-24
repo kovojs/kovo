@@ -284,6 +284,18 @@ describe('server schemas', () => {
     });
   });
 
+  it('does not trust SVG upload bytes as a safe inline image MIME', async () => {
+    const svg = formDataFile(
+      ['<svg><script>alert(1)</script></svg>'],
+      'avatar.svg',
+      'image/svg+xml',
+    );
+
+    await expect(parseSchemaAsync(s.file().mime(['image/svg+xml']), svg)).rejects.toThrow(
+      'Expected file type image/svg+xml',
+    );
+  });
+
   it('does not store invalid multipart file fields', async () => {
     const storage = createMemoryStorage();
     const uploadAvatar = mutation('profile/avatar', {

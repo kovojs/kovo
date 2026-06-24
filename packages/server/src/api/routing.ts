@@ -65,6 +65,7 @@ export type {
   RouteResponseOutcome,
   RouteStreamOptions,
   ServerResponseBase,
+  StoredFileResponseSource,
 } from '../response.js';
 export { respond } from '../response.js';
 export { layout, notFound, route } from '../route.js';

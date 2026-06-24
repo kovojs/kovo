@@ -260,6 +260,7 @@ export type {
   SessionProviderResult,
   SessionRequestLike,
   SessionUserLike,
+  StoredFileResponseSource,
   UnauthenticatedContext,
   UnauthenticatedDenial,
   UnauthenticatedHandler,

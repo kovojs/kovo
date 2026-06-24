@@ -650,13 +650,24 @@ packages/server/src/app-document.test.ts`; `vp check packages/server/src`; `git 
       real PNG/PDF signatures, and octet-stream fallback. Verified by
       `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/response.test.ts`,
       `vp check packages/server/src`, and `git diff --check`.
+  - [x] Add a stored-file serving primitive that defaults attacker-controlled uploaded bytes to
+        `Content-Disposition: attachment` plus `X-Content-Type-Options: nosniff`.
+    - Evidence: `respond.storedFile(...)` in `packages/server/src/response.ts` accepts storage get/stream
+      results, derives `filename` only from stored metadata, and has no inline option; verified by
+      `packages/server/src/response.test.ts` and
+      `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/response.test.ts`.
   - [ ] Deep sniffer probes ZIP/office containers and rejects HTML/SVG/ambiguous/polyglot for the inline path;
         for the inline guarantee prefer **server-side re-encode/rasterize** of images (framework-produced bytes
         are provably inert).
-  - [ ] **SVG: rasterize or force attachment, never sniff-and-trust** (SVG is XML+script; a prefix check is
+  - [x] **SVG: rasterize or force attachment, never sniff-and-trust** (SVG is XML+script; a prefix check is
         meaningless).
+    - Evidence: `packages/server/src/schema.test.ts` rejects `s.file().mime(['image/svg+xml'])` for SVG bytes,
+      and `packages/server/src/response.test.ts` proves `respond.storedFile(...)` serves a stored
+      `image/svg+xml` object as attachment with `nosniff`.
   - [ ] **Server-generated random/opaque storage keys** by construction; the user filename is sanitized
         metadata used only for the download `filename`, never the key — kills path traversal/overwrite.
+    - Gap: `s.file().store({ key })` still accepts caller-provided strings/functions; this slice did not add a
+      random key generator because no narrow opaque-key upload abstraction exists yet.
   - [ ] **Remove `.mime()`** (pre-release breaking change): the only verbatim-client-MIME path becomes the
         explicit `accept.unverified()` opt-out, listed in `kovo explain --capabilities`.
   - Honest scope: the common `respond.storedFile(key)` path takes a bare string key, so the static
