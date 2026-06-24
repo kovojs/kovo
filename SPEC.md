@@ -1045,6 +1045,33 @@ into manual fragment routing. The compiler may derive optimistic transforms, del
 plans for only the fields and query shapes it can prove; unproved presentation fields still travel
 through the same declared query and refresh via full server fragments.
 
+#### Default-deny access decisions (normative)
+
+Authorization is **default-deny, by construction**. Every request-reachable surface — a `query`, a
+`mutation`, a route `page`, an `endpoint`, or a `webhook` — MUST carry an **explicit access
+decision**. A surface's decision is **satisfied** by any one of:
+
+- an **access guard chain** — an existing `guard`/`guard`-chain on the surface (or, for a route, a
+  guard inherited from a parent `layout`), or an explicit `access: { kind: 'guard-chain', … }`;
+- a **public** decision — `access: publicAccess("reason")`, declaring the surface intentionally
+  reachable without authentication, with a human-readable justification recorded in the ledger;
+- a **verified machine-auth** decision — `access: verifiedAccess`, or (for an `endpoint`/`webhook`)
+  an `auth:`/`verify:` scheme that authenticates a machine caller.
+
+A surface with **none** of these is **undecided**: the static app graph classifies it
+`decision: 'missing'` and the build fails with **KV436** (§11.3). An existing guard already _counts_
+as a decision — guarded surfaces are not forced to re-declare `access`. The decision is recorded as a
+static graph fact (`graph.access`) that the build derives from each surface's source-captured
+guard/auth/`access` posture; `kovo explain --access` renders the full ledger (every surface, its
+decision, and any public justification), and a reviewer audits the `public` set before ship.
+
+This is **by-construction**: the unsafe state (a request-reachable surface with no access decision)
+is unrepresentable in a passing build, proven by the static graph fact rather than a TypeScript brand
+(the compiler runs no type checker, §6.6). The proof is **completeness, not correctness**: KV436
+proves a decision _exists_, never that it is _right_ — a no-op `return true` guard satisfies it. Row
+ownership / IDOR correctness remains KV414's obligation (§10.3), and `publicAccess` reason strings are
+greppable, so they MUST NOT carry sensitive operational detail.
+
 #### SQL statement safety on managed DB handles
 
 Framework-managed DB handles — `req.db`, query loaders, mutation domains, endpoint/webhook request
@@ -1353,7 +1380,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed by
 | KV425 | error    | Source/sink drift detection found a framework sink token that is not in the shared registry and has no narrow repo-internal exclusion                                                                                                                                                                                                                                                                                                                             |
 | KV426 | error    | Trust escape hatch such as `trustedHtml`, `trustedUrl`, raw endpoint, custom/no verifier, static export path override, or future trusted SQL lacks auditable provenance/source-span/justification (§4.8, §9.1)                                                                                                                                                                                                                                                    |
 | KV435 | error    | Secret-classified query result field, or an opaque/unresolved projection from a table carrying secret columns, reaches the client query wire; remove the field/opaque projection or use `trustedReveal(value, { justification: "..." })` in a statically analyzed Drizzle projection so `kovo explain --revealed` records the audit (§6.2, §10.2, §11.3)                                                                                                          |
-| KV436 | error    | Query, mutation, route/page, endpoint, or webhook has no explicit access decision; add an access guard chain, `public("reason")`, or verified machine-auth decision and review the ledger with `kovo explain --access` (§10.2, §11.3)                                                                                                                                                                                                                             |
+| KV436 | error    | Query, mutation, route/page, endpoint, or webhook has no explicit access decision (default-deny, §10.2); satisfy it with an access guard chain (an existing `guard`/layout guard counts), `publicAccess("reason")`, or `verifiedAccess`/an `auth`/`verify` scheme, and review the ledger with `kovo explain --access`. Proves a decision exists, not that it is correct — IDOR correctness stays KV414 (§10.2, §11.3)                                              |
 
 The shared `diagnosticDefinitions` registry is the source of each diagnostic's severity; surfaces
 must not override severity or invent local blocking policies. A diagnostic with `error` severity
