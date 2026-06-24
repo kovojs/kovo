@@ -14,10 +14,11 @@ It composes ideas from prior systems (Qwik, htmx/LiveView, RTK Query, Replicache
 
 ### 1.1 Primary goals
 
-Kovo exists to deliver two outcomes, in priority order. Every other property of the framework — legibility, static verifiability, the auditable wire — is a _means_ to these ends, not a co-equal goal.
+Kovo exists to deliver three outcomes, in priority order, all produced by one technique — machine-auditable generation (§1.3). Every other property of the framework — legibility, static verifiability, the auditable wire — is a _means_ to these ends.
 
-1. **Eliminate stale-UI bugs at compile time.** Inconsistent UI states — a badge that disagrees with the cart, a list that didn't reflect its own mutation, two views of one fact drifting apart — are not runtime races to debug but build/check errors that never ship. Kovo makes the staleness it can statically model (§1.2) a `tsc`/check failure, and forces the residue it cannot prove into declared, suppressible-in-source decisions.
-2. **Make loading instant.** First paint is interactive, and the bytes to get there are minimal: little-to-no JavaScript on the critical path (global delegation + `import()` on first interaction, not hydration), compiler-scoped CSS with no runtime style engine, and named incremental wire deltas in prod. Performance is a budget the compiler enforces, not a guideline.
+1. **Secure by construction.** Whole vulnerability classes — cross-site scripting, SQL injection, broken access control and IDOR, confidential-data exposure, mass assignment, SSRF, request forgery, lost-update races — are not runtime hazards to test for but build/check errors that never ship, or fail-closed runtime floors where static proof is impossible. Kovo makes the insecure pattern _inexpressible_ wherever the same static analysis that proves data freshness can prove it, and forces the residue into declared, audited, suppressible-in-source decisions visible to `kovo explain`. The distinctive claim is not "secure" — every framework says that — but **secure by the same machine-auditable construction that eliminates stale UI**: one substrate, checked without a browser.
+2. **Eliminate stale-UI bugs at compile time.** Inconsistent UI states — a badge that disagrees with the cart, a list that didn't reflect its own mutation, two views of one fact drifting apart — are not runtime races to debug but build/check errors that never ship. Kovo makes the staleness it can statically model (§1.2) a `tsc`/check failure, and forces the residue it cannot prove into declared, suppressible-in-source decisions.
+3. **Make loading instant.** First paint is interactive, and the bytes to get there are minimal: little-to-no JavaScript on the critical path (global delegation + `import()` on first interaction, not hydration), compiler-scoped CSS with no runtime style engine, and named incremental wire deltas in prod. Performance is a budget the compiler enforces, not a guideline.
 
 ### 1.2 Thesis statement
 
@@ -33,7 +34,7 @@ to the core mutation proof.
 
 ### 1.3 Design driver: machine-auditable generation
 
-Kovo is built to be the most machine-auditable compilation target a code-generation agent can emit: generated apps fail TypeScript static checking if wiring is wrong, and intent is verifiable against printed dependency graphs without headless browsers. Where a design choice trades author convenience for machine-checkability, machine-checkability wins. The corollary holds for every reader, not just agents: debugging always proceeds _down_ into plainer code, never _up_ into compiler internals. Machine-auditable generation is the chief _technique_ by which the two primary goals (§1.1) are reached: the same static analysis that lets an agent's output be checked without a browser is what turns stale-UI paths into build errors and what lets the compiler hold the byte budget.
+Kovo is built to be the most machine-auditable compilation target a code-generation agent can emit: generated apps fail TypeScript static checking if wiring is wrong, and intent is verifiable against printed dependency graphs without headless browsers. Where a design choice trades author convenience for machine-checkability, machine-checkability wins. The corollary holds for every reader, not just agents: debugging always proceeds _down_ into plainer code, never _up_ into compiler internals. Machine-auditable generation is the chief _technique_ by which the three primary goals (§1.1) are reached: the same static analysis that lets an agent's output be checked without a browser is what makes whole vulnerability classes inexpressible (the Prime Principle, §2), turns stale-UI paths into build errors, and lets the compiler hold the byte budget.
 
 ### 1.4 Explicit non-goals
 
@@ -47,15 +48,19 @@ Kovo is built to be the most machine-auditable compilation target a code-generat
 
 ## 2. The Constitution (Design Tests)
 
-Every feature proposal is evaluated against five tests. A feature failing any test is redesigned or rejected. These are normative. The five tests are the _gates_ every feature passes through, not the framework's objectives: the objectives are the two primary goals (§1.1), and the tests — legibility included — are how those goals are kept honest under pressure.
+The framework's overriding commitment is the **Prime Principle**, which precedes and is served by every test below:
 
-| #   | Test                                                                                                                                                                                                                                                                                                                                                   | Consequence                                                                                                                                                                                                  |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | **Legibility is load-bearing.** Names appear in HTML attributes and wire traffic, so they structurally cannot be mangled.                                                                                                                                                                                                                              | Minifiers cannot rename handler exports; debugging never requires decompiling the framework.                                                                                                                 |
-| 2   | **No global knowledge at local sites.** Any API requiring the author to enumerate distant call sites from memory is a bug factory and is rejected.                                                                                                                                                                                                     | Killed manual fragment targets, manual per-island optimism, query-side mutation registration.                                                                                                                |
-| 3   | **Sugar must lower to authorable IR.** Every compiler feature emits valid Kovo source. Compiling the output is a no-op (CI-enforced fixpoint).                                                                                                                                                                                                         | Output is auditable in devtools and mechanically checked; app authors still write TSX.                                                                                                                       |
-| 4   | **The wire is the documentation.** Named POSTs and schema-shaped JSON in every environment; full self-describing HTML fragments in dev. In prod the framework may ship size-optimized deltas (change-record-scoped query JSON, keyed-row fragment updates) — still named and schema-shaped, but incremental against a version-validated base (§9.1.1). | A dev frame is a complete document auditable from the Network panel; a prod frame shows _what changed_, with the full value reconstructable via `kovo explain`. Names are never mangled in either mode (#1). |
-| 5   | **Server truth always wins.** No client cache to invalidate; reconciliation is "morph the authority in."                                                                                                                                                                                                                                               | Optimistic predictions are disposable; there is no consistency protocol.                                                                                                                                     |
+> **Security is by construction.** A feature crossing a trust boundary — data coming _in_, data going _out_, _who_ may act, _how much_ — makes the unsafe state inexpressible at compile time wherever static analysis can prove it (over AST symbol-identity provenance, never a branded type or runtime taint, both unsound here; §6.6), falls back to a fail-closed runtime floor where it cannot, and routes every exception through an audited escape hatch surfaced in `kovo explain`. **Default-deny over default-allow; brands are defense-in-depth, not the mechanism; runtime floors are labeled as floors, never sold as proofs.** This turns XSS, SQL injection, IDOR/broken access control, confidential-data exposure, mass assignment, SSRF, and lost-update races into build errors or fail-closed floors — checkable without a browser, by the same machine-auditable generation (§1.3) that eliminates stale UI. It is the first primary goal (§1.1) and the lead gate here precisely because it is the highest-stakes property _and_ is delivered by the legibility, declare-once, and static-auditability the tests below enforce.
+
+Every feature proposal is then evaluated against five design tests. A feature failing the Prime Principle or any test is redesigned or rejected. These are normative. The objectives are the three primary goals (§1.1); the tests are how those goals — security included — are kept honest under pressure.
+
+| #   | Test                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Consequence                                                                                                                                                                                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Legibility is load-bearing.** Names appear in HTML attributes and wire traffic, so they structurally cannot be mangled.                                                                                                                                                                                                                                                                                                                                                                                                                               | Minifiers cannot rename handler exports; debugging never requires decompiling the framework.                                                                                                                                                                                       |
+| 2   | **No global knowledge at local sites.** Any API requiring the author to enumerate distant call sites from memory is a bug factory and is rejected.                                                                                                                                                                                                                                                                                                                                                                                                      | Killed manual fragment targets, manual per-island optimism, query-side mutation registration, call-site mass-assignment allowlists, and per-handler authorization — security facts (`secret`/`owner`/`governed`/`access`) are declared once and derived everywhere.                |
+| 3   | **Sugar must lower to authorable IR.** Every compiler feature emits valid Kovo source. Compiling the output is a no-op (CI-enforced fixpoint).                                                                                                                                                                                                                                                                                                                                                                                                          | Output is auditable in devtools and mechanically checked; app authors still write TSX.                                                                                                                                                                                             |
+| 4   | **The wire is the documentation.** Named POSTs and schema-shaped JSON in every environment; full self-describing HTML fragments in dev; size-optimized but still named/schema-shaped deltas against a version-validated base in prod (§9.1.1). The wire documents what the server **chose to send**, not all it knows: a `secret`-classified field is ineligible to reach the client wire or a client module, so legibility and confidentiality coexist by construction — the dual of output-safety (§5.2 rule 10, integrity), now for confidentiality. | A dev frame is a complete document auditable from the Network panel; a prod frame shows _what changed_, reconstructable via `kovo explain`. Names are never mangled in either mode (#1). A typed `secret` boundary keeps the readable wire from becoming an over-exposure channel. |
+| 5   | **Server truth always wins.** No client cache to invalidate; reconciliation is "morph the authority in."                                                                                                                                                                                                                                                                                                                                                                                                                                                | Optimistic predictions are disposable; there is no consistency protocol.                                                                                                                                                                                                           |
 
 ---
 
@@ -229,43 +234,25 @@ variables fit the stamped-prop channels (the same lowering discipline as handler
 the reference + props in the target's stamps, and re-renders the full subtree on fragment patch.
 Children that cannot be hoisted (unserializable captures) are compile error **KV230**, whose message
 shows the hoisted component that _would have_ been generated and the fixes.
-Because the full subtree re-renders on every fragment patch from (declared queries ∪ stamped props) and island-local `state` rides neither channel nor any morph-preserved serialization (§9.1, §4.9), a nested island that declares local `state` would be re-emitted at its render-time default and the morph would clobber its live value. An island declaring local `state` (or carrying `kovo-state`) that renders inside another component's inferred server-refreshable fragment target is therefore compile error **KV420**. The teaching error names the enclosing target, shows that the morph cannot carry the child's private state, and gives the fix menu: lift the child's state into a declared query so it travels in the refreshable channel, mark the child `isomorphic: true` so it self-renders rather than being server-refreshed (§4.8), set `disableServerRefresh: true` on the enclosing component so the child's position reclassifies under §4.9, or move the stateful island outside the refreshable target. Local state that is genuinely document-lifetime-immutable is `renderOnce` and does not trigger KV420. If the component has
-`disableServerRefresh: true`, the hoist requirement applies only to positions that still need a
-server fragment; ordinary §4.8 query bindings remain valid. Morph-preserved "slot holes" were
-considered and **rejected**: a fragment response must fully describe the DOM it produces
-(Constitution #4, #5) — there is no region the server cannot refresh. This "fully describes"
-property is literal in dev, where the fragment is complete HTML. In prod the framework may refresh
-the same region with a **delta** instead — a change-record-scoped query update the client applies
-through the update plan (§4.8), or keyed-row fragment updates — against a version-validated base
-(§9.1.1), when that is smaller. The delta is bounded by what the committed write touched, never by
-diffing against client state the stateless server would have to remember; soundness shifts from
-self-description to change-record scoping plus base-version validation (a missing or stale base
-refetches full, §9.1.1). The server's _capability_ to refresh any region is unchanged, so the
-rejection of slot holes stands: a prod delta still accounts for the entire target subtree, just
-incrementally.
+Because the full subtree re-renders on every fragment patch from (declared queries ∪ stamped props)
+and island-local `state` rides neither channel nor any morph-preserved serialization (§9.1, §4.9),
+an island declaring local `state` (or carrying `kovo-state`) inside another component's inferred
+server-refreshable fragment target is compile error **KV420**. The fixes are: lift the child's state
+into a declared query, mark the child `isomorphic: true` (§4.8), set `disableServerRefresh: true` on
+the enclosing component, move the stateful island outside the refreshable target, or declare genuinely
+document-lifetime-immutable state as `renderOnce`. If the component has `disableServerRefresh: true`,
+the hoist requirement applies only to positions that still need a server fragment; ordinary §4.8 query
+bindings remain valid. Fragment responses must fully describe the DOM they produce; prod may encode
+that refresh as a version-validated delta (§9.1.1), but there are no morph-preserved slot holes.
 
-**Layouts are first-class route chrome.** v1 has explicit `layout()` declarations,
-not a file-system route-tree convention. A layout is still render-time function
-composition over `children`, but authors attach it to routes instead of wrapping
-every page by hand:
-
-```tsx
-const ShellLayout = layout({
-  render: (_queries, _state, { children }) => <Shell>{children}</Shell>,
-});
-
-route('/', {
-  layout: ShellLayout,
-  page: () => <ProductPage />,
-});
-```
-
-Layouts may be nested with an explicit `parent`, may declare `queries`, `guard`,
-and per-segment `boundaries`, and are shown by `kovo explain page <path>
---layouts`. They are page chrome, not document assembly; documents are owned by
-the request shell (§9.5). Runtime persistence is not part of v1: every navigation
-still renders a full document, so later enhanced-navigation layers must preserve
-the same authored layout declarations.
+**Layouts are first-class route chrome.** v1 has explicit `layout()` declarations, not a file-system
+route-tree convention. A layout is still render-time function composition over `children`, but
+authors attach it to routes instead of wrapping every page by hand. Layouts may be nested with an
+explicit `parent`, may declare `queries`, `guard`, and per-segment `boundaries`, and are shown by
+`kovo explain page <path> --layouts`. They are page chrome, not document assembly; documents are
+owned by the request shell (§9.5). Runtime persistence is not part of v1: every navigation still
+renders a full document, so later enhanced-navigation layers must preserve the same authored layout
+declarations. Authoring examples live in `site/content/guides/layouts.md`.
 
 Route pages that return JSX are **compiler-processed Kovo source**, not opaque runtime JSX. The
 compiler lowers the route page into authorable server IR, records the component calls and
@@ -276,7 +263,7 @@ Every navigation is a full document, so there is no persistent-layout state to m
 cross-document View Transitions carry the visual continuity. A route-tree convention may arrive
 later as sugar lowering to exactly these calls (Constitution #3).
 
-**Payload posture:** projected children ship in the initial HTML — all tab panels, dialog bodies, accordion contents. There is no client-side lazy mount; `<kovo-defer>` (§8) is the escape hatch for expensive subtrees. This is the MPA posture by design.
+**Payload posture:** projected children ship in the initial HTML — all tab panels, dialog bodies, accordion contents. There is no client-side lazy mount; `<kovo-defer>` (§8) is the escape hatch for expensive subtrees. This is the MPA posture by design. Component authoring examples live in `site/content/guides/components.md`.
 
 Because projected children ship once and never receive a client mount, an `isomorphic: true` island (§4.8) that composes children or named slots must, on self-render, leave those projected regions in place and re-render only its own positions (§4.8); a render whose own positions cannot be separated from the projected regions is **KV316**.
 
@@ -620,86 +607,37 @@ ERROR KV234 package component prefix conflict.
 
 ### 6.2 Typed surfaces (summary table)
 
-| Surface               | Source of truth                     | What TypeScript proves                                                                                                                                                                                                                |
-| --------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Handler refs          | client module exports               | `cart.remove` exists; params required & typed; typo = error                                                                                                                                                                           |
-| Form fields           | mutation input schema               | names ∈ schema; types match; **completeness** (missing required field = error); coercion declared once (KV242)                                                                                                                        |
-| Fragment targets      | component registry                  | target exists; patched with the right component's props                                                                                                                                                                               |
-| Query data / bindings | Drizzle select shape (`$infer`)     | `data-bind` paths exist; column rename propagates to every template; nullable traversal requires `?.` or a derive (KV227, §4.8)                                                                                                       |
-| Invalidations         | domain layer / touch graph          | invalidated keys exist; optimistic exhaustiveness in `tsc` via emitted invalidation sets (§10.6)                                                                                                                                      |
-| Errors                | declared error codes                | `onError` receives exhaustive discriminated union                                                                                                                                                                                     |
-| Guards                | guard combinators                   | `req.session.user` non-null under `authed`; guards receive the validated args/instance key (§10.3) so ownership is expressible; static audit of unguarded mutations, routes, and queries, and IDOR audit (KV414) over `owner:` tables |
-| State                 | `JsonValue` constraint              | serializability by construction                                                                                                                                                                                                       |
-| Routes / links        | `route()` declarations (§6.4)       | `href`/`<Link>`/`redirect()` target exists; path params required & typed; search params typed; route rename propagates to every link                                                                                                  |
-| GET forms / URL state | route `search` schema               | field names ∈ search schema; coercion declared once; the §7 URL channel is typed                                                                                                                                                      |
-| IDREFs (L0 wiring)    | compiler id registry                | `commandfor`/`popovertarget`/`for`/`aria-*` reference an id that exists in scope (KV221)                                                                                                                                              |
-| Sessions              | declared session schema (§6.5)      | `req.session` fully typed; instance keys (§10.2) and guard refinements rest on typed fields                                                                                                                                           |
-| Derives               | declared inputs (§4.8)              | derive inputs exist in `QueryRegistry`; input types match query shapes; bound attribute targets type-checked                                                                                                                          |
-| Stamp lists           | query result element type           | `data-bind-list` paths are arrays; item-relative paths exist on the element type; `kovo-key` names a real field (§4.8)                                                                                                                |
-| Slots / children      | hoisted component refs (§4.5)       | fragment-target children lower to component references with serializable props (KV230)                                                                                                                                                |
-| Query args            | query `args` schema (§10.2)         | components bind args from their own props; coercion declared once; instance keys typed end-to-end (store, wire, optimism)                                                                                                             |
-| Update coverage       | render-output classification (§4.9) | every query/state-dependent DOM position has a status — `plan` / `isomorphic` / `fragment` / `renderOnce`; none is KV311                                                                                                              |
-| Opaque projections    | declared output schema (§10.2)      | `sql<T>`/raw projections carry `s.*` output schemas + a `reads:` table set (KV410); `reads:` checked against exemption, folded into the read set; result shape runtime-verified (§11.2)                                               |
+| Surface               | Source of truth                          | What TypeScript proves                                                                                                                                                                                                                                          |
+| --------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Handler refs          | client module exports                    | `cart.remove` exists; params required & typed; typo = error                                                                                                                                                                                                     |
+| Form fields           | mutation input schema                    | names ∈ schema; types match; **completeness** (missing required field = error); coercion declared once (KV242)                                                                                                                                                  |
+| Fragment targets      | component registry                       | target exists; patched with the right component's props                                                                                                                                                                                                         |
+| Query data / bindings | Drizzle select shape (`$infer`)          | `data-bind` paths exist; column rename propagates to every template; nullable traversal requires `?.` or a derive (KV227, §4.8)                                                                                                                                 |
+| Invalidations         | domain layer / touch graph               | invalidated keys exist; optimistic exhaustiveness in `tsc` via emitted invalidation sets (§10.6)                                                                                                                                                                |
+| Errors                | declared error codes                     | `onError` receives exhaustive discriminated union                                                                                                                                                                                                               |
+| Guards                | guard combinators                        | `req.session.user` non-null under `authed`; guards receive the validated args/instance key (§10.3) so ownership is expressible; static audit of unguarded mutations, routes, and queries, and IDOR audit (KV414) over `owner:` tables                           |
+| State                 | `JsonValue` constraint                   | serializability by construction                                                                                                                                                                                                                                 |
+| Routes / links        | `route()` declarations (§6.4)            | `href`/`<Link>`/`redirect()` target exists; path params required & typed; search params typed; route rename propagates to every link                                                                                                                            |
+| GET forms / URL state | route `search` schema                    | field names ∈ search schema; coercion declared once; the §7 URL channel is typed                                                                                                                                                                                |
+| IDREFs (L0 wiring)    | compiler id registry                     | `commandfor`/`popovertarget`/`for`/`aria-*` reference an id that exists in scope (KV221)                                                                                                                                                                        |
+| Sessions              | declared session schema (§6.5)           | `req.session` fully typed; instance keys (§10.2) and guard refinements rest on typed fields                                                                                                                                                                     |
+| Derives               | declared inputs (§4.8)                   | derive inputs exist in `QueryRegistry`; input types match query shapes; bound attribute targets type-checked                                                                                                                                                    |
+| Stamp lists           | query result element type                | `data-bind-list` paths are arrays; item-relative paths exist on the element type; `kovo-key` names a real field (§4.8)                                                                                                                                          |
+| Slots / children      | hoisted component refs (§4.5)            | fragment-target children lower to component references with serializable props (KV230)                                                                                                                                                                          |
+| Query args            | query `args` schema (§10.2)              | components bind args from their own props; coercion declared once; instance keys typed end-to-end (store, wire, optimism)                                                                                                                                       |
+| Update coverage       | render-output classification (§4.9)      | every query/state-dependent DOM position has a status — `plan` / `isomorphic` / `fragment` / `renderOnce`; none is KV311                                                                                                                                        |
+| Opaque projections    | declared output schema (§10.2)           | `sql<T>`/raw projections carry `s.*` output schemas + a `reads:` table set (KV410); `reads:` checked against exemption, folded into the read set; result shape runtime-verified (§11.2)                                                                         |
 | SQL statement safety  | managed DB-handle contract (§10.2/§10.3) | executable SQL text reaches framework-managed DB handles only as typed builders, parameterized SQL values, or audited `trustedSql(...)`; scalar request data binds as parameters, while identifiers/keywords come from schema facts or typed allowlists (KV422) |
-| Output safety         | binding sink + value brand (§4.8)   | every binding/derive into an unsafe output context (raw HTML, URL-scheme attr, `on*`, `style`, `srcdoc`, script/JSON) is `trustedHtml`/`trustedUrl`-branded or it is KV236                                                            |
+| Output safety         | binding sink + value brand (§4.8)        | every binding/derive into an unsafe output context (raw HTML, URL-scheme attr, `on*`, `style`, `srcdoc`, script/JSON) is `trustedHtml`/`trustedUrl`-branded or it is KV236                                                                                      |
 
-### 6.3 Example: end-to-end mutation typing
-
-```ts
-// cart.mutations.ts
-export const addToCart = mutation('cart/add', {
-  guard: authed,
-  input: s.object({
-    productId: s.string(),
-    quantity: s.number().int().min(1).default(1), // FormData coercion declared here
-  }),
-  errors: { OUT_OF_STOCK: s.object({ availableQuantity: s.number() }) },
-  async handler(input, req, { fail }) {
-    //          ^? { productId: string; quantity: number }   — inferred from schema
-    const ok = await cart.addItem(req.db, req.session.cartId, input.productId, input.quantity);
-    if (!ok) return fail('OUT_OF_STOCK', { availableQuantity: ok.available });
-    // NO invalidate() call — derived from cart.addItem's touch set (§11)
-  },
-});
-```
-
-```tsx
-// product.tsx — consuming form; the no-JS fallback IS the output
-export const AddToCartForm = component({
-  queries: { product: productQuery.args((p) => ({ id: p.productId })) },
-  props: s.object({ productId: s.string() }),
-  mutations: { addToCart },
-  render: ({ product }, _state, { productId, forms }) => (
-    <form enhance mutation={addToCart} key={productId}>
-      <input type="hidden" name="productId" value={productId} />
-      <input name="quantity" type="number" min={1} defaultValue={1} />
-      <FieldError name="quantity" />
-      <FormError
-        code="OUT_OF_STOCK"
-        message={(failure) => `Only ${failure.payload.availableQuantity} left.`}
-      />
-      <button disabled={product.stock <= 0}>Add to cart</button>
-    </form>
-  ),
-});
-// Emits: <form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" kovo-key="p1"> …
-
-// programmatic, with the exhaustive typed-error union:
-ctx.submit(addToCart, {
-  input: { productId: ctx.params.productId, quantity: 1 },
-  onError: (err) => {
-    if (err.code === 'OUT_OF_STOCK') toast(`Only ${err.payload.availableQuantity} left`);
-    // err: { code:'OUT_OF_STOCK', payload:{availableQuantity:number} }
-    //    | { code:'VALIDATION', fieldErrors: Record<FieldPath,string> }   — exhaustive
-  },
-});
-```
+### 6.3 Mutation typing contract
 
 Where the mutation value is importable — server-rendered templates always can — `mutation={addToCart}`
-is the preferred form authoring spelling: inference straight off the value, no registry hop. The compiler
-emits the concrete `action="/_m/cart/add"`, mutation key metadata, input coercion metadata, CSRF field,
-and submitted-form target. The string-keyed `form('cart/add')` helper survives for sites that cannot
-import the value, but author TSX should not hard-code mutation URLs.
+is the preferred form authoring spelling: inference comes straight off the value, no registry hop.
+The compiler emits the concrete `action="/_m/<key>"`, mutation key metadata, input coercion metadata,
+CSRF field, idempotency token, and submitted-form target. The string-keyed `form('<key>')` helper
+survives for sites that cannot import the value, but author TSX should not hard-code mutation URLs.
+An end-to-end add-to-cart walkthrough lives in `docs/worked-example-add-to-cart.md`.
 
 Enhanced form failures use the same render function as the no-JS full-page path. Expected failures
 are typed mutation results: schema validation maps to `<FieldError name="...">`, declared
@@ -708,10 +646,12 @@ enclosing enhanced mutation form. The third render argument still carries typed 
 escape hatch for custom UI, with each bound mutation exposing
 `forms.<mutation>.failure: null | { code; payload; fieldErrors? }`. The failure value is scoped to
 the submitted form instance for that render and is cleared by the next successful render of that
-instance. Repeated forms must provide stable identity through authored `key` or serializable keyed
-component props; the compiler lowers it to `kovo-key` and derives the submitted-form fragment target.
-Hidden inputs are submitted data, not identity. An enhanced form in a repeatable position with no
-stable key is a teaching diagnostic because the server cannot know which live form to re-render.
+instance. `ctx.submit(mutation, { input, onError })` receives the same exhaustive typed-error union.
+
+Repeated forms must provide stable identity through authored `key` or serializable keyed component
+props; the compiler lowers it to `kovo-key` and derives the submitted-form fragment target. Hidden
+inputs are submitted data, not identity. An enhanced form in a repeatable position with no stable key
+is a teaching diagnostic because the server cannot know which live form to re-render.
 
 ### 6.4 Routes & links (typed navigation)
 
@@ -774,6 +714,8 @@ Route and query guard failures have fixed outcomes so auth remains part of the t
 ### 6.6 Soundness boundary (normative)
 
 The §1.2 proof claims are claims about TypeScript programs that stay inside the sound subset. The starter therefore ships — and the docs state as a precondition — `strict` everything plus lint bans on `any`, non-null assertions, and `as` casts in app code. Three boundaries are runtime-validated regardless, by design: the **wire** (every mutation input passes its `s.*` schema — types-without-validators, raw-tRPC style, was rejected); **deploy skew** (a long-lived document POSTing yesterday's form shape is answered by schema validation and the 422 path, §9.2 — never undefined behavior); and **CSRF** — `kovo-csrf` (§9.1) is a synchronizer token stamped into every emitted form and verified before schema parsing, replay lookup, and the guard chain on every mutation POST. When `req.session` is present the token is bound to it; when it is null/anonymous (§6.5) the token is bound instead to a **framework-owned signed-cookie secret** that exists independent of `sessionProvider`, so pre-auth forms (login, signup, password reset) are CSRF-protected even with no session to bind to — anonymous-CSRF is mandatory, not optional. On a successful authenticating submit the framework rotates the anonymous token's binding to the new principal; apps should rotate their own session identity on auth (Kovo does not own session identity, §6.5). CSRF is default-on for server-rendered mutation endpoints; an explicit `csrf: false` is the only per-mutation opt-out and is reserved for non-browser or externally authenticated endpoints. A `csrf: false` mutation MUST NOT reference ambient browser authority: it is a compile error **KV418** for a `csrf: false` mutation to read `req.session` or run a session/cookie-derived guard (e.g. `authed`, `role()`, `owns()`), because such a mutation would skip CSRF yet still ride the victim's ambient cookie — exactly the unsound exemption §9.1 forbids for endpoints. The exemption is sound only by construction: a `csrf: false` mutation is served with no ambient `req.session` (cookies are not interpreted), mirroring the §9.1 endpoint guarantee. Truly non-browser writes belong in `endpoint()`/`webhook()`. Every mutation's CSRF posture (`checked` or `exempt:<justification>`) is listed in `kovo explain --endpoints` (§11.4) alongside endpoints and webhooks. The `Kovo-Idem` replay token (§9.1) is a per-submit, high-entropy value minted fresh by the client on each logical submit and refreshed in the enhanced success response (§10.3) — a freshly stamped hidden field, never a form-instance constant — so re-editing and re-submitting a form is a new mutation rather than a silent replay of the first response. Deploy skew also covers handler modules, normatively: emitted module URLs are immutable and versioned, and the serving layer retains prior versions — an old document's `on:*` refs keep resolving after a deploy; first interaction on a still-open tab never 404s. Generated ABI subpaths (for example `@kovojs/browser/generated`) may change when the compiler and runtime ship together because app source regenerates those imports, but already-emitted immutable modules remain governed by the same versioned-module retention rule: old generated modules must keep resolving to the runtime symbols they were emitted against for the supported deploy-skew window.
+
+**Security soundness (normative).** The Prime Principle (§2) rests on the same sound-subset discipline, bounded by three rules. (1) **The compiler performs no TypeScript type inference of its own** — security classification is carried by AST symbol-identity provenance, sink classification, and fail-closed runtime checks; a branded type (`Secret<T>`, a `public()` brand, and the like) is `tsc`-time ergonomics and defense-in-depth, never the enforcement. (2) **Runtime taint is unsound** — JS string operations and template literals produce fresh primitives with no surviving metadata, so request-derived provenance for confidentiality, write-eligibility, and input shape is proven _statically_ at the AST (where the path is still code), never by runtime value-tracking; runtime contributes only _sink validation_ (checking a final value's grammar, shape, or resolved IP, which survives transforms). (3) **By-construction and defense-in-depth are distinguished and labeled.** Where static analysis can prove the unsafe state inexpressible, the guarantee is by-construction (output-safety §5.2 rule 10, the confidentiality boundary, default-deny authorization, write-provenance). Where it cannot — outbound egress, a read-only-handle runtime proxy, Content-Security-Policy / Trusted Types, log redaction — the control is a fail-closed runtime floor: sound at its sink but bypassable by privileged same-process code, and it MUST be documented as defense-in-depth rather than a proof.
 
 ---
 
@@ -1076,8 +1018,8 @@ through the same declared query and refresh via full server fragments.
 Framework-managed DB handles — `req.db`, query loaders, mutation domains, endpoint/webhook request
 handles, and blessed-adapter wrappers — treat executable SQL text as a typed surface, not an
 arbitrary string channel. The ordinary accepted forms are: Drizzle query builders and native SQL
-objects that keep text separate from bound parameters, Kovo `sql\`\``/`staticSql\`\`` values, and
-the single audited `trustedSql(...)` escape hatch. KV406/KV410 remain the freshness/read-write proof
+objects that keep text separate from bound parameters, Kovo `sql\`\``/`staticSql\`\``values, and
+the single audited`trustedSql(...)` escape hatch. KV406/KV410 remain the freshness/read-write proof
 diagnostics; **KV422** is distinct and answers how executable SQL text was constructed before it
 reached a managed handle.
 
@@ -1214,34 +1156,18 @@ Navigation is a free reconciliation point: in-flight requests complete via `keep
 
 ### 10.5 Derivation algebra
 
-```
-Stage 1  write  →  symbolic row-effects
-         value ::= Param(path) | Const | ColRef(t.c) | Arith(op,v,v) | Opaque
-         effect ::= INSERT{vals} | UPDATE{match, sets} | DELETE{match} | UPSERT{…}
-         (match = eq-predicates on keys; ranges/server-time ⇒ Opaque match ⇒ punt)
+The compiler may derive an optimistic transform only when the write can be reduced to symbolic
+row-effects over mutation input, schema constants, and columns already present in the affected query,
+and the query shape fits the grammar named in §10.4. The derivation is all-or-nothing per affected
+field: an opaque server computation, non-key match, unsupported aggregation/windowing shape,
+interprocedural opacity, or untraceable parameter punts that field to `await-fragment` or a
+hand-written transform. Every punt is named in `kovo explain --optimistic` with the exact expression
+and reason.
 
-Stage 2  query  →  shape mapping
-         field ::= Scalar(keyed row col) | COUNT(R[, pred]) | SUM(R, arith)
-                 | AGG(R, projection)    where R = rowset(filter chain, key, orderBy)
-
-Stage 3  push effect through shape  →  JSON-patch program over client data
-         INSERT × AGG   ⇒ push (defaults from schema; Opaque cols ⇒ tempId()/now()
-                          placeholders, pending-styled, content-matched on reconcile;
-                          orderBy decides insertion point — Opaque orderBy col ⇒ punt)
-         UPSERT × AGG   ⇒ find-then-update-else-push (branchiness reproduced client-side)
-         DELETE × COUNT ⇒ −(matched count, computable iff client holds rows)
-         DELETE × SUM   ⇒ −Σ contribution iff query also ships the rows; else punt
-         SET on filtered col ⇒ membership transition: Const vs filter ⇒ exit derivable,
-                               entry punts (client lacks the row's other columns)
-         row possibly outside client's rowset ⇒ emit guard (find-or-no-op), not punt
-
-PUNT (all-or-nothing per field; wrong predictions are worse than none):
-  Opaque SET (SQL functions, subqueries, server computation) · non-key match predicates ·
-  window functions / GROUP BY+HAVING / DISTINCT in shape · interprocedural opacity
-  (external packages receiving db — KV406 sites) · params untraceable to input/session-key
-```
-
-Every punt is named in `kovo explain --optimistic` with the exact expression and reason. **Soundness is property-tested:** for derivable pairs, generated-state tests assert `patch(clientShape(s), i) ≡ clientShape(apply(effect, s, i))` — the commuting diagram is the deriver's test suite.
+**Soundness is property-tested:** for derivable pairs, generated-state tests assert
+`patch(clientShape(s), i) ≡ clientShape(apply(effect, s, i))` — the commuting diagram is the
+deriver's test suite. The expanded derivation grammar and examples live in
+`site/content/guides/optimistic.md`.
 
 ### 10.6 Exhaustiveness
 
@@ -1388,9 +1314,9 @@ Dev server and the test harness wrap `db`; every executed statement is parsed by
 | KV418 | error    | `csrf: false` mutation references ambient browser authority (reads `req.session` or runs a session/cookie-derived guard) — the CSRF exemption is unsound; route non-browser writes to `endpoint()`/`webhook()` (§6.6, §9.1)                                                                                                                                                                                                                                       |
 | KV419 | error    | `prefetch: 'moderate'` set on a guarded, session-dependent, or not-proven-side-effect-free route without a named justification (§8)                                                                                                                                                                                                                                                                                                                               |
 | KV421 | error    | Duplicate mutation key: generated mutation registry indexing and server dispatch would disagree (§6.1, §9.5)                                                                                                                                                                                                                                                                                                                                                      |
-| KV422 | error    | Request-derived or otherwise unproven data reaches executable SQL text on a framework-managed DB handle; bind scalar values as parameters and choose identifiers/keywords from typed allowlists or schema facts (§10.2/§10.3)                                                                                                                                                                                                                                 |
+| KV422 | error    | Request-derived or otherwise unproven data reaches executable SQL text on a framework-managed DB handle; bind scalar values as parameters and choose identifiers/keywords from typed allowlists or schema facts (§10.2/§10.3)                                                                                                                                                                                                                                     |
 | KV423 | error    | Raw `endpoint()` declaration lacks required audit metadata such as explicit method, reason, mount justification, response body posture, cache posture, or app-owned encoding/header-safety posture (§9.1)                                                                                                                                                                                                                                                         |
-| KV424 | error    | App-authored dangerous sink is not registered or behind a safe Kovo helper/trust API; direct raw HTML, URL/navigation, selector, header, file/path, dynamic-code, process sinks must use the matching safe surface or audited escape hatch (§4.8, §5.2, §9.1)                                                                                                                                                                                                  |
+| KV424 | error    | App-authored dangerous sink is not registered or behind a safe Kovo helper/trust API; direct raw HTML, URL/navigation, selector, header, file/path, dynamic-code, process sinks must use the matching safe surface or audited escape hatch (§4.8, §5.2, §9.1)                                                                                                                                                                                                     |
 | KV425 | error    | Source/sink drift detection found a framework sink token that is not in the shared registry and has no narrow repo-internal exclusion                                                                                                                                                                                                                                                                                                                             |
 | KV426 | error    | Trust escape hatch such as `trustedHtml`, `trustedUrl`, raw endpoint, custom/no verifier, static export path override, or future trusted SQL lacks auditable provenance/source-span/justification (§4.8, §9.1)                                                                                                                                                                                                                                                    |
 
@@ -1423,33 +1349,14 @@ Browser tests are a first-class part of the **framework's** own suite: morph run
 
 ## 12. Testing API
 
-```ts
-import { kovoTest } from '@kovojs/test/test-case';
+The testing surface mirrors the framework proof surface. Mutations execute as functions with
+touch-checking enabled, pages render to inspectable HTML without a browser, typed error paths expose
+the declared error union, and generated optimistic transforms have property tests for
+`patch(shape(s), input) ≡ shape(apply(effect, s, input))`. Handlers unit-test as `(event, ctx)`
+functions; transforms as pure `(data, input)` functions; the wire as HTTP.
 
-const cartMutations = kovoTest('cart mutations', async ({ exec, page, db }) => {
-  await db.seed({ products: [{ id: 'p1', stock: 5 }] });
-
-  // mutations as functions — touch-checking automatic on every exec
-  const res = await exec(addToCart, { productId: 'p1', quantity: 2 });
-  expect(res.queries.cart.count).toBe(1);
-  expect(res.queries.cart.items[0].qty).toBe(2);
-
-  // typed error paths
-  const fail = await exec(addToCart, { productId: 'p1', quantity: 99 });
-  expect(fail.error.code).toBe('OUT_OF_STOCK');
-
-  // wire-level: render a page, assert HTML, no browser
-  const html = await page('/cart');
-  expect(html.fragment('cart-badge')).toContain('data-bind="cart.count"');
-});
-it(cartMutations.name, cartMutations.run);
-
-// transform soundness: prediction ⊆ eventual truth over generated states
-// generated alongside derived transforms as the commuting-diagram suite
-propertyTest(addToCart, cartQuery); // patch∘shape ≡ shape∘apply over generated states
-```
-
-Handlers unit-test as `(event, ctx)` functions; transforms as pure `(data, input)`; the wire as HTTP.
+API examples and integration harness guidance live in `docs/integration-testing.md` and
+`site/content/guides/testing.md`.
 
 ---
 
@@ -1466,6 +1373,11 @@ explanatory examples:
 - Data-layer roadmap: `plans/data-layer-roadmap.md`
 - Risk register: `docs/risk-register.md`
 - Worked add-to-cart example: `docs/worked-example-add-to-cart.md`
+- Integration testing and browser-free test API examples: `docs/integration-testing.md`
+- Layout authoring examples: `site/content/guides/layouts.md`
+- Component authoring and copy-in UI examples: `site/content/guides/components.md`
+- Optimistic derivation examples and expanded grammar: `site/content/guides/optimistic.md`
+- StyleX, stylesheet, and theme-token guidance: `site/content/guides/styling.md`
 
 ### 13.1 StyleX and Theme Tokens
 
@@ -1476,18 +1388,12 @@ references into ordinary CSS assets, but it may not turn lowered style IR into a
 second app-authoring surface (§5.2). Extracted rules are global atomic CSS with
 stable provenance, not shadow-DOM scoped rules; components remain light DOM so
 form participation, IDREFs, and accessibility relationships cross component
-boundaries. A static `style.keyframes(...)` const resolves to a deterministic
-animation-name; the extractor binds that name (so an `animationName` reference
-lowers to a literal) and emits the matching `@keyframes` block once into the CSS
-asset, deduped by name across the components that share it.
+boundaries. Static keyframes resolve to deterministic animation names and are emitted once.
 
-Theme tokens are document CSS custom properties. A seed-generated Kovo theme
-emits reference palette variables such as `--kovo-theme-ref-palette-primary-40`
-and Material system role variables such as `--kovo-theme-sys-color-primary` on
-`:root` and dark-theme selectors. Component styles may reference typed public
-tokens from `@kovojs/style`, but the runtime value is still a CSS custom property
-resolved by the document. No core runtime theme store, hydration graph, or shadow
-boundary is introduced for theme selection.
+Theme tokens are document CSS custom properties. Components may reference typed public tokens from
+`@kovojs/style`, but the runtime value is still resolved by the document. No core runtime theme
+store, hydration graph, or shadow boundary is introduced for theme selection. Expanded StyleX,
+stylesheet, and theme-token guidance lives in `site/content/guides/styling.md`.
 
 ### 13.2 `kovo-key` runtime-identity contract (normative)
 

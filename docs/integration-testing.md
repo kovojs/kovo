@@ -121,3 +121,32 @@ Prefer, in order:
 
 Update snapshots intentionally with
 `pnpm exec playwright test --config tests/integration/playwright.config.ts --update-snapshots`.
+
+## Browser-free test API
+
+The browser-free surface mirrors SPEC §12: run mutations as functions, render pages as HTML, assert
+typed errors, and property-test optimistic transforms.
+
+```ts
+import { kovoTest } from '@kovojs/test/test-case';
+
+const cartMutations = kovoTest('cart mutations', async ({ exec, page, db }) => {
+  await db.seed({ products: [{ id: 'p1', stock: 5 }] });
+
+  const res = await exec(addToCart, { productId: 'p1', quantity: 2 });
+  expect(res.queries.cart.count).toBe(1);
+  expect(res.queries.cart.items[0].qty).toBe(2);
+
+  const fail = await exec(addToCart, { productId: 'p1', quantity: 99 });
+  expect(fail.error.code).toBe('OUT_OF_STOCK');
+
+  const html = await page('/cart');
+  expect(html.fragment('cart-badge')).toContain('data-bind="cart.count"');
+});
+it(cartMutations.name, cartMutations.run);
+
+propertyTest(addToCart, cartQuery);
+```
+
+Handlers unit-test as `(event, ctx)` functions; transforms as pure `(data, input)` functions; the
+wire-level test surface stays HTTP and HTML rather than browser-only behavior.

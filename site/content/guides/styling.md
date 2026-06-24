@@ -110,6 +110,10 @@ object and compiler-known token, extracts the CSS at build time, and routes stat
 toggles through the same attribute update plan as other Kovo bindings. That means late mutation
 fragments and deferred chunks can only reference classes already present in the app stylesheet.
 
+Static `style.keyframes(...)` constants resolve to deterministic animation names. The extractor
+binds each `animationName` reference to the literal emitted name and writes the matching
+`@keyframes` block once into the CSS asset, deduped across every component that references it.
+
 ## Overrides
 
 Public styled components expose typed `style` or `styles` override props. Put overrides last so the

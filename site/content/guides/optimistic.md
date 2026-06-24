@@ -159,6 +159,38 @@ Kovo supports a spectrum rather than a single optimistic style:
 `derived`, `hand-written`, or `await-fragment`. When derivation cannot prove a transform, the output
 names the expression and the reason for the punt so the choice can be reviewed in code.
 
+### Derivation grammar
+
+The compiler derives transforms by pushing symbolic write effects through query shapes:
+
+```text
+Stage 1  write  ->  symbolic row-effects
+         value ::= Param(path) | Const | ColRef(t.c) | Arith(op,v,v) | Opaque
+         effect ::= INSERT{vals} | UPDATE{match, sets} | DELETE{match} | UPSERT{...}
+         (match = eq-predicates on keys; ranges/server-time => Opaque match => punt)
+
+Stage 2  query  ->  shape mapping
+         field ::= Scalar(keyed row col) | COUNT(R[, pred]) | SUM(R, arith)
+                 | AGG(R, projection)    where R = rowset(filter chain, key, orderBy)
+
+Stage 3  push effect through shape  ->  JSON-patch program over client data
+         INSERT x AGG   => push (defaults from schema; Opaque cols => tempId()/now()
+                          placeholders, pending-styled, content-matched on reconcile;
+                          orderBy decides insertion point; Opaque orderBy col => punt)
+         UPSERT x AGG   => find-then-update-else-push (branchiness reproduced client-side)
+         DELETE x COUNT => -(matched count, computable iff client holds rows)
+         DELETE x SUM   => -SUM(contribution) iff query also ships the rows; else punt
+         SET on filtered col => membership transition: Const vs filter => exit derivable,
+                                entry punts because the client lacks the row's other columns
+         row possibly outside client's rowset => emit guard (find-or-no-op), not punt
+```
+
+Punts are all-or-nothing per field. Wrong predictions are worse than none, so these cases stay
+explicit: opaque `SET` expressions such as SQL functions, subqueries, or server computation;
+non-key match predicates; window functions; `GROUP BY` plus `HAVING`; `DISTINCT`;
+interprocedural opacity such as external packages receiving `db`; and params untraceable to
+mutation input or a session key.
+
 ## When not to predict
 
 Reach for `'await-fragment'` more often than SPA habits suggest:
