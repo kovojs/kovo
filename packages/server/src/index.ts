@@ -1,5 +1,6 @@
 export { createApp, createRequestHandler } from './app.js';
-export { EgressBlockedError } from './egress.js';
+export { awsCredential, azureCredential, EgressBlockedError, gcpCredential } from './egress.js';
+export type { CloudMetadataCredentialProvider } from './egress.js';
 export { isKovoApp } from './app-guards.js';
 export { guardAccess, publicAccess, verifiedAccess } from './access.js';
 export type {

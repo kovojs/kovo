@@ -9,9 +9,12 @@ import { Agent, fetch as undiciFetch, getGlobalDispatcher, setGlobalDispatcher }
 import {
   EgressBlockedError,
   assertEgressAllowed,
+  awsCredential,
+  azureCredential,
   createEgressDispatcher,
   createEgressFetch,
   createMetadataCredentialProvider,
+  gcpCredential,
   installNodeEgressGuard,
   normalizeAllowInternal,
 } from './egress.js';
@@ -89,6 +92,28 @@ describe('server egress private-network deny floor', () => {
       private: true,
     });
     await expect(readAwsMetadata()).rejects.toBeInstanceOf(EgressBlockedError);
+  });
+
+  it('wraps public cloud credential providers in the metadata egress frame', async () => {
+    const readMetadata = async (provider: string) => {
+      const decision = await assertEgressAllowed(
+        'http://169.254.169.254/latest/meta-data/iam/security-credentials/',
+        [],
+      );
+      return `${provider}:${decision.destination}`;
+    };
+
+    await expect(readMetadata('raw')).rejects.toBeInstanceOf(EgressBlockedError);
+    await expect(awsCredential(() => readMetadata('aws'))()).resolves.toBe(
+      'aws:169.254.169.254:80',
+    );
+    await expect(gcpCredential(() => readMetadata('gcp'))()).resolves.toBe(
+      'gcp:169.254.169.254:80',
+    );
+    await expect(azureCredential(() => readMetadata('azure'))()).resolves.toBe(
+      'azure:169.254.169.254:80',
+    );
+    await expect(readMetadata('raw')).rejects.toBeInstanceOf(EgressBlockedError);
   });
 
   it('blocks Azure identity endpoints through allowInternal unless a credential provider entered the frame', async () => {

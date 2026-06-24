@@ -502,8 +502,11 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
       - Evidence: `vp exec vitest --run packages/server/src/egress.test.ts` verifies unwrapped metadata access is
         denied, wrapped provider access survives an async boundary, Azure loopback `IDENTITY_ENDPOINT` cannot be
         authorized by `allowInternal`, and raw fetch/http/net/undici metadata paths remain denied outside the frame.
-    - [ ] Public per-cloud `kovo.{aws,gcp,azure}Credential()` factories still need to wrap actual SDK/provider
-          shapes; KV427 SDK-client static detection remains separate.
+    - [x] Public per-cloud credential factories wrap SDK/provider callbacks without exporting a generic metadata
+          access helper; KV427 SDK-client static detection remains separate.
+      - Evidence: `packages/server/src/egress.ts` exports `awsCredential`, `gcpCredential`, and
+        `azureCredential`; `vp exec vitest --run packages/server/src/egress.test.ts` verifies wrapped providers
+        enter the metadata frame while raw metadata access stays denied.
   - [ ] **Credential API (tiered) + compile-time forgot-it gate (KV427).** Tier 1 — env/WIF/key-file
         deployments touch no identity endpoint, so `new S3Client()`/`new Storage()` need NO Kovo API (starter
         default; floor is free). Tier 2 — metadata-creds deployments declare the cloud once in the shell

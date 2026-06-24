@@ -58,7 +58,8 @@ export interface EgressNodeGuard {
   uninstall(): void;
 }
 
-type MetadataCredentialProvider<T> = () => T | Promise<T>;
+/** Provider callback wrapped by Kovo cloud credential helpers for metadata-capable runtimes. */
+export type CloudMetadataCredentialProvider<T> = () => T | Promise<T>;
 
 // SPEC §6.6: outbound egress is a fail-closed runtime floor; cloud identity metadata is privileged.
 const metadataAllowed = new AsyncLocalStorage<{ on: true }>();
@@ -233,9 +234,39 @@ export function createEgressDispatcher(
 }
 
 export function createMetadataCredentialProvider<T>(
-  provider: MetadataCredentialProvider<T>,
-): MetadataCredentialProvider<T> {
+  provider: CloudMetadataCredentialProvider<T>,
+): CloudMetadataCredentialProvider<T> {
   return () => metadataAllowed.run({ on: true }, provider);
+}
+
+/**
+ * Wrap an AWS credential provider so lazy metadata refreshes run inside Kovo's
+ * privileged metadata egress frame. Raw IMDS access remains blocked elsewhere.
+ */
+export function awsCredential<T>(
+  provider: CloudMetadataCredentialProvider<T>,
+): CloudMetadataCredentialProvider<T> {
+  return createMetadataCredentialProvider(provider);
+}
+
+/**
+ * Wrap a Google Cloud credential provider so metadata refreshes run inside
+ * Kovo's privileged metadata egress frame.
+ */
+export function gcpCredential<T>(
+  provider: CloudMetadataCredentialProvider<T>,
+): CloudMetadataCredentialProvider<T> {
+  return createMetadataCredentialProvider(provider);
+}
+
+/**
+ * Wrap an Azure managed-identity credential provider so metadata refreshes run
+ * inside Kovo's privileged metadata egress frame.
+ */
+export function azureCredential<T>(
+  provider: CloudMetadataCredentialProvider<T>,
+): CloudMetadataCredentialProvider<T> {
+  return createMetadataCredentialProvider(provider);
 }
 
 export async function assertEgressAllowed(
