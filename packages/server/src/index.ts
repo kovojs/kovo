@@ -105,6 +105,7 @@ export {
   stream,
   tag,
   unsafeRegex,
+  unsafeStoredUploadKey,
   withSchemaInputBudget,
   write,
 } from './api/data.js';
@@ -164,6 +165,7 @@ export type {
   StoredFileSchemaOptions,
   StoredFileUpload,
   Tag,
+  UnsafeStoredUploadKey,
   UnsafeRegexPattern,
   ValidationFailurePayload,
   ValidationIssue,

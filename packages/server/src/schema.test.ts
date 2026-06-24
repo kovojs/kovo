@@ -10,6 +10,7 @@ import {
   parseSchemaAsync,
   s,
   unsafeRegex,
+  unsafeStoredUploadKey,
   withSchemaInputBudget,
 } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
@@ -240,7 +241,8 @@ describe('server schemas', () => {
     const form = new FormData();
     form.set('avatar', formDataFile([pngBytes()], 'avatar.png', 'image/png'));
 
-    await expect(runMutation(uploadAvatar, form, {})).resolves.toEqual({
+    const result = await runMutation(uploadAvatar, form, {});
+    expect(result).toEqual({
       changes: [],
       ok: true,
       rerunQueries: [],
@@ -262,7 +264,6 @@ describe('server schemas', () => {
             justification: 'avatar picker only permits PNG files before server storage',
           })
           .store({
-            key: (file) => `avatars/${file.name}`,
             storage,
           }),
       }),
@@ -278,24 +279,29 @@ describe('server schemas', () => {
     const form = new FormData();
     form.set('avatar', formDataFile([pngBytes()], 'avatar.png', 'image/png'));
 
-    await expect(runMutation(uploadAvatar, form, {})).resolves.toEqual({
+    const result = await runMutation(uploadAvatar, form, {});
+    expect(result).toEqual({
       changes: [],
       ok: true,
       rerunQueries: [],
       value: {
         contentType: 'image/png',
-        key: 'avatars/avatar.png',
+        key: expect.stringMatching(
+          /^uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+        ),
         name: 'avatar.png',
         size: 8,
       },
     });
-    await expect(storage.get('avatars/avatar.png')).resolves.toMatchObject({
+    if (!result.ok) throw new Error('expected upload mutation to succeed');
+    const storedKey = result.value.key;
+    await expect(storage.get(storedKey)).resolves.toMatchObject({
       contentType: 'image/png',
-      key: 'avatars/avatar.png',
+      key: storedKey,
       metadata: { filename: 'avatar.png' },
       size: 8,
     });
-    const stored = await storage.get('avatars/avatar.png');
+    const stored = await storage.get(storedKey);
     await expect(storageBodyToBytes(stored?.body ?? '')).resolves.toEqual(pngBytes());
   });
 
@@ -307,7 +313,9 @@ describe('server schemas', () => {
         justification: 'legacy import filter keeps browser-declared image uploads',
       })
       .store({
-        key: 'uploads/report.pdf',
+        unsafeKey: unsafeStoredUploadKey('uploads/report.pdf', {
+          justification: 'legacy fixture asserts server-sniffed PDF metadata for a fixed object',
+        }),
         storage,
       });
     const file = formDataFile(['%PDF-1.7\n'], 'report.pdf', 'image/png');
@@ -340,6 +348,31 @@ describe('server schemas', () => {
     });
   });
 
+  it('keeps dangerous user filenames as metadata only and never as overwrite-capable keys', async () => {
+    const storage = createMemoryStorage();
+    const upload = s.file().store({ storage });
+    const first = formDataFile([pngBytes()], '../../avatar.png', 'image/png');
+    const second = formDataFile([pngBytes()], '../../avatar.png', 'image/png');
+
+    const firstResult = await parseSchemaAsync(upload, first);
+    const secondResult = await parseSchemaAsync(upload, second);
+
+    expect(firstResult.key).toMatch(/^uploads\/[0-9a-f-]{36}$/u);
+    expect(secondResult.key).toMatch(/^uploads\/[0-9a-f-]{36}$/u);
+    expect(firstResult.key).not.toBe(secondResult.key);
+    expect(firstResult.key).not.toContain('..');
+    expect(secondResult.key).not.toContain('avatar.png');
+    await expect(storage.get(firstResult.key)).resolves.toMatchObject({
+      key: firstResult.key,
+      metadata: { filename: '../../avatar.png' },
+    });
+    await expect(storage.get(secondResult.key)).resolves.toMatchObject({
+      key: secondResult.key,
+      metadata: { filename: '../../avatar.png' },
+    });
+    await expect(storage.get('../../avatar.png')).rejects.toThrow(/parent path segments/u);
+  });
+
   it('allows a reviewed generated upload key prefix without using the filename as the key', async () => {
     const storage = createMemoryStorage();
     const upload = s.file().store({ keyPrefix: '/tenant-a/uploads/', storage });
@@ -359,7 +392,9 @@ describe('server schemas', () => {
   it('falls back to application/octet-stream for unsniffed upload bytes', async () => {
     const storage = createMemoryStorage();
     const upload = s.file().store({
-      key: 'uploads/payload.bin',
+      unsafeKey: unsafeStoredUploadKey('uploads/payload.bin', {
+        justification: 'fixed-key fixture for octet-stream fallback assertion',
+      }),
       storage,
     });
     const file = formDataFile([new Uint8Array([0, 1, 2, 3])], 'payload.bin', 'image/png');
@@ -370,6 +405,40 @@ describe('server schemas', () => {
     await expect(storage.get('uploads/payload.bin')).resolves.toMatchObject({
       contentType: 'application/octet-stream',
     });
+  });
+
+  it('rejects raw stored-upload key overrides and requires the audited static-key escape', async () => {
+    const storage = createMemoryStorage();
+    const unsafeRawKey = () => {
+      s.file().store({
+        // @ts-expect-error KV428: raw key overrides can accidentally use a user filename.
+        key: 'uploads/avatar.png',
+        storage,
+      });
+    };
+
+    expect(unsafeRawKey).toBeTypeOf('function');
+    await expect(
+      parseSchemaAsync(
+        s.file().store({
+          key: (file: { name: string }) => `avatars/${file.name}`,
+          storage,
+        } as unknown as Parameters<ReturnType<typeof s.file>['store']>[0]),
+        formDataFile([pngBytes()], '../../avatar.png', 'image/png'),
+      ),
+    ).rejects.toThrow(/raw key overrides are not allowed/u);
+    await expect(
+      parseSchemaAsync(
+        s.file().store({
+          key: 'avatars/avatar.png',
+          storage,
+        } as unknown as Parameters<ReturnType<typeof s.file>['store']>[0]),
+        formDataFile([pngBytes()], 'avatar.png', 'image/png'),
+      ),
+    ).rejects.toThrow(/raw key overrides are not allowed/u);
+    expect(() => unsafeStoredUploadKey('uploads/avatar.png', { justification: '   ' })).toThrow(
+      'unsafeStoredUploadKey requires a non-empty justification',
+    );
   });
 
   it('keeps SVG bytes out of verified upload type validation', async () => {
@@ -409,7 +478,6 @@ describe('server schemas', () => {
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
         avatar: s.file().maxBytes(4).store({
-          key: 'avatars/avatar.png',
           storage,
         }),
       }),
@@ -428,7 +496,7 @@ describe('server schemas', () => {
       ok: false,
       status: 422,
     });
-    await expect(storage.get('avatars/avatar.png')).resolves.toBeUndefined();
+    await expect(storage.get('uploads/avatar.png')).resolves.toBeUndefined();
   });
 
   it('returns validation failures with field paths for schema errors', async () => {
@@ -476,10 +544,9 @@ describe('server schemas', () => {
   });
 
   // M1: `s.array(s.file().store())` MUST run the async storing path for every item.
-  // Before the fix `s.array` had no `parseAsync`, so `parseSchemaAsync` fell back to the
-  // sync `parse`, which fabricated a `StoredFileUpload` without ever calling `storage.put`
-  // (data loss) and without `normalizeStorageKey` (traversal-key passthrough).
-  it('stores every item of an s.array(s.file().store()) and rejects traversal keys', async () => {
+  // The generated key path now also keeps repeated dangerous filenames from
+  // traversing or overwriting by construction (SPEC §6/KV428).
+  it('stores every item of an s.array(s.file().store()) under opaque keys', async () => {
     const memory = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
     const put = vi.fn<StorageCapability['put']>((key, body, options) =>
       memory.put(key, body, options),
@@ -487,32 +554,29 @@ describe('server schemas', () => {
     const storage: StorageCapability = { ...memory, put };
 
     const schema = s.object({
-      photos: s.array(
-        s.file().store({
-          key: (file) => `gallery/${file.name}`,
-          storage,
-        }),
-      ),
+      photos: s.array(s.file().store({ storage })),
     });
     const form = new FormData();
     form.append('photos', formDataFile([pngBytes()], 'one.png', 'image/png'));
     form.append('photos', formDataFile([pngBytes()], '../../etc/evil.png', 'image/png'));
 
-    // The traversal key reaches `storage.put`, where `normalizeStorageKey` rejects it.
-    await expect(parseSchemaAsync(schema, form)).rejects.toThrow(/parent path segments/u);
+    const result = await parseSchemaAsync(schema, form);
 
-    // `storage.put` was attempted once per file (was 0 before the fix — sync path skipped it).
     expect(put).toHaveBeenCalledTimes(2);
-    expect(put.mock.calls[0]?.[0]).toBe('gallery/one.png');
-    expect(put.mock.calls[1]?.[0]).toBe('gallery/../../etc/evil.png');
-
-    // The valid file actually landed in storage; the traversal file did not.
-    await expect(memory.get('gallery/one.png')).resolves.toMatchObject({ key: 'gallery/one.png' });
+    expect(result.photos).toHaveLength(2);
+    expect(result.photos[0]?.key).toMatch(/^uploads\/[0-9a-f-]{36}$/u);
+    expect(result.photos[1]?.key).toMatch(/^uploads\/[0-9a-f-]{36}$/u);
+    expect(result.photos[0]?.key).not.toBe(result.photos[1]?.key);
+    expect(put.mock.calls[0]?.[0]).toBe(result.photos[0]?.key);
+    expect(put.mock.calls[1]?.[0]).toBe(result.photos[1]?.key);
+    await expect(memory.get(result.photos[1]?.key ?? '')).resolves.toMatchObject({
+      metadata: { filename: '../../etc/evil.png' },
+    });
   });
 
   // M1: the sync `parse` of a storing file schema must refuse to fabricate a result.
   it('refuses to store a file through the synchronous parse path', () => {
-    const storing = s.file().store({ key: 'gallery/photo.png', storage: createMemoryStorage() });
+    const storing = s.file().store({ storage: createMemoryStorage() });
 
     expect(() => storing.parse(formDataFile(['x'], 'photo.png', 'image/png'))).toThrow(
       /storing requires async parsing/u,

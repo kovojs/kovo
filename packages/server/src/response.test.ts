@@ -118,12 +118,42 @@ describe('server response adapters', () => {
     expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
   });
 
-  it('defaults stream responses to X-Content-Type-Options: nosniff', () => {
+  it('defaults attachment stream responses to X-Content-Type-Options: nosniff', () => {
     const response = routeOutcomeResponse(
-      respond.stream('<svg/>', { contentType: 'image/svg+xml', disposition: 'inline' }),
+      respond.stream('<svg/>', { contentType: 'image/svg+xml' }),
       { method: 'GET' },
     );
 
+    expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
+  });
+
+  it('rejects inline responses for active or ambiguous content types', () => {
+    const rejectedTypes = [
+      'text/html; charset=utf-8',
+      'image/svg+xml',
+      'application/octet-stream',
+      'application/zip',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+
+    for (const contentType of rejectedTypes) {
+      expect(() =>
+        respond.stream('<script>alert(1)</script>', { contentType, disposition: 'inline' }),
+      ).toThrow(/not inline-safe/u);
+    }
+  });
+
+  it('allows inline responses only for reviewed inert content types', () => {
+    const response = routeOutcomeResponse(
+      respond.stream('plain report\n', {
+        contentType: 'text/plain; charset=utf-8',
+        disposition: 'inline',
+      }),
+      { method: 'GET' },
+    );
+
+    expect(response.headers['Content-Disposition']).toBe('inline');
+    expect(response.headers['Content-Type']).toBe('text/plain; charset=utf-8');
     expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
   });
 

@@ -275,17 +275,50 @@ export interface StoredFileUpload {
 /** Stored-upload schema produced by `s.file().store(...)` (SPEC.md §6). */
 export interface StoredFileSchema extends AsyncSchema<StoredFileUpload> {}
 
+/** Audited escape for the rare migration/import case that must choose its own stored-upload key (SPEC.md §6). */
+export interface UnsafeStoredUploadKey {
+  readonly __kovoUnsafeStoredUploadKey: true;
+  readonly justification: string;
+  readonly key: string;
+}
+
 /** Options for `s.file().store(...)`: storage capability, optional opaque key prefix, and metadata (SPEC.md §6). */
 export interface StoredFileSchemaOptions {
   /**
-   * Explicit storage key override. Omit this for the safe default: a server-generated
+   * Reviewed static-key escape. Omit this for the safe default: a server-generated
    * opaque UUID key under `keyPrefix`, with the user filename stored only as metadata.
+   * This deliberately does not receive the uploaded `FileLike`, so user filenames
+   * cannot accidentally become storage keys.
    */
-  key?: string | ((file: FileLike) => Promise<string> | string);
+  unsafeKey?: UnsafeStoredUploadKey;
   /** Prefix for generated opaque keys. Defaults to `uploads`. */
   keyPrefix?: string;
   metadata?: (file: FileLike) => Readonly<Record<string, string>>;
   storage: StorageCapability;
+}
+
+/** Create the reviewed static-key escape for `s.file().store({ unsafeKey })` (KV428). */
+export function unsafeStoredUploadKey(
+  key: string,
+  options: { justification: string },
+): UnsafeStoredUploadKey {
+  if (typeof key !== 'string' || key.trim() === '') {
+    throw new Error('unsafeStoredUploadKey requires a non-empty key.');
+  }
+  if (
+    typeof options !== 'object' ||
+    options === null ||
+    typeof options.justification !== 'string' ||
+    !options.justification.trim()
+  ) {
+    throw new Error('unsafeStoredUploadKey requires a non-empty justification.');
+  }
+
+  return {
+    __kovoUnsafeStoredUploadKey: true,
+    justification: options.justification,
+    key,
+  };
 }
 
 /** Array schema produced by `s.array(...)`; chains item parsing plus explicit length bounds (SPEC.md §6). */
@@ -574,7 +607,7 @@ class StoredFileSchemaImpl implements StoredFileSchema {
     const bytes = await file.arrayBuffer();
     const contentType = sniffUploadContentType(new Uint8Array(bytes));
 
-    const key = await storedUploadKey(file, this.#storageOptions);
+    const key = storedUploadKey(this.#storageOptions);
     const storage = await this.#storageOptions.storage.put(key, bytes, {
       contentType,
       metadata: {
@@ -626,13 +659,35 @@ function assertFileUnverifiedAccept(
   }
 }
 
-async function storedUploadKey(file: FileLike, options: StoredFileSchemaOptions): Promise<string> {
-  if (typeof options.key === 'string') return options.key;
-  if (typeof options.key === 'function') return await options.key(file);
+function storedUploadKey(options: StoredFileSchemaOptions): string {
+  const legacyKey = (options as { key?: unknown }).key;
+  if (legacyKey !== undefined) {
+    throw new Error(
+      's.file().store(): raw key overrides are not allowed; use unsafeStoredUploadKey(...) for reviewed static keys.',
+    );
+  }
+  if (options.unsafeKey !== undefined) {
+    if (!isUnsafeStoredUploadKey(options.unsafeKey)) {
+      throw new Error('s.file().store(): unsafeKey must come from unsafeStoredUploadKey(...).');
+    }
+    return options.unsafeKey.key;
+  }
 
   const prefix = generatedUploadKeyPrefix(options.keyPrefix);
   const id = randomUUID();
   return prefix === '' ? id : `${prefix}/${id}`;
+}
+
+function isUnsafeStoredUploadKey(value: unknown): value is UnsafeStoredUploadKey {
+  const candidate = value as Partial<UnsafeStoredUploadKey>;
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    candidate.__kovoUnsafeStoredUploadKey === true &&
+    typeof candidate.key === 'string' &&
+    typeof candidate.justification === 'string' &&
+    candidate.justification.trim() !== ''
+  );
 }
 
 function generatedUploadKeyPrefix(prefix: string | undefined): string {

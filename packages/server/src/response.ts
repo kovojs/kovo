@@ -300,6 +300,7 @@ function routeResponseOutcome(
   body: RouteResponseBody,
   options: RouteFileOptions & { disposition: 'attachment' | 'inline' },
 ): RouteResponseOutcome {
+  assertInlineContentType(options);
   const contentDisposition = options.filename
     ? `${options.disposition}; filename="${escapeHeaderValue(options.filename)}"`
     : options.disposition;
@@ -312,6 +313,52 @@ function routeResponseOutcome(
     routeResponse: true,
   };
 }
+
+function assertInlineContentType(
+  options: RouteFileOptions & { disposition: 'attachment' | 'inline' },
+): void {
+  if (options.disposition !== 'inline') return;
+
+  const contentType = normalizedMimeType(options.contentType);
+  if (inlineRejectedContentTypes.has(contentType) || !inlineSafeContentTypes.has(contentType)) {
+    throw new Error(
+      `respond.stream(): inline disposition requires framework-verified inert bytes; ${contentType} is not inline-safe (SPEC §6.4/KV428).`,
+    );
+  }
+}
+
+function normalizedMimeType(contentType: string): string {
+  return contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+}
+
+const inlineSafeContentTypes = new Set([
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'text/css',
+  'text/csv',
+  'text/plain',
+]);
+
+const inlineRejectedContentTypes = new Set([
+  'application/javascript',
+  'application/msword',
+  'application/octet-stream',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/xhtml+xml',
+  'application/xml',
+  'application/zip',
+  'image/svg+xml',
+  'text/html',
+  'text/javascript',
+  'text/xml',
+]);
 
 function routeOutcomeHeaders(outcome: RouteResponseOutcome): Record<string, string> {
   // Security finding M1: file/stream bodies can carry a sniffable/scriptable
