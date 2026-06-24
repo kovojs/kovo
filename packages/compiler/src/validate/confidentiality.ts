@@ -1,0 +1,50 @@
+import { componentOptionObjectKeys } from '../scan/parse.js';
+import type { ComponentModuleModel } from '../scan/parse.js';
+import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
+import { componentQueryShapes } from '../analyze/query-shapes.js';
+import type { CompileComponentOptions, QueryShape } from '../types.js';
+import { isArrayQueryShape, isQueryShapeObject, isQueryShapeWrapper } from '../types.js';
+
+/** Reject secret-classified query fields before they reach the client query wire (SPEC §6.2/§10.2). */
+export function validateSecretQueryWire(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+  options: CompileComponentOptions,
+): CompilerDiagnostic[] {
+  const queryShapes = componentQueryShapes(options);
+  if (!queryShapes) return [];
+
+  const queryNames = componentOptionObjectKeys(model, 'queries');
+  return queryNames.flatMap((query) =>
+    secretQueryShapePaths(queryShapes[query]).map((path) =>
+      diagnostics.at(
+        'KV435',
+        undefined,
+        `query="${query}" path="${pathForDiagnostic(query, path)}"`,
+      ),
+    ),
+  );
+}
+
+function secretQueryShapePaths(
+  shape: QueryShape | undefined,
+  path: readonly string[] = [],
+): string[] {
+  if (shape === undefined) return [];
+
+  if (isQueryShapeWrapper(shape)) {
+    if (shape.kind === 'secret') return [path.join('.')];
+    return secretQueryShapePaths(shape.shape, path);
+  }
+
+  if (isArrayQueryShape(shape)) return secretQueryShapePaths(shape[0] ?? 'object', path);
+  if (!isQueryShapeObject(shape)) return [];
+
+  return Object.entries(shape).flatMap(([key, child]) =>
+    secretQueryShapePaths(child, [...path, key]),
+  );
+}
+
+function pathForDiagnostic(query: string, path: string): string {
+  return path === '' ? query : `${query}.${path}`;
+}

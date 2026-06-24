@@ -68,7 +68,8 @@ export type DiagnosticCode =
   | 'KV423'
   | 'KV424'
   | 'KV425'
-  | 'KV426';
+  | 'KV426'
+  | 'KV435';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -858,5 +859,16 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Trust escape hatch lacks auditable provenance.',
+  },
+  KV435: {
+    code: 'KV435',
+    help: [
+      'Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.',
+      'Blocked reason: the projected query shape contains a secret-classified field, so rendering this query would serialize confidential data onto the client wire.',
+      'Fixes: remove the secret field from the projection, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.',
+      'SPEC §6.2 and §10.2 make query results JsonValue-bounded client wire values; a secret-classified value is ineligible for that boundary.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Secret query value reaches the client wire.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;
