@@ -77,7 +77,7 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
 - [x] No session-rotation, signed-URL, or wire string-format primitives exist.
   - Evidence: `rg rotateSession packages/server/src` empty (`sessionProvider` is a read-only resolver);
     `rg presign|signUrl|signedUrl` empty (`packages/core/src/storage.ts`, server); no `.email()/.url()/
-    .pattern()` on the wire schema surface; `verifier.ts` constant-time compare is inbound-webhook only.
+.pattern()` on the wire schema surface; `verifier.ts` constant-time compare is inbound-webhook only.
 
 ## Settled Design Decisions
 
@@ -181,23 +181,23 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
 
 ### Provisional diagnostic allocation (verify free before use)
 
-| Code  | Class                                                                 |
-| ----- | -------------------------------------------------------------------- |
-| KV422 | Secret-classified column reaches the client wire projection sink     |
-| KV423 | Opaque/aliased projection of a secret-bearing table without a brand  |
-| KV424 | Missing required `access:` decision on a data-touching surface       |
-| KV425 | Input-provenance value reaches a `governed`/protected write column   |
-| KV426 | Server-only/secret binding captured into a client module             |
+| Code  | Class                                                                                              |
+| ----- | -------------------------------------------------------------------------------------------------- |
+| KV422 | Secret-classified column reaches the client wire projection sink                                   |
+| KV423 | Opaque/aliased projection of a secret-bearing table without a brand                                |
+| KV424 | Missing required `access:` decision on a data-touching surface                                     |
+| KV425 | Input-provenance value reaches a `governed`/protected write column                                 |
+| KV426 | Server-only/secret binding captured into a client module                                           |
 | KV427 | Cloud SDK client built without the declared `cloud.*` credential (forgot-it compile gate, Phase 5) |
-| KV428 | Inline rendering of an unverified-content-type upload                |
-| KV429 | Read-then-write on a contended column without atomic/version guard   |
-| KV430 | Schema admits unbounded breadth/depth on an untrusted source         |
-| KV431 | Referenced client module absent from the integrity/CSP manifest      |
-| KV432 | Insecure cookie downgrade without a recorded justification           |
-| KV433 | `query()` loader reaches a write without a `query.elevated` brand    |
-| KV434 | Non-linear-safe pattern literal in a wire string validator           |
-| KV435 | _(unassigned — auth-response uniformity dropped from this plan 2026-06-23)_  |
-| KV436 | _(optional/advisory)_ secret-provenance value reaches a known logging sink (12c) |
+| KV428 | Inline rendering of an unverified-content-type upload                                              |
+| KV429 | Read-then-write on a contended column without atomic/version guard                                 |
+| KV430 | Schema admits unbounded breadth/depth on an untrusted source                                       |
+| KV431 | Referenced client module absent from the integrity/CSP manifest                                    |
+| KV432 | Insecure cookie downgrade without a recorded justification                                         |
+| KV433 | `query()` loader reaches a write without a `query.elevated` brand                                  |
+| KV434 | Non-linear-safe pattern literal in a wire string validator                                         |
+| KV435 | _(unassigned — auth-response uniformity dropped from this plan 2026-06-23)_                        |
+| KV436 | _(optional/advisory)_ secret-provenance value reaches a known logging sink (12c)                   |
 
 ## Explicit Non-Goals
 
@@ -233,7 +233,7 @@ until Phase 1, accepted deliberately so every gate is sound on arrival.
     is separately audited). The write/leak gates must **prove server-provenance** and reject all else.
 - [ ] Conformance test the bypass corpus before declaring Phase 0 done (the gate criterion).
   - Aliasing (`alias(users,'u')`), renamed import (`users as accounts`), intermediate binding (`const t =
-    users`), destructuring (`const { ownerId } = input`), and helper-returned values must each resolve to the
+users`), destructuring (`const { ownerId } = input`), and helper-returned values must each resolve to the
     correct symbol or fail closed — no spelling defeats a check. Phases 1–6 do not begin until this is green.
 
 ## Phase 1: Confidentiality field boundary (the dual of XSS) — KV422/KV423
@@ -258,8 +258,8 @@ design.
       Phase 0 symbol pass — the structural dual of KV236 (the proof here is AST provenance, not the type,
       because there is a Drizzle `select` to read).
 - [ ] Opaque/aliased projection backstop (KV423, **error** severity): a `sql\`\``/spread/computed-key
-      projection of a table carrying ≥1 secret column requires an audited brand. Blast radius concentrates on
-      `users`/`accounts`/`payments` — invest in the teaching message and make adding the brand the one-line fix.
+projection of a table carrying ≥1 secret column requires an audited brand. Blast radius concentrates on
+`users`/`accounts`/`payments` — invest in the teaching message and make adding the brand the one-line fix.
 - [ ] Cover Drizzle **relational** queries (`with: { author: { columns: { passwordHash: true } } }`) — a
       different AST shape than `db.select({})` and a primary leak vector. In scope for v1, not a follow-on.
 - [ ] Escape hatch (fork in Open Design Questions: fixed verifiable redactor set vs arbitrary `fn` behind
@@ -336,12 +336,12 @@ compiler). Derivation is fail-closed.
 ## Phase 5: Least authority — capabilities you only hold if you declared them
 
 - [ ] **Egress / SSRF — private-network deny (runtime floor; no compile-time channel ban).**
-  Decision (2026-06-23): the threat is SSRF *network position* (cloud metadata, localhost sidecars, internal
-  services), not reaching public sites. **Public/external egress is UNRESTRICTED; private/loopback/link-local/
-  metadata destinations are DENIED by default, reachable only via a narrow `host:port` allowlist.** The
-  compile-time channel ban (former KV427) and mandatory declared external channels are **dropped** — not worth
-  the friction. This is an explicit runtime defense-in-depth floor, not a by-construction proof (an IP is only
-  knowable at resolve time, so the check must be runtime sink-validation).
+      Decision (2026-06-23): the threat is SSRF _network position_ (cloud metadata, localhost sidecars, internal
+      services), not reaching public sites. **Public/external egress is UNRESTRICTED; private/loopback/link-local/
+      metadata destinations are DENIED by default, reachable only via a narrow `host:port` allowlist.** The
+      compile-time channel ban (former KV427) and mandatory declared external channels are **dropped** — not worth
+      the friction. This is an explicit runtime defense-in-depth floor, not a by-construction proof (an IP is only
+      knowable at resolve time, so the check must be runtime sink-validation).
   - [ ] **Dual-layer enforcement (verified necessary 2026-06-23).** A `setGlobalDispatcher`-only floor fails
         OPEN: AWS IMDS (`@smithy/credential-provider-imds`, raw `node:http`) and GCP (`gaxios`/node-fetch)
         bypass undici entirely, so `require('http').get('http://169.254.169.254/…')` never hits it. Enforce at
@@ -412,9 +412,9 @@ compiler). Derivation is fail-closed.
         concern) and confused-deputy proxying. Optional typed-client sugar (`egress('https://api.stripe.com')`)
         may remain as convenience but is not a security boundary.
 - [ ] **Read-only `query()` handle (KV433).**
-  Decision (2026-06-23): two stages, **both required for plan completion** — the runtime safe-default is a
-  backstop, not a stopping point. Sequenced (not optional): Stage 1 now; Stage 2 lands with the shared §11.1
-  write-reachability pass (also required by KV425/KV429).
+      Decision (2026-06-23): two stages, **both required for plan completion** — the runtime safe-default is a
+      backstop, not a stopping point. Sequenced (not optional): Stage 1 now; Stage 2 lands with the shared §11.1
+      write-reachability pass (also required by KV425/KV429).
   - [ ] Stage 1 (now, safe-default): Reader type narrows the loader handle (no `insert`/`update`/`delete`/
         `execute`) + a fail-closed runtime read-only proxy (write verbs throw at the managed handle). Catches a
         direct `req.db.insert` in a loader; the type is `tsc`-time ergonomics (unsound under `as any`); the
@@ -427,9 +427,9 @@ compiler). Derivation is fail-closed.
         `--capabilities`; document it MUST be idempotent-safe-to-repeat (GETs are re-fetched/prefetched).
         State-changing writes belong in mutations. Read-only raw defers to the SQL managed-handle guard.
 - [ ] **Cookie safe-defaults + class-derived floor (KV432).**
-  Decision (2026-06-23): ship the **reduced form (i)** — a sound cookie-attribute floor by construction;
-  **fixation-as-compile-error is cut** (no `rotateSession` primitive exists, "authenticating mutation" is not
-  soundly recognizable, and `better-auth` runs login inside the package so app code shows nothing to analyze).
+      Decision (2026-06-23): ship the **reduced form (i)** — a sound cookie-attribute floor by construction;
+      **fixation-as-compile-error is cut** (no `rotateSession` primitive exists, "authenticating mutation" is not
+      soundly recognizable, and `better-auth` runs login inside the package so app code shows nothing to analyze).
   - [ ] Typed cookie builder forces `HttpOnly` + `Secure`(prod) + a required `SameSite` (+ `__Host-` prefix
         where applicable), derived from a cookie **class** (`session`/`auth`/`app-data`) — declare the class
         once, get the floor everywhere. Enforce at BOTH the builder (can't express insecure) and a runtime
@@ -446,11 +446,11 @@ compiler). Derivation is fail-closed.
         rotate (hint, not KV-error — recognition is unsound, better-auth is opaque). A real `rotateSession()`
         helper is **deferred** to a possible later session-ownership item (Kovo does not own session identity, §6.5).
 - [ ] **Capability-URL primitive.**
-  Decision (2026-06-23): typed `ctx.signUrl({ key, method, scope?, expiresIn, oneTime? })` dual to the cookie
-  builder. **By-construction at the verify sink** (an object is un-dereferenceable without a valid token —
-  sound sink-validation) + **safe-default mitigations** for the inherent URL-as-credential leakage (not a
-  proof). Closes a gap the legible wire amplifies (links leak via the readable store, `Referer`, logs, shared
-  caches); without it apps hand-roll HMAC URLs and hit the canonical mistakes.
+      Decision (2026-06-23): typed `ctx.signUrl({ key, method, scope?, expiresIn, oneTime? })` dual to the cookie
+      builder. **By-construction at the verify sink** (an object is un-dereferenceable without a valid token —
+      sound sink-validation) + **safe-default mitigations** for the inherent URL-as-credential leakage (not a
+      proof). Closes a gap the legible wire amplifies (links leak via the readable store, `Referer`, logs, shared
+      caches); without it apps hand-roll HMAC URLs and hit the canonical mistakes.
   - [ ] HMAC over **canonicalized** bytes (`method+key+expiry+scope`), framework secret (anonymous-CSRF
         machinery), **constant-time verify** (`verifier.ts`) at a framework-owned download endpoint BEFORE any
         storage read; unsigned/tampered/expired → fail closed, object never read.
@@ -464,12 +464,12 @@ compiler). Derivation is fail-closed.
 ## Phase 6: Concurrency, resource, and uploads
 
 - [ ] **TOCTOU atomicity (KV429).**
-  Decision (2026-06-23): ship the **primitives first** (no analysis needed); the static gate is **option (a)** —
-  flag read-then-write only on a declared `kovo({ atomic })`/`kovo({ version })` column without a guard (the
-  KV414 philosophy: precise + declare-once, not blanket). Replay dedups the *same* submit; this covers *two
-  distinct* concurrent read-decide-write requests (oversell, double-spend, coupon reuse), which survive auth and
-  input validation. Note: the existing mutation tx (`READ COMMITTED`) does NOT prevent lost-update — CAS or
-  version is what closes it.
+      Decision (2026-06-23): ship the **primitives first** (no analysis needed); the static gate is **option (a)** —
+      flag read-then-write only on a declared `kovo({ atomic })`/`kovo({ version })` column without a guard (the
+      KV414 philosophy: precise + declare-once, not blanket). Replay dedups the _same_ submit; this covers _two
+      distinct_ concurrent read-decide-write requests (oversell, double-spend, coupon reuse), which survive auth and
+      input validation. Note: the existing mutation tx (`READ COMMITTED`) does NOT prevent lost-update — CAS or
+      version is what closes it.
   - [ ] Primitives (shippable independently): typed compare-and-set (`UPDATE … WHERE` folds check+act into one
         statement; 0 rows → conflict) and `kovo({ version })` optimistic concurrency (read carries version;
         stale → typed 409/422 the enhanced path re-renders). Wire the 409-conflict outcome into the lifecycle.
@@ -480,9 +480,9 @@ compiler). Derivation is fail-closed.
         constraints. Multi-row/aggregate invariants need `forUpdate`/`SERIALIZABLE` — documented as NOT
         by-construction (provide the tool + guidance; do not pretend CAS covers them).
 - [ ] **Input-shape DoS (KV430).**
-  Decision (2026-06-23): the **runtime budget is the protection** (a safe-default, not a compile-time proof);
-  KV430 is an auditable lint, not an error. Closes the small-body-huge-work class the byte+rate limiter misses;
-  high-ROI because it lives in the shared schema engine and protects every wire boundary at once.
+      Decision (2026-06-23): the **runtime budget is the protection** (a safe-default, not a compile-time proof);
+      KV430 is an auditable lint, not an error. Closes the small-body-huge-work class the byte+rate limiter misses;
+      high-ROI because it lives in the shared schema engine and protects every wire boundary at once.
   - [ ] Runtime budget enforced in the `s.*` parser **before descending** (fail fast, 413/422-class, no partial
         work): default max depth, max array/record breadth, max total node count. Reuse the `Object.create(null)`
         proto-safety path for the counter. Cover JSON nesting, the FormData→object key-count expansion, `/_q/`
@@ -493,11 +493,11 @@ compiler). Derivation is fail-closed.
         no `.max()`; surface in `kovo explain`. Lint because the runtime default already protects — this just
         makes the bound explicit/auditable. Recursive (`s.lazy`) depth is runtime-only.
 - [ ] **File-upload inline-XSS gate (KV428).**
-  Decision (2026-06-23): **default to `Content-Disposition: attachment` + `nosniff` for everything**; inline
-  rendering is a **branded opt-in requiring verified-safe bytes** (deep sniff, or framework re-encode). The
-  durable guarantee is "attacker bytes are never rendered inline as active content" (attachment-default +
-  re-encode), **not** "the sniffed type is unspoofable" — magic-byte sniffing proves a prefix, not the absence
-  of script.
+      Decision (2026-06-23): **default to `Content-Disposition: attachment` + `nosniff` for everything**; inline
+      rendering is a **branded opt-in requiring verified-safe bytes** (deep sniff, or framework re-encode). The
+      durable guarantee is "attacker bytes are never rendered inline as active content" (attachment-default +
+      re-encode), **not** "the sniffed type is unspoofable" — magic-byte sniffing proves a prefix, not the absence
+      of script.
   - [ ] Mint the served `Content-Type` from sniffed bytes (server-truth overrides the client lie; bytes
         already buffered, `schema.ts:340`). The deep sniffer probes ZIP/office containers and rejects
         HTML/SVG/ambiguous/polyglot for the inline path; for the inline guarantee prefer **server-side
@@ -510,12 +510,12 @@ compiler). Derivation is fail-closed.
         explicit `accept.unverified()` opt-out, listed in `kovo explain --capabilities`.
   - Honest scope: the common `respond.storedFile(key)` path takes a bare string key, so the static
     `VerifiedContentType` brand degrades to a runtime sidecar-marker check (refuse-to-serve-inline if
-    unverified — fail-closed). Attachment content-type confusion (a lying type on a *download*) is a lesser,
+    unverified — fail-closed). Attachment content-type confusion (a lying type on a _download_) is a lesser,
     separate issue from the inline-XSS pivot this closes.
 - [ ] **ReDoS-safe validators (KV434).**
-  Decision (2026-06-23): blessed-formats-first + compile-visible-literal `pattern()` with static reject +
-  runtime step-budget; full RE2 engine deferred. Design-the-API-safe-from-day-one (the validator API doesn't
-  exist yet — cheap before apps depend on JS `RegExp` semantics, expensive after).
+      Decision (2026-06-23): blessed-formats-first + compile-visible-literal `pattern()` with static reject +
+      runtime step-budget; full RE2 engine deferred. Design-the-API-safe-from-day-one (the validator API doesn't
+      exist yet — cheap before apps depend on JS `RegExp` semantics, expensive after).
   - [ ] Blessed linear formats: `email`/`url`/`uuid`/`slug` ship as audited backtracking-free matchers (no
         regex) — covers most needs.
   - [ ] `s.string().pattern(...)` REQUIRES a compile-visible literal; KV434 statically rejects exponential
