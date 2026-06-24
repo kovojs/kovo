@@ -78,6 +78,14 @@ describe('diagnostic registry', () => {
       'KV426',
       'KV435',
       'KV436',
+      'KV428',
+      'KV429',
+      'KV430',
+      'KV431',
+      'KV432',
+      'KV433',
+      'KV434',
+      'KV437',
     ]);
   });
 
@@ -642,6 +650,69 @@ describe('diagnostic registry', () => {
           "message": "Trust escape hatch lacks auditable provenance.",
           "severity": "error",
         },
+        "KV428": {
+          "code": "KV428",
+          "help": "Would lower to: an upload served Content-Disposition: attachment + X-Content-Type-Options: nosniff, with the served Content-Type minted from sniffed bytes (server truth), not the client-declared MIME.
+      Blocked reason: rendering an upload inline (disposition inline, or trusting the client Content-Type) lets attacker-controlled bytes — HTML/SVG/polyglots — execute as active content same-origin.
+      Fixes: serve attachment + nosniff (the default), or opt into inline only for verified-safe bytes (deep-sniffed or framework re-encoded/rasterized); use accept.unverified() as the audited escape, surfaced in kovo explain --capabilities.
+      SPEC §6.6/§9.1 and secure-framework Phase 6: the guarantee is "attacker bytes are never rendered inline as active content", a runtime defense-in-depth floor, not "the sniffed type is unspoofable".",
+          "message": "Inline rendering of an unverified-content-type upload.",
+          "severity": "error",
+        },
+        "KV429": {
+          "code": "KV429",
+          "help": "Would lower to: a compare-and-set (UPDATE ... WHERE) or kovo({ version }) optimistic-concurrency guard folding the check and the act into one statement.
+      Blocked reason: a read-then-write on a declared atomic/version column without a CAS/version guard is a lost-update race — two concurrent read-decide-write requests survive auth and validation and overwrite each other (oversell, double-spend, coupon reuse).
+      Fixes: use the typed compare-and-set helper or carry the row version and reject a stale write with the typed 409/422 path; add a DB CHECK/unique constraint as the fail-closed backstop.
+      SPEC §6.6/§10.3 and secure-framework Phase 6: the mutation transaction (READ COMMITTED) alone does not prevent lost-update; multi-row invariants need forUpdate/SERIALIZABLE and are not by-construction.",
+          "message": "Read-then-write on a contended column without an atomic/version guard.",
+          "severity": "error",
+        },
+        "KV430": {
+          "code": "KV430",
+          "help": "Would lower to: an s.* wire schema carrying an explicit breadth/depth bound (.max(...)) on every unbounded array/record reachable from an untrusted source.
+      Blocked reason: an unbounded s.array()/s.record() on a wire-reachable schema lets a small request body drive unbounded parser work (depth/breadth/node blow-up) that the byte+rate limiter cannot see.
+      Fixes: declare the legitimate bound with .max(n) (the runtime depth/breadth/node budget already protects by default — this lint just makes the bound explicit and auditable).
+      SPEC §6.6/§9.5 and secure-framework Phase 6: the runtime budget is the protection; KV430 is an auditable lint nudging an explicit bound, not an error.",
+          "message": "Schema admits unbounded breadth/depth on an untrusted source.",
+          "severity": "warning",
+        },
+        "KV431": {
+          "code": "KV431",
+          "help": "Would lower to: a completeness manifest listing every client module the document references against the integrity/CSP allowlist.
+      Blocked reason: a referenced client module absent from the integrity/CSP manifest cannot be audited for provenance; the CSP/allowlist cannot vouch for a module it does not list.
+      Fixes: add the module to the manifest/allowlist, or remove the dangling reference. Note: this is an advisory completeness/provenance audit, not byte-integrity — browser import() has no SRI gate.
+      SPEC §6.6 and secure-framework Phase 7: the real module-tamper defense is immutable versioned URLs + same-origin + the CSP self restriction, not SRI.",
+          "message": "Referenced client module is absent from the integrity/CSP manifest.",
+          "severity": "warning",
+        },
+        "KV432": {
+          "code": "KV432",
+          "help": "Would lower to: a Set-Cookie minted through the typed cookie builder with HttpOnly + Secure(prod) + an explicit SameSite derived from the cookie class.
+      Blocked reason: an insecure downgrade (HttpOnly/Secure false, or SameSite=None) of a session/auth-reachable cookie strips the floor that defends the session id against XSS theft, MITM, and CSRF.
+      Fixes: keep the class-derived secure floor, or record the downgrade explicitly with unsafeCookie({ downgrade, justification }), surfaced in kovo explain --cookies.
+      SPEC §6.6/§9.1 and secure-framework Phase 5: the cookie-attribute floor is by-construction at the single Set-Cookie sink; the downgrade path is audit-grade.",
+          "message": "Insecure cookie downgrade without a recorded justification.",
+          "severity": "error",
+        },
+        "KV433": {
+          "code": "KV433",
+          "help": "Would lower to: a read-only query() loader handle with no insert/update/delete/execute, and (Stage 2) a static proof that no write is reachable from the loader.
+      Blocked reason: a query() loader that reaches a write — directly or via an imported domain() function called with a captured handle — is a state change on an idempotent read surface (the confused-deputy case).
+      Fixes: move the write to a mutation(); or, if the write must run on a read, use query.elevated (a GET that must be idempotent-safe-to-repeat) and audit it in kovo explain --capabilities.
+      SPEC §6.6/§9.4 and secure-framework Phase 5: the runtime read-only proxy is the safe-default backstop; the static no-write-reachable proof is the by-construction guarantee.",
+          "message": "query() loader reaches a write without an elevated brand.",
+          "severity": "error",
+        },
+        "KV434": {
+          "code": "KV434",
+          "help": "Would lower to: a wire string validator backed by a blessed linear matcher (email/url/uuid/slug) or a compile-visible literal pattern with no exponential structure, executed under a runtime step-budget.
+      Blocked reason: a non-linear-safe or non-literal pattern in a wire string validator is a ReDoS vector — catastrophic backtracking turns a short input into unbounded CPU.
+      Fixes: use a blessed format, give pattern() a compile-visible literal with no nested/overlapping quantifiers, or take the ReDoS risk explicitly with unsafeRegex(re, justification), surfaced in kovo explain --capabilities.
+      SPEC §6.6/§9.5 and secure-framework Phase 6: blessed formats are by-construction; pattern() is by-construction-ish (static reject + runtime step-budget); a full linear engine is deferred.",
+          "message": "Non-linear-safe pattern literal in a wire string validator.",
+          "severity": "error",
+        },
         "KV435": {
           "code": "KV435",
           "help": "Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.
@@ -658,6 +729,15 @@ describe('diagnostic registry', () => {
       Fixes: add an access guard chain, public("reason"), or verified machine-auth decision; use kovo explain --access to inspect the ledger before enabling the strict gate.
       SPEC §10.2/§11.3 and the secure-by-construction Phase 2 plan require authorization to be default-deny through explicit access decisions, not through inferred defaults.",
           "message": "Missing explicit access decision.",
+          "severity": "error",
+        },
+        "KV437": {
+          "code": "KV437",
+          "help": "Would lower to: a client handler module whose captured cross-module imports all resolve to serializable literals or whitelisted client symbols.
+      Blocked reason: a client handler closure that captures a server-only binding (a secret/process.env-derived value, or any cross-module import not provably client-safe) re-emits it verbatim into the client bundle, leaking confidential server state to the browser.
+      Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain --capabilities.
+      SPEC §6.6/§6.2 and secure-framework Phase 4/Tier 0: the emit filter is fail-closed whole-channel (a narrow process.env/brand-only gate is unsound — call-wrapped secrets escape).",
+          "message": "Server-only value captured into a client handler reaches the client bundle.",
           "severity": "error",
         },
       }
