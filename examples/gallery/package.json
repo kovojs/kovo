@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest --run",
-    "test:browser": "vitest --config vitest.browser.config.ts --run --no-file-parallelism --maxWorkers=1"
+    "test:browser": "node scripts/materialize-interactive-gallery.mjs && vitest --config vitest.browser.config.ts --run --no-file-parallelism --maxWorkers=1"
   },
   "dependencies": {
     "@kovojs/browser": "workspace:*",
