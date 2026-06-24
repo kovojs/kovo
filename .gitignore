@@ -4,6 +4,7 @@ coverage/
 .vite/
 .vitest/
 .vp/
+.release/
 .kovo/cache/
 .kovo/sources-sinks.json
 **/.kovo/cache/
