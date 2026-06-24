@@ -46,12 +46,28 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
   `data-kovo-csp-hash` model); third-party allowlist config shape; non-overridable hardening directives.
   Trusted Types: framework `kovo` policy + module-side sinks routed, shipped **opt-in** (the always-on
   inline-loader `p`/`d` sinks need routing via `inline-loader-build.ts` before default-on — SF-WIRE).
-- [ ] **Schema-engine cluster (REDO — agent session-limited mid-run, worktree discarded):** KV430 input-shape
-  DoS budget; KV428 upload inline-XSS gate (remove `.mime()`, sniff-based content-type, attachment-default);
-  KV434 ReDoS-safe validators.
-- [ ] **Remaining waves:** sources-sinks enforce (KV424/425/426); KV436 default-deny wiring + access
-  migration; explain rendering (`--cookies`/`--capabilities` + SQL graph-merge + CSP allowlist app config);
-  §3 interprocedural foundation → mass-assignment / KV429 / KV433; egress/SSRF + capability-URL.
+- [x] **KV430 input-shape DoS budget** — iterative depth/breadth/node budget at the `parseSchemaAsync` wire
+  entry (`schema.ts`); the 4000-deep array attack is rejected before descent and the check can't itself
+  stack-overflow. 7 tests. Commit `52041325`. _Rest of the schema cluster below remains._
+- [ ] **Schema cluster remainder:** KV428 upload inline-XSS gate (remove `.mime()`, sniff-based content-type,
+  attachment-default); KV434 ReDoS-safe validators; per-schema `.max()` overrides; FormData-breadth +
+  sync-parse-entry coverage. _(The agent assigned this session-limited mid-run; worktree discarded.)_
+- [ ] **Remaining waves:** sources-sinks enforce (KV424/425/426); **KV436 default-deny wiring + access
+  migration** (breaking — touches every surface); explain rendering (`--cookies`/`--capabilities` + SQL
+  producer→graph merge + CSP allowlist app config — the SF-WIRE follow-ups); **§3 interprocedural foundation
+  → mass-assignment / KV429 / KV433** (the big by-construction write lever); **egress/SSRF + capability-URL** (XL).
+
+### Verified state of branch `agent/implement-secure-framework-20260624-114921` (2026-06-24)
+
+24 commits on top of `main` (`b7dd0a6a`). Gates: **2655 touched-package tests pass** (1 pre-existing
+unrelated `spec-coverage-map` failure); **tsc at the 34-error pre-existing baseline — zero new errors in any
+production file**; `check:api-surface` 0 new violations; `git diff --check` clean. Not yet merged to `main`
+(scope incomplete; CSP-default-on + cookie floor are intended breaking changes warranting review).
+
+**Cross-file SF-WIRE follow-ups still open** (analyzers/runtime work, surfacing pending): SQL
+`sqlSafetyDiagnostics` → real-app-build check graph; cookie-class adoption at the framework's own classless
+cookie sites; `kovo explain --cookies`/`--capabilities` rendering; CSP third-party allowlist `createApp` config;
+Trusted Types inline-loader sink routing; committed-secret compiler-AST check.
 - SPEC normative contracts land WITH each feature (per the plan's "land contracts with each feature" rule),
   not ahead — so `SPEC.md` edits are deferred into the slice that implements the behavior.
 
