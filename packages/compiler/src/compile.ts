@@ -807,7 +807,7 @@ function stableQueryShapeSignature(shape: QueryShape): string {
 }
 
 function isQueryShapeWrapper(shape: QueryShape): shape is {
-  kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
+  kind: 'nullable' | 'optional' | 'revealed' | 'secret' | 'volatile-time';
   shape: QueryShape;
 } {
   if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
@@ -815,6 +815,7 @@ function isQueryShapeWrapper(shape: QueryShape): shape is {
     'kind' in shape &&
     (shape.kind === 'nullable' ||
       shape.kind === 'optional' ||
+      shape.kind === 'revealed' ||
       shape.kind === 'secret' ||
       shape.kind === 'volatile-time') &&
     'shape' in shape

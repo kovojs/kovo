@@ -159,6 +159,14 @@ export const AccountCard = component({
       `{ parent: { child: import('@kovojs/core').Secret<boolean>; }; }`,
     ],
     ['quoted-key', { 'two-factor': 'boolean' }, '{ "two-factor": boolean; }'],
+    [
+      'revealed-secret',
+      {
+        kind: 'revealed',
+        shape: { kind: 'nullable', shape: { kind: 'secret', shape: 'string' } },
+      },
+      'string | null',
+    ],
   ] as const)('prints QueryShape type expression for %s', (_name, shape, expected) => {
     expect(queryShapeTypeExpression(shape)).toBe(expected);
   });
@@ -383,6 +391,44 @@ export const UserCard = component({
         }),
       ]),
     );
+  });
+
+  it('does not report KV435 for explicitly revealed query shape fields', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      queryShapes: {
+        user: {
+          id: 'string',
+          passwordDigest: {
+            kind: 'revealed',
+            reveal: {
+              grade: 'audit',
+              justification: 'one-way digest only',
+              method: 'arbitrary-fn',
+              selectedSecret: true,
+              site: 'queries/user.ts:18',
+              source: 'users.passwordHash',
+            },
+            shape: {
+              kind: 'secret',
+              shape: 'string',
+            },
+          },
+        },
+      },
+      source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span data-bind="user.passwordDigest">digest</span>
+    </user-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV435')).toEqual([]);
   });
 
   it('does not report KV435 for secret shapes that are not component-declared queries', () => {

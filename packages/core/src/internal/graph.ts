@@ -25,6 +25,7 @@ export type {
   QueryDataFact,
   QueryReadSet,
   ReadSite,
+  RevealExplainFact,
   RequestProviderExplain,
   RenderEquivalenceCheck,
   ScopeAuditFact,
