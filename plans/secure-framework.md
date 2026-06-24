@@ -12,6 +12,23 @@ This plan is grounded in an adversarial audit (21-agent recon→probe→skeptic�
 whose bypass claims were re-checked by independent skeptics and whose **narrative-critical findings were
 re-confirmed by hand** against the cited `file:line`. Every finding below carries its probe/grep evidence.
 
+## Implementation status (live ledger — branch `agent/implement-secure-framework-20260624-114921`)
+
+- [x] **Runtime `Secret` poison wrapper** (§4 / §5 follow-up). `secret()`/`isSecret()`/`revealSecret()`/
+  `SecretValue<T>` in `packages/core/src/secret.ts`; poisons toString/toJSON/JSON.stringify/coercion/inspect →
+  `[secret]`; module-private `Symbol()` brand (unforgeable); private `#value`; `reveal()`/`map()`/constant-time
+  `equals()`. Evidence: `vp exec vitest --run packages/core/src/secret.test.ts` (13 tests). Commit `b4aae9d5`.
+- [x] **Pre-allocated diagnostic codes** KV428-434/437 with full help text (so parallel slices don't collide on
+  `diagnostics.ts`). Evidence: `packages/core/src/diagnostics.test.ts` (5 tests). Commit `da677eba`.
+- [ ] **Wave 1 (in flight, parallel sub-agent worktrees):** SQL KV422→`kovo check` + brand/guard hardening;
+  free isolation headers (XFO/COOP/Permissions-Policy/HSTS); KV414 join-keyed IDOR fix; named-import
+  secret-emit gate (KV437); cookie floor (KV432) + CSRF Origin/Sec-Fetch floor.
+- [ ] **Later waves:** schema-engine cluster (KV430 DoS / KV428 upload / KV434 ReDoS); KV436 default-deny
+  wiring + access migration; sources-sinks enforce (KV424/425/426); §3 interprocedural foundation → mass-
+  assignment / KV429 / KV433; CSP default-on + Trusted Types (Tier 3); egress/SSRF + capability-URL (Tier 3).
+- SPEC normative contracts land WITH each feature (per the plan's "land contracts with each feature" rule),
+  not ahead — so `SPEC.md` edits are deferred into the slice that implements the behavior.
+
 ## Honesty frame (normative, SPEC §2 / §6.6)
 
 The audit is scored on the SPEC's own four-level vocabulary; this plan uses it everywhere:
