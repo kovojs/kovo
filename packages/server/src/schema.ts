@@ -200,7 +200,7 @@ export interface FileLike {
 }
 
 /** File-upload schema produced by `s.file()`; chains size/MIME limits and `.store()` (SPEC.md §6). */
-export interface FileSchema extends Schema<FileLike> {
+export interface FileSchema extends AsyncSchema<FileLike> {
   maxBytes(value: number): FileSchema;
   mime(types: readonly string[]): FileSchema;
   store(options: StoredFileSchemaOptions): StoredFileSchema;
@@ -316,7 +316,24 @@ class FileSchemaImpl implements FileSchema {
   }
 
   parse(input: unknown): FileLike {
-    return parseFileLike(input, createFileOptions(this.#maxBytes, this.#mime));
+    const file = parseFileLike(input, createFileOptions(this.#maxBytes, undefined));
+    if (this.#mime !== undefined) {
+      throw validationError('File MIME validation requires async parsing');
+    }
+
+    return file;
+  }
+
+  async parseAsync(input: unknown): Promise<FileLike> {
+    const file = parseFileLike(input, createFileOptions(this.#maxBytes, undefined));
+    if (this.#mime !== undefined) {
+      const contentType = sniffUploadContentType(new Uint8Array(await file.arrayBuffer()));
+      if (!this.#mime.includes(contentType)) {
+        throw validationError(`Expected file type ${this.#mime.join(', ')}`);
+      }
+    }
+
+    return file;
   }
 
   store(options: StoredFileSchemaOptions): StoredFileSchema {
@@ -344,12 +361,18 @@ class StoredFileSchemaImpl implements StoredFileSchema {
 
   async parseAsync(input: unknown): Promise<StoredFileUpload> {
     const file = parseFileLike(input, this.#fileOptions);
+    const bytes = await file.arrayBuffer();
+    const contentType = sniffUploadContentType(new Uint8Array(bytes));
+    if (this.#fileOptions.mime && !this.#fileOptions.mime.includes(contentType)) {
+      throw validationError(`Expected file type ${this.#fileOptions.mime.join(', ')}`);
+    }
+
     const key =
       typeof this.#storageOptions.key === 'string'
         ? this.#storageOptions.key
         : await this.#storageOptions.key(file);
-    const storage = await this.#storageOptions.storage.put(key, await file.arrayBuffer(), {
-      ...(file.type === '' ? {} : { contentType: file.type }),
+    const storage = await this.#storageOptions.storage.put(key, bytes, {
+      contentType,
       metadata: {
         filename: file.name,
         ...this.#storageOptions.metadata?.(file),
@@ -380,11 +403,47 @@ function parseFileLike(input: unknown, options: FileSchemaOptions): FileLike {
   if (options.maxBytes !== undefined && input.size > options.maxBytes) {
     throw validationError(`Expected file <= ${options.maxBytes} bytes`);
   }
-  if (options.mime && !options.mime.includes(input.type)) {
-    throw validationError(`Expected file type ${options.mime.join(', ')}`);
-  }
 
   return input;
+}
+
+function sniffUploadContentType(bytes: Uint8Array): string {
+  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return 'image/png';
+  }
+  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) return 'image/jpeg';
+  if (startsWithAscii(bytes, 'GIF87a') || startsWithAscii(bytes, 'GIF89a')) return 'image/gif';
+  if (bytes.length >= 12 && startsWithAscii(bytes, 'RIFF') && asciiAt(bytes, 8, 12) === 'WEBP') {
+    return 'image/webp';
+  }
+  if (startsWithAscii(bytes, '%PDF-')) return 'application/pdf';
+  if (looksLikePlainText(bytes)) return 'text/plain';
+
+  return 'application/octet-stream';
+}
+
+function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
+  if (bytes.length < prefix.length) return false;
+  return prefix.every((value, index) => bytes[index] === value);
+}
+
+function startsWithAscii(bytes: Uint8Array, prefix: string): boolean {
+  return asciiAt(bytes, 0, prefix.length) === prefix;
+}
+
+function asciiAt(bytes: Uint8Array, start: number, end: number): string {
+  return String.fromCharCode(...bytes.subarray(start, end));
+}
+
+function looksLikePlainText(bytes: Uint8Array): boolean {
+  if (bytes.length === 0) return false;
+
+  for (const byte of bytes) {
+    if (byte === 0) return false;
+    if (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d) return false;
+  }
+
+  return true;
 }
 
 function isFileLike(value: unknown): value is FileLike {

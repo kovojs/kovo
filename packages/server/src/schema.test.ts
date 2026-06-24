@@ -157,7 +157,7 @@ describe('server schemas', () => {
       },
     });
     const form = new FormData();
-    form.set('avatar', formDataFile(['avatar'], 'avatar.png', 'image/png'));
+    form.set('avatar', formDataFile([pngBytes()], 'avatar.png', 'image/png'));
 
     await expect(runMutation(uploadAvatar, form, {})).resolves.toEqual({
       changes: [],
@@ -165,7 +165,7 @@ describe('server schemas', () => {
       rerunQueries: [],
       value: {
         name: 'avatar.png',
-        size: 6,
+        size: 8,
         type: 'image/png',
       },
     });
@@ -190,7 +190,7 @@ describe('server schemas', () => {
       },
     });
     const form = new FormData();
-    form.set('avatar', formDataFile(['avatar'], 'avatar.png', 'image/png'));
+    form.set('avatar', formDataFile([pngBytes()], 'avatar.png', 'image/png'));
 
     await expect(runMutation(uploadAvatar, form, {})).resolves.toEqual({
       changes: [],
@@ -200,17 +200,50 @@ describe('server schemas', () => {
         contentType: 'image/png',
         key: 'avatars/avatar.png',
         name: 'avatar.png',
-        size: 6,
+        size: 8,
       },
     });
     await expect(storage.get('avatars/avatar.png')).resolves.toMatchObject({
       contentType: 'image/png',
       key: 'avatars/avatar.png',
       metadata: { filename: 'avatar.png' },
-      size: 6,
+      size: 8,
     });
     const stored = await storage.get('avatars/avatar.png');
-    expect(new TextDecoder().decode(await storageBodyToBytes(stored?.body ?? ''))).toBe('avatar');
+    await expect(storageBodyToBytes(stored?.body ?? '')).resolves.toEqual(pngBytes());
+  });
+
+  it('stores server-sniffed MIME instead of the client-declared file type', async () => {
+    const storage = createMemoryStorage();
+    const upload = s.file().store({
+      key: 'uploads/report.pdf',
+      storage,
+    });
+    const file = formDataFile(['%PDF-1.7\n'], 'report.pdf', 'image/png');
+
+    await expect(parseSchemaAsync(upload, file)).resolves.toMatchObject({
+      storage: { contentType: 'application/pdf' },
+    });
+    await expect(storage.get('uploads/report.pdf')).resolves.toMatchObject({
+      contentType: 'application/pdf',
+      metadata: { filename: 'report.pdf' },
+    });
+  });
+
+  it('falls back to application/octet-stream for unsniffed upload bytes', async () => {
+    const storage = createMemoryStorage();
+    const upload = s.file().store({
+      key: 'uploads/payload.bin',
+      storage,
+    });
+    const file = formDataFile([new Uint8Array([0, 1, 2, 3])], 'payload.bin', 'image/png');
+
+    await expect(parseSchemaAsync(upload, file)).resolves.toMatchObject({
+      storage: { contentType: 'application/octet-stream' },
+    });
+    await expect(storage.get('uploads/payload.bin')).resolves.toMatchObject({
+      contentType: 'application/octet-stream',
+    });
   });
 
   it('does not store invalid multipart file fields', async () => {
@@ -300,8 +333,8 @@ describe('server schemas', () => {
       ),
     });
     const form = new FormData();
-    form.append('photos', formDataFile(['one'], 'one.png', 'image/png'));
-    form.append('photos', formDataFile(['evil'], '../../etc/evil.png', 'image/png'));
+    form.append('photos', formDataFile([pngBytes()], 'one.png', 'image/png'));
+    form.append('photos', formDataFile([pngBytes()], '../../etc/evil.png', 'image/png'));
 
     // The traversal key reaches `storage.put`, where `normalizeStorageKey` rejects it.
     await expect(parseSchemaAsync(schema, form)).rejects.toThrow(/parent path segments/u);
@@ -407,6 +440,10 @@ describe('server schemas', () => {
   });
 });
 
-function formDataFile(bits: string[], name: string, type: string): Blob {
+function pngBytes(): Uint8Array {
+  return new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+}
+
+function formDataFile(bits: BlobPart[], name: string, type: string): Blob {
   return new File(bits, name, { type }) as unknown as Blob;
 }
