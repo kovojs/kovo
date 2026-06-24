@@ -277,6 +277,65 @@ export const CartBadge = component({
     }
   });
 
+  it('allows audited publishToClient derivations of secret-provenance constants', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+import { component, publishToClient } from '@kovojs/core';
+import { track } from './analytics';
+
+const KEY_PREFIX = publishToClient(process.env.API_KEY.slice(0, 4), {
+  reason: 'prefix is intentionally public for support correlation',
+});
+
+export const CartBadge = component({
+  render: () => <button onClick={() => track(KEY_PREFIX)}>Track</button>,
+});
+`,
+    });
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
+    expect(clientSource).toContain('const KEY_PREFIX = process.env.API_KEY.slice(0, 4);');
+    expect(clientSource).toContain('track(KEY_PREFIX);');
+    expect(result.capabilities).toEqual([
+      {
+        kind: 'publishToClient',
+        reason: 'prefix is intentionally public for support correlation',
+        site: 'cart-badge.tsx#KEY_PREFIX',
+        source: 'process.env.API_KEY.slice(0, 4)',
+      },
+    ]);
+  });
+
+  it('requires publishToClient to carry a non-empty static reason', () => {
+    for (const publishExpression of [
+      'publishToClient(process.env.API_KEY.slice(0, 4), {})',
+      'publishToClient(process.env.API_KEY.slice(0, 4), { reason: "" })',
+      'publishToClient(process.env.API_KEY.slice(0, 4), { reason })',
+    ]) {
+      const result = compileComponentModule({
+        fileName: 'cart-badge.tsx',
+        source: `
+import { component, publishToClient } from '@kovojs/core';
+import { track } from './analytics';
+
+const reason = 'reviewed';
+const KEY_PREFIX = ${publishExpression};
+
+export const CartBadge = component({
+  render: () => <button onClick={() => track(KEY_PREFIX)}>Track</button>,
+});
+`,
+      });
+      const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
+      expect(clientSource).not.toContain('const KEY_PREFIX =');
+      expect(result.capabilities).toEqual([]);
+    }
+  });
+
   it('reports KV201 for imported data captures while preserving imported handler callees', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -32,6 +32,7 @@ import {
   clientModuleUrl,
   clientModuleVersion,
   lowerEventHandlers,
+  publishToClientCapabilityFacts,
   versionHandlerLowering,
 } from './lower/handlers.js';
 import { runLoweringPipeline } from './lowering-pipeline.js';
@@ -197,6 +198,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       mutationForms,
     ),
   ];
+  const capabilities = publishToClientCapabilityFacts(model, options.fileName);
   const cssAssets = cssSource
     ? [
         {
@@ -268,6 +270,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   ];
 
   return {
+    capabilities,
     componentGraphFacts,
     dependencyFootprint: compileDependencyFootprint(compileOptions, {
       fileName: options.fileName,

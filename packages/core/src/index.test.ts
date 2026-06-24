@@ -7,6 +7,7 @@ import {
   FormError,
   href,
   Link,
+  publishToClient,
   query,
   redirect,
   route,
@@ -217,6 +218,15 @@ describe('core authoring APIs', () => {
     expect(() =>
       trustedReveal('hash-1' as unknown as Secret<string>, { justification: '   ' }),
     ).toThrow('trustedReveal requires a non-empty justification.');
+  });
+
+  it('requires an explicit audited reason before publishing a value to client modules', () => {
+    expect(publishToClient('key-prefix', { reason: 'public support correlation prefix' })).toBe(
+      'key-prefix',
+    );
+    expect(() => publishToClient('key-prefix', { reason: '   ' })).toThrow(
+      'publishToClient requires a non-empty reason.',
+    );
   });
 
   it('preserves query and form keys as typed authoring facts', () => {

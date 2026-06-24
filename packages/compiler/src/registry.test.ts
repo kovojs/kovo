@@ -531,6 +531,34 @@ export const ProductGrid = component({
     });
   });
 
+  it('threads component capability facts into the app explain graph', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component, publishToClient } from '@kovojs/core';
+
+const KEY_PREFIX = publishToClient(process.env.API_KEY.slice(0, 4), {
+  reason: 'prefix is intentionally public for support correlation',
+});
+
+export const CartBadge = component({
+  render: () => <button onClick={() => console.log(KEY_PREFIX)}>Track</button>,
+});
+`,
+    });
+
+    const derived = deriveAppGraph({ components: [result] });
+
+    expect(derived.graph.capabilities).toEqual([
+      {
+        kind: 'publishToClient',
+        reason: 'prefix is intentionally public for support correlation',
+        site: 'components/cart/cart-badge.tsx#KEY_PREFIX',
+        source: 'process.env.API_KEY.slice(0, 4)',
+      },
+    ]);
+  });
+
   it('derives page query facts from compiled route component usage', () => {
     const cartBadge = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',

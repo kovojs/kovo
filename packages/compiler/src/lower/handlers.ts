@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
@@ -135,7 +136,10 @@ function redactsClientBody(
   const references = handlerReferenceNames(eventAttribute);
   const secretBindings = new Set(
     model.moduleScopeBindings
-      .filter((binding) => binding.secretProvenance !== undefined)
+      .filter(
+        (binding) =>
+          binding.secretProvenance !== undefined && binding.publishToClient === undefined,
+      )
       .map((binding) => binding.name),
   );
   if ([...references].some((reference) => secretBindings.has(reference))) return true;
@@ -237,10 +241,14 @@ function clientConstantDependencies(
   references: ReadonlySet<string>,
 ): { clientConstants: readonly ClientConstantDependency[] } | {} {
   const clientConstants = moduleScopeBindings
-    .filter((item) => references.has(item.name) && item.secretProvenance === undefined)
+    .filter(
+      (item) =>
+        references.has(item.name) &&
+        (item.secretProvenance === undefined || item.publishToClient !== undefined),
+    )
     .map((item) => ({
       name: item.name,
-      source: item.source,
+      source: item.publishToClient?.source ?? item.source,
     }));
 
   return clientConstants.length > 0 ? { clientConstants } : {};
@@ -338,11 +346,29 @@ export function capturesUnserializableReferences(
     ...(context.elementParams ?? []).flatMap((param) => referenceRootsForElementParam(param)),
     ...(context.callableNamedImports ?? context.model.namedImports.map((item) => item.localName)),
     ...context.model.moduleScopeBindings
-      .filter((item) => item.secretProvenance === undefined)
+      .filter((item) => item.secretProvenance === undefined || item.publishToClient !== undefined)
       .map((item) => item.name),
   ]);
 
   return references.some((name) => !allowed.has(name));
+}
+
+export function publishToClientCapabilityFacts(
+  model: ComponentModuleModel,
+  fileName: string,
+): CoreGraph.CapabilityExplainFact[] {
+  return model.moduleScopeBindings.flatMap((binding) =>
+    binding.publishToClient
+      ? [
+          {
+            kind: 'publishToClient',
+            reason: binding.publishToClient.reason,
+            site: `${fileName}#${binding.name}`,
+            source: binding.publishToClient.source,
+          },
+        ]
+      : [],
+  );
 }
 
 function callableNamedImportReferences(

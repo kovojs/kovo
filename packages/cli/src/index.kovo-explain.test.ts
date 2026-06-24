@@ -736,6 +736,12 @@ describe('kovo explain', () => {
             source: 'input.role',
             table: 'accounts',
           },
+          {
+            kind: 'publishToClient',
+            reason: 'prefix is intentionally public for support correlation',
+            site: 'components/cart/cart-badge.tsx#KEY_PREFIX',
+            source: 'process.env.API_KEY.slice(0, 4)',
+          },
         ],
       },
       { capabilities: true },
@@ -746,7 +752,8 @@ describe('kovo explain', () => {
       "kovo-explain/v1
       CAPABILITIES
       CAPABILITY kind=adminAssign site=account.domain.ts:10 table=accounts column=role source=input.role reason="support role correction"
-      SUMMARY total=1
+      CAPABILITY kind=publishToClient site=components/cart/cart-badge.tsx#KEY_PREFIX table=- column=- source=process.env.API_KEY.slice(0, 4) reason="prefix is intentionally public for support correlation"
+      SUMMARY total=2
       "
     `);
   });
