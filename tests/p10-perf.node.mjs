@@ -130,7 +130,7 @@ export async function runP10PerfAcceptance() {
       assert.ok(
         firstLoad.lastDelegatedListenerMark - firstLoad.fcp <=
           p10PerfAcceptance.paintTimingJitterBudgetMs,
-        'delegated listeners are installed no later than first contentful paint',
+        `delegated listeners are installed no later than first contentful paint (fcp=${firstLoad.fcp}, listener=${firstLoad.lastDelegatedListenerMark}, delta=${firstLoad.lastDelegatedListenerMark - firstLoad.fcp})`,
       );
       assert.ok(
         firstLoad.ttiMinusFcpMs <= p10PerfAcceptance.paintTimingJitterBudgetMs,

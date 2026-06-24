@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+
 jobs:
   format:
     runs-on: ubuntu-latest
@@ -16,7 +19,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -36,7 +39,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -61,7 +64,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - run: vp exec pnpm rebuild better-sqlite3
       - id: compiler-cache-key
@@ -83,7 +86,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - run: vp exec pnpm rebuild better-sqlite3
       - run: |
@@ -106,7 +109,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -129,7 +132,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -150,7 +153,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -176,7 +179,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -197,7 +200,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -222,7 +225,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -246,7 +249,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -271,7 +274,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"

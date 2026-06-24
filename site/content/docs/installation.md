@@ -12,7 +12,8 @@ Kovo projects use.
 
 ## Prerequisites
 
-- **Node.js 24+** - the toolchain targets current Node.
+- **Node.js 22.15+** - the minimum Node line supported by the current toolchain. Repository
+  automation enables Node's transform-types flag where workspace source TS is loaded directly.
 - **pnpm 10+** - the workspace package manager.
 - **TypeScript, strict** - Kovo's correctness guarantees are guarantees about TypeScript programs
   that stay inside the sound subset. The starter ships strict TypeScript because the compiler can

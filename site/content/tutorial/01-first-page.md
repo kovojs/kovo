@@ -21,7 +21,7 @@ state is `site/tutorial/steps/01-first-page/`.
 ## Prerequisites
 
 Kovo is pre-release, so you'll work inside the repository as workspace code. See
-[Installation](/docs/installation/) for the prerequisites (Node 24+, pnpm 10+) and a tour of
+[Installation](/docs/installation/) for the prerequisites (Node 22.15+, pnpm 10+) and a tour of
 what `pnpm install` sets up. You'll write strict TypeScript throughout — the framework's
 correctness checks are checks on TypeScript programs.
 

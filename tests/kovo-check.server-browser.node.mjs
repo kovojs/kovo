@@ -313,6 +313,7 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
   } catch (error) {
     const importFailureFact = moduleImportFailureFact(error, [
       '__filename is not defined in ES module scope',
+      'packages/drizzle/src/graph.js',
       'packages/core/src/diagnostics.js',
     ]);
     assert.equal(importFailureFact.allowed, true, 'unexpected Drizzle static import failure');

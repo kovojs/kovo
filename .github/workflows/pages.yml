@@ -13,6 +13,9 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,7 +24,7 @@ jobs:
 
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
 
       - run: vp install
       - id: compiler-cache-key
