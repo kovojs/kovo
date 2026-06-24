@@ -234,9 +234,13 @@ until Phase 1, accepted deliberately so every gate is sound on arrival.
   - Evidence: `packages/drizzle/src/static.ts` exports `symbolProvenanceForExpression`,
     `provenServerProvenanceForExpression`, and `provenInputProvenanceForExpression`; the focused provenance
     test above covers positive and fail-closed proof-helper cases.
-- [ ] Invert the read-side input classifier for write/leak direction.
+- [x] Invert the read-side input classifier for write/leak direction.
   - `queryInputKeyOperand` (`summaries.ts:652`) fails open (fine for read-side IDOR, where the WHERE clause
     is separately audited). The write/leak gates must **prove server-provenance** and reject all else.
+  - Evidence: `provenServerProvenanceForExpression` in
+    `packages/drizzle/src/static/symbol-provenance.ts` returns proof only for `ServerProvenance`; the focused
+    provenance test passed on local `main` at `91988759` and covers input/unknown values returning
+    `undefined`.
 - [x] Conformance test the bypass corpus before declaring Phase 0 done (the gate criterion).
   - [x] Cover Drizzle aliasing (`alias(users, "u")`), renamed import (`users as accounts`),
         intermediate table binding (`const t = users`), and destructured input provenance in the symbolic
