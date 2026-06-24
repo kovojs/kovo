@@ -96,7 +96,9 @@ describe('SSRF normalization bypasses (decimal/octal/hex/IPv4-mapped/NAT64)', ()
 describe('evaluateEgress policy decision', () => {
   it('allows public, denies loopback not in allowInternal', () => {
     const policy = emptyPolicy();
-    expect(evaluateEgress({ host: '1.1.1.1', port: 443, resolvedIp: '1.1.1.1', policy })).toBeNull();
+    expect(
+      evaluateEgress({ host: '1.1.1.1', port: 443, resolvedIp: '1.1.1.1', policy }),
+    ).toBeNull();
     const blocked = evaluateEgress({
       host: '127.0.0.1',
       port: 6379,
@@ -165,9 +167,9 @@ describe('evaluateEgress policy decision', () => {
 
 describe('resolveEgressPolicy config validation', () => {
   it('rejects a metadata IP in allowInternal (loud config error)', () => {
-    expect(() =>
-      resolveEgressPolicy({ allowInternal: ['169.254.169.254:80'] }, () => {}),
-    ).toThrow(EgressConfigError);
+    expect(() => resolveEgressPolicy({ allowInternal: ['169.254.169.254:80'] }, () => {})).toThrow(
+      EgressConfigError,
+    );
   });
 
   it('warns on a CIDR entry but honors it as a range fallback', () => {

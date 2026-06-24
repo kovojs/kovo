@@ -89,7 +89,11 @@ describe('capability-url: sign + constant-time verify before any storage read', 
   });
 
   it('REJECTS a token signed with a different secret', async () => {
-    const { token } = await signCapability('secret-A-padding-padding-padding-pad', { key: 'a.pdf' }, 0);
+    const { token } = await signCapability(
+      'secret-A-padding-padding-padding-pad',
+      { key: 'a.pdf' },
+      0,
+    );
     const result = await verifyCapability('secret-B-padding-padding-padding-pad', token, {
       key: 'a.pdf',
       method: 'GET',
@@ -138,7 +142,12 @@ describe('capability-url: one-time tokens via a replay store', () => {
 
   it('a one-time token fails closed when no replay store is provided', async () => {
     const { token } = await signCapability(SECRET, { key: 'a.pdf', oneTime: true }, 0);
-    const result = await verifyCapability(SECRET, token, { key: 'a.pdf', method: 'GET' }, { now: 1 });
+    const result = await verifyCapability(
+      SECRET,
+      token,
+      { key: 'a.pdf', method: 'GET' },
+      { now: 1 },
+    );
     expect(result).toEqual({ ok: false, reason: 'replayed' });
   });
 

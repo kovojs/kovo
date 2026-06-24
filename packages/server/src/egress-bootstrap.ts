@@ -4,7 +4,15 @@ import {
   resolveEgressPolicy,
   type EgressOptions,
 } from './egress.js';
-import { installUndiciFloor, isUndiciFloorInstalled } from './egress-undici.js';
+
+type UndiciFloorModule = typeof import('./egress-undici.js');
+
+let undiciFloorModule: UndiciFloorModule | undefined;
+
+async function loadUndiciFloorModule(): Promise<UndiciFloorModule> {
+  undiciFloorModule ??= await import('./egress-undici.js');
+  return undiciFloorModule;
+}
 
 /**
  * Bootstrap for the outbound-egress private-network deny floor (SPEC §6.6;
@@ -72,8 +80,9 @@ export function installEgressFloor(
     let uninstallUndici: () => void = () => {};
     let undiciInstalled = false;
     try {
-      uninstallUndici = await installUndiciFloor(policy);
-      undiciInstalled = isUndiciFloorInstalled();
+      const undiciFloor = await loadUndiciFloorModule();
+      uninstallUndici = await undiciFloor.installUndiciFloor(policy);
+      undiciInstalled = undiciFloor.isUndiciFloorInstalled();
     } catch (error) {
       warn(
         `undici dispatcher layer failed to install (${
@@ -110,7 +119,7 @@ export function selfProbe(
   warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
 ): { netConnectInstalled: boolean; undiciInstalled: boolean } {
   const net = isNetConnectFloorInstalled();
-  const undici = isUndiciFloorInstalled();
+  const undici = undiciFloorModule?.isUndiciFloorInstalled() ?? false;
   if (!net && !undici) {
     warn(
       'SELF-PROBE: the outbound-egress private-network deny floor is NOT installed in this ' +

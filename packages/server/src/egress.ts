@@ -76,9 +76,10 @@ export class EgressBlockedError extends Error {
     classification: PrivateAddressClass;
     metadata?: boolean;
   }) {
-    const where = args.resolvedIp && args.resolvedIp !== args.destination.split(':')[0]
-      ? `${args.destination} (resolved to ${args.resolvedIp})`
-      : args.destination;
+    const where =
+      args.resolvedIp && args.resolvedIp !== args.destination.split(':')[0]
+        ? `${args.destination} (resolved to ${args.resolvedIp})`
+        : args.destination;
     const remediation = args.metadata
       ? 'Cloud instance-metadata is reachable only inside an awsCredential()/gcpCredential()/' +
         'azureCredential() frame, never via egress.allowInternal.'
@@ -556,9 +557,10 @@ export function installNetConnectFloor(policy: EgressPolicy): () => void {
       lookupOptions: unknown,
       callback: (err: Error | null, address: string, family: number) => void,
     ) => {
-      const cb = typeof lookupOptions === 'function'
-        ? (lookupOptions as (err: Error | null, a: string, f: number) => void)
-        : callback;
+      const cb =
+        typeof lookupOptions === 'function'
+          ? (lookupOptions as (err: Error | null, a: string, f: number) => void)
+          : callback;
       const opts = typeof lookupOptions === 'function' ? {} : (lookupOptions as object);
       const resolver = (userLookup ?? dns.lookup) as typeof dns.lookup;
       resolver(hostname, opts as dns.LookupOptions, (err, address, family) => {
@@ -578,10 +580,7 @@ export function installNetConnectFloor(policy: EgressPolicy): () => void {
   return makeUninstall(flooredNet, proto);
 }
 
-function makeUninstall(
-  flooredNet: FlooredNetModule,
-  proto: { connect: ConnectFn },
-): () => void {
+function makeUninstall(flooredNet: FlooredNetModule, proto: { connect: ConnectFn }): () => void {
   return () => {
     const original = flooredNet[ORIGINAL_CONNECT];
     if (original) {
