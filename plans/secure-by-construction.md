@@ -293,13 +293,14 @@ design.
 - [ ] Opaque/aliased projection backstop (diagnostic code TBD, **error** severity): a `sql\`\``/spread/computed-key
 projection of a table carrying ≥1 secret column requires an audited brand. Blast radius concentrates on
 `users`/`accounts`/`payments` — invest in the teaching message and make adding the brand the one-line fix.
-- [ ] Cover Drizzle **relational** queries (`with: { author: { columns: { passwordHash: true } } }`) — a
+- [x] Cover Drizzle **relational** queries (`with: { author: { columns: { passwordHash: true } } }`) — a
       different AST shape than `db.select({})` and a primary leak vector. In scope for v1, not a follow-on.
-  - Partial evidence: `packages/drizzle/src/static/query-shapes.ts` derives shapes for static top-level
-    `db.query.<table>.findMany({ columns: { ...: true } })` projections and preserves secret wrappers from
-    table annotations; `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts` verifies the
-    top-level relational secret projection case. Remaining gap: nested `with: { relation: { columns } }`
-    projections are not yet modeled.
+  - Evidence: `packages/drizzle/src/static/query-shapes.ts` recursively derives static
+    `db.query.<table>.findMany({ columns, with: { relation: { columns } } })` shapes, and
+    `packages/drizzle/src/static/schema.ts` maps Drizzle `relations(...)` property names to target table column
+    shapes so secret wrappers survive nested projections. Verified with
+    `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts` and
+    `vp exec vitest --run packages/drizzle/src`.
 - [ ] Escape hatch (fork in Open Design Questions: fixed verifiable redactor set vs arbitrary `fn` behind
       `trustedReveal`): surface every reveal in `kovo explain --revealed`; arbitrary-`fn` reveals are
       audit-grade, not proof-grade. Prefer a server-side projection that never selects the secret.

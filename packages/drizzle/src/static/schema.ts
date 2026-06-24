@@ -1136,7 +1136,77 @@ function secretAnnotatedColumnShapes(
     appendColumnShapesForTablePath(shapes, tablePath, tableShapes);
   }
 
+  appendRelationColumnShapesForFile(shapes, sourceFile, tableNamesBySymbol, columnShapesByTable);
+
   return shapes;
+}
+
+function appendRelationColumnShapesForFile(
+  shapes: Record<string, QueryShape>,
+  sourceFile: SourceFile,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+  columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>,
+): void {
+  const namespaceTableNames = projectNamespaceTableNamesByLocal(sourceFile, tableNamesBySymbol);
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (relationCallName(call) !== 'relations') continue;
+
+    const relationObject = relationDefinitionObject(call);
+    if (!relationObject) continue;
+
+    for (const property of relationObject.getProperties()) {
+      if (!Node.isPropertyAssignment(property)) continue;
+
+      const relation = propertyNameText(property.getNameNode());
+      const target = relationTargetTableName(
+        property.getInitializer(),
+        tableNamesBySymbol,
+        namespaceTableNames,
+      );
+      const tableShapes = target ? columnShapesByTable.get(target) : undefined;
+      if (!relation || !tableShapes) continue;
+
+      appendColumnShapesForTablePath(shapes, relation, tableShapes);
+    }
+  }
+}
+
+function relationCallName(call: CallExpression): string | undefined {
+  const expression = call.getExpression();
+  return Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+}
+
+function relationDefinitionObject(call: CallExpression): ObjectLiteralExpression | undefined {
+  const callback = call.getArguments()[1];
+  if (!callback || (!Node.isArrowFunction(callback) && !Node.isFunctionExpression(callback))) {
+    return undefined;
+  }
+
+  const body = unwrappedStaticExpressionNode(callback.getBody());
+  if (Node.isObjectLiteralExpression(body)) return body;
+  if (!Node.isBlock(body)) return undefined;
+
+  const returned = body.getStatements().flatMap((statement) => {
+    if (!Node.isReturnStatement(statement)) return [];
+    const returnExpression = statement.getExpression();
+    if (!returnExpression) return [];
+
+    const expression = unwrappedStaticExpressionNode(returnExpression);
+    return expression && Node.isObjectLiteralExpression(expression) ? [expression] : [];
+  });
+  return returned[0];
+}
+
+function relationTargetTableName(
+  initializer: Node | undefined,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+  namespaceTableNames: ProjectNamespaceTableNames,
+): string | undefined {
+  const call = initializer && Node.isCallExpression(initializer) ? initializer : undefined;
+  const target = call?.getArguments()[0];
+  return target
+    ? projectTableNameForNode(target, tableNamesBySymbol, namespaceTableNames)
+    : undefined;
 }
 
 /** @internal */ export function projectTableNameForColumnShapeAccess(
