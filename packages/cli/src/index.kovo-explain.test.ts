@@ -743,10 +743,53 @@ describe('kovo explain', () => {
             source: 'process.env.API_KEY.slice(0, 4)',
           },
           {
+            detail: 'scope=reports/*,method=GET,oneTime=yes',
+            kind: 'capabilityUrl',
+            reason: 'download link for a verified report recipient',
+            site: 'reports/download.ts:42',
+            source: 'request.signUrl',
+          },
+          {
+            detail: 'host=otel:4318',
+            kind: 'egressAllowInternal',
+            reason: 'local telemetry collector',
+            site: 'app.ts#egress.allowInternal[0]',
+            source: 'otel:4318',
+          },
+          {
             kind: 'cspAllow',
             reason: 'Stripe checkout frame',
             site: 'app.ts#document.csp.allow.frames',
             source: 'https://checkout.stripe.com',
+          },
+          {
+            kind: 'unsafeRegex',
+            reason: 'legacy SKU format reviewed for bounded input',
+            site: 'schema/product.ts:21',
+            source: '/^([A-Z]+)+$/',
+          },
+        ],
+        cookies: [
+          {
+            class: 'auth',
+            downgraded: ['sameSiteNone'],
+            floor: 'HttpOnly; Secure; SameSite=None',
+            justification: 'embedded checkout flow requires cross-site callback',
+            name: 'embed_sid',
+            site: 'auth/embed.ts:12',
+            source: 'builder',
+          },
+        ],
+        revealed: [
+          {
+            grade: 'proof',
+            justification: 'server SQL projects only the email domain',
+            method: 'server-projection',
+            path: 'emailDomain',
+            query: 'admin/users',
+            selectedSecret: false,
+            site: 'app/queries/users.ts:18',
+            source: 'users.email',
           },
         ],
       },
@@ -757,10 +800,15 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       CAPABILITIES
-      CAPABILITY kind=adminAssign site=account.domain.ts:10 table=accounts column=role source=input.role reason="support role correction"
-      CAPABILITY kind=cspAllow site=app.ts#document.csp.allow.frames table=- column=- source=https://checkout.stripe.com reason="Stripe checkout frame"
-      CAPABILITY kind=publishToClient site=components/cart/cart-badge.tsx#KEY_PREFIX table=- column=- source=process.env.API_KEY.slice(0, 4) reason="prefix is intentionally public for support correlation"
-      SUMMARY total=3
+      CAPABILITY capability=adminAssign owner=auth.data-authorization surface=write source="input.role" sink="db.write:accounts.role" site=account.domain.ts:10 detail="tableColumn=accounts.role" justification="support role correction"
+      CAPABILITY capability=publishToClient owner=confidentiality.client-module surface=client source="process.env.API_KEY.slice(0, 4)" sink="client-module" site=components/cart/cart-badge.tsx#KEY_PREFIX detail=- justification="prefix is intentionally public for support correlation"
+      CAPABILITY capability=confidentialityReveal owner=confidentiality.query-wire surface=query source="users.email" sink="query:admin/users.emailDomain" site=app/queries/users.ts:18 detail="grade=proof,method=server-projection,selectedSecret=no" justification="server SQL projects only the email domain"
+      CAPABILITY capability=capabilityUrl owner=file.storage.static-export surface=storage source="request.signUrl" sink="capability-url" site=reports/download.ts:42 detail="scope=reports/*,method=GET,oneTime=yes" justification="download link for a verified report recipient"
+      CAPABILITY capability=cspAllow owner=html.dom.output surface=document source="https://checkout.stripe.com" sink="csp-allowlist" site=app.ts#document.csp.allow.frames detail=- justification="Stripe checkout frame"
+      CAPABILITY capability=unsafeCookie owner=http.header.cookie surface=response source="builder" sink="Set-Cookie:embed_sid" site=auth/embed.ts:12 detail="class=auth,floor=HttpOnly; Secure; SameSite=None,downgraded=sameSiteNone" justification="embedded checkout flow requires cross-site callback"
+      CAPABILITY capability=egressAllowInternal owner=network.egress surface=egress source="otel:4318" sink="internal-network" site=app.ts#egress.allowInternal[0] detail="host=otel:4318" justification="local telemetry collector"
+      CAPABILITY capability=unsafeRegex owner=resource.regex surface=schema source="/^([A-Z]+)+$/" sink="RegExp" site=schema/product.ts:21 detail=- justification="legacy SKU format reviewed for bounded input"
+      SUMMARY total=8
       "
     `);
   });
@@ -881,6 +929,47 @@ describe('kovo explain', () => {
         'REVEALED',
         'REVEAL grade=audit method=arbitrary-fn query=support/user path=tokenPreview site=app/support.ts:9 source=users.apiToken selectedSecret=yes justification="reviewed support-only reveal"',
         'SUMMARY total=1 proof=0 audit=1',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('accepts kovo explain --capabilities as a CLI audit mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-capabilities-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          capabilities: [
+            {
+              kind: 'unsafeRegex',
+              reason: 'bounded import file format',
+              site: 'schema/import.ts:7',
+              source: '/^(a+)+$/',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--capabilities', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      [
+        'kovo-explain/v1',
+        'CAPABILITIES',
+        'CAPABILITY capability=unsafeRegex owner=resource.regex surface=schema source="/^(a+)+$/" sink="RegExp" site=schema/import.ts:7 detail=- justification="bounded import file format"',
+        'SUMMARY total=1',
         '',
       ].join('\n'),
     );

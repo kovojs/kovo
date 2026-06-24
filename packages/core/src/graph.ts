@@ -116,10 +116,28 @@ export interface AccessExplainFact {
 /** @internal */
 export interface CapabilityExplainFact {
   column?: string;
-  kind: 'adminAssign' | 'cspAllow' | 'publishToClient' | 'unsafeRegex';
+  detail?: string;
+  kind:
+    | 'acceptUnverified'
+    | 'adminAssign'
+    | 'allowInternal'
+    | 'capabilityUrl'
+    | 'cspAllow'
+    | 'egress'
+    | 'egressAllowInternal'
+    | 'elevatedRead'
+    | 'publishToClient'
+    | 'rawRead'
+    | 'rawResponse'
+    | 'serverValue'
+    | 'unsafeCookie'
+    | 'unsafeRegex';
+  owner?: string;
   reason?: string;
+  sink?: string;
   site: string;
   source?: string;
+  surface?: string;
   table?: string;
 }
 

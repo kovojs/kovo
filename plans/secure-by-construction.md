@@ -797,12 +797,23 @@ packages/server/src/static-export-manifest.test.ts packages/server/src/static-ex
 
 ## Phase 8: Unifying capability surface
 
-- [ ] Add `kovo explain --capabilities`: one diffable table of every surface's held dangerous capabilities —
+- [x] Add `kovo explain --capabilities`: one diffable table of every surface's held dangerous capabilities —
       confidentiality reveals, egress channels, raw-db/elevated reads, raw `Response`, secrets published to
       client, and `serverValue`/`unsafeCookie`/`accept.unverified` escape hatches with justifications.
-- [ ] Unify with `plans/sources-sinks.md` `kovo explain --trust` and the §11.4 Keppo contract: extend "what
+  - Evidence: `packages/cli/src/index.kovo-explain.test.ts` now snapshots one normalized
+    `CAPABILITIES` table composed from `capabilities`, `revealed`, and audit-grade `cookies` graph facts,
+    including `adminAssign`, `publishToClient`, `unsafeRegex`, `cspAllow`, `capabilityUrl`,
+    `egressAllowInternal`, `unsafeCookie`, and confidentiality reveal rows; verified with
+    `vp exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts`
+    and `vp check packages/cli/src packages/core/src`.
+- [x] Unify with `plans/sources-sinks.md` `kovo explain --trust` and the §11.4 Keppo contract: extend "what
       can reach this app and what can it touch" to "**and what can it leak, call out to, or write**" —
       answerable without a browser.
+  - Evidence: `packages/cli/src/graph-output.ts` renders each capability row with source/sink-aligned
+    `owner`, `surface`, `source`, `sink`, `site`, `detail`, and `justification` fields while keeping
+    `--trust` as the separate escape-hatch provenance view; verified with
+    `vp exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts`
+    and `vp check packages/cli/src packages/core/src`.
 
 ## Phase 9: Red corpus and acceptance
 

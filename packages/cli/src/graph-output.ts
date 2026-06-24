@@ -26,6 +26,17 @@ interface UnguardedAccessFact {
 
 type AccessExplainKind = CoreGraph.AccessExplainFact['kind'];
 
+interface CapabilityTableRow {
+  capability: string;
+  detail: string | undefined;
+  justification: string | undefined;
+  owner: string;
+  sink: string;
+  site: string;
+  source: string | undefined;
+  surface: string;
+}
+
 /** Check family selector accepted by {@link kovoCheck} and `kovo check`. */
 export type KovoCheckFamily = 'all' | 'coverage' | 'optimistic' | 'sources-sinks';
 
@@ -167,8 +178,8 @@ export interface KovoAccessExplainOptions {
 }
 
 /**
- * `kovo explain --capabilities` options: emit audited capability escapes such
- * as Phase 3 governed-column admin assignments (plans/secure-by-construction.md).
+ * `kovo explain --capabilities` options: emit one stable table of held dangerous
+ * capabilities from graph facts (plans/secure-by-construction.md Phase 8).
  */
 export interface KovoCapabilitiesExplainOptions {
   capabilities: true;
@@ -291,11 +302,11 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
   }
 
   if ('capabilities' in options) {
-    const capabilities = [...(graph.capabilities ?? [])].sort(compareCapabilityExplain);
+    const capabilities = capabilityTableRows(graph).sort(compareCapabilityTableRow);
     lines.push('CAPABILITIES');
 
     for (const capability of capabilities) {
-      lines.push(capabilityExplainLine(capability));
+      lines.push(capabilityTableLine(capability));
     }
 
     lines.push(`SUMMARY total=${capabilities.length}`);
@@ -1598,15 +1609,159 @@ function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
   ].join(' ');
 }
 
-function capabilityExplainLine(capability: CoreGraph.CapabilityExplainFact): string {
+function capabilityTableRows(graph: CoreGraph.KovoExplainInput): CapabilityTableRow[] {
+  return [
+    ...(graph.capabilities ?? []).map(capabilityFactRow),
+    ...(graph.revealed ?? []).map(revealCapabilityRow),
+    ...(graph.cookies ?? []).flatMap(cookieCapabilityRows),
+  ];
+}
+
+function capabilityFactRow(capability: CoreGraph.CapabilityExplainFact): CapabilityTableRow {
+  const profile = capabilityKindProfile(capability.kind);
+  const tableColumn =
+    capability.table || capability.column
+      ? [capability.table ?? '-', capability.column ?? '-'].join('.')
+      : undefined;
+  const detail = capability.detail ?? (tableColumn ? `tableColumn=${tableColumn}` : undefined);
+
+  return {
+    capability: capability.kind,
+    detail,
+    justification: capability.reason,
+    owner: capability.owner ?? profile.owner,
+    sink: capability.sink ?? capabilitySink(capability, profile.sink),
+    site: capability.site,
+    source: capability.source,
+    surface: capability.surface ?? profile.surface,
+  };
+}
+
+function revealCapabilityRow(reveal: CoreGraph.RevealExplainFact): CapabilityTableRow {
+  return {
+    capability: 'confidentialityReveal',
+    detail: `grade=${reveal.grade},method=${reveal.method},selectedSecret=${
+      reveal.selectedSecret === true ? 'yes' : 'no'
+    }`,
+    justification: reveal.justification,
+    owner: 'confidentiality.query-wire',
+    sink: `query:${reveal.query}.${reveal.path}`,
+    site: reveal.site,
+    source: reveal.source,
+    surface: 'query',
+  };
+}
+
+function cookieCapabilityRows(cookie: CoreGraph.CookieExplainFact): CapabilityTableRow[] {
+  const downgraded = cookie.downgraded ?? [];
+  if (cookie.source !== 'forwarded' && downgraded.length === 0) return [];
+
+  return [
+    {
+      capability: downgraded.length > 0 ? 'unsafeCookie' : 'forwardedCookie',
+      detail: `class=${cookie.class},floor=${cookie.floor},downgraded=${list(downgraded)}`,
+      justification: cookie.justification,
+      owner: 'http.header.cookie',
+      sink: `Set-Cookie:${cookie.name}`,
+      site: cookie.site ?? '-',
+      source: cookie.source,
+      surface: 'response',
+    },
+  ];
+}
+
+function capabilityKindProfile(kind: CoreGraph.CapabilityExplainFact['kind']): {
+  owner: string;
+  sink: string;
+  surface: string;
+} {
+  switch (kind) {
+    case 'acceptUnverified':
+      return {
+        owner: 'file.storage.static-export',
+        sink: 'upload.content-type',
+        surface: 'upload',
+      };
+    case 'adminAssign':
+    case 'serverValue':
+      return {
+        owner: 'auth.data-authorization',
+        sink: 'db.write',
+        surface: 'write',
+      };
+    case 'allowInternal':
+    case 'egress':
+    case 'egressAllowInternal':
+      return {
+        owner: 'network.egress',
+        sink: 'internal-network',
+        surface: 'egress',
+      };
+    case 'capabilityUrl':
+      return {
+        owner: 'file.storage.static-export',
+        sink: 'capability-url',
+        surface: 'storage',
+      };
+    case 'cspAllow':
+      return {
+        owner: 'html.dom.output',
+        sink: 'csp-allowlist',
+        surface: 'document',
+      };
+    case 'elevatedRead':
+    case 'rawRead':
+      return {
+        owner: 'data.read',
+        sink: 'db.read',
+        surface: 'read',
+      };
+    case 'publishToClient':
+      return {
+        owner: 'confidentiality.client-module',
+        sink: 'client-module',
+        surface: 'client',
+      };
+    case 'rawResponse':
+      return {
+        owner: 'ingress.endpoint.webhook',
+        sink: 'raw-response',
+        surface: 'response',
+      };
+    case 'unsafeCookie':
+      return {
+        owner: 'http.header.cookie',
+        sink: 'Set-Cookie',
+        surface: 'response',
+      };
+    case 'unsafeRegex':
+      return {
+        owner: 'resource.regex',
+        sink: 'RegExp',
+        surface: 'schema',
+      };
+  }
+}
+
+function capabilitySink(capability: CoreGraph.CapabilityExplainFact, fallback: string): string {
+  if (capability.table && capability.column)
+    return `${fallback}:${capability.table}.${capability.column}`;
+  if (capability.table) return `${fallback}:${capability.table}`;
+  if (capability.column) return `${fallback}:${capability.column}`;
+  return fallback;
+}
+
+function capabilityTableLine(capability: CapabilityTableRow): string {
   return [
     'CAPABILITY',
-    `kind=${capability.kind}`,
+    `capability=${capability.capability}`,
+    `owner=${capability.owner}`,
+    `surface=${capability.surface}`,
+    `source=${stableValue(capability.source)}`,
+    `sink=${stableValue(capability.sink)}`,
     `site=${capability.site}`,
-    `table=${capability.table ?? '-'}`,
-    `column=${capability.column ?? '-'}`,
-    `source=${capability.source ?? '-'}`,
-    `reason=${stableValue(capability.reason)}`,
+    `detail=${stableValue(capability.detail)}`,
+    `justification=${stableValue(capability.justification)}`,
   ].join(' ');
 }
 
@@ -1665,15 +1820,13 @@ function compareUnguardedAccess(left: UnguardedAccessFact, right: UnguardedAcces
   return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
 }
 
-function compareCapabilityExplain(
-  left: CoreGraph.CapabilityExplainFact,
-  right: CoreGraph.CapabilityExplainFact,
-): number {
+function compareCapabilityTableRow(left: CapabilityTableRow, right: CapabilityTableRow): number {
   return (
-    left.kind.localeCompare(right.kind) ||
+    left.owner.localeCompare(right.owner) ||
+    left.surface.localeCompare(right.surface) ||
+    left.capability.localeCompare(right.capability) ||
     left.site.localeCompare(right.site) ||
-    (left.table ?? '').localeCompare(right.table ?? '') ||
-    (left.column ?? '').localeCompare(right.column ?? '')
+    left.sink.localeCompare(right.sink)
   );
 }
 

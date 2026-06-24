@@ -144,7 +144,8 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
       },
       {
         flag: '--capabilities',
-        description: 'List audited capability escapes such as governed-column admin assignments.',
+        description:
+          'List held dangerous capabilities across confidentiality, egress, cookie, CSP, storage, and raw escape facts.',
       },
       {
         flag: '--cookies',
