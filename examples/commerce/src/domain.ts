@@ -1,5 +1,5 @@
 import { form, type FormInput } from '@kovojs/core';
-import { guards, i18n, metaFromQuery, mutation, s, session } from '@kovojs/server';
+import { guards, i18n, metaFromQuery, mutation, publicAccess, s, session } from '@kovojs/server';
 import {
   authed as betterAuthAuthed,
   betterAuthSession,
@@ -191,6 +191,9 @@ export const commerceSessionProvider = commerceSession.provider(
 export const commerceSignIn = betterAuthSignInEmailMutation<'auth/sign-in', CommerceAuthRequest>(
   commerceBetterAuth,
   {
+    // Sign-in runs before authentication, so its KV436 access decision is public
+    // (SPEC §10.2); CSRF still applies.
+    access: publicAccess('sign-in runs before authentication'),
     csrf: commerceAuthCsrf,
     defaultRedirectTo: '/cart',
   },

@@ -4,6 +4,7 @@ import {
   createApp,
   createRequestHandler,
   layout,
+  publicAccess,
   route,
   stylesheet,
   toNodeHandler,
@@ -93,7 +94,11 @@ function CommerceCartPage({ request }: { request: CommerceRouteRequest }): strin
   );
 }
 
+// The storefront (home + cart) is public browsing — no auth wall on catalog/cart
+// reads. The layout carries the public access decision each child route inherits
+// (KV436, SPEC §10.2); checkout-class mutations stay guarded.
 const CommerceCartLayout = layout({
+  access: publicAccess('public storefront browsing'),
   render: (_queries, _state, { children }) => <CommerceCartShell>{children}</CommerceCartShell>,
 });
 
@@ -124,6 +129,8 @@ export const commerceCartRoute = route('/cart', {
 });
 
 export const commerceLoginRoute = route('/login', {
+  // Sign-in page reachable before authentication — public by design (KV436, §10.2).
+  access: publicAccess('sign-in page reachable before authentication'),
   meta: {
     description: 'Sign in to the Kovo commerce reference app.',
     title: 'Kovo Commerce Sign In',

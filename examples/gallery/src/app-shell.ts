@@ -7,6 +7,7 @@ import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
+  publicAccess,
   route,
   toNodeHandler,
 } from '@kovojs/server';
@@ -50,6 +51,8 @@ export const galleryInteractiveClientModuleHrefs = Object.freeze(
 );
 
 export const galleryInteractiveRoute = route('/gallery/interactive', {
+  // A public UI-primitive demo page (KV436 access decision, SPEC §10.2).
+  access: publicAccess('public UI primitive demo gallery'),
   meta: {
     description: 'Compiled Kovo UI primitive demos with generated client handlers.',
     title: 'Kovo Interactive Gallery',

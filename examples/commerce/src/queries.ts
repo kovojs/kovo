@@ -1,4 +1,4 @@
-import { guards, query, type QueryLoadContext } from '@kovojs/server';
+import { guards, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import { eq, gt, sum } from 'drizzle-orm';
 import { domain } from '@kovojs/server';
 
@@ -48,6 +48,9 @@ type CommerceQueryLoadContext = QueryLoadContext<CommerceQueryRequest> & {
 };
 
 export const cartQuery = query('cart', {
+  // Public storefront browsing — the cart/catalog is visible without authentication
+  // (KV436 access decision, SPEC §10.2); checkout-class writes stay guarded.
+  access: publicAccess('public storefront browsing'),
   async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<CartQueryResult> {
     const db = requireCommerceQueryDb(context);
     const rows = await db.select({ value: sum(cartItems.qty) }).from(cartItems);
@@ -56,6 +59,7 @@ export const cartQuery = query('cart', {
 });
 
 export const productGridQuery = query('productGrid', {
+  access: publicAccess('public storefront browsing'),
   async load(input: unknown, context?: CommerceQueryLoadContext): Promise<ProductGridResult> {
     const db = requireCommerceQueryDb(context);
     const { after, limit } = (input ?? {}) as ProductGridInput;
