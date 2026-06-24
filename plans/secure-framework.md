@@ -20,12 +20,28 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
   `equals()`. Evidence: `vp exec vitest --run packages/core/src/secret.test.ts` (13 tests). Commit `b4aae9d5`.
 - [x] **Pre-allocated diagnostic codes** KV428-434/437 with full help text (so parallel slices don't collide on
   `diagnostics.ts`). Evidence: `packages/core/src/diagnostics.test.ts` (5 tests). Commit `da677eba`.
-- [ ] **Wave 1 (in flight, parallel sub-agent worktrees):** SQL KV422→`kovo check` + brand/guard hardening;
-  free isolation headers (XFO/COOP/Permissions-Policy/HSTS); KV414 join-keyed IDOR fix; named-import
-  secret-emit gate (KV437); cookie floor (KV432) + CSRF Origin/Sec-Fetch floor.
-- [ ] **Later waves:** schema-engine cluster (KV430 DoS / KV428 upload / KV434 ReDoS); KV436 default-deny
-  wiring + access migration; sources-sinks enforce (KV424/425/426); §3 interprocedural foundation → mass-
-  assignment / KV429 / KV433; CSP default-on + Trusted Types (Tier 3); egress/SSRF + capability-URL (Tier 3).
+- [x] **Wave 1 (landed + integrated, 5 parallel slices merged conflict-free):**
+  - [x] **SQL KV422** — runtime brands hardened to module-private `Symbol()`, `{text}`-carrier laundering
+    rejected, prod floor flipped to `enforce`, KV422 finding family + `compile drizzle-static` exit 1 (the
+    primary by-construction gate). Evidence: 133 focused + 846 server/core tests. _Follow-up: real-app-build
+    graph merge of `sqlSafetyDiagnostics` so `kovo check` surfaces it too (compile-static gate already fires)._
+  - [x] **Free isolation headers** — XFO:DENY, COOP, Permissions-Policy deny-all, Referrer-Policy on every
+    document; HSTS prod+HTTPS-gated (wired via the `secure` flag); CORP:same-origin on `/c/__v/` assets.
+  - [x] **KV414 join-keyed IDOR** — owner read via a join keyed on the joined table now flags `scope:'args'`;
+    session-via-local tracing fixes the prior CRM false-positive. Evidence: 363 drizzle tests.
+  - [x] **Named-import secret-emit gate (KV437)** — whole-channel fail-closed; client-safe = callee-position
+    or `publishToClient`; 0/47 example FPs.
+  - [x] **Cookie floor (KV432) + CSRF Origin/Sec-Fetch floor** — class-derived HttpOnly/Secure(prod)/SameSite
+    at the `serializeCookie` sink; `unsafeCookie` escape; forwarded better-auth cookies floored at the
+    document sink; cross-site unsafe-verb rejected before the token check. _Follow-up: migrate the framework's
+    own classless cookie sites (anonymous-CSRF) to declare a class for default-on coverage._
+  - Integration verified: api-surface 0 new violations; tsc at the 34-error pre-existing baseline (no new
+    errors in any production file); 2124 touched-package tests pass (1 pre-existing `spec-coverage-map`
+    failure, unrelated — examples/reference auth-flow citation).
+- [ ] **Wave 2+ (next):** redacted() PII wrapper; schema-engine cluster (KV430 DoS / KV428 upload / KV434
+  ReDoS); env validation + refuse-to-boot; CSP default-on + Trusted Types; sources-sinks enforce
+  (KV424/425/426); KV436 default-deny wiring + access migration; explain rendering (`--cookies`/`--capabilities`);
+  §3 interprocedural foundation → mass-assignment / KV429 / KV433; egress/SSRF + capability-URL.
 - SPEC normative contracts land WITH each feature (per the plan's "land contracts with each feature" rule),
   not ahead — so `SPEC.md` edits are deferred into the slice that implements the behavior.
 
