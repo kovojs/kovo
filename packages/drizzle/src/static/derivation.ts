@@ -1398,10 +1398,15 @@ function projectionColumnTypes(
 function jsonScalarType(
   shape: QueryShape | undefined,
 ): 'boolean' | 'number' | 'string' | undefined {
-  const unwrapped =
-    shape && typeof shape === 'object' && !Array.isArray(shape) && 'kind' in shape
-      ? (shape as QueryShapeWrapper).shape
-      : shape;
+  let unwrapped = shape;
+  while (
+    unwrapped &&
+    typeof unwrapped === 'object' &&
+    !Array.isArray(unwrapped) &&
+    'kind' in unwrapped
+  ) {
+    unwrapped = (unwrapped as QueryShapeWrapper).shape;
+  }
   if (unwrapped === 'number') return 'number';
   if (unwrapped === 'boolean') return 'boolean';
   if (unwrapped === 'string') return 'string';

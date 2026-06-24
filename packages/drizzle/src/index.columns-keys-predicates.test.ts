@@ -71,6 +71,101 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('brands projected secret columns in derived project query shapes', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
+            export const users = pgTable("users", {
+              apiToken: text("api_token"),
+              id: text("id").primaryKey(),
+              name: text("name").notNull(),
+              passwordHash: text("password_hash").notNull(),
+            }, kovo({ domain: "user", key: "id", secret: ["passwordHash", (t) => t.apiToken] }));
+
+            export const userQuery = query("user", {
+              load(_input, db: PgDatabase) {
+                return db.select({
+                  apiToken: users.apiToken,
+                  id: users.id,
+                  name: users.name,
+                  passwordHash: users.passwordHash,
+                }).from(users);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'user',
+        reads: ['user'],
+        shape: {
+          apiToken: {
+            kind: 'nullable',
+            shape: {
+              kind: 'secret',
+              shape: 'string',
+            },
+          },
+          id: 'string',
+          name: 'string',
+          passwordHash: {
+            kind: 'secret',
+            shape: 'string',
+          },
+        },
+        site: 'user.queries.ts:9',
+      },
+    ]);
+  });
+
+  it('brands every projected column when a table is annotated secret true', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'vault.queries.ts',
+          source: `
+            export const vaultEntries = pgTable("vault_entries", {
+              id: text("id").primaryKey(),
+              payload: json("payload").notNull(),
+            }, kovo({ domain: "vault", key: "id", secret: true }));
+
+            export const vaultQuery = query("vault", {
+              load(_input, db: PgDatabase) {
+                return db.select({
+                  id: vaultEntries.id,
+                  payload: vaultEntries.payload,
+                }).from(vaultEntries);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'vault',
+        reads: ['vault'],
+        shape: {
+          id: {
+            kind: 'secret',
+            shape: 'string',
+          },
+          payload: {
+            kind: 'secret',
+            shape: 'object',
+          },
+        },
+        site: 'vault.queries.ts:7',
+      },
+    ]);
+  });
+
   it('derives SQLite mode-based query shapes from sqlite-core builders', () => {
     const facts = extractQueryFactsFromProjectBase({
       files: [

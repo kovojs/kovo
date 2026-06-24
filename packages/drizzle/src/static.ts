@@ -164,7 +164,7 @@ export {
 
 /** @internal */
 /** @internal */ export interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional' | 'volatile-time';
+  kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
   shape: QueryShape;
 }
 

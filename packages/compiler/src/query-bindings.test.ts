@@ -217,6 +217,42 @@ export const ProductCard = component({
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('accepts binding paths through secret query shape metadata', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      queryShapeFacts: [
+        {
+          query: 'user',
+          shape: {
+            id: 'string',
+            profile: {
+              kind: 'nullable',
+              shape: {
+                token: {
+                  kind: 'secret',
+                  shape: 'string',
+                },
+              },
+            },
+          },
+          source: 'generated/queries/user.shape.ts',
+        },
+      ],
+      source: `
+export const UserCard = component({
+  render: () => (
+    <user-card>
+      <span data-bind="user.id">u1</span>
+      <span data-bind="user.profile?.token">tok</span>
+    </user-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('reports KV227 when binding paths traverse nullable query shape metadata without optional segments', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',

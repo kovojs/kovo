@@ -270,8 +270,11 @@ design.
       schema (mirrors `owner:`); generated query result types surface the column as `Secret<T>`.
   - Partial evidence: `@kovojs/core` now exposes `Secret<T>` as non-`JsonValue`, `s.secret(schema)` produces
     `Schema<Secret<T>>`, and Drizzle `kovo({ secret })` annotations preserve `true` or resolved column refs in
-    extracted table facts. Remaining gap: generated query result types do not yet brand projected secret
-    columns as `Secret<T>`.
+    extracted table facts. Drizzle projected query shapes now wrap selected secret columns in
+    `{ kind: "secret", shape }` while preserving nullable wrappers; verified with
+    `vp exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`
+    and `vp exec vitest --run packages/drizzle/src`. Remaining gap: generated query result types do not yet
+    surface projected secret columns as `Secret<T>`.
 - [x] Define `Secret<T>` as a brand **not assignable to `JsonValue`**, so Door 2 (`fail()`) and Door 3
       (island state) become type errors by construction. The wire/log poison (`toString`/`toJSON`) rides on
       top as defense-in-depth, not the proof.
