@@ -1,5 +1,13 @@
 export { Link, href, redirect } from '@kovojs/core';
 export type { DiagnosticCode, JsonValue, LinkDescriptor, Redirect, Route } from '@kovojs/core';
+export { publicAccess, verifiedAccess } from '../access.js';
+export type {
+  AccessDecision,
+  GuardAccessStep,
+  GuardChainAccess,
+  PublicAccess,
+  VerifiedMachineAccess,
+} from '../access.js';
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
 export { endpoint } from '../endpoint.js';
 export type {

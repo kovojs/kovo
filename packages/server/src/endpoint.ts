@@ -1,4 +1,5 @@
 import type { WebhookVerifier } from '@kovojs/core';
+import type { AccessDecision } from './access.js';
 
 /** HTTP method for an endpoint; arbitrary strings are allowed for custom verbs. */
 export type EndpointMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | (string & {});
@@ -41,6 +42,7 @@ export interface Endpoint<
   Method extends EndpointMethod = EndpointMethod,
   Mount extends EndpointMount = 'exact',
 > {
+  access?: AccessDecision;
   auth?: EndpointAuthDeclaration;
   csrf?: EndpointCsrfExemption;
   method: Method;
@@ -58,6 +60,7 @@ export type EndpointRequest = Request & { readonly session?: never };
 export type EndpointHandler = (request: EndpointRequest) => Promise<Response> | Response;
 
 interface EndpointDefinitionBase<Method extends EndpointMethod> {
+  access?: AccessDecision;
   auth?: EndpointAuthDeclaration;
   handler: EndpointHandler;
   method: Method;
@@ -138,6 +141,7 @@ export function endpoint<
   const reason = 'reason' in definition ? definition.reason : definition.purpose;
 
   return {
+    ...(definition.access === undefined ? {} : { access: definition.access }),
     ...(definition.auth === undefined ? {} : { auth: definition.auth }),
     ...(definition.csrf === false
       ? { csrf: { exempt: true, justification: definition.csrfJustification } }

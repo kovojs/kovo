@@ -16,6 +16,7 @@ import {
 import type { PageHintOptions } from './hints.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfValidationOptions } from './csrf.js';
+import type { AccessDecision } from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import type { DeferredRegionCollector } from './jsx-context.js';
 import type { MutationFail } from './mutation.js';
@@ -130,6 +131,7 @@ export interface LayoutDefinition<
   Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
   Page extends LayoutRenderResult = LayoutRenderResult,
 > extends PageHintOptions {
+  access?: AccessDecision;
   boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request>;
   parent?: LayoutDeclaration<Request, any, LayoutRenderResult>;
@@ -178,6 +180,7 @@ export interface RouteDefinition<
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
 > extends PageHintOptions {
+  access?: AccessDecision;
   boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request, GuardedRequest>;
   layout?: LayoutDeclaration<any, any, any>;

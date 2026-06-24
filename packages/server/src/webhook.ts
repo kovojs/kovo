@@ -1,5 +1,6 @@
 import type { WebhookVerifier } from '@kovojs/core';
 import type { ChangeRecord } from './change-record.js';
+import type { AccessDecision } from './access.js';
 import type { Domain } from './domain.js';
 import {
   endpointRequestWithoutSession,
@@ -107,6 +108,7 @@ type WebhookInputFor<InputSchema extends Schema<unknown>> = InferSchema<InputSch
   Record<string, unknown>;
 
 interface WebhookDefinitionBase<InputSchema extends Schema<unknown>, Value, Tx> {
+  access?: AccessDecision;
   handler: (
     input: WebhookInputFor<InputSchema>,
     context: WebhookHandlerContext<WebhookInputFor<InputSchema>, Tx>,
@@ -155,6 +157,7 @@ export interface WebhookDeclaration<
   Value = unknown,
   Tx = unknown,
 > extends EndpointDeclaration<Path, 'POST', 'exact'> {
+  access?: AccessDecision;
   name: Name;
   webhook: true;
   webhookDefinition: WebhookDefinition<InputSchema, Value, Tx>;
@@ -207,6 +210,7 @@ export function webhook<
     (await runWebhook(declaration, request)).response;
 
   declaration = {
+    ...(definition.access === undefined ? {} : { access: definition.access }),
     auth: webhookAuth(definition),
     csrf: {
       exempt: true,

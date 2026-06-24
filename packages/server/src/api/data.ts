@@ -1,4 +1,12 @@
 export type { Secret } from '@kovojs/core';
+export { publicAccess, verifiedAccess } from '../access.js';
+export type {
+  AccessDecision,
+  GuardAccessStep,
+  GuardChainAccess,
+  PublicAccess,
+  VerifiedMachineAccess,
+} from '../access.js';
 export { csrfField, csrfToken } from '../csrf.js';
 export type { CsrfAnonymousCookieOptions, CsrfOptions, CsrfValidationOptions } from '../csrf.js';
 export { domain, tag } from '../domain.js';

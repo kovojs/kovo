@@ -1,5 +1,6 @@
 import type { InvalidationSets, OptimisticDerivationSets, QueryRegistry } from '@kovojs/core';
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
+import type { AccessDecision } from '../access.js';
 import type { CookieOptions } from '../cookies.js';
 import type { CsrfValidationOptions } from '../csrf.js';
 import type { Domain } from '../domain.js';
@@ -198,6 +199,7 @@ export interface MutationDefinition<
   Value = unknown,
   GuardedRequest extends Request = Request,
 > {
+  access?: AccessDecision;
   csrf?: CsrfValidationOptions<Request> | false;
   /** Static/common POST-redirect-GET target for successful no-JS submissions (SPEC §9.1). */
   defaultRedirectTo?: string;

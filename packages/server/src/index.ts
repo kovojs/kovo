@@ -1,5 +1,13 @@
 export { createApp, createRequestHandler } from './app.js';
 export { isKovoApp } from './app-guards.js';
+export { publicAccess, verifiedAccess } from './access.js';
+export type {
+  AccessDecision,
+  GuardAccessStep,
+  GuardChainAccess,
+  PublicAccess,
+  VerifiedMachineAccess,
+} from './access.js';
 // SPEC.md §9.5: apps inject a custom versioned client-module registry through
 // `createApp({ clientModules })`. Real example/site consumers (examples/gallery,
 // crm, stackoverflow, reference; site/src/client/modules.ts) construct one with

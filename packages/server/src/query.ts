@@ -1,6 +1,7 @@
 import type { JsonValue } from '@kovojs/core';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
+import type { AccessDecision } from './access.js';
 import {
   renderHttpGuardFailureResponse,
   resolveLifecycleRequest,
@@ -72,6 +73,7 @@ export interface QueryDefinition<
   Input = unknown,
   Request = unknown,
 > {
+  access?: AccessDecision;
   args?: Schema<Input>;
   /**
    * Delta-eligible collections for this query. When present, the server can
@@ -138,6 +140,7 @@ type BivariantQueryVersion = {
 
 /** @internal */
 export interface RegisteredQueryDefinition {
+  access?: AccessDecision;
   args?: Schema<unknown>;
   /**
    * Delta-eligible collections for this query (SPEC §9.1.1). The compiler
@@ -158,6 +161,7 @@ export interface RegisteredQueryDefinition {
  * Query load values are checked against the public JSON boundary by `query()`.
  */
 export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue> {
+  access?: AccessDecision;
   args?: Schema<unknown>;
   /**
    * Delta-eligible collections for this query (SPEC §9.1.1). The compiler
