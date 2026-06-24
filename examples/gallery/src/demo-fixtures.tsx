@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import {
   MeterDemo,
   NumberFieldDemo,
@@ -849,7 +850,7 @@ export function BreadcrumbDemo(): string {
       </p>
       <div data-ui-demo="breadcrumb">
         {Breadcrumb.definition.render({
-          children: `${account}${separator}${billing}`,
+          children: trustedHtml(`${account}${separator}${billing}`) as unknown as string,
           label: 'Account path',
         })}
       </div>

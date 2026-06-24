@@ -401,8 +401,9 @@ describe('headless-ui slider primitive', () => {
 
   it('computes track-click and thumb-drag pointer values', () => {
     const trackDown = sliderPointerEvent('pointerdown', {
+      clientX: 150,
       currentTarget: { clientWidth: 200 },
-      offsetX: 150,
+      rect: { height: 6, left: 0, top: 0, width: 200 },
     });
     expect(
       sliderTrackPointerDown(trackDown, {
@@ -503,6 +504,7 @@ function sliderPointerEvent(
     currentTarget?: unknown;
     offsetX?: number;
     offsetY?: number;
+    rect?: { height: number; left: number; top: number; width: number };
   } = {},
 ): Event & {
   readonly clientX?: number;
@@ -518,8 +520,15 @@ function sliderPointerEvent(
     readonly offsetX?: number;
     readonly offsetY?: number;
   };
-  for (const [key, value] of Object.entries(options)) {
+  const { rect, ...eventOptions } = options;
+  for (const [key, value] of Object.entries(eventOptions)) {
     Object.defineProperty(event, key, { configurable: true, value });
+  }
+  if (rect && options.currentTarget && typeof options.currentTarget === 'object') {
+    Object.defineProperty(options.currentTarget, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => rect,
+    });
   }
   return event;
 }

@@ -264,16 +264,16 @@ describe('headless-ui otp-field primitive', () => {
     // A single Backspace on the last filled slot removes exactly one digit.
     const deleteEvent = otpKeyboardEvent('Backspace', '4');
     const deleteResult = otpFieldKeyDown(deleteEvent, { length: 4, slotIndex: 3, value: '1234' });
-    expect(deleteResult).toMatchObject({ changed: true, value: '123' });
+    expect(deleteResult).toMatchObject({ changed: true, focusIndex: 2, value: '123' });
     expect(deleteEvent.defaultPrevented).toBe(true);
   });
 
   // Bug: "cannot delete multiple numbers" — Backspace on an already-empty slot
   // used to no-op (focus never moved), so the user could not keep deleting the
   // previous digits. Backspace on an empty slot with a previous slot must walk
-  // focus left so repeated Backspace clears digits across slots, while Backspace
-  // on a filled slot must still clear exactly that slot's digit.
-  it('walks focus left when Backspace lands on an empty slot', () => {
+  // focus left so repeated Backspace clears digits across slots. Backspace on a
+  // filled slot clears exactly that digit and then moves focus left.
+  it('walks focus left when Backspace deletes or lands on an empty slot', () => {
     // Filled "12" with slots 2 and 3 empty: Backspace on the empty slot 2 seeks
     // left to slot 1 instead of getting stuck.
     const emptySlotEvent = otpKeyboardEvent('Backspace', '');
@@ -285,14 +285,15 @@ describe('headless-ui otp-field primitive', () => {
     expect(emptySlotResult).toEqual({ focusIndex: 1 });
     expect(emptySlotEvent.defaultPrevented).toBe(true);
 
-    // Backspace on the now-focused filled slot 1 still clears exactly one digit.
+    // Backspace on the now-focused filled slot 1 clears exactly one digit and
+    // moves focus left so the next Backspace continues deleting naturally.
     const filledSlotEvent = otpKeyboardEvent('Backspace', '2');
     const filledSlotResult = otpFieldKeyDown(filledSlotEvent, {
       length: 4,
       slotIndex: 1,
       value: '12',
     });
-    expect(filledSlotResult).toMatchObject({ changed: true, focusIndex: 1, value: '1' });
+    expect(filledSlotResult).toMatchObject({ changed: true, focusIndex: 0, value: '1' });
     expect(filledSlotEvent.defaultPrevented).toBe(true);
 
     // Backspace on the first slot when it is already empty stays put (no
@@ -479,7 +480,7 @@ describe('headless-ui otp-field primitive', () => {
     expect(canceledDeleteResult).toMatchObject({
       changed: false,
       detail: expect.objectContaining({ defaultPrevented: true }),
-      focusIndex: 1,
+      focusIndex: 0,
       value: '1234',
     });
     expect(canceledDeleteEvent.currentTarget?.value).toBe('2');
