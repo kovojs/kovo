@@ -673,35 +673,36 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
 
 ## Phase 6: Concurrency, resource, and uploads
 
-- [ ] **TOCTOU atomicity (KV429).**
+- [x] **TOCTOU atomicity (KV429).**
       Decision (2026-06-23): ship the **primitives first** (no analysis needed); the static gate is **option (a)** —
       flag read-then-write only on a declared `kovo({ atomic })`/`kovo({ version })` column without a guard (the
       KV414 philosophy: precise + declare-once, not blanket). Replay dedups the _same_ submit; this covers _two
       distinct_ concurrent read-decide-write requests (oversell, double-spend, coupon reuse), which survive auth and
       input validation. Note: the existing mutation tx (`READ COMMITTED`) does NOT prevent lost-update — CAS or
       version is what closes it.
-  - [ ] Primitives (shippable independently): typed compare-and-set (`UPDATE … WHERE` folds check+act into one
+  - [x] Primitives (shippable independently): typed compare-and-set (`UPDATE … WHERE` folds check+act into one
         statement; 0 rows → conflict) and `kovo({ version })` optimistic concurrency (read carries version;
         stale → typed 409/422 the enhanced path re-renders). Wire the 409-conflict outcome into the lifecycle.
-    - Partial evidence: `packages/drizzle/src/runtime.ts` exposes `compareAndSet()` / `KovoConflictError`, and
-      `packages/server/src/mutation.ts` maps returned or thrown Kovo conflict shapes to typed HTTP 409 failure
-      fragments/pages; verified by
-      `vp exec vitest run packages/drizzle/src/runtime-surface.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`.
-      Still open: fuller `kovo({ version })` optimistic-concurrency lifecycle where reads carry versions and stale
-      submits re-render with fresh versioned server truth.
-  - [ ] KV429 static gate, option (a): flag read-then-write on a declared `atomic`/`version` column without a
+    - Evidence: `packages/drizzle/src/runtime.ts` exposes `compareAndSet()` / `KovoConflictError`;
+      `packages/browser/src/query-store.ts` carries query version snapshots into enhanced submits as
+      `Kovo-Query-Versions`; `packages/server/src/mutation.ts` re-runs matching submitted versioned queries on
+      typed 409 conflicts before rendering the failure fragment. Verified by the integrated TOCTOU lane below.
+  - [x] KV429 static gate, option (a): flag read-then-write on a declared `atomic`/`version` column without a
         CAS/version guard. **Sequence after the §11.1 write-reachability pass** (needs read-then-write
         dataflow); cross-function check-then-act is a false-negative floor until that pass lands.
-    - Partial evidence: `packages/drizzle/src/static/derivation.ts` requires same-callback and direct local-helper
-      version/atomic guards to return or throw a typed `kovoConflict(...)`/`compareAndSet(...)` zero-row outcome;
-      verified by `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts packages/drizzle/src/runtime-surface.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`.
-      Still open: imported/node_modules helper summaries and full versioned-read lifecycle coverage.
+    - Evidence: `packages/drizzle/src/static/derivation.ts` requires same-callback, local-helper, imported-helper,
+      and package-summary version/atomic guards to return or throw typed `kovoConflict(...)`/`compareAndSet(...)`
+      zero-row outcomes; unknown helpers receiving a Drizzle receiver after an atomic/version read fail closed with
+      KV429. Verified by the integrated TOCTOU lane below.
   - [x] DB-constraint backstop (recommended, fail-closed under everything): `CHECK stock >= 0`, unique
         constraints. Multi-row/aggregate invariants need `forUpdate`/`SERIALIZABLE` — documented as NOT
         by-construction (provide the tool + guidance; do not pretend CAS covers them).
     - Evidence: `docs/toctou-atomicity.md` documents DB constraints as the fail-closed backstop under
       `compareAndSet`/version guards, distinguishes single-row invariants from multi-row/aggregate invariants,
       and SPEC §10.1 records that plain mutation transactions are not an atomicity proof.
+  - Latest verification: `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts packages/drizzle/src/runtime-surface.test.ts packages/browser/src/wire-parser.test.ts packages/browser/src/query-store.test.ts packages/browser/src/query-apply.test.ts packages/browser/src/mutation-fetch.test.ts packages/browser/src/mutation-submit.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts packages/server/src/wire-html.test.ts packages/server/src/mutation-no-js.test.ts`
+    passed 11 files / 158 tests; `vp check packages/drizzle/src packages/browser/src packages/server/src SPEC.md plans/secure-by-construction.md docs/toctou-atomicity.md` and
+    `git diff --check` passed.
 - [x] **Input-shape DoS (KV430).**
       Decision (2026-06-23): the **runtime budget is the protection** (a safe-default, not a compile-time proof);
       KV430 is an auditable lint, not an error. Closes the small-body-huge-work class the byte+rate limiter misses;
@@ -907,28 +908,33 @@ packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.tes
 
 ## Phase 9: Red corpus and acceptance
 
-- [ ] One negative + one positive test per phase (the dangerous source is rejected/neutralized; the blessed
+- [x] One negative + one positive test per phase (the dangerous source is rejected/neutralized; the blessed
       path still works without forcing the raw escape hatch). Seed the confidentiality, mass-assignment, and
       egress corpora with the alias/destructure/helper bypasses Phase 0 must defeat.
-  - Partial evidence: the current focused security lane covers 512 tests across compiler/CLI/core/server/Drizzle,
-    including relational secret rejection and access/endpoint/webhook acceptance. Still open: final TOCTOU
-    lifecycle/static-gate acceptance before this can close.
-- [ ] Acceptance: every new gate fails closed on `Unknown` provenance, and the bypass corpus (aliasing,
+  - Evidence: the final focused security lane below covers negative/positive acceptance for confidentiality,
+    access/default-deny, governed writes, egress, capability URLs, cookies, input budgets, uploads, ReDoS, CSP,
+    query read-only, and TOCTOU.
+- [x] Acceptance: every new gate fails closed on `Unknown` provenance, and the bypass corpus (aliasing,
       re-import, destructuring, `globalThis.fetch`, relational `with:` selection) is green.
-  - Partial evidence: `packages/drizzle/src/index.query-shapes.test.ts` covers relational `with:`, renamed import,
-    and Drizzle alias secret-selection KV435 cases; `packages/server/src/egress.test.ts` covers
-    `globalThis.fetch`/Node egress interposition. Still open: imported/node_modules KV429 helper summaries.
-- [ ] Acceptance: existing security lanes stay green — `plans/fix-security.md` focused suites, the SQL corpus
+  - Evidence: `packages/drizzle/src/index.query-shapes.test.ts` covers relational `with:`, renamed import, and
+    Drizzle alias secret-selection KV435 cases; `packages/server/src/egress.test.ts` covers `globalThis.fetch`/
+    Node egress interposition; `packages/drizzle/src/index.symbol-provenance.test.ts` covers imported/package
+    KV429 helper summaries and no-summary fail-closed behavior.
+- [x] Acceptance: existing security lanes stay green — `plans/fix-security.md` focused suites, the SQL corpus
       once landed, endpoint/webhook conformance, and `git diff --check`.
-  - Latest partial gate: `vp exec vitest --run packages/compiler/src/cloud-sdk-credentials.test.ts packages/compiler/src/schema-budgets.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/handler-lowering.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/server/src/schema.test.ts packages/server/src/response.test.ts packages/server/src/app.test.ts packages/server/src/app-document.test.ts packages/server/src/capability-url.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/egress.test.ts packages/server/src/cookies.test.ts packages/server/src/access-graph.test.ts packages/drizzle/src/index.symbol-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/runtime-surface.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`
-    passed 23 files / 512 tests; `vp check packages/compiler packages/server packages/cli packages/core packages/drizzle/src SPEC.md plans/secure-by-construction.md docs/egress-security.md`, `pnpm run check:api-surface`, and
+  - Evidence: `vp exec vitest --run packages/compiler/src/cloud-sdk-credentials.test.ts packages/compiler/src/schema-budgets.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/handler-lowering.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/server/src/schema.test.ts packages/server/src/response.test.ts packages/server/src/app.test.ts packages/server/src/app-document.test.ts packages/server/src/capability-url.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/egress.test.ts packages/server/src/cookies.test.ts packages/server/src/access-graph.test.ts packages/drizzle/src/index.symbol-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/runtime-surface.test.ts packages/browser/src/wire-parser.test.ts packages/browser/src/query-store.test.ts packages/browser/src/query-apply.test.ts packages/browser/src/mutation-fetch.test.ts packages/browser/src/mutation-submit.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/wire-html.test.ts`
+    passed 30 files / 596 tests; `vp check packages/compiler packages/server packages/browser packages/cli packages/core packages/drizzle/src SPEC.md plans/secure-by-construction.md docs/egress-security.md docs/toctou-atomicity.md`, `pnpm run check:api-surface`, `pnpm run check:imports`, `pnpm run check:inline-loader`, and
     `git diff --check` passed.
-- [ ] Acceptance (completion gate): the shared §11.1 write-reachability pass is built AND every by-construction
+- [x] Acceptance (completion gate): the shared §11.1 write-reachability pass is built AND every by-construction
       stage built on it lands — mass-assignment, KV429 (TOCTOU), KV433 (read-only query). The
       runtime/primitive safe-defaults are backstops, not completion; the plan is not green until these static
       gates ship.
-- [ ] Keep this ledger compact: as items land, replace prose with the narrowest verifying command or
+  - Evidence: the final focused security lane above includes KV437 governed-write coverage, KV433 read-only query
+    coverage, and KV429 TOCTOU static-gate coverage from the shared Drizzle static derivation pass.
+- [x] Keep this ledger compact: as items land, replace prose with the narrowest verifying command or
       authoritative file, and collapse superseded evidence.
+  - Evidence: stale Phase 9 partial evidence and TOCTOU open-gap notes were replaced with the final focused gate
+    above; historical discovery evidence remains isolated in Current Evidence / Latest Verification.
 
 ## Open Design Questions
 
@@ -965,16 +971,15 @@ packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.tes
       confidentiality dual; Test #2 consequence cites the security declare-once facts; **§6.6 gains the normative
       Security-soundness paragraph** (no type checker → brands are DiD; runtime taint unsound → static provenance;
       by-construction vs runtime-DiD labeled). `rules/constitution.md` mirrored.
-- [ ] **Deferred to land WITH each feature (per-feature normative contracts):** §6.2 typed-surface rows
+- [x] **Deferred to land WITH each feature (per-feature normative contracts):** §6.2 typed-surface rows
       (confidentiality / authorization-completeness / write-provenance); the confidentiality dual near §4.8/§5.2;
       `access:` default-deny + `governed` in §10.1/§10.3; a new outbound-egress section (classified runtime-DiD);
       `kovo explain --capabilities`/`--trust` in §11.4; new KV codes in §11.3 with the
       ceiling-note correction. Holding these avoids SPEC promising behavior that is not yet built (CLAUDE.md
       plan/SPEC-conflict rule).
-  - Partial evidence: SPEC §6.2/§4.8/§5.2/§9.5/§10.1/§10.2/§10.3/§11.4 now record the shipped
-    confidentiality, access, governed-write, egress, and explain-surface contracts, and SPEC §11.3 lists
-    KV427-KV438 with severities matching `packages/core/src/diagnostics.ts`. Still open: TOCTOU-specific
-    normative prose once the full KV429 lifecycle/static gate lands.
+  - Evidence: SPEC §6.2/§4.8/§5.2/§9.5/§10.1/§10.2/§10.3/§11.4 record the shipped confidentiality, access,
+    governed-write, egress, explain-surface, and TOCTOU contracts, and SPEC §11.3 lists KV427-KV438 with
+    severities matching `packages/core/src/diagnostics.ts`.
 
 ## Latest Verification
 

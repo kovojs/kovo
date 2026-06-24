@@ -1140,6 +1140,10 @@ export const orderQuery = query('order', {
 
 **Governed writes (KV437).** A write to a governed column (§10.1) MUST be derived from server provenance or a literal/framework value, not directly from client input. `serverValue(value, reason)` is the narrow non-input escape for values the analyzer cannot prove but that are not request-derived; it does not discharge `serverValue(input.x, ...)`. `adminAssign(input.x, reason)` is the explicit audited path for intentional administrator writes from client input, and appears in `kovo explain --capabilities`. Unknown write provenance fails closed.
 
+**Atomic/versioned writes (KV429).** A mutation that reads and then writes a table value declared with `kovo({ atomic })` or `kovo({ version })` MUST prove the write is guarded by compare-and-set, a version predicate whose zero-row outcome returns or throws a typed 409 conflict, an explicit row-lock proof, or serializable-transaction proof. `compareAndSet(...)` is the framework helper for the common guarded-update case; `kovoConflict(...)` is the typed zero-row conflict shape mapped by the mutation lifecycle to HTTP 409. Helper functions may declare their proof with `kovoAnalyzerSummary(fn, { atomicity: ... })`; absent or unknown helper summaries that receive a Drizzle receiver after an atomic/version read fail closed with KV429.
+
+For `kovo({ version })`, query reads that produce a version token carry it on the legible query wire. Enhanced mutation submits send the held snapshot as `Kovo-Query-Versions`; when a typed 409 conflict occurs, the server re-runs matching submitted versioned queries in the same request context and emits fresh `<kovo-query ... version="...">` truth before the failure fragment. This turns stale-version conflicts into a normal re-render path instead of a silent lost update.
+
 ### 10.4 Optimistic updates
 
 Optimism is keyed to **queries** (the data), never islands. One transform per (mutation × invalidated query); every island consuming the query updates from it — including islands written after the mutation (Constitution #2).
