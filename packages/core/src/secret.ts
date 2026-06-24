@@ -54,6 +54,11 @@ export function trustedReveal<T>(value: T, options: TrustedRevealOptions): Trust
   return value as TrustedRevealValue<T>;
 }
 
+/**
+ * Options for {@link publishToClient}. The compiler records the reason as a
+ * capability fact so client-public secret derivations are reviewable
+ * (SPEC §6.2).
+ */
 export interface PublishToClientOptions {
   /**
    * Why this server-derived value is safe to publish into a client module. Keep
