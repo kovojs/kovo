@@ -434,8 +434,9 @@ function sliderLargeStep(state: SliderState): number {
 function sliderPointerValue(event: SliderPointerEvent, state: SliderState): number | undefined {
   const computed = sliderValueState(state);
   const orientation = computed.orientation;
-  const trackSize = sliderPointerTargetSize(event.target ?? event.currentTarget, orientation);
-  const pointerOffset = sliderPointerOffset(event, orientation);
+  const pointerTarget = event.currentTarget ?? event.target;
+  const trackSize = sliderPointerTargetSize(pointerTarget, orientation);
+  const pointerOffset = sliderPointerOffset(event, orientation, pointerTarget);
   if (trackSize <= 0 || pointerOffset === undefined) return undefined;
 
   const ratio =
@@ -457,11 +458,9 @@ function sliderPointerTargetSize(
 function sliderPointerOffset(
   event: SliderPointerEvent,
   orientation: SliderOrientation,
+  target: SliderPointerTarget | null | undefined = event.currentTarget ?? event.target,
 ): number | undefined {
-  const offset = orientation === 'vertical' ? event.offsetY : event.offsetX;
-  if (typeof offset === 'number' && Number.isFinite(offset)) return offset;
-
-  const rect = (event.target ?? event.currentTarget)?.getBoundingClientRect?.();
+  const rect = target?.getBoundingClientRect?.();
   const pointer = sliderPointerClient(event, orientation);
   if (rect === undefined || pointer === undefined) return undefined;
 

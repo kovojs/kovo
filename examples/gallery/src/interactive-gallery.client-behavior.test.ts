@@ -763,7 +763,7 @@ describe('compiled interactive gallery demos', () => {
       signal,
       state: otpDeleteState,
     });
-    expect(otpDeleteState).toEqual({ activeSlot: 1, value: '1' });
+    expect(otpDeleteState).toEqual({ activeSlot: 0, value: '1' });
 
     const collapsibleState = { open: false };
     clientHandler(collapsible, 'GalleryCollapsibleDemo$summary_click')(new Event('click'), {
@@ -1015,8 +1015,11 @@ describe('compiled interactive gallery demos', () => {
     };
     clientHandler(slider, 'GallerySliderDemo$div_pointerdown')(
       pointerEvent('pointerdown', {
-        offsetX: 150,
-        target: { clientWidth: 200 },
+        clientX: 150,
+        currentTarget: {
+          clientWidth: 200,
+          getBoundingClientRect: () => ({ height: 6, left: 0, top: 0, width: 200 }),
+        },
       }),
       {
         params: {},
@@ -1037,8 +1040,8 @@ describe('compiled interactive gallery demos', () => {
       state: sliderState,
     });
     expect(sliderKeyDown.defaultPrevented).toBe(true);
-    // step is 5, so ArrowLeft from 75 lands on 70.
-    expect(sliderState.value).toBe(70);
+    // step is 1, so ArrowLeft from 75 lands on 74.
+    expect(sliderState.value).toBe(74);
     clientHandler(slider, 'GallerySliderDemo$span_pointerdown')(
       pointerEvent('pointerdown', { clientX: 20 }),
       {
@@ -1050,7 +1053,7 @@ describe('compiled interactive gallery demos', () => {
     expect(sliderState).toMatchObject({
       dragging: true,
       dragPointerStart: 20,
-      dragValueStart: 70,
+      dragValueStart: 74,
     });
     clientHandler(slider, 'GallerySliderDemo$span_pointermove')(
       pointerEvent('pointermove', {
@@ -1235,6 +1238,7 @@ function pointerEvent(
     offsetX?: number;
     offsetY?: number;
     target?: unknown;
+    currentTarget?: unknown;
   },
 ): Event {
   const event = new Event(type, { cancelable: true });

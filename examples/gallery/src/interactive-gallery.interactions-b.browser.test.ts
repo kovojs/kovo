@@ -359,7 +359,24 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(output.textContent).toBe('25');
 
     const trackDown = new PointerEvent('pointerdown', { bubbles: true, cancelable: true });
-    Object.defineProperty(trackDown, 'offsetX', { configurable: true, value: 150 });
+    Object.defineProperty(trackDown, 'clientX', { configurable: true, value: 150 });
+    Object.defineProperty(track, 'getBoundingClientRect', {
+      configurable: true,
+      value: () =>
+        ({
+          bottom: 6,
+          height: 6,
+          left: 0,
+          right: 200,
+          top: 0,
+          width: 200,
+          x: 0,
+          y: 0,
+          toJSON() {
+            return this;
+          },
+        }) as DOMRect,
+    });
     track.dispatchEvent(trackDown);
 
     await vi.waitFor(() => {
