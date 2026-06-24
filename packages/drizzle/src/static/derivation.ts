@@ -777,10 +777,150 @@ function atomicityDiagnosticsForWriteCall(
 
   const guardColumns = new Set(contendedColumns);
   if (versionColumn) guardColumns.add(versionColumn);
-  if (writeWhereGuardsAnyColumn(chain, table, guardColumns, context.resolveTable)) return [];
+  const hasAtomicityGuard = writeWhereGuardsAnyColumn(
+    chain,
+    table,
+    guardColumns,
+    context.resolveTable,
+  );
+  if (hasAtomicityGuard && writeHasConflictOutcome(chain, callbackBodyForCall(call))) return [];
 
   const site = `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`;
-  return [atomicityDiagnostic(site, table, contendedColumns, versionColumn)];
+  return [
+    atomicityDiagnostic(site, table, contendedColumns, versionColumn, {
+      hasAtomicityGuard,
+    }),
+  ];
+}
+
+function callbackBodyForCall(call: CallExpression): Node {
+  for (const ancestor of call.getAncestors()) {
+    if (
+      !Node.isArrowFunction(ancestor) &&
+      !Node.isFunctionDeclaration(ancestor) &&
+      !Node.isFunctionExpression(ancestor) &&
+      !Node.isMethodDeclaration(ancestor)
+    ) {
+      continue;
+    }
+    const body = ancestor.getBody();
+    if (body && call.getStart() >= body.getStart() && call.getEnd() <= body.getEnd()) {
+      return body;
+    }
+  }
+  return call.getSourceFile();
+}
+
+function writeHasConflictOutcome(chain: Node, body: Node): boolean {
+  if (writeChainPassedToCompareAndSet(chain)) return true;
+
+  const resultIdentifier = writeChainResultIdentifier(chain);
+  if (!resultIdentifier) return false;
+
+  for (const ifStatement of body.getDescendantsOfKind(SyntaxKind.IfStatement)) {
+    const condition = ifStatement.getExpression();
+    if (!conditionChecksZeroAffectedRows(condition, resultIdentifier)) continue;
+    if (statementReturnsOrThrowsConflict(ifStatement.getThenStatement())) return true;
+  }
+  return false;
+}
+
+function writeChainPassedToCompareAndSet(chain: Node): boolean {
+  let current: Node = chain;
+  while (Node.isAwaitExpression(current.getParent())) {
+    current = current.getParentOrThrow();
+  }
+  const parent = current.getParent();
+  return (
+    Node.isCallExpression(parent) &&
+    parent.getArguments().includes(current) &&
+    callExpressionName(parent) === 'compareAndSet'
+  );
+}
+
+function writeChainResultIdentifier(chain: Node): string | undefined {
+  let current: Node = chain;
+  while (Node.isAwaitExpression(current.getParent())) {
+    current = current.getParentOrThrow();
+  }
+  const parent = current.getParent();
+  if (!parent || !Node.isVariableDeclaration(parent)) return undefined;
+  const name = parent.getNameNode();
+  return Node.isIdentifier(name) ? name.getText() : undefined;
+}
+
+function conditionChecksZeroAffectedRows(condition: Node, identifier: string): boolean {
+  for (const binary of [
+    ...(Node.isBinaryExpression(condition) ? [condition] : []),
+    ...condition.getDescendantsOfKind(SyntaxKind.BinaryExpression),
+  ]) {
+    const operator = binary.getOperatorToken().getKind();
+    if (
+      operator !== SyntaxKind.EqualsEqualsEqualsToken &&
+      operator !== SyntaxKind.EqualsEqualsToken
+    ) {
+      continue;
+    }
+    if (
+      (affectedRowAccess(binary.getLeft(), identifier) && numericZero(binary.getRight())) ||
+      (affectedRowAccess(binary.getRight(), identifier) && numericZero(binary.getLeft()))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function affectedRowAccess(node: Node, identifier: string): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isPropertyAccessExpression(expression) && !Node.isElementAccessExpression(expression)) {
+    return false;
+  }
+  const name = staticAccessName(expression);
+  if (
+    name !== 'rowCount' &&
+    name !== 'rowsAffected' &&
+    name !== 'affectedRows' &&
+    name !== 'changes' &&
+    name !== 'count'
+  ) {
+    return false;
+  }
+  const receiver = unwrappedStaticExpressionNode(expression.getExpression());
+  return Node.isIdentifier(receiver) && receiver.getText() === identifier;
+}
+
+function numericZero(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  return (
+    (Node.isNumericLiteral(expression) && expression.getText() === '0') ||
+    (Node.isBigIntLiteral(expression) && expression.getText() === '0n')
+  );
+}
+
+function statementReturnsOrThrowsConflict(statement: Node): boolean {
+  if (Node.isReturnStatement(statement) || Node.isThrowStatement(statement)) {
+    const expression = statement.getExpression();
+    return expression !== undefined && expressionContainsConflict(expression);
+  }
+  if (Node.isBlock(statement)) {
+    return statement.getStatements().some((child) => statementReturnsOrThrowsConflict(child));
+  }
+  return false;
+}
+
+function expressionContainsConflict(expression: Node): boolean {
+  const calls = [
+    ...(Node.isCallExpression(expression) ? [expression] : []),
+    ...expression.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+  return calls.some((call) => callExpressionName(call) === 'kovoConflict');
+}
+
+function callExpressionName(call: CallExpression): string | undefined {
+  const expression = call.getExpression();
+  if (Node.isIdentifier(expression)) return expression.getText();
+  return staticAccessName(expression);
 }
 
 function writtenColumnsForPayload(
@@ -851,14 +991,18 @@ function atomicityDiagnostic(
   table: string,
   columns: readonly string[],
   versionColumn: string | undefined,
+  options: { hasAtomicityGuard: boolean },
 ): TouchGraphDiagnostic {
   const definition = diagnosticDefinitions.KV429;
   const guard = versionColumn
     ? `compare-and-set on ${columns.join(', ')} or version guard ${versionColumn}`
     : `compare-and-set on ${columns.join(', ')}`;
+  const conflictOutcome = options.hasAtomicityGuard
+    ? ' Guarded zero-row outcomes must return or throw a typed 409 conflict.'
+    : '';
   return {
     code: 'KV429',
-    message: `${definition.message} Read-before-write updates ${table}.${columns.join(', ')} without ${guard}.`,
+    message: `${definition.message} Read-before-write updates ${table}.${columns.join(', ')} without ${guard}.${conflictOutcome}`,
     severity: definition.severity,
     site,
   };

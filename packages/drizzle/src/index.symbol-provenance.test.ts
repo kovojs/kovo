@@ -585,7 +585,45 @@ describe('@kovojs/drizzle symbol provenance', () => {
     ]);
   });
 
-  it('accepts a version-guarded compare-and-set update for a declared atomic column', () => {
+  it('reports KV429 when a version-guarded update lacks typed conflict wiring', () => {
+    const diagnostics = atomicityDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<{ rowCount: number }> } };',
+        ]),
+        {
+          fileName: 'inventory.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '  version: integer("version").notNull(),',
+            '}, kovo({ domain: "product", key: "id", atomic: [(t) => t.stock], version: (t) => t.version }));',
+            '',
+            'export async function reserve(db: PgDatabase, input: { id: string; quantity: number; version: number }) {',
+            '  const [product] = await db.select({ stock: products.stock, version: products.version }).from(products).where(eq(products.id, input.id));',
+            '  if (product.stock < input.quantity) return;',
+            '  await db.update(products).set({ stock: product.stock - input.quantity, version: product.version + 1 }).where(and(eq(products.id, input.id), eq(products.version, input.version)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics.map(({ code, message, site }) => ({ code, message, site }))).toEqual([
+      {
+        code: 'KV429',
+        message:
+          'Read-then-write on an atomic value lacks an atomicity guard. Read-before-write updates products.stock, version without compare-and-set on stock, version or version guard version. Guarded zero-row outcomes must return or throw a typed 409 conflict.',
+        site: 'inventory.domain.ts:12',
+      },
+    ]);
+  });
+
+  it('accepts compareAndSet-wrapped guarded updates for a declared atomic column', () => {
     const diagnostics = atomicityDiagnosticsFromProject({
       files: [
         pgDatabaseTypes([
@@ -606,7 +644,39 @@ describe('@kovojs/drizzle symbol provenance', () => {
             'export async function reserve(db: PgDatabase, input: { id: string; quantity: number; version: number }) {',
             '  const [product] = await db.select({ stock: products.stock, version: products.version }).from(products).where(eq(products.id, input.id));',
             '  if (product.stock < input.quantity) return;',
-            '  await db.update(products).set({ stock: product.stock - input.quantity, version: product.version + 1 }).where(and(eq(products.id, input.id), eq(products.version, input.version)));',
+            '  await compareAndSet(db.update(products).set({ stock: product.stock - input.quantity, version: product.version + 1 }).where(and(eq(products.id, input.id), eq(products.version, input.version))));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('accepts guarded row-count checks that return typed TOCTOU conflicts', () => {
+    const diagnostics = atomicityDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<{ rowCount: number }> } };',
+        ]),
+        {
+          fileName: 'inventory.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '  version: integer("version").notNull(),',
+            '}, kovo({ domain: "product", key: "id", atomic: ["stock"], version: "version" }));',
+            '',
+            'export async function reserve(db: PgDatabase, input: { id: string; quantity: number; version: number }) {',
+            '  const [product] = await db.select({ stock: products.stock, version: products.version }).from(products).where(eq(products.id, input.id));',
+            '  if (product.stock < input.quantity) return;',
+            '  const result = await db.update(products).set({ stock: product.stock - input.quantity, version: product.version + 1 }).where(and(eq(products.id, input.id), eq(products.version, input.version)));',
+            '  if (result.rowCount === 0) throw kovoConflict({ code: "STALE_PRODUCT", payload: { id: input.id } });',
             '}',
           ].join('\n'),
         },
