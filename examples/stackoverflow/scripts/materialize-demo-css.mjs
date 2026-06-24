@@ -18,7 +18,7 @@ const exampleRoot = resolve(scriptDir, '..');
 const appEntry = resolve(exampleRoot, 'src/interactive-app.tsx');
 const stylesheetPath = resolve(exampleRoot, 'dist/assets/styles.css');
 
-const { extractAppComponentCss } = await import('@kovojs/compiler/package-styles');
+const { extractAppComponentCss } = await import('@kovojs/compiler');
 const result = extractAppComponentCss({
   fileName: appEntry,
   packagePrefixDiscoveryRoot: resolve(exampleRoot, 'src'),

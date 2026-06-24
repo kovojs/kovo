@@ -143,10 +143,11 @@ jobs:
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp exec playwright install --with-deps --no-shell chromium
-      - run: nohup Xvfb :99 -screen 0 1280x720x24 >/tmp/kovo-gallery-xvfb.log 2>&1 &
-      - run: vp exec pnpm --filter @kovojs/example-gallery run test:browser
+      - run: |
+          Xvfb :99 -screen 0 1280x720x24 >/tmp/kovo-gallery-xvfb.log 2>&1 &
+          export DISPLAY=:99
+          vp exec pnpm --filter @kovojs/example-gallery run test:browser
         env:
-          DISPLAY: ':99'
           KOVO_GALLERY_BROWSER_HEADED: '1'
 
   integration:
