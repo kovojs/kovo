@@ -752,11 +752,18 @@ export interface DocsSidebarProps {
   activePath?: string;
   groups: NavGroup[];
   mode?: 'desktop' | 'mobile';
+  syncHref?: string;
 }
 
 export const DocsSidebar = component({
-  render: ({ activePath = '', groups, mode = 'desktop' }: DocsSidebarProps) => (
-    <nav style={chromeStyles.docSidebar} aria-label="Documentation" data-docs-sidebar={mode}>
+  render: ({ activePath = '', groups, mode = 'desktop', syncHref }: DocsSidebarProps) => (
+    <nav
+      style={chromeStyles.docSidebar}
+      aria-label="Documentation"
+      data-docs-sidebar={mode}
+      // KV211: desktop docs nav syncs at parse so the current section is visible immediately.
+      on:load={mode === 'desktop' && syncHref ? `${syncHref}#sync` : undefined}
+    >
       {groups.map((group) => {
         const activeGroup =
           activePath === group.indexUrl ||

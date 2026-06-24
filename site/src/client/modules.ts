@@ -6,10 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
 
 // The docs site's client islands (SPEC §4.4, §7 L1): search ⌘K, theme toggle,
-// and the code-window copy button. They are authored source under src/client/
-// and registered through the framework's versioned client-module registry — the
-// same store createApp() serves to the browser — so the on:click hrefs carry an
-// immutable content-hash version (SPEC §6.6) instead of bare, cache-unsafe paths.
+// the code-window copy button, and the greppable on:load sidebar sync. They are
+// authored source under src/client/ and registered through the framework's
+// versioned client-module registry — the same store createApp() serves to the
+// browser — so handler hrefs carry an immutable content-hash version (SPEC
+// §6.6) instead of bare, cache-unsafe paths.
 
 const clientDir = fileURLToPath(new URL('./', import.meta.url));
 
@@ -37,5 +38,6 @@ export const siteClientModules = createMemoryVersionedClientModuleRegistry();
 export const clientHrefs = {
   code: register(siteClientModules, 'code.js'),
   search: register(siteClientModules, 'search.js'),
+  sidebar: register(siteClientModules, 'sidebar.js'),
   theme: register(siteClientModules, 'theme.js'),
 } as const;

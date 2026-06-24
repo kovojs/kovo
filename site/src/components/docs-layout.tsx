@@ -233,6 +233,7 @@ export function DocsRoutePage({
     activePath,
     groups: sidebarGroups,
     mode: 'desktop',
+    syncHref: clients.sidebar,
   });
   const mobileSidebar = DocsSidebar.definition.render({
     activePath,
