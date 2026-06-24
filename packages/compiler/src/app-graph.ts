@@ -58,11 +58,12 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   // KV436 consumer (`kovo check`) fires on any surface with no explicit decision,
   // guard, or machine-auth posture. By-construction: the proof is this static graph
   // fact, not a TS brand. KV436 proves a decision EXISTS, never that it is correct.
+  const pagesForAccess = mergedPages ?? options.graph?.pages;
   const access = deriveAccessExplainFacts({
-    endpoints: options.graph?.endpoints,
-    mutations: options.graph?.mutations,
-    pages: mergedPages ?? options.graph?.pages,
-    queries: options.graph?.queries,
+    ...(options.graph?.endpoints === undefined ? {} : { endpoints: options.graph.endpoints }),
+    ...(options.graph?.mutations === undefined ? {} : { mutations: options.graph.mutations }),
+    ...(pagesForAccess === undefined ? {} : { pages: pagesForAccess }),
+    ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
   });
   const graph: RegistryGraphInput = {
     ...options.graph,
