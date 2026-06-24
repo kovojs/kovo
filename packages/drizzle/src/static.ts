@@ -849,6 +849,7 @@ function extractTouchGraphFromPreparedFiles(
     const sourceContext = projectSourceModuleContext(extraction);
     const contextFiles = projectContextFiles(extraction);
     const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
+    const domainWriteActions = projectDomainWriteActionsBySymbol(extraction.sourceFiles);
     return extractQueryFactsFromPreparedFiles(
       extraction.files,
       (file) => {
@@ -860,6 +861,7 @@ function extractTouchGraphFromPreparedFiles(
 
         return extractProjectQueryDefinitions(sourceFile, {
           ...(file.columnShapes ? { columnShapes: file.columnShapes } : {}),
+          domainWriteActions,
           localFunctionReceiverParameters: functionReceiverParametersByKey(
             (projectFunctionExtractions.get(file.fileName) ?? new Map()).values(),
           ),
@@ -1237,10 +1239,11 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
   const diagnostics: TouchGraphDiagnostic[] = [];
 
   for (const write of summary.writes) {
+    const definition = diagnosticDefinitions.KV433;
     diagnostics.push({
-      code: 'KV406',
-      message: `${diagnosticDefinitions.KV406.message} Query local helper touches Drizzle table via ${write.operation}().`,
-      severity: diagnosticDefinitions.KV406.severity,
+      code: 'KV433',
+      message: `${definition.message} Query local helper reaches Drizzle ${write.operation}().`,
+      severity: definition.severity,
       site: write.site,
     });
   }
@@ -1377,6 +1380,7 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
 
 interface ProjectQueryDefinitionOptions {
   columnShapes?: Readonly<Record<string, QueryShape>>;
+  domainWriteActions?: ReadonlyMap<string, ReadonlySet<string>>;
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
   namespaceTableNames: ProjectNamespaceTableNames;
   relationalTableNames: ReadonlyMap<string, string>;
@@ -1394,6 +1398,7 @@ function extractProjectQueryDefinitions(
 
   return extractQueryDefinitionsFromSourceFile(sourceFile, {
     ...(options.columnShapes ? { columnShapes: options.columnShapes } : {}),
+    ...(options.domainWriteActions ? { domainWriteActions: options.domainWriteActions } : {}),
     ...(options.localFunctionReceiverParameters
       ? { localFunctionReceiverParameters: options.localFunctionReceiverParameters }
       : {}),
@@ -1403,8 +1408,75 @@ function extractProjectQueryDefinitions(
   });
 }
 
+function projectDomainWriteActionsBySymbol(
+  sourceFiles: readonly SourceFile[],
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const actionsByDomain = new Map<string, Set<string>>();
+
+  for (const sourceFile of sourceFiles) {
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const name = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!Node.isIdentifier(name) || !initializer) continue;
+
+      const domainCall = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isCallExpression(domainCall)) continue;
+      const expression = domainCall.getExpression();
+      if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
+
+      const symbolKey = resolvedSymbolKey(name.getSymbol());
+      if (!symbolKey) continue;
+
+      const domainObject = domainWriteObject(domainCall.getArguments()[0]);
+      if (!domainObject.body) continue;
+
+      const actions = actionsByDomain.get(symbolKey) ?? new Set<string>();
+      for (const property of domainWriteProperties(domainObject.body)) {
+        actions.add(property.memberName);
+      }
+      if (actions.size > 0) actionsByDomain.set(symbolKey, actions);
+    }
+  }
+
+  return new Map(
+    [...actionsByDomain.entries()].map(([symbolKey, actions]) => [symbolKey, new Set(actions)]),
+  );
+}
+
+function domainWriteActionQueryDiagnostics(
+  body: ObjectLiteralExpression,
+  domainWriteActions: ReadonlyMap<string, ReadonlySet<string>>,
+): TouchGraphDiagnostic[] {
+  if (domainWriteActions.size === 0) return [];
+
+  return queryExecutableCallExpressions(body, 'project').flatMap((call) => {
+    const callee = unwrappedStaticExpressionNode(call.getExpression());
+    const action = staticAccessName(callee);
+    const receiver = staticAccessExpression(callee);
+    if (!action || !receiver) return [];
+
+    const receiverSymbol =
+      symbolForCallbackReference(receiver) ??
+      symbolForIdentifierReference(receiver) ??
+      receiver.getSymbol();
+    const receiverKey = resolvedSymbolKey(receiverSymbol);
+    if (!receiverKey || !domainWriteActions.get(receiverKey)?.has(action)) return [];
+
+    const definition = diagnosticDefinitions.KV433;
+    return [
+      {
+        code: 'KV433' as const,
+        message: `${definition.message} Query loader calls domain write ${staticExpressionPath(callee) ?? callee.getText()}().`,
+        severity: definition.severity,
+        site: '',
+      },
+    ];
+  });
+}
+
 interface QueryDefinitionOptions {
   columnShapes?: Readonly<Record<string, QueryShape>>;
+  domainWriteActions?: ReadonlyMap<string, ReadonlySet<string>>;
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
   readTableIdentifier?: (node: Node) => string | undefined;
   receiverMode?: 'project' | 'source';
@@ -1497,6 +1569,8 @@ function extractQueryDefinitionsFromSourceFile(
     const diagnostics = [
       ...(bodyResolution.unresolved ? [unresolvedQueryLoadCallbackDiagnostic()] : []),
       ...unresolvedQueryCallbackDiagnostics(bodyObject, receiverMode),
+      ...queryWriteReceiverDiagnostics(bodyObject, receiverReferences),
+      ...domainWriteActionQueryDiagnostics(bodyObject, options.domainWriteActions ?? new Map()),
       ...relationalQueryDiagnostics(bodyObject, receiverReferences),
       ...(declaredOpaqueRead
         ? []
@@ -1985,6 +2059,7 @@ import {
   queryLocalHelperCalls,
   queryReceiverAliasReferencesForCall,
   queryShapeFromObjectLiteralNode,
+  queryWriteReceiverDiagnostics,
   receiverMethodAliasQueryDiagnostics,
   referencedQueryCallbackFunction,
   relationalQueryDiagnostics,

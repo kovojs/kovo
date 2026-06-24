@@ -81,23 +81,23 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         diagnostics: [
           {
+            code: 'KV433',
+            message:
+              'Query loader reaches a write without an elevated query capability. Query loader calls carrier.db.execute().',
+            severity: 'error',
+            site: 'product.queries.ts:11',
+          },
+          {
+            code: 'KV433',
+            message:
+              'Query loader reaches a write without an elevated query capability. Query loader calls carrier.db.update().',
+            severity: 'error',
+            site: 'product.queries.ts:11',
+          },
+          {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'error',
-            site: 'product.queries.ts:11',
-          },
-          {
-            code: 'KV406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.execute().',
-            severity: 'error',
-            site: 'product.queries.ts:11',
-          },
-          {
-            code: 'KV406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.update().',
             severity: 'error',
             site: 'product.queries.ts:11',
           },
@@ -153,23 +153,23 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         diagnostics: [
           {
+            code: 'KV433',
+            message:
+              'Query loader reaches a write without an elevated query capability. Query loader calls nested.inner.db.execute().',
+            severity: 'error',
+            site: 'product.queries.ts:11',
+          },
+          {
+            code: 'KV433',
+            message:
+              'Query loader reaches a write without an elevated query capability. Query loader calls nested.inner.db.update().',
+            severity: 'error',
+            site: 'product.queries.ts:11',
+          },
+          {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'error',
-            site: 'product.queries.ts:11',
-          },
-          {
-            code: 'KV406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.execute().',
-            severity: 'error',
-            site: 'product.queries.ts:11',
-          },
-          {
-            code: 'KV406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.update().',
             severity: 'error',
             site: 'product.queries.ts:11',
           },
@@ -989,7 +989,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
-  it('marks local query-loader helper writes as KV406', () => {
+  it('marks local query-loader helper writes as KV433', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -1020,9 +1020,9 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         diagnostics: [
           {
-            code: 'KV406',
+            code: 'KV433',
             message:
-              'Statically un-analyzable write site; manual touches required. Query local helper touches Drizzle table via update().',
+              'Query loader reaches a write without an elevated query capability. Query local helper reaches Drizzle update().',
             severity: 'error',
             site: 'product.queries.ts:8',
           },

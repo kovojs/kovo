@@ -551,10 +551,14 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
       runs queries with `dbAccess: "read"`; `packages/server/src/guards.ts` installs the fail-closed reader
       proxy. Verified with `vp check packages/server/src` and
       `vp exec vitest --run packages/server/src/query-endpoint.test.ts`.
-  - [ ] Stage 2 (REQUIRED, after the §11.1 write-reachability pass): KV433 statically proves no write is
+  - [x] Stage 2 (REQUIRED, after the §11.1 write-reachability pass): KV433 statically proves no write is
         reachable from a query loader — INCLUDING via an imported `domain()` fn called with a module-scope/
         captured handle (the confused-deputy case Stage 1 misses). This is the by-construction guarantee; the
         plan is not complete until it lands.
+    - Evidence: `packages/drizzle/src/static/query-shapes.ts` emits KV433 for query-loader write-capable DB
+      receiver calls, and `packages/drizzle/src/static.ts` emits KV433 for local-helper writes and imported
+      domain action calls; verified by `vp exec vitest --run packages/drizzle/src` (22 files / 367 tests).
+    - Evidence: `vp check packages/drizzle/src` passed after the KV433 static gate changes.
   - [ ] `query.elevated` stays a GET (§9.4, idempotent over `/_q/`): allow the write via the proxy + audit in
         `--capabilities`; document it MUST be idempotent-safe-to-repeat (GETs are re-fetched/prefetched).
         State-changing writes belong in mutations. Read-only raw defers to the SQL managed-handle guard.

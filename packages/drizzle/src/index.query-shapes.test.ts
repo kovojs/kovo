@@ -1616,7 +1616,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
-  it('keeps raw query receiver calls visible as KV406 query facts', () => {
+  it('keeps raw query receiver calls visible as KV433 query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -1638,9 +1638,9 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         diagnostics: [
           {
-            code: 'KV406',
+            code: 'KV433',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.execute().',
+              'Query loader reaches a write without an elevated query capability. Query loader calls db.execute().',
             severity: 'error',
             site: 'product.queries.ts:4',
           },
@@ -1676,6 +1676,15 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        diagnostics: [
+          {
+            code: 'KV433',
+            message:
+              'Query loader reaches a write without an elevated query capability. Query loader calls db.execute().',
+            severity: 'error',
+            site: 'product.queries.ts:4',
+          },
+        ],
         query: 'product/raw',
         reads: ['product'],
         shape: {
@@ -1685,7 +1694,15 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         site: 'product.queries.ts:4',
       },
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV433',
+        message:
+          'Query loader reaches a write without an elevated query capability. Query loader calls db.execute().',
+        severity: 'error',
+        site: 'product.queries.ts:4',
+      },
+    ]);
   });
 
   it('keeps computed query receiver calls visible as KV406 query facts', () => {

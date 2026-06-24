@@ -12,7 +12,7 @@ const extractQueryFactsFromProject = (
 ) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
 describe('@kovojs/drizzle touch graph helpers', () => {
-  it('marks project query-loader writes as KV406 instead of dropping the query fact', () => {
+  it('marks project query-loader writes as KV433 instead of dropping the query fact', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -37,9 +37,9 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         diagnostics: [
           {
-            code: 'KV406',
+            code: 'KV433',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.update().',
+              'Query loader reaches a write without an elevated query capability. Query loader calls db.update().',
             severity: 'error',
             site: 'product.queries.ts:6',
           },
@@ -48,6 +48,58 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         reads: [],
         shape: {},
         site: 'product.queries.ts:6',
+      },
+    ]);
+  });
+
+  it('marks imported domain write actions reached from query loaders as KV433', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.domain.ts',
+          source: `
+            export const products = pgTable("products", {
+              id: text("id").primaryKey(),
+            }, kovo({ domain: "product", key: "id" }));
+
+            export const productDomain = domain({
+              restock: write(async (db: PgDatabase, id: string) => {
+                await db.update(products).set({ id });
+              }),
+            });
+          `,
+        },
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            import { productDomain as inventory } from "./product.domain";
+
+            export const productQuery = query("product/domain-write", {
+              async load() {
+                await inventory.restock("p1");
+                return [];
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'KV433',
+            message:
+              'Query loader reaches a write without an elevated query capability. Query loader calls domain write inventory.restock().',
+            severity: 'error',
+            site: 'product.queries.ts:4',
+          },
+        ],
+        query: 'product/domain-write',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:4',
       },
     ]);
   });

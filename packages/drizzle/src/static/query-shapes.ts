@@ -66,6 +66,16 @@ import {
   DRIZZLE_STATIC_PROJECT_ROOT,
 } from '../static.js';
 
+const QUERY_WRITE_RECEIVER_METHODS = new Set([
+  'delete',
+  'execute',
+  'insert',
+  'refreshMaterializedView',
+  'transaction',
+  'update',
+  'write',
+]);
+
 /** @internal */ export interface QueryShapeSelection {
   diagnostics?: readonly TouchGraphDiagnostic[];
   hasTablelessScalar: boolean;
@@ -478,6 +488,35 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   );
 }
 
+/** @internal */ export function queryWriteReceiverDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+): TouchGraphDiagnostic[] {
+  return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
+    if (
+      boundReceiverMethodAccessName(call, (node) =>
+        isQueryReceiverIdentifier(node, receiverReferences),
+      )
+    ) {
+      return [];
+    }
+
+    const surface = directDrizzleReceiverCallSurface(call);
+    if (!surface || !QUERY_WRITE_RECEIVER_METHODS.has(surface.name)) return [];
+    if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
+
+    const definition = diagnosticDefinitions.KV433;
+    return [
+      {
+        code: 'KV433' as const,
+        message: `${definition.message} Query loader calls ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
+        severity: definition.severity,
+        site: '',
+      },
+    ];
+  });
+}
+
 /** @internal */ export function unclassifiedQueryReceiverDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
@@ -495,6 +534,7 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
 
     const surface = directDrizzleReceiverCallSurface(call);
     if (!surface || isSelectQueryCallName(surface.name) || surface.name === 'with') return [];
+    if (QUERY_WRITE_RECEIVER_METHODS.has(surface.name)) return [];
 
     if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
 
