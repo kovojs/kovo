@@ -129,6 +129,64 @@ describe('@kovojs/drizzle symbol provenance', () => {
       },
     ]);
   });
+
+  it('keeps renamed imports, Drizzle aliases, and intermediate table bindings symbol-based', () => {
+    const effects = extractSymbolicEffectsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'drizzle-pg-core-extra.d.ts',
+          source: [
+            'declare module "drizzle-orm/pg-core" {',
+            '  export function alias(table: unknown, name: string): unknown;',
+            '  export function pgTable(name: string, columns: unknown, extra?: unknown): unknown;',
+            '  export function text(name: string): { primaryKey(): unknown; notNull(): unknown };',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'packages/drizzle/src/schema.ts',
+          source: [
+            'import { pgTable, text } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  ownerId: text("owner_id").notNull(),',
+            '}, kovo({ domain: "user", key: "id" }));',
+          ].join('\n'),
+        },
+        {
+          fileName: 'packages/drizzle/src/account.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import { alias, type PgDatabase } from "drizzle-orm/pg-core";',
+            'import { users as accounts } from "./schema";',
+            '',
+            'const accountAlias = alias(accounts, "a");',
+            'const accountTable = accountAlias;',
+            '',
+            'export async function saveAccount(db: PgDatabase, input: { id: string; ownerId: string }) {',
+            '  const id = input.id;',
+            '  const { ownerId } = input;',
+            '  await db.update(accountTable).set({ ownerId }).where(eq(accountTable.id, id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    }).map((fact) => fact.effect);
+
+    expect(effects).toEqual([
+      {
+        match: { eq: [{ column: 'id', value: { kind: 'param', path: 'id' } }], kind: 'keys' },
+        op: 'update',
+        sets: { ownerId: { kind: 'param', path: 'ownerId' } },
+        table: 'users',
+      },
+    ]);
+  });
 });
 
 function source(sourceText: string) {
