@@ -21,6 +21,7 @@ import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { renderFragmentWireHtml } from './wire-html.js';
 import type { RegisteredQueryDefinition } from './query.js';
+import type { JsonSerializable } from './json-boundary.js';
 import {
   appendResponseHeader,
   retryAfterHeaders,
@@ -173,12 +174,15 @@ export async function runMutation<
   }
 
   const context: MutationContext<Errors> = {
-    fail(code, payload) {
+    fail<const Code extends Extract<keyof Errors, string>>(
+      code: Code,
+      payload: JsonSerializable<InferSchema<Errors[Code]>>,
+    ): MutationFail<Code, InferSchema<Errors[Code]>> {
       return {
         error: { code, payload },
         ok: false,
         status: 422,
-      };
+      } as MutationFail<Code, InferSchema<Errors[Code]>>;
     },
     invalidate(domain, options) {
       const record = invalidate(domain, options);

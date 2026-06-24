@@ -259,12 +259,13 @@ island `kovo-state`, and `fail()` error payloads), not just the query wire. Brea
 (pre-release), so the `JsonValue`-bound retrofit is pulled onto this phase's critical path (first checkbox) by
 design.
 
-- [ ] Retrofit `JsonValue` as the bound on every client-bound boundary (prerequisite for Doors 2/3).
-  - Today query result value is unbounded `unknown` (`packages/server/src/query.ts`) and `fail()` payload is
-    typed by the per-mutation error schema (`packages/server/src/mutation.ts`), not `JsonValue`; island state
-    is already `JsonValue`-bounded (§6.2). Make query result value and `fail()` payload `JsonValue`-bounded so
-    a `Secret<T>` value is a type error at those sinks. Deliberately app-breaking; amend SPEC §6.2/§9.2/§10.2
-    and follow `rules/api-surface.md`.
+- [x] Retrofit `JsonValue` as the bound on every client-bound boundary (prerequisite for Doors 2/3).
+  - Evidence: `packages/server/src/query.ts` gates `query().load` results through `JsonSerializable`, and
+    `packages/server/src/mutation/definition.ts` gates `context.fail()` payloads through the same boundary;
+    `packages/server/src/query-endpoint.test.ts` and `packages/server/src/mutation.test.ts` assert non-JSON
+    `Date`/function payloads fail at compile time while named readonly JSON DTOs compile. SPEC §6.2/§9.2/§10.2
+    now records the JsonValue-bound query/fail contract. Verified with `vp check`, `pnpm run check:api-surface`,
+    and focused query/mutation Vitest coverage.
 - [ ] Add a column-level confidentiality fact: `kovo({ secret: true })` / `s.secret()`, declared once on the
       schema (mirrors `owner:`); generated query result types surface the column as `Secret<T>`.
 - [ ] Define `Secret<T>` as a brand **not assignable to `JsonValue`**, so Door 2 (`fail()`) and Door 3

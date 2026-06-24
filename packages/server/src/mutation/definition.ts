@@ -7,6 +7,7 @@ import type { Guard, RequestLifecycleOptions } from '../guards.js';
 import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import type { InferSchema, Schema } from '../schema.js';
+import type { JsonSerializable } from '../json-boundary.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
 
 /**
@@ -52,7 +53,7 @@ export type MutationResult<Value, Input = unknown> = MutationFail | MutationSucc
 export interface MutationContext<Errors extends Record<string, Schema<unknown>>> {
   fail<const Code extends Extract<keyof Errors, string>>(
     code: Code,
-    payload: InferSchema<Errors[Code]>,
+    payload: JsonSerializable<InferSchema<Errors[Code]>>,
   ): MutationFail<Code, InferSchema<Errors[Code]>>;
   invalidate<const DomainKey extends string, Input = unknown>(
     domain: Domain<DomainKey>,

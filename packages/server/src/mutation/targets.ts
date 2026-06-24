@@ -18,7 +18,7 @@ import type {
 import type { QueryRerun } from './definition.js';
 
 export function queriesToRerun(
-  queries: readonly QueryDefinition[],
+  queries: readonly QueryDefinition<string, unknown, unknown, unknown>[],
   changes: readonly ChangeRecord[],
   input: unknown,
 ): QueryRerun[] {
@@ -42,7 +42,7 @@ export function queriesToRerun(
 }
 
 function queryTouchedByChange(
-  queryDefinition: QueryDefinition,
+  queryDefinition: QueryDefinition<string, unknown, unknown, unknown>,
   change: ChangeRecord,
   input: unknown,
 ): boolean {
@@ -55,7 +55,7 @@ function queryTouchedByChange(
 }
 
 function queryChangeInvalidatesWholeQueryInstance(
-  queryDefinition: QueryDefinition,
+  queryDefinition: QueryDefinition<string, unknown, unknown, unknown>,
   change: ChangeRecord,
   input: unknown,
 ): boolean {
@@ -78,7 +78,7 @@ function canonicalSingleRowQueryValue(domain: string, instanceKey: string): stri
 }
 
 export async function renderQueryChunks(
-  queries: readonly QueryDefinition[],
+  queries: readonly QueryDefinition<string, unknown, unknown, unknown>[],
   rerunQueries: readonly QueryRerun[],
   defaultInput: unknown,
   request: unknown,
@@ -112,7 +112,7 @@ export async function renderQueryChunks(
 }
 
 function queryMatchesRerun(
-  queryDefinition: QueryDefinition,
+  queryDefinition: QueryDefinition<string, unknown, unknown, unknown>,
   defaultInput: unknown,
   target: QueryRerun,
 ): boolean {
@@ -273,7 +273,7 @@ interface MutationResponseSelectionInput<Request> {
   liveTargetDescriptors: readonly MutationLiveTargetDescriptor[];
   liveTargetRenderers: readonly LiveTargetRenderer<Request>[];
   liveTargets?: readonly MutationLiveTarget[] | undefined;
-  queryDefinitions: readonly QueryDefinition[];
+  queryDefinitions: readonly QueryDefinition<string, unknown, unknown, unknown>[];
   rerunQueries: readonly QueryRerun[];
   targets: readonly string[];
 }
@@ -368,7 +368,7 @@ export function selectMutationResponseTargets<Request>(
 
 interface LiveTargetRendererQueryBinding {
   args?: (props: Record<string, unknown>) => unknown;
-  query: QueryDefinition;
+  query: QueryDefinition<string, unknown, unknown, unknown>;
 }
 
 type LiveTargetRendererWithQueryBindings<Request> = LiveTargetRenderer<Request> & {
@@ -378,7 +378,7 @@ type LiveTargetRendererWithQueryBindings<Request> = LiveTargetRenderer<Request> 
 function liveTargetDescriptorQueryReruns<Request>(
   renderer: LiveTargetRenderer<Request>,
   descriptor: MutationLiveTargetDescriptor,
-  queryDefinitions: readonly QueryDefinition[],
+  queryDefinitions: readonly QueryDefinition<string, unknown, unknown, unknown>[],
   changes: readonly ChangeRecord[],
 ): QueryRerun[] {
   const bindings = liveTargetRendererQueryBindings(renderer, queryDefinitions);
@@ -409,7 +409,7 @@ function liveTargetDescriptorQueryReruns<Request>(
 
 function liveTargetRendererQueryBindings<Request>(
   renderer: LiveTargetRenderer<Request>,
-  queryDefinitions: readonly QueryDefinition[],
+  queryDefinitions: readonly QueryDefinition<string, unknown, unknown, unknown>[],
 ): readonly LiveTargetRendererQueryBinding[] {
   const rendererWithBindings = renderer as LiveTargetRendererWithQueryBindings<Request>;
   if (rendererWithBindings.queryBindings) return rendererWithBindings.queryBindings;

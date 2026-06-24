@@ -29,10 +29,10 @@ export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
  * @param derive - Maps the query's value to `RouteMeta`.
  * @returns A `RouteMetaFactory` (deferred) or resolved `RouteMeta`.
  */
-export function metaFromQuery<const Query extends QueryDefinition, const Meta extends RouteMeta>(
-  queryDefinition: Query,
-  derive: (value: QueryResult<Query>) => Meta,
-): RouteMetaFactory;
+export function metaFromQuery<
+  const Query extends QueryDefinition<string, unknown, any, any>,
+  const Meta extends RouteMeta,
+>(queryDefinition: Query, derive: (value: QueryResult<Query>) => Meta): RouteMetaFactory;
 export function metaFromQuery<
   const Query extends { load?: (input: never) => unknown },
   const Meta extends RouteMeta,
