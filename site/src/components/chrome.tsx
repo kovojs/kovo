@@ -499,10 +499,21 @@ const chromeStyles = style.create(
         color: 'var(--ink)',
       },
     },
+    sideGroupHeadingActive: {
+      borderLeftColor: 'var(--teal)',
+      borderLeftStyle: 'solid',
+      borderLeftWidth: 1,
+      color: 'var(--ink)',
+      marginLeft: '-0.66rem',
+      paddingLeft: '0.65rem',
+    },
     sideGroupHeadingArrow: {
       color: 'var(--faint)',
       fontSize: '0.58rem',
       letterSpacing: 0,
+    },
+    sideGroupHeadingArrowActive: {
+      color: 'var(--teal)',
     },
     sideGroupLink: {
       borderLeftColor: 'transparent',
@@ -735,21 +746,36 @@ export const SiteFooter = component({
 export interface DocsSidebarProps {
   activePath?: string;
   groups: NavGroup[];
+  mode?: 'desktop' | 'mobile';
 }
 
 export const DocsSidebar = component({
-  render: ({ activePath = '', groups }: DocsSidebarProps) => (
+  render: ({ activePath = '', groups, mode = 'desktop' }: DocsSidebarProps) => (
     <nav style={chromeStyles.docSidebar} aria-label="Documentation">
       {groups.map((group) => {
         const activeGroup =
           activePath === group.indexUrl ||
           activePath === `/${group.key}/` ||
           group.pages.some((page) => page.url === activePath);
+        const activeSection =
+          activePath === `/${group.key}/` || group.pages.some((page) => page.url === activePath);
+        const openGroup = mode === 'desktop' || activeGroup;
         return (
-          <details style={chromeStyles.sideGroupDisclosure} open={activeGroup ? true : undefined}>
-            <summary style={chromeStyles.sideGroupHeading}>
+          <details style={chromeStyles.sideGroupDisclosure} open={openGroup ? true : undefined}>
+            <summary
+              style={[
+                chromeStyles.sideGroupHeading,
+                activeSection && chromeStyles.sideGroupHeadingActive,
+              ]}
+            >
               <span>{group.title}</span>
-              <span aria-hidden="true" style={chromeStyles.sideGroupHeadingArrow}>
+              <span
+                aria-hidden="true"
+                style={[
+                  chromeStyles.sideGroupHeadingArrow,
+                  activeSection && chromeStyles.sideGroupHeadingArrowActive,
+                ]}
+              >
                 ▾
               </span>
             </summary>

@@ -228,9 +228,16 @@ export function DocsRoutePage({
   // Show only the sidebar family for this page: the learning path (Getting
   // Started + Tutorial + Guides) together, or Components/Examples/reference
   // together — so the rail stays scoped to what the reader is browsing.
-  const sidebar = DocsSidebar.definition.render({
+  const sidebarGroups = sidebarGroupsForPath(groups, activePath);
+  const desktopSidebar = DocsSidebar.definition.render({
     activePath,
-    groups: sidebarGroupsForPath(groups, activePath),
+    groups: sidebarGroups,
+    mode: 'desktop',
+  });
+  const mobileSidebar = DocsSidebar.definition.render({
+    activePath,
+    groups: sidebarGroups,
+    mode: 'mobile',
   });
   const toc = apiSidebar ? ApiSidebar.definition.render({ apiSidebar }) : renderToc(headings);
 
@@ -238,11 +245,11 @@ export function DocsRoutePage({
     <div data-docs-route-page>
       {SiteHeader.definition.render({ activePath, clients })}
       <div style={docsLayoutStyles.docsShell}>
-        <aside style={docsLayoutStyles.sidebarRail}>{sidebar}</aside>
+        <aside style={docsLayoutStyles.sidebarRail}>{desktopSidebar}</aside>
         <main style={docsLayoutStyles.main}>
           <details style={docsLayoutStyles.mobileMenu}>
             <summary style={docsLayoutStyles.mobileSummary}>Menu</summary>
-            <div style={docsLayoutStyles.mobileBody}>{sidebar}</div>
+            <div style={docsLayoutStyles.mobileBody}>{mobileSidebar}</div>
           </details>
           {eyebrow ? <p style={docsLayoutStyles.pageEyebrow}>{escapeHtml(eyebrow)}</p> : ''}
           <DocsRouteContentView content={content} />
