@@ -27,7 +27,9 @@ if (mismatched.length > 0) {
 }
 
 if (process.env.SKIP_NPM_PUBLISHED_CHECK !== '1') {
-  const alreadyPublished = packages.filter((pkg) => publishedVersion(pkg.name, version) === version);
+  const alreadyPublished = packages.filter(
+    (pkg) => publishedVersion(pkg.name, version) === version,
+  );
   if (alreadyPublished.length > 0) {
     console.log(
       `Release ${version} is partially published; these packages will be skipped on publish:\n` +
