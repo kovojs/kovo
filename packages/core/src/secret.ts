@@ -1,5 +1,6 @@
 const secretBrand = Symbol('kovo.secret');
 const secretValue = Symbol('kovo.secret.value');
+declare const serverOnlyBrand: unique symbol;
 
 interface RuntimeSecret<T> extends Secret<T> {
   readonly [secretValue]: T;
@@ -18,6 +19,16 @@ export interface Secret<T> {
   toJSON(): never;
   toString(): never;
   [Symbol.toPrimitive](): never;
+}
+
+/**
+ * Type-only marker for values that are intended to remain server-side.
+ * `ServerOnly<T>` is TypeScript ergonomics only: the Kovo compiler has no type
+ * checker, so by-construction server/client safety still comes from static AST
+ * provenance and emit filtering, not this brand (SPEC §6.6).
+ */
+export interface ServerOnly<T> {
+  readonly [serverOnlyBrand]: T;
 }
 
 const secretPrototype = Object.freeze({

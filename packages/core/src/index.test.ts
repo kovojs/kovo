@@ -19,6 +19,7 @@ import {
   type FormValidationFailure,
   type JsonValue,
   type Secret,
+  type ServerOnly,
   trustedReveal,
   type TrustedRevealValue,
 } from './index.js';
@@ -205,6 +206,17 @@ describe('core authoring APIs', () => {
     };
 
     expect(assertSecretRejected).toBeTypeOf('function');
+  });
+
+  it('keeps ServerOnly as tsc-only ergonomics, not a runtime proof', () => {
+    const assertServerOnlyRejected = () => {
+      // @ts-expect-error SPEC §6.6: ServerOnly<T> is not a JsonValue client payload.
+      const _value: JsonValue = {} as ServerOnly<string>;
+    };
+    const assertRuntimeValue = (value: string) => value;
+
+    expect(assertServerOnlyRejected).toBeTypeOf('function');
+    expect(assertRuntimeValue('server-derived')).toBe('server-derived');
   });
 
   it('requires an explicit audited reveal before a Secret can cross JsonValue boundaries', () => {

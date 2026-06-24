@@ -7,6 +7,7 @@ export { publishToClient, secret, trustedReveal } from './secret.js';
 export type {
   PublishToClientOptions,
   Secret,
+  ServerOnly,
   TrustedRevealMethod,
   TrustedRevealOptions,
   TrustedRevealValue,

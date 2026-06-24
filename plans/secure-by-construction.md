@@ -424,9 +424,12 @@ compiler). Derivation is fail-closed.
 packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-explain.test.ts
 packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/src`, and
     `git diff --check`.
-- [ ] `ServerOnly<T>` brand, if shipped, is `tsc`-time ergonomic sugar only.
-  - Open risk: `process.env` retention changes the `ModuleScopeBindingModel` invariant (non-literal bindings
-    are dropped today, `parse.ts`); scope the refactor blast radius.
+- [x] `ServerOnly<T>` brand, if shipped, is `tsc`-time ergonomic sugar only.
+  - Evidence: `packages/core/src/secret.ts` exports a type-only `ServerOnly<T>` brand with JSDoc stating it is
+    not a compiler/runtime proof, and `packages/core/src/index.test.ts` verifies it is not a `JsonValue`
+    client payload. Verified by `vp exec vitest --run packages/core/src/index.test.ts`,
+    `vp check packages/core/src/index.ts packages/core/src/secret.ts packages/core/src/index.test.ts`, and
+    `pnpm run check:api-surface`.
 - [ ] Separate concern (NOT this phase): "don't bundle server code/deps into the client" is a module-graph
       property, not a secret. If needed, handle via inference (flag a client-reachable import of a module
       transitively using Node builtins) as a small lint; Kovo's existing component split already covers most.
