@@ -37,6 +37,9 @@ export interface KovoAnalyzerFunctionSummary {
  */
 export type KovoColumnRef = string | ((table: Record<string, unknown>) => unknown);
 
+/** Column-level confidentiality annotation consumed by the Phase 1 secret wire gate. */
+export type KovoSecretColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
+
 /**
  * A fan-out invalidation edge for a table's `fans`: when a write touches this table,
  * also invalidate the named `domain` reached `via` the given relation, optionally scoped
@@ -62,6 +65,7 @@ export type KovoTableAnnotation =
       fans?: readonly KovoFanAnnotation[];
       key?: KovoColumnRef;
       owner?: KovoColumnRef;
+      secret?: KovoSecretColumnAnnotation;
     }
   | {
       exempt: true;
@@ -80,6 +84,7 @@ export interface KovoDomainTableAnnotation {
   fans?: readonly KovoFanAnnotation[];
   key?: KovoColumnRef;
   owner?: KovoColumnRef;
+  secret?: KovoSecretColumnAnnotation;
 }
 
 /** The value `kovo(...)` returns: a Drizzle extra-config callback carrying the annotation. */
@@ -98,9 +103,10 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
  * facts from queries and writes — the Drizzle-blessed path to
  * schema-as-domain-registry (SPEC §10.1).
  *
- * @param annotation - A `{ domain, key?, owner? }` binding (`owner` names the
- *   principal-owning column for the §10.3 IDOR audit), `{ exempt: true }`, or
- *   `{ view: { of, refresh? } }` binding.
+ * @param annotation - A `{ domain, key?, owner?, secret? }` binding (`owner`
+ *   names the principal-owning column for the §10.3 IDOR audit and `secret`
+ *   names confidential columns for the Phase 1 wire gate), `{ exempt: true }`,
+ *   or `{ view: { of, refresh? } }` binding.
  * @returns A Drizzle extra-config callback carrying the Kovo annotation.
  * @example
  * import { kovo } from '@kovojs/drizzle';

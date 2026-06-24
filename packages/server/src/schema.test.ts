@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { File } from 'node:buffer';
-import type { StorageCapability } from '@kovojs/core';
+import type { JsonValue, Secret, StorageCapability } from '@kovojs/core';
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
 
 import { runMutation } from './mutation.js';
@@ -27,6 +27,19 @@ describe('server schemas', () => {
 
     expect(baseFile.parse(file)).toBe(file);
     expect(() => imageFile.parse(file)).toThrow('Expected file <= 10 bytes');
+  });
+
+  it('wraps schemas as Secret values outside JsonValue client payloads', () => {
+    const schema = s.object({ passwordHash: s.secret(s.string()) });
+    const parsed = schema.parse({ passwordHash: 'hash-1' });
+    const assertSecretBoundary = () => {
+      const _secret: Secret<string> = parsed.passwordHash;
+      // @ts-expect-error SPEC §6.2/§9.2/§10.2: Secret<T> is not JsonValue.
+      const _json: JsonValue = parsed.passwordHash;
+    };
+
+    expect(parsed.passwordHash).toBe('hash-1');
+    expect(assertSecretBoundary).toBeTypeOf('function');
   });
 
   it('coerces FormData once through the declared schema', async () => {

@@ -1389,12 +1389,14 @@ function extractQueryDefinitionsFromSourceFile(
   if (!domain) return null;
   const key = columnNamePropertyFromObject(annotationObject, 'key');
   const owner = columnNamePropertyFromObject(annotationObject, 'owner');
+  const secret = secretPropertyFromObject(annotationObject);
   const fans = fanAnnotationsFromObject(annotationObject);
   return {
     domain,
     ...(fans.length > 0 ? { fans } : {}),
     ...(key ? { key } : {}),
     ...(owner ? { owner } : {}),
+    ...(secret === undefined ? {} : { secret }),
     name: tableName,
   };
 }
@@ -1534,6 +1536,25 @@ function columnNamePropertyFromObject(object: Node, name: string): string | unde
     if (!Node.isPropertyAssignment(property)) continue;
     if (propertyNameText(property.getNameNode()) !== name) continue;
     return columnRefName(property.getInitializer());
+  }
+  return undefined;
+}
+
+function secretPropertyFromObject(object: Node): true | string[] | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== 'secret') continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) return undefined;
+    if (initializer.getKind() === SyntaxKind.TrueKeyword) return true;
+    if (Node.isArrayLiteralExpression(initializer)) {
+      const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
+      return columns.length > 0 ? columns : undefined;
+    }
+    const column = columnRefName(initializer);
+    return column === undefined ? undefined : [column];
   }
   return undefined;
 }

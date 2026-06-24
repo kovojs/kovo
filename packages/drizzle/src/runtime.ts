@@ -12,8 +12,10 @@ import {
 export type {
   KovoAnalyzerFunctionSummary,
   KovoAnalyzerPrivateScopeKind,
+  KovoColumnRef,
   KovoDomainTableAnnotation,
   KovoFanAnnotation,
+  KovoSecretColumnAnnotation,
   KovoTableAnnotation,
   KovoTableExtraConfig,
   KovoViewAnnotation,

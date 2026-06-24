@@ -268,9 +268,17 @@ design.
     and focused query/mutation Vitest coverage.
 - [ ] Add a column-level confidentiality fact: `kovo({ secret: true })` / `s.secret()`, declared once on the
       schema (mirrors `owner:`); generated query result types surface the column as `Secret<T>`.
-- [ ] Define `Secret<T>` as a brand **not assignable to `JsonValue`**, so Door 2 (`fail()`) and Door 3
+  - Partial evidence: `@kovojs/core` now exposes `Secret<T>` as non-`JsonValue`, `s.secret(schema)` produces
+    `Schema<Secret<T>>`, and Drizzle `kovo({ secret })` annotations preserve `true` or resolved column refs in
+    extracted table facts. Remaining gap: generated query result types do not yet brand projected secret
+    columns as `Secret<T>`.
+- [x] Define `Secret<T>` as a brand **not assignable to `JsonValue`**, so Door 2 (`fail()`) and Door 3
       (island state) become type errors by construction. The wire/log poison (`toString`/`toJSON`) rides on
       top as defense-in-depth, not the proof.
+  - Evidence: `packages/core/src/secret.ts` defines `Secret<T>` with a non-JSON brand member; compile-time
+    assertions in `packages/core/src/index.test.ts`, `packages/server/src/query-endpoint.test.ts`, and
+    `packages/server/src/mutation.test.ts` reject `Secret<T>` at `JsonValue`, query, state, and `fail()` client
+    boundaries. Verified with `vp check` and focused core/server/Drizzle Vitest coverage.
 - [ ] Door 1 (query wire): reject a secret column reaching the `<script kovo-query>` projection sink via the
       Phase 0 symbol pass — the structural dual of KV236 (the proof here is AST provenance, not the type,
       because there is a Drizzle `select` to read).

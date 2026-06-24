@@ -1,7 +1,9 @@
 export type {
   KovoAnalyzerFunctionSummary,
   KovoAnalyzerPrivateScopeKind,
+  KovoColumnRef,
   KovoDomainTableAnnotation,
+  KovoSecretColumnAnnotation,
   KovoTableAnnotation,
   KovoTableExtraConfig,
   KovoViewAnnotation,
