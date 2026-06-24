@@ -26,6 +26,52 @@ import {
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
 
 describe('server mutation primitives', () => {
+  it('renders optimistic-concurrency conflicts as enhanced 409 fragments with fresh targets', async () => {
+    const product = domain('product');
+    const productQuery = query('product', {
+      load: () => ({ id: 'p1', stock: 4, version: 2 }),
+      reads: [product],
+      version: (_input, value) => (value as { version: number }).version,
+    });
+    const reserveProduct = mutation('product/reserve', {
+      input: s.object({ productId: s.string(), version: s.number().int() }),
+      registry: {
+        queries: [productQuery],
+        touches: [product],
+      },
+      handler(_input, _request, context) {
+        return context.conflict({ reason: 'stale-version' });
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(reserveProduct, {
+        failureTarget: 'product-form',
+        fragmentRenderers: [
+          {
+            render: () => '<form data-version="2">fresh</form>',
+            target: 'product-form',
+          },
+        ],
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'product-form=product',
+        },
+        rawInput: { productId: 'p1', version: 1 },
+        redirectTo: '/products/p1',
+        renderFailureFragment: (failure) =>
+          `<form data-error="${failure.error.code}">${String(failure.error.payload.reason)}</form>`,
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<kovo-fragment target="product-form"><form data-error="CONFLICT">stale-version</form></kovo-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      },
+      status: 409,
+    });
+  });
+
   it('rejects raw string streaming fragments while keeping stream.text as escaped text', () => {
     const assertRawFragmentRejected = () => {
       stream.fragment({

@@ -70,6 +70,7 @@ import {
   type KovoFanAnnotation,
   type KovoGovernedColumnAnnotation,
   type KovoTableAnnotation,
+  type KovoVersionColumnAnnotation,
   type KovoViewAnnotation,
 } from './drizzle-surface.js';
 /** @internal */
@@ -1659,7 +1660,7 @@ function extractQueryDefinitionsFromSourceFile(
   const owner = columnNamePropertyFromObject(annotationObject, 'owner');
   const secret = secretPropertyFromObject(annotationObject);
   const fans = fanAnnotationsFromObject(annotationObject);
-  const version = columnNamePropertyFromObject(annotationObject, 'version');
+  const version = versionPropertyFromObject(annotationObject);
   return {
     domain,
     ...(atomic === undefined ? {} : { atomic }),
@@ -1668,7 +1669,7 @@ function extractQueryDefinitionsFromSourceFile(
     ...(key ? { key } : {}),
     ...(owner ? { owner } : {}),
     ...(secret === undefined ? {} : { secret }),
-    ...(version ? { version } : {}),
+    ...(version === undefined ? {} : { version }),
     name: tableName,
   };
 }
@@ -1837,6 +1838,10 @@ function columnAnnotationPropertyFromObject(
 function secretPropertyFromObject(object: Node): true | string[] | undefined {
   const secret = columnAnnotationPropertyFromObject(object, 'secret');
   return secret === true || Array.isArray(secret) ? secret : undefined;
+}
+
+function versionPropertyFromObject(object: Node): KovoVersionColumnAnnotation | undefined {
+  return columnNamePropertyFromObject(object, 'version');
 }
 
 function booleanPropertyFromObject(object: Node, name: string): boolean | undefined {

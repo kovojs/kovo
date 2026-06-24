@@ -12,10 +12,31 @@ import {
   provenServerProvenanceForExpression,
   symbolProvenanceContextForNodes,
   symbolProvenanceForExpression,
+  tableAnnotation,
 } from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 describe('@kovojs/drizzle symbol provenance', () => {
+  it('extracts kovo({ version }) column refs for the KV429 lifecycle', () => {
+    const sourceFile = source(`
+      export const products = pgTable("products", {
+        id: text("id").primaryKey(),
+        stock: integer("stock").notNull(),
+        version: integer("version").notNull(),
+      }, kovo({ domain: "product", key: "id", version: (t) => t.version }));
+    `);
+    const initializer = sourceFile
+      .getVariableDeclarationOrThrow('products')
+      .getInitializerOrThrow();
+
+    expect(tableAnnotation(initializer)).toMatchObject({
+      domain: 'product',
+      key: 'id',
+      name: 'products',
+      version: 'version',
+    });
+  });
+
   it('tracks input aliases, destructuring, server aliases, and fail-closed joins', () => {
     const sourceFile = source(`
       export function handler(input: { id: string; ownerId: string }, request: { session: { userId: string } }) {

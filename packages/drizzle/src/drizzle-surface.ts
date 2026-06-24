@@ -59,6 +59,9 @@ export type KovoGovernedColumnAnnotation = true | KovoColumnRef | readonly KovoC
 /** Column-level atomicity annotation consumed by the Phase 6 TOCTOU gate. */
 export type KovoAtomicColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
 
+/** Row-level optimistic-concurrency version column consumed by the KV429 lifecycle. */
+export type KovoVersionColumnAnnotation = KovoColumnRef;
+
 /**
  * A fan-out invalidation edge for a table's `fans`: when a write touches this table,
  * also invalidate the named `domain` reached `via` the given relation, optionally scoped
@@ -87,7 +90,7 @@ export type KovoTableAnnotation =
       key?: KovoColumnRef;
       owner?: KovoColumnRef;
       secret?: KovoSecretColumnAnnotation;
-      version?: KovoColumnRef;
+      version?: KovoVersionColumnAnnotation;
     }
   | {
       exempt: true;
@@ -109,7 +112,7 @@ export interface KovoDomainTableAnnotation {
   key?: KovoColumnRef;
   owner?: KovoColumnRef;
   secret?: KovoSecretColumnAnnotation;
-  version?: KovoColumnRef;
+  version?: KovoVersionColumnAnnotation;
 }
 
 /** The value `kovo(...)` returns: a Drizzle extra-config callback carrying the annotation. */
@@ -128,10 +131,11 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
  * facts from queries and writes — the Drizzle-blessed path to
  * schema-as-domain-registry (SPEC §10.1).
  *
- * @param annotation - A `{ domain, key?, owner?, secret? }` binding (`owner`
+ * @param annotation - A `{ domain, key?, owner?, secret?, version? }` binding (`owner`
  *   names the principal-owning column for the §10.3 IDOR audit and `secret`
- *   names confidential columns for the Phase 1 wire gate), `{ exempt: true }`,
- *   or `{ view: { of, refresh? } }` binding.
+ *   names confidential columns for the Phase 1 wire gate, and `version` names the
+ *   row version column used by the SPEC §11.1/KV429 optimistic-concurrency lifecycle),
+ *   `{ exempt: true }`, or `{ view: { of, refresh? } }` binding.
  * @returns A Drizzle extra-config callback carrying the Kovo annotation.
  * @example
  * import { kovo } from '@kovojs/drizzle';

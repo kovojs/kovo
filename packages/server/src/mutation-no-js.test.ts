@@ -9,6 +9,31 @@ import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('no-JS mutation responses', () => {
+  it('renders optimistic-concurrency conflicts as no-JS 409 pages', async () => {
+    const reserveProduct = mutation('product/reserve', {
+      input: s.object({ productId: s.string(), version: s.number().int() }),
+      handler(_input, _request, context) {
+        return context.conflict({ reason: 'stale-version' });
+      },
+    });
+
+    await expect(
+      renderNoJsMutationResponse(reserveProduct, {
+        rawInput: { productId: 'p1', version: 1 },
+        redirectTo: '/products/p1',
+        renderFailurePage: (failure) =>
+          `<!doctype html><html><body><form data-error="${failure.error.code}">${String(
+            failure.error.payload.reason,
+          )}</form></body></html>`,
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<!doctype html><html><body><form data-error="CONFLICT">stale-version</form></body></html>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 409,
+    });
+  });
+
   it('renders no-JS mutation success as POST-redirect-GET', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({

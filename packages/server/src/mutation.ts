@@ -174,6 +174,15 @@ export async function runMutation<
   }
 
   const context: MutationContext<Errors> = {
+    conflict<Payload extends JsonSerializable<Record<string, unknown>> = Record<string, never>>(
+      payload?: Payload,
+    ): MutationFail<'CONFLICT', Payload> {
+      return {
+        error: { code: 'CONFLICT', payload: (payload ?? {}) as Payload },
+        ok: false,
+        status: 409,
+      };
+    },
     fail<const Code extends Extract<keyof Errors, string>>(
       code: Code,
       payload: JsonSerializable<InferSchema<Errors[Code]>>,
@@ -370,10 +379,10 @@ export async function renderMutationResponse<
   }
 
   if (!result.ok) {
-    if (result.error.code === 'VALIDATION' || result.status === 429) {
-      // Pure schema validation failures and transient 429 rate-limits are not
-      // replayable (SPEC §9.1.1:904, A5): abandon the reservation so a corrected
-      // retry or post-window retry runs the handler fresh.
+    if (result.error.code === 'VALIDATION' || result.status === 409 || result.status === 429) {
+      // Pure schema validation failures, stale optimistic-concurrency conflicts, and transient
+      // 429 rate-limits are not replayable (SPEC §9.1.1:904, A5; KV429): abandon the reservation
+      // so a corrected retry, fresh-version retry, or post-window retry runs the handler fresh.
       reservation?.abort?.();
       return {
         body: await renderFailureFragment(result, wireRequest),

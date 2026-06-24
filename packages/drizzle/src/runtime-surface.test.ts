@@ -47,6 +47,23 @@ function drizzleCompatibilityBarrelSource(): string {
 }
 
 describe('@kovojs/drizzle runtime surface', () => {
+  it('turns zero-row compare-and-set writes into typed version conflicts', async () => {
+    await expect(
+      compareAndSet(Promise.resolve({ rowCount: 0 }), {
+        affectedRows: (result) => result.rowCount,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      status: 409,
+    });
+
+    await expect(
+      compareAndSet(() => ({ rowCount: 1, id: 'p1' }), {
+        affectedRows: (result) => result.rowCount,
+      }),
+    ).resolves.toEqual({ id: 'p1', rowCount: 1 });
+  });
+
   it('brands Kovo SQL values accepted by managed DB guards', () => {
     const productId = 'p1';
     const statement = sql`select * from products where id = ${productId}`;
@@ -118,6 +135,7 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(runtime.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect(runtime.compareAndSet).toBeTypeOf('function');
     expect(runtime.kovoConflict().status).toBe(409);
+    expect(runtime.kovo({ domain: 'cart', key: 'id', version: 'version' }).version).toBe('version');
     expect(runtime.kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }).secret).toEqual([
       'passwordHash',
     ]);

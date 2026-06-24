@@ -49,10 +49,14 @@ export type MutationResult<Value, Input = unknown> = MutationFail | MutationSucc
 
 /**
  * The `context` argument passed to a mutation `handler` (SPEC §9.1/§10.3). Exposes
- * `fail` to return a typed {@link MutationFail} from the declared `errors`, `invalidate`
- * to record a domain change, and the typed `setCookie` builder (SPEC §9.1.1).
+ * `conflict` for stale optimistic-concurrency submits (KV429), `fail` to return a
+ * typed {@link MutationFail} from the declared `errors`, `invalidate` to record a
+ * domain change, and the typed `setCookie` builder (SPEC §9.1.1).
  */
 export interface MutationContext<Errors extends Record<string, Schema<unknown>>> {
+  conflict<Payload extends JsonSerializable<Record<string, unknown>> = Record<string, never>>(
+    payload?: Payload,
+  ): MutationFail<'CONFLICT', Payload>;
   fail<const Code extends Extract<keyof Errors, string>>(
     code: Code,
     payload: JsonSerializable<InferSchema<Errors[Code]>>,

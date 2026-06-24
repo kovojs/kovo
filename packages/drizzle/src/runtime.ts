@@ -22,6 +22,7 @@ export type {
   KovoServerValue,
   KovoTableAnnotation,
   KovoTableExtraConfig,
+  KovoVersionColumnAnnotation,
   KovoViewAnnotation,
   KovoViewExtraConfig,
   KovoViewExtraConfigAnnotation,
