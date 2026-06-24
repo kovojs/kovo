@@ -25,9 +25,10 @@ hatch.
 
 ## Desired API Shape
 
-The final API should let app code express region intent without naming runtime marker attributes.
-The exact public shape is part of the implementation design, but the preferred direction is route
-and layout composition rather than JSX marker components.
+The final API must let app code express region intent at the route/layout boundary without naming
+runtime marker attributes. Route-level regions are the required public model; JSX marker components
+are not an acceptable fallback because they would make persistence policy feel like local markup
+rather than part of the route shell contract.
 
 Possible end state:
 
@@ -50,21 +51,9 @@ route('/guides/:slug', {
 });
 ```
 
-Fallback acceptable shape if route-level regions are too large for the first slice:
-
-```tsx
-<PageRegion>
-  <main>{content}</main>
-  <aside>{toc}</aside>
-</PageRegion>
-
-<LayoutRegion name="DocsSidebar">
-  <DocsSidebar />
-</LayoutRegion>
-```
-
-The fallback still must be public, typed, and compiler-lowered. It must not require app-authored
-`kovo-nav-*` attributes.
+No fallback JSX region-marker API is allowed. If route-level regions are too large for one slice,
+split the implementation into compiler/server/runtime phases, but keep the public API direction
+route-level throughout.
 
 ## Constraints
 
@@ -72,13 +61,14 @@ The fallback still must be public, typed, and compiler-lowered. It must not requ
   enhancement over real URLs.
 - Do not introduce navigation partial responses.
 - Do not let app code author raw persistence policy or runtime marker attributes.
+- Do not introduce public JSX region marker components as a substitute for route-level regions.
 - Keep the fallback behavior conservative: missing region proof falls back to full navigation.
 - Preserve no-JS/full-load and enhanced-navigation render equivalence.
 - Keep inline loader budget movement explicit if runtime logic grows.
 
 ## Implementation Plan
 
-- [ ] Define the public parallel-region API and update `SPEC.md` §8.
+- [ ] Define the public route-level parallel-region API and update `SPEC.md` §8.
   - Evidence needed: SPEC text describes the app-facing primitive, states that runtime stamps remain
     compiler-owned, and defines how route/page/layout regions degrade to full navigation when
     compatibility is unproven.
@@ -125,8 +115,8 @@ The fallback still must be public, typed, and compiler-lowered. It must not requ
 
 ## Open Design Questions
 
-- Should the primary public API be route-level `regions` or JSX region components lowered by the
-  compiler?
+- What exact route-level `regions` shape gives layout render functions typed access to named region
+  output without creating a client-router mental model?
 - Are route regions allowed to be independently guarded/query-dependent, or must they share the
   route's request shell for v1?
 - Does a route-dependent sidebar count as a page region, a layout region with dependencies, or a
