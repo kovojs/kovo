@@ -74,6 +74,9 @@ describe('server static export app replay boundary', () => {
           headers: {
             'content-type': 'text/html; charset=utf-8',
             'referrer-policy': 'strict-origin-when-cross-origin',
+            'cross-origin-opener-policy': 'same-origin-allow-popups',
+            'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+            'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },
           path: '/index.html',
