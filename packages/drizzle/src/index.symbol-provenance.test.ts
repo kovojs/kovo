@@ -3,6 +3,7 @@ import { Node, Project, SyntaxKind } from 'ts-morph';
 
 import {
   UNRESOLVED_READ_SOURCE_EXPRESSION,
+  atomicityDiagnosticsFromProject,
   extractSymbolicEffectsFromProject,
   governedWriteCapabilityFactsFromProject,
   governedWriteDiagnosticsFromProject,
@@ -544,6 +545,75 @@ describe('@kovojs/drizzle symbol provenance', () => {
           'Client input reaches a governed column write. Write to accounts.role receives input.role; derive the value on the server or use audited adminAssign(...).',
       },
     ]);
+  });
+
+  it('reports KV429 for read-then-write on a versioned row without a guard', () => {
+    const diagnostics = atomicityDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'inventory.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '  version: integer("version").notNull(),',
+            '}, kovo({ domain: "product", key: "id", version: "version" }));',
+            '',
+            'export async function reserve(db: PgDatabase, input: { id: string; quantity: number }) {',
+            '  const [product] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+            '  if (product.stock < input.quantity) return;',
+            '  await db.update(products).set({ stock: product.stock - input.quantity }).where(eq(products.id, input.id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics.map(({ code, message, site }) => ({ code, message, site }))).toEqual([
+      {
+        code: 'KV429',
+        message:
+          'Read-then-write on an atomic value lacks an atomicity guard. Read-before-write updates products.stock without compare-and-set on stock or version guard version.',
+        site: 'inventory.domain.ts:12',
+      },
+    ]);
+  });
+
+  it('accepts a version-guarded compare-and-set update for a declared atomic column', () => {
+    const diagnostics = atomicityDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'inventory.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '  version: integer("version").notNull(),',
+            '}, kovo({ domain: "product", key: "id", atomic: [(t) => t.stock], version: (t) => t.version }));',
+            '',
+            'export async function reserve(db: PgDatabase, input: { id: string; quantity: number; version: number }) {',
+            '  const [product] = await db.select({ stock: products.stock, version: products.version }).from(products).where(eq(products.id, input.id));',
+            '  if (product.stock < input.quantity) return;',
+            '  await db.update(products).set({ stock: product.stock - input.quantity, version: product.version + 1 }).where(and(eq(products.id, input.id), eq(products.version, input.version)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics).toEqual([]);
   });
 });
 

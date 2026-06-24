@@ -191,6 +191,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV317: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
+  KV429: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
   KV434: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
 

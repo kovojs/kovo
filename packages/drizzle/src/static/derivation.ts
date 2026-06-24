@@ -37,6 +37,7 @@ import {
   isOpaqueProjection,
   isProjectDrizzleReceiverIdentifier,
   isSelectQueryCallName,
+  isReadSourceCall,
   objectPropertyInitializer,
   lineForIndex,
   opaqueAliasReasonForExpression,
@@ -52,6 +53,7 @@ import {
   projectTablesBySyntheticName,
   propertyAccessCallName,
   propertyNameText,
+  queryBuilderRootCallName,
   queryBodyObjectLiteral,
   queryCallbackParameterNodes,
   queryLoadCallbackFunctions,
@@ -103,9 +105,11 @@ import {
 }
 
 interface DeriveExtraction extends ProjectExtraction {
+  atomicColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
   governedColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
   realTableNameBySynthetic: ReadonlyMap<string, string>;
   tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>;
+  versionColumnByRealTable: ReadonlyMap<string, string>;
 }
 
 /** A discovered write/query callback: its body node plus an optional resolvable key. */
@@ -123,18 +127,31 @@ function tableAnnotationKey(annotation: ExtractedTableAnnotation): string | null
 function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtraction {
   const base = createProjectExtraction(options);
   const tablesBySyntheticName = projectTablesBySyntheticName(base);
+  const atomicColumnsByRealTable = new Map<string, readonly string[]>();
   const realTableNameBySynthetic = new Map<string, string>();
   const governedColumnsByRealTable = new Map<string, readonly string[]>();
+  const versionColumnByRealTable = new Map<string, string>();
   const primaryKeysBySyntheticName = projectPrimaryKeyColumnsBySyntheticName(base);
   for (const [synthetic, table] of tablesBySyntheticName) {
     const realTable = table.annotation.name;
     realTableNameBySynthetic.set(synthetic, realTable);
+    atomicColumnsByRealTable.set(realTable, atomicColumnsForTable(table));
     governedColumnsByRealTable.set(
       realTable,
       governedColumnsForTable(table, primaryKeysBySyntheticName.get(synthetic) ?? []),
     );
+    if ('domain' in table.annotation && typeof table.annotation.version === 'string') {
+      versionColumnByRealTable.set(realTable, table.annotation.version);
+    }
   }
-  return { ...base, governedColumnsByRealTable, realTableNameBySynthetic, tablesBySyntheticName };
+  return {
+    ...base,
+    atomicColumnsByRealTable,
+    governedColumnsByRealTable,
+    realTableNameBySynthetic,
+    tablesBySyntheticName,
+    versionColumnByRealTable,
+  };
 }
 
 function projectPrimaryKeyColumnsBySyntheticName(
@@ -197,6 +214,22 @@ function governedColumnsForTable(
     }
   } else if (typeof governed === 'string') {
     columns.add(governed);
+  }
+  return [...columns].sort();
+}
+
+function atomicColumnsForTable(table: ExtractedTable): readonly string[] {
+  if (!('domain' in table.annotation)) return [];
+  const columns = new Set<string>();
+  const atomic = table.annotation.atomic;
+  if (atomic === true) {
+    for (const column of Object.keys(table.columns)) columns.add(column);
+  } else if (Array.isArray(atomic)) {
+    for (const column of atomic) {
+      if (typeof column === 'string') columns.add(column);
+    }
+  } else if (typeof atomic === 'string') {
+    columns.add(atomic);
   }
   return [...columns].sort();
 }
@@ -319,6 +352,52 @@ export function governedWriteDiagnosticsFromProject(
 }
 
 /** @internal */
+export function atomicityDiagnosticsFromProject(
+  options: TouchGraphProjectOptions,
+): TouchGraphDiagnostic[] {
+  const extraction = createDeriveExtraction(options);
+  try {
+    const diagnostics: TouchGraphDiagnostic[] = [];
+    extraction.sourceFiles.forEach((sourceFile, index) => {
+      const file = extraction.files[index];
+      if (!file) return;
+
+      const namespaceTableNames = projectNamespaceTableNamesByLocal(
+        sourceFile,
+        extraction.tableNamesBySymbol,
+      );
+      const resolveTable = (node: Node): string | undefined => {
+        const synthetic = projectTableNameForNode(
+          node,
+          extraction.tableNamesBySymbol,
+          namespaceTableNames,
+        );
+        if (!synthetic) return undefined;
+        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+        if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
+        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+      };
+
+      for (const callback of deriveWriteCallbacks(sourceFile)) {
+        const receivers = projectDrizzleReceivers(callback.fn);
+        diagnostics.push(
+          ...atomicityDiagnosticsForCallback(callback, {
+            atomicColumnsByRealTable: extraction.atomicColumnsByRealTable,
+            file,
+            receivers,
+            resolveTable,
+            versionColumnByRealTable: extraction.versionColumnByRealTable,
+          }),
+        );
+      }
+    });
+    return dedupeDiagnostics(diagnostics);
+  } finally {
+    extraction.dispose();
+  }
+}
+
+/** @internal */
 export function governedWriteCapabilityFactsFromProject(
   options: TouchGraphProjectOptions,
 ): CapabilityExplainFact[] {
@@ -426,11 +505,24 @@ interface GovernedWriteContext extends Omit<WriteCallContext, 'writeKey'> {
   governedColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
 }
 
+interface AtomicityContext {
+  atomicColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
+  file: SourceFileInput;
+  receivers: ProjectDrizzleReceivers;
+  resolveTable: (node: Node) => string | undefined;
+  versionColumnByRealTable: ReadonlyMap<string, string>;
+}
+
 interface GovernedCapabilityContext {
   file: SourceFileInput;
   governedColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
   receivers: ProjectDrizzleReceivers;
   resolveTable: (node: Node) => string | undefined;
+}
+
+interface AtomicReadSite {
+  index: number;
+  table: string;
 }
 
 function symbolicEffectForWriteCall(
@@ -602,6 +694,174 @@ function governedCapabilityFactsForWriteCall(
     return governedCapabilityFactsForPayload(chain, 'set', table, governedColumns, site);
   }
   return [];
+}
+
+function atomicityDiagnosticsForCallback(
+  callback: DeriveCallback,
+  context: AtomicityContext,
+): TouchGraphDiagnostic[] {
+  const reads = atomicReadSitesForCallback(callback.body, context);
+  if (reads.length === 0) return [];
+
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  const calls = touchBodyCallExpressions(callback.body).sort(
+    (left, right) => left.getStart() - right.getStart(),
+  );
+  for (const call of calls) {
+    diagnostics.push(...atomicityDiagnosticsForWriteCall(call, reads, context));
+  }
+  return diagnostics;
+}
+
+function atomicReadSitesForCallback(body: Node, context: AtomicityContext): AtomicReadSite[] {
+  const sites: AtomicReadSite[] = [];
+  for (const call of touchBodyCallExpressions(body)) {
+    if (!isReadSourceCall(call)) continue;
+    if (!isSelectQueryCallName(queryBuilderRootCallName(call))) continue;
+    const receiver = queryCallChainReceiverForAtomicity(call);
+    if (!isProjectDrizzleReceiverIdentifier(receiver, context.receivers)) continue;
+    const tableArgument = call.getArguments()[0];
+    const table = tableArgument ? context.resolveTable(tableArgument) : undefined;
+    if (!table) continue;
+    sites.push({ index: call.getStart(), table });
+  }
+  return sites.sort((left, right) => left.index - right.index);
+}
+
+function queryCallChainReceiverForAtomicity(call: CallExpression): Node | undefined {
+  let receiver = staticAccessExpression(call.getExpression());
+
+  while (receiver && Node.isCallExpression(receiver)) {
+    receiver = staticAccessExpression(receiver.getExpression());
+  }
+
+  return receiver;
+}
+
+function atomicityDiagnosticsForWriteCall(
+  call: CallExpression,
+  reads: readonly AtomicReadSite[],
+  context: AtomicityContext,
+): TouchGraphDiagnostic[] {
+  if (!isDrizzleWriteCall(call)) return [];
+
+  const expression = call.getExpression();
+  const operation = staticAccessName(expression);
+  if (operation !== 'update') return [];
+
+  const receiver = staticAccessExpression(expression);
+  if (!receiver || !isProjectDrizzleReceiverIdentifier(receiver, context.receivers)) return [];
+
+  const tableArgument = call.getArguments()[0];
+  const table = tableArgument ? context.resolveTable(tableArgument) : undefined;
+  if (!table) return [];
+  if (!reads.some((read) => read.table === table && read.index < call.getStart())) return [];
+
+  const atomicColumns = context.atomicColumnsByRealTable.get(table) ?? [];
+  const versionColumn = context.versionColumnByRealTable.get(table);
+  if (atomicColumns.length === 0 && !versionColumn) return [];
+
+  const chain = drizzleWriteChainRoot(call);
+  const written = writtenColumnsForPayload(chain, 'set');
+  const contendedColumns =
+    written.kind === 'opaque'
+      ? atomicColumns.length > 0
+        ? atomicColumns
+        : versionColumn
+          ? [versionColumn]
+          : []
+      : [...written.columns].filter(
+          (column) => atomicColumns.includes(column) || versionColumn !== undefined,
+        );
+  if (contendedColumns.length === 0) return [];
+
+  const guardColumns = new Set(contendedColumns);
+  if (versionColumn) guardColumns.add(versionColumn);
+  if (writeWhereGuardsAnyColumn(chain, table, guardColumns, context.resolveTable)) return [];
+
+  const site = `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`;
+  return [atomicityDiagnostic(site, table, contendedColumns, versionColumn)];
+}
+
+function writtenColumnsForPayload(
+  chain: Node,
+  method: 'set' | 'values',
+): { columns: ReadonlySet<string>; kind: 'columns' } | { kind: 'opaque' } {
+  const call = chainCallByName(chain, method);
+  const argument = call?.getArguments()[0];
+  if (!argument) return { columns: new Set(), kind: 'columns' };
+  const payload = unwrappedStaticExpressionNode(argument);
+  if (!Node.isObjectLiteralExpression(payload)) return { kind: 'opaque' };
+
+  const columns = new Set<string>();
+  for (const property of payload.getProperties()) {
+    if (Node.isSpreadAssignment(property)) return { kind: 'opaque' };
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      return { kind: 'opaque' };
+    }
+    const column = propertyNameText(property.getNameNode());
+    if (!column) return { kind: 'opaque' };
+    columns.add(column);
+  }
+  return { columns, kind: 'columns' };
+}
+
+function writeWhereGuardsAnyColumn(
+  chain: Node,
+  table: string,
+  guardColumns: ReadonlySet<string>,
+  resolveTable: (node: Node) => string | undefined,
+): boolean {
+  const whereCall = chainCallByName(chain, 'where');
+  const predicate = whereCall?.getArguments()[0];
+  if (!predicate) return false;
+
+  const conjuncts = pnfExactConjuncts(predicatePnf(predicate));
+  if (!conjuncts) return false;
+
+  for (const { left, right } of conjuncts) {
+    const leftColumn = writeColumnReferenceForTable(left, table, resolveTable);
+    const rightColumn = writeColumnReferenceForTable(right, table, resolveTable);
+    if (
+      (leftColumn && guardColumns.has(leftColumn)) ||
+      (rightColumn && guardColumns.has(rightColumn))
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function writeColumnReferenceForTable(
+  node: Node,
+  table: string,
+  resolveTable: (node: Node) => string | undefined,
+): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isPropertyAccessExpression(expression) && !Node.isElementAccessExpression(expression)) {
+    return undefined;
+  }
+  const base = expression.getExpression();
+  return resolveTable(base) === table ? staticAccessName(expression) : undefined;
+}
+
+function atomicityDiagnostic(
+  site: string,
+  table: string,
+  columns: readonly string[],
+  versionColumn: string | undefined,
+): TouchGraphDiagnostic {
+  const definition = diagnosticDefinitions.KV429;
+  const guard = versionColumn
+    ? `compare-and-set on ${columns.join(', ')} or version guard ${versionColumn}`
+    : `compare-and-set on ${columns.join(', ')}`;
+  return {
+    code: 'KV429',
+    message: `${definition.message} Read-before-write updates ${table}.${columns.join(', ')} without ${guard}.`,
+    severity: definition.severity,
+    site,
+  };
 }
 
 function governedDiagnosticsForPayload(

@@ -1181,6 +1181,7 @@ async function runCompileDrizzleStaticCommand(
 ): Promise<CliCommandResult> {
   const {
     analyzeSqlSafetyFromProject,
+    atomicityDiagnosticsFromProject,
     deriveInvalidationRegistry,
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
@@ -1246,7 +1247,10 @@ async function runCompileDrizzleStaticCommand(
     if (extract.has('symbolicEffects'))
       output.symbolicEffects = extractSymbolicEffectsFromProject({ files });
     if (extract.has('verificationDiagnostics')) {
-      output.verificationDiagnostics = governedWriteDiagnosticsFromProject({ files });
+      output.verificationDiagnostics = [
+        ...governedWriteDiagnosticsFromProject({ files }),
+        ...atomicityDiagnosticsFromProject({ files }),
+      ];
     }
     if (extract.has('algebraicShapes'))
       output.algebraicShapes = extractAlgebraicShapesFromProject({ files });

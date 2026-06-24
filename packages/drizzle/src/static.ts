@@ -65,6 +65,7 @@ import {
   isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,
   isKovoExtraConfigCallName,
+  type KovoAtomicColumnAnnotation,
   type KovoDomainTableAnnotation,
   type KovoFanAnnotation,
   type KovoGovernedColumnAnnotation,
@@ -1652,18 +1653,22 @@ function extractQueryDefinitionsFromSourceFile(
   }
   const domain = stringPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
+  const atomic = columnAnnotationPropertyFromObject(annotationObject, 'atomic');
   const governed = columnAnnotationPropertyFromObject(annotationObject, 'governed');
   const key = columnNamePropertyFromObject(annotationObject, 'key');
   const owner = columnNamePropertyFromObject(annotationObject, 'owner');
   const secret = secretPropertyFromObject(annotationObject);
   const fans = fanAnnotationsFromObject(annotationObject);
+  const version = columnNamePropertyFromObject(annotationObject, 'version');
   return {
     domain,
+    ...(atomic === undefined ? {} : { atomic }),
     ...(fans.length > 0 ? { fans } : {}),
     ...(governed === undefined ? {} : { governed }),
     ...(key ? { key } : {}),
     ...(owner ? { owner } : {}),
     ...(secret === undefined ? {} : { secret }),
+    ...(version ? { version } : {}),
     name: tableName,
   };
 }
@@ -1810,7 +1815,7 @@ function columnNamePropertyFromObject(object: Node, name: string): string | unde
 function columnAnnotationPropertyFromObject(
   object: Node,
   name: string,
-): KovoGovernedColumnAnnotation | undefined {
+): KovoAtomicColumnAnnotation | KovoGovernedColumnAnnotation | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
   for (const property of object.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
@@ -2456,6 +2461,7 @@ export {
   isRestBindingElement,
   isProjectDrizzleReceiverContainerCallReceiver,
   isFunctionLikeNode,
+  queryBuilderRootCallName,
   extractProjectUnresolvedCalls,
   extractProjectSelectReadCalls,
   extractProjectRelationalReadCalls,
@@ -2593,6 +2599,7 @@ export {
 /** @internal */
 export {
   extractAlgebraicShapesFromProject,
+  atomicityDiagnosticsFromProject,
   governedWriteCapabilityFactsFromProject,
   extractSymbolicEffectsFromProject,
   governedWriteDiagnosticsFromProject,

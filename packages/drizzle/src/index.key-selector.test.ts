@@ -99,4 +99,36 @@ describe('@kovojs/drizzle kovo({ key }) column selector (SPEC §10.1)', () => {
       secret: true,
     });
   });
+
+  it('extracts atomic and version column annotations from strings and selectors', () => {
+    const extraction = createProjectExtraction(
+      withPgDatabaseTypes({
+        files: [
+          {
+            fileName: 'inventory.schema.ts',
+            source: `
+              import { kovo } from "@kovojs/drizzle";
+              import { integer, pgTable, text } from "drizzle-orm/pg-core";
+
+              export const products = pgTable("products", {
+                id: text("id").primaryKey(),
+                reserved: integer("reserved").notNull(),
+                stock: integer("stock").notNull(),
+                version: integer("version").notNull(),
+              }, kovo({ domain: "product", key: "id", atomic: ["stock", (t) => t.reserved], version: (t) => t.version }));
+            `,
+          },
+        ],
+      }),
+    );
+    const productTable = [...projectTablesBySyntheticName(extraction).values()].find(
+      (table) => table.annotation.name === 'products',
+    );
+
+    expect(productTable?.annotation).toMatchObject({
+      atomic: ['stock', 'reserved'],
+      domain: 'product',
+      version: 'version',
+    });
+  });
 });

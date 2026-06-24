@@ -56,6 +56,9 @@ export type KovoSecretColumnAnnotation = true | KovoColumnRef | readonly KovoCol
 /** Column-level write-governance annotation consumed by the Phase 3 mass-assignment gate. */
 export type KovoGovernedColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
 
+/** Column-level atomicity annotation consumed by the Phase 6 TOCTOU gate. */
+export type KovoAtomicColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
+
 /**
  * A fan-out invalidation edge for a table's `fans`: when a write touches this table,
  * also invalidate the named `domain` reached `via` the given relation, optionally scoped
@@ -77,12 +80,14 @@ export interface KovoViewAnnotation {
 /** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key` and principal `owner`), or an `exempt` marker. */
 export type KovoTableAnnotation =
   | {
+      atomic?: KovoAtomicColumnAnnotation;
       domain: string;
       fans?: readonly KovoFanAnnotation[];
       governed?: KovoGovernedColumnAnnotation;
       key?: KovoColumnRef;
       owner?: KovoColumnRef;
       secret?: KovoSecretColumnAnnotation;
+      version?: KovoColumnRef;
     }
   | {
       exempt: true;
@@ -97,12 +102,14 @@ export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation
 
 /** The domain-bearing form of a table annotation: its `domain`, optional `key` column, and optional principal `owner` column (SPEC §10.1). */
 export interface KovoDomainTableAnnotation {
+  atomic?: KovoAtomicColumnAnnotation;
   domain: string;
   fans?: readonly KovoFanAnnotation[];
   governed?: KovoGovernedColumnAnnotation;
   key?: KovoColumnRef;
   owner?: KovoColumnRef;
   secret?: KovoSecretColumnAnnotation;
+  version?: KovoColumnRef;
 }
 
 /** The value `kovo(...)` returns: a Drizzle extra-config callback carrying the annotation. */

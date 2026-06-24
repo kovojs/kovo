@@ -85,6 +85,14 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(runtime.kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }).secret).toEqual([
       'passwordHash',
     ]);
+    const atomicConfig = runtime.kovo({
+      atomic: ['stock'],
+      domain: 'product',
+      version: 'version',
+    });
+    expect(atomicConfig.atomic).toEqual(['stock']);
+    expect(atomicConfig.domain).toBe('product');
+    expect(atomicConfig.version).toBe('version');
     expect('extractTouchGraphFromSource' in runtime).toBe(false);
     expect(compatibilityBarrel.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect('extractTouchGraphFromSource' in compatibilityBarrel).toBe(false);

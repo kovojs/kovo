@@ -758,7 +758,7 @@ describe('diagnostic registry', () => {
     type CompilerTeachingCode = keyof typeof compilerDiagnosticTeachingSchemas;
     const compilerDiagnosticCodes = Object.keys(diagnosticDefinitions).filter(
       (code): code is CompilerTeachingCode =>
-        code === 'KV201' || code === 'KV434' || /^KV[23]\d\d$/.test(code),
+        code === 'KV201' || code === 'KV429' || code === 'KV434' || /^KV[23]\d\d$/.test(code),
     );
 
     expect(compilerDiagnosticCodes).not.toEqual([]);

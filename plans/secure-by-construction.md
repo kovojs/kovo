@@ -610,11 +610,10 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
         capability. Scope = per-key+method by default (optional prefix); **short expiry default**.
     - Evidence: `packages/server/src/capability-url.test.ts` verifies canonical HMAC payload coverage, 300-second
       default expiry, exact and prefix scopes, and rejection of backslash/`//`/dot-segment key reopenings.
-  - [x] `oneTime` via the replay store (reuse).
-    - Evidence: `packages/server/src/capability-url.ts` signs a one-time nonce into the HMAC payload and
-      consumes it with `capabilityUrls.replayStore.reserve(...)` before storage dereference; `vp exec vitest
-      --run packages/server/src/capability-url.test.ts packages/server/src/app-dispatch.test.ts` verifies
-      first-use success, replay rejection, and no storage read on replay.
+  - [x] `oneTime` via the replay store (reuse). Evidence:
+        `packages/server/src/capability-url.ts` signs a one-time nonce into the HMAC payload and consumes it with
+        `capabilityUrls.replayStore.reserve(...)` before storage dereference; focused capability URL/app-dispatch
+        coverage verifies first-use success, replay rejection, and no storage read on replay.
   - [ ] Do NOT embed signed URLs in the legible query store / cacheable contexts by default; list mints in
         `kovo explain --capabilities`. Revocation tradeoff documented (stateless → can't revoke pre-expiry
         unless `oneTime`; default short expiry). No new KV code — it's a provided safe API, not a static gate.
@@ -635,9 +634,20 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
   - [ ] Primitives (shippable independently): typed compare-and-set (`UPDATE … WHERE` folds check+act into one
         statement; 0 rows → conflict) and `kovo({ version })` optimistic concurrency (read carries version;
         stale → typed 409/422 the enhanced path re-renders). Wire the 409-conflict outcome into the lifecycle.
+    - Partial evidence: `packages/drizzle/src/drizzle-surface.ts` and `packages/drizzle/src/static.ts` now carry
+      declared `atomic`/`version` column facts through the Drizzle annotation/runtime/static extraction surface;
+      `vp exec vitest run packages/drizzle/src/index.key-selector.test.ts packages/drizzle/src/runtime-surface.test.ts`
+      verified string/selector metadata extraction and runtime property preservation. Still open: public typed
+      compare-and-set helper, 0-row conflict mapping, and enhanced-path 409/422 re-render lifecycle.
   - [ ] KV429 static gate, option (a): flag read-then-write on a declared `atomic`/`version` column without a
         CAS/version guard. **Sequence after the §11.1 write-reachability pass** (needs read-then-write
         dataflow); cross-function check-then-act is a false-negative floor until that pass lands.
+    - Partial evidence: `packages/drizzle/src/static/derivation.ts` emits KV429 for same-callback Drizzle
+      select-before-update when a declared contended column is written without an `atomic`/`version` equality
+      guard, and accepts a version-guarded update; verified by
+      `vp exec vitest run packages/drizzle/src/index.symbol-provenance.test.ts packages/core/src/diagnostics.test.ts`.
+      Still open: cross-function/helper read-then-write dataflow, multi-row/aggregate invariants,
+      lock/SERIALIZABLE proof recognition, and runtime row-count conflict wiring.
   - [ ] DB-constraint backstop (recommended, fail-closed under everything): `CHECK stock >= 0`, unique
         constraints. Multi-row/aggregate invariants need `forUpdate`/`SERIALIZABLE` — documented as NOT
         by-construction (provide the tool + guidance; do not pretend CAS covers them).
