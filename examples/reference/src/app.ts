@@ -1,11 +1,4 @@
-import {
-  csrfField,
-  csrfToken,
-  mutationFormAttributes,
-  route,
-  s,
-  session,
-} from '@kovojs/server';
+import { csrfField, csrfToken, mutationFormAttributes, route, s, session } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import {
   authed,
