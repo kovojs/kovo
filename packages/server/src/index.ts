@@ -1,4 +1,5 @@
 export { createApp, createRequestHandler } from './app.js';
+export { EgressBlockedError } from './egress.js';
 export { isKovoApp } from './app-guards.js';
 export { guardAccess, publicAccess, verifiedAccess } from './access.js';
 export type {
@@ -36,6 +37,7 @@ export type {
 export type {
   AppDiagnostic,
   AppDocumentOptions,
+  AppEgressOptions,
   AppErrorShellOptions,
   AppMutationResponseContext,
   AppMutationResponseOptions,
@@ -49,6 +51,7 @@ export type {
   KovoApp,
   RequestHandler,
   ResolvedAppRateLimitOptions,
+  ResolvedAppEgressOptions,
   ResolvedAppRequestLimitOptions,
   ResolvedAppRequestRateLimitOptions,
 } from './app-types.js';

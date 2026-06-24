@@ -77,6 +77,7 @@ export async function renderAppRouteDocumentResponse({
         : { mutationFailure: jsxContext.mutationFailure }),
       onCsrfSetCookie: (rawSetCookie) => refreshSetCookies.push(rawSetCookie),
       ...(app.db === undefined ? {} : { db: app.db }),
+      egressFetch: app.egress.fetch,
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       onSessionSetCookie: (rawSetCookie) => refreshSetCookies.push(rawSetCookie),
       renderForbidden: async () =>

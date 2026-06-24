@@ -56,6 +56,7 @@ export async function dispatchMatchedAppRequest({
       currentUrl: appRequestUrl(url),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       ...(buildToken !== '' ? { buildToken } : {}),
+      egressFetch: app.egress.fetch,
       request,
       search: url.searchParams,
       ...(app.db === undefined ? {} : { db: app.db }),
@@ -77,8 +78,10 @@ export async function dispatchMatchedAppRequest({
   }
 
   if (match.kind === 'endpoint') {
-    const endpointRequest =
-      app.db === undefined ? request : await resolveLifecycleRequest(request, { db: app.db });
+    const endpointRequest = await resolveLifecycleRequest(request, {
+      ...(app.db === undefined ? {} : { db: app.db }),
+      egressFetch: app.egress.fetch,
+    });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
     if (authFailure) return authFailure;
     const csrfFailure = await validateEndpointCsrf(match.endpoint, endpointRequest, app.csrf);

@@ -3,6 +3,7 @@ import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import type { DocumentTemplate } from './document-core.js';
+import type { AppEgressOptions, ResolvedAppEgressOptions } from './egress.js';
 import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpoint.js';
 import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
@@ -14,6 +15,8 @@ import type { RoutePageResponse } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
+
+export type { AppEgressOptions, ResolvedAppEgressOptions } from './egress.js';
 
 export type AppLifecycleRequest<
   RawRequest extends globalThis.Request = globalThis.Request,
@@ -157,6 +160,7 @@ export interface CreateAppOptions<
   csrf?: CsrfValidationOptions<AppRequest>;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   document?: AppDocumentOptions;
+  egress?: AppEgressOptions;
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
   liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];
@@ -202,6 +206,7 @@ export interface KovoApp<
   db?: DbProvider<any, any, any>;
   diagnostics: readonly AppDiagnostic[];
   document: AppDocumentOptions;
+  egress: ResolvedAppEgressOptions;
   endpoints: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells: AppErrorShellOptions;
   liveTargetRenderers: readonly LiveTargetRenderer<any>[];

@@ -8,6 +8,7 @@ import {
 import { accessFactsFromApp } from './access-graph.js';
 import { isKovoApp } from './app-guards.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
+import { normalizeAppEgressOptions } from './egress.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
@@ -20,6 +21,7 @@ export type {
   AppAuthoringDeclarations,
   AppDocumentOptions,
   AppErrorShellOptions,
+  AppEgressOptions,
   AppDiagnostic,
   AppLifecycleRequest,
   AppMutationDeclaration,
@@ -41,6 +43,7 @@ export type {
   ResolvedAppRateLimitOptions,
   ResolvedAppRequestLimitOptions,
   ResolvedAppRequestRateLimitOptions,
+  ResolvedAppEgressOptions,
 } from './app-types.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryDefinition } from './query.js';
@@ -117,6 +120,7 @@ export function createApp<
       ...missingAccessDiagnostics(accessFacts),
     ],
     document: options.document ?? {},
+    egress: normalizeAppEgressOptions(options.egress),
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},
     liveTargetRenderers,

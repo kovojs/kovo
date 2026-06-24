@@ -14,9 +14,11 @@ import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
+import * as capabilityUrlApi from '../capability-url.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
+import * as egressApi from '../egress.js';
 import * as publicApi from '../index.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
 import * as internalCsrfApi from '../internal/csrf.js';
@@ -47,6 +49,12 @@ import * as wireHtmlApi from '../wire-html.js';
 
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppDocumentOptions = import('../index.js').AppDocumentOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootAppEgressOptions = import('../index.js').AppEgressOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootResolvedAppEgressOptions = import('../index.js').ResolvedAppEgressOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootEgressBlockedError = typeof import('../index.js').EgressBlockedError;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppErrorShellOptions = import('../index.js').AppErrorShellOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
@@ -359,11 +367,14 @@ describe('server app-shell public API barrels', () => {
       createMemoryVersionedClientModuleRegistry:
         internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: appApi.createRequestHandler,
+      EgressBlockedError: egressApi.EgressBlockedError,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
       kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
+      signCapabilityUrl: capabilityUrlApi.signCapabilityUrl,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       toNodeHandler: nodeSourceApi.toNodeHandler,
+      verifyCapabilityUrl: capabilityUrlApi.verifyCapabilityUrl,
     }).filter((key) => !renderingSubpathOnlyValues.has(key));
 
     expect(Object.keys(publicValues).sort()).toEqual(rootValues);
@@ -372,6 +383,7 @@ describe('server app-shell public API barrels', () => {
 
     expect(publicApi.createApp).toBe(appApi.createApp);
     expect(publicApi.createRequestHandler).toBe(appApi.createRequestHandler);
+    expect(publicApi.EgressBlockedError).toBe(egressApi.EgressBlockedError);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
     expect(publicApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
     expect(publicApi.stylesheet).toBe(hintsApi.stylesheet);
@@ -631,6 +643,8 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.isKovoApp(app)).toBe(true);
     expect(publicApi.isKovoApp({ ...app, document: undefined })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, document: { template: '<html></html>' } })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, egress: undefined })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, egress: { allowInternal: [] } })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, errorShells: undefined })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, errorShells: { notFound: '<main>404</main>' } })).toBe(
       false,

@@ -56,6 +56,7 @@ describe('server createApp request shell', () => {
     expect(app.queries).toEqual([productQuery]);
     expect(app.mutations).toEqual([]);
     expect(app.stylesheets).toEqual([appStylesheet]);
+    expect(app.egress.allowInternal).toEqual([]);
     expect(app.diagnostics).toEqual([]);
     expect(app.sessionProvider).toBe(sessionProvider);
     expect(app.requestLimits.maxBodyBytes).toBeGreaterThan(0);
@@ -65,6 +66,27 @@ describe('server createApp request shell', () => {
       windowMs: 60_000,
     });
     expect('use' in app).toBe(false);
+  });
+
+  it('normalizes configured egress allowInternal entries and exposes fetch on lifecycle requests', async () => {
+    const app = createApp({
+      egress: { allowInternal: ['LOCALHOST:11434'] },
+      routes: [
+        route('/egress', {
+          access: publicAccess('test fixture'),
+          page: (_context, request) => {
+            expect(request.fetch).toBe(app.egress.fetch);
+            return trustedHtml('<main>Egress</main>');
+          },
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+
+    expect(app.egress.allowInternal).toEqual(['localhost:11434']);
+    await expect(handler(new Request('https://app.example/egress'))).resolves.toMatchObject({
+      status: 200,
+    });
   });
 
   it('uses compiler-registered live target renderers when createApp does not receive explicit wiring', () => {

@@ -461,8 +461,18 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
         — **narrow `host:port` entries only.** The allowlist is provenance-blind (anything allowed is reachable
         by any caller, incl. an SSRF landing there), so broad CIDRs re-open the private space; permit but flag
         them. Starter ships a dev `allowInternal` with common localhost entries; policy is uniform across envs.
+        Partial evidence (2026-06-24): `packages/server/src/app.ts`/`app-types.ts` now accept and normalize
+        `createApp({ egress: { allowInternal } })`; `packages/server/src/app.test.ts` verifies normalized
+        `localhost:11434` config and route lifecycle `request.fetch`. Still open: starter defaults and any
+        broad-CIDR diagnostic/flagging.
   - [ ] Fail-closed: a blocked connection throws a typed `EgressBlockedError` (502-class) logged with the
         destination + "add to `egress.allowInternal` if intended."
+        Partial evidence (2026-06-24): `packages/server/src/egress.ts` adds typed `EgressBlockedError`
+        and a guarded lifecycle fetch wrapper; `pnpm exec vitest --run packages/server/src/egress.test.ts
+        packages/server/src/app.test.ts packages/server/src/api/app.test.ts` verifies default-deny
+        private/loopback/link-local/metadata decisions, exact `host:port` allowance, numeric/NAT64
+        normalization, and redirect-hop rechecks. Still open: logging and non-fetch socket/global-dispatcher
+        enforcement.
   - [ ] **Managed-identity wrinkle — RESOLVED via a privileged metadata ALS capability (workflow-verified
         2026-06-23).** The capability to reach an identity endpoint is "running inside the framework-owned
         credential ALS frame" — NOT a `host:port` allowlist (provenance-blind, SSRF-reachable) and NOT a stack

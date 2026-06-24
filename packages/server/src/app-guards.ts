@@ -15,6 +15,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isQueryDeclarations(value.queries) &&
     isRouteDeclarations(value.routes) &&
     isAppDocumentOptions(value.document) &&
+    isAppEgressOptions(value.egress) &&
     isAppErrorShellOptions(value.errorShells) &&
     isLiveTargetRenderers(value.liveTargetRenderers) &&
     isVersionedClientModuleRegistry(value.clientModules) &&
@@ -27,6 +28,15 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isOptionalFunction(value.sessionProvider) &&
     isStylesheets(value.stylesheets) &&
     isOptionalCsrfOptions(value.csrf)
+  );
+}
+
+function isAppEgressOptions(value: unknown): value is KovoApp['egress'] {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.allowInternal) &&
+    value.allowInternal.every((entry) => typeof entry === 'string') &&
+    typeof value.fetch === 'function'
   );
 }
 

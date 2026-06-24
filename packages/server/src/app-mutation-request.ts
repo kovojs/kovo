@@ -44,6 +44,7 @@ export async function handleAppMutationRequest(
 
   const mutationRequest = await resolveLifecycleRequest(request, {
     ...(app.db === undefined ? {} : { db: app.db }),
+    egressFetch: app.egress.fetch,
     ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
   });
   const currentUrl = appRequestUrl(url);

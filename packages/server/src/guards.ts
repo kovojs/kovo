@@ -170,8 +170,9 @@ export type DbProvider<RawRequest, DbValue, SessionValue = unknown> = (
 ) => Promise<DbValue> | DbValue;
 
 /** Request shape after the framework has installed configured lifecycle channels. */
-export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> = RawRequest &
-  ([SessionValue] extends [never] ? {} : { session: SessionValue | null }) &
+export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> = RawRequest & {
+  fetch: typeof fetch;
+} & ([SessionValue] extends [never] ? {} : { session: SessionValue | null }) &
   ([DbValue] extends [never] ? {} : { db: DbValue });
 
 /** Per-request options shared across the lifecycle: error hook plus session/db providers. */
@@ -183,6 +184,7 @@ export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbV
    * Other lifecycle callers keep write-capable handles unless they opt into the same floor.
    */
   dbAccess?: 'read' | 'write';
+  egressFetch?: typeof fetch;
   onError?: ServerErrorHandler;
   /**
    * @internal part-3 I2: optional sink the lifecycle calls with each raw `Set-Cookie`
@@ -414,6 +416,13 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   options: RequestLifecycleOptions<Request, SessionValue, DbValue> = {},
 ): Promise<LifecycleRequest<Request, SessionValue, DbValue>> {
   let lifecycleRequest: unknown = request;
+  if (options.egressFetch !== undefined || !hasRequestFetch(lifecycleRequest)) {
+    lifecycleRequest = requestWithProperty(
+      lifecycleRequest,
+      'fetch',
+      options.egressFetch ?? globalThis.fetch.bind(globalThis),
+    );
+  }
 
   if (options.sessionProvider) {
     const resolved = await options.sessionProvider(request);
@@ -443,6 +452,14 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   }
 
   return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
+}
+
+function hasRequestFetch(value: unknown): value is { fetch: typeof fetch } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { fetch?: unknown }).fetch === 'function'
+  );
 }
 
 export async function renderHttpGuardFailureResponse<Request>(
