@@ -62,6 +62,38 @@ describe('kovo check', () => {
     });
   });
 
+  it('keeps public access decisions separate from KV414 owner-scope correctness', () => {
+    expect(
+      kovoCheck({
+        access: [
+          {
+            decision: 'public',
+            justification: 'reviewed public order lookup',
+            kind: 'query',
+            name: 'orderById',
+            site: 'order.queries.ts:12',
+            source: 'access',
+          },
+        ],
+        ownerDomains: [{ domain: 'order', owner: 'userId' }],
+        scopeAudits: [
+          {
+            detail: 'where eq(orders.id, args.orderId)',
+            domain: 'order',
+            kind: 'query',
+            name: 'orderById',
+            scope: 'args',
+            site: 'order.queries.ts:12',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'kovo-check/v1\nERROR KV414 QUERY orderById domain=order scope=args site=order.queries.ts:12 Owner-table access is not scoped to the session principal (IDOR). where eq(orders.id, args.orderId)\n',
+    });
+  });
+
   it('fails on KV310 optimistic coverage gaps', () => {
     expect(
       kovoCheck({

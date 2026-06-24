@@ -338,9 +338,13 @@ endpoints use `access: verified`; the migration **assigns a real decision at eve
     missing explicit access even when legacy guard/auth posture exists. Verified by `vp check`, `vp test`,
     `vp run integration`, `pnpm run check:api-surface`, and
     `access-declaration-scan/v1 misses=0`.
-- [ ] Keep the missing-access diagnostic orthogonal to correctness: it proves a decision _exists_, never that it is _correct_ (a
+- [x] Keep the missing-access diagnostic orthogonal to correctness: it proves a decision _exists_, never that it is _correct_ (a
       no-op `return true` guard satisfies it). Retain KV414 (IDOR) and record every `public()` in a reviewed
       `kovo explain --access` snapshot so each public surface is a diff, not an invisible default.
+  - Evidence: `packages/cli/src/index.kovo-explain.test.ts` records all public access decisions in the stable
+    `kovo explain --access` snapshot, and `packages/cli/src/index.kovo-check.test.ts` proves `access: public`
+    does not suppress KV414 owner-scope correctness. Verified by
+    `vp exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts`.
 - [x] Migrate by updating call sites with real decisions, not stubs.
   - Mechanically port existing `guard: X` → `access: X`. For every currently-unguarded surface, assign the
     correct decision by hand — a real guard or `public('<genuine reason>')`. **No `public('TODO')` placeholder

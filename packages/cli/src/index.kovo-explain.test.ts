@@ -928,6 +928,62 @@ describe('kovo explain', () => {
     `);
   });
 
+  it('records every public access decision in a stable reviewed snapshot', () => {
+    const result = kovoExplain(
+      {
+        access: [
+          {
+            decision: 'public',
+            justification: 'anonymous cart add is CSRF-protected and writes no identity',
+            kind: 'mutation',
+            name: 'cart/add',
+            site: 'cart.mutations.ts:12',
+            source: 'access',
+          },
+          {
+            decision: 'public',
+            justification: 'public health probe',
+            kind: 'endpoint',
+            name: '/healthz',
+            site: 'health.ts:4',
+            source: 'access',
+          },
+          {
+            decision: 'public',
+            justification: 'marketing landing page',
+            kind: 'page',
+            name: '/',
+            site: 'routes/index.tsx:3',
+            source: 'access',
+          },
+          {
+            decision: 'public',
+            justification: 'public product catalog',
+            kind: 'query',
+            name: 'catalog',
+            site: 'catalog.query.ts:7',
+            source: 'access',
+          },
+        ],
+      },
+      { access: true },
+    );
+
+    expect(result).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'ACCESS',
+        'ACCESS ENDPOINT /healthz decision=public source=access site=health.ts:4 detail=- justification="public health probe"',
+        'ACCESS MUTATION cart/add decision=public source=access site=cart.mutations.ts:12 detail=- justification="anonymous cart add is CSRF-protected and writes no identity"',
+        'ACCESS PAGE / decision=public source=access site=routes/index.tsx:3 detail=- justification="marketing landing page"',
+        'ACCESS QUERY catalog decision=public source=access site=catalog.query.ts:7 detail=- justification="public product catalog"',
+        'SUMMARY total=4 guard=0 verified=0 public=4 missing=0',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('fails kovo explain --access when requested and missing decisions exist', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-'));
     const graphPath = join(tempDir, 'graph.json');
