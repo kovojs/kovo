@@ -45,10 +45,11 @@ export const siteNodeHandler = toNodeHandler(createRequestHandler(siteStaticExpo
 export default siteStaticExportApp;
 
 function docsRoute(page: SiteRoutePage): SiteRoute {
+  const modulepreloads = [...(page.modulepreloads ?? []), clientHrefs.sidebar];
   return route(page.routePath, {
     layout: SiteRouteLayout,
     meta: page.meta,
-    ...(page.modulepreloads ? { modulepreloads: page.modulepreloads } : {}),
+    modulepreloads,
     stylesheets: siteStylesheetsForRoute(page.routePath),
     page() {
       return <DocsRoutePage clients={clientHrefs} page={page.body} />;
