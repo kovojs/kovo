@@ -523,6 +523,16 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
         choice); no indirection chasing. Reuses Item 5's import-binding tracking (AST-only, no type checker).
         Passing `cloud.x` without declaring it is a reverse-mistake lint. Runtime fail-closed stays the backstop
         for helpers/`node_modules`/dynamic construction the static gate can't see.
+    - [x] Direct imported-constructor gate: compiler scanner records package-scope cloud SDK `new`
+          expressions from `@aws-sdk/*`, `@google-cloud/*`, and `@azure/*`; validator emits KV427 only when
+          `registryFacts.cloudMetadataProviders` declares the provider and the constructor lacks explicit
+          `credentials`/`credential`/`authClient`/provider-specific credential options.
+      - Evidence: `vp exec vitest --run packages/compiler/src/cloud-sdk-credentials.test.ts` and
+        `vp exec vitest --run packages/cli/src/index.kovo-compile.test.ts -t "KV427 cloud SDK credential"`.
+    - [ ] App-shell wiring still open: derive `registryFacts.cloudMetadataProviders` from
+          `createApp({ cloud: ... })` instead of the current compile-visible registry-fact fixture trigger.
+    - [ ] Reverse-mistake lint still open: flag uses of `cloud.<x>` credentials when the app did not declare
+          that cloud provider.
   - [ ] Fallback when a cloud SDK isn't factory-integrated: the floor **fails closed** (refresh →
         `EgressBlockedError` naming the endpoint + the fix). Prefer workload-identity-federation (IRSA/WIF) or
         env/sidecar creds so the app never HTTP-fetches an identity endpoint (floor is then free; starter

@@ -656,7 +656,7 @@ describe('diagnostic registry', () => {
           "help": "Blocked reason: a cloud SDK client was constructed without the declared Kovo cloud credential wrapper, so metadata credentials could be fetched through an untracked path.
       Fixes: declare the cloud provider capability, construct clients with the corresponding kovo cloud credential helper, or remove the SDK client.
       Escape: provider-specific credential helpers enter the framework metadata capability frame; arbitrary metadata egress remains blocked.
-      The secure-by-construction Phase 5 egress model requires cloud credentials to flow through framework-owned credential factories instead of raw SDK defaults.",
+      SPEC §11.3 and the secure-by-construction Phase 5 egress model require cloud credentials to flow through framework-owned credential factories instead of raw SDK defaults.",
           "message": "Cloud SDK client is missing its declared framework credential.",
           "severity": "error",
         },
@@ -758,7 +758,11 @@ describe('diagnostic registry', () => {
     type CompilerTeachingCode = keyof typeof compilerDiagnosticTeachingSchemas;
     const compilerDiagnosticCodes = Object.keys(diagnosticDefinitions).filter(
       (code): code is CompilerTeachingCode =>
-        code === 'KV201' || code === 'KV429' || code === 'KV434' || /^KV[23]\d\d$/.test(code),
+        code === 'KV201' ||
+        code === 'KV427' ||
+        code === 'KV429' ||
+        code === 'KV434' ||
+        /^KV[23]\d\d$/.test(code),
     );
 
     expect(compilerDiagnosticCodes).not.toEqual([]);

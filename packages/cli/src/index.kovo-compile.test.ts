@@ -82,6 +82,57 @@ export const CartBadge = component({
     }
   });
 
+  it('reports KV427 cloud SDK credential diagnostics through registry facts', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-component-cloud-sdk-'));
+    const sourcePath = join(root, 'cloud-client.ts');
+    const registryFactsPath = join(root, 'registry-facts.json');
+    const outPath = join(root, 'generated/cloud-client.ts');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        sourcePath,
+        `
+import { S3Client } from '@aws-sdk/client-s3';
+
+export const s3 = new S3Client({ region: 'us-east-1' });
+`,
+        'utf8',
+      );
+      writeFileSync(
+        registryFactsPath,
+        `${JSON.stringify({ cloudMetadataProviders: ['aws'] }, null, 2)}\n`,
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          'src/cloud-client.ts',
+          '--registry-facts',
+          registryFactsPath,
+          '--no-cache',
+        ]),
+      ).resolves.toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(errorOutput).toContain('ERROR KV427 file="src/cloud-client.ts"');
+      expect(errorOutput).toContain('S3Client is imported from @aws-sdk/client-s3');
+      expect(errorOutput).toContain('SUMMARY artifacts=0 diagnostics=1');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('bypasses the persistent compiler cache with --no-cache', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-component-no-cache-'));
     const sourcePath = join(root, 'cart-badge.tsx');

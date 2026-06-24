@@ -258,6 +258,17 @@ export interface ModuleSpecifierModel {
   start: number;
 }
 
+export type CloudMetadataProvider = 'aws' | 'azure' | 'gcp';
+
+export interface CloudSdkClientConstructionModel {
+  constructorName: string;
+  end: number;
+  hasCredentialOption: boolean;
+  moduleSpecifier: string;
+  provider: CloudMetadataProvider;
+  start: number;
+}
+
 export interface NamedImportModel {
   importedName: string;
   localName: string;
@@ -283,6 +294,7 @@ export interface ModuleScopePublishToClient {
 
 export interface ComponentModuleModel {
   calls: readonly CallExpressionModel[];
+  cloudSdkClientConstructions: readonly CloudSdkClientConstructionModel[];
   components: readonly ComponentModel[];
   jsxComments: readonly JsxCommentModel[];
   jsxExpressions: readonly JsxExpressionModel[];

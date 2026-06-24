@@ -5,6 +5,8 @@ import type { StaticLiteralValue } from './object.js';
 import type {
   ArrowFunctionPartsModel,
   CallExpressionModel,
+  CloudMetadataProvider,
+  CloudSdkClientConstructionModel,
   ComponentModel,
   ComponentModuleModel,
   ComponentOptionEntry,
@@ -118,6 +120,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
 
   const model: ComponentModuleModel = {
     calls,
+    cloudSdkClientConstructions: cloudSdkClientConstructionModels(sourceFile),
     components,
     jsxComments,
     jsxExpressions,
@@ -346,6 +349,178 @@ function isSchemaHelperCall(node: ts.CallExpression, methodName: string): boolea
   if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== methodName) return false;
   const receiver = unwrapExpression(callee.expression);
   return ts.isIdentifier(receiver) && receiver.text === 's';
+}
+
+interface CloudSdkImportBinding {
+  importedName: string;
+  moduleSpecifier: string;
+  provider: CloudMetadataProvider;
+}
+
+function cloudSdkClientConstructionModels(
+  sourceFile: ts.SourceFile,
+): CloudSdkClientConstructionModel[] {
+  const constructorBindings = new Map<string, CloudSdkImportBinding>();
+  const namespaceBindings = new Map<string, Omit<CloudSdkImportBinding, 'importedName'>>();
+
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !statement.moduleSpecifier ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+
+    const moduleSpecifier = statement.moduleSpecifier.text;
+    const provider = cloudMetadataProviderForSpecifier(moduleSpecifier);
+    if (!provider) continue;
+
+    const importClause = statement.importClause;
+    if (!importClause) continue;
+
+    if (importClause.name) {
+      constructorBindings.set(importClause.name.text, {
+        importedName: 'default',
+        moduleSpecifier,
+        provider,
+      });
+    }
+
+    const namedBindings = importClause.namedBindings;
+    if (!namedBindings) continue;
+    if (ts.isNamedImports(namedBindings)) {
+      for (const element of namedBindings.elements) {
+        constructorBindings.set(element.name.text, {
+          importedName: element.propertyName?.text ?? element.name.text,
+          moduleSpecifier,
+          provider,
+        });
+      }
+    } else {
+      namespaceBindings.set(namedBindings.name.text, { moduleSpecifier, provider });
+    }
+  }
+
+  const constructions: CloudSdkClientConstructionModel[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isNewExpression(node)) {
+      const construction = cloudSdkClientConstructionModel(
+        sourceFile,
+        node,
+        constructorBindings,
+        namespaceBindings,
+      );
+      if (construction) constructions.push(construction);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return constructions;
+}
+
+function cloudSdkClientConstructionModel(
+  sourceFile: ts.SourceFile,
+  node: ts.NewExpression,
+  constructorBindings: ReadonlyMap<string, CloudSdkImportBinding>,
+  namespaceBindings: ReadonlyMap<string, Omit<CloudSdkImportBinding, 'importedName'>>,
+): CloudSdkClientConstructionModel | null {
+  const expression = unwrapExpression(node.expression);
+  let binding: CloudSdkImportBinding | undefined;
+  let constructorName: string | undefined;
+
+  if (ts.isIdentifier(expression)) {
+    binding = constructorBindings.get(expression.text);
+    constructorName = binding?.importedName === 'default' ? expression.text : binding?.importedName;
+  } else if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)) {
+    const namespace = namespaceBindings.get(expression.expression.text);
+    if (namespace) {
+      binding = { ...namespace, importedName: expression.name.text };
+      constructorName = expression.name.text;
+    }
+  }
+
+  if (!binding || !constructorName) return null;
+
+  return {
+    constructorName,
+    end: expression.getEnd(),
+    hasCredentialOption: newExpressionHasCloudCredentialOption(binding.provider, node.arguments),
+    moduleSpecifier: binding.moduleSpecifier,
+    provider: binding.provider,
+    start: expression.getStart(sourceFile),
+  };
+}
+
+function cloudMetadataProviderForSpecifier(moduleSpecifier: string): CloudMetadataProvider | null {
+  if (moduleSpecifier.startsWith('@aws-sdk/')) return 'aws';
+  if (moduleSpecifier.startsWith('@google-cloud/')) return 'gcp';
+  if (moduleSpecifier.startsWith('@azure/')) return 'azure';
+  return null;
+}
+
+function newExpressionHasCloudCredentialOption(
+  provider: CloudMetadataProvider,
+  args: ts.NodeArray<ts.Expression> | undefined,
+): boolean {
+  if (!args || args.length === 0) return false;
+  for (const argument of args) {
+    const unwrapped = unwrapExpression(argument);
+    if (
+      ts.isObjectLiteralExpression(unwrapped) &&
+      objectLiteralHasCloudCredentialOption(provider, unwrapped)
+    ) {
+      return true;
+    }
+  }
+
+  // Azure SDK constructors commonly receive a TokenCredential as a positional argument. Treat any
+  // second argument as an explicit author credential choice; KV427 covers missing credentials only.
+  return provider === 'azure' && args.length >= 2;
+}
+
+function objectLiteralHasCloudCredentialOption(
+  provider: CloudMetadataProvider,
+  object: ts.ObjectLiteralExpression,
+): boolean {
+  for (const property of object.properties) {
+    if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) {
+      const key = objectPropertyNameText(property.name);
+      if (key && cloudCredentialOptionNames(provider).has(key)) return true;
+      if (ts.isPropertyAssignment(property)) {
+        const initializer = unwrapExpression(property.initializer);
+        if (
+          ts.isObjectLiteralExpression(initializer) &&
+          objectLiteralHasCloudCredentialOption(provider, initializer)
+        ) {
+          return true;
+        }
+      }
+    }
+    if (ts.isSpreadAssignment(property)) return true;
+  }
+  return false;
+}
+
+function objectPropertyNameText(name: ts.PropertyName): string | null {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  if (ts.isComputedPropertyName(name)) {
+    const expression = unwrapExpression(name.expression);
+    if (ts.isStringLiteralLike(expression)) return expression.text;
+  }
+  return null;
+}
+
+function cloudCredentialOptionNames(provider: CloudMetadataProvider): ReadonlySet<string> {
+  const common = ['credentials', 'credential', 'authClient'];
+  if (provider === 'aws') return new Set([...common, 'credentialDefaultProvider']);
+  if (provider === 'gcp')
+    return new Set([...common, 'apiKey', 'keyFile', 'keyFilename', 'keyFileName']);
+  return new Set([...common, 'tokenCredential']);
 }
 
 function moduleScopeBindingModels(

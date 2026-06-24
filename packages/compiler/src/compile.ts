@@ -461,6 +461,9 @@ function sliceRegistryFacts(
   const fragmentTargets = sliceArray(facts.fragmentTargets, new Set(usage.fragmentTargets));
   const viewTransitions = sliceArray(facts.viewTransitions, new Set(usage.viewTransitionNames));
   const sliced: RegistryFacts = {
+    ...(facts.cloudMetadataProviders === undefined
+      ? {}
+      : { cloudMetadataProviders: facts.cloudMetadataProviders }),
     ...(facts.components === undefined ? {} : { components: facts.components }),
     ...(facts.domainKeys === undefined ? {} : { domainKeys: facts.domainKeys }),
     ...(fragmentTargets === undefined ? {} : { fragmentTargets }),

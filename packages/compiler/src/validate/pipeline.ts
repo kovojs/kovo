@@ -7,6 +7,7 @@ import type { ComponentModuleModel, SourceSpan } from '../scan/parse.js';
 import type { SourceOffsetMap } from '../shared.js';
 import type { CompileComponentOptions, QueryUpdateCoverageFact } from '../types.js';
 import { validateDataBindings, validateStampExpressionDrift } from './bindings.js';
+import { validateCloudSdkCredentials } from './cloud-sdk-credentials.js';
 import {
   unhandledUpdateCoverageDiagnostics,
   validateDirectDbAccess,
@@ -95,6 +96,8 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateNestedStatefulIslandInRefreshTarget(loweredDiagnostics, model, options),
   ({ originalDiagnostics, originalModel, options }) =>
     validateSecretQueryWire(originalDiagnostics, originalModel, options),
+  ({ originalDiagnostics, originalModel, options }) =>
+    validateCloudSdkCredentials(originalDiagnostics, originalModel, options),
   ({ originalDiagnostics, originalModel }) =>
     validateStringPatterns(originalDiagnostics, originalModel),
   ({ originalDiagnostics, originalModel }) =>

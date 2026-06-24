@@ -191,6 +191,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV317: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
+  KV427: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
   KV429: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
   KV434: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
@@ -878,7 +879,7 @@ export const diagnosticDefinitions = {
       'Blocked reason: a cloud SDK client was constructed without the declared Kovo cloud credential wrapper, so metadata credentials could be fetched through an untracked path.',
       'Fixes: declare the cloud provider capability, construct clients with the corresponding kovo cloud credential helper, or remove the SDK client.',
       'Escape: provider-specific credential helpers enter the framework metadata capability frame; arbitrary metadata egress remains blocked.',
-      'The secure-by-construction Phase 5 egress model requires cloud credentials to flow through framework-owned credential factories instead of raw SDK defaults.',
+      'SPEC §11.3 and the secure-by-construction Phase 5 egress model require cloud credentials to flow through framework-owned credential factories instead of raw SDK defaults.',
     ].join('\n'),
     severity: 'error',
     message: 'Cloud SDK client is missing its declared framework credential.',

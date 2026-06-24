@@ -5,6 +5,7 @@ import type { ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
+import type { CloudMetadataProvider } from './scan/model.js';
 import { replaceExtension } from './shared.js';
 
 /**
@@ -103,6 +104,7 @@ export interface LiveTargetQueryBindingFact {
  * in-repo use only (SPEC.md §5.2).
  */
 export interface RegistryFacts {
+  cloudMetadataProviders?: readonly CloudMetadataProvider[];
   components?: readonly string[];
   diagnostics?: readonly CompilerDiagnostic[];
   domainKeys?: readonly string[];
