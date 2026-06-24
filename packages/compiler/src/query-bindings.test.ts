@@ -102,11 +102,33 @@ export const CartBadge = component({
         ],
         source: 'generated/queries/audit.shape.ts',
       },
+      {
+        query: 'sessions',
+        shape: [
+          {
+            kind: 'nullable',
+            shape: {
+              id: 'string',
+              actor: {
+                kind: 'optional',
+                shape: {
+                  'display-name': 'string',
+                  token: { kind: 'secret', shape: { kind: 'nullable', shape: 'string' } },
+                },
+              },
+              flags: [{ kind: 'optional', shape: 'boolean' }],
+              tags: [{ kind: 'nullable', shape: 'string' }],
+            },
+          },
+        ],
+        source: 'generated/queries/sessions.shape.ts',
+      },
     ] as const;
 
     expect(queryShapeRegistryTypeFacts(queryShapesFromFacts(queryShapeFacts))).toEqual({
       account: `{ id: string; name: string; profile: { token: import('@kovojs/core').Secret<string>; updatedAt: string; } | null; "two-factor"?: boolean; }`,
       audit: `{ id: string; payload: import('@kovojs/core').Secret<string | null>; }[]`,
+      sessions: `({ actor?: { "display-name": string; token: import('@kovojs/core').Secret<string | null>; }; flags: (boolean | undefined)[]; id: string; tags: (string | null)[]; } | null)[]`,
     });
   });
 
@@ -140,6 +162,50 @@ export const AccountCard = component({
   }`);
   });
 
+  it('emits complex generated QueryRegistry entries from query shape facts', () => {
+    const result = compileComponentModule({
+      fileName: 'session-list.tsx',
+      queryShapeFacts: [
+        {
+          query: 'sessions',
+          shape: [
+            {
+              kind: 'nullable',
+              shape: {
+                id: 'string',
+                actor: {
+                  kind: 'optional',
+                  shape: {
+                    'display-name': 'string',
+                    token: { kind: 'secret', shape: { kind: 'nullable', shape: 'string' } },
+                  },
+                },
+                flags: [{ kind: 'optional', shape: 'boolean' }],
+                tags: [{ kind: 'nullable', shape: 'string' }],
+              },
+            },
+          ],
+          source: 'generated/queries/sessions.shape.ts',
+        },
+      ],
+      source: `
+export const SessionList = component({
+  render: () => <section>Sessions</section>,
+});
+`,
+    });
+
+    const registry = result.files[2]?.source ?? '';
+    const sessionsType = `({ actor?: { "display-name": string; token: import('@kovojs/core').Secret<string | null>; }; flags: (boolean | undefined)[]; id: string; tags: (string | null)[]; } | null)[]`;
+    expect(registry).toContain(`export interface QueryRegistry {
+  'sessions': ${sessionsType};
+}`);
+    expect(registry).toContain(`declare module '@kovojs/core' {
+  interface QueryRegistry {
+  'sessions': ${sessionsType};
+  }`);
+  });
+
   it('emits fallback TypeScript for primitive query shape placeholders', () => {
     expect(queryShapeTypeExpression('array')).toBe('unknown[]');
     expect(queryShapeTypeExpression('object')).toBe('Record<string, unknown>');
@@ -154,6 +220,11 @@ export const AccountCard = component({
     ['nullable', { kind: 'nullable', shape: 'string' }, 'string | null'],
     ['optional', { value: { kind: 'optional', shape: 'number' } }, '{ value?: number; }'],
     ['array-of-union', [{ kind: 'nullable', shape: 'number' }], '(number | null)[]'],
+    [
+      'array-of-optional-union',
+      [{ kind: 'optional', shape: 'boolean' }],
+      '(boolean | undefined)[]',
+    ],
     [
       'nested-object',
       { parent: { child: { kind: 'secret', shape: 'boolean' } } },
