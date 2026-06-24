@@ -20,7 +20,7 @@ import { registeredGeneratedMutationTouches } from './generated-mutation-registr
 import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { renderFragmentWireHtml } from './wire-html.js';
-import type { RegisteredQueryDefinition } from './query.js';
+import { readQueryInstanceKey, type RegisteredQueryDefinition } from './query.js';
 import type { JsonSerializable } from './json-boundary.js';
 import {
   appendResponseHeader,
@@ -384,8 +384,13 @@ export async function renderMutationResponse<
       // 429 rate-limits are not replayable (SPEC §9.1.1:904, A5; KV429): abandon the reservation
       // so a corrected retry, fresh-version retry, or post-window retry runs the handler fresh.
       reservation?.abort?.();
+      const queryChunks =
+        result.status === 409
+          ? await renderConflictQueryChunks(definition, wireRequest, wireRequest.rawInput)
+          : [];
+      const failureFragment = await renderFailureFragment(result, wireRequest);
       return {
-        body: await renderFailureFragment(result, wireRequest),
+        body: [...queryChunks, failureFragment].join('\n'),
         headers: {
           ...mutationWireResponseHeaders(wireRequest),
           ...retryAfterHeaders(result),
@@ -521,6 +526,51 @@ async function renderSuccessfulMutationWireResponse<
     ),
     status: 200,
   };
+}
+
+async function renderConflictQueryChunks<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request = Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  wireRequest: MutationWireRequest<Request>,
+  input: unknown,
+): Promise<string[]> {
+  const submittedVersions = wireRequest.queryVersions;
+  if (submittedVersions === undefined || Object.keys(submittedVersions).length === 0) return [];
+
+  const rerunQueries = (definition.registry?.queries ?? [])
+    .map((queryDefinition) => {
+      const instanceKey = readQueryInstanceKey(queryDefinition, input);
+      const wireKey = queryWireKey(queryDefinition.key, instanceKey);
+      if (submittedVersions[wireKey] === undefined) return undefined;
+      return {
+        ...(instanceKey === undefined ? {} : { instanceKey }),
+        key: queryDefinition.key,
+        whole: true,
+      };
+    })
+    .filter(
+      (query): query is { instanceKey?: string; key: string; whole: true } => query !== undefined,
+    );
+
+  if (rerunQueries.length === 0) return [];
+  return renderQueryChunks(
+    definition.registry?.queries ?? [],
+    rerunQueries,
+    input,
+    wireRequest.request,
+    [],
+  );
+}
+
+function queryWireKey(name: string, key: string | undefined): string {
+  if (key === undefined) return name;
+  return key.startsWith(`${name}:`) ? key : `${name}:${key}`;
 }
 
 function mutationRenderErrorResponse<Request>(

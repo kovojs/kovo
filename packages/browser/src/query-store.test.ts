@@ -37,6 +37,21 @@ describe('query store', () => {
     expect(plan).toHaveBeenCalledWith({ count: 1 });
   });
 
+  it('stores query version tokens beside values for later enhanced submits', () => {
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+    store.setVersion('cart', '7');
+    store.set('product', { id: 'p1' }, 'product:p1');
+    store.setVersion('product', '12', 'product:p1');
+
+    expect(store.getVersion('cart')).toBe('7');
+    expect(store.getVersion('product', 'product:p1')).toBe('12');
+    expect(store.versions()).toEqual([
+      { name: 'cart', version: '7' },
+      { key: 'product:p1', name: 'product', version: '12' },
+    ]);
+  });
+
   // L7-1 / SPEC §9.4: unsubscribe must prune the now-empty subscriber Set so the
   // internal `plans` map does not leak one empty Set per distinct `(name, key)`.
   describe('subscriber Set pruning (L7-1)', () => {
@@ -110,6 +125,7 @@ describe('query store', () => {
       // All held values are released.
       expect(store.get('cart')).toBeUndefined();
       expect(store.get('reviews', 'product:p1')).toBeUndefined();
+      expect(store.versions()).toEqual([]);
 
       // The subscription survives a clear so the store can be re-hydrated.
       plan.mockClear();
@@ -120,13 +136,17 @@ describe('query store', () => {
     it('delete(name, key) evicts a single rotating instance key', () => {
       const store = createQueryStore();
       store.set('reviews', { items: ['a'] }, 'product:p1');
+      store.setVersion('reviews', '1', 'product:p1');
       store.set('reviews', { items: ['b'] }, 'product:p2');
+      store.setVersion('reviews', '2', 'product:p2');
 
       store.delete('reviews', 'product:p1');
 
       expect(store.get('reviews', 'product:p1')).toBeUndefined();
+      expect(store.getVersion('reviews', 'product:p1')).toBeUndefined();
       // Sibling keys are untouched.
       expect(store.get('reviews', 'product:p2')).toEqual({ items: ['b'] });
+      expect(store.getVersion('reviews', 'product:p2')).toBe('2');
     });
 
     it('delete() handles the unkeyed query identity', () => {

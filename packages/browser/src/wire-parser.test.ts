@@ -32,8 +32,10 @@ describe('wire parser HTML entity handling', () => {
 
   it('reads kovo-query attributes with quoted tag closers', () => {
     expect(
-      readQueryChunks('<kovo-query name="cart" key="cart>a">{&quot;count&quot;:1}</kovo-query>'),
-    ).toEqual([{ key: 'cart>a', name: 'cart', value: { count: 1 } }]);
+      readQueryChunks(
+        '<kovo-query name="cart" key="cart>a" version="v7">{&quot;count&quot;:1}</kovo-query>',
+      ),
+    ).toEqual([{ key: 'cart>a', name: 'cart', value: { count: 1 }, version: 'v7' }]);
   });
 
   it('reads a pre-split kovo-query element chunk through the same decoded shape', () => {
@@ -70,11 +72,12 @@ describe('wire parser HTML entity handling', () => {
     expect(
       readQueryScriptChunks([
         {
-          getAttribute: (name) => (name === 'kovo-query' ? 'product:p3' : null),
+          getAttribute: (name) =>
+            name === 'kovo-query' ? 'product:p3' : name === 'version' ? '9' : null,
           textContent: '{"stock":9}',
         },
       ]),
-    ).toEqual([{ key: 'p3', name: 'product', value: { stock: 9 } }]);
+    ).toEqual([{ key: 'p3', name: 'product', value: { stock: 9 }, version: '9' }]);
   });
 
   it('decodes apostrophe entities in kovo-query JSON bodies', () => {

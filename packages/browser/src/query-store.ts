@@ -21,18 +21,28 @@ export interface QueryStore {
    */
   delete(name: string, key?: string): void;
   get<Value = unknown>(name: string, key?: string): Value | undefined;
+  getVersion(name: string, key?: string): string | undefined;
   snapshot(
     names: readonly string[],
     keys?: Readonly<Record<string, string | undefined>>,
   ): QuerySnapshot;
   set<Value = unknown>(name: string, value: Value, key?: string): void;
+  setVersion(name: string, version: string | undefined, key?: string): void;
   subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>, key?: string): () => void;
+  versions(): QueryVersionSnapshot[];
 }
 
 /**
  * A point-in-time copy of query values, used to roll back optimistic updates.
  */
 export type QuerySnapshot = Map<string, unknown>;
+
+/** A held query row/version token available to enhanced submits. */
+export interface QueryVersionSnapshot {
+  key?: string;
+  name: string;
+  version: string;
+}
 
 /**
  * Create the client-side query store: the in-memory source of truth the loader
@@ -48,6 +58,7 @@ export type QuerySnapshot = Map<string, unknown>;
  */
 export function createQueryStore(): QueryStore {
   const values = new Map<string, unknown>();
+  const versions = new Map<string, string>();
   const plans = new Map<string, Set<QueryUpdatePlan>>();
 
   return {
@@ -57,12 +68,18 @@ export function createQueryStore(): QueryStore {
     // give the loader/morph path a way to release that retained memory.
     clear(): void {
       values.clear();
+      versions.clear();
     },
     delete(name: string, key?: string): void {
-      values.delete(queryStoreKey(name, key));
+      const storeKey = queryStoreKey(name, key);
+      values.delete(storeKey);
+      versions.delete(storeKey);
     },
     get<Value = unknown>(name: string, key?: string): Value | undefined {
       return values.get(queryStoreKey(name, key)) as Value | undefined;
+    },
+    getVersion(name: string, key?: string): string | undefined {
+      return versions.get(queryStoreKey(name, key));
     },
     snapshot(
       names: readonly string[],
@@ -87,6 +104,14 @@ export function createQueryStore(): QueryStore {
       for (const plan of plans.get(storeKey) ?? []) {
         plan(value);
       }
+    },
+    setVersion(name: string, version: string | undefined, key?: string): void {
+      const storeKey = queryStoreKey(name, key);
+      if (version === undefined) {
+        versions.delete(storeKey);
+        return;
+      }
+      versions.set(storeKey, version);
     },
     subscribe<Value = unknown>(
       name: string,
@@ -113,6 +138,12 @@ export function createQueryStore(): QueryStore {
           plans.delete(storeKey);
         }
       };
+    },
+    versions(): QueryVersionSnapshot[] {
+      return [...versions.entries()].map(([storeKey, version]) => ({
+        ...queryIdentityFromStoreKey(storeKey),
+        version,
+      }));
     },
   };
 }

@@ -29,6 +29,7 @@ describe('server mutation primitives', () => {
   it('renders optimistic-concurrency conflicts as enhanced 409 fragments with fresh targets', async () => {
     const product = domain('product');
     const productQuery = query('product', {
+      instanceKey: (input) => `product:${(input as { productId: string }).productId}`,
       load: () => ({ id: 'p1', stock: 4, version: 2 }),
       reads: [product],
       version: (_input, value) => (value as { version: number }).version,
@@ -55,6 +56,7 @@ describe('server mutation primitives', () => {
         ],
         headers: {
           'Kovo-Fragment': 'true',
+          'Kovo-Query-Versions': '{"product:p1":"1"}',
           'Kovo-Targets': 'product-form=product',
         },
         rawInput: { productId: 'p1', version: 1 },
@@ -64,7 +66,10 @@ describe('server mutation primitives', () => {
         request: {},
       }),
     ).resolves.toEqual({
-      body: '<kovo-fragment target="product-form"><form data-error="CONFLICT">stale-version</form></kovo-fragment>',
+      body: [
+        '<kovo-query name="product" key="product:p1" version="2">{"id":"p1","stock":4,"version":2}</kovo-query>',
+        '<kovo-fragment target="product-form"><form data-error="CONFLICT">stale-version</form></kovo-fragment>',
+      ].join('\n'),
       headers: {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },

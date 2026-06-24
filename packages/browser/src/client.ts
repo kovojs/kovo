@@ -14,7 +14,12 @@ export { createQueryStore } from './query-store.js';
 export type { BrowserKovoRoot, CreateBrowserKovoRootOptions } from './browser-root.js';
 export type { BrowserEnhancedMutationOptions, KovoLoader, KovoLoaderOptions } from './loader.js';
 export type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
-export type { QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
+export type {
+  QuerySnapshot,
+  QueryStore,
+  QueryUpdatePlan,
+  QueryVersionSnapshot,
+} from './query-store.js';
 
 // --- DOM-shape supporting types named by the loader option surface ---
 export type {

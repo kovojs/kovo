@@ -29,6 +29,8 @@ export interface QueryChunk {
    */
   settles?: readonly string[];
   value: unknown;
+  /** Row/version token emitted by server reads for optimistic concurrency (Phase 6 TOCTOU). */
+  version?: string;
 }
 
 /** The raw `{ attrs, content }` of a `<kovo-query>` element before decoding (SPEC §9.4). */
@@ -146,6 +148,7 @@ export function readQueryElementChunk(
       key: readAttribute(chunk.attrs, 'key'),
       name: readAttribute(chunk.attrs, 'name'),
       settles: readAttribute(chunk.attrs, 'settles'),
+      version: readAttribute(chunk.attrs, 'version'),
     },
     onError,
   );
@@ -190,6 +193,7 @@ export function readQueryScriptChunk(
       key: script.getAttribute('key'),
       name,
       settles: script.getAttribute('settles'),
+      version: script.getAttribute('version'),
     },
     onError,
   );
@@ -202,6 +206,7 @@ interface QueryChunkPayload {
   key?: string | null;
   name: string | null;
   settles?: string | null;
+  version?: string | null;
 }
 
 function readQueryChunkPayload(
@@ -226,6 +231,9 @@ function readQueryChunkPayload(
     name: identity.name,
     ...(settles.length > 0 ? { settles } : {}),
     value: parsed.value,
+    ...(payload.version === undefined || payload.version === null
+      ? {}
+      : { version: payload.version }),
   };
 }
 

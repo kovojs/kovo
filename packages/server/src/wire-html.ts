@@ -81,6 +81,7 @@ export interface QueryScriptRenderOptions {
   key?: string | undefined;
   name: string;
   value: unknown;
+  version?: number | string | undefined;
 }
 
 export interface FragmentWireRenderOptions {
@@ -128,8 +129,10 @@ export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
  */
 export function renderQueryScript(options: QueryScriptRenderOptions): string {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
+  const versionAttribute =
+    options.version === undefined ? '' : ` version="${escapeAttribute(String(options.version))}"`;
 
-  return `<script type="application/json" kovo-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(stringifyWireValue(options.value))}</script>`;
+  return `<script type="application/json" kovo-query="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}>${escapeScriptJson(stringifyWireValue(options.value))}</script>`;
 }
 
 export function renderFragmentWireHtml(options: FragmentWireRenderOptions): string {

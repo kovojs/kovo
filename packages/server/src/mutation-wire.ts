@@ -62,6 +62,7 @@ export interface MutationWireRequest<
   liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
   liveTargets?: readonly MutationLiveTarget[];
   mutationKey?: string;
+  queryVersions?: Readonly<Record<string, string>>;
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore<BufferedMutationWireResponse>;
   rawInput: unknown;
@@ -136,6 +137,7 @@ export interface MutationWireHeaders {
   idem?: string;
   liveTargetDescriptors: readonly MutationLiveTargetDescriptor[];
   liveTargets: readonly MutationLiveTarget[];
+  queryVersions: Readonly<Record<string, string>>;
   stream: boolean;
   submittedFormTarget?: string;
   targets: readonly string[];
@@ -276,6 +278,7 @@ export function readMutationWireHeaders(headers: MutationWireHeaderSource): Muta
   const liveTargetDescriptors = parseLiveTargetDescriptorHeader(
     readHeader(headers, 'Kovo-Live-Targets') ?? '',
   );
+  const queryVersions = parseQueryVersionsHeader(readHeader(headers, 'Kovo-Query-Versions') ?? '');
   const targets = dedupe(liveTargets.map((entry) => entry.target));
 
   return {
@@ -283,6 +286,7 @@ export function readMutationWireHeaders(headers: MutationWireHeaderSource): Muta
     ...(idem ? { idem } : {}),
     liveTargetDescriptors,
     liveTargets,
+    queryVersions,
     stream,
     ...(submittedFormTarget ? { submittedFormTarget } : {}),
     targets,
@@ -319,6 +323,9 @@ export function mutationWireRequestFromHeaders<Request>(
       ? {}
       : { liveTargetRenderers: options.liveTargetRenderers }),
     ...(options.mutationKey === undefined ? {} : { mutationKey: options.mutationKey }),
+    ...(Object.keys(headers.queryVersions).length === 0
+      ? {}
+      : { queryVersions: headers.queryVersions }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(headers.idem === undefined ? {} : { idem: headers.idem }),
     liveTargetDescriptors: headers.liveTargetDescriptors,
@@ -333,6 +340,25 @@ export function mutationWireRequestFromHeaders<Request>(
     stream: headers.stream,
     targets: headers.targets,
   };
+}
+
+function parseQueryVersionsHeader(value: string): Readonly<Record<string, string>> {
+  if (!value.trim()) return {};
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+    const result: Record<string, string> = {};
+    for (const [key, version] of Object.entries(parsed)) {
+      if (typeof key !== 'string' || typeof version !== 'string') continue;
+      if (!key || !version) continue;
+      result[key] = version;
+    }
+    return result;
+  } catch {
+    return {};
+  }
 }
 
 /**

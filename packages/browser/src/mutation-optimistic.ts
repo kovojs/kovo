@@ -114,7 +114,14 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
   const { idem, optimisticKeys, queryNames } = context;
 
   try {
-    const fetched = await fetchEnhancedMutation({ ...options, ...definedProps({ signal }) }, idem);
+    const fetched = await fetchEnhancedMutation(
+      {
+        ...options,
+        queryVersions: options.store.versions(),
+        ...definedProps({ signal }),
+      },
+      idem,
+    );
 
     if (isFailedMutationResponse(fetched.response)) {
       discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);

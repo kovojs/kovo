@@ -51,7 +51,7 @@ describe('decoded query runtime apply', () => {
 
     const applied = applyQueryChunksToRuntime(
       store,
-      [{ key: 'product:p1', name: 'product', value: { stock: 7 } }],
+      [{ key: 'product:p1', name: 'product', value: { stock: 7 }, version: '8' }],
       {
         queryPlans: {
           product: { bindings: false },
@@ -65,6 +65,7 @@ describe('decoded query runtime apply', () => {
     // consumers, so a product:p1 chunk cannot overwrite product:p2 bindings.
     expect(applied).toEqual(['product:p1']);
     expect(store.get('product', 'product:p1')).toEqual({ stock: 7 });
+    expect(store.getVersion('product', 'product:p1')).toBe('8');
     expect(p1Stock.textContent).toBe('7');
     expect(p2Stock.textContent).toBe('9');
   });

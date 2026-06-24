@@ -63,6 +63,8 @@ describe('enhanced mutation submit', () => {
 
   it('submits enhanced mutation forms with live targets and applies the fragment response', async () => {
     const store = createQueryStore();
+    store.setVersion('cart', '7');
+    store.setVersion('product', '12', 'product:p1');
     const channel = new FakeBroadcastChannel();
     const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
@@ -150,6 +152,7 @@ describe('enhanced mutation submit', () => {
         'Kovo-Idem': 'idem_01HX',
         'Kovo-Live-Targets':
           'cart-badge#components/cart/cart-badge/cart-badge:{}; recommendations#components/recommendations/recommendations:{"productId":"p1"}',
+        'Kovo-Query-Versions': '{"cart":"7","product:p1":"12"}',
         'Kovo-Targets': 'cart-badge=cart; recommendations=product:p1',
       },
       keepalive: true,

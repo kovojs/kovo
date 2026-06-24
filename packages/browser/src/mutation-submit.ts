@@ -194,6 +194,7 @@ export async function submitEnhancedMutation(
   try {
     const fetched = await fetchEnhancedMutation({
       ...options,
+      queryVersions: options.store.versions(),
       streaming: isStreamingEnhancedMutationForm(options.form),
     });
     // SPEC §9.1.1: default the build token (from the page meta) and the

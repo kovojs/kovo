@@ -15,6 +15,7 @@ describe('mutation wire headers', () => {
         'Kovo-Idem': ' idem_01HX ',
         'Kovo-Live-Targets':
           'cart-badge#components/cart/cart-badge/cart-badge:{}; recommendations#components/recommendations/recommendations:{"productId":"p1;still-json"}; cart-badge#ignored:{}',
+        'Kovo-Query-Versions': '{"cart":"7","product:p1":"12"}',
         'Kovo-Targets': 'cart-badge=cart; recommendations=product:p1, cart-badge=cart',
       }),
     ).toEqual({
@@ -36,6 +37,7 @@ describe('mutation wire headers', () => {
         { deps: ['cart'], target: 'cart-badge' },
         { deps: ['product:p1'], target: 'recommendations' },
       ],
+      queryVersions: { cart: '7', 'product:p1': '12' },
       stream: false,
       targets: ['cart-badge', 'recommendations'],
     });
@@ -55,6 +57,7 @@ describe('mutation wire headers', () => {
             'Kovo-Live-Targets',
             'product-form:p1#components/product-form/product-form:{"productId":"p1"}',
           ],
+          ['Kovo-Query-Versions', '{"product:p1":"12"}'],
           ['Kovo-Targets', 'product-form:p1=product:p1'],
         ]),
         rawInput: { productId: 'p1', quantity: 99 },
@@ -72,6 +75,7 @@ describe('mutation wire headers', () => {
         },
       ],
       liveTargets: [{ deps: ['product:p1'], target: 'product-form:p1' }],
+      queryVersions: { 'product:p1': '12' },
       rawInput: { productId: 'p1', quantity: 99 },
       replayStore,
       request: { sessionId: 's1' },

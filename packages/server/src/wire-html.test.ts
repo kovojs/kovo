@@ -50,9 +50,10 @@ describe('server wire html emitters', () => {
           html: '</script><script>alert(1)</script>',
           items: [{ productId: 'p1', qty: 1 }],
         },
+        version: 7,
       }),
     ).toBe(
-      '<script type="application/json" kovo-query="cart" key="cart:c1">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>","items":[{"productId":"p1","qty":1}]}</script>',
+      '<script type="application/json" kovo-query="cart" key="cart:c1" version="7">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>","items":[{"productId":"p1","qty":1}]}</script>',
     );
   });
 

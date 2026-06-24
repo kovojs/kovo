@@ -79,6 +79,10 @@ describe('enhanced mutation fetch', () => {
       formData,
       idem: 'idem_fetch',
       onUploadProgress: uploadProgress,
+      queryVersions: [
+        { name: 'cart', version: '7' },
+        { key: 'product:p1', name: 'product', version: '12' },
+      ],
       root,
     });
 
@@ -92,6 +96,7 @@ describe('enhanced mutation fetch', () => {
         'Kovo-Idem': 'idem_fetch',
         'Kovo-Live-Targets':
           'cart-badge#cart-badge:{}; recommendations:p1#components/recommendations/recommendations:{"productId":"p1"}',
+        'Kovo-Query-Versions': '{"cart":"7","product:p1":"12"}',
         'Kovo-Targets': 'cart-badge=cart product:p1; recommendations:p1=recommendations',
       },
       keepalive: true,

@@ -4,6 +4,7 @@ import { readLiveTargetSnapshot } from './mutation-targets.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { MutationChangeRecord } from './optimism.js';
 import { definedProps } from './defined-props.js';
+import { queryWireKey, type QueryVersionSnapshot } from './query-store.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedFormLike {
@@ -53,6 +54,7 @@ export interface FetchEnhancedMutationOptions {
   idem?: string;
   onError?: RuntimeErrorReporter;
   onUploadProgress?: (progress: UploadProgress) => void;
+  queryVersions?: readonly QueryVersionSnapshot[];
   root: TargetCollectorRoot;
   signal?: AbortSignal;
   streaming?: boolean;
@@ -86,6 +88,10 @@ export async function fetchEnhancedMutation(
   };
   if (submittedFormTarget !== undefined) {
     headers['Kovo-Form-Target'] = submittedFormTarget;
+  }
+  const queryVersionHeader = serializeQueryVersions(options.queryVersions ?? []);
+  if (queryVersionHeader !== undefined) {
+    headers['Kovo-Query-Versions'] = queryVersionHeader;
   }
   if (options.streaming) {
     headers['Kovo-Stream'] = 'true';
@@ -152,6 +158,19 @@ function readSubmittedFormTarget(form: EnhancedFormLike): string | undefined {
     undefined;
 
   return target === '' ? undefined : target;
+}
+
+function serializeQueryVersions(versions: readonly QueryVersionSnapshot[]): string | undefined {
+  const entries = versions
+    .filter((entry) => entry.version !== '')
+    .map((entry) => [queryWireKey(entry.name, entry.key), entry.version] as const)
+    .sort(([left], [right]) => left.localeCompare(right));
+  if (entries.length === 0) return undefined;
+
+  return JSON.stringify(Object.fromEntries(entries)).replace(
+    /[^\x20-\x7e]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
 }
 
 export function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {

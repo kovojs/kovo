@@ -113,6 +113,7 @@ function applyQueryChunk(
     try {
       const merged = resolveQueryChunkValue(store, query);
       store.set(query.name, merged, query.key);
+      store.setVersion(query.name, query.version, query.key);
       return merged;
     } catch (error) {
       if (error instanceof QueryDeltaApplyError) {
@@ -127,6 +128,7 @@ function applyQueryChunk(
   }
 
   store.set(query.name, query.value, query.key);
+  store.setVersion(query.name, query.version, query.key);
   return query.value;
 }
 
