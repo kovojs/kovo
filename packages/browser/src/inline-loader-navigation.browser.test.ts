@@ -225,6 +225,62 @@ describe('browser inline loader enhanced navigation', () => {
     );
   });
 
+  it('preserves matching loaded head asset nodes during enhanced navigation', async () => {
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Products</title>',
+      '<link rel="stylesheet" href="/assets/site.css" data-loaded="css">',
+      '<link rel="modulepreload" href="/c/shared.js" data-loaded="module">',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">Products</section>',
+      '</main>',
+    ].join('');
+    const stylesheet = document.querySelector('link[rel="stylesheet"][href="/assets/site.css"]');
+    const modulepreload = document.querySelector('link[rel="modulepreload"][href="/c/shared.js"]');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>Cart</title>',
+          '<meta name="description" content="Cart">',
+          '<link rel="stylesheet" href="/assets/site.css">',
+          '<link rel="modulepreload" href="/c/shared.js">',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+          '<a id="to-cart" href="/cart">Cart</a>',
+          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/cart', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/cart');
+
+    await vi.waitFor(() => expect(document.title).toBe('Cart'));
+
+    expect(document.querySelector('link[rel="stylesheet"][href="/assets/site.css"]')).toBe(
+      stylesheet,
+    );
+    expect(document.querySelector('link[rel="modulepreload"][href="/c/shared.js"]')).toBe(
+      modulepreload,
+    );
+    expect(document.head.innerHTML).not.toContain('data-kovo-head-preserve');
+    expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(
+      'Cart',
+    );
+  });
+
   it('promotes deferred full stylesheet links after enhanced navigation commits head markup', async () => {
     document.head.innerHTML = [
       '<meta name="kovo-build" content="build-a">',
