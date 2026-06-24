@@ -91,6 +91,7 @@ export type {
   CsrfAnonymousCookieOptions,
   CsrfOptions,
   CsrfValidationOptions,
+  AsyncSchema,
   Domain,
   FileLike,
   FileSchema,

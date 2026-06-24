@@ -85,6 +85,8 @@ const commerceStylesheetRuntime = {
 };
 
 describe('@kovojs/test server fixture facts', () => {
+  const receiptPdfBytes = new TextEncoder().encode('%PDF-1.7\nreceipt');
+
   it('projects page-hint speculation rules through public server APIs', () => {
     expect(serverPageHintsBehaviorFact({ renderPageHints })).toEqual({
       deduplicatedRules: {
@@ -354,11 +356,11 @@ describe('@kovojs/test server fixture facts', () => {
               file: expect.any(Blob),
               key: 'receipts/receipt.pdf',
               storage: {
-                body: new TextEncoder().encode('receipt'),
+                body: receiptPdfBytes,
                 contentType: 'application/pdf',
                 key: 'receipts/receipt.pdf',
                 metadata: { filename: 'receipt.pdf' },
-                size: 7,
+                size: receiptPdfBytes.byteLength,
               },
             },
           },
@@ -373,11 +375,11 @@ describe('@kovojs/test server fixture facts', () => {
       },
     });
     expect(fact.upload.stored).toEqual({
-      body: new TextEncoder().encode('receipt'),
+      body: receiptPdfBytes,
       contentType: 'application/pdf',
       key: 'receipts/receipt.pdf',
       metadata: { filename: 'receipt.pdf' },
-      size: 7,
+      size: receiptPdfBytes.byteLength,
     });
     expect(fact.upload.progress).toEqual({ max: '100', value: '50' });
     expect(fact.upload.pendingDuringResponse).toBe('');

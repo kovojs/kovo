@@ -624,7 +624,11 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
   });
   const receiptForm = new FormData();
   receiptForm.set('orderId', 'o1');
-  receiptForm.set('receipt', new Blob(['receipt'], { type: 'application/pdf' }), 'receipt.pdf');
+  receiptForm.set(
+    'receipt',
+    new Blob([new TextEncoder().encode('%PDF-1.7\nreceipt')], { type: 'application/pdf' }),
+    'receipt.pdf',
+  );
 
   const uploadResult = await runtime.runMutation(uploadReceipt, receiptForm, authenticatedRequest);
 

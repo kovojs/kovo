@@ -8,7 +8,8 @@ export interface Schema<T> {
 /** Extract the parsed value type of a `Schema`. */
 export type InferSchema<T> = T extends Schema<infer Value> ? Value : never;
 
-interface AsyncSchema<T> extends Schema<T> {
+/** A validator that may need async work, such as byte-backed file validation. */
+export interface AsyncSchema<T> extends Schema<T> {
   parseAsync(input: unknown): Promise<T>;
 }
 

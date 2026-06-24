@@ -46,6 +46,7 @@ export type {
 export { query } from '../query.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {
+  AsyncSchema,
   FileLike,
   FileSchema,
   FileSchemaOptions,
