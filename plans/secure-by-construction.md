@@ -710,7 +710,7 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
         lint diagnostics into the explain graph's `lints`. `vp exec vitest --run packages/compiler/src/schema-budgets.test.ts`
         covers unbounded array/record positives, `.max()` negatives, query-output exclusion, `s.lazy`
         runtime-only depth, and explain-graph surfacing; `vp check packages/compiler/src` passed.
-- [ ] **File-upload inline-XSS gate (KV428).**
+- [x] **File-upload inline-XSS gate (KV428).**
       Decision (2026-06-23): **default to `Content-Disposition: attachment` + `nosniff` for everything**; inline
       rendering is a **branded opt-in requiring verified-safe bytes** (deep sniff, or framework re-encode). The
       durable guarantee is "attacker bytes are never rendered inline as active content" (attachment-default +
@@ -729,19 +729,24 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
       results, derives `filename` only from stored metadata, and has no inline option; verified by
       `packages/server/src/response.test.ts` and
       `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/response.test.ts`.
-  - [ ] Deep sniffer probes ZIP/office containers and rejects HTML/SVG/ambiguous/polyglot for the inline path;
+  - [x] Deep sniffer probes ZIP/office containers and rejects HTML/SVG/ambiguous/polyglot for the inline path;
         for the inline guarantee prefer **server-side re-encode/rasterize** of images (framework-produced bytes
         are provably inert).
+    - Evidence: `packages/server/src/response.ts` rejects inline `respond.stream(...)` for HTML, SVG,
+      octet-stream, ZIP, and Office content types, while stored uploads still have no inline serving path.
+      Verified by `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/response.test.ts`.
   - [x] **SVG: rasterize or force attachment, never sniff-and-trust** (SVG is XML+script; a prefix check is
         meaningless).
     - Evidence: `packages/server/src/schema.test.ts` keeps SVG out of the safe upload-type path by requiring an
       explicit `accept.unverified(...)` opt-out, and `packages/server/src/response.test.ts` proves
       `respond.storedFile(...)` serves a stored `image/svg+xml` object as attachment with `nosniff`.
-  - [ ] **Server-generated random/opaque storage keys** by construction; the user filename is sanitized
+  - [x] **Server-generated random/opaque storage keys** by construction; the user filename is sanitized
         metadata used only for the download `filename`, never the key — kills path traversal/overwrite.
-    - Partial evidence: `s.file().store({ storage })` now defaults to an opaque `uploads/<uuid>` key and keeps
-      the user filename in metadata only; `vp exec vitest --run packages/server/src/schema.test.ts` covers the
-      generated key and prefix path. Gap: explicit `key` string/function overrides still exist.
+    - Evidence: `packages/server/src/schema.ts` removed raw `key` overrides from `s.file().store(...)`, keeps
+      generated opaque UUID keys as the default, and requires `unsafeStoredUploadKey(...)` for reviewed static
+      keys. Verified by `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/response.test.ts`,
+      `vp check packages/server/src packages/cli/src packages/core/src plans/secure-by-construction.md`, and
+      `pnpm run check:api-surface`.
   - [x] **Remove `.mime()`** (pre-release breaking change): the only verbatim-client-MIME path becomes the
         explicit `accept.unverified()` opt-out, listed in `kovo explain --capabilities`.
     - Evidence: `packages/server/src/schema.ts` removes `FileSchema.mime`/`FileSchemaOptions.mime` and adds
