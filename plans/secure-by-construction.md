@@ -546,7 +546,7 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
         concern) and confused-deputy proxying. Optional typed-client sugar (`egress('https://api.stripe.com')`)
         may remain as convenience but is not a security boundary.
 
-- [ ] **Read-only `query()` handle (KV433).**
+- [x] **Read-only `query()` handle (KV433).**
       Decision (2026-06-23): two stages, **both required for plan completion** — the runtime safe-default is a
       backstop, not a stopping point. Sequenced (not optional): Stage 1 now; Stage 2 lands with the shared §11.1
       write-reachability pass (also required by mass-assignment and KV429).
@@ -566,9 +566,14 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
       receiver calls, and `packages/drizzle/src/static.ts` emits KV433 for local-helper writes and imported
       domain action calls; verified by `vp exec vitest --run packages/drizzle/src` (22 files / 367 tests).
     - Evidence: `vp check packages/drizzle/src` passed after the KV433 static gate changes.
-  - [ ] `query.elevated` stays a GET (§9.4, idempotent over `/_q/`): allow the write via the proxy + audit in
+  - [x] `query.elevated` stays a GET (§9.4, idempotent over `/_q/`): allow the write via the proxy + audit in
         `--capabilities`; document it MUST be idempotent-safe-to-repeat (GETs are re-fetched/prefetched).
-        State-changing writes belong in mutations. Read-only raw defers to the SQL managed-handle guard.
+        State-changing writes belong in mutations. Read-only raw defers to the SQL managed-handle guard. - Evidence: `packages/server/src/query.ts` exposes `query.elevated({ reason }, load)`, keeps
+        `renderQueryEndpointResponse` on the `/_q/` GET surface, grants `dbAccess: "write"` only for branded
+        elevated loaders, strips `request.signUrl`, and emits an `elevatedRead` capability fact with
+        `source: "query.elevated"` / `sink: "db.write"`; `vp exec vitest --run
+packages/server/src/query-endpoint.test.ts` verifies default query writes still fail, elevated query writes
+        succeed, non-empty reasons are required, and the audit fact is recorded.
 - [ ] **Cookie safe-defaults + class-derived floor (KV432).**
       Decision (2026-06-23): ship the **reduced form (i)** — a sound cookie-attribute floor by construction;
       **fixation-as-compile-error is cut** (no `rotateSession` primitive exists, "authenticating mutation" is not
@@ -870,8 +875,10 @@ packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.tes
 - [ ] Confidentiality reveal hatch: fixed verifiable redactor set vs arbitrary `fn` behind `trustedReveal`?
 - [ ] Default-deny migration: is a sea of `public('TODO')` acceptable as a one-time reviewed audit, or should
       missing-access diagnostic require a non-placeholder reason after a grace window?
-- [ ] Read-only handle: does `query.elevated` stay a GET (and how) or is a write-from-read always pushed to a
+- [x] Read-only handle: does `query.elevated` stay a GET (and how) or is a write-from-read always pushed to a
       mutation? Resolve against §9.4 before building.
+  - Evidence: resolved by the Phase 5 KV433 `query.elevated` item above: elevated query loaders keep the typed
+    read endpoint and carry the documented idempotency warning.
 - [ ] Egress: is the residual `node_modules`/`globalThis` socket path acceptable as a documented boundary
       (like KV406's `node_modules` hole), or does it need a runtime dispatcher interposition?
 

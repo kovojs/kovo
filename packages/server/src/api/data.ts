@@ -39,8 +39,13 @@ export type {
 export type { MutationFormAttributes } from '../mutation.js';
 export type {
   QueryCapabilityRequest,
+  QueryCapabilityFact,
   QueryDeclarationDefinition,
   QueryDefinition,
+  QueryElevatedLoad,
+  QueryElevatedLoadContext,
+  QueryElevatedLoadMetadata,
+  QueryElevatedRequest,
   QueryLoadContext,
   QueryReaderDb,
   QueryReaderRequest,

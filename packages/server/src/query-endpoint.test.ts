@@ -8,6 +8,7 @@ import {
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
   runQuery,
+  type QueryElevatedLoadContext,
   type QueryLoadContext,
 } from './query.js';
 import { s, type Schema } from './schema.js';
@@ -176,6 +177,69 @@ describe('query endpoints', () => {
       value: { ok: true },
     });
     expect(calls).toEqual(['select', 'transaction']);
+  });
+
+  it('requires a non-empty reason for elevated query loaders', () => {
+    expect(() => query.elevated({ reason: '   ' }, () => ({ ok: true }))).toThrow(
+      'query.elevated requires a non-empty reason',
+    );
+  });
+
+  it('allows audited elevated query loaders to use the write-capable DB handle', async () => {
+    const calls: string[] = [];
+    const db = {
+      insert() {
+        calls.push('insert');
+        return 'inserted';
+      },
+      select() {
+        calls.push('select');
+        return 'ok';
+      },
+    };
+    const elevatedQuery = query('reader-elevated-runtime', {
+      access: publicAccess('test fixture'),
+      load: query.elevated(
+        {
+          reason: 'idempotent audit touch for stale-read repair',
+          site: 'queries/audit.ts:12',
+        },
+        (_input: unknown, context?: QueryElevatedLoadContext<{ db: typeof db }>) => {
+          if (!context) throw new Error('missing query context');
+
+          expect(context.request.db.select()).toBe('ok');
+          expect(context.request.db.insert()).toBe('inserted');
+          return { ok: true };
+        },
+      ),
+      reads: [],
+    });
+
+    await expect(
+      runQuery(elevatedQuery, undefined, {} as { db: typeof db }, { db: () => db }),
+    ).resolves.toEqual({
+      input: undefined,
+      ok: true,
+      value: { ok: true },
+    });
+    const response = await renderQueryEndpointResponse(elevatedQuery, {
+      db: () => db,
+      request: {} as { db: typeof db },
+    });
+    expect(response.status).toBe(200);
+    expect(calls).toEqual(['select', 'insert', 'select', 'insert']);
+    expect(elevatedQuery.capabilities).toEqual([
+      {
+        detail: 'query=reader-elevated-runtime',
+        kind: 'elevatedRead',
+        owner: 'data.read',
+        reason: 'idempotent audit touch for stale-read repair',
+        sink: 'db.write',
+        site: 'queries/audit.ts:12',
+        source: 'query.elevated',
+        surface: 'query',
+      },
+    ]);
   });
 
   it('runs query endpoints through args schemas, guards, and request context', async () => {

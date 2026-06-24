@@ -58,6 +58,62 @@ export interface QueryLoadContext<Request = unknown> {
   request: QueryReaderRequest<Request>;
 }
 
+/** Request view exposed to an elevated query loader: capability URL minting is still stripped, but `db` is write-capable. */
+export type QueryElevatedRequest<Request> = QueryCapabilityRequest<Request>;
+
+/** The context a `query.elevated(...)` loader receives. */
+export interface QueryElevatedLoadContext<Request = unknown> {
+  request: QueryElevatedRequest<Request>;
+}
+
+/** Metadata attached to an audited elevated query loader. */
+export interface QueryElevatedLoadMetadata {
+  detail?: string;
+  reason: string;
+  site?: string;
+  source?: string;
+}
+
+/** Capability fact shape emitted by server query declarations for graph/explain consumers. */
+export interface QueryCapabilityFact {
+  column?: string;
+  detail?: string;
+  kind:
+    | 'acceptUnverified'
+    | 'adminAssign'
+    | 'allowInternal'
+    | 'capabilityUrl'
+    | 'cspAllow'
+    | 'egress'
+    | 'egressAllowInternal'
+    | 'elevatedRead'
+    | 'publishToClient'
+    | 'rawRead'
+    | 'rawResponse'
+    | 'serverValue'
+    | 'unsafeCookie'
+    | 'unsafeRegex';
+  owner?: string;
+  reason?: string;
+  sink?: string;
+  site: string;
+  source?: string;
+  surface?: string;
+  table?: string;
+}
+
+/**
+ * A query loader branded by `query.elevated(...)`.
+ *
+ * @typeParam Input - Parsed query args passed to the loader.
+ * @typeParam Request - App request type after lifecycle providers are resolved.
+ * @typeParam Value - JSON-serializable value returned to the query wire.
+ */
+export interface QueryElevatedLoad<Input = unknown, Request = unknown, Value = JsonValue> {
+  (input: Input, context?: QueryElevatedLoadContext<Request>): Promise<Value> | Value;
+  readonly __kovoQueryElevated: QueryElevatedLoadMetadata;
+}
+
 /** @internal */
 export interface QueryEndpointRequest<
   Request = unknown,
@@ -100,6 +156,7 @@ export interface QueryDefinition<
 > {
   access: AccessDecision;
   args?: Schema<Input>;
+  capabilities?: readonly QueryCapabilityFact[];
   /**
    * Delta-eligible collections for this query. When present, the server can
    * emit a change-record-scoped delta (SPEC §9.1.1) instead of the full value
@@ -111,7 +168,11 @@ export interface QueryDefinition<
     call(request: Request): GuardResult | Promise<GuardResult>;
   }['call'];
   instanceKey?: ((input: unknown) => string | undefined) | string;
-  load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
+  load?:
+    | {
+        call(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
+      }['call']
+    | QueryElevatedLoad<Input, Request, Value>;
   key: Key;
   output?: Schema<Value>;
   reads?: readonly Domain[];
@@ -138,11 +199,16 @@ type BivariantGuard<Request> = {
 interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Request> {
   access: AccessDecision;
   args: Schema<Input>;
+  capabilities?: readonly QueryCapabilityFact[];
   delta?: readonly QueryDeltaListMeta[];
   guard?: BivariantGuard<Request>;
   instanceKey?: ((input: unknown) => string | undefined) | string;
   key?: Key;
-  load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
+  load?:
+    | {
+        call(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
+      }['call']
+    | QueryElevatedLoad<Input, Request, Value>;
   output?: Schema<Value>;
   reads?: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
@@ -168,6 +234,7 @@ type BivariantQueryVersion = {
 export interface RegisteredQueryDefinition {
   access: AccessDecision;
   args?: Schema<unknown>;
+  capabilities?: readonly QueryCapabilityFact[];
   /**
    * Delta-eligible collections for this query (SPEC §9.1.1). The compiler
    * populates this; framework/test code may set it directly.
@@ -176,7 +243,7 @@ export interface RegisteredQueryDefinition {
   guard?: BivariantQueryGuard;
   instanceKey?: ((input: unknown) => string | undefined) | string;
   key: string;
-  load?: BivariantQueryLoad;
+  load?: BivariantQueryLoad | QueryElevatedLoad<unknown, unknown, unknown>;
   output?: Schema<unknown>;
   reads?: readonly Domain[];
   version?: BivariantQueryVersion | number | string;
@@ -189,6 +256,7 @@ export interface RegisteredQueryDefinition {
 export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue> {
   access: AccessDecision;
   args?: Schema<unknown>;
+  capabilities?: readonly QueryCapabilityFact[];
   /**
    * Delta-eligible collections for this query (SPEC §9.1.1). The compiler
    * populates this; framework/test code may set it directly.
@@ -198,9 +266,11 @@ export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue
     call(request: Request): GuardResult | Promise<GuardResult>;
   }['call'];
   instanceKey?: ((input: unknown) => string | undefined) | string;
-  load?: {
-    call(input: any, context?: QueryLoadContext<Request>): Value | Promise<Value>;
-  }['call'];
+  load?:
+    | {
+        call(input: any, context?: QueryLoadContext<Request>): Value | Promise<Value>;
+      }['call']
+    | QueryElevatedLoad<any, Request, Value>;
   output?: Schema<Value>;
   reads?: readonly Domain[];
   version?: ((input: any, value: any) => number | string | undefined) | number | string;
@@ -293,8 +363,17 @@ export function query<const Key extends string>(
   definition: Omit<RegisteredQueryDefinition, 'key'>,
   ..._jsonBoundary: never[]
 ): unknown {
+  const elevated = queryElevatedLoadMetadata(definition.load);
   const queryDefinition = {
     ...definition,
+    ...(elevated
+      ? {
+          capabilities: [
+            ...(definition.capabilities ?? []),
+            elevatedQueryCapabilityFact(key, elevated),
+          ],
+        }
+      : {}),
     key,
     reads: definition.reads ?? [],
   };
@@ -306,6 +385,80 @@ export function query<const Key extends string>(
       definition.args,
       queryDefinition as QueryDefinition<string, unknown, unknown, unknown>,
     ),
+  };
+}
+
+/**
+ * Mark a query loader as an audited elevated loader that receives a write-capable
+ * DB handle. SPEC §9.4 keeps `/_q/` as a credentialed GET that may be refetched,
+ * prefetched, and repeated; elevated loaders MUST therefore be idempotent-safe.
+ * State-changing writes belong in `mutation()` unless this rare capability has a
+ * reviewed non-empty reason.
+ *
+ * @param metadata - Non-empty `reason` plus optional graph fact source/site/detail.
+ * @param load - The query loader that needs the elevated DB handle.
+ * @returns The same loader, branded for runtime DB authority and capability audit.
+ */
+function elevatedQueryLoad<Input, Request, Value>(
+  metadata: QueryElevatedLoadMetadata,
+  load: (input: Input, context?: QueryElevatedLoadContext<Request>) => Promise<Value> | Value,
+): QueryElevatedLoad<Input, Request, Value> {
+  const reason = normalizeElevatedQueryReason(metadata.reason);
+  const elevated = load as QueryElevatedLoad<Input, Request, Value>;
+  Object.defineProperty(elevated, '__kovoQueryElevated', {
+    configurable: false,
+    enumerable: false,
+    value: { ...metadata, reason },
+  });
+  return elevated;
+}
+
+export namespace query {
+  export const elevated = elevatedQueryLoad;
+}
+
+function normalizeElevatedQueryReason(reason: string): string {
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    throw new Error('query.elevated requires a non-empty reason');
+  }
+  return reason.trim();
+}
+
+function queryElevatedLoadMetadata(load: unknown): QueryElevatedLoadMetadata | undefined {
+  if ((typeof load !== 'function' && typeof load !== 'object') || load === null) return undefined;
+  const metadata = (load as { __kovoQueryElevated?: unknown }).__kovoQueryElevated;
+  if ((typeof metadata !== 'object' && typeof metadata !== 'function') || metadata === null) {
+    return undefined;
+  }
+  const reason = (metadata as { reason?: unknown }).reason;
+  if (typeof reason !== 'string' || reason.trim() === '') return undefined;
+  return {
+    ...(typeof (metadata as { detail?: unknown }).detail === 'string'
+      ? { detail: (metadata as { detail: string }).detail }
+      : {}),
+    reason: reason.trim(),
+    ...(typeof (metadata as { site?: unknown }).site === 'string'
+      ? { site: (metadata as { site: string }).site }
+      : {}),
+    ...(typeof (metadata as { source?: unknown }).source === 'string'
+      ? { source: (metadata as { source: string }).source }
+      : {}),
+  };
+}
+
+function elevatedQueryCapabilityFact(
+  key: string,
+  metadata: QueryElevatedLoadMetadata,
+): QueryCapabilityFact {
+  return {
+    detail: metadata.detail ?? `query=${key}`,
+    kind: 'elevatedRead',
+    owner: 'data.read',
+    reason: metadata.reason,
+    sink: 'db.write',
+    site: metadata.site ?? `query:${key}`,
+    source: metadata.source ?? 'query.elevated',
+    surface: 'query',
   };
 }
 
@@ -333,31 +486,58 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   request: Request,
   options: RequestLifecycleOptions<Request> = {},
 ): Promise<QueryEndpointResult<Value, Input>> {
-  const argsResult = parseQueryInput(definition, rawInput);
-  if (!argsResult.ok) return argsResult.failure;
+  const { result } = await runQueryWithLifecycle(definition, rawInput, request, options);
+  return result;
+}
 
+async function runQueryWithLifecycle<const Key extends string, Value, Input, Request>(
+  definition: QueryDefinition<Key, Value, Input, Request>,
+  rawInput: unknown,
+  request: Request,
+  options: RequestLifecycleOptions<Request> = {},
+): Promise<{
+  lifecycleRequest: QueryCapabilityRequest<Request>;
+  result: QueryEndpointResult<Value, Input>;
+}> {
+  const argsResult = parseQueryInput(definition, rawInput);
+  if (!argsResult.ok) {
+    return {
+      lifecycleRequest: withoutQueryCapabilityUrlSigner(request),
+      result: argsResult.failure,
+    };
+  }
+
+  const elevated = queryElevatedLoadMetadata(definition.load);
   const lifecycleRequest = withoutQueryCapabilityUrlSigner(
-    await resolveLifecycleRequest(request, { ...options, dbAccess: 'read' }),
+    await resolveLifecycleRequest(request, {
+      ...options,
+      dbAccess: elevated ? 'write' : 'read',
+    }),
   );
   const guardFailure = await runGuard(definition.guard, lifecycleRequest as Request);
   if (guardFailure) {
     return {
-      ...(guardFailure.auth === undefined ? {} : { auth: guardFailure.auth }),
-      error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
-      ok: false,
-      ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
-      status: guardFailure.status,
+      lifecycleRequest,
+      result: {
+        ...(guardFailure.auth === undefined ? {} : { auth: guardFailure.auth }),
+        error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
+        ok: false,
+        ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
+        status: guardFailure.status,
+      },
     };
   }
 
   const input = argsResult.value;
   const value = definition.load
-    ? await definition.load(input, { request: lifecycleRequest as QueryReaderRequest<Request> })
+    ? await definition.load(input, {
+        request: lifecycleRequest as QueryElevatedRequest<Request> & QueryReaderRequest<Request>,
+      })
     : (null as Value);
   const outputResult = parseQueryOutput(definition, value);
-  if (!outputResult.ok) return outputResult.failure;
+  if (!outputResult.ok) return { lifecycleRequest, result: outputResult.failure };
 
-  return { input, ok: true, value: outputResult.value };
+  return { lifecycleRequest, result: { input, ok: true, value: outputResult.value } };
 }
 
 function withoutQueryCapabilityUrlSigner<Request>(
@@ -431,11 +611,14 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   let lifecycleRequest: Request = endpointRequest.request;
   try {
     const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
-    lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, {
-      ...endpointRequest,
-      dbAccess: 'read',
-    });
-    result = await runQuery(definition, rawInput, lifecycleRequest);
+    const executed = await runQueryWithLifecycle(
+      definition,
+      rawInput,
+      endpointRequest.request,
+      endpointRequest,
+    );
+    lifecycleRequest = executed.lifecycleRequest as Request;
+    result = executed.result;
   } catch (error) {
     if (isSchemaValidationError(error)) {
       return {
