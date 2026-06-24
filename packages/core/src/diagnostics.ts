@@ -79,7 +79,8 @@ export type DiagnosticCode =
   | 'KV434'
   | 'KV435'
   | 'KV436'
-  | 'KV437';
+  | 'KV437'
+  | 'KV438';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -993,5 +994,16 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Client input reaches a governed column write.',
+  },
+  KV438: {
+    code: 'KV438',
+    help: [
+      'Blocked reason: a CIDR egress.allowInternal entry grants every matching private-network host at that port to any server code path, including SSRF landing sites.',
+      'Fixes: replace the CIDR with exact host:port entries for the internal services the app actually needs, or keep the CIDR as an explicitly reviewed infrastructure exception.',
+      'Escape: broad allowInternal entries are permitted but remain diagnostic-visible because outbound egress is a runtime defense-in-depth floor, not a by-construction proof.',
+      'SPEC §6.6/§9.5 and secure-by-construction Phase 5 require private-network egress holes to stay auditable and narrow by default.',
+    ].join('\n'),
+    severity: 'warn',
+    message: 'Broad egress.allowInternal CIDR opens private-network reachability.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

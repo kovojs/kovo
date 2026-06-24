@@ -90,6 +90,22 @@ describe('server createApp request shell', () => {
     });
   });
 
+  it('surfaces broad egress allowInternal entries as non-blocking diagnostics', () => {
+    const app = createApp({
+      egress: { allowInternal: ['10.0.0.0/8:6379'] },
+    });
+
+    expect(app.egress.allowInternal).toEqual(['10.0.0.0/8:6379']);
+    expect(app.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV438',
+        fileName: 'egress.allowInternal[0]',
+        message: expect.stringContaining('10.0.0.0/8:6379'),
+        severity: 'warn',
+      }),
+    ]);
+  });
+
   it('derives app-config capability facts for explain output', () => {
     const app = createApp({
       capabilityUrls: { path: '/download', secret: 'test-secret' },

@@ -3,6 +3,8 @@ import { lookup } from 'node:dns/promises';
 import type { LookupOneOptions } from 'node:dns';
 import { createRequire } from 'node:module';
 import { isIP } from 'node:net';
+import type { DiagnosticSeverity } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as Http from 'node:http';
 import type * as Https from 'node:https';
 import type * as Net from 'node:net';
@@ -26,12 +28,28 @@ export interface AppEgressOptions {
 }
 
 /**
- * Normalized egress policy installed on a created app: printable `allowInternal` entries plus the guarded
- * lifecycle `fetch` function that enforces the private-network floor.
+ * Normalized egress policy installed on a created app: printable `allowInternal`
+ * entries, non-blocking policy diagnostics, and the guarded lifecycle `fetch`
+ * function that enforces the private-network floor.
  */
 export interface ResolvedAppEgressOptions {
   allowInternal: readonly string[];
+  diagnostics: readonly EgressDiagnostic[];
   fetch: typeof fetch;
+}
+
+/**
+ * Non-blocking egress policy diagnostic surfaced on the app aggregate.
+ *
+ * SPEC §6.6 treats outbound egress as a runtime defense-in-depth floor, so broad
+ * private-network openings remain visible even when they are permitted.
+ */
+export interface EgressDiagnostic {
+  code: 'KV438';
+  fileName: string;
+  help?: string;
+  message: string;
+  severity?: DiagnosticSeverity;
 }
 
 export interface EgressDecision {
@@ -63,6 +81,8 @@ export type CloudMetadataCredentialProvider<T> = () => T | Promise<T>;
 
 // SPEC §6.6: outbound egress is a fail-closed runtime floor; cloud identity metadata is privileged.
 const metadataAllowed = new AsyncLocalStorage<{ on: true }>();
+const nodeEgressGuardStateKey = Symbol.for('kovo.egress.nodeGuardState');
+const egressBlockedGuidance = 'add this exact host:port to `egress.allowInternal` if intended';
 
 /** Error thrown when guarded lifecycle `fetch` blocks a private/special-use destination. */
 export class EgressBlockedError extends Error {
@@ -90,8 +110,10 @@ export function normalizeAppEgressOptions(
   fetchOptions: EgressFetchOptions = {},
 ): ResolvedAppEgressOptions {
   const allowInternal = normalizeAllowInternal(options?.allowInternal ?? []);
+  const diagnostics = egressAllowInternalDiagnostics(allowInternal);
   return {
     allowInternal,
+    diagnostics,
     fetch: createEgressFetch({ allowInternal }, fetchOptions),
   };
 }
@@ -131,6 +153,17 @@ export function installNodeEgressGuard(options: EgressNodeGuardOptions): EgressN
   const http = require('node:http') as MutableHttpModule;
   const https = require('node:https') as MutableHttpsModule;
   const net = require('node:net') as MutableNetModule;
+  const existing = currentNodeEgressGuardState();
+
+  if (existing !== undefined) {
+    if (!nodeEgressGuardStillInstalled(existing, http, https, net)) {
+      throw new Error(
+        'Kovo node egress guard was re-patched after install; refusing to stack another global patch.',
+      );
+    }
+    return { uninstall() {} };
+  }
+
   const resolver = options.resolver ?? defaultResolver;
   const originals = {
     httpGet: http.get,
@@ -210,10 +243,31 @@ export function installNodeEgressGuard(options: EgressNodeGuardOptions): EgressN
   ) {
     return Reflect.apply(originals.socketConnect, this, guardConnect(args));
   } as typeof net.Socket.prototype.connect;
-  setGlobalDispatcher(createEgressDispatcher(originals.undiciDispatcher, options));
+  const dispatcher = createEgressDispatcher(originals.undiciDispatcher, options);
+  setGlobalDispatcher(dispatcher);
+  setNodeEgressGuardState({
+    dispatcher,
+    httpGet: http.get,
+    httpRequest: http.request,
+    httpsGet: https.get,
+    httpsRequest: https.request,
+    netConnect: net.connect,
+    netCreateConnection: net.createConnection,
+    originals,
+    socketConnect: Reflect.get(
+      net.Socket.prototype,
+      'connect',
+    ) as typeof net.Socket.prototype.connect,
+  });
 
   return {
     uninstall() {
+      const state = currentNodeEgressGuardState();
+      if (state !== undefined && !nodeEgressGuardStillInstalled(state, http, https, net)) {
+        throw new Error(
+          'Kovo node egress guard cannot safely uninstall because another patch replaced its hooks.',
+        );
+      }
       http.request = originals.httpRequest;
       http.get = originals.httpGet;
       https.request = originals.httpsRequest;
@@ -222,6 +276,7 @@ export function installNodeEgressGuard(options: EgressNodeGuardOptions): EgressN
       net.createConnection = originals.netCreateConnection;
       net.Socket.prototype.connect = originals.socketConnect;
       setGlobalDispatcher(originals.undiciDispatcher);
+      setNodeEgressGuardState(undefined);
     },
   };
 }
@@ -295,6 +350,23 @@ export function normalizeAllowInternal(values: readonly string[]): readonly stri
   return [...new Set(values.map(normalizeAllowInternalEntry))].sort();
 }
 
+export function egressAllowInternalDiagnostics(
+  allowInternal: readonly string[],
+): readonly EgressDiagnostic[] {
+  return allowInternal.flatMap((entry, index) => {
+    if (!isCidrAllowInternalEntry(entry)) return [];
+    return [
+      {
+        code: 'KV438' as const,
+        fileName: `egress.allowInternal[${index}]`,
+        help: diagnosticDefinitions.KV438.help,
+        message: `${diagnosticDefinitions.KV438.message} Entry "${entry}" is provenance-blind; prefer exact host:port entries.`,
+        severity: diagnosticDefinitions.KV438.severity,
+      },
+    ];
+  });
+}
+
 function normalizeAllowInternalEntry(value: string): string {
   const trimmed = value.trim();
   const match = /^(.*):(\d+)$/.exec(trimmed);
@@ -304,7 +376,18 @@ function normalizeAllowInternalEntry(value: string): string {
     );
   }
 
-  return `${normalizeHostname(match[1])}:${match[2]}`;
+  const host = normalizeHostname(match[1]);
+  if (host.includes('/')) {
+    const cidr = parseIpv4Cidr(host);
+    if (cidr === undefined) {
+      throw new TypeError(
+        `Invalid egress.allowInternal CIDR entry "${value}". Use an IPv4 CIDR plus port, for example 10.0.0.0/24:6379.`,
+      );
+    }
+    return `${cidr.network}/${cidr.prefix}:${match[2]}`;
+  }
+
+  return `${host}:${match[2]}`;
 }
 
 async function defaultResolver(hostname: string): Promise<string> {
@@ -332,6 +415,27 @@ type ConnectOptions = Omit<Net.TcpNetConnectOpts, 'lookup'> & {
   lookup?: LookupFunction;
   port: number | string;
 };
+
+interface NodeEgressGuardState {
+  dispatcher: UndiciDispatcher;
+  httpGet: MutableHttpModule['get'];
+  httpRequest: MutableHttpModule['request'];
+  httpsGet: MutableHttpsModule['get'];
+  httpsRequest: MutableHttpsModule['request'];
+  netConnect: MutableNetModule['connect'];
+  netCreateConnection: MutableNetModule['createConnection'];
+  originals: {
+    httpGet: MutableHttpModule['get'];
+    httpRequest: MutableHttpModule['request'];
+    httpsGet: MutableHttpsModule['get'];
+    httpsRequest: MutableHttpsModule['request'];
+    netConnect: MutableNetModule['connect'];
+    netCreateConnection: MutableNetModule['createConnection'];
+    socketConnect: typeof Net.Socket.prototype.connect;
+    undiciDispatcher: UndiciDispatcher;
+  };
+  socketConnect: typeof Net.Socket.prototype.connect;
+}
 
 interface ParsedHttpRequestArgs {
   url: URL;
@@ -361,12 +465,11 @@ function assertEgressAllowedForHost(
   const decision = { destination: destinationKey, host, ip, port, private: privateDestination };
 
   if (metadataDestination && metadataAllowed.getStore()?.on === true) return decision;
-  if (metadataDestination)
-    throw new EgressBlockedError({ destination: destinationKey, host, ip, port });
+  if (metadataDestination) throw blockEgress({ destination: destinationKey, host, ip, port });
   if (!privateDestination) return decision;
-  if (allowInternal.includes(destinationKey)) return decision;
+  if (allowInternalAllows(destinationKey, ip, port, allowInternal)) return decision;
 
-  throw new EgressBlockedError({ destination: destinationKey, host, ip, port });
+  throw blockEgress({ destination: destinationKey, host, ip, port });
 }
 
 function assertEgressAllowedSync(destination: URL, allowInternal: readonly string[]): void {
@@ -633,6 +736,118 @@ function ipv4FromInteger(value: number): string | undefined {
   if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) return undefined;
   return [(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff].join(
     '.',
+  );
+}
+
+function blockEgress(input: {
+  destination: string;
+  host: string;
+  ip?: string;
+  port: string;
+}): never {
+  const error = new EgressBlockedError(input);
+  logBlockedEgress(error);
+  throw error;
+}
+
+function logBlockedEgress(error: EgressBlockedError): void {
+  console.warn(
+    `[Kovo] blocked egress destination=${JSON.stringify(error.destination)} ip=${JSON.stringify(error.ip ?? '')}; ${egressBlockedGuidance}.`,
+  );
+}
+
+function allowInternalAllows(
+  destinationKey: string,
+  ip: string,
+  port: string,
+  allowInternal: readonly string[],
+): boolean {
+  if (allowInternal.includes(destinationKey)) return true;
+  for (const entry of allowInternal) {
+    if (cidrAllowInternalMatches(entry, ip, port)) return true;
+  }
+  return false;
+}
+
+function cidrAllowInternalMatches(entry: string, ip: string, port: string): boolean {
+  const parsed = parseAllowInternalEntry(entry);
+  if (parsed === undefined || parsed.port !== port) return false;
+  const cidr = parseIpv4Cidr(parsed.host);
+  if (cidr === undefined) return false;
+  const ipNumber = ipv4ToInteger(ip);
+  if (ipNumber === undefined) return false;
+  return (ipNumber & cidr.mask) === cidr.networkNumber;
+}
+
+function isCidrAllowInternalEntry(entry: string): boolean {
+  return parseAllowInternalEntry(entry)?.host.includes('/') === true;
+}
+
+function parseAllowInternalEntry(entry: string): { host: string; port: string } | undefined {
+  const match = /^(.*):(\d+)$/.exec(entry);
+  if (match === null || match[1] === undefined || match[2] === undefined) return undefined;
+  return { host: match[1], port: match[2] };
+}
+
+function parseIpv4Cidr(
+  value: string,
+): { mask: number; network: string; networkNumber: number; prefix: number } | undefined {
+  const match = /^(\d+\.\d+\.\d+\.\d+)\/(\d{1,2})$/.exec(value);
+  if (match?.[1] === undefined || match[2] === undefined) return undefined;
+  const prefix = Number(match[2]);
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) return undefined;
+  const ipNumber = ipv4ToInteger(match[1]);
+  if (ipNumber === undefined) return undefined;
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  const networkNumber = (ipNumber & mask) >>> 0;
+  const network = ipv4FromInteger(networkNumber);
+  if (network === undefined) return undefined;
+  return { mask, network, networkNumber, prefix };
+}
+
+function ipv4ToInteger(ip: string): number | undefined {
+  const parts = ip.split('.').map((part) => Number.parseInt(part, 10));
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
+    return undefined;
+  }
+  const [a = 0, b = 0, c = 0, d = 0] = parts;
+  return (((a << 24) >>> 0) + (b << 16) + (c << 8) + d) >>> 0;
+}
+
+function currentNodeEgressGuardState(): NodeEgressGuardState | undefined {
+  return (
+    globalThis as typeof globalThis & {
+      [nodeEgressGuardStateKey]?: NodeEgressGuardState;
+    }
+  )[nodeEgressGuardStateKey];
+}
+
+function setNodeEgressGuardState(state: NodeEgressGuardState | undefined): void {
+  const global = globalThis as typeof globalThis & {
+    [nodeEgressGuardStateKey]?: NodeEgressGuardState;
+  };
+  if (state === undefined) delete global[nodeEgressGuardStateKey];
+  else global[nodeEgressGuardStateKey] = state;
+}
+
+function nodeEgressGuardStillInstalled(
+  state: NodeEgressGuardState,
+  http: MutableHttpModule,
+  https: MutableHttpsModule,
+  net: MutableNetModule,
+): boolean {
+  return (
+    http.request === state.httpRequest &&
+    http.get === state.httpGet &&
+    https.request === state.httpsRequest &&
+    https.get === state.httpsGet &&
+    net.connect === state.netConnect &&
+    net.createConnection === state.netCreateConnection &&
+    net.Socket.prototype.connect === state.socketConnect &&
+    getGlobalDispatcher() === state.dispatcher
   );
 }
 

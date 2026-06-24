@@ -49,6 +49,7 @@ export type {
   AppCloudOptions,
   AppDocumentOptions,
   AppEgressOptions,
+  EgressDiagnostic,
   AppErrorShellOptions,
   AppMutationResponseContext,
   AppMutationResponseOptions,

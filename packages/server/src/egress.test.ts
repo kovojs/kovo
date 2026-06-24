@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { connect as netConnect } from 'node:net';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agent, fetch as undiciFetch, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 
 import {
@@ -14,6 +14,7 @@ import {
   createEgressDispatcher,
   createEgressFetch,
   createMetadataCredentialProvider,
+  egressAllowInternalDiagnostics,
   gcpCredential,
   installNodeEgressGuard,
   normalizeAllowInternal,
@@ -22,6 +23,14 @@ import {
 const require = createRequire(import.meta.url);
 
 describe('server egress private-network deny floor', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('allows public destinations without declarations', async () => {
     await expect(
       assertEgressAllowed('https://api.example.test/v1', [], async () => '93.184.216.34'),
@@ -79,6 +88,43 @@ describe('server egress private-network deny floor', () => {
     );
     await expect(assertEgressAllowed('http://localhost:8080/api', allowInternal)).rejects.toThrow(
       /localhost:8080/,
+    );
+  });
+
+  it('permits but flags CIDR allowInternal entries as broad internal reachability', async () => {
+    const allowInternal = normalizeAllowInternal(['10.0.0.0/8:6379']);
+
+    expect(allowInternal).toEqual(['10.0.0.0/8:6379']);
+    expect(egressAllowInternalDiagnostics(allowInternal)).toEqual([
+      expect.objectContaining({
+        code: 'KV438',
+        fileName: 'egress.allowInternal[0]',
+        message: expect.stringContaining('10.0.0.0/8:6379'),
+        severity: 'warn',
+      }),
+    ]);
+    await expect(
+      assertEgressAllowed('http://redis.internal:6379', allowInternal, async () => '10.25.1.9'),
+    ).resolves.toMatchObject({
+      destination: 'redis.internal:6379',
+      ip: '10.25.1.9',
+      private: true,
+    });
+    await expect(
+      assertEgressAllowed('http://redis.internal:6380', allowInternal, async () => '10.25.1.9'),
+    ).rejects.toBeInstanceOf(EgressBlockedError);
+  });
+
+  it('logs blocked egress with typed error guidance', async () => {
+    await expect(assertEgressAllowed('http://127.0.0.1:8080', [])).rejects.toMatchObject({
+      destination: '127.0.0.1:8080',
+      status: 502,
+    });
+
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'destination="127.0.0.1:8080" ip="127.0.0.1"; add this exact host:port to `egress.allowInternal` if intended',
+      ),
     );
   });
 
@@ -228,6 +274,22 @@ describe('server egress private-network deny floor', () => {
         EgressBlockedError,
       );
     } finally {
+      guard.uninstall();
+    }
+  });
+
+  it('detects global node hook re-patching after guard install', () => {
+    const http = require('node:http') as typeof import('node:http');
+    const guard = installNodeEgressGuard({ allowInternal: [] });
+    const guardedGet = http.get;
+
+    try {
+      http.get = (() => {
+        throw new Error('foreign patch');
+      }) as typeof http.get;
+      expect(() => installNodeEgressGuard({ allowInternal: [] })).toThrow(/re-patched/);
+    } finally {
+      http.get = guardedGet;
       guard.uninstall();
     }
   });

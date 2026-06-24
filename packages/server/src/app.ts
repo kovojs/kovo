@@ -138,6 +138,7 @@ export function createApp<
     clientModules,
     cloud,
     diagnostics: [
+      ...egress.diagnostics,
       ...routeTableDiagnostics(routes),
       ...routePrefetchGuardDiagnostics(routes),
       ...missingAccessDiagnostics(accessFacts),

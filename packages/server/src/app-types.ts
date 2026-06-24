@@ -18,7 +18,7 @@ import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 
-export type { AppEgressOptions, ResolvedAppEgressOptions } from './egress.js';
+export type { AppEgressOptions, EgressDiagnostic, ResolvedAppEgressOptions } from './egress.js';
 
 export type AppLifecycleRequest<
   RawRequest extends globalThis.Request = globalThis.Request,

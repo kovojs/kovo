@@ -34,6 +34,11 @@ compiles the app and serves route documents and `/c/` handler modules (SPEC.md
 §9.5). The compiler-derived dependency graph is auditable with `kovo check` and
 `kovo explain` against the built app — there is no hand-maintained graph file.
 
+The starter declares a small dev `egress.allowInternal` list for localhost model
+and telemetry endpoints (`11434` and `4318`). Kovo's server egress floor still
+denies private, loopback, link-local, and cloud metadata destinations by default;
+add only exact `host:port` entries for additional intentional local services.
+
 ## Deploying
 
 `kovo build ./src/app.tsx` emits a self-contained server under `dist/server`

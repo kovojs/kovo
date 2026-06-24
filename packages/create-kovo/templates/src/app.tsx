@@ -85,6 +85,9 @@ const app = createApp({
   clientModules: createMemoryVersionedClientModuleRegistry(),
   db: () => appDb,
   document: { lang: 'en' },
+  egress: {
+    allowInternal: ['localhost:11434', '127.0.0.1:11434', 'localhost:4318', '127.0.0.1:4318'],
+  },
   mutations: [addContact, appSignIn, appSignOut],
   queries: [contactsQuery],
   sessionProvider: (request) => appSessionProvider(request as unknown as AppRequest),
