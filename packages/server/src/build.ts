@@ -370,13 +370,22 @@ module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
     const request = nodeRequestToWebRequest(nodeRequest);
     const response = await handler(request);
     await writeWebResponseToNode(response, nodeResponse, request.method);
-  } catch {
+  } catch (error) {
+    const correlationId = serverErrorCorrelationId();
+    console.error('[Kovo] server error ' + correlationId, error);
     if (!nodeResponse.headersSent) {
-      nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+      nodeResponse.writeHead(500, {
+        'content-type': 'text/plain; charset=utf-8',
+        'Kovo-Error-Id': correlationId,
+      });
     }
-    nodeResponse.end('Internal Server Error');
+    nodeResponse.end('Internal Server Error\\nReference: ' + correlationId);
   }
 };
+
+function serverErrorCorrelationId() {
+  return 'kovo-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+}
 
 async function loadHandler() {
   handlerPromise ||= import('./handler.mjs').then((module) => module.default);
@@ -583,13 +592,22 @@ export function createKovoNodeServer(options = {}) {
       const request = nodeRequestToWebRequest(nodeRequest, options);
       const response = await handler(request);
       await writeWebResponseToNode(response, nodeResponse, request.method);
-    } catch {
+    } catch (error) {
+      const correlationId = serverErrorCorrelationId();
+      console.error('[Kovo] server error ' + correlationId, error);
       if (!nodeResponse.headersSent) {
-        nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+        nodeResponse.writeHead(500, {
+          'content-type': 'text/plain; charset=utf-8',
+          'Kovo-Error-Id': correlationId,
+        });
       }
-      nodeResponse.end('Internal Server Error');
+      nodeResponse.end('Internal Server Error\\nReference: ' + correlationId);
     }
   });
+}
+
+function serverErrorCorrelationId() {
+  return 'kovo-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
 }
 
 async function maybeServeStatic(nodeRequest, nodeResponse) {

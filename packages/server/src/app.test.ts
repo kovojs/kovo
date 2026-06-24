@@ -453,6 +453,7 @@ describe('server createApp request shell', () => {
     expect(body).toContain('<h1>Not Found</h1>');
     expect(body).not.toContain('private shell detail');
     expect(onError).toHaveBeenCalledWith(shellError, {
+      correlationId: expect.stringMatching(/^kovo-/),
       operation: 'error-shell',
       request,
       status: 404,
@@ -489,16 +490,19 @@ describe('server createApp request shell', () => {
     const response = await handler(request);
 
     expect(response.status).toBe(500);
+    expect(response.headers.get('Kovo-Error-Id')).toMatch(/^kovo-/);
     const body = await response.text();
     expect(body).toContain('<h1>Server Error</h1>');
     expect(body).not.toContain('private endpoint detail');
     expect(body).not.toContain('private 500 shell detail');
     expect(onError).toHaveBeenCalledWith(endpointError, {
+      correlationId: expect.stringMatching(/^kovo-/),
       operation: 'app-request',
       request,
       url: '/status',
     });
     expect(onError).toHaveBeenCalledWith(shellError, {
+      correlationId: response.headers.get('Kovo-Error-Id'),
       operation: 'error-shell',
       request,
       status: 500,
@@ -667,10 +671,12 @@ describe('server createApp request shell', () => {
     const response = await handler(request);
 
     expect(response.status).toBe(500);
+    expect(response.headers.get('Kovo-Error-Id')).toMatch(/^kovo-/);
     const body = await response.text();
     expect(body).toContain('<h1>Server Error</h1>');
     expect(body).not.toContain('private endpoint detail');
     expect(onError).toHaveBeenCalledWith(thrown, {
+      correlationId: response.headers.get('Kovo-Error-Id'),
       operation: 'app-request',
       request,
       url: '/status?check=true',

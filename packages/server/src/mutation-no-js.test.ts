@@ -113,19 +113,26 @@ describe('no-JS mutation responses', () => {
       },
     });
 
-    await expect(
-      renderNoJsMutationResponse(addToCart, {
-        onError,
-        rawInput: { productId: 'p1' },
-        redirectTo: '/cart',
-        request,
-      }),
-    ).resolves.toEqual({
-      body: 'Internal Server Error',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    const response = await renderNoJsMutationResponse(addToCart, {
+      onError,
+      rawInput: { productId: 'p1' },
+      redirectTo: '/cart',
+      request,
+    });
+
+    expect(response).toEqual({
+      body: response.body,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Kovo-Error-Id': expect.stringMatching(/^kovo-/),
+      },
       status: 500,
     });
+    expect(response.body).toBe(
+      `Internal Server Error\nReference: ${response.headers['Kovo-Error-Id']}`,
+    );
     expect(onError).toHaveBeenCalledWith(thrown, {
+      correlationId: response.headers['Kovo-Error-Id'],
       mutationKey: 'cart/add',
       operation: 'no-js-mutation-handler',
       request,

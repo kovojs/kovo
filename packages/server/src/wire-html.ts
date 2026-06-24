@@ -99,6 +99,7 @@ export interface TextWireRenderOptions {
 }
 
 export interface DoneWireRenderOptions {
+  errorId?: string | undefined;
   reason?: string | undefined;
 }
 
@@ -155,8 +156,10 @@ export function renderTextWireHtml(options: TextWireRenderOptions): string {
 }
 
 export function renderDoneWireHtml(options: DoneWireRenderOptions = {}): string {
+  const errorAttribute =
+    options.errorId === undefined ? '' : ` error-id="${escapeAttribute(options.errorId)}"`;
   const reasonAttribute =
     options.reason === undefined ? '' : ` reason="${escapeAttribute(options.reason)}"`;
 
-  return `<kovo-done${reasonAttribute}></kovo-done>`;
+  return `<kovo-done${reasonAttribute}${errorAttribute}></kovo-done>`;
 }

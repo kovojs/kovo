@@ -1,5 +1,5 @@
 import type { JsonValue } from '@kovojs/core';
-import { reportServerError } from './diagnostics.js';
+import { reportServerError, serverErrorHeaders, type ServerErrorReport } from './diagnostics.js';
 import type { Domain } from './domain.js';
 import type { AccessDecision } from './access.js';
 import {
@@ -388,7 +388,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
       };
     }
 
-    reportServerError(endpointRequest.onError, error, {
+    const errorReport = reportServerError(endpointRequest.onError, error, {
       operation: 'query-endpoint',
       queryKey: definition.key,
       request: lifecycleRequest,
@@ -397,8 +397,8 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
     // including error responses, so a shared/intermediary cache cannot store and replay
     // any response (even an anon 403) to a different user.
     return {
-      body: JSON.stringify(serverErrorPayload()),
-      headers: queryJsonHeaders(endpointRequest),
+      body: JSON.stringify(serverErrorPayload(errorReport)),
+      headers: { ...queryJsonHeaders(endpointRequest), ...serverErrorHeaders(errorReport) },
       status: 500,
     };
   }
@@ -439,14 +439,14 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   try {
     body = renderQueryEndpointChunk(definition, result.input, result.value);
   } catch (error) {
-    reportServerError(endpointRequest.onError, error, {
+    const errorReport = reportServerError(endpointRequest.onError, error, {
       operation: 'query-endpoint',
       queryKey: definition.key,
       request: lifecycleRequest,
     });
     return {
-      body: JSON.stringify(serverErrorPayload()),
-      headers: queryJsonHeaders(endpointRequest),
+      body: JSON.stringify(serverErrorPayload(errorReport)),
+      headers: { ...queryJsonHeaders(endpointRequest), ...serverErrorHeaders(errorReport) },
       status: 500,
     };
   }
@@ -664,8 +664,11 @@ function renderQueryEndpointChunk<const Key extends string, Value, Input, Reques
   });
 }
 
-function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, never> } {
-  return { code: 'SERVER_ERROR', payload: {} };
+function serverErrorPayload(report: ServerErrorReport): {
+  code: 'SERVER_ERROR';
+  payload: { correlationId: string };
+} {
+  return { code: 'SERVER_ERROR', payload: { correlationId: report.correlationId } };
 }
 
 function queryJsonHeaders<Request>(

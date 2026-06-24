@@ -200,16 +200,27 @@ describe('query endpoints', () => {
     });
 
     // H3 fix: /_q/ 500 responses now carry the private cache posture (SPEC §9.4:895).
-    await expect(renderQueryEndpointResponse(productQuery, { onError, request })).resolves.toEqual({
-      body: '{"code":"SERVER_ERROR","payload":{}}',
+    const response = await renderQueryEndpointResponse(productQuery, { onError, request });
+    const body = JSON.parse(response.body) as {
+      code: string;
+      payload: { correlationId: string };
+    };
+    expect(response).toEqual({
+      body: response.body,
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'application/json; charset=utf-8',
+        'Kovo-Error-Id': body.payload.correlationId,
         Vary: 'Cookie',
       },
       status: 500,
     });
+    expect(body).toEqual({
+      code: 'SERVER_ERROR',
+      payload: { correlationId: expect.stringMatching(/^kovo-/) },
+    });
     expect(onError).toHaveBeenCalledWith(thrown, {
+      correlationId: body.payload.correlationId,
       operation: 'query-endpoint',
       queryKey: 'product',
       request,
@@ -532,7 +543,12 @@ describe('query endpoints', () => {
     expect(result.status).toBe(500);
     expect(result.headers['Cache-Control']).toBe('private, no-store');
     expect(result.headers.Vary).toBe('Cookie');
-    expect(result.body).toBe(JSON.stringify({ code: 'SERVER_ERROR', payload: {} }));
+    const body = JSON.parse(result.body) as { code: string; payload: { correlationId: string } };
+    expect(body).toEqual({
+      code: 'SERVER_ERROR',
+      payload: { correlationId: expect.stringMatching(/^kovo-/) },
+    });
+    expect(result.headers['Kovo-Error-Id']).toBe(body.payload.correlationId);
   });
 });
 

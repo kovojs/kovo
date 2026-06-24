@@ -656,21 +656,24 @@ describe('server mutation primitives', () => {
     const onError = vi.fn();
     const request = {};
 
-    await expect(
-      renderMutationResponse(addToCart, {
-        onError,
-        rawInput: { productId: 'p1' },
-        request,
-        targets: ['cart-badge'],
-      }),
-    ).resolves.toEqual({
-      body: '<kovo-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></kovo-fragment>',
+    const response = await renderMutationResponse(addToCart, {
+      onError,
+      rawInput: { productId: 'p1' },
+      request,
+      targets: ['cart-badge'],
+    });
+    expect(response).toEqual({
+      body: response.body,
       headers: {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[{"domain":"cart"}]',
+        'Kovo-Error-Id': expect.stringMatching(/^kovo-/),
       },
       status: 500,
     });
+    expect(response.body).toBe(
+      `<kovo-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR" data-error-id="${response.headers['Kovo-Error-Id']}">Internal Server Error</output></kovo-fragment>`,
+    );
     expect(onError).toHaveBeenCalledOnce();
     const [error, context] = onError.mock.calls[0] ?? [];
     expect(error).toBeInstanceOf(Error);
@@ -681,6 +684,7 @@ describe('server mutation primitives', () => {
       status: 422,
     });
     expect(context).toEqual({
+      correlationId: response.headers['Kovo-Error-Id'],
       mutationKey: 'cart/add',
       operation: 'mutation-render',
       request,
@@ -893,30 +897,34 @@ describe('server mutation primitives', () => {
       },
     });
 
-    await expect(
-      renderMutationResponse(addToCart, {
-        fragmentRenderers: [
-          {
-            render() {
-              throw thrown;
-            },
-            target: 'recommendations',
+    const response = await renderMutationResponse(addToCart, {
+      fragmentRenderers: [
+        {
+          render() {
+            throw thrown;
           },
-        ],
-        onError,
-        rawInput: { productId: 'p1' },
-        request,
-        targets: ['recommendations'],
-      }),
-    ).resolves.toEqual({
-      body: '<kovo-fragment target="recommendations"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></kovo-fragment>',
+          target: 'recommendations',
+        },
+      ],
+      onError,
+      rawInput: { productId: 'p1' },
+      request,
+      targets: ['recommendations'],
+    });
+    expect(response).toEqual({
+      body: response.body,
       headers: {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[]',
+        'Kovo-Error-Id': expect.stringMatching(/^kovo-/),
       },
       status: 500,
     });
+    expect(response.body).toBe(
+      `<kovo-fragment target="recommendations"><output role="alert" data-error-code="RENDER_ERROR" data-error-id="${response.headers['Kovo-Error-Id']}">Internal Server Error</output></kovo-fragment>`,
+    );
     expect(onError).toHaveBeenCalledWith(thrown, {
+      correlationId: response.headers['Kovo-Error-Id'],
       mutationKey: 'cart/add',
       operation: 'mutation-render',
       request,
@@ -935,18 +943,24 @@ describe('server mutation primitives', () => {
       },
     });
 
-    await expect(
-      renderMutationResponse(addToCart, {
-        onError,
-        rawInput: { productId: 'p1' },
-        request,
-      }),
-    ).resolves.toEqual({
-      body: '<kovo-fragment target="error"><output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output></kovo-fragment>',
-      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+    const response = await renderMutationResponse(addToCart, {
+      onError,
+      rawInput: { productId: 'p1' },
+      request,
+    });
+    expect(response).toEqual({
+      body: response.body,
+      headers: {
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Error-Id': expect.stringMatching(/^kovo-/),
+      },
       status: 500,
     });
+    expect(response.body).toBe(
+      `<kovo-fragment target="error"><output role="alert" data-error-code="SERVER_ERROR" data-error-id="${response.headers['Kovo-Error-Id']}">Internal Server Error</output></kovo-fragment>`,
+    );
     expect(onError).toHaveBeenCalledWith(thrown, {
+      correlationId: response.headers['Kovo-Error-Id'],
       mutationKey: 'cart/add',
       operation: 'mutation-handler',
       request,
@@ -1462,14 +1476,18 @@ describe('server mutation primitives', () => {
     expect(response.body).toBeInstanceOf(ReadableStream);
     const body = await readResponseBody(response.body);
     expect(body).toContain('<kovo-text target="assistant:a1">partial</kovo-text>');
-    expect(body).toContain('<kovo-done reason="error">');
+    expect(body).toContain('<kovo-done reason="error" error-id="kovo-');
 
-    expect(onError).toHaveBeenCalledWith(thrown, {
+    const [error, context] = onError.mock.calls[0] ?? [];
+    expect(error).toBe(thrown);
+    expect(context).toEqual({
+      correlationId: expect.stringMatching(/^kovo-/),
       mutationKey: 'chat/stream-error',
       operation: 'mutation-stream',
       request: {},
       targets: [],
     });
+    expect(body).toContain(`error-id="${(context as { correlationId: string }).correlationId}"`);
   });
 });
 

@@ -1,7 +1,13 @@
 import type { JsonValue, Redirect } from '@kovojs/core';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
-import { reportServerError } from './diagnostics.js';
+import {
+  createServerErrorCorrelationId,
+  reportServerError,
+  serverErrorHeaders,
+  type ServerErrorDiagnosticContext,
+  type ServerErrorHandler,
+} from './diagnostics.js';
 import {
   renderHttpGuardFailureResponse,
   resolveLifecycleRequest,
@@ -895,12 +901,12 @@ export async function renderRoutePageResponse<
       routeJsxContextOptions(options, deferredRegions),
     );
   } catch (error) {
-    reportServerError(options.onError, error, {
+    const errorReport = reportServerError(options.onError, error, {
       operation: 'route-page',
       request: lifecycleRequest,
       routePath: definition.path,
     });
-    return htmlServerErrorResponse();
+    return htmlServerErrorResponse(errorReport);
   }
 
   if (!result.ok) {
@@ -950,7 +956,17 @@ export async function renderRoutePageResponse<
   }
 
   if ('outcome' in result) {
-    return attachLifecycleRequest(routeOutcomeResponse(result.outcome, request), lifecycleRequest);
+    return attachLifecycleRequest(
+      routeOutcomeResponse(
+        protectRouteOutcomeStream(result.outcome, options.onError, {
+          operation: 'route-render',
+          request: lifecycleRequest,
+          routePath: definition.path,
+        }),
+        request,
+      ),
+      lifecycleRequest,
+    );
   }
   // SPEC §6.4: page redirect() → 303 + sanitized Location header.
   if ('redirect' in result) {
@@ -977,13 +993,57 @@ export async function renderRoutePageResponse<
       lifecycleRequest,
     );
   } catch (error) {
-    reportServerError(options.onError, error, {
+    const errorReport = reportServerError(options.onError, error, {
       operation: 'route-render',
       request: lifecycleRequest,
       routePath: definition.path,
     });
-    return htmlServerErrorResponse();
+    return htmlServerErrorResponse(errorReport);
   }
+}
+
+function protectRouteOutcomeStream(
+  outcome: RouteResponseOutcome,
+  onError: ServerErrorHandler | undefined,
+  context: ServerErrorDiagnosticContext,
+): RouteResponseOutcome {
+  if (!(outcome.body instanceof ReadableStream)) return outcome;
+
+  const correlationId = createServerErrorCorrelationId();
+  return {
+    ...outcome,
+    body: reportRouteStreamErrors(outcome.body, onError, context, correlationId),
+    headers: { ...outcome.headers, ...serverErrorHeaders({ correlationId }) },
+  };
+}
+
+function reportRouteStreamErrors(
+  stream: ReadableStream<Uint8Array>,
+  onError: ServerErrorHandler | undefined,
+  context: ServerErrorDiagnosticContext,
+  correlationId: string,
+): ReadableStream<Uint8Array> {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      reader = stream.getReader();
+      try {
+        for (;;) {
+          const result = await reader.read();
+          if (result.done) break;
+          controller.enqueue(result.value);
+        }
+        controller.close();
+      } catch (error) {
+        reportServerError(onError, error, context, { correlationId });
+        controller.error(new Error(`Kovo stream failed. Reference: ${correlationId}`));
+      }
+    },
+    cancel(reason) {
+      return reader?.cancel(reason);
+    },
+  });
 }
 
 function attachLifecycleRequest<Request>(

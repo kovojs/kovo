@@ -4,6 +4,7 @@ import { createBrotliCompress, createGzip } from 'node:zlib';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app-types.js';
+import { createServerErrorCorrelationId, serverErrorHeaders } from './diagnostics.js';
 
 /** Options for adapting a Web `RequestHandler` to a Node `http` listener. */
 export interface NodeHandlerOptions {
@@ -62,7 +63,7 @@ export function toNodeHandler(
       };
 
       await writeWebResponseToNode(response, nodeResponse, request.method, writeOptions);
-    } catch {
+    } catch (error) {
       // E1 (SPEC §9.5/§9.2): once the response head is committed (`headersSent`), a 200's
       // status/body are already on the wire. Appending "Internal Server Error" here would
       // corrupt that committed body (a mid-stream render error yielding HTTP 200
@@ -72,8 +73,13 @@ export function toNodeHandler(
         nodeResponse.destroy();
         return;
       }
-      nodeResponse.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-      nodeResponse.end('Internal Server Error');
+      const correlationId = createServerErrorCorrelationId();
+      console.error(`[Kovo] server error ${correlationId}`, error);
+      nodeResponse.writeHead(500, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        ...serverErrorHeaders({ correlationId }),
+      });
+      nodeResponse.end(`Internal Server Error\nReference: ${correlationId}`);
     }
   };
 }

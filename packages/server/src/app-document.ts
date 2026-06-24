@@ -1,6 +1,6 @@
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
-import { reportServerError } from './diagnostics.js';
+import { reportServerError, serverErrorHeaders, type ServerErrorReport } from './diagnostics.js';
 import {
   mergeVaryHeader,
   renderErrorDocument,
@@ -221,7 +221,9 @@ export async function renderAppErrorDocumentResponse(
   app: KovoApp,
   request: Request,
   status: 403 | 404 | 500,
+  errorReport?: ServerErrorReport,
 ): Promise<RoutePageResponse> {
+  let report = errorReport;
   const renderer =
     status === 403
       ? app.errorShells.forbidden
@@ -231,9 +233,10 @@ export async function renderAppErrorDocumentResponse(
 
   if (renderer) {
     try {
-      return await renderer({ request, status });
+      const response = await renderer({ request, status });
+      return withServerErrorReport(response, status, report);
     } catch (error) {
-      reportServerError(app.onError, error, {
+      report = reportServerError(app.onError, error, {
         operation: 'error-shell',
         request,
         status,
@@ -244,13 +247,30 @@ export async function renderAppErrorDocumentResponse(
 
   // SPEC §9.2/§9.5: error shells are app config, but unexpected failures
   // still fall back to a stable no-internals document.
-  return renderErrorDocument({
-    ...(app.stylesheets.length > 0 ? { hints: { stylesheets: app.stylesheets } } : {}),
-    ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
-    loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
+  return withServerErrorReport(
+    renderErrorDocument({
+      ...(app.stylesheets.length > 0 ? { hints: { stylesheets: app.stylesheets } } : {}),
+      ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
+      loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
+      status,
+      ...(app.document.template === undefined ? {} : { template: app.document.template }),
+    }),
     status,
-    ...(app.document.template === undefined ? {} : { template: app.document.template }),
-  });
+    report,
+  );
+}
+
+function withServerErrorReport(
+  response: RoutePageResponse,
+  status: 403 | 404 | 500,
+  report: ServerErrorReport | undefined,
+): RoutePageResponse {
+  if (status !== 500 || report === undefined) return response;
+
+  return {
+    ...response,
+    headers: { ...response.headers, ...serverErrorHeaders(report) },
+  };
 }
 
 export function appRequestUrl(url: URL): string {

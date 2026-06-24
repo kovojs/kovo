@@ -6,7 +6,7 @@ import {
   type ChangeRecord,
   type MutationTouchSite,
 } from './change-record.js';
-import { reportServerError } from './diagnostics.js';
+import { reportServerError, serverErrorHeaders, type ServerErrorReport } from './diagnostics.js';
 import { escapeAttribute, escapeHtml } from './html.js';
 import {
   guardFailureIsUnauthenticated,
@@ -356,13 +356,13 @@ export async function renderMutationResponse<
     // The handler threw before producing a result; release the reservation so a
     // retry can run, then surface the server-error fragment (never replayed).
     reservation?.abort?.();
-    reportServerError(wireRequest.onError, error, {
+    const errorReport = reportServerError(wireRequest.onError, error, {
       mutationKey: definition.key,
       operation: 'mutation-handler',
       request: wireRequest.request,
       ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
     });
-    return mutationServerErrorResponse(wireRequest);
+    return mutationServerErrorResponse(wireRequest, errorReport);
   }
 
   if (!result.ok) {
@@ -401,14 +401,14 @@ export async function renderMutationResponse<
       renderInput,
     );
   } catch (error) {
-    reportServerError(wireRequest.onError, error, {
+    const errorReport = reportServerError(wireRequest.onError, error, {
       mutationKey: definition.key,
       operation: 'mutation-render',
       request: wireRequest.request,
       ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
     });
     return commitReservedMutationReplay(reservation, async () =>
-      mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders),
+      mutationRenderErrorResponse(result.changes, wireRequest, errorReport, result.responseHeaders),
     );
   }
 
@@ -513,15 +513,17 @@ async function renderSuccessfulMutationWireResponse<
 function mutationRenderErrorResponse<Request>(
   changes: readonly ChangeRecord[],
   wireRequest: MutationWireRequest<Request>,
+  errorReport: ServerErrorReport,
   responseHeaders?: MutationResponseHeaders,
 ): BufferedMutationWireResponse {
   return {
-    body: renderMutationRenderErrorFragment(wireRequest),
+    body: renderMutationRenderErrorFragment(wireRequest, errorReport),
     headers: mergeMutationResponseHeaders(
       mutationWireResponseHeaders(wireRequest),
       {
         'Kovo-Changes': mutationWireChangeHeader(changes),
       },
+      serverErrorHeaders(errorReport),
       responseHeaders,
     ),
     status: 500,
@@ -530,10 +532,11 @@ function mutationRenderErrorResponse<Request>(
 
 function mutationServerErrorResponse<Request>(
   wireRequest: MutationWireRequest<Request>,
+  errorReport: ServerErrorReport,
 ): MutationWireResponse {
   return {
-    body: renderMutationServerErrorFragment(wireRequest),
-    headers: mutationWireResponseHeaders(wireRequest),
+    body: renderMutationServerErrorFragment(wireRequest, errorReport),
+    headers: { ...mutationWireResponseHeaders(wireRequest), ...serverErrorHeaders(errorReport) },
     status: 500,
   };
 }
@@ -788,12 +791,12 @@ export async function renderNoJsMutationResponse<
       );
     } catch (error) {
       reservation?.abort?.();
-      reportServerError(noJsRequest.onError, error, {
+      const errorReport = reportServerError(noJsRequest.onError, error, {
         mutationKey: definition.key,
         operation: 'no-js-mutation-handler',
         request: noJsRequest.request,
       });
-      return noJsMutationServerErrorResponse();
+      return noJsMutationServerErrorResponse(errorReport);
     }
 
     if (!result.ok) {
@@ -836,12 +839,12 @@ export async function renderNoJsMutationResponse<
       lifecycleOpts,
     );
   } catch (error) {
-    reportServerError(noJsRequest.onError, error, {
+    const errorReport = reportServerError(noJsRequest.onError, error, {
       mutationKey: definition.key,
       operation: 'no-js-mutation-handler',
       request: noJsRequest.request,
     });
-    return noJsMutationServerErrorResponse();
+    return noJsMutationServerErrorResponse(errorReport);
   }
 
   if (!result.ok) {
@@ -925,10 +928,10 @@ function mutationRedirectLocation<Value>(
   return sanitizeNext(typeof redirectTo === 'function' ? redirectTo(result) : redirectTo, []);
 }
 
-function noJsMutationServerErrorResponse(): NoJsMutationResponse {
+function noJsMutationServerErrorResponse(errorReport: ServerErrorReport): NoJsMutationResponse {
   return {
-    body: 'Internal Server Error',
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    body: `Internal Server Error\nReference: ${errorReport.correlationId}`,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', ...serverErrorHeaders(errorReport) },
     status: 500,
   };
 }
@@ -1101,22 +1104,24 @@ async function renderDefaultFailureFragment<Request>(
 
 function renderMutationRenderErrorFragment<Request>(
   wireRequest: MutationWireRequest<Request>,
+  errorReport: ServerErrorReport,
 ): string {
   const target = mutationFailureTarget(wireRequest);
 
   return renderFragmentWireHtml({
-    html: '<output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output>',
+    html: `<output role="alert" data-error-code="RENDER_ERROR" data-error-id="${escapeAttribute(errorReport.correlationId)}">Internal Server Error</output>`,
     target,
   });
 }
 
 function renderMutationServerErrorFragment<Request>(
   wireRequest: MutationWireRequest<Request>,
+  errorReport: ServerErrorReport,
 ): string {
   const target = mutationFailureTarget(wireRequest);
 
   return renderFragmentWireHtml({
-    html: '<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output>',
+    html: `<output role="alert" data-error-code="SERVER_ERROR" data-error-id="${escapeAttribute(errorReport.correlationId)}">Internal Server Error</output>`,
     stylesheets: wireRequest.failureStylesheets,
     target,
   });

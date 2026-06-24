@@ -216,34 +216,39 @@ describe('route primitives', () => {
       },
     });
     // SPEC §9.2 keeps server exceptions private while preserving onError diagnostics.
-    const serverErrorResponse = {
-      body: 'Internal Server Error',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: 500,
-    };
+    const loadResponse = await renderRoutePageResponse(
+      throwingPage,
+      { params: { id: 'p1' } },
+      request,
+      String,
+      { onError },
+    );
+    const renderResponse = await renderRoutePageResponse(
+      throwingRenderer,
+      {},
+      request,
+      () => {
+        throw renderError;
+      },
+      { onError },
+    );
 
-    await expect(
-      renderRoutePageResponse(throwingPage, { params: { id: 'p1' } }, request, String, {
-        onError,
-      }),
-    ).resolves.toEqual(serverErrorResponse);
-    await expect(
-      renderRoutePageResponse(
-        throwingRenderer,
-        {},
-        request,
-        () => {
-          throw renderError;
-        },
-        { onError },
-      ),
-    ).resolves.toEqual(serverErrorResponse);
+    for (const response of [loadResponse, renderResponse]) {
+      expect(response.status).toBe(500);
+      expect(response.body).toMatch(/^Internal Server Error\nReference: kovo-/);
+      expect(response.headers).toMatchObject({
+        'Content-Type': 'text/html; charset=utf-8',
+        'Kovo-Error-Id': expect.stringMatching(/^kovo-/),
+      });
+    }
     expect(onError).toHaveBeenCalledWith(loadError, {
+      correlationId: loadResponse.headers['Kovo-Error-Id'],
       operation: 'route-page',
       request,
       routePath: '/products/:id',
     });
     expect(onError).toHaveBeenCalledWith(renderError, {
+      correlationId: renderResponse.headers['Kovo-Error-Id'],
       operation: 'route-render',
       request,
       routePath: '/cart',

@@ -284,6 +284,10 @@ describe('server webhook primitive', () => {
     // First call: handler throws.
     const first = await runWebhook(flakyWebhook, makeRequest());
     expect(first.response.status).toBe(500);
+    expect(first.response.headers.get('Kovo-Error-Id')).toMatch(/^kovo-/);
+    expect(await first.response.text()).toBe(
+      `Internal Server Error\nReference: ${first.response.headers.get('Kovo-Error-Id')}`,
+    );
     expect(first.replayed).toBe(false);
 
     // Second call: same event id — must NOT replay the cached 500; handler runs again.
@@ -476,7 +480,11 @@ describe('server webhook primitive', () => {
     );
 
     expect(result.response.status).toBe(500);
+    expect(result.response.headers.get('Kovo-Error-Id')).toMatch(/^kovo-/);
     const text = await result.response.text();
+    expect(text).toBe(
+      `Internal Server Error\nReference: ${result.response.headers.get('Kovo-Error-Id')}`,
+    );
     expect(text).not.toContain('postgres://');
     expect(text).not.toContain(secret);
     // The handler must never run for a failed input parse.

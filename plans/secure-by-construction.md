@@ -610,10 +610,15 @@ compiler). Derivation is fail-closed.
   - [ ] Full linear (RE2-style/DFA) engine deferred unless static-reject + step-budget proves insufficient
         (avoids a heavy dep in v1). Honest: by-construction-ish (compile gate + runtime backstop); airtight only
         with the deferred engine.
-- [ ] **Prod error opacity (12a, CWE-209).** Unexpected handler/loader/stream exceptions return an OPAQUE error
+- [x] **Prod error opacity (12a, CWE-209).** Unexpected handler/loader/stream exceptions return an OPAQUE error
       in prod (no stack trace, no DB/driver error text, no internal detail) + a correlation id; the real error
       is logged server-side, retrievable by id. Dev keeps the §11.3 verbose teaching-error docs. Cover the
       `respond.stream` mid-stream error path too. Runtime safe-default, sound — no new KV code.
+  - Evidence: `packages/server/src/diagnostics.ts`, `packages/server/src/route.ts`, `packages/server/src/query.ts`,
+    `packages/server/src/mutation.ts`, `packages/server/src/webhook.ts`, and `packages/server/src/node.ts` attach
+    opaque correlation ids to unexpected 500 responses without exposing raw errors; verified by
+    `git diff --check` and
+    `vp exec vitest --run packages/server/src/route.test.ts packages/server/src/route-response.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-response.test.ts packages/server/src/replay.test.ts packages/server/src/wire-html.test.ts packages/server/src/node.test.ts packages/server/src/build.test.ts packages/server/src/webhook.test.ts packages/server/src/app.test.ts`.
 - [x] **Prototype-pollution-safe coercion (12b).** FormData→object AND JSON-body→object coercion use null-proto
       (`Object.create(null)`, already used) and reject/strip `__proto__`/`constructor`/`prototype` keys before
       assignment; cover `/_q/` args + route params. Runtime safe-default, sound — no new KV code.

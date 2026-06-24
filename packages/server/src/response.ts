@@ -1,4 +1,5 @@
 import type { DeferredStreamChunk } from './deferred-stream.js';
+import { serverErrorHeaders, type ServerErrorReport } from './diagnostics.js';
 
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
@@ -222,10 +223,10 @@ export function routeOutcomeResponse(
   };
 }
 
-export function htmlServerErrorResponse(): RoutePageResponse {
+export function htmlServerErrorResponse(report: ServerErrorReport): RoutePageResponse {
   return {
-    body: 'Internal Server Error',
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    body: `Internal Server Error\nReference: ${report.correlationId}`,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', ...serverErrorHeaders(report) },
     status: 500,
   };
 }

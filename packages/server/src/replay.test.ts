@@ -745,14 +745,18 @@ describe('server mutation response replay', () => {
 
     expect(writes).toBe(1);
     expect(first).toEqual({
-      body: '<kovo-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></kovo-fragment>',
+      body: first.body,
       headers: {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[{"domain":"cart"}]',
+        'Kovo-Error-Id': expect.stringMatching(/^kovo-/),
         'Kovo-Idem': 'idem_render_failure',
       },
       status: 500,
     });
+    expect(first.body).toBe(
+      `<kovo-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR" data-error-id="${first.headers['Kovo-Error-Id']}">Internal Server Error</output></kovo-fragment>`,
+    );
     expect(second).toEqual(first);
   });
 

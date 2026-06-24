@@ -138,9 +138,7 @@ export const stream = {
 /**
  * L10-1 (SPEC §9): error-reporting context threaded into the streaming render so a
  * generator that throws mid-stream can report via `onError` and emit a failure
- * terminator. `'mutation-stream'` is not yet a member of the shared
- * `ServerErrorDiagnosticContext.operation` union, so the context is cast at the
- * reporting boundary; the runtime value the diagnostic hook observes is unchanged.
+ * terminator carrying the same opaque correlation id.
  */
 export interface StreamingMutationErrorContext {
   context: {
@@ -216,15 +214,17 @@ export function renderStreamingMutationWireResponse(
           // client observes a clean, in-band end-of-stream (mirroring the explicit
           // `stream.done({ reason: 'error' })` path) instead of a silent hang. The
           // reservation is aborted, never committed, so the failed stream is not replayed.
-          if (errorContext) {
-            reportServerError(
+          const errorDone = (() => {
+            if (!errorContext) return renderDoneWireHtml({ reason: 'error' });
+            const errorReport = reportServerError(
               errorContext.onError,
               error,
               errorContext.context as ServerErrorDiagnosticContext,
             );
-          }
+            return renderDoneWireHtml({ errorId: errorReport.correlationId, reason: 'error' });
+          })();
           try {
-            enqueue(renderDoneWireHtml({ reason: 'error' }));
+            enqueue(errorDone);
             controller.close();
           } catch {
             // The controller may already be errored/closed (e.g. the consumer cancelled

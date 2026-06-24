@@ -2,6 +2,7 @@ import type { WebhookVerifier } from '@kovojs/core';
 import type { ChangeRecord } from './change-record.js';
 import type { AccessDecision } from './access.js';
 import type { Domain } from './domain.js';
+import { createServerErrorCorrelationId, serverErrorHeaders } from './diagnostics.js';
 import {
   endpointRequestWithoutSession,
   type EndpointDeclaration,
@@ -284,7 +285,7 @@ export async function runWebhook<
     return {
       changes: [],
       replayed: false,
-      response: webhookResponse(500, 'Internal Server Error'),
+      response: webhookServerErrorResponse(),
     };
   }
   if (!inputResult.ok) {
@@ -391,7 +392,7 @@ export async function runWebhook<
     return {
       changes: [],
       replayed: false,
-      response: webhookResponse(500, 'Internal Server Error'),
+      response: webhookServerErrorResponse(),
     };
   }
 }
@@ -572,6 +573,17 @@ function webhookResponse(status: 400 | 401 | 500, body: string): Response {
   return new Response(body, {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     status,
+  });
+}
+
+function webhookServerErrorResponse(): Response {
+  const correlationId = createServerErrorCorrelationId();
+  return new Response(`Internal Server Error\nReference: ${correlationId}`, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      ...serverErrorHeaders({ correlationId }),
+    },
+    status: 500,
   });
 }
 

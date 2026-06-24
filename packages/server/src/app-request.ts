@@ -36,13 +36,13 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   try {
     return await dispatchMatchedAppRequest({ app, match, request, url });
   } catch (error) {
-    reportServerError(app.onError, error, {
+    const errorReport = reportServerError(app.onError, error, {
       operation: 'app-request',
       request,
       url: appRequestUrl(url),
     });
     return routeResponseToWebResponse(
-      await renderAppErrorDocumentResponse(app, request, 500),
+      await renderAppErrorDocumentResponse(app, request, 500, errorReport),
       request,
     );
   }

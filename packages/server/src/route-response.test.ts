@@ -1,5 +1,5 @@
 import { publicAccess } from './access.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { respond } from './response.js';
 import { renderRoutePageResponse, route } from './route.js';
@@ -63,5 +63,50 @@ describe('route responses', () => {
       status: 200,
     });
     expect(streamResponse.body).toBeInstanceOf(ReadableStream);
+  });
+
+  it('reports respond.stream mid-stream failures with an opaque correlation id', async () => {
+    const thrown = new Error('private export stream failure');
+    const onError = vi.fn();
+    const request = {};
+    const exportRoute = route('/exports.csv', {
+      access: publicAccess('test fixture'),
+      page() {
+        return respond.stream(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('id,name\n'));
+            },
+            pull() {
+              throw thrown;
+            },
+          }),
+          { contentType: 'text/csv' },
+        );
+      },
+    });
+
+    const response = await renderRoutePageResponse(exportRoute, {}, request, undefined, {
+      onError,
+    });
+    expect(response.body).toBeInstanceOf(ReadableStream);
+    expect(response.headers).toMatchObject({
+      'Content-Disposition': 'attachment',
+      'Content-Type': 'text/csv',
+      'Kovo-Error-Id': expect.stringMatching(/^kovo-/),
+      'X-Content-Type-Options': 'nosniff',
+    });
+
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    await expect(reader.read()).resolves.toMatchObject({ done: false });
+    await expect(reader.read()).rejects.toThrow(
+      `Kovo stream failed. Reference: ${response.headers['Kovo-Error-Id']}`,
+    );
+    expect(onError).toHaveBeenCalledWith(thrown, {
+      correlationId: response.headers['Kovo-Error-Id'],
+      operation: 'route-render',
+      request,
+      routePath: '/exports.csv',
+    });
   });
 });
