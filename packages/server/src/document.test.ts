@@ -19,9 +19,12 @@ const deferredCleanupScriptBody =
   'for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()';
 const deferredApplyHash = cspSha256(deferredApplyScriptBody);
 const deferredCleanupHash = cspSha256(deferredCleanupScriptBody);
-const deferredApplyScript = `<script data-kovo-csp-hash="${deferredApplyHash}">${deferredApplyScriptBody}</script>`;
-const deferredCleanupScript = `<script data-kovo-csp-hash="${deferredCleanupHash}">${deferredCleanupScriptBody}</script>`;
 const fullInlineLoaderSource = `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`;
+
+function nonceFor(csp: { nonce?: string }): string {
+  expect(csp.nonce).toMatch(/^[A-Za-z0-9_-]{22}$/);
+  return csp.nonce!;
+}
 
 describe('server app shell document assembly', () => {
   it('assembles deterministic documents with hints, loader, and query hydration before body', () => {
@@ -42,9 +45,11 @@ describe('server app shell document assembly', () => {
     });
     expect({
       ...document.csp,
+      nonce: '<nonce>',
       scripts: document.csp.scripts.map((hash) => (hash === loaderHash ? '<loader-hash>' : hash)),
     }).toMatchInlineSnapshot(`
       {
+        "nonce": "<nonce>",
         "scripts": [
           "sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=",
           "<loader-hash>",
@@ -55,10 +60,13 @@ describe('server app shell document assembly', () => {
         ],
       }
     `);
+    const nonce = nonceFor(document.csp);
     expect(
-      renderContentSecurityPolicy(document.csp).replaceAll(loaderHash, '<loader-hash>'),
+      renderContentSecurityPolicy(document.csp)
+        .replaceAll(loaderHash, '<loader-hash>')
+        .replaceAll(nonce, '<nonce>'),
     ).toMatchInlineSnapshot(
-      `"default-src 'self'; script-src 'self' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' '<loader-hash>' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"`,
+      `"default-src 'self'; script-src 'self' 'nonce-<nonce>' 'strict-dynamic' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' '<loader-hash>' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"`,
     );
     // G2 (bugs-part3 CSP-2): the hardening directives are present so a hash-locked
     // script-src is not bypassable via an injected `<base>`/`<object>`.
@@ -72,13 +80,16 @@ describe('server app shell document assembly', () => {
     expect(document.html).toContain(
       '<style data-kovo-critical-href="/assets/app.css" data-kovo-csp-hash="sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E=">body{color:red}</style><link rel="stylesheet" href="/assets/app.css">',
     );
-    expect(document.html).toContain(`<script data-kovo-csp-hash="${loaderHash}">`);
+    expect(document.html).toContain(`<script nonce="${nonce}" data-kovo-csp-hash="${loaderHash}">`);
+    expect(document.html).toContain(
+      `<script type="application/json" kovo-i18n locale="en-US" nonce="${nonce}"`,
+    );
     expect(document.html).toContain('installInlineKovoLoader');
     expect(document.html.indexOf('kovo-query="cart"')).toBeLessThan(
       document.html.indexOf('<body>'),
     );
     expect(document.html).toContain(
-      '<script type="application/json" kovo-query="cart" key="cart:c1" data-kovo-csp-hash="sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE=">{"count":1}</script>',
+      `<script type="application/json" kovo-query="cart" key="cart:c1" nonce="${nonce}" data-kovo-csp-hash="sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE=">{"count":1}</script>`,
     );
     expect(document.html).toContain(
       '<body><main><cart-badge kovo-deps="cart"></cart-badge></main></body></html>',
@@ -97,28 +108,30 @@ describe('server app shell document assembly', () => {
     expect(document.html).not.toContain(`<script data-kovo-csp-hash="${loaderHash}">`);
     expect(document.csp.scripts).not.toContain(loaderHash);
     expect(renderContentSecurityPolicy(document.csp)).not.toContain(loaderHash);
+    expect(renderContentSecurityPolicy(document.csp)).toContain(
+      `'nonce-${nonceFor(document.csp)}'`,
+    );
     expect(document.html).toContain('kovo-query="product"');
   });
 
   it('keeps CSP hardening directives non-overridable', () => {
     const policy = renderContentSecurityPolicy(
-      { scripts: [], styles: [] },
+      { nonce: 'abc123', scripts: [], styles: [] },
       {
-        baseUri: ['https://base.example.test'],
-        formAction: ['https://forms.example.test'],
-        frameAncestors: ['https://frames.example.test'],
-        objectSrc: ['https://objects.example.test'],
+        baseUri: ['https://evil.example'],
+        formAction: ['https://evil.example'],
+        frameAncestors: ['https://evil.example'],
+        objectSrc: ['https://evil.example'],
       },
     );
 
     expect(policy).toContain("base-uri 'self'");
+    expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("form-action 'self'");
     expect(policy).toContain("frame-ancestors 'none'");
-    expect(policy).toContain("object-src 'none'");
-    expect(policy).not.toContain('base.example.test');
-    expect(policy).not.toContain('forms.example.test');
-    expect(policy).not.toContain('frames.example.test');
-    expect(policy).not.toContain('objects.example.test');
+    expect(policy).toContain("'nonce-abc123'");
+    expect(policy).toContain("'strict-dynamic'");
+    expect(policy).not.toContain('https://evil.example');
   });
 
   // F2 (bugs-part3 L2-early-hints-2): the document head path threads rendered query
@@ -278,9 +291,14 @@ describe('server app shell document assembly', () => {
     // same metadata so the framework's inline loader is admitted without app opt-in.
     expect(wrapped.csp).toBeDefined();
     expect(wrapped.csp?.scripts.length).toBeGreaterThan(0);
+    const nonce = nonceFor(wrapped.csp!);
     const policy = renderContentSecurityPolicy(wrapped.csp!);
     expect(wrapped.headers['Content-Security-Policy']).toBe(policy);
     expect(policy).toContain("script-src 'self'");
+    expect(policy).toContain(`'nonce-${nonce}'`);
+    expect(policy).toContain("'strict-dynamic'");
+    expect(policy).not.toContain("'unsafe-inline'");
+    expect(policy).not.toContain("'unsafe-eval'");
     expect(policy).toContain("base-uri 'self'");
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("form-action 'self'");
@@ -317,6 +335,7 @@ describe('server app shell document assembly', () => {
   it('attaches baseline security headers to error documents (CSP-3)', () => {
     const error = renderErrorDocument({ status: 404 });
     expect(error.headers).toMatchObject({
+      'Content-Security-Policy': expect.stringContaining("'strict-dynamic'"),
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Security-Policy': renderContentSecurityPolicy(error.csp),
       'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -351,7 +370,8 @@ describe('server app shell document assembly', () => {
       status: 200,
     });
     expect(response.body).toContain('<link rel="stylesheet" href="/app.css">');
-    expect(response.body).toContain(`<script data-kovo-csp-hash="${loaderHash}">`);
+    const nonce = nonceFor(response.csp);
+    expect(response.body).toContain(`<script nonce="${nonce}" data-kovo-csp-hash="${loaderHash}">`);
     expect(response.body.indexOf('<kovo-defer target="reviews:p1">')).toBeLessThan(
       response.body.indexOf('--kovo-boundary'),
     );
@@ -361,9 +381,13 @@ describe('server app shell document assembly', () => {
     expect(response.body).toContain(
       '<kovo-fragment target="reviews:p1"><link rel="stylesheet" href="/reviews.css"><section>Ready</section></kovo-fragment>',
     );
-    expect(response.body).toContain(deferredApplyScript);
+    expect(response.body).toContain(
+      `<script nonce="${nonce}" data-kovo-csp-hash="${deferredApplyHash}">${deferredApplyScriptBody}</script>`,
+    );
     expect(
-      response.body.endsWith(`--kovo-boundary--\n${deferredCleanupScript}\n</body></html>`),
+      response.body.endsWith(
+        `--kovo-boundary--\n<script nonce="${nonce}" data-kovo-csp-hash="${deferredCleanupHash}">${deferredCleanupScriptBody}</script>\n</body></html>`,
+      ),
     ).toBe(true);
 
     // G1 (bugs-part3 CSP-1): the deferred apply/cleanup script hashes are merged into
@@ -375,7 +399,9 @@ describe('server app shell document assembly', () => {
     const policy = renderContentSecurityPolicy(response.csp);
     expect(policy).toContain(`'${deferredApplyHash}'`);
     expect(policy).toContain(`'${deferredCleanupHash}'`);
-    expect(response.body).toContain(`data-kovo-csp-hash="${deferredApplyHash}"`);
+    expect(policy).toContain(`'nonce-${nonce}'`);
+    expect(policy).toContain("'strict-dynamic'");
+    expect(response.body).toContain(`nonce="${nonce}" data-kovo-csp-hash="${deferredApplyHash}"`);
   });
 
   it('renders stable error documents with escaped content', () => {

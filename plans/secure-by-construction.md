@@ -541,8 +541,8 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
         builder output and forwarded session-provider cookies to `HttpOnly; Secure; SameSite=Lax`,
         rejects KV432 downgrades without `unsafeCookie(...)`, and enforces `__Host-` constraints.
         Focused proof: `pnpm exec vitest --run packages/server/src/cookies.test.ts
-        packages/server/src/csrf.test.ts packages/server/src/mutation.test.ts
-        packages/server/src/app-document.test.ts`; `vp check packages/server/src`; `git diff --check`.
+packages/server/src/csrf.test.ts packages/server/src/mutation.test.ts
+packages/server/src/app-document.test.ts`; `vp check packages/server/src`; `git diff --check`.
         Gap: class declaration/audit plumbing and `kovo explain --cookies` are still open, so this
         parent item and forwarded-cookie audit subitem remain unchecked.
   - [ ] Optional sound add: HMAC sealing (constant-time verify via `verifier.ts`, framework secret) for
@@ -679,17 +679,14 @@ Because the framework is the sole DOM-writer and emits no inline code, the stric
 construction; third-party embeds that break must be allowlisted (fail-closed) — that is the intended forcing
 function. Classified runtime defense-in-depth: makes a slipped-through XSS inert; does not prevent it.
 
-- [ ] Auto-emit a strict CSP by default (today opt-in): `script-src 'self' 'nonce-…' 'strict-dynamic'`, no
+- [x] Auto-emit a strict CSP by default (today opt-in): `script-src 'self' 'nonce-…' 'strict-dynamic'`, no
       `unsafe-inline`/`unsafe-eval`; the nonce flows through the request shell onto every emitted script tag.
       Build on `packages/server/src/csp.ts` (keep its non-overridable `base-uri`/`object-src`/`form-action`/
       `frame-ancestors`).
-  - Partial evidence: integrated slice emits the existing hash-based document CSP by default in
-    `renderRouteDocumentResponse`/`renderErrorDocument`, appends Kovo's policy to author CSP headers, and keeps
-    `base-uri`/`object-src`/`form-action`/`frame-ancestors` fixed; verified by `vp exec vitest --run
-packages/server/src/document.test.ts packages/server/src/app-dispatch.test.ts` and `vp check
-packages/server/src`.
-  - Remaining gap: nonce propagation and `strict-dynamic` default-on are still open; this slice intentionally
-    stays on existing hash metadata.
+      Evidence: `pnpm vitest --run packages/server/src/document.test.ts
+packages/server/src/deferred-stream.test.ts packages/server/src/hints.test.ts` proves default CSP headers,
+      nonce-bearing document/deferred/hint scripts, `strict-dynamic`, no unsafe script sources, and
+      non-overridable hardening directives.
 - [ ] Install a Trusted Types policy with the framework as the SOLE policy (`require-trusted-types-for 'script'`)
       so any non-framework DOM-write sink (`innerHTML`/`script.src`) throws — kills DOM-XSS sinks outside the
       framework. Chromium-only (one-engine DiD; the CSP carries the cross-browser floor). **Flipped on

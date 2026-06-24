@@ -87,6 +87,19 @@ describe('deferred streams', () => {
     expect(policy).toContain(`'${cleanupHashXb}'`);
   });
 
+  it('threads a document nonce onto deferred apply and cleanup scripts', () => {
+    const result = renderDeferredStream({
+      cspNonce: 'doc-nonce',
+      chunks: [{ fragments: [{ html: '<section>Ready</section>', target: 'main' }] }],
+      shell: '<!doctype html><html><body><kovo-defer target="main"></kovo-defer>',
+    });
+
+    expect(result.csp.nonce).toBe('doc-nonce');
+    expect(result.body).toContain(`<script nonce="doc-nonce" data-kovo-csp-hash="${applyHash}">`);
+    expect(result.body).toContain(`<script nonce="doc-nonce" data-kovo-csp-hash="${cleanupHash}">`);
+    expect(renderContentSecurityPolicy(result.csp)).toContain("'nonce-doc-nonce' 'strict-dynamic'");
+  });
+
   it('orders deferred stream chunks by priority, queries before fragments within each chunk', () => {
     const result = renderDeferredStream({
       chunks: [

@@ -1,5 +1,6 @@
 import {
   cspHashAttribute,
+  cspNonceAttribute,
   cspSha256,
   hasCspInlineMetadata,
   mergeCspInlineMetadata,
@@ -120,6 +121,7 @@ export interface PageHintOptions {
 
 /** @internal */
 export interface PageHintRenderContext {
+  cspNonce?: string;
   queries?: Record<string, unknown>;
 }
 
@@ -190,12 +192,16 @@ export function renderPageHints(
   ]);
   const stylesheets = dedupeStylesheets(options.stylesheets ?? []);
   const stylesheetHints = stylesheets.map(renderPageStylesheetHint);
-  const i18nCatalogs = renderI18nCatalogs(options.i18n);
+  const i18nCatalogs = renderI18nCatalogs(options.i18n, context.cspNonce);
   const speculationRules = renderSpeculationRules(
     options.prefetch ?? false,
     options.prerenderUrls ?? [],
+    context.cspNonce,
   );
   const csp = mergeCspInlineMetadata(
+    context.cspNonce === undefined
+      ? undefined
+      : { nonce: context.cspNonce, scripts: [], styles: [] },
     ...stylesheetHints.map((hint) => hint.csp),
     ...i18nCatalogs.map((catalog) => catalog.csp),
     speculationRules.csp,
@@ -206,7 +212,7 @@ export function renderPageHints(
     ...stylesheetHints.map((hint) => hint.html),
     ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
     options.bootstrapScript
-      ? `<script type="module" src="${escapeAttribute(options.bootstrapScript)}"></script>`
+      ? `<script type="module" src="${escapeAttribute(options.bootstrapScript)}"${cspNonceAttribute(context.cspNonce)}></script>`
       : '',
     speculationRules.html,
   ]
@@ -568,6 +574,7 @@ function findCriticalCssDeclarationColon(declaration: string): number | undefine
 function renderSpeculationRules(
   prefetch: RoutePrefetch,
   urls: readonly string[],
+  nonce: string | undefined,
 ): InlineHtmlWithCsp {
   // L2-early-hints-1 (bugs-part3): a speculation rule with `prefetch:'conservative'`
   // prerenders/prefetches the listed URLs with the user's credentials, and KV419 only
@@ -592,8 +599,8 @@ function renderSpeculationRules(
   const hash = cspSha256(scriptText);
 
   return {
-    csp: { scripts: [hash], styles: [] },
-    html: `<script type="speculationrules" ${cspHashAttribute(hash)}>${scriptText}</script>`,
+    csp: { ...(nonce === undefined ? {} : { nonce }), scripts: [hash], styles: [] },
+    html: `<script type="speculationrules"${cspNonceAttribute(nonce)} ${cspHashAttribute(hash)}>${scriptText}</script>`,
   };
 }
 
@@ -692,7 +699,10 @@ function isRouteMetaFactory(source: RouteMetaSource): source is RouteMetaFactory
   return typeof (source as RouteMetaFactory).resolve === 'function';
 }
 
-function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): InlineHtmlWithCsp[] {
+function renderI18nCatalogs(
+  i18nInput: PageHintOptions['i18n'],
+  nonce: string | undefined,
+): InlineHtmlWithCsp[] {
   const catalogs = Array.isArray(i18nInput) ? i18nInput : i18nInput ? [i18nInput] : [];
 
   return catalogs.map((catalog) => {
@@ -700,8 +710,8 @@ function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): InlineHtmlWithC
     const hash = cspSha256(scriptText);
 
     return {
-      csp: { scripts: [hash], styles: [] },
-      html: `<script type="application/json" kovo-i18n locale="${escapeAttribute(catalog.locale)}" ${cspHashAttribute(hash)}>${scriptText}</script>`,
+      csp: { ...(nonce === undefined ? {} : { nonce }), scripts: [hash], styles: [] },
+      html: `<script type="application/json" kovo-i18n locale="${escapeAttribute(catalog.locale)}"${cspNonceAttribute(nonce)} ${cspHashAttribute(hash)}>${scriptText}</script>`,
     };
   });
 }

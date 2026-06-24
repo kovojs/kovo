@@ -50,18 +50,18 @@ export function staticExportInventory(
  */
 export function staticExportManifest(result: StaticExportResultArtifacts): StaticExportManifest {
   const routeDocuments = result.artifacts.map((artifact) => ({
-    headers: artifact.headers,
+    headers: staticExportManifestHeaders(artifact.headers),
     path: artifact.path,
     status: artifact.status,
   }));
   const clientModules = result.clientModules.map((artifact) => ({
-    headers: artifact.headers,
+    headers: staticExportManifestHeaders(artifact.headers),
     href: artifact.href,
     path: artifact.path,
     status: artifact.status,
   }));
   const assets = result.assets.map((artifact) => ({
-    headers: artifact.headers,
+    headers: staticExportManifestHeaders(artifact.headers),
     path: artifact.path,
     source: artifact.source,
     status: artifact.status,
@@ -70,7 +70,7 @@ export function staticExportManifest(result: StaticExportResultArtifacts): Stati
   return {
     assets,
     clientModules,
-    files: staticExportInventory(result),
+    files: staticExportManifestInventory(result),
     routeDocuments,
   };
 }
@@ -139,6 +139,26 @@ function staticExportManifestSignature(manifest: StaticExportManifest): string {
     files: manifest.files,
     routeDocuments: manifest.routeDocuments,
   });
+}
+
+function staticExportManifestHeaders(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [
+      name,
+      name.toLowerCase() === 'content-security-policy'
+        ? value.replaceAll(/'nonce-[^']+'/g, "'nonce-<static-export>'")
+        : value,
+    ]),
+  );
+}
+
+function staticExportManifestInventory(
+  result: StaticExportResultArtifacts,
+): StaticExportInventoryItem[] {
+  return staticExportInventory(result).map((item) => ({
+    ...item,
+    headers: staticExportManifestHeaders(item.headers),
+  }));
 }
 
 function staticExportManifestSummary(manifest: StaticExportManifest): string {

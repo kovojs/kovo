@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { versionedClientModuleHref } from './client-modules.js';
+import { renderContentSecurityPolicy } from './csp.js';
 import { renderDeferredStream } from './deferred-stream.js';
 import { renderPageHints, stylesheet, stylesheetsForTargets } from './hints.js';
 
@@ -44,6 +45,27 @@ describe('page hints', () => {
         '<script type="module" src="/c/generated/app.client.js"></script>',
       ].join(''),
     });
+  });
+
+  it('threads the document CSP nonce through emitted hint scripts', () => {
+    const hints = renderPageHints(
+      {
+        bootstrapScript: '/c/generated/app.client.js',
+        i18n: { locale: 'en-US', messages: { cart: 'Cart' } },
+        prefetch: 'conservative',
+        prerenderUrls: ['/cart'],
+      },
+      { cspNonce: 'doc-nonce' },
+    );
+
+    expect(hints.html).toContain(
+      '<script type="module" src="/c/generated/app.client.js" nonce="doc-nonce"></script>',
+    );
+    expect(hints.html).toContain(
+      '<script type="application/json" kovo-i18n locale="en-US" nonce="doc-nonce"',
+    );
+    expect(hints.html).toContain('<script type="speculationrules" nonce="doc-nonce"');
+    expect(renderContentSecurityPolicy(hints.csp!)).toContain("'nonce-doc-nonce' 'strict-dynamic'");
   });
 
   it('renders versioned client module hrefs in page hints', () => {

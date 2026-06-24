@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { cspHashAttribute, cspSha256, type CspInlineMetadata } from './csp.js';
+import { cspHashAttribute, cspNonceAttribute, cspSha256, type CspInlineMetadata } from './csp.js';
 import type { StylesheetAsset } from './hints.js';
 import type { ServerResponseBase } from './response.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
@@ -29,6 +29,7 @@ export interface DeferredStreamOptions {
   boundary?: string;
   chunks: readonly DeferredStreamChunk[];
   closeHtml?: string;
+  cspNonce?: string | undefined;
   shell: string;
 }
 
@@ -87,7 +88,7 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
   // surfaced on `csp` so `renderDeferredDocument` merges them into `document.csp`.
   const cleanupScriptBody = `for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--${boundary}"))n.remove();document.currentScript.remove()`;
   const cleanupHash = cspSha256(cleanupScriptBody);
-  const deferredCloseCleanupScript = `<script ${cspHashAttribute(cleanupHash)}>${cleanupScriptBody}</script>`;
+  const deferredCloseCleanupScript = `<script${cspNonceAttribute(options.cspNonce)} ${cspHashAttribute(cleanupHash)}>${cleanupScriptBody}</script>`;
   // SPEC §9:769 ("deferred query JSON is guaranteed to arrive before or with its
   // consumers") is held INTRA-CHUNK: each chunk emits its queries before its fragments,
   // and the canonical wire fixture enforces that a fragment ships in the same chunk as
@@ -107,7 +108,7 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
     [
       `--${boundary}`,
       ...chunkLines,
-      `<script ${cspHashAttribute(applyHashes[index] ?? '')}>${applyScriptBodies[index] ?? ''}</script>`,
+      `<script${cspNonceAttribute(options.cspNonce)} ${cspHashAttribute(applyHashes[index] ?? '')}>${applyScriptBodies[index] ?? ''}</script>`,
     ].join('\n'),
   );
 
@@ -120,7 +121,11 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
       options.closeHtml ?? '',
     ].join('\n'),
     // Dedupe: the apply hash repeats once per chunk but the CSP hash list is a set.
-    csp: { scripts: [...new Set([...applyHashes, cleanupHash])], styles: [] },
+    csp: {
+      ...(options.cspNonce === undefined ? {} : { nonce: options.cspNonce }),
+      scripts: [...new Set([...applyHashes, cleanupHash])],
+      styles: [],
+    },
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
     },

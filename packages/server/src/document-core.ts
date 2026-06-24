@@ -3,7 +3,9 @@ import {
   inlineKovoLoaderInstallerSource,
 } from '@kovojs/browser/internal/inline-loader';
 import {
+  createCspNonce,
   cspHashAttribute,
+  cspNonceAttribute,
   cspSha256,
   emptyCspInlineMetadata,
   mergeCspInlineMetadata,
@@ -202,6 +204,7 @@ export function renderDeferredDocument(
   const response = renderDeferredStream({
     chunks: options.chunks,
     closeHtml: frame.closeHtml,
+    cspNonce: assembled.csp.nonce,
     ...(options.boundary === undefined ? {} : { boundary: options.boundary }),
     shell,
   });
@@ -228,19 +231,23 @@ function assembleDocumentParts(
     | 'loaderRuntimeHref'
   >,
 ): { csp: CspInlineMetadata; earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
+  const nonce = createCspNonce();
   // F2 (bugs-part3 L2-early-hints-2): thread the rendered query values into the head
   // hint context so a `metaFromQuery(...)` factory resolves against real data instead
   // of an always-empty `{}` (which previously made every such factory throw → a hard
   // 500 during head render). Map by query name, matching `RouteMetaFactory.queries`.
   const queryValues = queryValuesByName(options.queries ?? []);
-  const hints = renderPageHints(
-    options.hints ?? {},
-    Object.keys(queryValues).length > 0 ? { queries: queryValues } : {},
+  const hints = renderPageHints(options.hints ?? {}, {
+    cspNonce: nonce,
+    ...(Object.keys(queryValues).length > 0 ? { queries: queryValues } : {}),
+  });
+  const queryScripts = (options.queries ?? []).map((query) =>
+    renderDocumentQueryScriptWithCsp(query, nonce),
   );
-  const queryScripts = (options.queries ?? []).map(renderDocumentQueryScriptWithCsp);
   const loader =
-    options.loader === 'omit' ? undefined : inlineLoaderScript(options.loaderRuntimeHref);
+    options.loader === 'omit' ? undefined : inlineLoaderScript(options.loaderRuntimeHref, nonce);
   const csp = mergeCspInlineMetadata(
+    { nonce, scripts: [], styles: [] },
     hints.csp,
     ...(loader === undefined ? [] : [loader.csp]),
     ...queryScripts.map((query) => query.csp),
@@ -311,7 +318,7 @@ export function renderRouteDocumentResponse(
   return {
     body: document.html,
     // Phase 7 / SPEC §9.5: surface the assembled CSP metadata for compatibility, while
-    // emitting the framework hash-based CSP by default below.
+    // emitting the framework strict CSP by default below.
     csp: document.csp,
     headers: withDefaultDocumentSecurityHeaders(
       {
@@ -394,7 +401,7 @@ export function withDefaultDocumentSecurityHeaders(
 ): ResponseHeaders {
   const secured: ResponseHeaders = { ...headers };
 
-  // Phase 7: documents emit the framework-owned hash CSP by default. If an app set
+  // Phase 7: documents emit the framework-owned strict CSP by default. If an app set
   // its own CSP, append Kovo's policy as a second enforcing policy so the fixed
   // base-uri/object-src/form-action/frame-ancestors floor remains non-overridable.
   appendHeaderValue(secured, 'Content-Security-Policy', renderContentSecurityPolicy(csp));
@@ -496,7 +503,10 @@ function requiredDocumentTemplateParts(
   ].filter(({ value }) => value.length > 0);
 }
 
-function inlineLoaderScript(runtimeHref: string | undefined): {
+function inlineLoaderScript(
+  runtimeHref: string | undefined,
+  nonce: string | undefined,
+): {
   csp: CspInlineMetadata;
   html: string;
 } {
@@ -506,8 +516,8 @@ function inlineLoaderScript(runtimeHref: string | undefined): {
       : createInlineKovoLoaderSource(JSON.stringify(runtimeHref), '(url)=>import(url)');
   const hash = cspSha256(source);
   return {
-    csp: { scripts: [hash], styles: [] },
-    html: `<script ${cspHashAttribute(hash)}>${source}</script>`,
+    csp: { ...(nonce === undefined ? {} : { nonce }), scripts: [hash], styles: [] },
+    html: `<script${cspNonceAttribute(nonce)} ${cspHashAttribute(hash)}>${source}</script>`,
   };
 }
 
@@ -525,7 +535,10 @@ function queryValuesByName(queries: readonly QueryScriptRenderOptions[]): Record
   return byName;
 }
 
-function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {
+function renderDocumentQueryScriptWithCsp(
+  options: QueryScriptRenderOptions,
+  nonce: string | undefined,
+): {
   csp: CspInlineMetadata;
   html: string;
 } {
@@ -536,8 +549,8 @@ function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {
   const hash = cspSha256(scriptText);
 
   return {
-    csp: { scripts: [hash], styles: [] },
-    html: `<script type="application/json" kovo-query="${escapeAttribute(options.name)}"${keyAttribute} ${cspHashAttribute(hash)}>${scriptText}</script>`,
+    csp: { ...(nonce === undefined ? {} : { nonce }), scripts: [hash], styles: [] },
+    html: `<script type="application/json" kovo-query="${escapeAttribute(options.name)}"${keyAttribute}${cspNonceAttribute(nonce)} ${cspHashAttribute(hash)}>${scriptText}</script>`,
   };
 }
 
