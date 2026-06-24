@@ -63,6 +63,7 @@ export type {
   RoutePageResponse,
   RouteResponseBody,
   RouteResponseOutcome,
+  RouteStoredFileOptions,
   RouteStreamOptions,
   ServerResponseBase,
 } from '../response.js';

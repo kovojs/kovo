@@ -4,7 +4,8 @@ import type { JsonValue, Secret, StorageCapability } from '@kovojs/core';
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
 
 import { runMutation } from './mutation.js';
-import { entriesToRecord, parseSchemaAsync, s } from './schema.js';
+import { type Schema, entriesToRecord, parseSchemaAsync, s } from './schema.js';
+import { unsafeRegex } from './redos.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server schemas', () => {
@@ -23,7 +24,7 @@ describe('server schemas', () => {
       type: 'text/plain',
     };
     const baseFile = s.file();
-    const imageFile = baseFile.mime(['image/png']).maxBytes(10);
+    const imageFile = baseFile.accept(['image/png']).maxBytes(10);
 
     expect(baseFile.parse(file)).toBe(file);
     expect(() => imageFile.parse(file)).toThrow('Expected file <= 10 bytes');
@@ -146,7 +147,7 @@ describe('server schemas', () => {
   it('coerces multipart file fields through s.file()', async () => {
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
-        avatar: s.file({ maxBytes: 16, mime: ['image/png'] }),
+        avatar: s.file({ maxBytes: 16, accept: ['image/png'] }),
       }),
       handler(input) {
         return {
@@ -171,56 +172,50 @@ describe('server schemas', () => {
     });
   });
 
-  it('stores multipart file fields through storage-backed s.file()', async () => {
+  // KV428 (SPEC §6.6/§9.1): the storage key is SERVER-GENERATED and opaque (random UUID under the
+  // `keyPrefix` namespace); the served contentType is SNIFFED from the bytes (server truth), NOT the
+  // client `file.type`; the client filename is sanitized download metadata only.
+  it('stores multipart file fields under a server-minted key with a sniffed content type', async () => {
     const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
-        avatar: s.file({ maxBytes: 16, mime: ['image/png'] }).store({
-          key: (file) => `avatars/${file.name}`,
-          storage,
-        }),
+        // Client lies "image/jpeg" but the bytes are a real PNG — the sniffer overrides the lie.
+        avatar: s.file({ maxBytes: 64 }).store({ keyPrefix: 'avatars', storage }),
       }),
       handler(input) {
         return {
           contentType: input.avatar.storage.contentType,
           key: input.avatar.key,
           name: input.avatar.file.name,
-          size: input.avatar.storage.size,
         };
       },
     });
     const form = new FormData();
-    form.set('avatar', formDataFile(['avatar'], 'avatar.png', 'image/png'));
+    form.set('avatar', pngFile('../../etc/passwd.png', 'image/jpeg'));
 
-    await expect(runMutation(uploadAvatar, form, {})).resolves.toEqual({
-      changes: [],
-      ok: true,
-      rerunQueries: [],
-      value: {
-        contentType: 'image/png',
-        key: 'avatars/avatar.png',
-        name: 'avatar.png',
-        size: 6,
-      },
-    });
-    await expect(storage.get('avatars/avatar.png')).resolves.toMatchObject({
-      contentType: 'image/png',
-      key: 'avatars/avatar.png',
-      metadata: { filename: 'avatar.png' },
-      size: 6,
-    });
-    const stored = await storage.get('avatars/avatar.png');
-    expect(new TextDecoder().decode(await storageBodyToBytes(stored?.body ?? ''))).toBe('avatar');
+    const result = await runMutation(uploadAvatar, form, {});
+    expect(result).toMatchObject({ ok: true });
+    const value = (result as { value: { contentType: string; key: string } }).value;
+    // Server truth: sniffed PNG, not the client "image/jpeg" lie.
+    expect(value.contentType).toBe('image/png');
+    // Opaque server key under the namespace — the traversal filename never became the key.
+    expect(value.key).toMatch(/^avatars\/[0-9a-f-]{36}$/u);
+    expect(value.key).not.toContain('..');
+
+    const stored = await storage.get(value.key);
+    expect(stored?.contentType).toBe('image/png');
+    // The client filename survives only as sanitized download metadata (no path segments).
+    expect(stored?.metadata?.filename).toBe('passwd.png');
   });
 
   it('does not store invalid multipart file fields', async () => {
     const storage = createMemoryStorage();
+    const put = vi.fn<StorageCapability['put']>((key, body, options) =>
+      storage.put(key, body, options),
+    );
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
-        avatar: s.file().maxBytes(4).store({
-          key: 'avatars/avatar.png',
-          storage,
-        }),
+        avatar: s.file().maxBytes(4).store({ keyPrefix: 'avatars', storage: { ...storage, put } }),
       }),
       handler(input) {
         return input.avatar.key;
@@ -237,13 +232,13 @@ describe('server schemas', () => {
       ok: false,
       status: 422,
     });
-    await expect(storage.get('avatars/avatar.png')).resolves.toBeUndefined();
+    expect(put).not.toHaveBeenCalled();
   });
 
   it('returns validation failures with field paths for schema errors', async () => {
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
-        avatar: s.file().maxBytes(4).mime(['image/png']),
+        avatar: s.file().maxBytes(4).accept(['image/png']),
       }),
       handler(input) {
         return input.avatar.name;
@@ -280,11 +275,40 @@ describe('server schemas', () => {
     });
   });
 
+  // KV434 (SPEC §6.6/§9.5): blessed formats + linear-safe pattern + unsafeRegex on s.string().
+  it('validates blessed string formats by-construction', () => {
+    expect(s.string().email().parse('user@example.com')).toBe('user@example.com');
+    expect(() => s.string().email().parse('nope')).toThrow('Expected email');
+    expect(s.string().uuid().parse('c8428f29-323d-4533-a60c-a0e6a5dea76a')).toBe(
+      'c8428f29-323d-4533-a60c-a0e6a5dea76a',
+    );
+    expect(() => s.string().uuid().parse('bad')).toThrow('Expected uuid');
+    expect(s.string().slug().parse('my-post')).toBe('my-post');
+  });
+
+  it('rejects a catastrophic-backtracking pattern literal and accepts a safe one (KV434)', () => {
+    expect(() => s.string().pattern('(a+)+$')).toThrow(/KV434/u);
+    const safe = s.string().pattern('^[a-z0-9]+$');
+    expect(safe.parse('abc123')).toBe('abc123');
+    expect(() => safe.parse('Bad!')).toThrow('Expected string matching pattern');
+  });
+
+  it('caps pattern() input length under the runtime step-budget (KV434)', () => {
+    const schema = s.string().pattern('^a+$');
+    expect(() => schema.parse('a'.repeat(5000))).toThrow(/match budget/u);
+  });
+
+  it('takes the audited unsafeRegex escape (KV434)', () => {
+    const schema = s.string().matches(unsafeRegex(/^(x+)+$/u, 'capped upstream'));
+    expect(schema.parse('xxx')).toBe('xxx');
+    expect(() => schema.parse('y')).toThrow('Expected string matching pattern');
+  });
+
   // M1: `s.array(s.file().store())` MUST run the async storing path for every item.
   // Before the fix `s.array` had no `parseAsync`, so `parseSchemaAsync` fell back to the
   // sync `parse`, which fabricated a `StoredFileUpload` without ever calling `storage.put`
   // (data loss) and without `normalizeStorageKey` (traversal-key passthrough).
-  it('stores every item of an s.array(s.file().store()) and rejects traversal keys', async () => {
+  it('stores every item of an s.array(s.file().store()) under distinct server-minted keys', async () => {
     const memory = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
     const put = vi.fn<StorageCapability['put']>((key, body, options) =>
       memory.put(key, body, options),
@@ -292,32 +316,33 @@ describe('server schemas', () => {
     const storage: StorageCapability = { ...memory, put };
 
     const schema = s.object({
-      photos: s.array(
-        s.file().store({
-          key: (file) => `gallery/${file.name}`,
-          storage,
-        }),
-      ),
+      photos: s.array(s.file().store({ keyPrefix: 'gallery', storage })),
     });
     const form = new FormData();
-    form.append('photos', formDataFile(['one'], 'one.png', 'image/png'));
-    form.append('photos', formDataFile(['evil'], '../../etc/evil.png', 'image/png'));
+    form.append('photos', pngFile('one.png', 'image/png'));
+    // KV428: a traversal filename can no longer become the storage key — the key is server-minted.
+    form.append('photos', pngFile('../../etc/evil.png', 'image/png'));
 
-    // The traversal key reaches `storage.put`, where `normalizeStorageKey` rejects it.
-    await expect(parseSchemaAsync(schema, form)).rejects.toThrow(/parent path segments/u);
+    const parsed = (await parseSchemaAsync(schema, form)) as {
+      photos: Array<{ key: string }>;
+    };
 
-    // `storage.put` was attempted once per file (was 0 before the fix — sync path skipped it).
+    // `storage.put` was attempted once per file with an opaque server key (was 0 before the M1 fix).
     expect(put).toHaveBeenCalledTimes(2);
-    expect(put.mock.calls[0]?.[0]).toBe('gallery/one.png');
-    expect(put.mock.calls[1]?.[0]).toBe('gallery/../../etc/evil.png');
-
-    // The valid file actually landed in storage; the traversal file did not.
-    await expect(memory.get('gallery/one.png')).resolves.toMatchObject({ key: 'gallery/one.png' });
+    for (const call of put.mock.calls) {
+      expect(call[0]).toMatch(/^gallery\/[0-9a-f-]{36}$/u);
+      expect(call[0]).not.toContain('..');
+    }
+    // Distinct opaque keys; both files landed (no overwrite via a colliding traversal name).
+    expect(parsed.photos[0]?.key).not.toBe(parsed.photos[1]?.key);
+    await expect(memory.get(parsed.photos[0]?.key ?? '')).resolves.toMatchObject({
+      key: parsed.photos[0]?.key,
+    });
   });
 
   // M1: the sync `parse` of a storing file schema must refuse to fabricate a result.
   it('refuses to store a file through the synchronous parse path', () => {
-    const storing = s.file().store({ key: 'gallery/photo.png', storage: createMemoryStorage() });
+    const storing = s.file().store({ keyPrefix: 'gallery', storage: createMemoryStorage() });
 
     expect(() => storing.parse(formDataFile(['x'], 'photo.png', 'image/png'))).toThrow(
       /storing requires async parsing/u,
@@ -328,7 +353,7 @@ describe('server schemas', () => {
   // NOT be wrapped into a SchemaValidationError — otherwise its raw `.message` leaks to the
   // client through the 422. It must re-throw unchanged so the caller routes it to the 500 path.
   it('re-throws non-validation field errors instead of leaking them as a 422', async () => {
-    const leaky: ReturnType<typeof s.string> = {
+    const leaky: Schema<string> = {
       parse() {
         throw new Error('SECRET endpoint https://internal.example/keys leaked');
       },
@@ -387,4 +412,10 @@ describe('server schemas', () => {
 
 function formDataFile(bits: string[], name: string, type: string): Blob {
   return new File(bits, name, { type }) as unknown as Blob;
+}
+
+/** A File whose bytes are a real (minimal) PNG, with an arbitrary client-declared `type`. */
+function pngFile(name: string, type: string): Blob {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02]);
+  return new File([png], name, { type }) as unknown as Blob;
 }

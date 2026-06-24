@@ -16,10 +16,13 @@ describe('route responses', () => {
     });
     const streamRoute = route('/attachments/:id', {
       page(context) {
+        // KV428: an un-bufferable stream served inline is the branded opt-in — the route attests
+        // the bytes are verified-safe (re-encoded/rasterized) via `verifiedSafe: true`.
         return respond.stream(new ReadableStream<Uint8Array>(), {
           contentType: 'application/octet-stream',
           disposition: 'inline',
           filename: `${context.params.id}.bin`,
+          verifiedSafe: true,
         });
       },
     });

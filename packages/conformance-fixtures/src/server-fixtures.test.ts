@@ -344,6 +344,11 @@ describe('@kovojs/test server fixture facts', () => {
       firstRateLimitPasses: true,
       secondRateLimitFailure: 'rateLimited',
     });
+    // KV428 (SPEC §6.6/§9.1): the storage key is a server-minted opaque UUID under the `receipts`
+    // namespace (never the client filename), and the served contentType is SNIFFED (`%PDF-` →
+    // application/pdf), not the client-declared type.
+    const receiptKey = expect.stringMatching(/^receipts\/[0-9a-f-]{36}$/u) as unknown as string;
+    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e]);
     expect(fact.upload.result).toEqual({
       changes: [
         {
@@ -352,11 +357,11 @@ describe('@kovojs/test server fixture facts', () => {
             orderId: 'o1',
             receipt: {
               file: expect.any(Blob),
-              key: 'receipts/receipt.pdf',
+              key: receiptKey,
               storage: {
-                body: new TextEncoder().encode('receipt'),
+                body: pdfBytes,
                 contentType: 'application/pdf',
-                key: 'receipts/receipt.pdf',
+                key: receiptKey,
                 metadata: { filename: 'receipt.pdf' },
                 size: 7,
               },
@@ -369,13 +374,13 @@ describe('@kovojs/test server fixture facts', () => {
       value: {
         orderId: 'o1',
         session: 'u1',
-        storageKey: 'receipts/receipt.pdf',
+        storageKey: receiptKey,
       },
     });
     expect(fact.upload.stored).toEqual({
-      body: new TextEncoder().encode('receipt'),
+      body: pdfBytes,
       contentType: 'application/pdf',
-      key: 'receipts/receipt.pdf',
+      key: receiptKey,
       metadata: { filename: 'receipt.pdf' },
       size: 7,
     });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
 import {
   isHeaderSource,
@@ -120,11 +121,60 @@ describe('server response adapters', () => {
 
   it('defaults stream responses to X-Content-Type-Options: nosniff', () => {
     const response = routeOutcomeResponse(
-      respond.stream('<svg/>', { contentType: 'image/svg+xml', disposition: 'inline' }),
+      respond.stream('any attachment body', { contentType: 'text/plain' }),
       { method: 'GET' },
     );
 
+    expect(response.headers['Content-Disposition']).toBe('attachment');
     expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
+  });
+
+  // KV428 (SPEC §6.6/§9.1): the live inline-XSS hole — `respond.stream({disposition:'inline'})`
+  // serving an attacker SVG/HTML inline — is now REFUSED at the sink (the runtime fail-closed floor).
+  it('refuses to serve an inline SVG/HTML body (KV428)', () => {
+    expect(() =>
+      respond.stream('<svg onload="alert(1)"/>', {
+        contentType: 'image/svg+xml',
+        disposition: 'inline',
+      }),
+    ).toThrow(/KV428/u);
+    expect(() =>
+      respond.stream('<!doctype html><script>x</script>', {
+        contentType: 'text/html',
+        disposition: 'inline',
+      }),
+    ).toThrow(/KV428/u);
+  });
+
+  // KV428 positive: a real raster image still renders inline, with the SNIFFED content type (server
+  // truth) regardless of what the caller declared.
+  it('serves a real PNG inline with the sniffed content type (KV428)', () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2]);
+    const response = routeOutcomeResponse(
+      // Caller lies "text/html"; the sniffer overrides it to image/png and allows inline.
+      respond.stream(png, { contentType: 'text/html', disposition: 'inline' }),
+      { method: 'GET' },
+    );
+
+    expect(response.headers['Content-Type']).toBe('image/png');
+    expect(response.headers['Content-Disposition']).toBe('inline');
+    expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
+  });
+
+  // KV428: an un-bufferable stream cannot be sniffed, so inline requires the explicit verifiedSafe
+  // brand (the framework re-encode/rasterize attestation); without it the runtime refuses.
+  it('requires verifiedSafe for an inline un-bufferable stream (KV428)', () => {
+    const body = new ReadableStream<Uint8Array>();
+    expect(() =>
+      respond.stream(body, { contentType: 'image/png', disposition: 'inline' }),
+    ).toThrow(/KV428/u);
+
+    const ok = respond.stream(body, {
+      contentType: 'image/png',
+      disposition: 'inline',
+      verifiedSafe: true,
+    });
+    expect(ok.contentDisposition).toBe('inline');
   });
 
   it('does not clobber an author-supplied X-Content-Type-Options header', () => {
@@ -138,6 +188,32 @@ describe('server response adapters', () => {
 
     expect(response.headers['x-content-type-options']).toBe('custom');
     expect(response.headers['X-Content-Type-Options']).toBeUndefined();
+  });
+
+  // KV428: respond.storedFile takes a bare string key (no compile-visible verification), so it is
+  // the runtime sidecar-marker path — defaults to attachment + nosniff + sniffed type, and refuses
+  // inline for non-passive bytes.
+  it('serves a stored file as attachment with a sniffed content type (KV428)', async () => {
+    const storage = createMemoryStorage();
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1]);
+    await storage.put('avatars/k', png, { contentType: 'text/html' }); // stored type is a lie.
+
+    const outcome = await respond.storedFile(storage, 'avatars/k', { filename: 'a.png' });
+    expect(outcome?.contentType).toBe('image/png'); // server truth, not the stored "text/html".
+    expect(outcome?.contentDisposition).toBe('attachment; filename="a.png"');
+
+    expect(await respond.storedFile(storage, 'missing')).toBeUndefined();
+  });
+
+  it('refuses to serve a stored SVG/HTML object inline (KV428)', async () => {
+    const storage = createMemoryStorage();
+    await storage.put('uploads/evil', new TextEncoder().encode('<svg onload="x"/>'), {
+      contentType: 'image/svg+xml',
+    });
+
+    await expect(
+      respond.storedFile(storage, 'uploads/evil', { disposition: 'inline' }),
+    ).rejects.toThrow(/KV428/u);
   });
 
   it('accepts concrete header sources without treating arbitrary objects as headers', () => {

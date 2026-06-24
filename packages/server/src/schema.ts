@@ -1,5 +1,19 @@
 import type { Secret, StorageCapability, StorageObjectInfo } from '@kovojs/core';
 
+import {
+  type UnverifiedAcceptance,
+  mintStorageKey,
+  sanitizeDownloadFilename,
+  sniffUploadBytes,
+} from './upload-sniff.js';
+import {
+  type BlessedFormatName,
+  type UnsafeRegexBrand,
+  BLESSED_FORMATS,
+  PATTERN_MAX_INPUT_LENGTH,
+  assertLinearSafePattern,
+} from './redos.js';
+
 /** A validator that parses unknown input into a typed value (throwing `SchemaValidationError` on failure). */
 export interface Schema<T> {
   parse(input: unknown): T;
@@ -130,13 +144,8 @@ export const s = {
   file(options: FileSchemaOptions = {}): FileSchema {
     return new FileSchemaImpl(options);
   },
-  string(): Schema<string> {
-    return {
-      parse(input: unknown): string {
-        if (typeof input !== 'string') throw validationError('Expected string');
-        return input;
-      },
-    };
+  string(): StringSchema {
+    return new StringSchemaImpl();
   },
   number(): NumberSchema {
     return new NumberSchemaImpl();
@@ -197,17 +206,36 @@ export interface FileLike {
   type: string;
 }
 
-/** File-upload schema produced by `s.file()`; chains size/MIME limits and `.store()` (SPEC.md §6). */
+/**
+ * File-upload schema produced by `s.file()`; chains a size limit, a verified content-type
+ * allowlist via `.accept(...)`, and `.store()` (SPEC.md §6; KV428 SPEC §6.6/§9.1).
+ *
+ * KV428 (plans/secure-framework.md Phase 6 Tier 1): the legacy `.mime()` was REMOVED — it trusted
+ * the client-declared `file.type`, the verbatim-client-MIME hole. The replacement `.accept(...)`
+ * checks against the SERVER-SNIFFED type (`accept([...])`) or takes the audited
+ * `accept.unverified([...], justification)` escape, which is surfaced in `kovo explain
+ * --capabilities`.
+ */
 export interface FileSchema extends Schema<FileLike> {
   maxBytes(value: number): FileSchema;
-  mime(types: readonly string[]): FileSchema;
+  /**
+   * Restrict accepted uploads to an allowlist of content types. Pass `accept([...types])` from
+   * `@kovojs/server` to check against the SERVER-SNIFFED bytes (server truth), or
+   * `accept.unverified([...types], justification)` to trust the client-declared MIME (the audited
+   * escape, surfaced in `kovo explain --capabilities`). KV428 (SPEC §6.6/§9.1).
+   */
+  accept(acceptance: UnverifiedAcceptance | readonly string[]): FileSchema;
   store(options: StoredFileSchemaOptions): StoredFileSchema;
 }
 
-/** Size/MIME constraints captured by an `s.file()` schema (SPEC.md §6). */
+/** Size/content-type constraints captured by an `s.file()` schema (SPEC.md §6; KV428 §6.6/§9.1). */
 export interface FileSchemaOptions {
   maxBytes?: number;
-  mime?: readonly string[];
+  /**
+   * The accepted content types: a plain string allowlist checked against the SERVER-SNIFFED type,
+   * or an `accept.unverified(...)` acceptance that trusts the client-declared MIME (audited).
+   */
+  accept?: UnverifiedAcceptance | readonly string[];
 }
 
 /** Result of a stored upload produced by `s.file().store(...)` (SPEC.md §6). */
@@ -220,11 +248,47 @@ export interface StoredFileUpload {
 /** Stored-upload schema produced by `s.file().store(...)` (SPEC.md §6). */
 export interface StoredFileSchema extends AsyncSchema<StoredFileUpload> {}
 
-/** Options for `s.file().store(...)`: storage capability, object key, and metadata (SPEC.md §6). */
+/**
+ * Options for `s.file().store(...)`: storage capability, an optional key namespace, and metadata
+ * (SPEC.md §6; KV428 SPEC §6.6/§9.1).
+ *
+ * KV428: the storage key is SERVER-GENERATED and opaque by construction (a random UUID, optionally
+ * namespaced by `keyPrefix`). The client filename is NEVER the key — it is sanitized download
+ * metadata only, killing path-traversal/overwrite. The legacy author-controlled `key` callback was
+ * removed; pass `keyPrefix` to namespace uploads.
+ */
 export interface StoredFileSchemaOptions {
-  key: string | ((file: FileLike) => Promise<string> | string);
+  /** Optional namespace segment for the server-minted random key (e.g. `'avatars'`). */
+  keyPrefix?: string;
   metadata?: (file: FileLike) => Readonly<Record<string, string>>;
   storage: StorageCapability;
+}
+
+/**
+ * String schema produced by `s.string()`; chains a blessed-format check (`.email()`/`.url()`/
+ * `.uuid()`/`.slug()`), a linear-safe `.pattern(...)` literal, or the audited `.matches(unsafeRegex)`
+ * escape (KV434, SPEC §6.6/§9.5).
+ *
+ * KV434: blessed formats are backtracking-free BY-CONSTRUCTION; `.pattern(literal)` is
+ * by-construction-ISH (static nested/overlapping-quantifier reject + a runtime input-length
+ * step-budget); a non-literal/unanalyzable pattern is rejected. `unsafeRegex(re, justification)` is
+ * the audited escape surfaced in `kovo explain --capabilities`.
+ */
+export interface StringSchema extends Schema<string> {
+  /** Restrict to one of the blessed backtracking-free formats (KV434). */
+  format(name: BlessedFormatName): StringSchema;
+  email(): StringSchema;
+  url(): StringSchema;
+  uuid(): StringSchema;
+  slug(): StringSchema;
+  /**
+   * Require the value to match a COMPILE-VISIBLE literal pattern. The pattern is statically rejected
+   * for catastrophic-backtracking structure and executes under a runtime step-budget (KV434). Pass a
+   * string source or a literal `RegExp`; for a dynamic/unsafe pattern use `.matches(unsafeRegex(...))`.
+   */
+  pattern(source: RegExp | string): StringSchema;
+  /** Match against an audited {@link unsafeRegex} brand — the escape for an unanalyzable pattern (KV434). */
+  matches(brand: UnsafeRegexBrand): StringSchema;
 }
 
 /** Numeric schema produced by `s.number()`; chains int/min/default refinements (SPEC.md §6). */
@@ -290,35 +354,108 @@ class NumberSchemaImpl implements NumberSchema {
   }
 }
 
+/** One refinement a `StringSchema` applies in order: a blessed format, a linear-safe pattern, or an audited regex. */
+type StringCheck =
+  | { kind: 'format'; name: BlessedFormatName }
+  | { kind: 'pattern'; regex: RegExp; source: string }
+  | { kind: 'unsafe'; regex: RegExp };
+
+class StringSchemaImpl implements StringSchema {
+  readonly #checks: readonly StringCheck[];
+
+  constructor(checks: readonly StringCheck[] = []) {
+    this.#checks = checks;
+  }
+
+  #with(check: StringCheck): StringSchema {
+    return new StringSchemaImpl([...this.#checks, check]);
+  }
+
+  format(name: BlessedFormatName): StringSchema {
+    return this.#with({ kind: 'format', name });
+  }
+  email(): StringSchema {
+    return this.format('email');
+  }
+  url(): StringSchema {
+    return this.format('url');
+  }
+  uuid(): StringSchema {
+    return this.format('uuid');
+  }
+  slug(): StringSchema {
+    return this.format('slug');
+  }
+
+  pattern(source: RegExp | string): StringSchema {
+    const src = typeof source === 'string' ? source : source.source;
+    // KV434: statically reject catastrophic-backtracking structure BEFORE the pattern can ever run.
+    // A dynamic/non-literal pattern reaches here as a runtime value the compiler cannot inspect; the
+    // KV434 lint flags that at the call site, and `unsafeRegex(...)` is the audited escape.
+    assertLinearSafePattern(src);
+    const flags = typeof source === 'string' ? '' : source.flags.replace(/[gy]/g, '');
+    return this.#with({ kind: 'pattern', regex: new RegExp(src, flags), source: src });
+  }
+
+  matches(brand: UnsafeRegexBrand): StringSchema {
+    // The audited escape: the ReDoS risk was accepted + recorded at `unsafeRegex(...)`.
+    return this.#with({ kind: 'unsafe', regex: brand.regex });
+  }
+
+  parse(input: unknown): string {
+    if (typeof input !== 'string') throw validationError('Expected string');
+
+    for (const check of this.#checks) {
+      if (check.kind === 'format') {
+        if (!BLESSED_FORMATS[check.name].test(input)) {
+          throw validationError(`Expected ${check.name}`);
+        }
+        continue;
+      }
+      // KV434 runtime step-budget backstop (SPEC §6.6): cap input length so a pattern that slipped
+      // the static analysis (or an audited `unsafeRegex`) cannot burn unbounded CPU. JS RegExp has no
+      // native step limit; length is the proxy. Over-budget input is a non-match (fail-closed).
+      if (input.length > PATTERN_MAX_INPUT_LENGTH) {
+        throw validationError(
+          `Expected string matching pattern (input exceeds the ${PATTERN_MAX_INPUT_LENGTH}-char match budget)`,
+        );
+      }
+      if (!check.regex.test(input)) throw validationError('Expected string matching pattern');
+    }
+
+    return input;
+  }
+}
+
 class FileSchemaImpl implements FileSchema {
   readonly #maxBytes: number | undefined;
-  readonly #mime: readonly string[] | undefined;
+  readonly #accept: UnverifiedAcceptance | readonly string[] | undefined;
 
   constructor(options: FileSchemaOptions = {}) {
     this.#maxBytes = options.maxBytes;
-    this.#mime = options.mime;
+    this.#accept = options.accept;
   }
 
   maxBytes(value: number): FileSchema {
     return new FileSchemaImpl({
       maxBytes: value,
-      ...(this.#mime === undefined ? {} : { mime: this.#mime }),
+      ...(this.#accept === undefined ? {} : { accept: this.#accept }),
     });
   }
 
-  mime(types: readonly string[]): FileSchema {
+  accept(acceptance: UnverifiedAcceptance | readonly string[]): FileSchema {
     return new FileSchemaImpl({
       ...(this.#maxBytes === undefined ? {} : { maxBytes: this.#maxBytes }),
-      mime: types,
+      accept: acceptance,
     });
   }
 
   parse(input: unknown): FileLike {
-    return parseFileLike(input, createFileOptions(this.#maxBytes, this.#mime));
+    return parseFileLike(input, createFileOptions(this.#maxBytes, this.#accept));
   }
 
   store(options: StoredFileSchemaOptions): StoredFileSchema {
-    return new StoredFileSchemaImpl(createFileOptions(this.#maxBytes, this.#mime), options);
+    return new StoredFileSchemaImpl(createFileOptions(this.#maxBytes, this.#accept), options);
   }
 }
 
@@ -342,14 +479,26 @@ class StoredFileSchemaImpl implements StoredFileSchema {
 
   async parseAsync(input: unknown): Promise<StoredFileUpload> {
     const file = parseFileLike(input, this.#fileOptions);
-    const key =
-      typeof this.#storageOptions.key === 'string'
-        ? this.#storageOptions.key
-        : await this.#storageOptions.key(file);
-    const storage = await this.#storageOptions.storage.put(key, await file.arrayBuffer(), {
-      ...(file.type === '' ? {} : { contentType: file.type }),
+    const bytes = new Uint8Array(await file.arrayBuffer());
+
+    // KV428 (SPEC §6.6/§9.1): the storage key is SERVER-GENERATED and opaque (random UUID), never
+    // derived from the client filename. This kills path traversal / overwrite by construction — an
+    // attacker `../../etc/passwd` name can no longer become the storage key.
+    const key = mintStorageKey(this.#storageOptions.keyPrefix);
+
+    // KV428: mint the stored contentType from the SNIFFED bytes (server truth overrides the client
+    // lie). The audited `accept.unverified(...)` escape trusts the client-declared `file.type`
+    // instead (recorded for `kovo explain --capabilities`). The bytes are already buffered, so the
+    // deep sniff is free.
+    const contentType = isUnverifiedAcceptance(this.#fileOptions.accept)
+      ? file.type
+      : sniffUploadBytes(bytes).contentType;
+
+    const storage = await this.#storageOptions.storage.put(key, bytes.buffer.slice(0), {
+      ...(contentType === '' ? {} : { contentType }),
       metadata: {
-        filename: file.name,
+        // The client filename is sanitized download METADATA only — never the key.
+        filename: sanitizeDownloadFilename(file.name),
         ...this.#storageOptions.metadata?.(file),
       },
     });
@@ -358,13 +507,24 @@ class StoredFileSchemaImpl implements StoredFileSchema {
   }
 }
 
+function isUnverifiedAcceptance(
+  accept: UnverifiedAcceptance | readonly string[] | undefined,
+): accept is UnverifiedAcceptance {
+  return (
+    typeof accept === 'object' &&
+    accept !== null &&
+    !Array.isArray(accept) &&
+    (accept as UnverifiedAcceptance).unverified === true
+  );
+}
+
 function createFileOptions(
   maxBytes: number | undefined,
-  mime: readonly string[] | undefined,
+  accept: UnverifiedAcceptance | readonly string[] | undefined,
 ): FileSchemaOptions {
   return {
     ...(maxBytes === undefined ? {} : { maxBytes }),
-    ...(mime === undefined ? {} : { mime }),
+    ...(accept === undefined ? {} : { accept }),
   };
 }
 
@@ -378,8 +538,14 @@ function parseFileLike(input: unknown, options: FileSchemaOptions): FileLike {
   if (options.maxBytes !== undefined && input.size > options.maxBytes) {
     throw validationError(`Expected file <= ${options.maxBytes} bytes`);
   }
-  if (options.mime && !options.mime.includes(input.type)) {
-    throw validationError(`Expected file type ${options.mime.join(', ')}`);
+  // The `.accept(...)` allowlist on the SYNC parse path is a cheap client-MIME pre-filter only; the
+  // authoritative server-sniffed-type check happens on the async `.store()` path (KV428). For an
+  // `accept.unverified(...)` allowlist this client-MIME check is the *intended* (audited) check.
+  const acceptedTypes = isUnverifiedAcceptance(options.accept)
+    ? options.accept.types
+    : options.accept;
+  if (acceptedTypes && acceptedTypes.length > 0 && !acceptedTypes.includes(input.type)) {
+    throw validationError(`Expected file type ${acceptedTypes.join(', ')}`);
   }
 
   return input;

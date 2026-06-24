@@ -613,18 +613,24 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
     },
     input: runtime.s.object({
       orderId: runtime.s.string(),
+      // KV428: the storage key is server-minted under the `receipts` namespace; the client filename
+      // is sanitized metadata only. The accepted-type allowlist is checked against sniffed bytes.
       receipt: runtime.s
-        .file({ maxBytes: 64 * 1024, mime: ['application/pdf', 'image/png'] })
-        .store({
-          key: (file: { name: string }) => `receipts/${file.name}`,
-          storage,
-        }),
+        .file({ maxBytes: 64 * 1024 })
+        .store({ keyPrefix: 'receipts', storage }),
     }),
     registry: { touches: [runtime.domain('attachment')] },
   });
   const receiptForm = new FormData();
   receiptForm.set('orderId', 'o1');
-  receiptForm.set('receipt', new Blob(['receipt'], { type: 'application/pdf' }), 'receipt.pdf');
+  // Real PDF magic bytes (`%PDF-`) so the KV428 sniffer mints `application/pdf` (server truth).
+  receiptForm.set(
+    'receipt',
+    new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e])], {
+      type: 'application/pdf',
+    }),
+    'receipt.pdf',
+  );
 
   const uploadResult = await runtime.runMutation(uploadReceipt, receiptForm, authenticatedRequest);
 
@@ -745,7 +751,13 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
         value: progressElement.getAttribute('value'),
       },
       result: uploadResult,
-      stored: await storage.stat('receipts/receipt.pdf'),
+      stored: await storage.stat(uploadedReceiptKey(uploadResult)),
     },
   };
+}
+
+/** Extract the server-minted receipt key from the upload mutation result (KV428). */
+function uploadedReceiptKey(result: unknown): string {
+  const value = (result as { value?: { storageKey?: unknown } })?.value;
+  return typeof value?.storageKey === 'string' ? value.storageKey : 'receipts/missing';
 }

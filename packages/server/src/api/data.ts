@@ -55,9 +55,20 @@ export type {
   StoredFileSchema,
   StoredFileSchemaOptions,
   StoredFileUpload,
+  StringSchema,
   ValidationFailurePayload,
   ValidationIssue,
 } from '../schema.js';
+// KV428 (SPEC §6.6/§9.1): the upload inline-XSS gate. `accept`/`accept.unverified()` is the
+// verified-MIME allowlist + audited client-MIME escape; `InlineUnverifiedUploadError` is the
+// fail-closed inline-refusal; `drainUnverifiedMimeFacts` feeds `kovo explain --capabilities`.
+export { accept, InlineUnverifiedUploadError, drainUnverifiedMimeFacts } from '../upload-sniff.js';
+export type { UnverifiedAcceptance, UnverifiedMimeFact } from '../upload-sniff.js';
+// KV434 (SPEC §6.6/§9.5): ReDoS-safe string validators. `unsafeRegex` is the audited escape for an
+// unanalyzable pattern; `RedosPatternError` is the static-reject error; `drainUnsafeRegexFacts`
+// feeds `kovo explain --capabilities`.
+export { RedosPatternError, drainUnsafeRegexFacts, unsafeRegex } from '../redos.js';
+export type { BlessedFormatName, UnsafeRegexBrand, UnsafeRegexFact } from '../redos.js';
 // SPEC §9.1 idempotent replay store: apps provision and hold a store for webhook
 // and mutation handlers (real consumer: conformance/webhook-spike). The default
 // in-memory implementation and its contract types stay public at the root.

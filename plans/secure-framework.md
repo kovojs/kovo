@@ -47,11 +47,25 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
       Trusted Types: framework `kovo` policy + module-side sinks routed, shipped **opt-in** (the always-on
       inline-loader `p`/`d` sinks need routing via `inline-loader-build.ts` before default-on — SF-WIRE).
 - [x] **KV430 input-shape DoS budget** — iterative depth/breadth/node budget at the `parseSchemaAsync` wire
-      entry (`schema.ts`); the 4000-deep array attack is rejected before descent and the check can't itself
-      stack-overflow. 7 tests. Commit `52041325`. _Rest of the schema cluster below remains._
-- [ ] **Schema cluster remainder:** KV428 upload inline-XSS gate (remove `.mime()`, sniff-based content-type,
-  attachment-default); KV434 ReDoS-safe validators; per-schema `.max()` overrides; FormData-breadth +
-  sync-parse-entry coverage. _(The agent assigned this session-limited mid-run; worktree discarded.)_
+  entry (`schema.ts`); the 4000-deep array attack is rejected before descent and the check can't itself
+  stack-overflow. 7 tests. Commit `52041325`. _Rest of the schema cluster below remains._
+- [x] **KV428 upload inline-XSS gate** — `respond.*` default `attachment` + `nosniff`; served `Content-Type`
+  minted from SNIFFED bytes (deep sniffer in `upload-sniff.ts`: magic-byte + ZIP/OOXML, rejects
+  HTML/SVG/XML/polyglot inline); inline is a branded opt-in over verified-safe bytes (in-memory sniff, or
+  `verifiedSafe: true` for un-bufferable streams). `s.file().store()` mints opaque server keys (random UUID,
+  no client-filename key → no traversal/overwrite); filename is sanitized download metadata. `.mime()`
+  REMOVED (only test callers) → `accept([...])` (checks SNIFFED type) + audited `accept.unverified([...],
+  justification)` escape (`drainUnverifiedMimeFacts` SF-WIRE). `respond.storedFile(storage, key)` is the
+  runtime sidecar-marker fail-closed path. KV428 = `InlineUnverifiedUploadError`. Honest ceiling: "attacker
+  bytes never render inline as active content", NOT "sniffed type unspoofable" (SPEC §6.6/§9.1). `schema.ts`,
+  `response.ts`, new `upload-sniff.ts`. ~30 new tests (schema/response/upload-sniff suites).
+- [ ] **KV434 ReDoS-safe validators (mostly landed):** blessed by-construction `email`/`url`/`uuid`/`slug`
+  matchers (backtracking-free, no `RegExp`); `s.string().pattern(literal)` statically rejects nested/overlapping
+  quantifiers + runs under a runtime input-length step-budget; `unsafeRegex(re, justification)` audited escape
+  (`drainUnsafeRegexFacts` SF-WIRE). New `redos.ts`, 19 tests. _Residual: the compiler-side KV434 lint that
+  flags a NON-LITERAL `pattern()` at the call site (the runtime rejects exponential literals + budgets
+  execution today, but the static "unanalyzable pattern → KV434" call-site diagnostic and the full RE2/DFA
+  linear engine are deferred); per-schema `.max()` overrides; FormData-breadth + sync-parse-entry coverage._
 - [x] **KV436 default-deny + access migration** (breaking) — merged to `main`. `deriveAppGraph` classifies
   every surface (guard/public/verified/**missing**); KV436 fails `kovo check` on missing; every app surface
   migrated with a real decision; SPEC §10.2. By-construction that a decision exists (KV414 keeps IDOR).

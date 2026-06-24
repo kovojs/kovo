@@ -1,4 +1,7 @@
 import type { DeferredStreamChunk } from './deferred-stream.js';
+import type { StorageCapability } from '@kovojs/core';
+
+import { InlineUnverifiedUploadError, sniffUploadBytes } from './upload-sniff.js';
 
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
@@ -56,9 +59,28 @@ export interface RouteFileOptions {
   headers?: Record<string, string>;
 }
 
+/**
+ * Options for `respond.storedFile`: optional download `filename` and inline/attachment disposition.
+ * The content type is always the SERVER-SNIFFED type of the stored bytes (KV428), never supplied by
+ * the caller.
+ */
+export interface RouteStoredFileOptions {
+  disposition?: 'attachment' | 'inline';
+  filename?: string;
+}
+
 /** Options for `respond.stream`: `RouteFileOptions` plus inline/attachment disposition. */
 export interface RouteStreamOptions extends RouteFileOptions {
   disposition?: 'attachment' | 'inline';
+  /**
+   * KV428 inline opt-in (SPEC §6.6/§9.1): set ONLY when the body bytes have been proven safe to
+   * render inline — the framework re-encoded/rasterized them, or they came through a deep-sniff
+   * `inlineSafe` pass. Required for `disposition: 'inline'` on an un-bufferable stream body; for an
+   * in-memory body (string/bytes/ArrayBuffer) the runtime deep-sniffs instead and this brand is the
+   * explicit override of that check. Setting it on attacker-controlled active content (HTML/SVG) is
+   * the audited risk the brand records.
+   */
+  verifiedSafe?: boolean;
 }
 
 /**
@@ -269,10 +291,55 @@ export const respond = {
       disposition: 'attachment',
     });
   },
+  /**
+   * Serve a stored upload by its (server-generated, opaque) storage key. KV428 (SPEC §6.6/§9.1):
+   * this path takes a BARE STRING key, so there is no compile-visible verification that the bytes
+   * are inline-safe — the static brand degrades to a RUNTIME SIDECAR-MARKER, fail-closed:
+   *
+   *  - Defaults to `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`.
+   *  - The served `Content-Type` is minted from the SNIFFED stored bytes (server truth), NOT the
+   *    stored `contentType` (which a prior `accept.unverified()` may have set to a client lie).
+   *  - `disposition: 'inline'` deep-sniffs and REFUSES to serve unless the bytes are known-passive
+   *    (the runtime sidecar-marker refuse-to-serve-inline-if-unverified floor).
+   *
+   * @param storage - The storage capability to read from.
+   * @param key - The opaque stored object key (from `s.file().store(...)`).
+   */
+  async storedFile(storage: StorageCapability, key: string, options: RouteStoredFileOptions = {}) {
+    const object = await storage.get(key);
+    if (object === undefined) return undefined;
+    const disposition = options.disposition ?? 'attachment';
+    const sniffed = sniffUploadBytes(object.body);
+    if (disposition === 'inline' && !sniffed.inlineSafe) {
+      throw new InlineUnverifiedUploadError(
+        `Refusing to serve stored object "${key}" inline: its sniffed content type is not a ` +
+          'known-passive type. Serve as an attachment, or rasterize/re-encode the bytes.',
+      );
+    }
+    return routeResponseOutcome(object.body, {
+      // Server truth: the served type is the SNIFFED type, never the stored (possibly-client) type.
+      contentType: sniffed.contentType,
+      disposition,
+      ...(options.filename === undefined ? {} : { filename: options.filename }),
+      ...(object.etag === undefined ? {} : { etag: object.etag }),
+    });
+  },
   stream(body: RouteResponseBody, options: RouteStreamOptions) {
+    const disposition = options.disposition ?? 'attachment';
+    // KV428 (SPEC §6.6/§9.1): inline rendering is a branded opt-in over verified-safe bytes. For an
+    // in-memory body we deep-sniff and refuse unless the bytes are a known-passive type; an
+    // un-bufferable stream cannot be sniffed, so it requires the explicit `verifiedSafe` brand
+    // (the framework re-encode/rasterize attestation). This is the fail-closed runtime floor — the
+    // honest ceiling is "attacker bytes never render inline as active content", not an unspoofable
+    // type. Authors override the sniffed contentType via `verifiedSafe: true` (audited risk).
+    const contentType =
+      disposition === 'inline'
+        ? assertInlineBody(body, options.contentType, options.verifiedSafe ?? false)
+        : options.contentType;
     return routeResponseOutcome(body, {
       ...options,
-      disposition: options.disposition ?? 'attachment',
+      contentType,
+      disposition,
     });
   },
 };
@@ -347,6 +414,49 @@ export function routeResponseToDocumentResponse(
     ...response,
     body: response.body instanceof ArrayBuffer ? new Uint8Array(response.body) : response.body,
   };
+}
+
+/**
+ * KV428 (SPEC §6.6/§9.1): assert an in-memory body is safe to render inline, returning the
+ * server-minted (sniffed) content type. Throws {@link InlineUnverifiedUploadError} for
+ * HTML/SVG/XML/ambiguous bytes. An un-bufferable `ReadableStream` cannot be sniffed, so inline
+ * serving requires the explicit `verifiedSafe` brand — without it, the runtime refuses (fail-closed
+ * floor). When `verifiedSafe` is set, the author's declared content type is trusted (audited risk).
+ */
+function assertInlineBody(
+  body: RouteResponseBody,
+  declaredContentType: string,
+  verifiedSafe: boolean,
+): string {
+  if (verifiedSafe) return declaredContentType;
+
+  const bytes = inlineBodyBytes(body);
+  if (bytes === undefined) {
+    throw new InlineUnverifiedUploadError(
+      'Refusing to serve a streamed (un-bufferable) body inline without `verifiedSafe: true`. ' +
+        'Buffer the bytes so the runtime can deep-sniff them, serve as an attachment, or pass ' +
+        '`verifiedSafe: true` only for bytes the framework re-encoded/rasterized.',
+    );
+  }
+
+  const sniffed = sniffUploadBytes(bytes);
+  if (!sniffed.inlineSafe) {
+    throw new InlineUnverifiedUploadError(
+      'Refusing to serve unverified bytes inline: the sniffed content type is not a known-passive ' +
+        'type (HTML/SVG/XML/ambiguous bytes are attachment-only — SVG is XML+script). Serve as an ' +
+        'attachment, or rasterize/re-encode and pass `verifiedSafe: true`.',
+    );
+  }
+  // Server truth: the served Content-Type comes from the sniffed bytes, not the client/author lie.
+  return sniffed.contentType;
+}
+
+/** Buffer an in-memory body to bytes for sniffing; `undefined` for an un-bufferable stream. */
+function inlineBodyBytes(body: RouteResponseBody): Uint8Array | undefined {
+  if (typeof body === 'string') return new TextEncoder().encode(body);
+  if (body instanceof ArrayBuffer) return new Uint8Array(body);
+  if (body instanceof Uint8Array) return body;
+  return undefined; // ReadableStream — not bufferable without consuming it.
 }
 
 function routeResponseOutcome(
