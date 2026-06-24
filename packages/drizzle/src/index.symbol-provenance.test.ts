@@ -4,6 +4,7 @@ import { Node, Project, SyntaxKind } from 'ts-morph';
 import {
   UNRESOLVED_READ_SOURCE_EXPRESSION,
   extractSymbolicEffectsFromProject,
+  governedWriteDiagnosticsFromProject,
   joinSymbolProvenance,
   provenInputProvenanceForExpression,
   provenServerProvenanceForExpression,
@@ -309,6 +310,128 @@ describe('@kovojs/drizzle symbol provenance', () => {
         op: 'update',
         sets: { ownerId: { kind: 'param', path: 'ownerId' } },
         table: 'users',
+      },
+    ]);
+  });
+
+  it('reports governed write diagnostics for primary keys, owner columns, and destructured input', () => {
+    const diagnostics = governedWriteDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'account.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const accounts = pgTable("accounts", {',
+            '  id: text("id").primaryKey(),',
+            '  ownerId: text("owner_id").notNull(),',
+            '  name: text("name").notNull(),',
+            '}, kovo({ domain: "account", key: "id", owner: (t) => t.ownerId }));',
+            '',
+            'export async function saveAccount(db: PgDatabase, input: { id: string; ownerId: string; name: string }) {',
+            '  const id = input.id;',
+            '  const { ownerId, name } = input;',
+            '  await db.insert(accounts).values({ id, ownerId, name });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'KV437',
+        message:
+          'Client input reaches a governed column write. Write to accounts.id receives input.id; derive the value on the server or use an audited admin assignment escape once it lands.',
+      },
+      {
+        code: 'KV437',
+        message:
+          'Client input reaches a governed column write. Write to accounts.ownerId receives input.ownerId; derive the value on the server or use an audited admin assignment escape once it lands.',
+      },
+    ]);
+  });
+
+  it('fails closed for whole input, spread, and helper-returned governed writes', () => {
+    const diagnostics = governedWriteDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'account.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const accounts = pgTable("accounts", {',
+            '  id: text("id").primaryKey(),',
+            '  ownerId: text("owner_id").notNull(),',
+            '  name: text("name").notNull(),',
+            '}, kovo({ domain: "account", key: "id", owner: "ownerId" }));',
+            '',
+            'function ownerFromInput(input: { ownerId: string }) {',
+            '  return input.ownerId;',
+            '}',
+            '',
+            'export async function saveAccount(db: PgDatabase, input: { id: string; ownerId: string; name: string }) {',
+            '  await db.insert(accounts).values(input);',
+            '  await db.insert(accounts).values({ ...input, name: input.name });',
+            '  await db.update(accounts).set({ ownerId: ownerFromInput(input) });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'KV437',
+        message:
+          'Client input reaches a governed column write. Write to accounts.id, ownerId receives input; derive the value on the server or use an audited admin assignment escape once it lands.',
+      },
+      {
+        code: 'KV437',
+        message:
+          'Client input reaches a governed column write. Write to accounts.id, ownerId receives spread ...input; derive the value on the server or use an audited admin assignment escape once it lands.',
+      },
+      {
+        code: 'KV437',
+        message:
+          'Client input reaches a governed column write. Write to accounts.ownerId receives unsummarized-helper:ownerFromInput; derive the value on the server or use an audited admin assignment escape once it lands.',
+      },
+    ]);
+  });
+
+  it('honors explicit governed annotations without blocking non-governed input writes', () => {
+    const diagnostics = governedWriteDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes(['update(table: unknown): { set(value: unknown): Promise<void> };']),
+        {
+          fileName: 'account.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const accounts = pgTable("accounts", {',
+            '  id: text("id").notNull(),',
+            '  role: text("role").notNull(),',
+            '  name: text("name").notNull(),',
+            '}, kovo({ domain: "account", key: "id", governed: ["role"] }));',
+            '',
+            'export async function saveAccount(db: PgDatabase, input: { role: string; name: string }) {',
+            '  await db.update(accounts).set({ role: input.role, name: input.name });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'KV437',
+        message:
+          'Client input reaches a governed column write. Write to accounts.role receives input.role; derive the value on the server or use an audited admin assignment escape once it lands.',
       },
     ]);
   });

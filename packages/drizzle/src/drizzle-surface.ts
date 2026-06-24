@@ -40,6 +40,9 @@ export type KovoColumnRef = string | ((table: Record<string, unknown>) => unknow
 /** Column-level confidentiality annotation consumed by the Phase 1 secret wire gate. */
 export type KovoSecretColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
 
+/** Column-level write-governance annotation consumed by the Phase 3 mass-assignment gate. */
+export type KovoGovernedColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
+
 /**
  * A fan-out invalidation edge for a table's `fans`: when a write touches this table,
  * also invalidate the named `domain` reached `via` the given relation, optionally scoped
@@ -63,6 +66,7 @@ export type KovoTableAnnotation =
   | {
       domain: string;
       fans?: readonly KovoFanAnnotation[];
+      governed?: KovoGovernedColumnAnnotation;
       key?: KovoColumnRef;
       owner?: KovoColumnRef;
       secret?: KovoSecretColumnAnnotation;
@@ -82,6 +86,7 @@ export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation
 export interface KovoDomainTableAnnotation {
   domain: string;
   fans?: readonly KovoFanAnnotation[];
+  governed?: KovoGovernedColumnAnnotation;
   key?: KovoColumnRef;
   owner?: KovoColumnRef;
   secret?: KovoSecretColumnAnnotation;

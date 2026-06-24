@@ -1,4 +1,5 @@
 import type { JsonValue } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type {
   AlgebraicField,
   AlgebraicQueryShape,
@@ -35,6 +36,7 @@ import {
   isOpaqueProjection,
   isProjectDrizzleReceiverIdentifier,
   isSelectQueryCallName,
+  objectPropertyInitializer,
   lineForIndex,
   opaqueAliasReasonForExpression,
   pnfExactConjuncts,
@@ -73,6 +75,7 @@ import {
   type SessionProvenanceContext,
   type SourceFileInput,
   type SymbolProvenanceContext,
+  type TouchGraphDiagnostic,
   type TouchGraphProjectOptions,
 } from '../static.js';
 
@@ -99,6 +102,7 @@ import {
 }
 
 interface DeriveExtraction extends ProjectExtraction {
+  governedColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
   realTableNameBySynthetic: ReadonlyMap<string, string>;
   tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>;
 }
@@ -119,10 +123,81 @@ function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtrac
   const base = createProjectExtraction(options);
   const tablesBySyntheticName = projectTablesBySyntheticName(base);
   const realTableNameBySynthetic = new Map<string, string>();
+  const governedColumnsByRealTable = new Map<string, readonly string[]>();
+  const primaryKeysBySyntheticName = projectPrimaryKeyColumnsBySyntheticName(base);
   for (const [synthetic, table] of tablesBySyntheticName) {
-    realTableNameBySynthetic.set(synthetic, table.annotation.name);
+    const realTable = table.annotation.name;
+    realTableNameBySynthetic.set(synthetic, realTable);
+    governedColumnsByRealTable.set(
+      realTable,
+      governedColumnsForTable(table, primaryKeysBySyntheticName.get(synthetic) ?? []),
+    );
   }
-  return { ...base, realTableNameBySynthetic, tablesBySyntheticName };
+  return { ...base, governedColumnsByRealTable, realTableNameBySynthetic, tablesBySyntheticName };
+}
+
+function projectPrimaryKeyColumnsBySyntheticName(
+  extraction: ProjectExtraction,
+): ReadonlyMap<string, readonly string[]> {
+  const primaryKeysBySyntheticName = new Map<string, readonly string[]>();
+  for (const sourceFile of extraction.sourceFiles) {
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const name = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!initializer || !Node.isCallExpression(initializer)) continue;
+      const synthetic = extraction.tableNamesBySymbol.get(
+        resolvedSymbolKey(name.getSymbol()) ?? '',
+      );
+      if (!synthetic) continue;
+      primaryKeysBySyntheticName.set(synthetic, primaryKeyColumnsFromTableInitializer(initializer));
+    }
+  }
+  return primaryKeysBySyntheticName;
+}
+
+function primaryKeyColumnsFromTableInitializer(initializer: Node): readonly string[] {
+  if (!Node.isCallExpression(initializer)) return [];
+  const columns = initializer.getArguments()[1];
+  if (!columns || !Node.isObjectLiteralExpression(columns)) return [];
+
+  const primaryKeys: string[] = [];
+  for (const property of columns.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    const column = propertyNameText(property.getNameNode());
+    const value = property.getInitializer();
+    if (column && value && columnBuilderCallsMethod(value, 'primaryKey')) {
+      primaryKeys.push(column);
+    }
+  }
+  return primaryKeys;
+}
+
+function columnBuilderCallsMethod(node: Node, method: string): boolean {
+  const calls = [
+    ...(Node.isCallExpression(node) ? [node] : []),
+    ...node.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+  return calls.some((call) => propertyAccessCallName(call) === method);
+}
+
+function governedColumnsForTable(
+  table: ExtractedTable,
+  primaryKeys: readonly string[],
+): readonly string[] {
+  if (!('domain' in table.annotation)) return [];
+  const columns = new Set(primaryKeys);
+  if (typeof table.annotation.owner === 'string') columns.add(table.annotation.owner);
+  const governed = table.annotation.governed;
+  if (governed === true) {
+    for (const column of Object.keys(table.columns)) columns.add(column);
+  } else if (Array.isArray(governed)) {
+    for (const column of governed) {
+      if (typeof column === 'string') columns.add(column);
+    }
+  } else if (typeof governed === 'string') {
+    columns.add(governed);
+  }
+  return [...columns].sort();
 }
 
 /**
@@ -187,6 +262,61 @@ function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtrac
   }
 }
 
+/** @internal */
+export function governedWriteDiagnosticsFromProject(
+  options: TouchGraphProjectOptions,
+): TouchGraphDiagnostic[] {
+  const extraction = createDeriveExtraction(options);
+  try {
+    const diagnostics: TouchGraphDiagnostic[] = [];
+    extraction.sourceFiles.forEach((sourceFile, index) => {
+      const file = extraction.files[index];
+      if (!file) return;
+
+      const namespaceTableNames = projectNamespaceTableNamesByLocal(
+        sourceFile,
+        extraction.tableNamesBySymbol,
+      );
+      const resolveTable = (node: Node): string | undefined => {
+        const synthetic = projectTableNameForNode(
+          node,
+          extraction.tableNamesBySymbol,
+          namespaceTableNames,
+        );
+        if (!synthetic) return undefined;
+        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+        if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
+        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+      };
+
+      for (const callback of deriveWriteCallbacks(sourceFile)) {
+        const receivers = projectDrizzleReceivers(callback.fn);
+        const paramSymbolKeys = callbackParameterSymbolKeys(callback.fn);
+        const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
+        const symbolContext = symbolProvenanceContextForNodes([callback.body], {
+          inputRoots: callbackInputRootNodes(callback.fn),
+        });
+        for (const call of touchBodyCallExpressions(callback.body)) {
+          diagnostics.push(
+            ...governedDiagnosticsForWriteCall(call, {
+              file,
+              governedColumnsByRealTable: extraction.governedColumnsByRealTable,
+              paramSymbolKeys,
+              receivers,
+              resolveTable,
+              sessionContext,
+              symbolContext,
+            }),
+          );
+        }
+      }
+    });
+    return dedupeDiagnostics(diagnostics);
+  } finally {
+    extraction.dispose();
+  }
+}
+
 function tableSyntheticNameForDerivation(synthetic: string): string {
   const namespaceIndex = synthetic.lastIndexOf('.');
   return namespaceIndex === -1 ? synthetic : synthetic.slice(namespaceIndex + 1);
@@ -242,6 +372,10 @@ interface WriteCallContext {
   sessionContext: SessionProvenanceContext;
   symbolContext: SymbolProvenanceContext;
   writeKey?: string;
+}
+
+interface GovernedWriteContext extends Omit<WriteCallContext, 'writeKey'> {
+  governedColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
 }
 
 function symbolicEffectForWriteCall(
@@ -332,6 +466,159 @@ function symbolicEffectForWriteCall(
   }
 
   return undefined;
+}
+
+function governedDiagnosticsForWriteCall(
+  call: CallExpression,
+  context: GovernedWriteContext,
+): TouchGraphDiagnostic[] {
+  if (!isDrizzleWriteCall(call)) return [];
+
+  const expression = call.getExpression();
+  const operation = staticAccessName(expression);
+  const receiver = staticAccessExpression(expression);
+  if (!operation || !receiver) return [];
+  if (!isProjectDrizzleReceiverIdentifier(receiver, context.receivers)) return [];
+
+  const tableArgument = call.getArguments()[0];
+  if (!tableArgument) return [];
+  const table = context.resolveTable(tableArgument);
+  if (!table) return [];
+  const governedColumns = context.governedColumnsByRealTable.get(table) ?? [];
+  if (governedColumns.length === 0) return [];
+
+  const chain = drizzleWriteChainRoot(call);
+  const site = `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`;
+  if (operation === 'insert') {
+    return [
+      ...governedDiagnosticsForPayload(chain, 'values', table, governedColumns, site, context),
+      ...governedDiagnosticsForPayload(
+        chain,
+        'onConflictDoUpdate',
+        table,
+        governedColumns,
+        site,
+        context,
+        'set',
+      ),
+    ];
+  }
+  if (operation === 'update') {
+    return governedDiagnosticsForPayload(chain, 'set', table, governedColumns, site, context);
+  }
+  return [];
+}
+
+function governedDiagnosticsForPayload(
+  chain: Node,
+  method: string,
+  table: string,
+  governedColumns: readonly string[],
+  site: string,
+  context: GovernedWriteContext,
+  nestedProperty?: string,
+): TouchGraphDiagnostic[] {
+  const call = chainCallByName(chain, method);
+  let argument = call?.getArguments()[0];
+  if (!argument) return [];
+  if (nestedProperty) {
+    const object = unwrappedStaticExpressionNode(argument);
+    if (!Node.isObjectLiteralExpression(object)) {
+      return [governedWriteDiagnostic(site, table, governedColumns, 'opaque config')];
+    }
+    argument = objectPropertyInitializer(object, nestedProperty);
+    if (!argument) return [];
+  }
+
+  const payload = unwrappedStaticExpressionNode(argument);
+  if (!Node.isObjectLiteralExpression(payload)) {
+    return [governedWriteDiagnostic(site, table, governedColumns, payload.getText())];
+  }
+
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  for (const property of payload.getProperties()) {
+    if (Node.isSpreadAssignment(property)) {
+      diagnostics.push(
+        governedWriteDiagnostic(site, table, governedColumns, `spread ${property.getText()}`),
+      );
+      continue;
+    }
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      diagnostics.push(
+        governedWriteDiagnostic(
+          site,
+          table,
+          governedColumns,
+          `dynamic property ${property.getText()}`,
+        ),
+      );
+      continue;
+    }
+    const column = propertyNameText(property.getNameNode());
+    if (!column) {
+      diagnostics.push(
+        governedWriteDiagnostic(site, table, governedColumns, `computed key ${property.getText()}`),
+      );
+      continue;
+    }
+    if (!governedColumns.includes(column)) continue;
+    const valueNode = Node.isShorthandPropertyAssignment(property)
+      ? property.getNameNode()
+      : property.getInitializer();
+    const value = valueNode
+      ? symbolicValueFromExpression(
+          valueNode,
+          context.paramSymbolKeys,
+          context.sessionContext,
+          undefined,
+          context.symbolContext,
+        )
+      : ({ kind: 'opaque', expr: column } satisfies SymbolicValue);
+    if (symbolicValueIsInputOrUnknown(value)) {
+      diagnostics.push(
+        governedWriteDiagnostic(site, table, [column], symbolicValueDescription(value)),
+      );
+    }
+  }
+  return diagnostics;
+}
+
+function symbolicValueIsInputOrUnknown(value: SymbolicValue): boolean {
+  if (value.kind === 'param' || value.kind === 'opaque' || value.kind === 'placeholder')
+    return true;
+  if (value.kind === 'arith') {
+    return symbolicValueIsInputOrUnknown(value.left) || symbolicValueIsInputOrUnknown(value.right);
+  }
+  return false;
+}
+
+function symbolicValueDescription(value: SymbolicValue): string {
+  if (value.kind === 'param') {
+    return value.path === 'input' || value.path.startsWith('input.')
+      ? value.path
+      : `input.${value.path}`;
+  }
+  if (value.kind === 'opaque') return value.expr;
+  if (value.kind === 'arith') {
+    return `${symbolicValueDescription(value.left)} ${value.op} ${symbolicValueDescription(value.right)}`;
+  }
+  if (value.kind === 'placeholder') return `placeholder:${value.placeholder}`;
+  return value.kind;
+}
+
+function governedWriteDiagnostic(
+  site: string,
+  table: string,
+  columns: readonly string[],
+  source: string,
+): TouchGraphDiagnostic {
+  const definition = diagnosticDefinitions.KV437;
+  return {
+    code: 'KV437',
+    message: `${definition.message} Write to ${table}.${columns.join(', ')} receives ${source}; derive the value on the server or use an audited admin assignment escape once it lands.`,
+    severity: definition.severity,
+    site,
+  };
 }
 
 /** Parse the object literal of a chained `.values({…})` / `.set({…})` into SymbolicValues. */
@@ -799,6 +1086,18 @@ function dedupeEffectFacts(facts: readonly SymbolicEffectFact[]): SymbolicEffect
     deduped.push(fact);
   }
   return deduped;
+}
+
+function dedupeDiagnostics(diagnostics: readonly TouchGraphDiagnostic[]): TouchGraphDiagnostic[] {
+  const seen = new Set<string>();
+  const deduped: TouchGraphDiagnostic[] = [];
+  for (const diagnostic of diagnostics) {
+    const key = `${diagnostic.code}\0${diagnostic.site}\0${diagnostic.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(diagnostic);
+  }
+  return deduped.sort((left, right) => left.site.localeCompare(right.site));
 }
 
 // ── Stage 2 (query → AlgebraicQueryShape) ────────────────────────────────────
