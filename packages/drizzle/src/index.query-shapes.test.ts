@@ -1825,6 +1825,22 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        diagnostics: [
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection users.apiToken selects a secret field from secret-classified table(s): users.',
+            severity: 'error',
+            site: 'user.queries.ts:9',
+          },
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection users.passwordHash selects a secret field from secret-classified table(s): users.',
+            severity: 'error',
+            site: 'user.queries.ts:9',
+          },
+        ],
         query: 'users',
         reads: ['user'],
         shape: {
@@ -1845,7 +1861,6 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         site: 'user.queries.ts:9',
       },
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
   it('derives nested relational query shapes from static with columns projections', () => {
@@ -1890,6 +1905,22 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        diagnostics: [
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection posts.author.apiToken selects a secret field from secret-classified table(s): users.',
+            severity: 'error',
+            site: 'post.queries.ts:14',
+          },
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection posts.author.passwordHash selects a secret field from secret-classified table(s): users.',
+            severity: 'error',
+            site: 'post.queries.ts:14',
+          },
+        ],
         query: 'posts',
         reads: ['post'],
         shape: {
@@ -1911,7 +1942,6 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         site: 'post.queries.ts:14',
       },
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
   it('reports KV435 when relational with projections select nested secret columns', () => {
@@ -1958,7 +1988,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         message:
           'Secret query value reaches the client wire. Query projection posts.author.passwordHash selects a secret field from secret-classified table(s): users.',
         severity: 'error',
-        site: 'post.queries.ts:12',
+        site: 'post.queries.ts:13',
       },
     ]);
   });

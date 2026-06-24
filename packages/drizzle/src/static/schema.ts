@@ -144,6 +144,7 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
     for (const specifier of declaration.getNamedImports()) {
       const local = specifier.getAliasNode() ?? specifier.getNameNode();
       append(local.getText(), local);
+      if (specifier.getAliasNode()) append(specifier.getName(), specifier.getNameNode());
     }
 
     const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
@@ -163,6 +164,59 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
 
   for (const text of ambiguous) names.delete(text);
   return names;
+}
+
+/** @internal */ export function projectRelationalTableDisplayNamesByProperty(
+  sourceFile: SourceFile,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  const append = (name: string, displayName: string | undefined) => {
+    if (displayName) names.set(name, displayName);
+  };
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const name = declaration.getNameNode();
+    if (Node.isIdentifier(name)) append(name.getText(), name.getText());
+  }
+
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    for (const specifier of declaration.getNamedImports()) {
+      const imported = specifier.getName();
+      const local = specifier.getAliasNode()?.getText() ?? imported;
+      append(local, imported);
+      append(imported, imported);
+    }
+
+    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
+    if (!declaration.getNamespaceImport() || !moduleSourceFile) continue;
+    for (const [name] of projectExportedTableNamesByName(moduleSourceFile, tableNamesBySymbol)) {
+      append(name, name);
+    }
+  }
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (relationCallName(call) !== 'relations') continue;
+    const relationObject = relationDefinitionObject(call);
+    if (!relationObject) continue;
+
+    for (const property of relationObject.getProperties()) {
+      if (!Node.isPropertyAssignment(property)) continue;
+      const relation = propertyNameText(property.getNameNode());
+      if (!relation) continue;
+      append(relation, relationTargetDisplayName(property.getInitializer()));
+    }
+  }
+
+  return names;
+}
+
+function relationTargetDisplayName(initializer: Node | undefined): string | undefined {
+  const call = initializer && Node.isCallExpression(initializer) ? initializer : undefined;
+  const target = call?.getArguments()[0];
+  if (!target) return undefined;
+  const path = staticExpressionPath(target);
+  return path?.split('.').at(-1);
 }
 
 /** @internal */ export function isDrizzleWriteCall(call: CallExpression): boolean {

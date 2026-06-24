@@ -875,6 +875,10 @@ function extractTouchGraphFromPreparedFiles(
             sourceFile,
             extraction.tableNamesBySymbol,
           ),
+          relationalTableDisplayNames: projectRelationalTableDisplayNamesByProperty(
+            sourceFile,
+            extraction.tableNamesBySymbol,
+          ),
           unmodeledRelationNamesBySymbol: extraction.unmodeledRelationNamesBySymbol,
           tableNamesBySymbol: extraction.tableNamesBySymbol,
         });
@@ -1151,6 +1155,19 @@ function secretProjectionBackstopDiagnostics(
   }));
 }
 
+function relationalSecretSelectionDiagnostics(
+  query: string,
+  selections: readonly QueryShapeSecretSelection[],
+): TouchGraphDiagnostic[] {
+  const definition = diagnosticDefinitions.KV435;
+  return selections.map((selection) => ({
+    code: 'KV435' as const,
+    message: `${definition.message} Query projection ${query}.${selection.path} selects a secret field from secret-classified table(s): ${[...new Set(selection.tables)].sort().join(', ')}.`,
+    severity: definition.severity,
+    site: '',
+  }));
+}
+
 function revealedQueryShapePaths(
   shape: QueryShape,
   path: readonly string[] = [],
@@ -1385,6 +1402,7 @@ interface ProjectQueryDefinitionOptions {
   domainWriteActions?: ReadonlyMap<string, ReadonlySet<string>>;
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
   namespaceTableNames: ProjectNamespaceTableNames;
+  relationalTableDisplayNames: ReadonlyMap<string, string>;
   relationalTableNames: ReadonlyMap<string, string>;
   tableNamesBySymbol: ReadonlyMap<string, string>;
   unmodeledRelationNamesBySymbol: ReadonlyMap<string, string>;
@@ -1406,6 +1424,7 @@ function extractProjectQueryDefinitions(
       : {}),
     readTableIdentifier: resolveTableIdentifier,
     receiverMode: 'project',
+    relationalTableDisplayName: (name) => options.relationalTableDisplayNames.get(name),
     relationalTableName: (name) => options.relationalTableNames.get(name),
   });
 }
@@ -1482,6 +1501,7 @@ interface QueryDefinitionOptions {
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
   readTableIdentifier?: (node: Node) => string | undefined;
   receiverMode?: 'project' | 'source';
+  relationalTableDisplayName?: (name: string) => string | undefined;
   relationalTableName?: (name: string) => string | undefined;
 }
 
@@ -1557,7 +1577,14 @@ function extractQueryDefinitionsFromSourceFile(
         receiverReferences,
         options.columnShapes,
         receiverMode,
-      ) ?? relationalShapeFromQueryBody(bodyObject, receiverReferences, options.columnShapes);
+      ) ??
+      relationalShapeFromQueryBody(
+        bodyObject,
+        receiverReferences,
+        options.columnShapes,
+        options.relationalTableName,
+        options.relationalTableDisplayName,
+      );
     const hasOutputSchema = objectHasProperty(bodyObject, 'output');
     const declaredReadExpressions = queryDeclaredReadExpressions(
       bodyObject,
@@ -1570,6 +1597,7 @@ function extractQueryDefinitionsFromSourceFile(
     };
     const diagnostics = [
       ...(bodyResolution.unresolved ? [unresolvedQueryLoadCallbackDiagnostic()] : []),
+      ...relationalSecretSelectionDiagnostics(query, selection?.secretSelections ?? []),
       ...unresolvedQueryCallbackDiagnostics(bodyObject, receiverMode),
       ...queryWriteReceiverDiagnostics(bodyObject, receiverReferences),
       ...domainWriteActionQueryDiagnostics(bodyObject, options.domainWriteActions ?? new Map()),
@@ -2099,6 +2127,7 @@ import {
   type QueryLoadSpreadResolution,
   type QueryShapeContext,
   type QueryShapeSelection,
+  type QueryShapeSecretSelection,
   isSelectQueryCallName,
   queryBodyObjectLiteral,
   isQueryReceiverIdentifier,
@@ -2182,6 +2211,7 @@ import {
   projectDrizzleCoreIdentifierExportName,
   projectForeignKeyForColumn,
   projectForeignKeysForTable,
+  projectRelationalTableDisplayNamesByProperty,
   projectRelationalTableNamesByProperty,
   projectTableNameForColumnShapeAccess,
   projectTableNamesBySymbol,

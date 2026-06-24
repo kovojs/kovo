@@ -80,9 +80,15 @@ const QUERY_WRITE_RECEIVER_METHODS = new Set([
   diagnostics?: readonly TouchGraphDiagnostic[];
   hasTablelessScalar: boolean;
   opaquePaths: readonly string[];
+  secretSelections?: readonly QueryShapeSecretSelection[];
   shape: QueryShape;
   scalarTables: ReadonlySet<string>;
   unresolvedPaths: readonly string[];
+}
+
+/** @internal */ export interface QueryShapeSecretSelection {
+  path: string;
+  tables: readonly string[];
 }
 
 /** @internal */ export function selectShapeFromQueryBody(
@@ -128,6 +134,8 @@ const QUERY_WRITE_RECEIVER_METHODS = new Set([
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
+  relationalTableName?: (name: string) => string | undefined,
+  relationalTableDisplayName?: (name: string) => string | undefined,
 ): QueryShapeSelection | null {
   const call = relationalQueryCallFromQueryBody(body, receiverReferences);
   if (!call) return null;
@@ -137,12 +145,24 @@ const QUERY_WRITE_RECEIVER_METHODS = new Set([
   if (!table || !projection || !relationalProjectionIsFullyStatic(projection)) return null;
 
   const shape: Record<string, QueryShape> = {};
+  const secretSelections: QueryShapeSecretSelection[] = [];
   const unresolvedPaths: string[] = [];
-  appendRelationalProjectionShape(shape, unresolvedPaths, table, projection, columnShapes);
+  appendRelationalProjectionShape(
+    shape,
+    unresolvedPaths,
+    secretSelections,
+    table,
+    projection,
+    columnShapes,
+    [],
+    relationalTableDisplayName?.(table) ?? table,
+    relationalTableDisplayName,
+  );
 
   return {
     hasTablelessScalar: false,
     opaquePaths: [],
+    ...(secretSelections.length > 0 ? { secretSelections } : {}),
     shape,
     scalarTables: new Set([table]),
     unresolvedPaths,
@@ -157,16 +177,23 @@ interface RelationalProjection {
 function appendRelationalProjectionShape(
   shape: Record<string, QueryShape>,
   unresolvedPaths: string[],
+  secretSelections: QueryShapeSecretSelection[],
   table: string,
   projection: RelationalProjection,
   columnShapes: Readonly<Record<string, QueryShape>>,
+  path: readonly string[] = [],
+  sourceTable = table,
+  relationalTableDisplayName?: (name: string) => string | undefined,
 ): void {
   for (const column of projection.columns) {
     const columnShape = columnShapes[`${table}.${column}`];
     if (columnShape) {
       shape[column] = columnShape;
+      if (relationalQueryShapeContainsSecret(columnShape)) {
+        secretSelections.push({ path: [...path, column].join('.'), tables: [sourceTable] });
+      }
     } else {
-      unresolvedPaths.push(column);
+      unresolvedPaths.push([...path, column].join('.'));
     }
   }
 
@@ -178,13 +205,29 @@ function appendRelationalProjectionShape(
     appendRelationalProjectionShape(
       relationShape,
       relationUnresolvedPaths,
+      secretSelections,
       relation,
       relationProjection,
       columnShapes,
+      [...path, relation],
+      relationalTableDisplayName?.(relation) ?? relation,
+      relationalTableDisplayName,
     );
     shape[relation] = relationShape;
-    unresolvedPaths.push(...relationUnresolvedPaths.map((path) => `${relation}.${path}`));
+    unresolvedPaths.push(...relationUnresolvedPaths);
   }
+}
+
+function relationalQueryShapeContainsSecret(shape: QueryShape): boolean {
+  if (typeof shape !== 'object' || shape === null) return false;
+  if (Array.isArray(shape)) return shape.some(relationalQueryShapeContainsSecret);
+
+  if ('kind' in shape && 'shape' in shape) {
+    if (shape.kind === 'secret') return true;
+    return relationalQueryShapeContainsSecret(shape.shape);
+  }
+
+  return Object.values(shape).some(relationalQueryShapeContainsSecret);
 }
 
 /** @internal */ export function queryBodyHasTimeVolatileWhere(
