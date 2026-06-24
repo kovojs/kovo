@@ -513,10 +513,14 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
       Decision (2026-06-23): two stages, **both required for plan completion** — the runtime safe-default is a
       backstop, not a stopping point. Sequenced (not optional): Stage 1 now; Stage 2 lands with the shared §11.1
       write-reachability pass (also required by mass-assignment and KV429).
-  - [ ] Stage 1 (now, safe-default): Reader type narrows the loader handle (no `insert`/`update`/`delete`/
+  - [x] Stage 1 (now, safe-default): Reader type narrows the loader handle (no `insert`/`update`/`delete`/
         `execute`) + a fail-closed runtime read-only proxy (write verbs throw at the managed handle). Catches a
         direct `req.db.insert` in a loader; the type is `tsc`-time ergonomics (unsound under `as any`); the
         proxy guards only writes through that handle.
+    - Evidence: `packages/server/src/query.ts` narrows `QueryLoadContext` through `QueryReaderRequest` and
+      runs queries with `dbAccess: "read"`; `packages/server/src/guards.ts` installs the fail-closed reader
+      proxy. Verified with `vp check packages/server/src` and
+      `vp exec vitest --run packages/server/src/query-endpoint.test.ts`.
   - [ ] Stage 2 (REQUIRED, after the §11.1 write-reachability pass): KV433 statically proves no write is
         reachable from a query loader — INCLUDING via an imported `domain()` fn called with a module-scope/
         captured handle (the confused-deputy case Stage 1 misses). This is the by-construction guarantee; the

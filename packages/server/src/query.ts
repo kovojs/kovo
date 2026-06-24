@@ -28,9 +28,26 @@ interface QueryDeltaListMeta {
   path: string;
 }
 
+/** DB method names that query loaders cannot call through the reader handle (KV433 / SPEC §10.2). */
+export type QueryWriteMethod = 'delete' | 'execute' | 'insert' | 'update' | 'write';
+
+/** The read-only DB view exposed to query loaders by default (KV433 / SPEC §10.2). */
+export type QueryReaderDb<Db> = Db extends (...args: any[]) => any
+  ? Db
+  : Db extends object
+    ? {
+        readonly [Key in keyof Db]: Key extends QueryWriteMethod ? never : QueryReaderDb<Db[Key]>;
+      }
+    : Db;
+
+/** Request view exposed to a query loader: its `db` channel is narrowed to a reader handle. */
+export type QueryReaderRequest<Request> = Request extends { db: infer Db }
+  ? Omit<Request, 'db'> & { readonly db: QueryReaderDb<Db> }
+  : Request;
+
 /** The context a query's `load` receives: the current request value. */
 export interface QueryLoadContext<Request = unknown> {
-  request: Request;
+  request: QueryReaderRequest<Request>;
 }
 
 /** @internal */
@@ -311,7 +328,7 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   const argsResult = parseQueryInput(definition, rawInput);
   if (!argsResult.ok) return argsResult.failure;
 
-  const lifecycleRequest = await resolveLifecycleRequest(request, options);
+  const lifecycleRequest = await resolveLifecycleRequest(request, { ...options, dbAccess: 'read' });
   const guardFailure = await runGuard(definition.guard, lifecycleRequest);
   if (guardFailure) {
     return {
@@ -325,7 +342,7 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
 
   const input = argsResult.value;
   const value = definition.load
-    ? await definition.load(input, { request: lifecycleRequest })
+    ? await definition.load(input, { request: lifecycleRequest as QueryReaderRequest<Request> })
     : (null as Value);
   const outputResult = parseQueryOutput(definition, value);
   if (!outputResult.ok) return outputResult.failure;
@@ -374,7 +391,10 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   let lifecycleRequest: Request = endpointRequest.request;
   try {
     const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
-    lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, endpointRequest);
+    lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, {
+      ...endpointRequest,
+      dbAccess: 'read',
+    });
     result = await runQuery(definition, rawInput, lifecycleRequest);
   } catch (error) {
     if (isSchemaValidationError(error)) {

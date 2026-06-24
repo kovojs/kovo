@@ -178,6 +178,11 @@ export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> 
 /** @internal */
 export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbValue = unknown> {
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
+  /**
+   * KV433 / SPEC §10.2: query loaders receive a managed DB handle in read mode by default.
+   * Other lifecycle callers keep write-capable handles unless they opt into the same floor.
+   */
+  dbAccess?: 'read' | 'write';
   onError?: ServerErrorHandler;
   /**
    * @internal part-3 I2: optional sink the lifecycle calls with each raw `Set-Cookie`
@@ -429,10 +434,11 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
 
   if (options.db) {
     const dbValue = await options.db(lifecycleRequest as LifecycleRequest<Request, SessionValue>);
+    const sqlSafeDb = wrapManagedDbForSqlSafety(dbValue, managedSqlSafetyMode());
     lifecycleRequest = requestWithProperty(
       lifecycleRequest,
       'db',
-      wrapManagedDbForSqlSafety(dbValue, managedSqlSafetyMode()),
+      options.dbAccess === 'read' ? wrapManagedDbForReadOnly(sqlSafeDb) : sqlSafeDb,
     );
   }
 
@@ -485,6 +491,72 @@ function wrapManagedDbForSqlSafety<DbValue>(db: DbValue, mode: SqlSafetyMode): D
   const proxyCache = new WeakMap<object, object>();
   const methodCache = new WeakMap<object, Map<PropertyKey, Function>>();
   return wrapDbAdapter(db, mode, proxyCache, methodCache) as DbValue;
+}
+
+const readOnlyDbWriteMethods = new Set<PropertyKey>([
+  'delete',
+  'execute',
+  'insert',
+  'update',
+  'write',
+]);
+
+function wrapManagedDbForReadOnly<DbValue>(db: DbValue): DbValue {
+  if ((typeof db !== 'object' && typeof db !== 'function') || db === null) return db;
+
+  return wrapReadOnlyDbObject(db, new WeakMap(), new WeakMap()) as DbValue;
+}
+
+function wrapReadOnlyDbObject(
+  db: object,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+): object {
+  const cached = proxyCache.get(db);
+  if (cached) return cached;
+
+  const proxy = new Proxy(db as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+
+      if (typeof value === 'function') {
+        if (readOnlyDbWriteMethods.has(prop)) {
+          return cachedSqlSafetyMethod(target, prop, value, methodCache, () => () => {
+            throw new Error(
+              `KV433 read-only query DB handle blocked write method "${String(prop)}"`,
+            );
+          });
+        }
+
+        if (prop === 'transaction') {
+          return cachedSqlSafetyMethod(
+            target,
+            prop,
+            value,
+            methodCache,
+            () =>
+              (callback: (tx: object) => unknown, ...args: unknown[]) =>
+                value.call(
+                  target,
+                  (tx: object) => callback(wrapReadOnlyDbObject(tx, proxyCache, methodCache)),
+                  ...args,
+                ),
+          );
+        }
+
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target));
+      }
+
+      if ((typeof value === 'object' || typeof value === 'function') && value !== null) {
+        return wrapReadOnlyDbObject(value, proxyCache, methodCache);
+      }
+
+      return value;
+    },
+  });
+
+  proxyCache.set(db, proxy);
+  return proxy;
 }
 
 function wrapDbAdapter(

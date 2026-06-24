@@ -41,7 +41,10 @@ export type {
   QueryDeclarationDefinition,
   QueryDefinition,
   QueryLoadContext,
+  QueryReaderDb,
+  QueryReaderRequest,
   QueryResult,
+  QueryWriteMethod,
 } from '../query.js';
 export { query } from '../query.js';
 export { s, SchemaValidationError } from '../schema.js';

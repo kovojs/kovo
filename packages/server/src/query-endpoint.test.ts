@@ -8,6 +8,7 @@ import {
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
   runQuery,
+  type QueryLoadContext,
 } from './query.js';
 import { s, type Schema } from './schema.js';
 
@@ -81,6 +82,105 @@ describe('query endpoints', () => {
       ok: true,
       value: { id: 'p1' },
     });
+  });
+
+  it('types query loader DB handles as read-only reader views', () => {
+    interface QueryDb {
+      delete(): void;
+      execute(): void;
+      insert(): void;
+      nested: {
+        read(): string;
+        update(): void;
+      };
+      select(): string;
+      write(): void;
+    }
+
+    const assertReadOnlyLoaderContext = () => {
+      query('reader-types', {
+        access: publicAccess('test fixture'),
+        load(_input: unknown, context?: QueryLoadContext<{ db: QueryDb }>) {
+          if (!context) return { nested: '', value: '' };
+
+          const value: string = context.request.db.select();
+          const nested: string = context.request.db.nested.read();
+          // @ts-expect-error KV433 query loaders cannot call managed DB inserts.
+          context.request.db.insert();
+          // @ts-expect-error KV433 query loaders cannot call managed DB deletes.
+          context.request.db.delete();
+          // @ts-expect-error KV433 query loaders cannot call managed DB execute.
+          context.request.db.execute();
+          // @ts-expect-error KV433 query loaders cannot call nested managed DB updates.
+          context.request.db.nested.update();
+          // @ts-expect-error KV433 query loaders cannot call generic managed DB writes.
+          context.request.db.write();
+
+          return { nested, value };
+        },
+        reads: [],
+      });
+    };
+
+    expect(assertReadOnlyLoaderContext).toBeTypeOf('function');
+  });
+
+  it('blocks query loader DB writes at runtime through the managed reader handle', async () => {
+    const calls: string[] = [];
+    const db = {
+      insert() {
+        calls.push('insert');
+      },
+      nested: {
+        update() {
+          calls.push('nested-update');
+        },
+      },
+      select() {
+        calls.push('select');
+        return 'ok';
+      },
+      transaction(callback: (tx: { update(): void }) => unknown) {
+        calls.push('transaction');
+        return callback({
+          update() {
+            calls.push('tx-update');
+          },
+        });
+      },
+      update() {
+        calls.push('update');
+      },
+    };
+    const readerQuery = query('reader-runtime', {
+      access: publicAccess('test fixture'),
+      load(_input: unknown, context?: QueryLoadContext<{ db: typeof db }>) {
+        if (!context) throw new Error('missing query context');
+
+        expect(context.request.db.select()).toBe('ok');
+        expect(() => (context.request.db as any).insert()).toThrow(
+          'KV433 read-only query DB handle blocked write method "insert"',
+        );
+        expect(() => (context.request.db as any).nested.update()).toThrow(
+          'KV433 read-only query DB handle blocked write method "update"',
+        );
+        expect(() => (context.request.db as any).transaction((tx: any) => tx.update())).toThrow(
+          'KV433 read-only query DB handle blocked write method "update"',
+        );
+
+        return { ok: true };
+      },
+      reads: [],
+    });
+
+    await expect(
+      runQuery(readerQuery, undefined, {} as { db: typeof db }, { db: () => db }),
+    ).resolves.toEqual({
+      input: undefined,
+      ok: true,
+      value: { ok: true },
+    });
+    expect(calls).toEqual(['select', 'transaction']);
   });
 
   it('runs query endpoints through args schemas, guards, and request context', async () => {
