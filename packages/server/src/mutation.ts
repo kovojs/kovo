@@ -1029,6 +1029,9 @@ function runMutationOptions<Request>(
       ? {}
       : { capabilityUrls: lifecycle.capabilityUrls }),
     ...(lifecycle?.db === undefined ? {} : { db: lifecycle.db }),
+    ...(lifecycle?.onCapabilityUrlMint === undefined
+      ? {}
+      : { onCapabilityUrlMint: lifecycle.onCapabilityUrlMint }),
     ...(lifecycle?.onError === undefined ? {} : { onError: lifecycle.onError }),
     ...(lifecycle?.sessionProvider === undefined
       ? {}

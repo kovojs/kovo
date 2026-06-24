@@ -91,6 +91,7 @@ describe('server app matched dispatch boundary', () => {
     const body = await response.text();
     expect(body).toContain('"hasSignUrl":false');
     expect(body).toContain('"signUrlType":"undefined"');
+    expect(app.capabilities.some((fact) => fact.source === 'request.signUrl')).toBe(false);
   });
 
   it('owns SPEC §9.5 raw endpoint dispatch without app session leakage', async () => {

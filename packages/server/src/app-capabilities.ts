@@ -22,6 +22,17 @@ export function capabilityFactsFromApp(
   ];
 }
 
+/** @internal Append a runtime capability fact once per app aggregate. */
+export function recordAppCapability(
+  app: Pick<KovoApp, 'capabilities'>,
+  fact: KovoApp['capabilities'][number],
+): void {
+  const capabilities = app.capabilities as KovoApp['capabilities'][number][];
+  const key = JSON.stringify(fact);
+  if (capabilities.some((capability) => JSON.stringify(capability) === key)) return;
+  capabilities.push(fact);
+}
+
 function capabilityUrlFacts(app: Pick<KovoApp, 'capabilityUrls'>): KovoApp['capabilities'] {
   const options = app.capabilityUrls;
   if (options === undefined) return [];

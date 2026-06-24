@@ -1,4 +1,5 @@
 import { renderVersionedClientModuleResponse } from './client-modules.js';
+import { recordAppCapability } from './app-capabilities.js';
 import { renderCapabilityStorageResponse } from './capability-url.js';
 import { validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
 import { runEndpoint, runEndpointAuth } from './endpoint.js';
@@ -87,6 +88,7 @@ export async function dispatchMatchedAppRequest({
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
       egressFetch: app.egress.fetch,
+      onCapabilityUrlMint: (fact) => recordAppCapability(app, fact),
     });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
     if (authFailure) return authFailure;

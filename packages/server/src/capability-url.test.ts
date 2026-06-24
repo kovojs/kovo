@@ -260,6 +260,8 @@ describe('capability URL app wiring', () => {
             const href = request.signUrl?.({
               expiresIn: 60,
               key: 'exports/report.csv',
+              reason: 'download link for verified export recipient',
+              site: 'routes/exports.tsx:12',
             });
             return renderedHtml(String(href));
           },
@@ -281,6 +283,13 @@ describe('capability URL app wiring', () => {
     expect(download.headers.get('content-disposition')).toBe('attachment; filename="report.csv"');
     await expect(download.text()).resolves.toBe('id,total\n1,42\n');
     expect(storage.streamCalls).toEqual(['exports/report.csv']);
+    expect(app.capabilities).toContainEqual({
+      detail: 'scope=key:exports/report.csv,method=GET,oneTime=no',
+      kind: 'capabilityUrl',
+      reason: 'download link for verified export recipient',
+      site: 'routes/exports.tsx:12',
+      source: 'request.signUrl',
+    });
   });
 
   it('fails closed without reading storage for missing, tampered, expired, or wrong-method caps', async () => {

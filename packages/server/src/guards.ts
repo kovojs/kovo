@@ -3,6 +3,7 @@ import {
   createAppCapabilityUrlSigner,
   type AppCapabilityUrlOptions,
   type AppCapabilityUrlSigner,
+  type CapabilityUrlMintAuditSink,
 } from './capability-url.js';
 import {
   isDbAdapterLike,
@@ -192,6 +193,7 @@ export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbV
    */
   dbAccess?: 'read' | 'write';
   egressFetch?: typeof fetch;
+  onCapabilityUrlMint?: CapabilityUrlMintAuditSink;
   onError?: ServerErrorHandler;
   /**
    * @internal part-3 I2: optional sink the lifecycle calls with each raw `Set-Cookie`
@@ -431,7 +433,11 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     lifecycleRequest = requestWithProperty(
       lifecycleRequest,
       'signUrl',
-      createAppCapabilityUrlSigner(requestUrlForCapabilityMinting(request), options.capabilityUrls),
+      createAppCapabilityUrlSigner(
+        requestUrlForCapabilityMinting(request),
+        options.capabilityUrls,
+        options.onCapabilityUrlMint,
+      ),
     );
   }
 

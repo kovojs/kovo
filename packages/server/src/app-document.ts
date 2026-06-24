@@ -1,5 +1,6 @@
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
+import { recordAppCapability } from './app-capabilities.js';
 import { normalizeForwardedSetCookie } from './cookies.js';
 import { documentContentSecurityPolicyOptions } from './csp.js';
 import { reportServerError, serverErrorHeaders, type ServerErrorReport } from './diagnostics.js';
@@ -80,6 +81,7 @@ export async function renderAppRouteDocumentResponse({
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
       egressFetch: app.egress.fetch,
+      onCapabilityUrlMint: (fact) => recordAppCapability(app, fact),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       onSessionSetCookie: (rawSetCookie) => refreshSetCookies.push(rawSetCookie),
       renderForbidden: async () =>

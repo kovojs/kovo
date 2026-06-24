@@ -57,6 +57,8 @@ export interface AppCapabilityUrlOptions {
 
 /** Server-owned minting input exposed on lifecycle requests as `request.signUrl`. */
 export interface AppSignCapabilityUrlOptions {
+  /** Optional audit justification surfaced in `kovo explain --capabilities`. */
+  reason?: string;
   /** Concrete storage/object key authorized by the capability. */
   key: string;
   /** HTTP method authorized by the capability. Defaults to `GET`. */
@@ -67,10 +69,24 @@ export interface AppSignCapabilityUrlOptions {
   scope?: CapabilityUrlScope;
   /** Relative expiry in seconds. Defaults to a short 300-second lifetime. */
   expiresIn?: number;
+  /** Optional source site for audit output. Defaults to `request.signUrl`. */
+  site?: string;
 }
 
 /** Server-owned capability URL minting function installed on lifecycle requests. */
 export type AppCapabilityUrlSigner = (options: AppSignCapabilityUrlOptions) => string;
+
+/** Runtime audit fact recorded when app code mints a capability URL. */
+export interface CapabilityUrlMintAuditFact {
+  detail: string;
+  kind: 'capabilityUrl';
+  reason?: string;
+  site: string;
+  source: 'request.signUrl';
+}
+
+/** Receives runtime capability URL mint facts for app-level explain output. */
+export type CapabilityUrlMintAuditSink = (fact: CapabilityUrlMintAuditFact) => void;
 
 /** Input for verifying an HMAC-signed capability URL before dereferencing a key. */
 export interface VerifyCapabilityUrlOptions {
@@ -181,17 +197,34 @@ export function signCapabilityUrl(options: SignCapabilityUrlOptions): string {
 export function createAppCapabilityUrlSigner(
   requestUrl: string,
   options: AppCapabilityUrlOptions,
+  audit?: CapabilityUrlMintAuditSink,
 ): AppCapabilityUrlSigner {
-  return (input) =>
-    signCapabilityUrl({
+  return (input) => {
+    const method = canonicalCapabilityMethod(input.method ?? 'GET');
+    const key = canonicalCapabilityKey(input.key);
+    const scope = canonicalCapabilityScope(input.scope, key);
+    const oneTime = input.oneTime === true;
+    const href = signCapabilityUrl({
       baseUrl: new URL(options.path ?? CAPABILITY_STORAGE_PATH, requestUrl),
-      key: input.key,
-      method: input.method ?? 'GET',
+      key,
+      method,
       ...(input.expiresIn === undefined ? {} : { expiresIn: input.expiresIn }),
-      ...(input.oneTime === undefined ? {} : { oneTime: input.oneTime }),
+      ...(oneTime ? { oneTime } : {}),
       ...(input.scope === undefined ? {} : { scope: input.scope }),
       secret: options.secret,
     });
+    audit?.({
+      detail: `scope=${scope},method=${method},oneTime=${oneTime ? 'yes' : 'no'}`,
+      kind: 'capabilityUrl',
+      ...(typeof input.reason === 'string' && input.reason.trim()
+        ? { reason: input.reason.trim() }
+        : {}),
+      site:
+        typeof input.site === 'string' && input.site.trim() ? input.site.trim() : 'request.signUrl',
+      source: 'request.signUrl',
+    });
+    return href;
+  };
 }
 
 /**

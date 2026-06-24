@@ -1,4 +1,5 @@
 import { resolveLifecycleRequest } from './guards.js';
+import { recordAppCapability } from './app-capabilities.js';
 import {
   renderMutationEndpointResponse,
   type MutationDefinition,
@@ -46,6 +47,7 @@ export async function handleAppMutationRequest(
     ...(app.db === undefined ? {} : { db: app.db }),
     ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
     egressFetch: app.egress.fetch,
+    onCapabilityUrlMint: (fact) => recordAppCapability(app, fact),
     ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
   });
   const currentUrl = appRequestUrl(url);
@@ -106,6 +108,7 @@ export async function handleAppMutationRequest(
     ...(buildToken !== '' ? { buildToken } : {}),
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
+    onCapabilityUrlMint: (fact) => recordAppCapability(app, fact),
     currentUrl: appRequestUrl(sourceUrl),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
     ...(app.onError === undefined ? {} : { onError: app.onError }),

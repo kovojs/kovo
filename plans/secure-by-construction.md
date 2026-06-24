@@ -640,9 +640,10 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
         `kovo explain --capabilities`. Revocation tradeoff documented (stateless → can't revoke pre-expiry
         unless `oneTime`; default short expiry). No new KV code — it's a provided safe API, not a static gate.
     - Current evidence/gap: `packages/server/src/query.ts` strips `request.signUrl` from all query loader
-      request views and `packages/server/src/app-dispatch.test.ts` verifies `/_q/` cannot mint a capability URL
-      into the typed-read wire. Still open: runtime mint audit facts / `kovo explain --capabilities`
-      unification and broader cacheable-route policy.
+      request views, `packages/server/src/capability-url.ts` records runtime `request.signUrl` mints as
+      `capabilityUrl` facts with method/scope/oneTime audit detail, and
+      `packages/server/src/capability-url.test.ts` / `app-dispatch.test.ts` verify route mints are recorded
+      while `/_q/` cannot mint or record signed URLs. Still open: broader cacheable-route policy.
 
 ## Phase 6: Concurrency, resource, and uploads
 
