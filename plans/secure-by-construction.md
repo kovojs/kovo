@@ -589,10 +589,16 @@ compiler). Derivation is fail-closed.
       durable guarantee is "attacker bytes are never rendered inline as active content" (attachment-default +
       re-encode), **not** "the sniffed type is unspoofable" — magic-byte sniffing proves a prefix, not the absence
       of script.
-  - [ ] Mint the served `Content-Type` from sniffed bytes (server-truth overrides the client lie; bytes
-        already buffered, `schema.ts:340`). The deep sniffer probes ZIP/office containers and rejects
-        HTML/SVG/ambiguous/polyglot for the inline path; for the inline guarantee prefer **server-side
-        re-encode/rasterize** of images (framework-produced bytes are provably inert).
+  - [x] Mint stored-upload `Content-Type` from server-sniffed bytes for the common safe signatures, not the
+        client-declared `file.type`; unknown bytes fall back to `application/octet-stream`.
+    - Evidence: `packages/server/src/schema.ts` derives stored upload `contentType` and async `.mime()`
+      validation from `sniffUploadContentType`; `packages/server/src/schema.test.ts` covers a client MIME lie,
+      real PNG/PDF signatures, and octet-stream fallback. Verified by
+      `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/response.test.ts`,
+      `vp check packages/server/src`, and `git diff --check`.
+  - [ ] Deep sniffer probes ZIP/office containers and rejects HTML/SVG/ambiguous/polyglot for the inline path;
+        for the inline guarantee prefer **server-side re-encode/rasterize** of images (framework-produced bytes
+        are provably inert).
   - [ ] **SVG: rasterize or force attachment, never sniff-and-trust** (SVG is XML+script; a prefix check is
         meaningless).
   - [ ] **Server-generated random/opaque storage keys** by construction; the user filename is sanitized
