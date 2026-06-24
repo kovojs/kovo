@@ -7,13 +7,34 @@ export { cspSha256, renderContentSecurityPolicy } from '../csp.js';
 export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
 export { Defer } from '../deferred-region.js';
 export type { DeferProps, RegionPriority, ServerRenderable } from '../deferred-region.js';
+export {
+  BodyAttrs,
+  BodyEnd,
+  BodyStart,
+  Document,
+  FontPreload,
+  Head,
+  HtmlAttrs,
+  InlineScript,
+  InlineStyle,
+  Link,
+  Meta,
+  ModulePreload,
+  Stylesheet,
+} from '../document-structured.js';
+export type {
+  DocumentAuthoringContext,
+  DocumentConfig,
+  DocumentDeclaration,
+  DocumentShellAttributes,
+  DocumentShellAttributeValue,
+} from '../document-structured.js';
 export type {
   DeferredFragmentChunk,
   DeferredPriority,
   DeferredQueryChunk,
   DeferredStreamChunk,
 } from '../deferred-stream.js';
-export type { DocumentParts, DocumentTemplate, DocumentTemplateContext } from '../document-core.js';
 export { stylesheet } from '../hints.js';
 export type {
   I18nCatalog,

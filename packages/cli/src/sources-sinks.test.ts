@@ -21,6 +21,7 @@ describe('source/sink inventory', () => {
     expect([...sinks].sort()).toEqual([
       'auth.data-access',
       'css.style.output',
+      'document.shell.output',
       'dynamic.import.process',
       'file.storage.static-export',
       'html.dom.output',
@@ -398,7 +399,7 @@ describe('source/sink inventory', () => {
   it('exposes the same inventory through kovo check', () => {
     expect(kovoCheck({}, { family: 'sources-sinks' })).toMatchObject({
       exitCode: 0,
-      output: expect.stringContaining('CHECK families=10 entries=10 drift-tokens=17'),
+      output: expect.stringContaining('CHECK families=11 entries=11 drift-tokens=17'),
     });
   });
 });

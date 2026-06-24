@@ -2,7 +2,7 @@ import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
-import type { DocumentTemplate } from './document-core.js';
+import type { DocumentConfig, DocumentDeclaration } from './document-structured.js';
 import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpoint.js';
 import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
@@ -76,8 +76,8 @@ export type ErrorShellRenderer = (context: {
 
 /** Document-level options applied by `createApp()` when rendering route documents. */
 export interface AppDocumentOptions {
+  structured?: DocumentConfig;
   lang?: string;
-  template?: DocumentTemplate;
 }
 
 /** Request-shell context passed to a custom `renderRoute` hook (SPEC §9.5). */
@@ -156,7 +156,7 @@ export interface CreateAppOptions<
   clientModules?: VersionedClientModuleRegistry;
   csrf?: CsrfValidationOptions<AppRequest>;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
-  document?: AppDocumentOptions;
+  document?: AppDocumentOptions | DocumentDeclaration;
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
   liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];

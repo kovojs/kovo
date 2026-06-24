@@ -64,6 +64,7 @@ export type {
   KovoAccessExplainOptions,
   KovoCheckFamily,
   KovoCheckInput,
+  KovoDocumentExplainOptions,
   KovoEndpointExplainOptions,
   KovoExplainInput,
   KovoExplainOptions,

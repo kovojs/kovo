@@ -6,10 +6,13 @@ import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type { DerivationProof } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
+import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 
 import { AUDIT_USAGE, CHECK_USAGE, EXPLAIN_USAGE_LINE } from './commands-manifest.js';
 import { type CliCommandResult, type KovoCheckResult } from './shared.js';
 import { sourcesSinksCheckResult, sourcesSinksExplainResult } from './sources-sinks.js';
+
+type DocumentSourceSinkRow = ReturnType<typeof frameworkSourceSinkInventory>[number];
 
 interface TouchGraphDiagnosticFact {
   code: DiagnosticCode;
@@ -146,6 +149,7 @@ export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query
  */
 export type KovoExplainOptions =
   | KovoAccessExplainOptions
+  | KovoDocumentExplainOptions
   | KovoEndpointExplainOptions
   | KovoRevealedExplainOptions
   | KovoSourcesSinksExplainOptions
@@ -162,6 +166,15 @@ export type KovoExplainOptions =
 export interface KovoAccessExplainOptions {
   access: true;
   failOnFindings?: boolean;
+}
+
+/**
+ * `kovo explain document` options: emit the framework-owned document shell
+ * source/sink row plus any document-owned trust escape facts in the optional
+ * extracted graph (SPEC.md §9.5; plans/structured-document.md).
+ */
+export interface KovoDocumentExplainOptions {
+  document: true;
 }
 
 /**
@@ -305,6 +318,22 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     }
 
     lines.push(`SUMMARY total=${endpoints.length}`);
+    return ok(lines);
+  }
+
+  if ('document' in options) {
+    const sinks = documentSourceSinkRows();
+    const escapes = documentTrustEscapes(graph.trustEscapes ?? []);
+    lines.push('DOCUMENT');
+
+    for (const sink of sinks) {
+      lines.push(documentSinkLine(sink));
+    }
+    for (const escape of escapes) {
+      lines.push(trustEscapeLine(escape));
+    }
+
+    lines.push(`SUMMARY sinks=${sinks.length} trustEscapes=${escapes.length}`);
     return ok(lines);
   }
 
@@ -963,6 +992,16 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   if (flags.has('--fail-on-findings')) return explainUsage();
 
   const [kind, target, inputPath, extra] = positional;
+  if (kind === 'document') {
+    if (
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      (target === undefined ? false : inputPath !== undefined)
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: target, ok: true, options: { document: true } };
+  }
   if (!isExplainKind(kind) || !target || extra) return explainUsage();
   if (flags.has('--layouts') && kind !== 'page') return explainUsage();
   if (flags.has('--optimistic') && kind !== 'mutation') return explainUsage();
@@ -1526,6 +1565,34 @@ function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
     `safePath=${escape.safePath ?? '-'}`,
     `justification=${stableValue(escape.justification)}`,
   ].join(' ');
+}
+
+function documentSourceSinkRows(): readonly DocumentSourceSinkRow[] {
+  return frameworkSourceSinkInventory().filter((entry) => entry.sink === 'document.shell.output');
+}
+
+function documentSinkLine(entry: DocumentSourceSinkRow): string {
+  return [
+    'SINK',
+    `source=${entry.source}`,
+    `sink=${entry.sink}`,
+    `context=${entry.context}`,
+    `schema=${entry.schema}`,
+    `guard=${entry.guard}`,
+    `escapeHatch=${entry.escapeHatch}`,
+  ].join(' ');
+}
+
+function documentTrustEscapes(
+  escapes: readonly CoreGraph.TrustEscapeExplain[],
+): readonly CoreGraph.TrustEscapeExplain[] {
+  return escapes
+    .filter(
+      (escape) =>
+        escape.owner?.includes('document') === true ||
+        escape.safePath?.includes('Document') === true,
+    )
+    .sort(compareTrustEscape);
 }
 
 function revealExplainLine(reveal: CoreGraph.RevealExplainFact): string {

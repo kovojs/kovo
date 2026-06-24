@@ -239,8 +239,7 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
             <h2 style={galleryStyles.detailHeading}>Source</h2>
             <ul style={galleryStyles.detailList}>
               <li>
-                Package source:{' '}
-                <code style={galleryStyles.inlineCode}>{source.packageSource}</code>
+                Package source: <code style={galleryStyles.inlineCode}>{source.packageSource}</code>
               </li>
               <li>
                 Gallery fixture: <code style={galleryStyles.inlineCode}>{source.fixture}</code>

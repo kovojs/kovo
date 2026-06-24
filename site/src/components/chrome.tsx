@@ -10,7 +10,7 @@ import type { ApiSidebar as ApiSidebarData, Heading, NavGroup, NavLink } from '.
 // (SPEC §4.5 — layouts are render-time function composition, not a nested-layout
 // primitive). The header/footer/sidebar/toc are rendered per route so the active
 // path is exact; the document shell (loader, theme script, search dialog) is
-// owned by the DocumentTemplate. on:click islands resolve to versioned client
+// owned by the structured Document declaration. on:click islands resolve to versioned client
 // modules registered in src/client/modules.ts.
 
 export interface ClientHrefs {

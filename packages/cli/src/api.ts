@@ -15,6 +15,7 @@ export type {
   KovoCheckFamily,
   KovoCheckInput,
   KovoCheckResult,
+  KovoDocumentExplainOptions,
   KovoEndpointExplainOptions,
   KovoExplainInput,
   KovoExplainOptions,

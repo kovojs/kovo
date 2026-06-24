@@ -10,6 +10,7 @@ import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.j
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
+import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
 export type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
@@ -101,7 +102,7 @@ export function createApp<
   return {
     clientModules,
     diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
-    document: options.document ?? {},
+    document: normalizeAppDocumentOptions(options.document),
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},
     liveTargetRenderers,
@@ -120,6 +121,25 @@ export function createApp<
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
   };
+}
+
+function normalizeAppDocumentOptions(
+  document: CreateAppOptions['document'] | undefined,
+): KovoApp['document'] {
+  if (document === undefined) return {};
+  if (isDocumentConfig(document) || typeof document === 'function') {
+    const structured = resolveDocumentDeclaration(document);
+    return {
+      ...(structured?.lang === undefined ? {} : { lang: structured.lang }),
+      ...(structured === undefined ? {} : { structured }),
+    };
+  }
+  if ('template' in document) {
+    throw new TypeError(
+      'createApp({ document.template }) is not supported. Use structured document primitives such as Document, Head, BodyStart, and BodyEnd (SPEC.md §9.5).',
+    );
+  }
+  return document;
 }
 
 /**

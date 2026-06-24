@@ -85,8 +85,7 @@ afterEach(() => {
   document.body.replaceChildren();
   localStorage.removeItem('theme');
   inlineImportModule = async () => ({});
-  delete (globalThis as typeof globalThis & { __navDeferredApplied?: number })
-    .__navDeferredApplied;
+  delete (globalThis as typeof globalThis & { __navDeferredApplied?: number }).__navDeferredApplied;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   history.replaceState({}, '', initialUrl);

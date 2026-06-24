@@ -7,23 +7,19 @@ import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
+import { BodyAttrs, BodyStart, Document } from './document-structured.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 
 describe('server static export', () => {
   it('exports a simple route through the app request handler to an html artifact', async () => {
     const app = createApp({
-      document: {
-        template({ parts }) {
-          return [
-            '<!doctype html>',
-            '<html>',
-            `<head>${parts.head}</head>`,
-            `<body data-export-shell>${parts.body}</body>`,
-            '</html>',
-          ].join('');
-        },
-      },
+      document: Document({
+        children: [
+          BodyAttrs({ 'data-export-shell': true }),
+          BodyStart({ children: '<header>Export shell</header>' }),
+        ],
+      }),
       routes: [
         route('/about', {
           meta: { title: 'About' },
@@ -48,7 +44,9 @@ describe('server static export', () => {
       status: 200,
     });
     expect(result.artifacts[0]?.body).toContain('<title>About</title>');
-    expect(result.artifacts[0]?.body).toContain('<body data-export-shell><main>About Kovo</main>');
+    expect(result.artifacts[0]?.body).toContain(
+      '<body data-export-shell>&lt;header&gt;Export shell&lt;/header&gt;<main>About Kovo</main>',
+    );
   });
 
   it('uses the same handler and document assembly rather than a second render path', async () => {

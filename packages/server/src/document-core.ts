@@ -10,6 +10,7 @@ import {
 } from './csp.js';
 import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
 import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
+import { renderShellAttributes, type DocumentConfig } from './document-structured.js';
 import {
   renderPageHints,
   type PageHintOptions,
@@ -29,42 +30,28 @@ import {
 } from './wire-html.js';
 
 /**
- * Assembled document parts (`head`, `body`, `lang`, and serialized query
- * scripts) handed to a custom {@link DocumentTemplate} so it can frame the page
- * without dropping framework-required markup (SPEC.md §9.5).
+ * Framework-owned assembled document parts consumed by the structured document
+ * renderer (SPEC.md §9.5).
+ *
+ * @internal
  */
-export interface DocumentParts {
+interface DocumentShellParts {
   body: string;
   head: string;
   lang: string;
   queryScripts: readonly string[];
 }
 
-/** Context passed to a custom {@link DocumentTemplate} (SPEC.md §9.5). */
-export interface DocumentTemplateContext {
+interface DocumentAssemblyContext {
   csp: CspInlineMetadata;
-  parts: DocumentParts;
+  parts: DocumentShellParts;
 }
-
-/** Custom document framing template applied via `AppDocumentOptions.template` (SPEC.md §9.5). */
-export type DocumentTemplate = (context: DocumentTemplateContext) => string;
 
 /** @internal */
 export interface DeferredDocumentFrame {
   closeHtml: string;
   shell: string;
 }
-
-/** @internal */
-export interface DeferredDocumentTemplateContext {
-  csp: CspInlineMetadata;
-  parts: DocumentParts;
-}
-
-/** @internal */
-export type DeferredDocumentTemplate = (
-  context: DeferredDocumentTemplateContext,
-) => DeferredDocumentFrame;
 
 /** @internal */
 export interface DocumentAssemblyOptions {
@@ -84,6 +71,7 @@ export interface DocumentAssemblyOptions {
    */
   loader?: 'inline' | 'omit';
   loaderRuntimeHref?: string;
+  document?: DocumentConfig;
   queries?: readonly QueryScriptRenderOptions[];
   /**
    * bugs-1 F13 / SPEC §9.3: an opaque per-session fingerprint. When present, stamped as
@@ -91,7 +79,6 @@ export interface DocumentAssemblyOptions {
    * rebroadcast can discard cross-principal messages on shared devices.
    */
   sessionFingerprint?: string;
-  template?: DocumentTemplate;
 }
 
 /** @internal */
@@ -122,20 +109,19 @@ export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, '
 }
 
 /** @internal */
-export interface DeferredDocumentAssemblyOptions extends Omit<DocumentAssemblyOptions, 'template'> {
+export interface DeferredDocumentAssemblyOptions extends DocumentAssemblyOptions {
   boundary?: string;
   chunks: readonly DeferredStreamChunk[];
-  template?: DeferredDocumentTemplate | DocumentTemplate;
 }
 
 /** @internal */
 export interface ErrorDocumentOptions {
+  document?: DocumentConfig;
   hints?: PageHintOptions;
   lang?: string;
   loaderRuntimeHref?: string;
   message?: string;
   status: 403 | 404 | 500;
-  template?: DocumentTemplate;
   title?: string;
 }
 
@@ -167,14 +153,14 @@ const fallbackTitles = {
  * @internal
  */
 export function renderDocument(options: DocumentAssemblyOptions): DocumentRenderResult {
-  const assembled = assembleDocumentParts(options);
-  const template = options.template ?? defaultDocumentTemplate;
-  const html = template({ csp: assembled.csp, parts: assembled.parts });
+  const assembled = assembleDocumentShellParts(options);
+  const context = { csp: assembled.csp, parts: assembled.parts };
+  const html = renderStructuredDocumentShell(context, assembled.document);
 
   return {
     csp: assembled.csp,
     earlyHints: assembled.earlyHints,
-    html: enforceDocumentTemplateParts(html, assembled.parts, 'DocumentTemplate'),
+    html,
   };
 }
 
@@ -186,22 +172,16 @@ export function renderDocument(options: DocumentAssemblyOptions): DocumentRender
 export function renderDeferredDocument(
   options: DeferredDocumentAssemblyOptions,
 ): DeferredDocumentRenderResult {
-  const assembled = assembleDocumentParts(options);
-  const template = options.template ?? defaultDeferredDocumentTemplate;
-  const frame = deferredDocumentFrame(
-    template({ csp: assembled.csp, parts: assembled.parts }),
-    assembled.parts,
-  );
-  const shell = enforceDocumentTemplateParts(
-    frame.shell,
-    assembled.parts,
-    'DeferredDocumentTemplate',
+  const assembled = assembleDocumentShellParts(options);
+  const frame = renderStructuredDeferredDocumentShell(
+    { csp: assembled.csp, parts: assembled.parts },
+    assembled.document,
   );
   const response = renderDeferredStream({
     chunks: options.chunks,
     closeHtml: frame.closeHtml,
     ...(options.boundary === undefined ? {} : { boundary: options.boundary }),
-    shell,
+    shell: frame.shell,
   });
 
   return {
@@ -213,11 +193,12 @@ export function renderDeferredDocument(
   };
 }
 
-function assembleDocumentParts(
+function assembleDocumentShellParts(
   options: Pick<
     DocumentAssemblyOptions,
     | 'body'
     | 'buildToken'
+    | 'document'
     | 'hints'
     | 'lang'
     | 'loader'
@@ -225,7 +206,12 @@ function assembleDocumentParts(
     | 'sessionFingerprint'
     | 'loaderRuntimeHref'
   >,
-): { csp: CspInlineMetadata; earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
+): {
+  csp: CspInlineMetadata;
+  document: DocumentConfig | undefined;
+  earlyHints: PageHints['earlyHints'];
+  parts: DocumentShellParts;
+} {
   // F2 (bugs-part3 L2-early-hints-2): thread the rendered query values into the head
   // hint context so a `metaFromQuery(...)` factory resolves against real data instead
   // of an always-empty `{}` (which previously made every such factory throw → a hard
@@ -239,6 +225,7 @@ function assembleDocumentParts(
   const loader =
     options.loader === 'omit' ? undefined : inlineLoaderScript(options.loaderRuntimeHref);
   const csp = mergeCspInlineMetadata(
+    options.document?.csp,
     hints.csp,
     ...(loader === undefined ? [] : [loader.csp]),
     ...queryScripts.map((query) => query.csp),
@@ -261,11 +248,12 @@ function assembleDocumentParts(
 
   return {
     csp,
+    document: options.document,
     earlyHints: hints.earlyHints,
     parts: {
       body: options.body,
       head: `${buildMeta}${sessionMeta}${hints.html}${loader?.html ?? ''}`,
-      lang: options.lang ?? langFromHints(options.hints) ?? 'en',
+      lang: options.lang ?? options.document?.lang ?? langFromHints(options.hints) ?? 'en',
       queryScripts: queryScripts.map((query) => query.html),
     },
   };
@@ -366,6 +354,7 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
   const message = options.message ?? title;
   const document = renderDocument({
     body: `<main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></main>`,
+    ...(options.document === undefined ? {} : { document: options.document }),
     hints: {
       ...options.hints,
       meta: [{ title }, ...withoutStaticTitleMeta(routeMetaArray(options.hints?.meta))],
@@ -374,7 +363,6 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
     ...(options.loaderRuntimeHref === undefined
       ? {}
       : { loaderRuntimeHref: options.loaderRuntimeHref }),
-    ...(options.template === undefined ? {} : { template: options.template }),
   });
 
   return {
@@ -391,89 +379,58 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
   };
 }
 
-function defaultDocumentTemplate({ parts }: DocumentTemplateContext): string {
+function renderStructuredDocumentShell(
+  { parts }: DocumentAssemblyContext,
+  document: DocumentConfig | undefined,
+): string {
+  const htmlAttrs = {
+    lang: parts.lang,
+    ...document?.htmlAttrs,
+  };
   return [
     '<!doctype html>',
-    `<html lang="${escapeAttribute(parts.lang)}">`,
+    `<html${renderShellAttributes(htmlAttrs)}>`,
     '<head>',
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    ...(document?.head ?? []),
     parts.head,
     parts.queryScripts.join(''),
     '</head>',
-    '<body>',
+    `<body${renderShellAttributes(document?.bodyAttrs ?? {})}>`,
+    ...(document?.bodyStart ?? []),
     parts.body,
+    ...(document?.bodyEnd ?? []),
     '</body>',
     '</html>',
   ].join('');
 }
 
-function defaultDeferredDocumentTemplate({
-  parts,
-}: DeferredDocumentTemplateContext): DeferredDocumentFrame {
+function renderStructuredDeferredDocumentShell(
+  { parts }: DocumentAssemblyContext,
+  document: DocumentConfig | undefined,
+): DeferredDocumentFrame {
+  const htmlAttrs = {
+    lang: parts.lang,
+    ...document?.htmlAttrs,
+  };
   return {
-    closeHtml: '</body></html>',
+    closeHtml: [...(document?.bodyEnd ?? []), '</body></html>'].join(''),
     shell: [
       '<!doctype html>',
-      `<html lang="${escapeAttribute(parts.lang)}">`,
+      `<html${renderShellAttributes(htmlAttrs)}>`,
       '<head>',
       '<meta charset="utf-8">',
       '<meta name="viewport" content="width=device-width, initial-scale=1">',
+      ...(document?.head ?? []),
       parts.head,
       parts.queryScripts.join(''),
       '</head>',
-      '<body>',
+      `<body${renderShellAttributes(document?.bodyAttrs ?? {})}>`,
+      ...(document?.bodyStart ?? []),
       parts.body,
     ].join(''),
   };
-}
-
-function deferredDocumentFrame(
-  result: DeferredDocumentFrame | string,
-  parts: DocumentParts,
-): DeferredDocumentFrame {
-  if (typeof result !== 'string') return result;
-
-  const html = enforceDocumentTemplateParts(result, parts, 'DocumentTemplate');
-  const bodyCloseIndex = html.toLowerCase().lastIndexOf('</body>');
-  if (bodyCloseIndex < 0) {
-    throw new Error('DocumentTemplate omitted </body>, which is required for deferred documents.');
-  }
-
-  return {
-    closeHtml: html.slice(bodyCloseIndex),
-    shell: html.slice(0, bodyCloseIndex),
-  };
-}
-
-function enforceDocumentTemplateParts(
-  html: string,
-  parts: DocumentParts,
-  templateName: string,
-): string {
-  const missing = requiredDocumentTemplateParts(parts).filter(({ value }) => !html.includes(value));
-  if (missing.length === 0) return html;
-
-  // SPEC §9.5: custom templates receive assembled parts rather than a blank
-  // canvas, so they cannot silently drop loader, query scripts, or page body.
-  throw new Error(
-    `${templateName} omitted required assembled document part(s): ${missing
-      .map(({ name }) => name)
-      .join(', ')}.`,
-  );
-}
-
-function requiredDocumentTemplateParts(
-  parts: DocumentParts,
-): readonly { name: string; value: string }[] {
-  return [
-    { name: 'parts.head', value: parts.head },
-    ...parts.queryScripts.map((value, index) => ({
-      name: `parts.queryScripts[${index}]`,
-      value,
-    })),
-    { name: 'parts.body', value: parts.body },
-  ].filter(({ value }) => value.length > 0);
 }
 
 function inlineLoaderScript(runtimeHref: string | undefined): {

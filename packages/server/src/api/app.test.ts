@@ -30,6 +30,7 @@ import * as queryApi from '../query.js';
 import * as dataApi from './data.js';
 import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
+import * as documentStructuredApi from '../document-structured.js';
 import * as hintsApi from '../hints.js';
 import * as internalStaticExportApi from '../internal/static-export.js';
 import * as renderingApi from './rendering.js';
@@ -112,6 +113,20 @@ type RootDeferProps = import('@kovojs/server').DeferProps;
 type RootRegionPriority = import('@kovojs/server').RegionPriority;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootServerRenderable = import('@kovojs/server').ServerRenderable;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootDocumentConfig = import('@kovojs/server').DocumentConfig;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootDocumentDeclaration = import('@kovojs/server').DocumentDeclaration;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootDocumentAuthoringContext = import('@kovojs/server').DocumentAuthoringContext;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootDocumentShellAttributes = import('@kovojs/server').DocumentShellAttributes;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootDocumentShellAttributeValue = import('@kovojs/server').DocumentShellAttributeValue;
+if (false) {
+  // @ts-expect-error - SPEC.md §9.5 document customization uses structured primitives, not string templates.
+  publicApi.createApp({ document: { template: () => '<html></html>' } });
+}
 // SPEC.md §9.5: the versioned client-module registry constructor and its option
 // surface are public at the root barrel for `createApp({ clientModules })` consumers.
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
@@ -410,6 +425,17 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
     expect(publicApi.cspSha256).toBe(cspApi.cspSha256);
     expect(publicApi.Defer).toBe(renderingApi.Defer);
+    expect(publicApi.Document).toBe(documentStructuredApi.Document);
+    expect(publicApi.Head).toBe(documentStructuredApi.Head);
+    expect(publicApi.BodyStart).toBe(documentStructuredApi.BodyStart);
+    expect(publicApi.BodyEnd).toBe(documentStructuredApi.BodyEnd);
+    expect(publicApi.HtmlAttrs).toBe(documentStructuredApi.HtmlAttrs);
+    expect(publicApi.BodyAttrs).toBe(documentStructuredApi.BodyAttrs);
+    expect(publicApi.FontPreload).toBe(documentStructuredApi.FontPreload);
+    expect(publicApi.InlineScript).toBe(documentStructuredApi.InlineScript);
+    expect(publicApi.InlineStyle).toBe(documentStructuredApi.InlineStyle);
+    expect(renderingApi.Link).toBe(documentStructuredApi.Link);
+    expect(publicValues).not.toHaveProperty('DocumentLink');
     expect(publicValues).not.toHaveProperty('defer');
     expect(packageRootApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
     expect(packageRootApi.cspSha256).toBe(cspApi.cspSha256);
@@ -629,8 +655,15 @@ describe('server app-shell public API barrels', () => {
     const app = publicApi.createApp();
 
     expect(publicApi.isKovoApp(app)).toBe(true);
+    expect(publicApi.isKovoApp(publicApi.createApp({ document: publicApi.Document({}) }))).toBe(
+      true,
+    );
+    expect(() =>
+      publicApi.createApp({ document: { template: () => '<html></html>' } as any }),
+    ).toThrow('createApp({ document.template }) is not supported');
     expect(publicApi.isKovoApp({ ...app, document: undefined })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, document: { template: '<html></html>' } })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, document: { structured: {} } })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, errorShells: undefined })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, errorShells: { notFound: '<main>404</main>' } })).toBe(
       false,

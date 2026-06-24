@@ -133,6 +133,23 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     trust: 'untrusted-unless-branded',
   },
   {
+    consumers: ['structured-document-primitives', 'document-assembly'],
+    context: 'document.head.body-start.body-end.script.style.link.attrs',
+    diagnostic: 'KV236|KV424',
+    escapeHatch: 'InlineScript|InlineStyle|trustedHtml|trustedUrl',
+    firstParser: 'structured-document-primitives',
+    guard: `typed-document-primitives+url-scheme-allowlist:${SAFE_URL_SCHEMES.join('|')}`,
+    runtimeGuard: 'server-document-assembly-csp-enrollment',
+    schema:
+      'Document|Head|BodyStart|BodyEnd|HtmlAttrs|BodyAttrs|Meta|Link|Stylesheet|FontPreload|ModulePreload|InlineScript|InlineStyle',
+    sink: 'document.shell.output',
+    source:
+      'app-document-TSX|inline-script-source|inline-style-source|font-preload-url|modulepreload-url|body-end-ui',
+    specAnchor: 'SPEC.md#4.8;SPEC.md#5.2;SPEC.md#9.5',
+    testEvidence: ['packages/server/src/document.test.ts'],
+    trust: 'structured-author-contribution',
+  },
+  {
     consumers: ['route-matcher', 'mutation-redirects', 'inline-loader', 'client-module-loader'],
     context: 'url.navigation.redirect.module.selector',
     diagnostic: 'KV220|KV236|KV228',

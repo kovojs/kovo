@@ -2,225 +2,330 @@
 
 **Date:** 2026-06-24
 
-**Status:** Draft implementation roadmap. Committed to **Option 3** (typed config object: helper-built
-head items + JSX body slots, Kovo owns the frame). Static-only. Breaking change — no compatibility
-window for the old string `DocumentTemplate`.
+**Status:** Completed implementation ledger.
 
-**Goal:** replace the string-returning `DocumentTemplate` document surface with a structured,
-TSX-native document API. Kovo owns the full document frame (doctype, `<html>`, `<head>`, `<body>`,
-required meta, loader, query scripts, deferred framing, CSP accounting); apps contribute only typed,
-audited document facts.
+**Goal:** replace the raw string-returning `DocumentTemplate` app authoring surface with a
+structured, TSX-native document API. Kovo should continue to own the full document frame, required
+framework parts, CSP accounting, query scripts, loader placement, deferred stream framing, and
+output-safety rules, while apps author only approved document contributions.
 
 **Normative anchors:** `SPEC.md` §4.8 output safety and trusted HTML escape hatch, §5.2 hard rules
 7/8/10, §9.1 wire/script-data encoding, §9.5 document shell assembly, `rules/compiler-hard-rules.md`,
 `rules/api-surface.md`, `plans/no-raw-strings.md`, and `plans/sources-sinks.md`.
 
-## Problem Statement
+## Context
 
-The earlier "raw string template" framing is **partly stale**: the docs site already authors its
-shell as TSX. The real residual problems are narrower and sharper:
+Kovo's ordinary app authoring posture is TSX-first and safe-by-default. Component output contexts
+already reject plain strings in unsafe raw-HTML sinks with KV236 unless the author explicitly uses
+`trustedHtml(...)`. Route/page/layout raw string markup has already been narrowed by
+`plans/no-raw-strings.md`.
 
-1. **The app owns the frame.** `site/src/document-template.tsx` hand-writes `<!doctype>`, `<html>`,
-   `<head>`, `<meta charset>`, `<body>` and threads framework output back in by hand via
-   `{trustedHtml(parts.head)}`, `{trustedHtml(parts.queryScripts.join(''))}`, `{trustedHtml(parts.body)}`.
-   Kovo's only guard is `enforceDocumentTemplateParts` doing `html.includes(part)`
-   (`packages/server/src/document-core.ts:449`) — a substring grep that cannot validate ordering or
-   context, and which forces the deferred path to string-slice on `</body>`
-   (`document-core.ts:438`).
-2. **Inline scripts are untyped, un-accounted sinks.** The site emits three
-   `<script rawHtml={trustedHtml(...)} />` tags (theme, search hotkey, API nav). They carry no `id`,
-   no execution posture, and **are not enrolled in CSP** — the framework hashes the loader and query
-   scripts but not these. A strict hash-CSP is therefore impossible today.
+Before this plan, the remaining document-shell exception was `DocumentTemplate`:
 
-Option 3 fixes both structurally: Kovo assembles the frame (problem 1 disappears) and inline scripts
-exist only as a typed helper whose hash is merged into the document CSP by construction (problem 2
-disappears — raw `<script>` text becomes unexpressible).
+- [x] Confirm the former public template type returned an arbitrary string.
+  - Evidence: prior `packages/server/src/document-core.ts` exposed
+    `DocumentTemplate = (context: DocumentTemplateContext) => string`; the current file no longer
+    exports that type.
+- [x] Confirm former framework assembly verified required parts but not template-authored string
+      safety.
+  - Evidence: the template/enforcement path was removed from `packages/server/src/document-core.ts`;
+    structured assembly now owns required shell parts directly.
+- [x] Confirm the docs site no longer uses the raw string surface.
+  - Evidence: `site/src/document-template.tsx` exports a structured `<Document>` declaration.
+- [x] Confirm the docs site no longer relies on app-authored internal framework imports.
+  - Evidence: `site/src/document-template.tsx` imports public document primitives from
+    `@kovojs/server`.
+- [x] Confirm the explicit prior plan left `DocumentTemplate` as the remaining exception.
+  - Evidence: `plans/no-raw-strings.md` records `@kovojs/server#DocumentTemplate` as an explicit
+    low-level raw-markup exception and recommends revisiting it only with product direction.
 
-### Confirmed current state
+## External Reference
 
-- [x] Public template type returns an arbitrary string.
-  - Evidence: `packages/server/src/document-core.ts:50`
-    `export type DocumentTemplate = (context: DocumentTemplateContext) => string`.
-- [x] Framework assembly verifies required parts by substring inclusion, not structure.
-  - Evidence: `document-core.ts:449` `enforceDocumentTemplateParts` filters
-    `requiredDocumentTemplateParts(...)` by `!html.includes(value)`; deferred framing slices on
-    `lastIndexOf('</body>')` (`document-core.ts:438`).
-- [x] The docs site authors the shell as TSX but owns the frame and threads framework parts by hand.
-  - Evidence: `site/src/document-template.tsx:164-202` returns
-    `` `<!doctype html>${String(<html>…{trustedHtml(parts.head)}…{trustedHtml(parts.body)}…</html>)}` ``.
-- [x] The site's inline scripts ride `trustedHtml`, not a CSP-accounted sink.
-  - Evidence: `site/src/document-template.tsx:170-172`
-    `<script rawHtml={trustedHtml(THEME_SCRIPT)} />` ×3; none appear in `assembleDocumentParts` CSP
-    merge (`document-core.ts:241-245`).
-- [x] (Corrected) The site no longer imports `escapeAttribute` from `@kovojs/server/internal/html`.
-  - Evidence: `site/src/document-template.tsx:1-6` imports only `trustedHtml` from `@kovojs/browser`
-    and the `DocumentTemplate` type from `@kovojs/server`. The prior plan's internal-import claim is
-    obsolete and has been dropped.
-- [x] `document` is currently a thin options object on `createApp`.
-  - Evidence: `packages/server/src/app-types.ts:159` `document?: AppDocumentOptions`; `app.ts:104`
-    `document: options.document ?? {}`. Only `lang` is exercised today (`app-document.test.ts:288`).
+Next.js is useful prior art but not a contract for Kovo:
 
-## Decisions (locked)
+- In the Pages Router, `pages/_document.tsx` returns JSX using framework-owned primitives:
+  `Html`, `Head`, `Main`, and `NextScript`. Next documents those primitives as required for proper
+  rendering, and `_document` is server-only.
+- In the App Router, the root layout is natural JSX (`<html><body>{children}</body></html>`), while
+  metadata is usually declared through structured `metadata` / `generateMetadata` exports that
+  generate head tags.
+- Scripts use a dedicated `next/script` component with explicit loading strategies, and Next has
+  diagnostics for common misuse such as raw `<script>` in `next/head` or inline scripts missing an
+  identifier.
 
-- **Surface: Option 3.** `document` is a typed config **object**. Head contributions are built by
-  typed helper functions (`inlineScript`, `inlineStyle`, `fontPreload`); body contributions are
-  natural JSX slots (`bodyStart`, `bodyEnd`). Kovo owns the frame. Rationale: identical security to a
-  `<Document>` JSX boundary, but the closed-world constraint lives in the **type signature** (the
-  invalid move does not typecheck) instead of a post-build compiler diagnostic — best for both human
-  and AI authors — and it needs no new compiler pass.
-- **Resolution: static-only.** `document` is evaluated once at app construction. No
-  `(ctx) => DocumentConfig` form. This keeps inline-script/style CSP hashes stable and keeps the
-  document exportable. Route-varying head continues to flow through route meta/hints.
-- **Primitive set: minimal.** `inlineScript`, `fontPreload`, `bodyStart`/`bodyEnd`,
-  `htmlAttrs`/`bodyAttrs`, and the `rawHead` escape hatch. `<meta>`, `<link>`, stylesheets, and
-  modulepreloads stay in the existing route-meta/hints path and `createApp({ stylesheets })` — the
-  document API does not duplicate them. **`inlineStyle` is deliberately omitted** (see Resolved
-  Questions): no current consumer, and the surface stays minimal per `rules/api-surface.md`.
-- **Attribute model.** `htmlAttrs`/`bodyAttrs` allow safe global attributes by category
-  (`lang`/`dir`/`class`/`id`/`data-*`); `data-*` is open (escaped values, low risk) and need not be
-  declared. `on*`, `style`, and `srcdoc` are excluded structurally; URL-bearing attributes are
-  scheme-checked. The `data-kovo-*` / `kovo-*` namespace is reserved for the framework and rejected
-  in app attrs.
-- **Body wrapping: before/after only.** `bodyStart`/`bodyEnd` inject around the route body; no app
-  wrapper element. Root containers/chrome remain the job of layouts and route regions.
-- **Compatibility: none. Breaking change.** Remove the string `DocumentTemplate`,
-  `DocumentTemplateContext`, the `template?` option, `enforceDocumentTemplateParts`, and the
-  `</body>`-slicing deferred path. The docs site is the only consumer and is migrated in the same
-  change. No deprecation window, no `unsafeDocumentTemplate`.
+Kovo should borrow the shape: TSX-native document authoring and dedicated primitives for scripts,
+preloads, metadata, and shell additions. Kovo should not inherit the weaker parts of the React/Next
+escape-hatch model where arbitrary raw HTML remains easy to hide.
 
-## Public API Shape
+Reference docs:
+
+- Next custom document: `https://nextjs.org/docs/pages/building-your-application/routing/custom-document`
+- Next metadata: `https://nextjs.org/docs/app/getting-started/metadata-and-og-images`
+- Next script component: `https://nextjs.org/docs/app/api-reference/components/script`
+
+## Product Direction
+
+The desired authoring shape should feel like an app shell, not a low-level serializer:
 
 ```tsx
 createApp({
-  document: {
-    lang: "en",
-    htmlAttrs: { "data-theme": "dark" },          // constrained allowlist
-    head: [
-      fontPreload("/fonts/inter-latin-wght-normal.woff2"),
-      inlineScript({ id: "theme", run: "beforePaint", source: THEME_SCRIPT }),
-    ],
-    bodyEnd: <SearchDialog />,                      // natural JSX, server-escaped
-  },
+  document: (
+    <Document lang="en">
+      <Head>
+        <FontPreload href="/fonts/inter-latin-wght-normal.woff2" />
+        <InlineScript id="theme" run="beforePaint">
+          {themeScript}
+        </InlineScript>
+      </Head>
+
+      <BodyEnd>
+        <SearchDialog />
+      </BodyEnd>
+    </Document>
+  ),
 });
 ```
 
-- [ ] Replace `AppDocumentOptions` with the structured shape.
+This is a declarative configuration surface, not an arbitrary replacement for the route document.
+Kovo must still inject and order the framework-owned parts: doctype, `<html>`, required meta,
+build/session meta, page hints, query scripts, loader, route body, deferred shell close, CSP hashes,
+and any render-plan/version metadata.
+
+## Design Principles
+
+- [x] Preserve Kovo ownership of required document structure.
+  - Required outcome: app code cannot omit `parts.head`, query scripts, loader, build/session meta,
+    route body, deferred close tags, or hydration contracts by forgetting to include a placeholder.
+  - Evidence: `packages/server/src/document-core.ts` keeps doctype/html/head/body/query/loader/defer
+    assembly framework-owned, and `packages/server/src/document.test.ts` proves structured documents
+    still include loader, query scripts, route body, and deferred close.
+- [x] Keep document authoring TSX-native.
+  - Required outcome: document additions are authored as TSX/JSX values or typed helper values, not
+    as full-document string concatenation.
+  - Evidence: `site/src/document-template.tsx` now exports `<Document>...</Document>` instead of a
+    string-returning `DocumentTemplate`; `pnpm --filter @kovojs/site run build` passed.
+- [x] Make unsafe document contributions explicit and auditable.
+  - Required outcome: inline scripts, inline styles, raw HTML, unusual URL sinks, and shell-level
+    escape hatches are surfaced through named helpers and enrolled in `kovo explain --trust`.
+  - Evidence: `packages/server/src/document-structured.ts` exposes `InlineScript`, `InlineStyle`,
+    and URL-checked link primitives; `packages/core/src/internal/source-sink-registry.ts` records the
+    document shell output sink; no raw document HTML escape hatch was added.
+- [x] Avoid a generic "slot soup" API.
+  - Required outcome: common needs such as fonts, meta tags, scripts, body-end UI, and shell
+    attributes have first-class primitives; authors should not need to think in raw insertion
+    offsets for normal work.
+  - Evidence: `packages/server/src/document-structured.ts` exports first-class document primitives;
+    `packages/server/src/api/app.test.ts` asserts the public API surface.
+- [x] Keep partial/deferred documents byte-compatible with full documents.
+  - Required outcome: deferred streams use the same structured document model and cannot drift from
+    ordinary document assembly.
+  - Evidence: `packages/server/src/document.test.ts` verifies structured `BodyEnd` is emitted in
+    the deferred close frame after deferred fragments and before `</body>`.
+- [x] Make migration honest.
+  - Required outcome: `DocumentTemplate` is removed before v1; app document customization uses
+    structured primitives rather than a silent compatibility template.
+  - Evidence: `packages/server/src/app-types.ts` no longer exposes `template`, `packages/server/src/api/rendering.ts`
+    no longer exports template types, and `site/content/guides/request-shell.md` documents structured
+    documents as the only app authoring path.
+
+## Proposed Public API Shape
+
+- [x] Add a structured `document` option to `createApp()`.
   - Candidate:
-    ```ts
-    interface AppDocumentOptions {
-      lang?: string;
-      htmlAttrs?: DocumentHtmlAttrs;   // lang/dir/class/id/data-*; no on*/style/srcdoc; URL attrs scheme-checked
-      bodyAttrs?: DocumentBodyAttrs;   // class/id/data-*; data-kovo-*/kovo-* reserved
-      head?: readonly DocumentHeadItem[];
-      bodyStart?: DocumentNode;        // injected immediately after <body>
-      bodyEnd?: DocumentNode;          // injected after the route body, before </body>
-    }
-    ```
-  - `DocumentHeadItem` is an opaque branded type returned only by the head helpers; a plain string or
-    raw JSX element is not assignable to it.
-- [ ] Add the head-item helpers under a documented public entrypoint (`@kovojs/server`).
-  - `inlineScript({ id, run, source }): DocumentHeadItem` — `run: 'beforePaint' | 'afterInteractive'`;
-    `source: string` is static text (v1 accepts only a string, never a stringified function), hashed
-    for CSP at construction.
-  - `fontPreload(href, opts?): DocumentHeadItem` — `as="font"`, `type="font/woff2"`, `crossorigin`
-    defaults; `href` scheme-checked.
-  - `rawHead(value: TrustedHtml, { reason }): DocumentHeadItem` — the single audited head escape
-    hatch; rejects plain `string`; enrolled in `kovo explain --trust`.
-- [ ] Keep body slots as ordinary server JSX.
-  - `bodyStart`/`bodyEnd` go through the same JSX escaping/KV236 model as component output; a
-    `SearchDialog` component or `trustedHtml(...)` works exactly as elsewhere. No document-specific
-    body primitive is needed.
+    `document: DocumentConfig | ((context: DocumentAuthoringContext) => DocumentConfig)`.
+  - `DocumentConfig` is produced by `<Document>...</Document>` or a non-JSX object form for callers
+    that do not use TSX.
+  - Evidence: `packages/server/src/app-types.ts` accepts `DocumentDeclaration` and
+    `packages/server/src/app.ts` normalizes it into app document options; `pnpm run check:api-surface`
+    passed.
+- [x] Add document primitives under a documented public entrypoint.
+  - Candidate exports: `Document`, `Head`, `BodyStart`, `BodyEnd`, `HtmlAttrs`, `BodyAttrs`,
+    `Meta`, `Link`, `Stylesheet`, `FontPreload`, `ModulePreload`, `InlineScript`, `InlineStyle`.
+  - Evidence: `packages/server/src/api/rendering.ts` and `packages/server/src/index.ts` export the
+    structured primitives and public document types; `packages/server/src/api/app.test.ts` asserts
+    the public barrel.
+- [x] Make `<Document>` a declaration boundary, not a normal component.
+  - Required outcome: it can collect document facts, but it cannot render arbitrary children around
+    the route body or replace Kovo-owned shell parts.
+  - Evidence: `packages/server/src/document.test.ts` rejects unsupported `<Document>` children and
+    proves app code contributes facts, not route-body placeholders.
+- [x] Define natural placement semantics.
+  - `Head` contributes app-wide head nodes.
+  - `BodyStart` contributes immediately after `<body>`.
+  - `BodyEnd` contributes after the route body and before `</body>`.
+  - `HtmlAttrs` and `BodyAttrs` expose a constrained attribute allowlist.
+  - Evidence: `packages/server/src/document.test.ts` verifies `Head`, `BodyStart`, `BodyEnd`,
+    `HtmlAttrs`, and `BodyAttrs` placement in full and deferred documents.
+- [x] Define request-aware context carefully.
+  - Decision: keep the initial `DocumentAuthoringContext` request-independent and exclude raw
+    `parts.head`, `parts.body`, `parts.queryScripts`, and internal rendered strings from public app
+    authoring.
+  - Evidence: `packages/server/src/document-structured.ts` exposes `DocumentAuthoringContext` but
+    `packages/server/src/app.ts` resolves declarations without request/rendered shell parts.
 
 ## Safety Model
 
-- [ ] Inline scripts are a typed sink only.
-  - `inlineScript` is the only way to emit inline script text; raw `<script>` text in document config
-    is unexpressible (no slot accepts it). Each `inlineScript` merges its `cspSha256` hash into the
-    document CSP metadata via `mergeCspInlineMetadata`, so a strict hash-CSP is complete by
-    construction.
-- [ ] URL-bearing values pass the existing URL-scheme allowlist.
-  - Applies to `fontPreload` href and any URL-bearing `htmlAttrs`.
-- [ ] Attribute sinks are categorically constrained.
-  - `htmlAttrs`/`bodyAttrs` reject `on*`, `style`, and `srcdoc`; scheme-check URL attrs; reject the
-    reserved `data-kovo-*`/`kovo-*` namespace. Dynamic styling goes through `style.create`, not an
-    inline `style` attr.
-- [ ] (Accepted gap) Inline `<style>` has no CSP-complete path in v1.
-  - `inlineStyle` is omitted, so inline CSS would ride `rawHead(trustedHtml(...))`, which is not
-    auto-hashed (hashing arbitrary trusted markup would require parsing it). This is an accepted
-    consequence of leaving `inlineStyle` out; add the typed `style-src`-hashing helper when a real
-    inline-`<style>` consumer appears.
-- [ ] Raw HTML only through `rawHead(trustedHtml(...))` (head) or `trustedHtml(...)` in body JSX.
-  - Plain `string` raw HTML is never accepted; both are enrolled in `kovo explain --trust`.
-- [ ] App-authored imports from `@kovojs/server/internal/*` stay invalid (SPEC §5.2 rule 8). The
-  structured helpers remove every current reason to reach for them.
+- [x] Route all document child text through the same escaping model as server JSX.
+  - Plain strings inside structured document primitives are text unless a primitive explicitly
+    consumes code, CSS, or trusted markup.
+  - Evidence: `packages/server/src/document.test.ts` proves plain body-start/body-end strings escape
+    as text instead of markup.
+- [x] Make inline scripts a typed sink.
+  - `InlineScript` requires a stable `id`, a loading/execution posture such as `beforePaint` /
+    `afterInteractive`, and CSP hash/nonce enrollment.
+  - Plain inline script strings are allowed only through this primitive, not arbitrary `<script>`
+    element text in document TSX.
+  - Evidence: `packages/server/src/document-structured.ts` implements `InlineScript`, rejects missing
+    IDs and non-primitive `Head` children, and `packages/server/src/document.test.ts` verifies CSP hash
+    enrollment.
+- [x] Make inline styles a typed sink.
+  - `InlineStyle` requires source metadata and CSP enrollment; dynamic values must be compiler-owned
+    or explicitly trusted.
+  - Evidence: `packages/server/src/document-structured.ts` implements `InlineStyle` with required
+    source metadata; `packages/server/src/document.test.ts` verifies CSP style hashes.
+- [x] Enforce URL-bearing attributes through the existing URL-scheme allowlist.
+  - Applies to `Link`, `FontPreload`, `ModulePreload`, `Stylesheet`, metadata image URLs, and any
+    constrained shell attributes that can carry URLs.
+  - Evidence: `packages/server/src/document.test.ts` verifies `FontPreload` rejects
+    `javascript:` URLs; source/sink inventory records the document URL sink.
+- [x] Enroll raw HTML escape hatches in `kovo explain --trust`.
+  - Decision: omit a raw document-HTML escape hatch from this API. Plain `string` document children
+    are escaped text in body placements and rejected in `Head`/`Document` structure.
+  - Evidence: `packages/server/src/document.test.ts` proves body strings are escaped, rejects raw
+    `<script>`/raw `<Document>` children, and `rg -n "UnsafeDocumentHtml|DocumentTemplate" packages/server/src`
+    finds no raw document escape surface.
+- [x] Forbid app-authored imports from internal document helpers.
+  - `escapeAttribute` and other HTML internals stay internal/generated-only; structured primitives
+    should remove the need for app authors to import them.
+  - Evidence: `site/src/document-template.tsx` imports only public `@kovojs/server` primitives and
+    `pnpm run check:imports` passed.
 
 ## Compiler And Runtime Work
 
-This is largely a **runtime value API**; the heavy lifting is server-side assembly, not a new
-compiler pass.
+- [x] Extend the parser/model to recognize structured document declarations.
+  - Decision: no compiler-only syntax was introduced; structured document declarations are ordinary
+    TSX/runtime declarations that produce branded `DocumentConfig` facts.
+  - Evidence: `packages/server/src/document-structured.ts` owns the typed fact model, and
+    `pnpm --filter @kovojs/site run build` plus the structured document integration spec verify
+    app-authored TSX declarations flow through the build/runtime path.
+- [x] Add server document assembly support for structured document facts.
+  - Keep existing `assembleDocumentParts(...)` as the owner of framework parts, but consume app
+    additions from a typed model.
+  - Evidence: `packages/server/src/document-core.ts` merges structured document head/body facts into
+    default document assembly without exposing `parts.*` to app code.
+- [x] Add deferred document assembly support.
+  - The structured API must support `renderDeferredDocument(...)` without requiring string slicing
+    around `</body>`.
+  - Evidence: `packages/server/src/document-core.ts` emits structured `BodyEnd` in the deferred close
+    frame; `packages/server/src/document.test.ts` verifies deferred placement.
+- [x] Add CSP integration.
+  - Inline script/style primitives must merge their hashes/nonces with existing loader/query/defer
+    CSP metadata.
+  - Evidence: `packages/server/src/document.test.ts` verifies structured script/style CSP hashes are
+    present alongside loader/query/defer CSP metadata.
+- [x] Add diagnostics for invalid document structure.
+  - Examples: duplicate `<Document>`, unknown child under `<Document>`, raw `<script>` text outside
+    `InlineScript`, direct `dangerouslySetInnerHTML`, unsafe URL, unsupported shell attribute,
+    missing inline script `id`, or request-derived dynamic code in an inline script.
+  - Evidence: `packages/server/src/document.test.ts` covers teaching errors for missing inline script
+    IDs, unsafe font preload URLs, unsupported shell attributes, raw `<script>` under `Head`, and raw
+    document children.
+- [x] Add public/import-boundary diagnostics.
+  - App-authored `@kovojs/server/internal/*`, `@kovojs/*/generated`, and app-local generated imports
+    remain invalid per `SPEC.md` §5.2 rule 8.
+  - Evidence: `pnpm run check:imports` passed after the site migrated off internal document helpers.
+- [x] Add `kovo explain document`.
+  - Output should show document contributions, their source files, placement, CSP entries,
+    script/style trust posture, and raw/trusted escape hatches.
+  - Evidence: `packages/cli/src/graph-output.ts` adds `kovo explain document`, backed by the
+    document source/sink row and document-owned trust escapes; `pnpm exec vitest --run
+packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` passed.
 
-- [ ] Server: own the frame in `assembleDocumentParts`.
-  - Compose the default frame from framework parts **plus** the app's `head`/`bodyStart`/`bodyEnd`/
-    attrs. Remove `DocumentTemplate`, `DocumentTemplateContext`, the `template?` option,
-    `enforceDocumentTemplateParts`, and `requiredDocumentTemplateParts`.
-- [ ] Server: render head items to markup + CSP at construction.
-  - `inlineScript` → hashed `<script>` with `cspHashAttribute`; `fontPreload` → `<link rel=preload>`;
-    merge all hashes into the document CSP alongside loader/query/defer.
-- [ ] Server: structured deferred framing.
-  - `renderDeferredDocument` builds `shell`/`closeHtml` from the structured model (the route body and
-    `bodyEnd` straddle the boundary) instead of slicing on `</body>`.
-- [ ] Types: brand `DocumentHeadItem` so the wrong move fails to typecheck.
-  - A plain `string`, a raw JSX element, or `dangerouslySetInnerHTML` must not be assignable to a
-    head slot; this is the primary enforcement surface for AI/human authors.
-- [ ] Diagnostics (runtime + type, not a new compiler pass where avoidable).
-  - Duplicate `inlineScript` `id`; missing `id`; non-allowlisted `htmlAttrs`/`bodyAttrs`; unsafe URL;
-    plain-string raw HTML. Prefer type errors; fall back to construction-time throws.
-- [ ] `kovo explain document`.
-  - Enumerate document contributions, source files, placement, CSP entries, script/style execution
-    posture, and raw/trusted escape hatches — statically, from the constructed-once config.
+## Migration Work
 
-## Migration Work (same change, no compat)
-
-- [ ] Migrate `site/src/document-template.tsx` to the structured config.
-  - Font preloads → `fontPreload`; theme/search-hotkey/API-nav scripts → `inlineScript`; search
-    dialog stays a JSX component in `bodyEnd`.
-  - Delete the hand-authored frame and all `trustedHtml(parts.*)` threading.
-- [ ] Remove the string `DocumentTemplate` surface and its tests/fixtures; replace with structured
-  equivalents.
-- [ ] Update docs/examples and `plans/no-raw-strings.md` (close the `DocumentTemplate` exception).
+- [x] Migrate the docs site from `site/src/document-template.ts` to the structured API.
+  - Convert font preloads to `FontPreload`.
+  - Convert the theme, search-hotkey, and API-nav inline scripts to `InlineScript`.
+  - Convert the search dialog from raw string HTML to TSX.
+  - Remove the app-authored import from `@kovojs/server/internal/html`.
+  - Evidence: `site/src/document-template.tsx` now uses `Document`, `Head`, `FontPreload`,
+    `InlineScript`, and `BodyEnd`; `pnpm --filter @kovojs/site run build` passed.
+- [x] Decide the compatibility posture for existing `DocumentTemplate`.
+  - Decision: remove before v1; do not keep a compatibility escape under the old name.
+  - Evidence: `packages/server/src/document-core.ts`, `packages/server/src/app-types.ts`, and the
+    public barrels no longer contain `DocumentTemplate`; `packages/server/src/app-guards.ts` rejects
+    app aggregates with a `document.template` property.
+- [x] Update docs and examples.
+  - Replace raw document template examples with structured document examples.
+  - State that `document.template` is unsupported and structured document primitives are the
+    migration path.
+  - Evidence: `site/content/guides/request-shell.md` documents a structured document example and
+    states that `document.template` is not an app authoring surface.
+- [x] Update `plans/no-raw-strings.md` or archive note when the exception is closed.
+  - The old plan currently records `DocumentTemplate` as the explicit remaining exception.
+  - Evidence: `plans/no-raw-strings.md` records the exception as closed and directs future document
+    escape hatches to named, audited trust boundaries.
 
 ## Verification Plan
 
-- [ ] Type-level tests: a plain string / raw JSX / `dangerouslySetInnerHTML` is rejected in a head
-  slot, and the old string `DocumentTemplate` no longer typechecks.
-- [ ] Server tests: required framework parts (loader, query scripts, build/session meta, route body)
-  are present and correctly ordered without any app-side placeholder.
-- [ ] Deferred tests: full vs deferred shell parity via the structured model (no `</body>` slicing).
-- [ ] CSP tests: every `inlineScript` hash is merged into the document CSP.
-- [ ] Source/sink tests: document raw-HTML/script/style/URL sinks are inventoried in
-  `kovo explain --trust`.
-- [ ] Import-boundary test: app-authored `@kovojs/server/internal/*` document imports fail.
-- [ ] Site build/static-export test after migration.
-- [ ] `git diff --check` + public API gates before checkpoint commits.
+- [x] Add type-level tests rejecting raw string full-document templates in app-authored source.
+  - Evidence: `packages/server/src/api/app.test.ts` has an `@ts-expect-error` regression for
+    `createApp({ document: { template } })`; `vp check --fix` and `pnpm run check` passed.
+- [x] Add compiler tests for structured document lowering and diagnostics.
+  - Decision: no compiler-only lowering was added; structured documents are TSX/runtime config.
+    Build/integration coverage is the relevant verification for this shape.
+  - Evidence: `pnpm --filter @kovojs/site run build` compiled the docs site's structured document
+    declaration, and the Playwright structured-document-shell spec passed against a TSX fixture.
+- [x] Add server tests proving required framework parts cannot be omitted.
+  - Evidence: `packages/server/src/document.test.ts` verifies structured documents keep loader, query
+    scripts, route body, body-start/body-end contributions, and framework-owned head/body framing.
+- [x] Add deferred document tests proving full/deferred shell parity.
+  - Evidence: `packages/server/src/document.test.ts` verifies structured `BodyEnd` is emitted in the
+    deferred close frame after streamed fragments.
+- [x] Add CSP tests proving inline document scripts/styles are hashed or nonce-enrolled.
+  - Evidence: `packages/server/src/document.test.ts` verifies `InlineScript` and `InlineStyle` hashes
+    are present in `document.csp` and emitted hash attributes.
+- [x] Add source/sink tests proving document-level raw HTML/script/style/URL sinks are inventoried.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` includes `document.shell.output`
+    and `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts` passed.
+- [x] Add import-boundary tests proving app-authored internal document helper imports fail.
+  - Evidence: `pnpm run check:imports` passed after `site/src/document-template.tsx` migrated to
+    public `@kovojs/server` document primitives only.
+- [x] Add site build/static export tests after migrating the docs site.
+  - Evidence: `pnpm --filter @kovojs/site run build` passed with `html=107` and `diagnostics=0`.
+- [x] Add `git diff --check` and relevant public API gates before checkpoint commits.
+  - Evidence: `git diff --check`, `pnpm run check:api-surface`, `pnpm run check:exports`, and
+    `pnpm run check` passed.
 
-## Resolved Questions
+## Open Questions
 
-- **`inlineScript` source: static string only (v1).** No stringified-function form. Reasons: the
-  emitted bytes equal the hashed bytes (stable, dev=prod CSP hash, no build-stage coupling), and the
-  `fn` form's headline benefit is undercut by the closure-capture trap — a stringified function that
-  references outer scope typechecks but fails at runtime, exactly the constraint-not-in-types
-  anti-pattern this API avoids. Keep the signature open so a guarded `fn` form (with a strict
-  no-free-variables diagnostic) can be added later without breaking `source`.
-- **Attributes: category allowlist, `data-*` open.** Permit `lang`/`dir`/`class`/`id`/`data-*`;
-  exclude `on*`/`style`/`srcdoc`; scheme-check URL attrs; reserve `data-kovo-*`/`kovo-*`. `data-*`
-  need not be declared (values are escaped → low risk; declaration is ceremony for negligible gain).
-- **`inlineStyle`: omitted from v1.** No current consumer (site uses `style.create`), and
-  `rules/api-surface.md` favors a minimal surface. Accepted consequence: inline `<style>` has no
-  CSP-complete typed path until the helper is added (see Safety Model).
+- [x] Should `document` accept only JSX or also a typed object form for non-TSX app entries?
+  - Decision: accept the typed object/function form too; `Document(...)` returns branded
+    `DocumentConfig`, and `CreateAppOptions.document` accepts `DocumentDeclaration`.
+- [x] Should `InlineScript` accept source text children, an imported function, or both?
+  - Decision: accept source text children for the initial API; imported-function handling remains
+    outside this plan.
+- [x] Should Kovo allow direct `<script>` under structured `Head`, or require `InlineScript` always?
+  - Decision: require `InlineScript`; raw `<script>`/rendered HTML under `Head` throws.
+- [x] Should `HtmlAttrs` / `BodyAttrs` be allowlist-only, or should arbitrary `data-*` be accepted?
+  - Decision: allowlisted structural attributes plus arbitrary `data-*`; unsupported event/style
+    shell attributes throw.
+- [x] Should the compatibility escape be named `unsafeDocumentTemplate(...)`,
+      `rawDocumentTemplate(...)`, or omitted entirely before v1?
+  - Decision: omit it entirely before v1; no public string-returning template escape remains.
+- [x] Should `DocumentTemplate` become internal-only immediately once the structured API exists?
+  - Decision: remove it rather than keep an internal alias; internal document rendering now uses
+    structured assembly directly.
 
 ## Latest Verification
 
-- `nl -ba packages/server/src/document-core.ts | sed -n '36,180p;394,477p'`
-- `nl -ba site/src/document-template.tsx | sed -n '1,6p;160,235p'`
-- `rg -n "DocumentTemplate|document:|enforceDocumentTemplateParts" packages site --glob '!node_modules'`
-- `nl -ba SPEC.md | sed -n '925,941p'` (§9.5 request shell)
+- `vp check --fix`
+- `pnpm exec vitest --run packages/server/src/document.test.ts packages/server/src/api/app.test.ts packages/server/src/static-export-handler-doc.test.ts packages/cli/src/sources-sinks.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts`
+- `pnpm exec playwright test -c tests/integration/playwright.config.ts tests/integration/specs/structured-document-shell.spec.ts`
+- `pnpm run check:api-surface`
+- `pnpm run check:exports`
+- `pnpm run check:imports`
+- `pnpm --filter @kovojs/site run build`
+- `pnpm run check`
+- `rg -n "^- \[ \]" plans/structured-document.md plans/no-raw-strings.md`
+- `git diff --check`
