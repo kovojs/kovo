@@ -5,6 +5,8 @@ import { isIP } from 'node:net';
 import type * as Http from 'node:http';
 import type * as Https from 'node:https';
 import type * as Net from 'node:net';
+import { Dispatcher, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
+import type { Dispatcher as UndiciDispatcher } from 'undici';
 
 /**
  * Private-network egress policy for the app request shell (SPEC §9.5; secure-by-construction Phase 5).
@@ -134,6 +136,7 @@ export function installNodeEgressGuard(options: EgressNodeGuardOptions): EgressN
       net.Socket.prototype,
       'connect',
     ) as typeof net.Socket.prototype.connect,
+    undiciDispatcher: getGlobalDispatcher(),
   };
 
   const guardUrl = (protocol: 'http:' | 'https:', args: readonly unknown[]): readonly unknown[] => {
@@ -200,6 +203,7 @@ export function installNodeEgressGuard(options: EgressNodeGuardOptions): EgressN
   ) {
     return Reflect.apply(originals.socketConnect, this, guardConnect(args));
   } as typeof net.Socket.prototype.connect;
+  setGlobalDispatcher(createEgressDispatcher(originals.undiciDispatcher, options));
 
   return {
     uninstall() {
@@ -210,8 +214,16 @@ export function installNodeEgressGuard(options: EgressNodeGuardOptions): EgressN
       net.connect = originals.netConnect;
       net.createConnection = originals.netCreateConnection;
       net.Socket.prototype.connect = originals.socketConnect;
+      setGlobalDispatcher(originals.undiciDispatcher);
     },
   };
+}
+
+export function createEgressDispatcher(
+  dispatcher: UndiciDispatcher,
+  options: EgressNodeGuardOptions,
+): UndiciDispatcher {
+  return new GuardedUndiciDispatcher(dispatcher, options);
 }
 
 export async function assertEgressAllowed(
@@ -356,6 +368,72 @@ function guardedLookup(
       (error: NodeJS.ErrnoException) => finish(error, '', 0),
     );
   };
+}
+
+class GuardedUndiciDispatcher extends Dispatcher {
+  private readonly dispatcher: UndiciDispatcher;
+  private readonly allowInternal: readonly string[];
+  private readonly resolver: EgressResolver;
+
+  constructor(dispatcher: UndiciDispatcher, options: EgressNodeGuardOptions) {
+    super();
+    this.dispatcher = dispatcher;
+    this.allowInternal = options.allowInternal;
+    this.resolver = options.resolver ?? defaultResolver;
+  }
+
+  dispatch(
+    options: UndiciDispatcher.DispatchOptions,
+    handler: UndiciDispatcher.DispatchHandler,
+  ): boolean {
+    const destination = undiciDispatchDestination(options);
+    if (destination === undefined) return this.dispatcher.dispatch(options, handler);
+
+    void assertEgressAllowed(destination, this.allowInternal, this.resolver).then(
+      () => {
+        this.dispatcher.dispatch(options, handler);
+      },
+      (error: Error) => {
+        handler.onResponseError?.(undefined as never, error);
+      },
+    );
+
+    return true;
+  }
+
+  close(callback: () => void): void;
+  close(): Promise<void>;
+  close(callback?: () => void): Promise<void> | void {
+    if (callback !== undefined) return this.dispatcher.close(callback);
+    return this.dispatcher.close();
+  }
+
+  destroy(error: Error | null, callback: () => void): void;
+  destroy(callback: () => void): void;
+  destroy(error: Error | null): Promise<void>;
+  destroy(): Promise<void>;
+  destroy(
+    errorOrCallback?: Error | null | (() => void),
+    callback?: () => void,
+  ): Promise<void> | void {
+    if (typeof errorOrCallback === 'function') return this.dispatcher.destroy(errorOrCallback);
+    if (callback !== undefined) return this.dispatcher.destroy(errorOrCallback ?? null, callback);
+    if (errorOrCallback !== undefined) return this.dispatcher.destroy(errorOrCallback);
+    return this.dispatcher.destroy();
+  }
+}
+
+function undiciDispatchDestination(options: UndiciDispatcher.DispatchOptions): string | undefined {
+  if (options.origin === undefined) {
+    try {
+      return new URL(options.path).href;
+    } catch {
+      return undefined;
+    }
+  }
+
+  const origin = options.origin instanceof URL ? options.origin.href : options.origin;
+  return new URL(options.path, origin).href;
 }
 
 function parseHttpRequestArgs(

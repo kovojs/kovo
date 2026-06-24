@@ -1,12 +1,15 @@
 import { createRequire } from 'node:module';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
+import { connect as netConnect } from 'node:net';
 
 import { describe, expect, it, vi } from 'vitest';
+import { Agent, fetch as undiciFetch, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 
 import {
   EgressBlockedError,
   assertEgressAllowed,
+  createEgressDispatcher,
   createEgressFetch,
   installNodeEgressGuard,
   normalizeAllowInternal,
@@ -115,6 +118,62 @@ describe('server egress private-network deny floor', () => {
     }
   });
 
+  it('blocks raw undici metadata requests before dispatch', async () => {
+    const guard = installNodeEgressGuard({ allowInternal: ['169.254.169.254:80'] });
+
+    try {
+      await expect(undiciFetch('http://169.254.169.254/latest/meta-data/')).rejects.toMatchObject({
+        cause: expect.any(EgressBlockedError),
+      });
+    } finally {
+      guard.uninstall();
+    }
+  });
+
+  it('rechecks raw undici redirect hops before dispatch', async () => {
+    const originalDispatcher = getGlobalDispatcher();
+    const server = createServer((_request, response) => {
+      response.writeHead(302, { Location: 'http://169.254.169.254/latest/meta-data/' });
+      response.end();
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('expected TCP server');
+
+    const agent = new Agent({
+      connect(options, callback) {
+        const socket = netConnect(Number(options.port), '127.0.0.1');
+        socket.once('connect', () => callback(null, socket));
+        socket.once('error', (error) => callback(error, null));
+      },
+    });
+    setGlobalDispatcher(
+      createEgressDispatcher(agent, {
+        allowInternal: [],
+        resolver: async (host) =>
+          host === 'public-hop.test' ? '93.184.216.34' : '169.254.169.254',
+      }),
+    );
+
+    try {
+      await expect(
+        undiciFetch(`http://public-hop.test:${address.port}/start`),
+      ).rejects.toMatchObject({
+        cause: expect.objectContaining({
+          destination: '169.254.169.254:80',
+          status: 502,
+        }),
+      });
+    } finally {
+      setGlobalDispatcher(originalDispatcher);
+      await agent.close();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error === undefined ? resolve() : reject(error)));
+      });
+    }
+  });
+
   it('blocks raw net connects to private addresses outside allowInternal', () => {
     const net = require('node:net') as typeof import('node:net');
     const guard = installNodeEgressGuard({ allowInternal: [] });
@@ -155,6 +214,58 @@ describe('server egress private-network deny floor', () => {
       ).resolves.toBe('ok');
     } finally {
       guard.uninstall();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error === undefined ? resolve() : reject(error)));
+      });
+    }
+  });
+
+  it('rechecks undici dispatches before pooled socket reuse', async () => {
+    const originalDispatcher = getGlobalDispatcher();
+    const server = createServer((_request, response) => {
+      response.setHeader('Connection', 'keep-alive');
+      response.end('ok');
+    });
+    let connections = 0;
+    server.on('connection', () => {
+      connections += 1;
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('expected TCP server');
+
+    const policyAddresses = ['93.184.216.34', '127.0.0.1'];
+    const agent = new Agent({
+      connect(options, callback) {
+        const socket = netConnect(Number(options.port), '127.0.0.1');
+        socket.once('connect', () => callback(null, socket));
+        socket.once('error', (error) => callback(error, null));
+      },
+      connections: 1,
+    });
+    setGlobalDispatcher(
+      createEgressDispatcher(agent, {
+        allowInternal: [],
+        resolver: async () => policyAddresses.shift() ?? '127.0.0.1',
+      }),
+    );
+
+    try {
+      await expect(undiciFetch(`http://rebind.test:${address.port}/first`)).resolves.toMatchObject({
+        status: 200,
+      });
+      await expect(undiciFetch(`http://rebind.test:${address.port}/second`)).rejects.toMatchObject({
+        cause: expect.objectContaining({
+          destination: `rebind.test:${address.port}`,
+          ip: '127.0.0.1',
+          status: 502,
+        }),
+      });
+      expect(connections).toBe(1);
+    } finally {
+      setGlobalDispatcher(originalDispatcher);
+      await agent.close();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error === undefined ? resolve() : reject(error)));
       });

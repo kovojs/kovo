@@ -440,7 +440,7 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
       compile-time channel ban (former KV427) and mandatory declared external channels are **dropped** — not worth
       the friction. This is an explicit runtime defense-in-depth floor, not a by-construction proof (an IP is only
       knowable at resolve time, so the check must be runtime sink-validation).
-  - [ ] **Dual-layer enforcement (verified necessary 2026-06-23).** A `setGlobalDispatcher`-only floor fails
+  - [x] **Dual-layer enforcement (verified necessary 2026-06-23).** A `setGlobalDispatcher`-only floor fails
         OPEN: AWS IMDS (`@smithy/credential-provider-imds`, raw `node:http`) and GCP (`gaxios`/node-fetch)
         bypass undici entirely, so `require('http').get('http://169.254.169.254/…')` never hits it. Enforce at
         BOTH (a) a custom undici dispatcher and (b) the `node:http` / `net.Socket.prototype.connect` layer. The
@@ -448,13 +448,12 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
         pooled-socket reuse skips `beforeConnect` (proven: 3 same-origin fetches fire the connect guard 2×), so
         a connect-only gate fails open on socket reuse. Keep the connect/lookup hook for IP classification +
         DNS-rebinding pinning. (ALS context propagates into both the undici connector and `net.connect` —
-        verified Node v24.) - Evidence (2026-06-24 partial): `packages/server/src/egress.ts` now has an internal reusable
-        `installNodeEgressGuard()` patch layer for `node:http`, `node:https`, `net.connect`,
-        `net.createConnection`, and `Socket.prototype.connect`, reusing the shared egress decision and lookup
-        recheck. `vp exec vitest --run packages/server/src/egress.test.ts packages/server/src/app.test.ts
-packages/server/src/api/app.test.ts` verifies raw `node:http` metadata denial, raw `net` private denial,
-        exact allowed internal `node:http`, and existing lifecycle `request.fetch`. Still open: undici dispatcher,
-        global bootstrap install/freeze, and pooled-socket per-dispatch coverage.
+        verified Node v24.) - Evidence (2026-06-24): `packages/server/src/egress.ts` installs a guarded undici global dispatcher plus
+        the existing `node:http`, `node:https`, `net.connect`, `net.createConnection`, and
+        `Socket.prototype.connect` patch layer. `vp exec vitest --run packages/server/src/egress.test.ts
+packages/server/src/app.test.ts packages/server/src/api/app.test.ts` verifies raw undici metadata denial,
+        raw undici redirect-hop denial, pooled-socket per-dispatch recheck, raw `node:http` metadata denial, raw
+        `net` private denial, exact allowed internal `node:http`, and lifecycle `request.fetch`.
   - [ ] Decision rule (both layers, per request AND per redirect hop): resolve → normalize (IPv4-mapped
         `::ffff:`, decimal/octal/hex, NAT64) → pin to the exact validated IP. Public IP → allow. **Identity/
         metadata endpoint** (`169.254.169.254`/`.170.2`/`.170.23`, Azure loopback `IDENTITY_ENDPOINT`) → allow
@@ -464,9 +463,9 @@ packages/server/src/api/app.test.ts` verifies raw `node:http` metadata denial, r
         (`pg`/`ioredis`) reach declared internal hosts via `allowInternal`; raw-socket libs are governed only
         at layer (b)'s `net.connect` patch.
     - Evidence (2026-06-24 partial): `packages/server/src/egress.test.ts` verifies metadata endpoints remain
-      denied even when listed in `allowInternal`, redirect hops are rechecked by lifecycle fetch, and raw
-      `node:http`/`net` decisions use the same private-network floor. Still open: privileged metadata ALS scope
-      and undici per-request redirect/dispatch coverage.
+      denied even when listed in `allowInternal`, redirect hops are rechecked by lifecycle fetch and raw undici,
+      pooled undici dispatches re-run the decision before socket reuse, and raw `node:http`/`net` decisions use
+      the same private-network floor. Still open: privileged metadata ALS scope.
   - [ ] Config: `createApp({ egress: { allowInternal: ['otel:4318', 'localhost:11434', '10.0.5.2:6379'] } })`
         — **narrow `host:port` entries only.** The allowlist is provenance-blind (anything allowed is reachable
         by any caller, incl. an SSRF landing there), so broad CIDRs re-open the private space; permit but flag
@@ -476,14 +475,12 @@ packages/server/src/api/app.test.ts` verifies raw `node:http` metadata denial, r
       `localhost:11434` config and route lifecycle `request.fetch`. Still open: starter defaults and any
       broad-CIDR diagnostic/flagging.
   - [ ] Fail-closed: a blocked connection throws a typed `EgressBlockedError` (502-class) logged with the
-        destination plus "add to `egress.allowInternal` if intended." - Evidence (2026-06-24 partial): `packages/server/src/egress.ts` adds typed `EgressBlockedError` and a
-        guarded lifecycle fetch wrapper. `pnpm exec vitest --run packages/server/src/egress.test.ts
-packages/server/src/app.test.ts packages/server/src/api/app.test.ts` verifies default-deny private,
-        loopback, link-local, metadata, exact `host:port` allowance, numeric/NAT64 normalization, and redirect-hop
-        rechecks. 2026-06-24 update: `vp exec vitest --run packages/server/src/egress.test.ts
-        packages/server/src/app.test.ts packages/server/src/api/app.test.ts` also verifies raw `node:http` and
-        `net` fail-closed behavior. Still open: logging, undici dispatcher enforcement, and global bootstrap
-        install/freeze.
+        destination plus "add to `egress.allowInternal` if intended." - Evidence (2026-06-24 partial): `packages/server/src/egress.ts` adds typed `EgressBlockedError`, guarded
+        lifecycle fetch, raw undici dispatcher, and raw `node:http`/`net` enforcement. `vp exec vitest --run
+packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/server/src/api/app.test.ts`
+        verifies default-deny private, loopback, link-local, metadata, exact `host:port` allowance,
+        numeric/NAT64 normalization, redirect-hop rechecks, raw undici fail-closed behavior, raw `node:http`, and
+        `net` fail-closed behavior. Still open: logging and global bootstrap install/freeze.
   - [ ] **Managed-identity wrinkle — RESOLVED via a privileged metadata ALS capability (workflow-verified
         2026-06-23).** The capability to reach an identity endpoint is "running inside the framework-owned
         credential ALS frame" — NOT a `host:port` allowlist (provenance-blind, SSRF-reachable) and NOT a stack
