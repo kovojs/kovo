@@ -21,6 +21,7 @@ import {
 } from './schema.js';
 import { renderQueryWireHtml } from './wire-html.js';
 import type { JsonSerializable } from './json-boundary.js';
+import type { Reader } from './managed-db.js';
 
 interface QueryDeltaListMeta {
   domain: string;
@@ -28,8 +29,17 @@ interface QueryDeltaListMeta {
   path: string;
 }
 
-/** The context a query's `load` receives: the current request value. */
-export interface QueryLoadContext<Request = unknown> {
+/**
+ * The context a query's `load` receives: the current request value plus the framework-owned
+ * read-only managed db handle (SPEC §9.4 KV433 Stage 1 / §10.3). The framework threads `db` as a
+ * `Reader<Db>` — the SQL-safe (KV422) managed handle with the write verbs
+ * (insert/update/delete/execute/run/batch) removed at the type level (mirroring the runtime proxy
+ * that throws `KovoReadonlyHandleError`). A loader destructures `{ db }` and reads through it; a
+ * write in a loader is a `tsc` error, a runtime throw, AND a KV433 static-gate error. Use
+ * `query.elevated(...)` for the audited GET-write escape (which receives the full read-write handle).
+ */
+export interface QueryLoadContext<Request = unknown, Db = unknown> {
+  db?: Reader<Db>;
   request: Request;
 }
 
@@ -82,6 +92,13 @@ export interface QueryDefinition<
    * may set it directly.
    */
   delta?: readonly QueryDeltaListMeta[];
+  /**
+   * SPEC §9.4/§10.3 (KV433): the audited GET-write escape. A `query.elevated(...)` loader receives
+   * the FULL read-write managed handle (not the read-only proxy) and MUST be idempotent-safe-to-
+   * repeat (GETs are re-fetched/prefetched). Set only by `query.elevated`; the capability is
+   * surfaced in `kovo explain --capabilities`.
+   */
+  elevated?: boolean;
   guard?: {
     call(request: Request): GuardResult | Promise<GuardResult>;
   }['call'];
@@ -147,6 +164,8 @@ export interface RegisteredQueryDefinition {
    * populates this; framework/test code may set it directly.
    */
   delta?: readonly QueryDeltaListMeta[];
+  /** SPEC §9.4/§10.3 (KV433): set by `query.elevated(...)` — the audited GET-write escape. */
+  elevated?: boolean;
   guard?: BivariantQueryGuard;
   instanceKey?: ((input: unknown) => string | undefined) | string;
   key: string;
@@ -210,6 +229,8 @@ export interface QueryFactory<Request = unknown> {
   ): Definition extends { args: Schema<infer Input> }
     ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] }
     : Definition & { key: Key; reads: readonly Domain[] };
+  /** SPEC §9.4/§10.3 (KV433): the audited GET-write escape — see `query.elevated`. */
+  elevated: QueryFactory<Request>;
 }
 
 /**
@@ -266,10 +287,19 @@ export function query<const Key extends string>(
   definition: Omit<RegisteredQueryDefinition, 'key'>,
   ..._jsonBoundary: never[]
 ): unknown {
+  return buildQueryDefinition(key, definition, false);
+}
+
+function buildQueryDefinition<const Key extends string>(
+  key: Key,
+  definition: Omit<RegisteredQueryDefinition, 'key'>,
+  elevated: boolean,
+): unknown {
   const queryDefinition = {
     ...definition,
     key,
     reads: definition.reads ?? [],
+    ...(elevated ? { elevated: true } : {}),
   };
   if (!definition.args) return queryDefinition;
 
@@ -281,6 +311,89 @@ export function query<const Key extends string>(
     ),
   };
 }
+
+/**
+ * A recorded `query.elevated(...)` capability fact for `kovo explain --capabilities`
+ * (SPEC §9.4/§10.3, audit-grade). Names the elevated GET-write query that received the full
+ * read-write handle, so the audit surfaces every read surface authorized to write.
+ */
+export interface ElevatedQueryFact {
+  query: string;
+}
+
+const elevatedQueryFacts: ElevatedQueryFact[] = [];
+
+/**
+ * Drain the recorded {@link ElevatedQueryFact}s for `kovo explain --capabilities`
+ * (SPEC §9.4/§10.3). Returns and clears the accumulated facts.
+ */
+export function drainElevatedQueryFacts(): ElevatedQueryFact[] {
+  return elevatedQueryFacts.splice(0, elevatedQueryFacts.length);
+}
+
+/**
+ * The audited GET-write escape for the read-only loader rule (SPEC §9.4/§10.3, KV433).
+ *
+ * A normal `query()` loader receives the read-only managed handle (write verbs throw,
+ * `KovoReadonlyHandleError`). `query.elevated(...)` declares a read surface that is allowed to write
+ * — its loader receives the FULL read-write handle — and is recorded as a capability for
+ * `kovo explain --capabilities`. An elevated loader MUST be idempotent-safe-to-repeat: a GET is
+ * re-fetched and prefetched (SPEC §9.4), so its write must produce the same observable state when
+ * repeated. Use this only when a write genuinely must run on a read (e.g. a usage counter that is
+ * fine to double-count via an idempotent UPSERT); otherwise move the write to a `mutation()`.
+ *
+ * @param key - The query's stable registry key.
+ * @param definition - `load` (receiving a read-write handle), `reads`, and optional facets.
+ * @returns A query definition carrying `key` and `elevated: true`.
+ */
+function queryElevated<const Key extends string>(
+  key: Key,
+  definition: Omit<RegisteredQueryDefinition, 'key'>,
+  ..._jsonBoundary: never[]
+): unknown {
+  elevatedQueryFacts.push({ query: key });
+  return buildQueryDefinition(key, definition, true);
+}
+
+// Attach the audited escape to the `query` factory. Typed against the same overloads as `query`
+// (minus the elevated marker the factory owns) so `query.elevated('name', { load, reads })` type-
+// checks identically to `query('name', …)`.
+interface QueryElevated {
+  <
+    const Key extends string,
+    Input,
+    Request,
+    Value,
+    const Definition extends Omit<QueryArgsDeclarationDefinition<Key, Value, Input, Request>, 'key'>,
+  >(
+    key: Key,
+    definition: Definition,
+    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
+      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+        ? []
+        : [never]
+      : []
+  ): QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[]; elevated: true };
+  <const Key extends string, const Definition extends QueryDeclarationDefinition<any, any>>(
+    key: Key,
+    definition: Definition,
+    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
+      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+        ? []
+        : [never]
+      : []
+  ): Definition extends { args: Schema<infer Input> }
+    ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[]; elevated: true }
+    : Definition & { key: Key; reads: readonly Domain[]; elevated: true };
+}
+
+// Merge `query.elevated` onto the `query` function symbol so the public type carries the escape.
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export declare namespace query {
+  /** SPEC §9.4/§10.3 (KV433): the audited GET-write escape; see {@link queryElevated}. */
+  export const elevated: QueryElevated;
+}
+(query as unknown as { elevated: QueryElevated }).elevated = queryElevated as QueryElevated;
 
 /** Extract the resolved value type a query's `load` produces. */
 export type QueryResult<Query> = Query extends { load: (...args: never[]) => infer Value }
@@ -309,7 +422,11 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   const argsResult = parseQueryInput(definition, rawInput);
   if (!argsResult.ok) return argsResult.failure;
 
-  const lifecycleRequest = await resolveLifecycleRequest(request, options);
+  // SPEC §9.4/§10.3 (MARQUEE): the framework owns the handle threaded into the loader. A normal
+  // `query()` loader runs in read mode (KV433 read-only proxy); the audited `query.elevated(...)`
+  // escape runs in write mode so a GET that must be idempotent-safe-to-repeat can perform its write.
+  const dbMode = definition.elevated ? 'write' : 'read';
+  const lifecycleRequest = await resolveLifecycleRequest(request, { ...options, dbMode });
   const guardFailure = await runGuard(definition.guard, lifecycleRequest);
   if (guardFailure) {
     return {
@@ -322,9 +439,17 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   }
 
   const input = argsResult.value;
-  const value = definition.load
-    ? await definition.load(input, { request: lifecycleRequest })
-    : (null as Value);
+  // The framework-owned managed handle is installed on `lifecycleRequest.db` by
+  // `resolveLifecycleRequest` (read-only proxy for a loader, read-write for an elevated GET). Thread
+  // it onto the loader context as `context.db` so loaders destructure `{ db }` from the framework
+  // instead of bringing their own (the breaking change). When no `db` provider is configured the
+  // field is simply absent, preserving today's behavior for db-less queries.
+  const threadedDb = (lifecycleRequest as { db?: unknown }).db;
+  const loadContext = {
+    request: lifecycleRequest,
+    ...(threadedDb === undefined ? {} : { db: threadedDb }),
+  } as QueryLoadContext<Request>;
+  const value = definition.load ? await definition.load(input, loadContext) : (null as Value);
   const outputResult = parseQueryOutput(definition, value);
   if (!outputResult.ok) return outputResult.failure;
 
