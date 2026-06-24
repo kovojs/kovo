@@ -393,6 +393,27 @@ describe('kovo check', () => {
     ).not.toContain('KV414');
   });
 
+  it('reports a governed-column mass-assignment as KV438 (SPEC §11.1)', () => {
+    const result = kovoCheck({
+      massAssignmentFacts: [
+        {
+          column: 'role',
+          detail: 'role',
+          domain: 'account',
+          name: 'updateAccount',
+          provenance: 'input',
+          site: 'account.domain.ts:7',
+          via: 'set',
+        },
+      ],
+    });
+    expect(result.output).toContain(
+      'ERROR KV438 WRITE updateAccount domain=account column=role via=set provenance=input site=account.domain.ts:7',
+    );
+    expect(result.output).toContain('Request input reaches a governed column (mass assignment).');
+    expect(result.exitCode).not.toBe(0);
+  });
+
   it('suppresses KV414 with a recorded public-read justification (SPEC §10.3)', () => {
     const result = kovoCheck({
       ownerDomains: [{ domain: 'order', owner: 'userId' }],

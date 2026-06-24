@@ -7,6 +7,8 @@ export { committedSecretWaiver, CreateAppBootError, isCreateAppBootError } from 
 export type { EnvValidationIssue } from './env.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
+export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';
+export type { AdminAssignFact } from './write-governance.js';
 // SPEC §6.6 / plans/secure-framework.md Phase 5: outbound-egress private-network deny floor
 // (runtime defense-in-depth, NOT a by-construction proof). `EgressBlockedError` is the typed
 // 502-class error a blocked outbound connection throws; `installEgressFloor`/`selfProbe` let a

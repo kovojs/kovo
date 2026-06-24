@@ -15,6 +15,7 @@ export type {
   HandlerExplain,
   KovoCheckInput,
   KovoExplainInput,
+  MassAssignmentFact,
   MutationExplain,
   MutationFormErrorExplain,
   MutationFormExplain,

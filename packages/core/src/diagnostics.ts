@@ -78,7 +78,8 @@ export type DiagnosticCode =
   | 'KV434'
   | 'KV435'
   | 'KV436'
-  | 'KV437';
+  | 'KV437'
+  | 'KV438';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -978,5 +979,16 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Server-only value captured into a client handler reaches the client bundle.',
+  },
+  KV438: {
+    code: 'KV438',
+    help: [
+      'Would lower to: a write whose governed columns (owner/principal columns, the primary key, and columns marked kovo({ governed: true })) receive only server-derived, literal, or explicitly-asserted values — never raw request input.',
+      'Blocked reason: a governed column (owner/principal/role/privilege/identity) set from request input — directly, through an alias/destructure, or via a .values(input) / .set(input) spread — is mass assignment: a client can over-write a field the server never meant to expose (privilege escalation, ownership takeover, balance tampering).',
+      'Fixes: assign the column from a server value (req.session/guard/tenant), a literal, or a same-package helper declared kovoAnalyzerSummary(fn, { returns: { kind: "server" } }); discharge a proven non-input value with serverValue(value, reason); for a deliberate privileged write use adminAssign(input.x, reason) (the audited path, surfaced in kovo explain --writes).',
+      'SPEC §10.3/§11.1 and secure-framework Phase 3: governed-column write-provenance is by-construction (input-reaching a governed column fails the build, fail-closed on unprovable provenance); serverValue/adminAssign are author-assertion escapes (audit-grade).',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Request input reaches a governed column (mass assignment).',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

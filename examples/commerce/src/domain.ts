@@ -1,5 +1,14 @@
 import { form, type FormInput } from '@kovojs/core';
-import { guards, i18n, metaFromQuery, mutation, publicAccess, s, session } from '@kovojs/server';
+import {
+  guards,
+  i18n,
+  metaFromQuery,
+  mutation,
+  publicAccess,
+  s,
+  serverValue,
+  session,
+} from '@kovojs/server';
 import {
   authed as betterAuthAuthed,
   betterAuthSession,
@@ -248,11 +257,14 @@ export const addToCart = mutation('cart/add', {
       unitPrice: found.unitPrice,
     });
     await db.insert(orders).values({
-      id: orderId,
+      // SPEC §11.1 / KV438: `id` and `userId` are governed (primary key + owner). Both
+      // are server-derived (a generated id and the session principal), so they are
+      // discharged with serverValue(...) — request input never reaches them.
+      id: serverValue(orderId, 'server-generated order id'),
       productId: productId,
       qty: quantity,
       total: found.unitPrice * quantity,
-      userId: currentSession.user.id,
+      userId: serverValue(currentSession.user.id, 'session principal'),
     });
     await db
       .update(products)

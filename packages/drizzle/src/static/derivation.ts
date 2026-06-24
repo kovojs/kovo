@@ -12,6 +12,7 @@ import type {
   SymbolicMatch,
   SymbolicValue,
 } from '@kovojs/core/internal/derivation';
+import type { MassAssignmentFact } from '@kovojs/core/internal/graph';
 import {
   Node,
   SyntaxKind,
@@ -54,6 +55,7 @@ import {
   queryLoadCallbackFunctions,
   resolvedSymbolKey,
   selectProjectionArgument,
+  serverSummaryKeysForSourceFile,
   sessionProvenanceContextForNodes,
   symbolProvenanceContextForNodes,
   symbolProvenanceForExpression,
@@ -799,6 +801,382 @@ function dedupeEffectFacts(facts: readonly SymbolicEffectFact[]): SymbolicEffect
     deduped.push(fact);
   }
   return deduped;
+}
+
+// ── §11.1 mass-assignment write-provenance gate (KV438) ──────────────────────
+//
+// Builds on the Stage-1 write extractor's machinery (table resolution, write-chain
+// payload parsing, the symbol-provenance engine) but applies a DIFFERENT, fail-closed
+// adapter: the symbolic-effect extractor over-approximates opaque→opaque, whereas the
+// mass-assignment gate must over-approximate opaque→REJECT for a GOVERNED column. A
+// governed column receiving a request-input value (directly, aliased, destructured, or
+// spread) — or an unprovable value — is the blocking KV438 finding (SPEC §10.3/§11.1).
+//
+// Governed columns: the table's `key` (instance/primary key), its `owner` principal
+// column (both AUTO-governed), and every column named in `kovo({ governed })`.
+//
+// Two-tier escape (author-assertion, audit-grade):
+//   serverValue(value, reason)   — discharges a NON-input value (serverValue(input.x,…) still fails).
+//   adminAssign(value, reason)   — the louder audited path for a deliberate privileged write.
+// Helper false-positives are resolved by `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })`,
+// which the symbol-provenance engine reads as `server` provenance.
+
+/**
+ * SPEC §10.3/§11.1 — flag every write that lands request-input (or unprovable)
+ * provenance on a governed column. Fail-closed: a value the analyzer cannot prove is
+ * server-derived/literal/escaped is rejected on a governed column. Returns the
+ * `MassAssignmentFact[]` the graph emission turns into blocking KV438 errors.
+ *
+ * @internal
+ */
+export function extractMassAssignmentFromProject(
+  options: TouchGraphProjectOptions,
+): MassAssignmentFact[] {
+  const extraction = createDeriveExtraction(options);
+  try {
+    const governedByTable = new Map<string, GovernedTableInfo>();
+    for (const table of extraction.tablesBySyntheticName.values()) {
+      const info = governedTableInfo(table);
+      if (info) governedByTable.set(table.annotation.name, info);
+    }
+    if (governedByTable.size === 0) return [];
+
+    const facts: MassAssignmentFact[] = [];
+    extraction.sourceFiles.forEach((sourceFile, index) => {
+      const file = extraction.files[index];
+      if (!file) return;
+
+      const namespaceTableNames = projectNamespaceTableNamesByLocal(
+        sourceFile,
+        extraction.tableNamesBySymbol,
+      );
+      const resolveTable = (node: Node): string | undefined => {
+        const synthetic = projectTableNameForNode(
+          node,
+          extraction.tableNamesBySymbol,
+          namespaceTableNames,
+        );
+        if (!synthetic) return undefined;
+        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+        if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
+        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+      };
+      const serverSummaryKeys = serverSummaryKeysForSourceFile(sourceFile);
+
+      for (const callback of deriveWriteCallbacks(sourceFile)) {
+        const receivers = projectDrizzleReceivers(callback.fn);
+        const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
+        const symbolContext = symbolProvenanceContextForNodes([callback.body], {
+          inputRoots: callbackInputRootNodes(callback.fn),
+          serverSummaryKeys,
+        });
+        const name = callback.key ?? '<anonymous>';
+        for (const call of touchBodyCallExpressions(callback.body)) {
+          facts.push(
+            ...massAssignmentFactsForWriteCall(call, {
+              file,
+              governedByTable,
+              name,
+              receivers,
+              resolveTable,
+              sessionContext,
+              symbolContext,
+            }),
+          );
+        }
+      }
+    });
+    return dedupeMassAssignmentFacts(facts);
+  } finally {
+    extraction.dispose();
+  }
+}
+
+interface GovernedTableInfo {
+  /** The §10.1 domain (for the finding fact). */
+  domain: string;
+  /** The governed column set, or `'*'` when `kovo({ governed: true })` governs all columns. */
+  governed: ReadonlySet<string> | '*';
+}
+
+function governedTableInfo(table: ExtractedTable): GovernedTableInfo | undefined {
+  const annotation = table.annotation;
+  if (!('domain' in annotation)) return undefined;
+  const governedAnnotation = (annotation as { governed?: true | readonly string[] }).governed;
+  if (governedAnnotation === true) return { domain: annotation.domain, governed: '*' };
+
+  const governed = new Set<string>();
+  // AUTO-governed: the instance/primary key and the principal owner column.
+  const key = 'key' in annotation && typeof annotation.key === 'string' ? annotation.key : undefined;
+  const owner =
+    'owner' in annotation && typeof annotation.owner === 'string' ? annotation.owner : undefined;
+  if (key) governed.add(key);
+  if (owner) governed.add(owner);
+  if (Array.isArray(governedAnnotation)) {
+    for (const column of governedAnnotation) {
+      if (typeof column === 'string') governed.add(column);
+    }
+  }
+  return governed.size > 0 ? { domain: annotation.domain, governed } : undefined;
+}
+
+interface MassAssignmentCallContext {
+  file: SourceFileInput;
+  governedByTable: ReadonlyMap<string, GovernedTableInfo>;
+  name: string;
+  receivers: ProjectDrizzleReceivers;
+  resolveTable: (node: Node) => string | undefined;
+  sessionContext: SessionProvenanceContext;
+  symbolContext: SymbolProvenanceContext;
+}
+
+function massAssignmentFactsForWriteCall(
+  call: CallExpression,
+  context: MassAssignmentCallContext,
+): MassAssignmentFact[] {
+  if (!isDrizzleWriteCall(call)) return [];
+  const expression = call.getExpression();
+  const operation = staticAccessName(expression);
+  const receiver = staticAccessExpression(expression);
+  if (!operation || !receiver) return [];
+  if (!isProjectDrizzleReceiverIdentifier(receiver, context.receivers)) return [];
+  if (operation !== 'insert' && operation !== 'update') return [];
+
+  const tableArgument = call.getArguments()[0];
+  if (!tableArgument) return [];
+  const table = context.resolveTable(tableArgument);
+  if (!table) return [];
+  const info = context.governedByTable.get(table);
+  if (!info) return [];
+
+  const chain = drizzleWriteChainRoot(call);
+  const site = `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`;
+  const facts: MassAssignmentFact[] = [];
+
+  // INSERT `.values({...})` + UPDATE `.set({...})`; also UPSERT `.onConflictDoUpdate({ set })`.
+  const payloadMethods: ('set' | 'values')[] = operation === 'insert' ? ['values'] : ['set'];
+  for (const method of payloadMethods) {
+    facts.push(
+      ...massAssignmentFactsForPayload(chain, method, info, site, context, table),
+    );
+  }
+  const conflictSet = chainOnConflictSetObject(chain);
+  if (conflictSet) {
+    facts.push(
+      ...massAssignmentFactsForObject(conflictSet, 'set', info, site, context, table),
+    );
+  }
+  return facts;
+}
+
+function massAssignmentFactsForPayload(
+  chain: Node,
+  method: 'set' | 'values',
+  info: GovernedTableInfo,
+  site: string,
+  context: MassAssignmentCallContext,
+  table: string,
+): MassAssignmentFact[] {
+  const call = chainCallByName(chain, method);
+  const argument = call?.getArguments()[0];
+  if (!argument) return [];
+  const object = unwrappedStaticExpressionNode(argument);
+
+  // `.values(input)` / `.set(input)` — a NON-object-literal payload. The whole row is
+  // populated from one expression; if it carries input/unprovable provenance it can set
+  // ANY governed column. Fail-closed: reject the spread on a governed table (the design's
+  // usability cliff), unless the payload is provably server-derived.
+  if (!Node.isObjectLiteralExpression(object)) {
+    return spreadMassAssignmentFacts(object, info, site, context, table, method);
+  }
+  return massAssignmentFactsForObject(object, method, info, site, context, table);
+}
+
+function massAssignmentFactsForObject(
+  object: ObjectLiteralExpression,
+  via: 'set' | 'values',
+  info: GovernedTableInfo,
+  site: string,
+  context: MassAssignmentCallContext,
+  table: string,
+): MassAssignmentFact[] {
+  const facts: MassAssignmentFact[] = [];
+  for (const property of object.getProperties()) {
+    // `{ ...input }` spread inside the payload object — same fail-closed treatment.
+    if (Node.isSpreadAssignment(property)) {
+      facts.push(
+        ...spreadMassAssignmentFacts(property.getExpression(), info, site, context, table, 'spread'),
+      );
+      continue;
+    }
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      continue;
+    }
+    const column = propertyNameText(property.getNameNode());
+    if (!column || !governs(info, column)) continue;
+    const valueNode = Node.isShorthandPropertyAssignment(property)
+      ? property.getNameNode()
+      : property.getInitializer();
+    if (!valueNode) continue;
+
+    const verdict = governedValueVerdict(valueNode, context);
+    if (verdict.ok) continue;
+    facts.push({
+      column,
+      domain: info.domain,
+      name: context.name,
+      provenance: verdict.provenance,
+      site,
+      via,
+      ...(verdict.detail ? { detail: verdict.detail } : {}),
+    });
+  }
+  return facts;
+}
+
+/**
+ * A `.values(input)` / `.set(input)` / `{ ...input }` spread on a governed table. The
+ * spread can populate any governed column, so a non-server-provable spread is rejected
+ * wholesale (one finding per governed column it could reach is noisy; we emit a single
+ * `via:'spread'` finding keyed on the offending expression). A spread proven `server`
+ * (e.g. a `kovoAnalyzerSummary('server')` row-builder) passes.
+ */
+function spreadMassAssignmentFacts(
+  expression: Node,
+  info: GovernedTableInfo,
+  site: string,
+  context: MassAssignmentCallContext,
+  table: string,
+  via: 'set' | 'spread' | 'values',
+): MassAssignmentFact[] {
+  const verdict = governedValueVerdict(expression, context);
+  if (verdict.ok) return [];
+  return [
+    {
+      column: governedColumnsLabel(info, table),
+      domain: info.domain,
+      name: context.name,
+      provenance: verdict.provenance,
+      site,
+      via,
+      ...(verdict.detail ? { detail: verdict.detail } : {}),
+    },
+  ];
+}
+
+interface GovernedValueVerdict {
+  detail?: string;
+  ok: boolean;
+  provenance: 'input' | 'unknown';
+}
+
+/**
+ * Classify a value flowing into a governed column. Fail-closed:
+ *  - `serverValue(x, reason)` passes only when `x` is NON-input (serverValue(input.x,…) fails).
+ *  - `adminAssign(x, reason)` is the audited privileged write — always passes (recorded).
+ *  - literal / `server` (req.session/guard/tenant or a `kovoAnalyzerSummary('server')` helper) passes.
+ *  - `input` provenance → reject (`input`).
+ *  - anything else (unprovable / opaque helper) → reject (`unknown`, fail-closed).
+ */
+function governedValueVerdict(
+  node: Node,
+  context: MassAssignmentCallContext,
+): GovernedValueVerdict {
+  const expression = unwrappedStaticExpressionNode(node);
+
+  if (Node.isCallExpression(expression)) {
+    const callee = unwrappedStaticExpressionNode(expression.getExpression());
+    const calleeName = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+    // adminAssign(value, reason): the audited privileged write — always passes (recorded).
+    if (calleeName === 'adminAssign') return { ok: true, provenance: 'input' };
+    if (calleeName === 'serverValue') {
+      const inner = expression.getArguments()[0];
+      // serverValue discharges only a NON-input argument; serverValue(input.x,…) still fails.
+      if (!inner) return { ok: true, provenance: 'unknown' };
+      const innerVerdict = governedValueVerdict(inner, context);
+      return innerVerdict.provenance === 'input'
+        ? {
+            ok: false,
+            provenance: 'input',
+            ...(innerVerdict.detail ? { detail: innerVerdict.detail } : {}),
+          }
+        : { ok: true, provenance: 'unknown' };
+    }
+  }
+
+  // Literal → safe (e.g. a server-seeded constant).
+  if (symbolicLiteralValue(expression) !== undefined) return { ok: true, provenance: 'unknown' };
+
+  // Server provenance via session/guard/tenant (req.session.userId etc.) → safe.
+  if (privateScopeForExpression(expression, context.sessionContext)) {
+    return { ok: true, provenance: 'unknown' };
+  }
+  // A `kovoAnalyzerSummary('server')` helper call resolves to `server` provenance.
+  const symbolProvenance = symbolProvenanceForExpression(expression, context.symbolContext);
+  if (symbolProvenance.kind === 'server') return { ok: true, provenance: 'unknown' };
+  if (symbolProvenance.kind === 'literal') return { ok: true, provenance: 'unknown' };
+  if (symbolProvenance.kind === 'input') {
+    return {
+      ok: false,
+      provenance: 'input',
+      detail:
+        symbolProvenance.path && symbolProvenance.path.length > 0
+          ? symbolProvenance.path
+          : expression.getText(),
+    };
+  }
+  // Unknown provenance on a governed column is fail-closed (opaque helper / un-narrowable spread).
+  return { ok: false, provenance: 'unknown', detail: expression.getText() };
+}
+
+function symbolicLiteralValue(node: Node): JsonValue | undefined {
+  return literalJsonValue(node)?.value;
+}
+
+function governs(info: GovernedTableInfo, column: string): boolean {
+  return info.governed === '*' || info.governed.has(column);
+}
+
+function governedColumnsLabel(info: GovernedTableInfo, table: string): string {
+  if (info.governed === '*') return '*';
+  const columns = [...info.governed].sort();
+  return columns.length > 0 ? columns.join('+') : table;
+}
+
+/** `onConflictDoUpdate({ set: {…} })` → the upsert `set` object literal (else undefined). */
+function chainOnConflictSetObject(chain: Node): ObjectLiteralExpression | undefined {
+  const call = chainCallByName(chain, 'onConflictDoUpdate');
+  const config = call?.getArguments()[0];
+  if (!config) return undefined;
+  const object = unwrappedStaticExpressionNode(config);
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  const setProperty = object
+    .getProperties()
+    .find(
+      (property): property is PropertyAssignment =>
+        Node.isPropertyAssignment(property) && propertyNameText(property.getNameNode()) === 'set',
+    );
+  const setObject = setProperty?.getInitializer();
+  return setObject && Node.isObjectLiteralExpression(setObject) ? setObject : undefined;
+}
+
+function dedupeMassAssignmentFacts(facts: readonly MassAssignmentFact[]): MassAssignmentFact[] {
+  const seen = new Set<string>();
+  const deduped: MassAssignmentFact[] = [];
+  for (const fact of facts) {
+    const dedupeKey = `${fact.site}\0${fact.name}\0${fact.domain}\0${fact.column}\0${fact.via}\0${fact.provenance}\0${fact.detail ?? ''}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    deduped.push(fact);
+  }
+  return deduped.sort(
+    (left, right) =>
+      left.name.localeCompare(right.name) ||
+      left.domain.localeCompare(right.domain) ||
+      left.column.localeCompare(right.column) ||
+      left.site.localeCompare(right.site) ||
+      left.via.localeCompare(right.via),
+  );
 }
 
 // ── Stage 2 (query → AlgebraicQueryShape) ────────────────────────────────────

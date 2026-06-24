@@ -3,6 +3,7 @@ export type {
   KovoAnalyzerPrivateScopeKind,
   KovoColumnRef,
   KovoDomainTableAnnotation,
+  KovoGovernedColumnAnnotation,
   KovoSecretColumnAnnotation,
   KovoTableAnnotation,
   KovoTableExtraConfig,

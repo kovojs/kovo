@@ -14,6 +14,7 @@ import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
+import * as writeGovernanceApi from '../write-governance.js';
 import * as capabilityUrlApi from '../capability-url.js';
 import * as egressApi from '../egress.js';
 import * as egressBootstrapApi from '../egress-bootstrap.js';
@@ -405,6 +406,12 @@ describe('server app-shell public API barrels', () => {
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
+      // SPEC.md §10.3/§11.1 / plans/secure-framework.md Phase 3: the mass-assignment
+      // (KV438) author-assertion escapes — serverValue(non-input) + the audited
+      // adminAssign + its drain — are public at the root barrel.
+      adminAssign: writeGovernanceApi.adminAssign,
+      drainAdminAssignFacts: writeGovernanceApi.drainAdminAssignFacts,
+      serverValue: writeGovernanceApi.serverValue,
       kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       toNodeHandler: nodeSourceApi.toNodeHandler,

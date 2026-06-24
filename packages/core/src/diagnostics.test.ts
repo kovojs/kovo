@@ -86,6 +86,7 @@ describe('diagnostic registry', () => {
       'KV433',
       'KV434',
       'KV437',
+      'KV438',
     ]);
   });
 
@@ -738,6 +739,15 @@ describe('diagnostic registry', () => {
       Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain --capabilities.
       SPEC §6.6/§6.2 and secure-framework Phase 4/Tier 0: the emit filter is fail-closed whole-channel (a narrow process.env/brand-only gate is unsound — call-wrapped secrets escape).",
           "message": "Server-only value captured into a client handler reaches the client bundle.",
+          "severity": "error",
+        },
+        "KV438": {
+          "code": "KV438",
+          "help": "Would lower to: a write whose governed columns (owner/principal columns, the primary key, and columns marked kovo({ governed: true })) receive only server-derived, literal, or explicitly-asserted values — never raw request input.
+      Blocked reason: a governed column (owner/principal/role/privilege/identity) set from request input — directly, through an alias/destructure, or via a .values(input) / .set(input) spread — is mass assignment: a client can over-write a field the server never meant to expose (privilege escalation, ownership takeover, balance tampering).
+      Fixes: assign the column from a server value (req.session/guard/tenant), a literal, or a same-package helper declared kovoAnalyzerSummary(fn, { returns: { kind: "server" } }); discharge a proven non-input value with serverValue(value, reason); for a deliberate privileged write use adminAssign(input.x, reason) (the audited path, surfaced in kovo explain --writes).
+      SPEC §10.3/§11.1 and secure-framework Phase 3: governed-column write-provenance is by-construction (input-reaching a governed column fails the build, fail-closed on unprovable provenance); serverValue/adminAssign are author-assertion escapes (audit-grade).",
+          "message": "Request input reaches a governed column (mass assignment).",
           "severity": "error",
         },
       }

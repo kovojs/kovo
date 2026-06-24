@@ -58,6 +58,7 @@ export interface KovoCheckInput {
   eventPayloads?: readonly EventPayloadFact[];
   fixpointChecks?: readonly FixpointCheck[];
   lints?: readonly SemanticLint[];
+  massAssignmentFacts?: readonly MassAssignmentFact[];
   mutations?: readonly MutationExplain[];
   optimistic?: readonly OptimisticCoverage[];
   ownerDomains?: readonly OwnerDomainFact[];
@@ -343,6 +344,34 @@ export interface ScopeAuditFact {
   name: string;
   scope: 'args' | 'session' | 'unscoped' | 'unknown';
   site: string;
+}
+
+/**
+ * A write reaching a GOVERNED column with request-input provenance — the §11.1
+ * mass-assignment finding (KV438). Governed columns are owner/principal columns,
+ * the primary key, and columns marked `kovo({ governed: true })`. `escape` records
+ * an audited author-assertion (`serverValue`/`adminAssign`) when the write was
+ * discharged; `kind: 'reject'` (no escape) is the blocking KV438 error.
+ *
+ * @internal
+ */
+export interface MassAssignmentFact {
+  column: string;
+  /** The dot-path of the offending request-input value (e.g. `role`, `input.isAdmin`). */
+  detail?: string;
+  domain: string;
+  /**
+   * `input` — a request-input value reached the governed column (the unsafe case).
+   * `unknown` — fail-closed: the value's provenance is unprovable (opaque helper /
+   * spread of an un-narrowable object) on a governed column.
+   */
+  provenance: 'input' | 'unknown';
+  /** The mutation/handler key owning the write, for audit + `owns()`-style discharge. */
+  name: string;
+  /** The write site (`file:line`). */
+  site: string;
+  /** The table column-write the finding flags. */
+  via: 'set' | 'spread' | 'values';
 }
 
 /** @internal */
@@ -645,6 +674,7 @@ const arrayFields = [
   'eventPayloads',
   'fixpointChecks',
   'lints',
+  'massAssignmentFacts',
   'mutations',
   'optimistic',
   'ownerDomains',

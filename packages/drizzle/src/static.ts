@@ -1621,10 +1621,12 @@ function extractQueryDefinitionsFromSourceFile(
   const key = columnNamePropertyFromObject(annotationObject, 'key');
   const owner = columnNamePropertyFromObject(annotationObject, 'owner');
   const secret = secretPropertyFromObject(annotationObject);
+  const governed = governedPropertyFromObject(annotationObject);
   const fans = fanAnnotationsFromObject(annotationObject);
   return {
     domain,
     ...(fans.length > 0 ? { fans } : {}),
+    ...(governed === undefined ? {} : { governed }),
     ...(key ? { key } : {}),
     ...(owner ? { owner } : {}),
     ...(secret === undefined ? {} : { secret }),
@@ -1776,6 +1778,31 @@ function secretPropertyFromObject(object: Node): true | string[] | undefined {
   for (const property of object.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
     if (propertyNameText(property.getNameNode()) !== 'secret') continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) return undefined;
+    if (initializer.getKind() === SyntaxKind.TrueKeyword) return true;
+    if (Node.isArrayLiteralExpression(initializer)) {
+      const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
+      return columns.length > 0 ? columns : undefined;
+    }
+    const column = columnRefName(initializer);
+    return column === undefined ? undefined : [column];
+  }
+  return undefined;
+}
+
+/**
+ * Parse a `governed:` annotation (SPEC §11.1, the mass-assignment gate / KV438) into
+ * its resolved column-name form: `true` (all columns governed) or `string[]` (the
+ * named columns). Mirrors `secretPropertyFromObject`. The primary `key` and `owner`
+ * columns are AUTO-governed elsewhere; this captures the explicit extra columns.
+ */
+function governedPropertyFromObject(object: Node): true | string[] | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== 'governed') continue;
 
     const initializer = property.getInitializer();
     if (!initializer) return undefined;
@@ -2440,6 +2467,7 @@ export {
   joinSymbolProvenance,
   provenInputProvenanceForExpression,
   provenServerProvenanceForExpression,
+  serverSummaryKeysForSourceFile,
   symbolProvenanceContextForNodes,
   symbolProvenanceForExpression,
   type SymbolProvenance,
@@ -2550,6 +2578,7 @@ export {
 /** @internal */
 export {
   extractAlgebraicShapesFromProject,
+  extractMassAssignmentFromProject,
   extractSymbolicEffectsFromProject,
 } from './static/derivation.js';
 /** @internal */

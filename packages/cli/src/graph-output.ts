@@ -747,6 +747,13 @@ export function kovoCheck(
       pushFinding(unscopedKv414Line(finding), true);
     }
 
+    // SPEC §11.1 / secure-framework Phase 3: a write reaching a governed column with
+    // request-input (or fail-closed unprovable) provenance is the blocking KV438
+    // mass-assignment error. serverValue/adminAssign discharges never reach here.
+    for (const finding of sortedMassAssignment(graph.massAssignmentFacts ?? [])) {
+      pushFinding(massAssignmentKv438Line(finding), true);
+    }
+
     for (const lint of graph.lints ?? []) {
       pushFinding(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
     }
@@ -2011,6 +2018,37 @@ function unscopedKv414Line(fact: CoreGraph.ScopeAuditFact): string {
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+/** The enforced KV438 (mass-assignment) error line for an input-reaching governed column write (SPEC §11.1). */
+function massAssignmentKv438Line(fact: CoreGraph.MassAssignmentFact): string {
+  return [
+    'ERROR KV438',
+    'WRITE',
+    fact.name,
+    `domain=${fact.domain}`,
+    `column=${fact.column}`,
+    `via=${fact.via}`,
+    `provenance=${fact.provenance}`,
+    `site=${fact.site}`,
+    diagnosticDefinitions.KV438.message,
+    fact.detail ? `value=${fact.detail}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function sortedMassAssignment(
+  facts: readonly CoreGraph.MassAssignmentFact[],
+): readonly CoreGraph.MassAssignmentFact[] {
+  return [...facts].sort(
+    (left, right) =>
+      left.name.localeCompare(right.name) ||
+      left.domain.localeCompare(right.domain) ||
+      left.column.localeCompare(right.column) ||
+      left.site.localeCompare(right.site) ||
+      left.via.localeCompare(right.via),
+  );
 }
 
 function compareScopeAudit(

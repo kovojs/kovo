@@ -1182,6 +1182,7 @@ async function runCompileDrizzleStaticCommand(
     deriveInvalidationRegistry,
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
+    extractMassAssignmentFromProject,
     extractMaterializedViewRefreshFactsFromProject,
     extractOwnerAuditFromProject,
     extractQueryFactsFromProject,
@@ -1202,6 +1203,7 @@ async function runCompileDrizzleStaticCommand(
     const extract = new Set(
       input.extract ?? [
         'algebraicShapes',
+        'massAssignmentFacts',
         'materializedViewRefreshFacts',
         'ownerAudit',
         'queryFacts',
@@ -1221,6 +1223,11 @@ async function runCompileDrizzleStaticCommand(
       const ownerAudit = extractOwnerAuditFromProject({ files });
       output.ownerDomains = ownerAudit.ownerDomains;
       output.scopeAudits = ownerAudit.scopeAudits;
+    }
+    if (extract.has('massAssignmentFacts')) {
+      // SPEC §11.1 / secure-framework Phase 3: governed-column mass-assignment facts
+      // the graph emission feeds to `kovo check` (KV438).
+      output.massAssignmentFacts = extractMassAssignmentFromProject({ files });
     }
     if (extract.has('materializedViewRefreshFacts')) {
       output.materializedViewRefreshFacts = extractMaterializedViewRefreshFactsFromProject({

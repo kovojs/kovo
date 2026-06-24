@@ -18,15 +18,23 @@ export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 export type KovoAnalyzerPrivateScopeKind = 'guard' | 'session' | 'tenant';
 
 /**
+ * The return-provenance kinds a `kovoAnalyzerSummary` may declare. The private-scope
+ * kinds (`guard`/`session`/`tenant`) carry a `path` and feed the §10.3 IDOR/session
+ * proof. The `server` kind (SPEC §11.1, secure-framework Phase 3) declares that the
+ * helper returns a server-derived value with NO request-input provenance — it
+ * discharges the write-provenance gate (KV438) for a legitimate server-computed
+ * governed value (e.g. `resolveOwner()`), without the looser/false-positive-prone
+ * reflexive `serverValue` wrap. It carries no path.
+ */
+export type KovoAnalyzerReturnKind = KovoAnalyzerPrivateScopeKind | 'server';
+
+/**
  * A declared analyzer summary for a pure helper. The helper body is not inspected
  * for provenance; the static analyzer consumes this typed declaration instead.
  */
-export interface KovoAnalyzerFunctionSummary {
-  returns: {
-    kind: KovoAnalyzerPrivateScopeKind;
-    path: string;
-  };
-}
+export type KovoAnalyzerFunctionSummary =
+  | { returns: { kind: KovoAnalyzerPrivateScopeKind; path: string } }
+  | { returns: { kind: 'server'; path?: string } };
 
 /**
  * A column reference inside a Kovo annotation: either the column name as a
@@ -58,11 +66,21 @@ export interface KovoViewAnnotation {
   refresh?: 'async' | 'sync';
 }
 
+/**
+ * Names columns that may only be written from a server-derived value, never from
+ * raw request input (SPEC §11.1, the §11.1 mass-assignment gate / KV438). The
+ * primary `key` and the principal `owner` column are AUTO-governed; this annotation
+ * governs the rest (`role`/`balance`/`isAdmin`/…). `true` would govern every column
+ * (rarely wanted); the usual form is a column ref or list.
+ */
+export type KovoGovernedColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
+
 /** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key` and principal `owner`), or an `exempt` marker. */
 export type KovoTableAnnotation =
   | {
       domain: string;
       fans?: readonly KovoFanAnnotation[];
+      governed?: KovoGovernedColumnAnnotation;
       key?: KovoColumnRef;
       owner?: KovoColumnRef;
       secret?: KovoSecretColumnAnnotation;
@@ -82,6 +100,7 @@ export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation
 export interface KovoDomainTableAnnotation {
   domain: string;
   fans?: readonly KovoFanAnnotation[];
+  governed?: KovoGovernedColumnAnnotation;
   key?: KovoColumnRef;
   owner?: KovoColumnRef;
   secret?: KovoSecretColumnAnnotation;
