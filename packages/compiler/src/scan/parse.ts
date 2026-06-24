@@ -55,6 +55,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
   const moduleScopeBindings: ModuleScopeBindingModel[] = [];
+  const moduleScopeSecretBindings = new Map<string, ModuleScopeBindingModel['secretProvenance']>();
   const moduleSpecifiers: ModuleSpecifierModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
   const namedImports: NamedImportModel[] = [];
@@ -64,7 +65,13 @@ export function parseComponentModule(fileName: string, source: string): Componen
     const specifier = moduleSpecifierModel(node);
     if (specifier) moduleSpecifiers.push(specifier);
     namedImports.push(...namedImportModels(node));
-    moduleScopeBindings.push(...moduleScopeBindingModels(sourceFile, source, node));
+    const bindings = moduleScopeBindingModels(sourceFile, source, node, moduleScopeSecretBindings);
+    moduleScopeBindings.push(...bindings);
+    for (const binding of bindings) {
+      if (binding.secretProvenance) {
+        moduleScopeSecretBindings.set(binding.name, binding.secretProvenance);
+      }
+    }
 
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
       const model = componentModelFromInitializer(
@@ -172,6 +179,7 @@ function moduleScopeBindingModels(
   sourceFile: ts.SourceFile,
   source: string,
   node: ts.Node,
+  secretBindings: ReadonlyMap<string, ModuleScopeBindingModel['secretProvenance']>,
 ): ModuleScopeBindingModel[] {
   if (!ts.isVariableStatement(node) || node.parent !== sourceFile) return [];
 
@@ -179,19 +187,57 @@ function moduleScopeBindingModels(
     if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) return [];
 
     const value = staticLiteralValue(declaration.initializer);
-    if (value === undefined) return [];
+    const secretProvenance = moduleScopeSecretProvenance(declaration.initializer, secretBindings);
+    if (value === undefined && secretProvenance === undefined) return [];
 
     return [
       {
         name: declaration.name.text,
+        ...(secretProvenance === undefined ? {} : { secretProvenance }),
         source: source.slice(
           declaration.initializer.getStart(sourceFile),
           declaration.initializer.getEnd(),
         ),
-        staticValue: value,
+        ...(value === undefined ? {} : { staticValue: value }),
       },
     ];
   });
+}
+
+function moduleScopeSecretProvenance(
+  initializer: ts.Expression,
+  secretBindings: ReadonlyMap<string, ModuleScopeBindingModel['secretProvenance']>,
+): ModuleScopeBindingModel['secretProvenance'] | undefined {
+  let found: ModuleScopeBindingModel['secretProvenance'] | undefined;
+
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    const path = ts.isPropertyAccessExpression(node) ? propertyAccessPath(node) : null;
+    if (path === 'process.env' || path?.startsWith('process.env.')) {
+      found = { kind: 'process-env' };
+      return;
+    }
+    if (ts.isCallExpression(node) && isSecretCallExpression(node)) {
+      found = { kind: 'secret-call' };
+      return;
+    }
+    if (ts.isIdentifier(node) && isReferenceIdentifier(node) && secretBindings.has(node.text)) {
+      found = { kind: 'derived' };
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(initializer);
+  return found;
+}
+
+function isSecretCallExpression(node: ts.CallExpression): boolean {
+  const callee = unwrapExpression(node.expression);
+  if (ts.isIdentifier(callee)) return callee.text === 'secret';
+  if (ts.isPropertyAccessExpression(callee)) return callee.name.text === 'secret';
+  return false;
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
@@ -1747,6 +1793,7 @@ function referenceIdentifierModels(
         referenced.push({
           end: node.getEnd(),
           name: node.text,
+          ...identifierReferenceRole(node),
           start: node.getStart(sourceFile),
         });
       }
@@ -1757,6 +1804,15 @@ function referenceIdentifierModels(
 
   visit(root);
   return referenced.filter((reference) => !declared.has(reference.name));
+}
+
+function identifierReferenceRole(node: ts.Identifier): { role: 'call-callee' } | {} {
+  const parent = node.parent;
+  if (ts.isCallExpression(parent) && unwrapExpression(parent.expression) === node) {
+    return { role: 'call-callee' };
+  }
+
+  return {};
 }
 
 function arrowObjectPatternKeys(

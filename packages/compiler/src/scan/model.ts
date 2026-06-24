@@ -45,6 +45,7 @@ export interface TemporalReadModel {
 
 export interface IdentifierReferenceModel {
   end: number;
+  role?: 'call-callee';
   name: string;
   start: number;
 }
@@ -251,8 +252,13 @@ export interface NamedImportModel {
 
 export interface ModuleScopeBindingModel {
   name: string;
+  secretProvenance?: ModuleScopeSecretProvenance;
   source: string;
-  staticValue: StaticLiteralValue;
+  staticValue?: StaticLiteralValue;
+}
+
+export interface ModuleScopeSecretProvenance {
+  kind: 'process-env' | 'secret-call' | 'derived';
 }
 
 export interface ComponentModuleModel {

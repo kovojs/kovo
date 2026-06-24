@@ -402,6 +402,7 @@ export interface HandlerLowering {
   // the raw `expression` snippet.
   isBareNamedHandler: boolean;
   params: ElementParam[];
+  redactClientBody?: boolean;
   diagnostic?: CompilerDiagnostic;
   diagnostics?: readonly CompilerDiagnostic[];
 }
