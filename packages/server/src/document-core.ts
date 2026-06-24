@@ -10,6 +10,7 @@ import {
   emptyCspInlineMetadata,
   mergeCspInlineMetadata,
   renderContentSecurityPolicy,
+  type ContentSecurityPolicyOptions,
   type CspInlineMetadata,
 } from './csp.js';
 import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
@@ -117,6 +118,7 @@ export interface DocumentRoutePageResponseWithCsp extends DocumentRoutePageRespo
 
 /** @internal */
 export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, 'body'> {
+  cspOptions?: ContentSecurityPolicyOptions;
   /**
    * bugs-1 F34 / SPEC §8: a guarded or session-dependent route document carries
    * `Cache-Control: no-store` so the browser's bfcache can never restore an
@@ -134,6 +136,7 @@ export interface DeferredDocumentAssemblyOptions extends Omit<DocumentAssemblyOp
 
 /** @internal */
 export interface ErrorDocumentOptions {
+  cspOptions?: ContentSecurityPolicyOptions;
   hints?: PageHintOptions;
   lang?: string;
   loaderRuntimeHref?: string;
@@ -289,7 +292,7 @@ export function renderRouteDocumentResponse(
   response: DocumentRoutePageResponse,
   options: DocumentResponseOptions = {},
 ): DocumentRoutePageResponseWithCsp {
-  const { noStore, ...assemblyOptions } = options;
+  const { cspOptions, noStore, ...assemblyOptions } = options;
   const contentType = readHeader(response.headers, 'Content-Type');
   if (
     response.status !== 200 ||
@@ -328,6 +331,7 @@ export function renderRouteDocumentResponse(
         ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
       },
       document.csp,
+      cspOptions,
     ),
     status: response.status,
   };
@@ -389,6 +393,7 @@ export function renderErrorDocument(
         'Content-Type': 'text/html; charset=utf-8',
       },
       document.csp,
+      options.cspOptions,
     ),
     status: options.status,
   };
@@ -398,13 +403,18 @@ export function renderErrorDocument(
 export function withDefaultDocumentSecurityHeaders(
   headers: ResponseHeaders,
   csp: CspInlineMetadata = emptyCspInlineMetadata(),
+  cspOptions: ContentSecurityPolicyOptions = {},
 ): ResponseHeaders {
   const secured: ResponseHeaders = { ...headers };
 
   // Phase 7: documents emit the framework-owned strict CSP by default. If an app set
   // its own CSP, append Kovo's policy as a second enforcing policy so the fixed
   // base-uri/object-src/form-action/frame-ancestors floor remains non-overridable.
-  appendHeaderValue(secured, 'Content-Security-Policy', renderContentSecurityPolicy(csp));
+  appendHeaderValue(
+    secured,
+    'Content-Security-Policy',
+    renderContentSecurityPolicy(csp, cspOptions),
+  );
 
   // Baseline document security headers match the file/stream posture:
   // `nosniff` prevents MIME confusion; Referrer-Policy limits cross-origin leakage.

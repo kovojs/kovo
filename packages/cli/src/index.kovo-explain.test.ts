@@ -742,6 +742,12 @@ describe('kovo explain', () => {
             site: 'components/cart/cart-badge.tsx#KEY_PREFIX',
             source: 'process.env.API_KEY.slice(0, 4)',
           },
+          {
+            kind: 'cspAllow',
+            reason: 'Stripe checkout frame',
+            site: 'app.ts#document.csp.allow.frames',
+            source: 'https://checkout.stripe.com',
+          },
         ],
       },
       { capabilities: true },
@@ -752,8 +758,9 @@ describe('kovo explain', () => {
       "kovo-explain/v1
       CAPABILITIES
       CAPABILITY kind=adminAssign site=account.domain.ts:10 table=accounts column=role source=input.role reason="support role correction"
+      CAPABILITY kind=cspAllow site=app.ts#document.csp.allow.frames table=- column=- source=https://checkout.stripe.com reason="Stripe checkout frame"
       CAPABILITY kind=publishToClient site=components/cart/cart-badge.tsx#KEY_PREFIX table=- column=- source=process.env.API_KEY.slice(0, 4) reason="prefix is intentionally public for support correlation"
-      SUMMARY total=2
+      SUMMARY total=3
       "
     `);
   });

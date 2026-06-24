@@ -115,7 +115,7 @@ export interface AccessExplainFact {
 /** @internal */
 export interface CapabilityExplainFact {
   column?: string;
-  kind: 'adminAssign' | 'publishToClient';
+  kind: 'adminAssign' | 'cspAllow' | 'publishToClient';
   reason?: string;
   site: string;
   source?: string;

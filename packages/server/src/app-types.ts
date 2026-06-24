@@ -2,6 +2,7 @@ import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { AppCapabilityUrlOptions } from './capability-url.js';
 import type { CsrfValidationOptions } from './csrf.js';
+import type { DocumentContentSecurityPolicyOptions } from './csp.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import type { DocumentTemplate } from './document-core.js';
 import type { AppEgressOptions, ResolvedAppEgressOptions } from './egress.js';
@@ -80,6 +81,7 @@ export type ErrorShellRenderer = (context: {
 
 /** Document-level options applied by `createApp()` when rendering route documents. */
 export interface AppDocumentOptions {
+  csp?: DocumentContentSecurityPolicyOptions;
   lang?: string;
   template?: DocumentTemplate;
 }

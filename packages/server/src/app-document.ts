@@ -1,6 +1,7 @@
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
 import { normalizeForwardedSetCookie } from './cookies.js';
+import { documentContentSecurityPolicyOptions } from './csp.js';
 import { reportServerError, serverErrorHeaders, type ServerErrorReport } from './diagnostics.js';
 import {
   mergeVaryHeader,
@@ -135,6 +136,7 @@ export async function renderAppRouteDocumentResponse({
       // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
       // always non-empty so the carve-out is no longer needed (DEPLOY-3).
       buildToken,
+      cspOptions: documentContentSecurityPolicyOptions(app.document.csp),
       hints: mergeAppRouteHints(app, route),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
       loaderRuntimeHref,
@@ -241,7 +243,10 @@ export async function renderAppErrorDocumentResponse(
     try {
       const response = await renderer({ request, status });
       return withServerErrorReport(
-        withDefaultHtmlErrorShellSecurityHeaders(response),
+        withDefaultHtmlErrorShellSecurityHeaders(
+          response,
+          documentContentSecurityPolicyOptions(app.document.csp),
+        ),
         status,
         report,
       );
@@ -260,6 +265,7 @@ export async function renderAppErrorDocumentResponse(
   return withServerErrorReport(
     renderErrorDocument({
       ...(app.stylesheets.length > 0 ? { hints: { stylesheets: app.stylesheets } } : {}),
+      cspOptions: documentContentSecurityPolicyOptions(app.document.csp),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
       loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
       status,
@@ -283,7 +289,10 @@ function withServerErrorReport(
   };
 }
 
-function withDefaultHtmlErrorShellSecurityHeaders(response: RoutePageResponse): RoutePageResponse {
+function withDefaultHtmlErrorShellSecurityHeaders(
+  response: RoutePageResponse,
+  cspOptions = documentContentSecurityPolicyOptions(undefined),
+): RoutePageResponse {
   const contentType = readHeader(response.headers, 'Content-Type');
   if (contentType === undefined || !contentType.toLowerCase().includes('text/html')) {
     return response;
@@ -291,7 +300,7 @@ function withDefaultHtmlErrorShellSecurityHeaders(response: RoutePageResponse): 
 
   return {
     ...response,
-    headers: withDefaultDocumentSecurityHeaders(response.headers),
+    headers: withDefaultDocumentSecurityHeaders(response.headers, undefined, cspOptions),
   };
 }
 

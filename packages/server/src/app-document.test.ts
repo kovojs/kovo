@@ -92,6 +92,71 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
   });
 });
 
+describe('document CSP third-party allowlist', () => {
+  it('threads app-level script and frame allowlists into route document CSP', async () => {
+    const homeRoute = route('/', {
+      access: publicAccess('test fixture'),
+      page: () => trustedHtml('<main>Home</main>'),
+    });
+    const app = createApp({
+      document: {
+        csp: {
+          allow: {
+            frames: ['https://checkout.example.test'],
+            scripts: ['https://analytics.example.test'],
+          },
+        },
+      },
+      routes: [homeRoute],
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+    const csp = response.headers['Content-Security-Policy'];
+
+    expect(csp).toContain('https://analytics.example.test');
+    expect(csp).toContain('frame-src https://checkout.example.test');
+    expect(csp).toContain("frame-ancestors 'none'");
+  });
+
+  it('threads app-level CSP allowlists into fallback and custom error documents', async () => {
+    const app = createApp({
+      document: { csp: { allow: { frames: ['https://checkout.example.test'] } } },
+      errorShells: {
+        notFound: () => ({
+          body: '<main>Missing</main>',
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          status: 404,
+        }),
+      },
+      routes: [],
+    });
+
+    const fallback = await renderAppErrorDocumentResponse(
+      { ...app, errorShells: {} },
+      new Request('https://example.test/missing'),
+      404,
+    );
+    const custom = await renderAppErrorDocumentResponse(
+      app,
+      new Request('https://example.test/missing'),
+      404,
+    );
+
+    expect(fallback.headers['Content-Security-Policy']).toContain(
+      'frame-src https://checkout.example.test',
+    );
+    expect(custom.headers['Content-Security-Policy']).toContain(
+      'frame-src https://checkout.example.test',
+    );
+  });
+});
+
 // ─── K3: session fingerprint derives from session identity, not cookie header ──
 
 describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', () => {

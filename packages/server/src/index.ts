@@ -166,6 +166,8 @@ export type {
   ContentSecurityPolicyOptions,
   CspInlineMetadata,
   DeferProps,
+  DocumentContentSecurityPolicyAllowlist,
+  DocumentContentSecurityPolicyOptions,
   DocumentParts,
   DocumentTemplate,
   DocumentTemplateContext,

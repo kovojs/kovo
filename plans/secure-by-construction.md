@@ -448,14 +448,13 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
         pooled-socket reuse skips `beforeConnect` (proven: 3 same-origin fetches fire the connect guard 2×), so
         a connect-only gate fails open on socket reuse. Keep the connect/lookup hook for IP classification +
         DNS-rebinding pinning. (ALS context propagates into both the undici connector and `net.connect` —
-        verified Node v24.)
-    - Evidence (2026-06-24 partial): `packages/server/src/egress.ts` now has an internal reusable
-      `installNodeEgressGuard()` patch layer for `node:http`, `node:https`, `net.connect`,
-      `net.createConnection`, and `Socket.prototype.connect`, reusing the shared egress decision and lookup
-      recheck. `vp exec vitest --run packages/server/src/egress.test.ts packages/server/src/app.test.ts
-      packages/server/src/api/app.test.ts` verifies raw `node:http` metadata denial, raw `net` private denial,
-      exact allowed internal `node:http`, and existing lifecycle `request.fetch`. Still open: undici dispatcher,
-      global bootstrap install/freeze, and pooled-socket per-dispatch coverage.
+        verified Node v24.) - Evidence (2026-06-24 partial): `packages/server/src/egress.ts` now has an internal reusable
+        `installNodeEgressGuard()` patch layer for `node:http`, `node:https`, `net.connect`,
+        `net.createConnection`, and `Socket.prototype.connect`, reusing the shared egress decision and lookup
+        recheck. `vp exec vitest --run packages/server/src/egress.test.ts packages/server/src/app.test.ts
+packages/server/src/api/app.test.ts` verifies raw `node:http` metadata denial, raw `net` private denial,
+        exact allowed internal `node:http`, and existing lifecycle `request.fetch`. Still open: undici dispatcher,
+        global bootstrap install/freeze, and pooled-socket per-dispatch coverage.
   - [ ] Decision rule (both layers, per request AND per redirect hop): resolve → normalize (IPv4-mapped
         `::ffff:`, decimal/octal/hex, NAT64) → pin to the exact validated IP. Public IP → allow. **Identity/
         metadata endpoint** (`169.254.169.254`/`.170.2`/`.170.23`, Azure loopback `IDENTITY_ENDPOINT`) → allow
@@ -585,13 +584,12 @@ packages/server/src/app-document.test.ts`; `vp check packages/server/src`; `git 
       caches); without it apps hand-roll HMAC URLs and hit the canonical mistakes.
   - [x] HMAC over **canonicalized** bytes (`method+key+expiry+scope`), configured framework secret,
         **constant-time verify** at a framework-owned download endpoint BEFORE any storage read;
-        unsigned/tampered/expired → fail closed, object never read.
-    - Evidence: `packages/server/src/capability-url.ts` installs `request.signUrl` via
-      `createApp({ capabilityUrls })` and reserves `/_cap/storage`; `vp exec vitest --run
-      packages/server/src/capability-url.test.ts packages/server/src/shell.test.ts
-      packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserved endpoint dispatch,
-      no-store download responses, and fail-closed missing/tampered/expired/wrong-method capabilities with no
-      storage read.
+        unsigned/tampered/expired → fail closed, object never read. - Evidence: `packages/server/src/capability-url.ts` installs `request.signUrl` via
+        `createApp({ capabilityUrls })` and reserves `/_cap/storage`; `vp exec vitest --run
+packages/server/src/capability-url.test.ts packages/server/src/shell.test.ts
+packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserved endpoint dispatch,
+        no-store download responses, and fail-closed missing/tampered/expired/wrong-method capabilities with no
+        storage read.
   - [x] Canonicalize-before-sign (reuse the path normalization) so backslash/`//`/dot-segment cannot reopen the
         capability. Scope = per-key+method by default (optional prefix); **short expiry default**.
     - Evidence: `packages/server/src/capability-url.test.ts` verifies canonical HMAC payload coverage, 300-second
@@ -755,6 +753,13 @@ packages/server/src/static-export-manifest.test.ts packages/server/src/static-ex
 - [ ] Third-party allowlist config (`script-src`/`frame-src` extras for analytics/payments/widgets), surfaced
       in `kovo explain --capabilities`. Required precisely because there is no report-only ramp — a third-party
       embed is denied until declared (fail-closed).
+  - Partial evidence: `createApp({ document: { csp: { allow } } })` now accepts additive HTTPS-origin
+    `scripts`/`frames` allowlists, `packages/server/src/csp.ts` emits them as `script-src`/`frame-src` without
+    weakening non-overridable hardening directives, and `packages/cli/src/graph-output.ts` renders `cspAllow`
+    capability facts. Verified by
+    `vp exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts`,
+    `vp check packages/core/src packages/server/src packages/cli/src`, and `pnpm run check:api-surface`.
+    Remaining gap: automatic graph emission from app config into `kovo explain --capabilities`.
 - [ ] KV431 is a **completeness** gate (every referenced client module is listed/allowed), not byte-integrity —
       browser `import()` has no SRI. Label any integrity manifest advisory; the real module-tamper defense is
       immutable versioned URLs + same-origin + the CSP `'self'` restriction, not SRI. Do not claim a swapped

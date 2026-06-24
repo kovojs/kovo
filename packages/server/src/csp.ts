@@ -47,6 +47,7 @@ export interface ContentSecurityPolicyOptions {
    * hardening directive is not overridable.
    */
   frameAncestors?: readonly string[];
+  frameSrc?: readonly string[];
   imgSrc?: readonly string[];
   /**
    * Legacy option retained for source compatibility. `object-src` is non-overridable
@@ -68,6 +69,22 @@ export interface ContentSecurityPolicyOptions {
   requireTrustedTypesFor?: readonly string[];
   scriptSrc?: readonly string[];
   styleSrc?: readonly string[];
+}
+
+/** Third-party CSP sources an app explicitly admits for framework documents. */
+export interface DocumentContentSecurityPolicyAllowlist {
+  /**
+   * HTTPS origins allowed for third-party scripts that an app deliberately embeds
+   * outside Kovo's framework-owned inline loader.
+   */
+  scripts?: readonly string[];
+  /** HTTPS origins allowed for embedded payment/widget frames. */
+  frames?: readonly string[];
+}
+
+/** Document CSP options accepted by `createApp({ document: { csp } })`. */
+export interface DocumentContentSecurityPolicyOptions {
+  allow?: DocumentContentSecurityPolicyAllowlist;
 }
 
 /** Framework-owned Trusted Types policy name emitted in CSP and installed by the loader. */
@@ -144,6 +161,7 @@ export function renderContentSecurityPolicy(
       ...quoteHashes(metadata.scripts),
     ]),
     directive('style-src', [...(options.styleSrc ?? ["'self'"]), ...quoteHashes(metadata.styles)]),
+    directive('frame-src', options.frameSrc),
     directive('img-src', options.imgSrc),
     directive('connect-src', options.connectSrc),
     // G2 (bugs-part3 CSP-2): `base-uri` and `object-src` are NON-overridable hardening
@@ -165,6 +183,31 @@ export function renderContentSecurityPolicy(
   ].filter((item): item is string => item !== undefined);
 
   return directives.join('; ');
+}
+
+export function normalizeDocumentContentSecurityPolicyOptions(
+  options: DocumentContentSecurityPolicyOptions | undefined,
+): DocumentContentSecurityPolicyOptions | undefined {
+  const scripts = normalizeThirdPartySources(options?.allow?.scripts, 'script');
+  const frames = normalizeThirdPartySources(options?.allow?.frames, 'frame');
+  if (scripts.length === 0 && frames.length === 0) return undefined;
+  return {
+    allow: {
+      ...(scripts.length === 0 ? {} : { scripts }),
+      ...(frames.length === 0 ? {} : { frames }),
+    },
+  };
+}
+
+export function documentContentSecurityPolicyOptions(
+  options: DocumentContentSecurityPolicyOptions | undefined,
+): ContentSecurityPolicyOptions {
+  const scripts = options?.allow?.scripts ?? [];
+  const frames = options?.allow?.frames ?? [];
+  return {
+    ...(scripts.length === 0 ? {} : { scriptSrc: ["'self'", ...scripts] }),
+    ...(frames.length === 0 ? {} : { frameSrc: frames }),
+  };
 }
 
 function quoteHashes(hashes: readonly string[]): string[] {
@@ -192,4 +235,32 @@ function directive(name: string, values: readonly string[] | undefined): string 
 
 function dedupe(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+function normalizeThirdPartySources(
+  values: readonly string[] | undefined,
+  kind: 'frame' | 'script',
+): string[] {
+  return dedupe((values ?? []).map((value) => normalizeThirdPartySource(value, kind)));
+}
+
+function normalizeThirdPartySource(value: string, kind: 'frame' | 'script'): string {
+  const source = value.trim();
+  let url: URL;
+  try {
+    url = new URL(source);
+  } catch {
+    throw new Error(`Kovo document CSP ${kind} allowlist entries must be HTTPS origins: ${value}`);
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.pathname !== '/' ||
+    url.search !== '' ||
+    url.hash !== ''
+  ) {
+    throw new Error(`Kovo document CSP ${kind} allowlist entries must be HTTPS origins: ${value}`);
+  }
+  return url.origin;
 }

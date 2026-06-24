@@ -8,6 +8,7 @@ import {
 import { accessFactsFromApp } from './access-graph.js';
 import { isKovoApp } from './app-guards.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
+import { normalizeDocumentContentSecurityPolicyOptions } from './csp.js';
 import { normalizeAppEgressOptions } from './egress.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
@@ -51,6 +52,7 @@ import type { LayoutDeclaration } from './route.js';
 import type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
+  AppDocumentOptions,
   AppLifecycleRequest,
   AppMutationDeclaration,
   CreateAppOptions,
@@ -122,7 +124,7 @@ export function createApp<
       ...routePrefetchGuardDiagnostics(routes),
       ...missingAccessDiagnostics(accessFacts),
     ],
-    document: options.document ?? {},
+    document: normalizeAppDocumentOptions(options.document),
     egress: normalizeAppEgressOptions(options.egress),
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},
@@ -141,6 +143,16 @@ export function createApp<
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
+  };
+}
+
+function normalizeAppDocumentOptions(options: CreateAppOptions['document']): AppDocumentOptions {
+  if (options === undefined) return {};
+  const csp = normalizeDocumentContentSecurityPolicyOptions(options.csp);
+  return {
+    ...(csp === undefined ? {} : { csp }),
+    ...(options.lang === undefined ? {} : { lang: options.lang }),
+    ...(options.template === undefined ? {} : { template: options.template }),
   };
 }
 

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { inlineKovoLoaderInstallerSource } from '@kovojs/browser/internal/inline-loader';
 
-import { cspSha256, renderContentSecurityPolicy } from './csp.js';
+import {
+  cspSha256,
+  documentContentSecurityPolicyOptions,
+  normalizeDocumentContentSecurityPolicyOptions,
+  renderContentSecurityPolicy,
+} from './csp.js';
 import {
   renderDeferredDocument,
   renderDocument,
@@ -109,6 +114,43 @@ describe('server app shell document assembly', () => {
 
     expect(policy).not.toContain('trusted-types');
     expect(policy).not.toContain('require-trusted-types-for');
+  });
+
+  it('adds declared third-party script and frame origins without weakening hardening directives', () => {
+    const options = normalizeDocumentContentSecurityPolicyOptions({
+      allow: {
+        frames: ['https://checkout.example.test'],
+        scripts: [' https://analytics.example.test ', 'https://analytics.example.test/'],
+      },
+    });
+    const policy = renderContentSecurityPolicy(
+      { nonce: 'abc123', scripts: [], styles: [] },
+      documentContentSecurityPolicyOptions(options),
+    );
+
+    expect(policy).toContain(
+      "script-src 'self' https://analytics.example.test 'nonce-abc123' 'strict-dynamic'",
+    );
+    expect(policy).toContain('frame-src https://checkout.example.test');
+    expect(policy).toContain("base-uri 'self'");
+    expect(policy).toContain("object-src 'none'");
+    expect(policy).toContain("form-action 'self'");
+    expect(policy).toContain("frame-ancestors 'none'");
+    expect(policy).not.toContain("'unsafe-inline'");
+    expect(policy).not.toContain("'unsafe-eval'");
+  });
+
+  it('rejects non-HTTPS or pathful third-party CSP allowlist entries', () => {
+    expect(() =>
+      normalizeDocumentContentSecurityPolicyOptions({
+        allow: { scripts: ['http://analytics.example.test'] },
+      }),
+    ).toThrow('Kovo document CSP script allowlist entries must be HTTPS origins');
+    expect(() =>
+      normalizeDocumentContentSecurityPolicyOptions({
+        allow: { frames: ['https://checkout.example.test/embed'] },
+      }),
+    ).toThrow('Kovo document CSP frame allowlist entries must be HTTPS origins');
   });
 
   it('omits the loader script and loader CSP hash for negotiated loader-free documents', () => {
