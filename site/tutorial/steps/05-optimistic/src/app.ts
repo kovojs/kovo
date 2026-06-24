@@ -1,6 +1,13 @@
 import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticPlan } from '@kovojs/browser';
-import { mutation, route, s, type MutationFail } from '@kovojs/server';
+import {
+  mutation,
+  publicAccess,
+  route,
+  s,
+  type MutationFail,
+  type RoutePageResult,
+} from '@kovojs/server';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
@@ -66,6 +73,7 @@ export const addToCartTouches = [
 // /snippet
 
 export const addToCart = mutation('cart/add', {
+  access: publicAccess('public tutorial cart form protected by CSRF'),
   csrf: shopCsrf,
   input: s.object({
     productId: s.string(),
@@ -132,8 +140,9 @@ export function renderShopPage(
 }
 
 export const homeRoute = route('/', {
+  access: publicAccess('public tutorial shop page'),
   page() {
-    return renderShopPage();
+    return renderShopPage() as unknown as RoutePageResult;
   },
 });
 

@@ -4,6 +4,7 @@ import {
   createApp,
   createRequestHandler,
   layout,
+  publicAccess,
   route,
   stylesheet,
   toNodeHandler,
@@ -98,6 +99,7 @@ const CommerceCartLayout = layout({
 });
 
 export const commerceHomeRoute = route('/', {
+  access: publicAccess('public storefront route with guest catalog browsing'),
   i18n: commerceMessages,
   meta: {
     description: 'Browse products and checkout with verifiable cart state.',
@@ -111,6 +113,7 @@ export const commerceHomeRoute = route('/', {
 });
 
 export const commerceCartRoute = route('/cart', {
+  access: publicAccess('public cart route renders guest cart state and guarded user history'),
   i18n: commerceMessages,
   meta: {
     description: 'Browse products and checkout with verifiable cart state.',
@@ -124,6 +127,7 @@ export const commerceCartRoute = route('/cart', {
 });
 
 export const commerceLoginRoute = route('/login', {
+  access: publicAccess('public commerce sign-in form'),
   meta: {
     description: 'Sign in to the Kovo commerce reference app.',
     title: 'Kovo Commerce Sign In',

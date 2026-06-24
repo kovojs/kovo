@@ -1,4 +1,4 @@
-import { notFound, route, s } from '@kovojs/server';
+import { notFound, publicAccess, route, s, type RoutePageResult } from '@kovojs/server';
 
 // Tutorial step 01 (chapter 1): routes and the first page. Pages are complete
 // documents rendered on the server — there is no client router and no
@@ -24,19 +24,21 @@ export function formatPrice(cents: number): string {
 
 // snippet:home-route
 export const homeRoute = route('/', {
+  access: publicAccess('public tutorial shop home page'),
   page() {
-    return renderHomePage();
+    return renderHomePage() as unknown as RoutePageResult;
   },
 });
 // /snippet
 
 // snippet:product-route
 export const productRoute = route('/products/:id', {
+  access: publicAccess('public tutorial product detail page'),
   params: s.object({ id: s.string() }),
   page({ params }) {
     const product = catalog.find((item) => item.id === params.id);
     if (!product) return notFound();
-    return renderProductPage(product);
+    return renderProductPage(product) as unknown as RoutePageResult;
   },
 });
 // /snippet

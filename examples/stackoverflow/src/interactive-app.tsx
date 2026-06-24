@@ -8,6 +8,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   layout,
+  publicAccess,
   route,
   s,
   stylesheet,
@@ -299,6 +300,7 @@ export async function buildSoInteractiveApp(
   // JSX composition lets the component query declarations load question +
   // answers from PGlite by `params.id`.
   const questionDetailRoute = route('/questions/:id', {
+    access: publicAccess('public KovOverflow demo question detail route'),
     meta: { description: 'Question detail', title: 'Question · KovOverflow' },
     params: s.object({ id: s.string() }),
     staticPaths: soStaticQuestionPaths,
@@ -313,6 +315,7 @@ export async function buildSoInteractiveApp(
   });
 
   const taggedQuestionsRoute = route('/questions/tagged/:tag', {
+    access: publicAccess('public KovOverflow demo tagged questions route'),
     meta: { description: 'Questions filtered by tag', title: 'Tagged questions · KovOverflow' },
     params: s.object({ tag: s.string() }),
     page({ params }: { params: { tag: string } }) {
@@ -323,6 +326,7 @@ export async function buildSoInteractiveApp(
   });
 
   const userProfileRoute = route('/users/:id', {
+    access: publicAccess('public KovOverflow demo user profile route'),
     meta: { description: 'Member profile', title: 'User · KovOverflow' },
     params: s.object({ id: s.string() }),
     page({ params }: { params: { id: string } }) {
@@ -346,6 +350,7 @@ export async function buildSoInteractiveApp(
     queries: [questionList, answerList, questionDetail, questionAnswers, questionScore],
     routes: [
       route('/', {
+        access: publicAccess('public KovOverflow demo questions route'),
         meta: {
           description: 'Top developer questions and answers.',
           title: 'Questions · KovOverflow',
@@ -359,6 +364,7 @@ export async function buildSoInteractiveApp(
       taggedQuestionsRoute,
       questionDetailRoute,
       route('/tags', {
+        access: publicAccess('public KovOverflow demo tags route'),
         meta: { description: 'Browse questions by tag.', title: 'Tags · KovOverflow' },
         page() {
           return <TagsPage />;
@@ -367,6 +373,7 @@ export async function buildSoInteractiveApp(
         stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/tags'),
       }),
       route('/users', {
+        access: publicAccess('public KovOverflow demo users route'),
         meta: { description: 'The KovOverflow community.', title: 'Users · KovOverflow' },
         page() {
           return <UsersPage />;

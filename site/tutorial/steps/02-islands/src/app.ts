@@ -1,4 +1,4 @@
-import { notFound, route, s } from '@kovojs/server';
+import { notFound, publicAccess, route, s, type RoutePageResult } from '@kovojs/server';
 
 import { ProductActions } from './components/product-actions.js';
 
@@ -24,17 +24,19 @@ export function formatPrice(cents: number): string {
 }
 
 export const homeRoute = route('/', {
+  access: publicAccess('public tutorial shop home page'),
   page() {
-    return renderHomePage();
+    return renderHomePage() as unknown as RoutePageResult;
   },
 });
 
 export const productRoute = route('/products/:id', {
+  access: publicAccess('public tutorial product detail page'),
   params: s.object({ id: s.string() }),
   page({ params }) {
     const product = catalog.find((item) => item.id === params.id);
     if (!product) return notFound();
-    return renderProductPage(product);
+    return renderProductPage(product) as unknown as RoutePageResult;
   },
 });
 

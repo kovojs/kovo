@@ -1,4 +1,4 @@
-import { guards, query, type QueryLoadContext } from '@kovojs/server';
+import { guards, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import { eq, gt, sum } from 'drizzle-orm';
 import { domain } from '@kovojs/server';
 
@@ -48,6 +48,7 @@ type CommerceQueryLoadContext = QueryLoadContext<CommerceQueryRequest> & {
 };
 
 export const cartQuery = query('cart', {
+  access: publicAccess('public cart count for storefront chrome'),
   async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<CartQueryResult> {
     const db = requireCommerceQueryDb(context);
     const rows = await db.select({ value: sum(cartItems.qty) }).from(cartItems);
@@ -56,6 +57,7 @@ export const cartQuery = query('cart', {
 });
 
 export const productGridQuery = query('productGrid', {
+  access: publicAccess('public product catalog grid'),
   async load(input: unknown, context?: CommerceQueryLoadContext): Promise<ProductGridResult> {
     const db = requireCommerceQueryDb(context);
     const { after, limit } = (input ?? {}) as ProductGridInput;
@@ -83,6 +85,7 @@ export const productGridQuery = query('productGrid', {
 });
 
 export const orderHistoryQuery = query('orderHistory', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   // SECURITY (SECURITY_FINDINGS.md M9): order history is per-user, so this read must
   // require an authenticated session — the endpoint guard rejects unauthenticated
   // callers, and the `load` below additionally scopes the rowset to that user's id

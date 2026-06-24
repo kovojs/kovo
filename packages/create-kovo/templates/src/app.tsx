@@ -4,6 +4,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   layout,
+  publicAccess,
   redirect,
   route,
   stylesheet,
@@ -89,6 +90,7 @@ const app = createApp({
   sessionProvider: (request) => appSessionProvider(request as unknown as AppRequest),
   routes: [
     route('/', {
+      access: publicAccess('public starter home route redirects guests to sign in'),
       meta: {
         description: 'A Kovo starter: a contact book over a real database, gated by real auth.',
         title: 'Kovo Starter',
@@ -103,6 +105,7 @@ const app = createApp({
       },
     }),
     route('/login', {
+      access: publicAccess('public starter sign-in form'),
       meta: { description: 'Sign in to the Kovo starter.', title: 'Sign in · Kovo Starter' },
       layout: AppLayout,
       stylesheets,

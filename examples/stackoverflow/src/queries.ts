@@ -1,4 +1,4 @@
-import { query, s, type QueryLoadContext } from '@kovojs/server';
+import { publicAccess, query, s, type QueryLoadContext } from '@kovojs/server';
 import { and, asc, eq, sum } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
@@ -13,6 +13,7 @@ type SoQueryLoadContext = QueryLoadContext<SoRequest> & { db?: SoDb };
 // The list is ordered by stable id so a vote changes the score without reshuffling
 // rows while a fragment response is being applied.
 export const questionList = query('questionList', {
+  access: publicAccess('public KovOverflow demo questions scoped to the demo session'),
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
     const sessionId = context?.request?.session?.id;
@@ -41,6 +42,7 @@ export const questionList = query('questionList', {
 
 // All answers, ordered by stable id.
 export const answerList = query('answerList', {
+  access: publicAccess('public KovOverflow demo answers scoped to the demo session'),
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
     const sessionId = context?.request?.session?.id;
@@ -62,6 +64,7 @@ export const answerList = query('answerList', {
 });
 
 export const questionDetail = query('questionDetail', {
+  access: publicAccess('public KovOverflow demo question detail scoped to the demo session'),
   args: s.object({ id: s.string() }),
   load: async (
     input: { id: string },
@@ -92,6 +95,7 @@ export const questionDetail = query('questionDetail', {
 });
 
 export const questionAnswers = query('questionAnswers', {
+  access: publicAccess('public KovOverflow demo answer thread scoped to the demo session'),
   args: s.object({ questionId: s.string() }),
   load: async (
     input: { questionId: string },
@@ -121,6 +125,7 @@ export const questionAnswers = query('questionAnswers', {
 
 // Total score across all question votes.
 export const questionScore = query('questionScore', {
+  access: publicAccess('public KovOverflow demo score scoped to the demo session'),
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
     const sessionId = context?.request?.session?.id;

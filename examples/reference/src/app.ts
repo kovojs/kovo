@@ -1,4 +1,11 @@
-import { csrfField, csrfToken, mutationFormAttributes, route, s, session } from '@kovojs/server';
+import {
+  csrfField,
+  csrfToken,
+  mutationFormAttributes,
+  route,
+  s,
+  session,
+} from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import {
   authed,
@@ -246,6 +253,7 @@ export const referenceGraph = {
 } as const satisfies KovoExplainInput;
 
 export const accountRoute = route('/account', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   guard: authed<ReferenceRequest>(),
   page(_input, request) {
     return trustedHtml(
@@ -255,6 +263,7 @@ export const accountRoute = route('/account', {
 });
 
 export const adminRoute = route('/admin', {
+  access: { kind: 'guard-chain', guards: [{ name: 'role:admin' }] },
   guard: role<ReferenceRequest>('admin'),
   page(_input, request) {
     return trustedHtml(

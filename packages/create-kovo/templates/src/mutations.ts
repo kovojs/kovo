@@ -27,6 +27,7 @@ const duplicateEmailError = s.object({ email: s.string() });
 // predict the optimistic list update. No-JS clients POST to /_m/addContact and
 // get the refreshed page; `enhance` upgrades the same form to a fragment swap.
 export const addContact = mutation('addContact', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   csrf: appCsrf,
   errors: { DUPLICATE_EMAIL: duplicateEmailError },
   guard: guards.authed<AppRequest>(),

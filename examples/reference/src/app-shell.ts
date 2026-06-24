@@ -2,6 +2,7 @@ import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
+  publicAccess,
   route,
   toNodeHandler,
   type CsrfValidationOptions,
@@ -56,6 +57,7 @@ const shellReferenceAuthCsrf: CsrfValidationOptions<Request> = {
 };
 
 export const referencePublicRoute = route('/', {
+  access: publicAccess('public reference shell landing page'),
   meta: {
     description: 'A public Kovo reference app shell exported through synthetic replay.',
     title: 'Kovo Reference Public Shell',
@@ -76,6 +78,7 @@ export const referencePublicRoute = route('/', {
 });
 
 export const referenceLoginRoute = route('/login', {
+  access: publicAccess('public sign-in form for the reference app'),
   meta: {
     description: 'Sign in to the Kovo reference app.',
     title: 'Kovo Reference Sign In',

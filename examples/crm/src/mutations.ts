@@ -114,6 +114,7 @@ export async function addContactHandler(
 }
 
 export const addContact = mutation('addContact', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   csrf: crmCsrf,
   errors: {
     DUPLICATE_EMAIL: duplicateEmailError,
@@ -164,6 +165,7 @@ export async function createDealHandler(
 }
 
 export const createDeal = mutation('createDeal', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   csrf: crmCsrf,
   errors: {
     CONTACT_NOT_FOUND: contactOwnershipError,
@@ -244,6 +246,7 @@ export async function moveDealHandler(
 }
 
 export const moveDeal = mutation('moveDeal', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   csrf: crmCsrf,
   errors: {
     DEAL_NOT_FOUND: dealOwnershipError,
@@ -311,6 +314,7 @@ export async function closeDealHandler(
 }
 
 export const closeDeal = mutation('closeDeal', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   csrf: crmCsrf,
   errors: {
     DEAL_NOT_FOUND: dealOwnershipError,
