@@ -959,13 +959,14 @@ packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.tes
       `kovo explain --capabilities`/`--trust` in §11.4; new KV codes in §11.3 with the
       ceiling-note correction. Holding these avoids SPEC promising behavior that is not yet built (CLAUDE.md
       plan/SPEC-conflict rule).
-  - Partial evidence: SPEC §11.3 now lists KV427-KV438, including KV428-KV434 rows with severities matching
-    `packages/core/src/diagnostics.ts`. Still open: broader typed-surface/outbound-egress/capability normative
-    prose after remaining implementation gates finish.
+  - Partial evidence: SPEC §6.2/§4.8/§5.2/§9.5/§10.1/§10.2/§10.3/§11.4 now record the shipped
+    confidentiality, access, governed-write, egress, and explain-surface contracts, and SPEC §11.3 lists
+    KV427-KV438 with severities matching `packages/core/src/diagnostics.ts`. Still open: TOCTOU-specific
+    normative prose once the full KV429 lifecycle/static gate lands.
 
 ## Latest Verification
 
-- `rg -o "KV4[0-9][0-9]" packages/core/src/diagnostics.ts | sort -u | tail` — diagnostic ceiling KV421.
+- `rg -o "KV4[0-9][0-9]" packages/core/src/diagnostics.ts | sort -u | tail` — diagnostic ceiling KV438.
 - `grep getTypeChecker packages/compiler/src` — empty (no type checker in the compiler).
 - `ls packages/server/src/csp.ts` — CSP hashing present; header opt-in.
 - `rg -n "file\.type|arrayBuffer" packages/server/src/schema.ts` — verbatim served content-type at :340-341.
