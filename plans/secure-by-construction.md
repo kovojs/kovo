@@ -920,13 +920,20 @@ packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.tes
 
 ## Open Design Questions
 
-- [ ] Phase 0 precision dial (build-order is settled as Option A; this is orthogonal): intra-procedural only
+- [x] Phase 0 precision dial (build-order is settled as Option A; this is orthogonal): intra-procedural only
       for v1, add trivial same-file arrow inlining, or full interprocedural summaries (reusing
       `kovoAnalyzerSummary`)? Proposed default: intra-procedural with `kovoAnalyzerSummary` as the
       helper-returned-value escape valve; finalize after measuring false-positive noise on real apps.
-- [ ] Confidentiality reveal hatch: fixed verifiable redactor set vs arbitrary `fn` behind `trustedReveal`?
-- [ ] Default-deny migration: is a sea of `public('TODO')` acceptable as a one-time reviewed audit, or should
+  - Evidence: `packages/drizzle/src/static/symbol-provenance.ts` implements intra-procedural provenance and
+    `packages/drizzle/src/index.symbol-provenance.test.ts` covers `kovoAnalyzerSummary` as the helper escape.
+- [x] Confidentiality reveal hatch: fixed verifiable redactor set vs arbitrary `fn` behind `trustedReveal`?
+  - Evidence: `packages/core/src/secret.ts` defines `trustedReveal` as an audited author assertion, while
+    `packages/drizzle/src/index.query-shapes.test.ts` distinguishes proof-grade server projections from
+    audit-grade SQL/arbitrary reveals and requires static justifications.
+- [x] Default-deny migration: is a sea of `public('TODO')` acceptable as a one-time reviewed audit, or should
       missing-access diagnostic require a non-placeholder reason after a grace window?
+  - Evidence: the Phase 2 migration item above requires real decisions and no `public('TODO')` stubs; `rg`
+    finds `public('TODO')` only in this ledger's historical decision text, not in shipped app/example surfaces.
 - [x] Read-only handle: does `query.elevated` stay a GET (and how) or is a write-from-read always pushed to a
       mutation? Resolve against §9.4 before building.
   - Evidence: resolved by the Phase 5 KV433 `query.elevated` item above: elevated query loaders keep the typed
