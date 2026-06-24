@@ -155,8 +155,9 @@ function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtrac
           namespaceTableNames,
         );
         if (!synthetic) return undefined;
-        if (extraction.conditionalTableTargetsBySyntheticName.has(synthetic)) return undefined;
-        return extraction.realTableNameBySynthetic.get(synthetic) ?? synthetic;
+        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+        if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
+        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
       };
 
       for (const callback of deriveWriteCallbacks(sourceFile)) {
@@ -184,6 +185,11 @@ function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtrac
   } finally {
     extraction.dispose();
   }
+}
+
+function tableSyntheticNameForDerivation(synthetic: string): string {
+  const namespaceIndex = synthetic.lastIndexOf('.');
+  return namespaceIndex === -1 ? synthetic : synthetic.slice(namespaceIndex + 1);
 }
 
 /** All callback bodies in a file that may carry a Drizzle write call, with resolvable keys. */
