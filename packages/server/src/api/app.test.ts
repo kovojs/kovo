@@ -538,6 +538,7 @@ describe('server app-shell public API barrels', () => {
     ]);
     expect(packageInternalEscapeApi).toEqual(internalEscapeApi);
     expect(moduleValueKeys(packageInternalExecutionApi)).toEqual([
+      'accessFactsFromApp',
       'createMemoryMutationReplayStore',
       'endpointMatches',
       'invalidate',

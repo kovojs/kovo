@@ -338,6 +338,9 @@ endpoints use `access: verified`; the migration **assigns a real decision at eve
     guard/auth derivation, and `packages/core/src/diagnostics.ts` assigns KV436 so explicit missing-access
     facts fail `kovo check`. Remaining gap: the public `access:` definition API is not yet required or
     migrated across call sites.
+  - Extractor evidence: `packages/server/src/access-graph.ts` derives opt-in app access facts from
+    assembled `KovoApp` query/mutation/route guard posture and endpoint/webhook auth posture; verified by
+    `vp exec vitest --run packages/server/src/access-graph.test.ts packages/server/src/api/app.test.ts`.
 - [ ] Keep the missing-access diagnostic orthogonal to correctness: it proves a decision _exists_, never that it is _correct_ (a
       no-op `return true` guard satisfies it). Retain KV414 (IDOR) and record every `public()` in a reviewed
       `kovo explain --access` snapshot so each public surface is a diff, not an invisible default.
