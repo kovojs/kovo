@@ -111,6 +111,38 @@ import {
     : selection;
 }
 
+/** @internal */ export function relationalShapeFromQueryBody(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  columnShapes: Readonly<Record<string, QueryShape>> = {},
+): QueryShapeSelection | null {
+  const call = relationalQueryCallFromQueryBody(body, receiverReferences);
+  if (!call) return null;
+
+  const table = relationalQueryTableName(call);
+  const columns = relationalQueryColumns(call);
+  if (!table || columns.length === 0) return null;
+
+  const shape: Record<string, QueryShape> = {};
+  const unresolvedPaths: string[] = [];
+  for (const column of columns) {
+    const columnShape = columnShapes[`${table}.${column}`];
+    if (columnShape) {
+      shape[column] = columnShape;
+    } else {
+      unresolvedPaths.push(column);
+    }
+  }
+
+  return {
+    hasTablelessScalar: false,
+    opaquePaths: [],
+    shape,
+    scalarTables: new Set([table]),
+    unresolvedPaths,
+  };
+}
+
 /** @internal */ export function queryBodyHasTimeVolatileWhere(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
@@ -292,7 +324,9 @@ import {
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
 ): TouchGraphDiagnostic[] {
-  if (queryRelationalTableExpressions(body, receiverReferences).length === 0) return [];
+  if (relationalQueryCallsWithoutStaticProjection(body, receiverReferences).length === 0) {
+    return [];
+  }
 
   return [
     {
@@ -302,6 +336,66 @@ import {
       site: '',
     },
   ];
+}
+
+function relationalQueryCallFromQueryBody(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+): CallExpression | undefined {
+  const calls = relationalQueryCalls(body, receiverReferences);
+  return calls.find((call) => call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) ?? calls[0];
+}
+
+function relationalQueryCallsWithoutStaticProjection(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+): CallExpression[] {
+  return relationalQueryCalls(body, receiverReferences).filter(
+    (call) => relationalQueryColumns(call).length === 0,
+  );
+}
+
+function relationalQueryCalls(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+): CallExpression[] {
+  return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
+    const expression = call.getExpression();
+    const method = staticAccessName(expression);
+    if (method !== 'findMany' && method !== 'findFirst') return [];
+
+    const tableAccess = staticAccessExpression(expression);
+    const queryAccess = tableAccess ? staticAccessExpression(tableAccess) : undefined;
+    if (!queryAccess || staticAccessName(queryAccess) !== 'query') return [];
+    if (!isQueryReceiverIdentifier(staticAccessExpression(queryAccess), receiverReferences)) {
+      return [];
+    }
+
+    return [call];
+  });
+}
+
+function relationalQueryTableName(call: CallExpression): string | undefined {
+  const tableAccess = staticAccessExpression(call.getExpression());
+  return tableAccess ? staticAccessName(tableAccess) : undefined;
+}
+
+function relationalQueryColumns(call: CallExpression): string[] {
+  const config = call.getArguments()[0];
+  if (!config || !Node.isObjectLiteralExpression(config)) return [];
+
+  const columnsProperty = config.getProperty('columns');
+  if (!columnsProperty || !Node.isPropertyAssignment(columnsProperty)) return [];
+
+  const columns = columnsProperty.getInitializer();
+  if (!columns || !Node.isObjectLiteralExpression(columns)) return [];
+
+  return columns.getProperties().flatMap((property) => {
+    if (!Node.isPropertyAssignment(property)) return [];
+    const value = property.getInitializer();
+    if (!value || value.getKind() !== SyntaxKind.TrueKeyword) return [];
+    return propertyNameText(property.getNameNode()) ?? [];
+  });
 }
 
 /** @internal */ export function unclassifiedQueryReceiverDiagnostics(

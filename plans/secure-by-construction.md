@@ -295,6 +295,11 @@ projection of a table carrying ≥1 secret column requires an audited brand. Bla
 `users`/`accounts`/`payments` — invest in the teaching message and make adding the brand the one-line fix.
 - [ ] Cover Drizzle **relational** queries (`with: { author: { columns: { passwordHash: true } } }`) — a
       different AST shape than `db.select({})` and a primary leak vector. In scope for v1, not a follow-on.
+  - Partial evidence: `packages/drizzle/src/static/query-shapes.ts` derives shapes for static top-level
+    `db.query.<table>.findMany({ columns: { ...: true } })` projections and preserves secret wrappers from
+    table annotations; `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts` verifies the
+    top-level relational secret projection case. Remaining gap: nested `with: { relation: { columns } }`
+    projections are not yet modeled.
 - [ ] Escape hatch (fork in Open Design Questions: fixed verifiable redactor set vs arbitrary `fn` behind
       `trustedReveal`): surface every reveal in `kovo explain --revealed`; arbitrary-`fn` reveals are
       audit-grade, not proof-grade. Prefer a server-side projection that never selects the secret.

@@ -1287,12 +1287,13 @@ function extractQueryDefinitionsFromSourceFile(
       destructuredCandidates,
       receiverReferences,
     );
-    const selection = selectShapeFromQueryBody(
-      bodyObject,
-      receiverReferences,
-      options.columnShapes,
-      receiverMode,
-    );
+    const selection =
+      selectShapeFromQueryBody(
+        bodyObject,
+        receiverReferences,
+        options.columnShapes,
+        receiverMode,
+      ) ?? relationalShapeFromQueryBody(bodyObject, receiverReferences, options.columnShapes);
     const hasOutputSchema = objectHasProperty(bodyObject, 'output');
     const declaredReadExpressions = queryDeclaredReadExpressions(
       bodyObject,
@@ -1787,6 +1788,7 @@ import {
   receiverMethodAliasQueryDiagnostics,
   referencedQueryCallbackFunction,
   relationalQueryDiagnostics,
+  relationalShapeFromQueryBody,
   scalarProjectionTable,
   scalarQueryShape,
   selectCallDisplayName,
