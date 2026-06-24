@@ -67,6 +67,7 @@ import {
   isKovoExtraConfigCallName,
   type KovoDomainTableAnnotation,
   type KovoFanAnnotation,
+  type KovoGovernedColumnAnnotation,
   type KovoTableAnnotation,
   type KovoViewAnnotation,
 } from './drizzle-surface.js';
@@ -1577,6 +1578,7 @@ function extractQueryDefinitionsFromSourceFile(
   }
   const domain = stringPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
+  const governed = columnAnnotationPropertyFromObject(annotationObject, 'governed');
   const key = columnNamePropertyFromObject(annotationObject, 'key');
   const owner = columnNamePropertyFromObject(annotationObject, 'owner');
   const secret = secretPropertyFromObject(annotationObject);
@@ -1584,6 +1586,7 @@ function extractQueryDefinitionsFromSourceFile(
   return {
     domain,
     ...(fans.length > 0 ? { fans } : {}),
+    ...(governed === undefined ? {} : { governed }),
     ...(key ? { key } : {}),
     ...(owner ? { owner } : {}),
     ...(secret === undefined ? {} : { secret }),
@@ -1730,11 +1733,14 @@ function columnNamePropertyFromObject(object: Node, name: string): string | unde
   return undefined;
 }
 
-function secretPropertyFromObject(object: Node): true | string[] | undefined {
+function columnAnnotationPropertyFromObject(
+  object: Node,
+  name: string,
+): KovoGovernedColumnAnnotation | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
   for (const property of object.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.getNameNode()) !== 'secret') continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
 
     const initializer = property.getInitializer();
     if (!initializer) return undefined;
@@ -1747,6 +1753,11 @@ function secretPropertyFromObject(object: Node): true | string[] | undefined {
     return column === undefined ? undefined : [column];
   }
   return undefined;
+}
+
+function secretPropertyFromObject(object: Node): true | string[] | undefined {
+  const secret = columnAnnotationPropertyFromObject(object, 'secret');
+  return secret === true || Array.isArray(secret) ? secret : undefined;
 }
 
 function booleanPropertyFromObject(object: Node, name: string): boolean | undefined {
@@ -2508,6 +2519,7 @@ export {
 export {
   extractAlgebraicShapesFromProject,
   extractSymbolicEffectsFromProject,
+  governedWriteDiagnosticsFromProject,
 } from './static/derivation.js';
 /** @internal */
 /** @internal */ export type { SymbolicEffectFact } from './static/derivation.js';

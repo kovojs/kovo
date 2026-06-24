@@ -15,6 +15,7 @@ export type {
   KovoColumnRef,
   KovoDomainTableAnnotation,
   KovoFanAnnotation,
+  KovoGovernedColumnAnnotation,
   KovoSecretColumnAnnotation,
   KovoTableAnnotation,
   KovoTableExtraConfig,

@@ -78,6 +78,7 @@ describe('diagnostic registry', () => {
       'KV426',
       'KV435',
       'KV436',
+      'KV437',
     ]);
   });
 
@@ -658,6 +659,15 @@ describe('diagnostic registry', () => {
       Fixes: add an access guard chain, public("reason"), or verified machine-auth decision; use kovo explain --access to inspect the ledger before enabling the strict gate.
       SPEC §10.2/§11.3 and the secure-by-construction Phase 2 plan require authorization to be default-deny through explicit access decisions, not through inferred defaults.",
           "message": "Missing explicit access decision.",
+          "severity": "error",
+        },
+        "KV437": {
+          "code": "KV437",
+          "help": "Would lower to: a Drizzle write whose governed columns are assigned only from literals, current row values, or proven server/private-scope values.
+      Blocked reason: client input or unproven data can assign an owner, primary key, or explicitly governed column, which would bypass the table-level ownership and identity facts declared once in schema.
+      Fixes: derive owner/identity values on the server, remove governed keys from client payload writes, replace spreads/whole-object values with explicit non-governed fields, or use the audited adminAssign escape once it lands.
+      SPEC §10.1, §10.3, and §11.1 make owner columns and primary keys governed write boundaries, proven by symbol provenance rather than lexical source matching.",
+          "message": "Client input reaches a governed column write.",
           "severity": "error",
         },
       }
