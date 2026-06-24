@@ -164,7 +164,15 @@ export {
 
 /** @internal */
 /** @internal */ export interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
+  kind: 'nullable' | 'optional' | 'revealed' | 'secret' | 'volatile-time';
+  reveal?: {
+    grade: 'audit' | 'proof';
+    justification?: string;
+    method: 'arbitrary-fn' | 'fixed-redactor' | 'server-projection';
+    selectedSecret?: boolean;
+    site?: string;
+    source?: string;
+  };
   shape: QueryShape;
 }
 

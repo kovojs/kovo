@@ -65,6 +65,7 @@ export interface KovoCheckInput {
   queries?: readonly QueryReadSet[];
   requestProviders?: readonly RequestProviderExplain[];
   renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
+  revealed?: readonly RevealExplainFact[];
   scopeAudits?: readonly ScopeAuditFact[];
   sqlSafety?: readonly SqlSafetyExplainFact[];
   touchGraph?: TouchGraph;
@@ -335,6 +336,18 @@ export interface TrustEscapeExplain {
 }
 
 /** @internal */
+export interface RevealExplainFact {
+  grade: 'audit' | 'proof';
+  justification?: string;
+  method: 'arbitrary-fn' | 'fixed-redactor' | 'server-projection';
+  path: string;
+  query: string;
+  selectedSecret?: boolean;
+  site: string;
+  source?: string;
+}
+
+/** @internal */
 export interface UnregisteredSinkFact {
   safePath: string;
   sink: string;
@@ -456,6 +469,7 @@ const arrayFields = [
   'queries',
   'requestProviders',
   'renderEquivalenceChecks',
+  'revealed',
   'scopeAudits',
   'sqlSafety',
   'trustEscapes',

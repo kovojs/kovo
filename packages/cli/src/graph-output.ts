@@ -144,6 +144,7 @@ export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query
  */
 export type KovoExplainOptions =
   | KovoEndpointExplainOptions
+  | KovoRevealedExplainOptions
   | KovoSourcesSinksExplainOptions
   | KovoTargetExplainOptions
   | { trust: true }
@@ -157,6 +158,15 @@ export type KovoExplainOptions =
  */
 export interface KovoEndpointExplainOptions {
   endpoints: true;
+}
+
+/**
+ * `kovo explain --revealed` options: emit every declared confidentiality reveal,
+ * labeling proof-grade server projections separately from audit-grade arbitrary
+ * function reveals (SPEC.md §1.1/§2; plans/secure-by-construction.md Phase 1).
+ */
+export interface KovoRevealedExplainOptions {
+  revealed: true;
 }
 
 /**
@@ -269,6 +279,18 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     }
 
     lines.push(`SUMMARY total=${endpoints.length}`);
+    return ok(lines);
+  }
+
+  if ('revealed' in options) {
+    const revealed = [...(graph.revealed ?? [])].sort(compareRevealExplain);
+    lines.push('REVEALED');
+
+    for (const reveal of revealed) {
+      lines.push(revealExplainLine(reveal));
+    }
+
+    lines.push(revealSummary(revealed));
     return ok(lines);
   }
 
@@ -816,6 +838,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--fail-on-findings',
     '--layouts',
     '--optimistic',
+    '--revealed',
     '--sources-sinks',
     '--trust',
     '--unguarded',
@@ -826,6 +849,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   const { flags, positional } = parsed;
   const modeFlags = [
     '--endpoints',
+    '--revealed',
     '--sources-sinks',
     '--trust',
     '--unguarded',
@@ -855,6 +879,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       return explainUsage();
     }
     return { inputPath: positional[0], ok: true, options: { endpoints: true } };
+  }
+
+  if (flags.has('--revealed')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { revealed: true } };
   }
 
   if (flags.has('--trust')) {
@@ -1266,6 +1302,26 @@ function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
   ].join(' ');
 }
 
+function revealExplainLine(reveal: CoreGraph.RevealExplainFact): string {
+  return [
+    'REVEAL',
+    `grade=${reveal.grade}`,
+    `method=${reveal.method}`,
+    `query=${reveal.query}`,
+    `path=${reveal.path}`,
+    `site=${reveal.site}`,
+    `source=${reveal.source ?? '-'}`,
+    `selectedSecret=${reveal.selectedSecret === true ? 'yes' : 'no'}`,
+    `justification=${stableValue(reveal.justification)}`,
+  ].join(' ');
+}
+
+function revealSummary(revealed: readonly CoreGraph.RevealExplainFact[]): string {
+  const audit = revealed.filter((reveal) => reveal.grade === 'audit').length;
+  const proof = revealed.filter((reveal) => reveal.grade === 'proof').length;
+  return `SUMMARY total=${revealed.length} proof=${proof} audit=${audit}`;
+}
+
 function unguardedWarningLine(access: UnguardedAccessFact): string {
   if (access.kind === 'endpoint') {
     return `WARN UNGUARDED ${access.name} endpoint is reachable without an auth declaration.`;
@@ -1326,6 +1382,17 @@ function compareTrustEscape(
     left.kind.localeCompare(right.kind) ||
     left.site.localeCompare(right.site) ||
     (left.source ?? '').localeCompare(right.source ?? '')
+  );
+}
+
+function compareRevealExplain(
+  left: CoreGraph.RevealExplainFact,
+  right: CoreGraph.RevealExplainFact,
+): number {
+  return (
+    left.query.localeCompare(right.query) ||
+    left.path.localeCompare(right.path) ||
+    left.site.localeCompare(right.site)
   );
 }
 

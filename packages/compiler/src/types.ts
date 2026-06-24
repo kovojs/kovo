@@ -697,7 +697,15 @@ export type QueryShape =
 
 /** @internal A metadata wrapper around a {@link QueryShape}. In-repo use only. */
 export interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
+  kind: 'nullable' | 'optional' | 'revealed' | 'secret' | 'volatile-time';
+  reveal?: {
+    grade: 'audit' | 'proof';
+    justification?: string;
+    method: 'arbitrary-fn' | 'fixed-redactor' | 'server-projection';
+    selectedSecret?: boolean;
+    site?: string;
+    source?: string;
+  };
   shape: QueryShape;
 }
 
@@ -900,6 +908,7 @@ export function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapp
   return (
     (record.kind === 'nullable' ||
       record.kind === 'optional' ||
+      record.kind === 'revealed' ||
       record.kind === 'secret' ||
       record.kind === 'volatile-time') &&
     'shape' in shape

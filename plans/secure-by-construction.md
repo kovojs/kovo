@@ -306,6 +306,13 @@ design.
 - [ ] Escape hatch (fork in Open Design Questions: fixed verifiable redactor set vs arbitrary `fn` behind
       `trustedReveal`): surface every reveal in `kovo explain --revealed`; arbitrary-`fn` reveals are
       audit-grade, not proof-grade. Prefer a server-side projection that never selects the secret.
+  - Foundation evidence: `packages/core/src/graph.ts` now defines `revealed` explain facts, `packages/cli/src/graph-output.ts`
+    renders `kovo explain --revealed` with proof/audit counts, and `packages/compiler/src/validate/confidentiality.ts`
+    recognizes an explicit `revealed` query-shape wrapper without weakening opaque/spread KV435 backstops. Verified with
+    `vp exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` and
+    `vp exec vitest --run packages/compiler/src/query-bindings.test.ts`.
+  - Remaining gap: no public `trustedReveal`/redactor API or Drizzle AST recognizer is landed yet, so real query loaders
+    cannot safely discharge KV435 through a database projection or audited arbitrary function in app code.
 
 ## Phase 2: Authorization completeness — default-deny (diagnostic code TBD)
 

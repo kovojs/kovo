@@ -653,6 +653,91 @@ describe('kovo explain', () => {
     `);
   });
 
+  it('prints confidentiality reveals with stable explain output', () => {
+    const result = kovoExplain(
+      {
+        revealed: [
+          {
+            grade: 'audit',
+            justification: 'bcrypt digest is intentionally displayed to admins',
+            method: 'arbitrary-fn',
+            path: 'passwordDigest',
+            query: 'admin/users',
+            selectedSecret: true,
+            site: 'app/queries/users.ts:31',
+            source: 'users.passwordHash',
+          },
+          {
+            grade: 'proof',
+            justification: 'server SQL projects only the email domain',
+            method: 'server-projection',
+            path: 'emailDomain',
+            query: 'admin/users',
+            selectedSecret: false,
+            site: 'app/queries/users.ts:18',
+            source: 'users.email',
+          },
+        ],
+      },
+      { revealed: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      REVEALED
+      REVEAL grade=proof method=server-projection query=admin/users path=emailDomain site=app/queries/users.ts:18 source=users.email selectedSecret=no justification="server SQL projects only the email domain"
+      REVEAL grade=audit method=arbitrary-fn query=admin/users path=passwordDigest site=app/queries/users.ts:31 source=users.passwordHash selectedSecret=yes justification="bcrypt digest is intentionally displayed to admins"
+      SUMMARY total=2 proof=1 audit=1
+      "
+    `);
+  });
+
+  it('accepts kovo explain --revealed as a CLI audit mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-revealed-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          revealed: [
+            {
+              grade: 'audit',
+              justification: 'reviewed support-only reveal',
+              method: 'arbitrary-fn',
+              path: 'tokenPreview',
+              query: 'support/user',
+              selectedSecret: true,
+              site: 'app/support.ts:9',
+              source: 'users.apiToken',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--revealed', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      [
+        'kovo-explain/v1',
+        'REVEALED',
+        'REVEAL grade=audit method=arbitrary-fn query=support/user path=tokenPreview site=app/support.ts:9 source=users.apiToken selectedSecret=yes justification="reviewed support-only reveal"',
+        'SUMMARY total=1 proof=0 audit=1',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('accepts kovo explain --trust as a CLI audit mode', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-trust-'));
     const graphPath = join(tempDir, 'graph.json');
