@@ -13,6 +13,12 @@ export interface AsyncSchema<T> extends Schema<T> {
   parseAsync(input: unknown): Promise<T>;
 }
 
+const defaultSchemaInputBudget = {
+  maxBreadth: 1_000,
+  maxDepth: 32,
+  maxNodes: 10_000,
+} as const;
+
 /**
  * A single field-level validation failure: a human `message` and the `path` of record
  * keys/array indices locating it. Carried on `SchemaValidationError.issues` and surfaced
@@ -87,6 +93,7 @@ export const s = {
     // and no key normalization (data loss + traversal-key passthrough; Part 4 M1).
     const schema: AsyncSchema<Item[]> = {
       parse(input: unknown): Item[] {
+        assertSchemaInputBudget(input);
         return arrayValues(input).map((value, index) => {
           try {
             return item.parse(value);
@@ -96,6 +103,7 @@ export const s = {
         });
       },
       async parseAsync(input: unknown): Promise<Item[]> {
+        assertSchemaInputBudget(input);
         const output: Item[] = [];
 
         for (const [index, value] of arrayValues(input).entries()) {
@@ -154,6 +162,7 @@ export const s = {
   ): Schema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> {
     const schema: AsyncSchema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {
       parse(input: unknown): { [Key in keyof Shape]: InferSchema<Shape[Key]> } {
+        assertSchemaInputBudget(input);
         const record = formLikeToRecord(input);
         const output = Object.create(null) as Partial<{
           [Key in keyof Shape]: InferSchema<Shape[Key]>;
@@ -170,6 +179,7 @@ export const s = {
         return output as { [Key in keyof Shape]: InferSchema<Shape[Key]> };
       },
       async parseAsync(input: unknown): Promise<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> {
+        assertSchemaInputBudget(input);
         const record = formLikeToRecord(input);
         const output = Object.create(null) as Partial<{
           [Key in keyof Shape]: InferSchema<Shape[Key]>;
@@ -525,12 +535,67 @@ export function entriesToRecord(
   // SPEC §9.4/§10.2/§10.3: every request-derived record used by schema coercion
   // is null-prototype and rejects prototype-pollution keys before assignment.
   const record = Object.create(null) as Record<string, unknown>;
+  let entryCount = 0;
 
   for (const [key, value] of entries) {
+    entryCount += 1;
+    if (entryCount > defaultSchemaInputBudget.maxBreadth) {
+      throw validationError(`Input exceeds maximum breadth ${defaultSchemaInputBudget.maxBreadth}`);
+    }
     appendRecordValue(record, key, value);
   }
 
   return record;
+}
+
+function assertSchemaInputBudget(input: unknown): void {
+  const seen = new WeakSet<object>();
+  let nodes = 0;
+
+  const visit = (value: unknown, depth: number): void => {
+    nodes += 1;
+    if (nodes > defaultSchemaInputBudget.maxNodes) {
+      throw validationError(
+        `Input exceeds maximum node count ${defaultSchemaInputBudget.maxNodes}`,
+      );
+    }
+    if (depth > defaultSchemaInputBudget.maxDepth) {
+      throw validationError(`Input exceeds maximum depth ${defaultSchemaInputBudget.maxDepth}`);
+    }
+    if (value === null || typeof value !== 'object') return;
+    if (isFileLike(value)) return;
+    if (seen.has(value)) return;
+    seen.add(value);
+
+    if (value instanceof FormData) {
+      const entries = [...value.entries()];
+      if (entries.length > defaultSchemaInputBudget.maxBreadth) {
+        throw validationError(
+          `Input exceeds maximum breadth ${defaultSchemaInputBudget.maxBreadth}`,
+        );
+      }
+      for (const [, item] of entries) visit(item, depth + 1);
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      if (value.length > defaultSchemaInputBudget.maxBreadth) {
+        throw validationError(
+          `Input exceeds maximum breadth ${defaultSchemaInputBudget.maxBreadth}`,
+        );
+      }
+      for (const item of value) visit(item, depth + 1);
+      return;
+    }
+
+    const entries = Object.entries(value);
+    if (entries.length > defaultSchemaInputBudget.maxBreadth) {
+      throw validationError(`Input exceeds maximum breadth ${defaultSchemaInputBudget.maxBreadth}`);
+    }
+    for (const [, item] of entries) visit(item, depth + 1);
+  };
+
+  visit(input, 0);
 }
 
 function appendRecordValue(record: Record<string, unknown>, key: string, value: unknown): void {

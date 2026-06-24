@@ -581,10 +581,14 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
       Decision (2026-06-23): the **runtime budget is the protection** (a safe-default, not a compile-time proof);
       KV430 is an auditable lint, not an error. Closes the small-body-huge-work class the byte+rate limiter misses;
       high-ROI because it lives in the shared schema engine and protects every wire boundary at once.
-  - [ ] Runtime budget enforced in the `s.*` parser **before descending** (fail fast, 413/422-class, no partial
+  - [x] Runtime budget enforced in the `s.*` parser **before descending** (fail fast, 413/422-class, no partial
         work): default max depth, max array/record breadth, max total node count. Reuse the `Object.create(null)`
         proto-safety path for the counter. Cover JSON nesting, the FormData→object key-count expansion, `/_q/`
         arg coercion, and route params — all through the one budget.
+        Evidence: `packages/server/src/schema.ts` enforces default depth/breadth/node budgets in `s.object`,
+        `s.array`, and `entriesToRecord`; `vp exec vitest --run packages/server/src/schema.test.ts
+packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts` covers JSON nesting,
+        FormData key expansion, `/_q/` arg coercion, and route params; `vp check packages/server/src` passed.
   - [ ] Per-schema overrides (`s.array().max(n)`, `s.string().max(len)`) + a global config ceiling so
         legitimate large inputs (bulk imports) declare their bound (declare-once).
   - [ ] KV430 **lint** (not error): flag an unbounded `s.array()`/`s.record()` on a wire-reachable schema with

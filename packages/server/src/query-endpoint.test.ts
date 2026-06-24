@@ -168,6 +168,36 @@ describe('query endpoints', () => {
     });
   });
 
+  it('rejects typed-read search args that exceed the shared schema runtime budget', async () => {
+    const productQuery = query('productDetail', {
+      access: publicAccess('test fixture'),
+      args: s.object({ id: s.string() }),
+      load(input: { id: string }) {
+        return { id: input.id };
+      },
+      reads: [domain('product')],
+    });
+    const search = new URLSearchParams([['id', 'p1']]);
+    for (let index = 0; index <= 1_000; index += 1) {
+      search.append(`extra-${index}`, 'value');
+    }
+
+    await expect(
+      renderQueryEndpointResponse(productQuery, {
+        request: {},
+        search,
+      }),
+    ).resolves.toEqual({
+      body: '{"code":"VALIDATION","payload":{"issues":[{"message":"Input exceeds maximum breadth 1000","path":[]}]}}',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'application/json; charset=utf-8',
+        Vary: 'Cookie',
+      },
+      status: 422,
+    });
+  });
+
   it('keeps parameterized query args parseable while supporting component prop bindings', () => {
     const productQuery = query('product', {
       access: publicAccess('test fixture'),

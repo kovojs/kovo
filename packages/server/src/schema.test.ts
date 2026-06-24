@@ -4,7 +4,7 @@ import type { JsonValue, Secret, StorageCapability } from '@kovojs/core';
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
 
 import { runMutation } from './mutation.js';
-import { entriesToRecord, parseSchemaAsync, s } from './schema.js';
+import { SchemaValidationError, entriesToRecord, parseSchemaAsync, s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server schemas', () => {
@@ -432,6 +432,29 @@ describe('server schemas', () => {
     });
   });
 
+  it('rejects JSON-shaped inputs that exceed the shared schema runtime budget', () => {
+    const schema = s.object({ payload: s.object({}) });
+
+    expect(() => schema.parse({ payload: nestedObject(33) })).toThrow(SchemaValidationError);
+    expect(() => schema.parse({ payload: nestedObject(33) })).toThrow(
+      'Input exceeds maximum depth 32',
+    );
+    expect(() => s.array(s.string()).parse(new Array(1_001).fill('tag'))).toThrow(
+      'Input exceeds maximum breadth 1000',
+    );
+  });
+
+  it('rejects FormData key expansion that exceeds the shared schema runtime budget', () => {
+    const form = new FormData();
+    for (let index = 0; index <= 1_000; index += 1) {
+      form.append(`field-${index}`, 'value');
+    }
+
+    expect(() => s.object({ title: s.string() }).parse(form)).toThrow(
+      'Input exceeds maximum breadth 1000',
+    );
+  });
+
   it('keeps safe inherited-name FormData fields as own null-prototype data', () => {
     const record = entriesToRecord([['toString', 'only']]);
 
@@ -446,4 +469,12 @@ function pngBytes(): Uint8Array {
 
 function formDataFile(bits: BlobPart[], name: string, type: string): Blob {
   return new File(bits, name, { type }) as unknown as Blob;
+}
+
+function nestedObject(depth: number): Record<string, unknown> {
+  let value: Record<string, unknown> = {};
+  for (let index = 0; index < depth; index += 1) {
+    value = { child: value };
+  }
+  return value;
 }

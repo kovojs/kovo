@@ -108,6 +108,30 @@ describe('route primitives', () => {
     });
   });
 
+  it('rejects route params that exceed the shared schema runtime budget before page execution', () => {
+    const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
+      page(context) {
+        return renderedHtml(context.params.id);
+      },
+      params: s.object({ id: s.string() }),
+    });
+    const params: Record<string, string> = { id: 'p1' };
+    for (let index = 0; index <= 1_000; index += 1) {
+      params[`extra-${index}`] = 'value';
+    }
+
+    let error: unknown;
+    try {
+      parseRouteRequest(productRoute, { params });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
+      issues: [{ message: 'Input exceeds maximum breadth 1000', path: [] }],
+    });
+  });
+
   it('runs route pages through guards and notFound page outcomes', async () => {
     const productRoute = route('/products/:id', {
       access: publicAccess('test fixture'),
