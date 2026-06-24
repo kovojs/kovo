@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import type { StorageCapability, StorageStreamResult } from '@kovojs/core';
 import { respond, routeOutcomeResponse, routeResponseToWebResponse } from './response.js';
 
@@ -28,6 +28,10 @@ export interface SignCapabilityUrlOptions {
   method: string;
   /** Signing clock. Defaults to `Date.now()`. */
   now?: Date | number;
+  /** Whether the URL may be consumed only once via the configured replay store. */
+  oneTime?: boolean;
+  /** Test hook for deterministic one-time capability nonces. Defaults to `crypto.randomUUID()`. */
+  oneTimeNonce?: string;
   /** Scope classification. Defaults to exact `key + method`. */
   scope?: CapabilityUrlScope;
   /** HMAC signing secret. */
@@ -44,6 +48,11 @@ export interface AppCapabilityUrlOptions {
   secret: CapabilityUrlSecret;
   /** Object store read only after framework verification succeeds. */
   storage?: StorageCapability;
+  /**
+   * Replay store used to atomically consume `oneTime` capability URLs. Required
+   * when minting or verifying one-time capabilities.
+   */
+  replayStore?: CapabilityUrlReplayStore;
 }
 
 /** Server-owned minting input exposed on lifecycle requests as `request.signUrl`. */
@@ -52,6 +61,8 @@ export interface AppSignCapabilityUrlOptions {
   key: string;
   /** HTTP method authorized by the capability. Defaults to `GET`. */
   method?: string;
+  /** Whether the URL may be consumed only once via `capabilityUrls.replayStore`. */
+  oneTime?: boolean;
   /** Scope classification. Defaults to exact `key + method`. */
   scope?: CapabilityUrlScope;
   /** Relative expiry in seconds. Defaults to a short 300-second lifetime. */
@@ -69,6 +80,8 @@ export interface VerifyCapabilityUrlOptions {
   method: string;
   /** Verification clock. Defaults to `Date.now()`. */
   now?: Date | number;
+  /** Replay store used to atomically consume one-time capability URLs. */
+  replayStore?: CapabilityUrlReplayStore;
   /** Expected scope classification. Defaults to exact `key + method`. */
   scope?: CapabilityUrlScope;
   /** HMAC signing secret. */
@@ -81,6 +94,8 @@ export interface CapabilityUrlVerification {
   key: string;
   method: string;
   ok: true;
+  oneTime: boolean;
+  replayId?: string;
   scope: string;
 }
 
@@ -95,8 +110,30 @@ export type CapabilityUrlVerificationResult =
         | 'key-mismatch'
         | 'malformed'
         | 'method-mismatch'
+        | 'replayed'
         | 'scope-mismatch';
     };
+
+/** Replay-store payload committed after a one-time capability URL is consumed. */
+export type CapabilityUrlReplayResponse = {
+  body: '';
+  headers: {};
+  status: 200;
+};
+
+/** Pending one-time capability reservation returned by {@link CapabilityUrlReplayStore.reserve}. */
+export interface CapabilityUrlReplayReservation {
+  commit(response: CapabilityUrlReplayResponse): void;
+}
+
+/**
+ * Replay store contract used to consume one-time capability URLs atomically.
+ * `createMemoryMutationReplayStore<CapabilityUrlReplayResponse>()` satisfies this
+ * narrower structural contract, so apps can reuse the existing replay store implementation.
+ */
+export interface CapabilityUrlReplayStore {
+  reserve(scope: string, idem: string): CapabilityUrlReplayReservation | undefined;
+}
 
 const CAPABILITY_STORAGE_PATH = '/_cap/storage';
 
@@ -114,7 +151,16 @@ export function signCapabilityUrl(options: SignCapabilityUrlOptions): string {
   const key = canonicalCapabilityKey(options.key);
   const scope = canonicalCapabilityScope(options.scope, key);
   const expiresAt = expirySeconds(options.now, options.expiresIn ?? DEFAULT_EXPIRES_IN_SECONDS);
-  const payload = canonicalCapabilityPayload({ expiresAt, key, method, scope });
+  const replayId = options.oneTime
+    ? canonicalCapabilityReplayId(options.oneTimeNonce ?? randomUUID())
+    : undefined;
+  const payload = canonicalCapabilityPayload({
+    expiresAt,
+    key,
+    method,
+    ...(replayId === undefined ? {} : { replayId }),
+    scope,
+  });
   const signature = hmacCapabilityPayload(options.secret, payload);
 
   const url = new URL(options.baseUrl);
@@ -122,6 +168,7 @@ export function signCapabilityUrl(options: SignCapabilityUrlOptions): string {
   url.searchParams.set('kovo-cap-method', method);
   url.searchParams.set('kovo-cap-exp', String(expiresAt));
   url.searchParams.set('kovo-cap-scope', scope);
+  if (replayId !== undefined) url.searchParams.set('kovo-cap-once', replayId);
   url.searchParams.set('kovo-cap-sig', signature);
   return url.toString();
 }
@@ -141,6 +188,7 @@ export function createAppCapabilityUrlSigner(
       key: input.key,
       method: input.method ?? 'GET',
       ...(input.expiresIn === undefined ? {} : { expiresIn: input.expiresIn }),
+      ...(input.oneTime === undefined ? {} : { oneTime: input.oneTime }),
       ...(input.scope === undefined ? {} : { scope: input.scope }),
       secret: options.secret,
     });
@@ -160,6 +208,7 @@ export function verifyCapabilityUrl(
   const rawMethod = parsed.searchParams.get('kovo-cap-method');
   const rawExpiry = parsed.searchParams.get('kovo-cap-exp');
   const rawScope = parsed.searchParams.get('kovo-cap-scope');
+  const rawReplayId = parsed.searchParams.get('kovo-cap-once');
   const rawSignature = parsed.searchParams.get('kovo-cap-sig');
 
   if (
@@ -176,12 +225,14 @@ export function verifyCapabilityUrl(
   let expectedKey: string;
   let signedMethod: string;
   let expectedMethod: string;
+  let replayId: string | undefined;
   let expectedScope: string;
   try {
     signedKey = canonicalCapabilityKey(rawKey);
     expectedKey = canonicalCapabilityKey(options.key);
     signedMethod = canonicalCapabilityMethod(rawMethod);
     expectedMethod = canonicalCapabilityMethod(options.method);
+    replayId = rawReplayId === null ? undefined : canonicalCapabilityReplayId(rawReplayId);
     expectedScope = canonicalCapabilityScope(options.scope, expectedKey);
   } catch {
     return { ok: false, reason: 'malformed' };
@@ -201,6 +252,7 @@ export function verifyCapabilityUrl(
     expiresAt,
     key: signedKey,
     method: signedMethod,
+    ...(replayId === undefined ? {} : { replayId }),
     scope: rawScope,
   });
   const expectedSignature = hmacCapabilityPayload(options.secret, payload);
@@ -208,11 +260,20 @@ export function verifyCapabilityUrl(
     return { ok: false, reason: 'invalid' };
   }
 
+  if (
+    replayId !== undefined &&
+    !consumeOneTimeCapability({ key: signedKey, replayId, store: options.replayStore })
+  ) {
+    return { ok: false, reason: 'replayed' };
+  }
+
   return {
     expiresAt: new Date(expiresAt * 1000),
     key: signedKey,
     method: signedMethod,
     ok: true,
+    oneTime: replayId !== undefined,
+    ...(replayId === undefined ? {} : { replayId }),
     scope: rawScope,
   };
 }
@@ -245,6 +306,7 @@ export async function renderCapabilityStorageResponse(
   const verification = verifyCapabilityUrl(url, {
     key,
     method,
+    ...(options.replayStore === undefined ? {} : { replayStore: options.replayStore }),
     scope,
     secret: options.secret,
   });
@@ -260,9 +322,10 @@ function canonicalCapabilityPayload(input: {
   expiresAt: number;
   key: string;
   method: string;
+  replayId?: string;
   scope: string;
 }): string {
-  return `kovo-cap-url-v1\nmethod=${input.method}\nkey=${input.key}\nexp=${input.expiresAt}\nscope=${input.scope}`;
+  return `kovo-cap-url-v1\nmethod=${input.method}\nkey=${input.key}\nexp=${input.expiresAt}\nscope=${input.scope}\nonce=${input.replayId ?? '-'}`;
 }
 
 function canonicalCapabilityMethod(method: string): string {
@@ -306,6 +369,28 @@ function capabilityScopeFromSignedValue(value: string | null): CapabilityUrlScop
   if (value.startsWith('key:')) return { kind: 'exact' };
   if (value.startsWith('prefix:')) return { kind: 'prefix', prefix: value.slice('prefix:'.length) };
   return undefined;
+}
+
+function canonicalCapabilityReplayId(value: string): string {
+  assertNoControlCharacters(value, 'Capability URL one-time nonce');
+  if (value.length === 0 || value.length > 128) {
+    throw new Error('Capability URL one-time nonce must be 1-128 characters');
+  }
+  if (!/^[A-Za-z0-9._~-]+$/u.test(value)) {
+    throw new Error('Capability URL one-time nonce must be URL-token safe');
+  }
+  return value;
+}
+
+function consumeOneTimeCapability(input: {
+  key: string;
+  replayId: string;
+  store: CapabilityUrlReplayStore | undefined;
+}): boolean {
+  const reservation = input.store?.reserve(`capability-url:${input.key}`, input.replayId);
+  if (reservation === undefined) return false;
+  reservation.commit({ body: '', headers: {}, status: 200 });
+  return true;
 }
 
 function capabilityStorageObjectResponse(request: Request, object: StorageStreamResult): Response {

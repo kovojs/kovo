@@ -68,6 +68,31 @@ describe('server app matched dispatch boundary', () => {
     expect(sessionReads).toBe(1);
   });
 
+  it('does not expose request.signUrl inside typed-read query loaders', async () => {
+    const signedUrlQuery = query('signed-url-query', {
+      access: publicAccess('test fixture'),
+      load(_input, context?: { request: Request & { signUrl?: unknown } }) {
+        return {
+          hasSignUrl: 'signUrl' in (context?.request ?? {}),
+          signUrlType: typeof context?.request.signUrl,
+        };
+      },
+      reads: [],
+    });
+    const app = createApp({
+      capabilityUrls: { secret: 'query-capability-secret' },
+      queries: [signedUrlQuery],
+    });
+    const request = new Request('https://shop.example.test/_q/signed-url-query');
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain('"hasSignUrl":false');
+    expect(body).toContain('"signUrlType":"undefined"');
+  });
+
   it('owns SPEC §9.5 raw endpoint dispatch without app session leakage', async () => {
     const status = endpoint('/status', {
       access: publicAccess('test fixture'),

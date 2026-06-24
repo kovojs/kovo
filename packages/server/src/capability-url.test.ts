@@ -3,8 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { StorageCapability, StorageStreamResult } from '@kovojs/core';
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
-import { signCapabilityUrl, verifyCapabilityUrl } from './capability-url.js';
+import {
+  signCapabilityUrl,
+  type CapabilityUrlReplayResponse,
+  verifyCapabilityUrl,
+} from './capability-url.js';
 import { renderedHtml } from './html.js';
+import { createMemoryMutationReplayStore } from './replay.js';
 import { route } from './route.js';
 
 const secret = 'capability-url-test-secret';
@@ -193,6 +198,52 @@ describe('capability URL primitive', () => {
       }),
     ).toEqual({ ok: false, reason: 'malformed' });
   });
+
+  it('consumes one-time capability URLs through the replay store', () => {
+    const replayStore = createMemoryMutationReplayStore<CapabilityUrlReplayResponse>();
+    const url = signCapabilityUrl({
+      baseUrl: 'https://cdn.example.test/_cap/download',
+      expiresIn: 60,
+      key: 'exports/report.csv',
+      method: 'GET',
+      now,
+      oneTime: true,
+      oneTimeNonce: 'nonce-01',
+      secret,
+    });
+
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get('kovo-cap-once')).toBe('nonce-01');
+
+    expect(
+      verifyCapabilityUrl(url, {
+        key: 'exports/report.csv',
+        method: 'GET',
+        now,
+        replayStore,
+        secret,
+      }),
+    ).toMatchObject({ ok: true, oneTime: true, replayId: 'nonce-01' });
+
+    expect(
+      verifyCapabilityUrl(url, {
+        key: 'exports/report.csv',
+        method: 'GET',
+        now,
+        replayStore,
+        secret,
+      }),
+    ).toEqual({ ok: false, reason: 'replayed' });
+
+    expect(
+      verifyCapabilityUrl(url, {
+        key: 'exports/report.csv',
+        method: 'GET',
+        now,
+        secret,
+      }),
+    ).toEqual({ ok: false, reason: 'replayed' });
+  });
 });
 
 describe('capability URL app wiring', () => {
@@ -268,6 +319,33 @@ describe('capability URL app wiring', () => {
       status: 403,
     });
     expect(storage.streamCalls).toEqual([]);
+  });
+
+  it('consumes one-time storage capabilities before reading and rejects replay', async () => {
+    const replayStore = createMemoryMutationReplayStore<CapabilityUrlReplayResponse>();
+    const storage = capabilityStorage({
+      'exports/report.csv': storageObject('exports/report.csv', 'ok', 'text/csv'),
+    });
+    const signed = signCapabilityUrl({
+      baseUrl: 'https://example.test/_cap/storage',
+      expiresIn: 60,
+      key: 'exports/report.csv',
+      method: 'GET',
+      oneTime: true,
+      oneTimeNonce: 'download-01',
+      secret,
+    });
+    const handler = createRequestHandler(
+      createApp({ capabilityUrls: { replayStore, secret, storage } }),
+    );
+
+    const first = await handler(new Request(signed));
+    expect(first.status).toBe(200);
+    await expect(first.text()).resolves.toBe('ok');
+
+    const second = await handler(new Request(signed));
+    expect(second.status).toBe(403);
+    expect(storage.streamCalls).toEqual(['exports/report.csv']);
   });
 });
 

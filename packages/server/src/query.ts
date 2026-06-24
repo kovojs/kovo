@@ -38,10 +38,20 @@ export type QueryReaderDb<Db> = Db extends object
     }
   : Db;
 
-/** Request view exposed to a query loader: its `db` channel is narrowed to a reader handle. */
-export type QueryReaderRequest<Request> = Request extends { db: infer Db }
-  ? Omit<Request, 'db'> & { readonly db: QueryReaderDb<Db> }
+/**
+ * Query loaders do not receive capability URL minting authority, even when the
+ * enclosing route request has it, so signed URLs are not emitted into the legible
+ * query store by default (SPEC.md Phase 5 Capability-URL primitive).
+ */
+export type QueryCapabilityRequest<Request> = Request extends { signUrl?: unknown }
+  ? Omit<Request, 'signUrl'>
   : Request;
+
+/** Request view exposed to a query loader: its `db` channel is narrowed to a reader handle. */
+export type QueryReaderRequest<Request> =
+  QueryCapabilityRequest<Request> extends { db: infer Db }
+    ? Omit<QueryCapabilityRequest<Request>, 'db'> & { readonly db: QueryReaderDb<Db> }
+    : QueryCapabilityRequest<Request>;
 
 /** The context a query's `load` receives: the current request value. */
 export interface QueryLoadContext<Request = unknown> {
@@ -326,8 +336,10 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   const argsResult = parseQueryInput(definition, rawInput);
   if (!argsResult.ok) return argsResult.failure;
 
-  const lifecycleRequest = await resolveLifecycleRequest(request, { ...options, dbAccess: 'read' });
-  const guardFailure = await runGuard(definition.guard, lifecycleRequest);
+  const lifecycleRequest = withoutQueryCapabilityUrlSigner(
+    await resolveLifecycleRequest(request, { ...options, dbAccess: 'read' }),
+  );
+  const guardFailure = await runGuard(definition.guard, lifecycleRequest as Request);
   if (guardFailure) {
     return {
       ...(guardFailure.auth === undefined ? {} : { auth: guardFailure.auth }),
@@ -346,6 +358,36 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   if (!outputResult.ok) return outputResult.failure;
 
   return { input, ok: true, value: outputResult.value };
+}
+
+function withoutQueryCapabilityUrlSigner<Request>(
+  request: Request,
+): QueryCapabilityRequest<Request> {
+  if (
+    (typeof request !== 'object' && typeof request !== 'function') ||
+    request === null ||
+    !('signUrl' in request)
+  ) {
+    return request as QueryCapabilityRequest<Request>;
+  }
+
+  return new Proxy(request as object, {
+    get(target, property) {
+      if (property === 'signUrl') return undefined;
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (property === 'signUrl') return undefined;
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+    has(target, property) {
+      return property === 'signUrl' ? false : property in target;
+    },
+    ownKeys(target) {
+      return Reflect.ownKeys(target).filter((key) => key !== 'signUrl');
+    },
+  }) as QueryCapabilityRequest<Request>;
 }
 
 /** @internal */

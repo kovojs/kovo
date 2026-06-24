@@ -38,6 +38,7 @@ export type {
 /** Attribute object returned by `mutationFormAttributes(...)`. */
 export type { MutationFormAttributes } from '../mutation.js';
 export type {
+  QueryCapabilityRequest,
   QueryDeclarationDefinition,
   QueryDefinition,
   QueryLoadContext,

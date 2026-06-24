@@ -61,7 +61,6 @@ export async function dispatchMatchedAppRequest({
       currentUrl: appRequestUrl(url),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       ...(buildToken !== '' ? { buildToken } : {}),
-      ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
       egressFetch: app.egress.fetch,
       request,
       search: url.searchParams,

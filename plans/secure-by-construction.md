@@ -591,10 +591,18 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
         capability. Scope = per-key+method by default (optional prefix); **short expiry default**.
     - Evidence: `packages/server/src/capability-url.test.ts` verifies canonical HMAC payload coverage, 300-second
       default expiry, exact and prefix scopes, and rejection of backslash/`//`/dot-segment key reopenings.
-  - [ ] `oneTime` via the replay store (reuse).
+  - [x] `oneTime` via the replay store (reuse).
+    - Evidence: `packages/server/src/capability-url.ts` signs a one-time nonce into the HMAC payload and
+      consumes it with `capabilityUrls.replayStore.reserve(...)` before storage dereference; `vp exec vitest
+      --run packages/server/src/capability-url.test.ts packages/server/src/app-dispatch.test.ts` verifies
+      first-use success, replay rejection, and no storage read on replay.
   - [ ] Do NOT embed signed URLs in the legible query store / cacheable contexts by default; list mints in
         `kovo explain --capabilities`. Revocation tradeoff documented (stateless → can't revoke pre-expiry
         unless `oneTime`; default short expiry). No new KV code — it's a provided safe API, not a static gate.
+    - Current evidence/gap: `packages/server/src/query.ts` strips `request.signUrl` from all query loader
+      request views and `packages/server/src/app-dispatch.test.ts` verifies `/_q/` cannot mint a capability URL
+      into the typed-read wire. Still open: runtime mint audit facts / `kovo explain --capabilities`
+      unification and broader cacheable-route policy.
 
 ## Phase 6: Concurrency, resource, and uploads
 
