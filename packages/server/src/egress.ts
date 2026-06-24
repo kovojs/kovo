@@ -1,5 +1,10 @@
 import { lookup } from 'node:dns/promises';
+import type { LookupOneOptions } from 'node:dns';
+import { createRequire } from 'node:module';
 import { isIP } from 'node:net';
+import type * as Http from 'node:http';
+import type * as Https from 'node:https';
+import type * as Net from 'node:net';
 
 /**
  * Private-network egress policy for the app request shell (SPEC §9.5; secure-by-construction Phase 5).
@@ -10,8 +15,9 @@ export interface AppEgressOptions {
    * Internal destinations the app intentionally exposes to server code.
    *
    * Entries are exact `host:port` pairs. Public/external destinations do not need
-   * declarations; private, loopback, link-local, metadata, and other special-use
-   * destinations fail closed unless this exact pair is listed.
+   * declarations; private, loopback, link-local, and other special-use
+   * destinations fail closed unless this exact pair is listed. Metadata identity
+   * endpoints are never enabled through this provenance-blind allowlist.
    */
   allowInternal?: readonly string[];
 }
@@ -38,6 +44,15 @@ export type EgressResolver = (hostname: string) => Promise<string>;
 export interface EgressFetchOptions {
   fetch?: typeof fetch;
   resolver?: EgressResolver;
+}
+
+export interface EgressNodeGuardOptions {
+  allowInternal: readonly string[];
+  resolver?: EgressResolver;
+}
+
+export interface EgressNodeGuard {
+  uninstall(): void;
 }
 
 /** Error thrown when guarded lifecycle `fetch` blocks a private/special-use destination. */
@@ -102,6 +117,103 @@ export function createEgressFetch(
   }) as typeof fetch;
 }
 
+export function installNodeEgressGuard(options: EgressNodeGuardOptions): EgressNodeGuard {
+  const require = createRequire(import.meta.url);
+  const http = require('node:http') as MutableHttpModule;
+  const https = require('node:https') as MutableHttpsModule;
+  const net = require('node:net') as MutableNetModule;
+  const resolver = options.resolver ?? defaultResolver;
+  const originals = {
+    httpGet: http.get,
+    httpRequest: http.request,
+    httpsGet: https.get,
+    httpsRequest: https.request,
+    netConnect: net.connect,
+    netCreateConnection: net.createConnection,
+    socketConnect: Reflect.get(
+      net.Socket.prototype,
+      'connect',
+    ) as typeof net.Socket.prototype.connect,
+  };
+
+  const guardUrl = (protocol: 'http:' | 'https:', args: readonly unknown[]): readonly unknown[] => {
+    const parsed = parseHttpRequestArgs(protocol, args);
+    if (parsed === undefined) return args;
+    assertEgressAllowedSync(parsed.url, options.allowInternal);
+
+    const guardedOptions = {
+      ...parsed.options,
+      lookup: guardedLookup(
+        parsed.url.hostname,
+        destinationPort(parsed.url),
+        options.allowInternal,
+        resolver,
+        parsed.options?.lookup,
+      ),
+    } as RequestOptions;
+
+    if (parsed.options === undefined) {
+      return [parsed.url, guardedOptions, parsed.callback].filter((value) => value !== undefined);
+    }
+
+    return parsed.rebuild(guardedOptions);
+  };
+
+  const guardConnect = (args: readonly unknown[]): readonly unknown[] => {
+    const parsed = parseNetConnectArgs(args);
+    if (parsed === undefined) return args;
+    assertEgressAllowedForHost(parsed.host, String(parsed.port), options.allowInternal);
+    const guardedOptions = {
+      ...parsed.options,
+      lookup: guardedLookup(
+        parsed.host,
+        String(parsed.port),
+        options.allowInternal,
+        resolver,
+        parsed.options.lookup,
+      ),
+    } as ConnectOptions;
+    return parsed.rebuild(guardedOptions);
+  };
+
+  http.request = function guardedHttpRequest(this: unknown, ...args: unknown[]) {
+    return Reflect.apply(originals.httpRequest, this, guardUrl('http:', args));
+  } as typeof http.request;
+  http.get = function guardedHttpGet(this: unknown, ...args: unknown[]) {
+    return Reflect.apply(originals.httpGet, this, guardUrl('http:', args));
+  } as typeof http.get;
+  https.request = function guardedHttpsRequest(this: unknown, ...args: unknown[]) {
+    return Reflect.apply(originals.httpsRequest, this, guardUrl('https:', args));
+  } as typeof https.request;
+  https.get = function guardedHttpsGet(this: unknown, ...args: unknown[]) {
+    return Reflect.apply(originals.httpsGet, this, guardUrl('https:', args));
+  } as typeof https.get;
+  net.connect = function guardedNetConnect(this: unknown, ...args: unknown[]) {
+    return Reflect.apply(originals.netConnect, this, guardConnect(args));
+  } as typeof net.connect;
+  net.createConnection = function guardedNetCreateConnection(this: unknown, ...args: unknown[]) {
+    return Reflect.apply(originals.netCreateConnection, this, guardConnect(args));
+  } as typeof net.createConnection;
+  net.Socket.prototype.connect = function guardedSocketConnect(
+    this: Net.Socket,
+    ...args: unknown[]
+  ) {
+    return Reflect.apply(originals.socketConnect, this, guardConnect(args));
+  } as typeof net.Socket.prototype.connect;
+
+  return {
+    uninstall() {
+      http.request = originals.httpRequest;
+      http.get = originals.httpGet;
+      https.request = originals.httpsRequest;
+      https.get = originals.httpsGet;
+      net.connect = originals.netConnect;
+      net.createConnection = originals.netCreateConnection;
+      net.Socket.prototype.connect = originals.socketConnect;
+    },
+  };
+}
+
 export async function assertEgressAllowed(
   destination: string | URL,
   allowInternal: readonly string[],
@@ -120,16 +232,8 @@ export async function assertEgressAllowed(
 
   const host = normalizeHostname(url.hostname);
   const port = destinationPort(url);
-  const destinationKey = `${host}:${port}`;
   const resolved = await resolveHostIp(host, resolver);
-  const ip = normalizeIp(resolved);
-  const privateDestination = isPrivateOrSpecialIp(ip);
-  const decision = { destination: destinationKey, host, ip, port, private: privateDestination };
-
-  if (!privateDestination) return decision;
-  if (allowInternal.includes(destinationKey)) return decision;
-
-  throw new EgressBlockedError({ destination: destinationKey, host, ip, port });
+  return assertEgressAllowedForHost(host, port, allowInternal, resolved);
 }
 
 export function normalizeAllowInternal(values: readonly string[]): readonly string[] {
@@ -152,6 +256,203 @@ async function defaultResolver(hostname: string): Promise<string> {
   if (isIP(hostname) !== 0) return hostname;
   const result = await lookup(hostname, { verbatim: true });
   return result.address;
+}
+
+type MutableHttpModule = typeof Http;
+type MutableHttpsModule = typeof Https;
+type MutableNetModule = typeof Net;
+type LookupCallback = (err: NodeJS.ErrnoException | null, address: string, family: number) => void;
+type LookupFunction = (
+  hostname: string,
+  options: LookupOneOptions,
+  callback: LookupCallback,
+) => void;
+type HttpRequestOptions = Http.RequestOptions & { lookup?: LookupFunction };
+type HttpsRequestOptions = Https.RequestOptions & { lookup?: LookupFunction };
+type RequestOptions = (Omit<HttpRequestOptions, 'lookup'> | Omit<HttpsRequestOptions, 'lookup'>) & {
+  lookup?: LookupFunction;
+};
+type ConnectOptions = Omit<Net.TcpNetConnectOpts, 'lookup'> & {
+  host?: string;
+  lookup?: LookupFunction;
+  port: number | string;
+};
+
+interface ParsedHttpRequestArgs {
+  url: URL;
+  options: RequestOptions | undefined;
+  callback: unknown;
+  rebuild(options: RequestOptions): readonly unknown[];
+}
+
+interface ParsedNetConnectArgs {
+  host: string;
+  port: number;
+  options: ConnectOptions;
+  rebuild(options: ConnectOptions): readonly unknown[];
+}
+
+function assertEgressAllowedForHost(
+  hostInput: string,
+  port: string,
+  allowInternal: readonly string[],
+  resolvedIp?: string,
+): EgressDecision {
+  const host = normalizeHostname(hostInput);
+  const destinationKey = `${host}:${port}`;
+  const ip = normalizeIp(resolvedIp ?? host);
+  const privateDestination = isPrivateOrSpecialIp(ip);
+  const decision = { destination: destinationKey, host, ip, port, private: privateDestination };
+
+  if (!privateDestination) return decision;
+  if (!isMetadataIp(ip) && allowInternal.includes(destinationKey)) return decision;
+
+  throw new EgressBlockedError({ destination: destinationKey, host, ip, port });
+}
+
+function assertEgressAllowedSync(destination: URL, allowInternal: readonly string[]): void {
+  if (destination.protocol !== 'http:' && destination.protocol !== 'https:') return;
+  const host = normalizeHostname(destination.hostname);
+  const numericIp = parseIPv4Number(host);
+  if (numericIp !== undefined || isIP(host) !== 0) {
+    assertEgressAllowedForHost(
+      host,
+      destinationPort(destination),
+      allowInternal,
+      numericIp ?? host,
+    );
+  }
+}
+
+function guardedLookup(
+  host: string,
+  port: string,
+  allowInternal: readonly string[],
+  resolver: EgressResolver,
+  originalLookup: LookupFunction | undefined,
+): LookupFunction {
+  return (hostname, lookupOptions, callback) => {
+    const finish = (err: NodeJS.ErrnoException | null, address: string, family: number): void => {
+      if (err !== null) {
+        callback(err, address, family);
+        return;
+      }
+
+      try {
+        assertEgressAllowedForHost(host || hostname, port, allowInternal, address);
+        callback(null, address, family);
+      } catch (error) {
+        callback(error as NodeJS.ErrnoException, address, family);
+      }
+    };
+
+    if (originalLookup !== undefined) {
+      originalLookup(hostname, lookupOptions, finish);
+      return;
+    }
+
+    resolver(hostname).then(
+      (address) => finish(null, address, isIP(address)),
+      (error: NodeJS.ErrnoException) => finish(error, '', 0),
+    );
+  };
+}
+
+function parseHttpRequestArgs(
+  protocol: 'http:' | 'https:',
+  args: readonly unknown[],
+): ParsedHttpRequestArgs | undefined {
+  const [first, second, third] = args;
+  const callback = typeof args.at(-1) === 'function' ? args.at(-1) : undefined;
+
+  if (first instanceof URL || typeof first === 'string') {
+    const url = new URL(first.toString());
+    const options = isRecord(second) ? (second as RequestOptions) : undefined;
+    return {
+      url,
+      options,
+      callback,
+      rebuild(nextOptions) {
+        if (options === undefined) return [url, nextOptions, callback].filter(isDefined);
+        return [url, nextOptions, third].filter(isDefined);
+      },
+    };
+  }
+
+  if (isRecord(first)) {
+    const options = first as RequestOptions;
+    const url = urlFromRequestOptions(protocol, options);
+    return {
+      url,
+      options,
+      callback,
+      rebuild(nextOptions) {
+        return [nextOptions, second].filter(isDefined);
+      },
+    };
+  }
+
+  return undefined;
+}
+
+function urlFromRequestOptions(protocol: 'http:' | 'https:', options: RequestOptions): URL {
+  const optionProtocol = typeof options.protocol === 'string' ? options.protocol : protocol;
+  const host = String(options.hostname ?? options.host ?? 'localhost');
+  const port = options.port === undefined ? '' : `:${String(options.port)}`;
+  const path = typeof options.path === 'string' ? options.path : '/';
+  return new URL(`${optionProtocol}//${host}${port}${path}`);
+}
+
+function parseNetConnectArgs(args: readonly unknown[]): ParsedNetConnectArgs | undefined {
+  const [first, second, third] = args;
+  const callback = typeof args.at(-1) === 'function' ? args.at(-1) : undefined;
+
+  if (isRecord(first)) {
+    const options = first as unknown as ConnectOptions & { path?: string };
+    if (options.path !== undefined || options.port === undefined) return undefined;
+    return {
+      host: String(options.host ?? 'localhost'),
+      port: Number(options.port),
+      options,
+      rebuild(nextOptions) {
+        return [nextOptions, second].filter(isDefined);
+      },
+    };
+  }
+
+  if (typeof first === 'number') {
+    const host = typeof second === 'string' ? second : 'localhost';
+    return {
+      host,
+      port: first,
+      options: { host, port: first },
+      rebuild(nextOptions) {
+        return [nextOptions, callback].filter(isDefined);
+      },
+    };
+  }
+
+  if (typeof first === 'string' && typeof second === 'number') {
+    const host = typeof third === 'string' ? third : 'localhost';
+    return {
+      host,
+      port: second,
+      options: { host, port: second },
+      rebuild(nextOptions) {
+        return [nextOptions, callback].filter(isDefined);
+      },
+    };
+  }
+
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
 }
 
 async function resolveHostIp(host: string, resolver: EgressResolver): Promise<string> {
@@ -213,6 +514,10 @@ function ipv4FromInteger(value: number): string | undefined {
 function isPrivateOrSpecialIp(ip: string): boolean {
   if (ip.includes('.')) return isPrivateOrSpecialIpv4(ip);
   return isPrivateOrSpecialIpv6(ip);
+}
+
+function isMetadataIp(ip: string): boolean {
+  return ip === '169.254.169.254' || ip === '169.254.170.2' || ip === '169.254.170.23';
 }
 
 function isPrivateOrSpecialIpv4(ip: string): boolean {

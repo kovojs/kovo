@@ -1,11 +1,18 @@
+import { createRequire } from 'node:module';
+import { once } from 'node:events';
+import { createServer } from 'node:http';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   EgressBlockedError,
   assertEgressAllowed,
   createEgressFetch,
+  installNodeEgressGuard,
   normalizeAllowInternal,
 } from './egress.js';
+
+const require = createRequire(import.meta.url);
 
 describe('server egress private-network deny floor', () => {
   it('allows public destinations without declarations', async () => {
@@ -50,6 +57,17 @@ describe('server egress private-network deny floor', () => {
     );
   });
 
+  it('denies metadata endpoints even when they appear in allowInternal', async () => {
+    const allowInternal = normalizeAllowInternal(['169.254.169.254:80', '169.254.170.2:80']);
+
+    await expect(
+      assertEgressAllowed('http://169.254.169.254/latest', allowInternal),
+    ).rejects.toBeInstanceOf(EgressBlockedError);
+    await expect(
+      assertEgressAllowed('http://169.254.170.2/creds', allowInternal),
+    ).rejects.toBeInstanceOf(EgressBlockedError);
+  });
+
   it('normalizes numeric and mapped private IP spellings before deciding', async () => {
     await expect(assertEgressAllowed('http://2130706433/', [])).rejects.toMatchObject({
       ip: '127.0.0.1',
@@ -82,5 +100,64 @@ describe('server egress private-network deny floor', () => {
       status: 502,
     });
     expect(baseFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks raw node:http metadata requests before dispatch', () => {
+    const http = require('node:http') as typeof import('node:http');
+    const guard = installNodeEgressGuard({ allowInternal: ['169.254.169.254:80'] });
+
+    try {
+      expect(() => http.get('http://169.254.169.254/latest/meta-data/')).toThrow(
+        EgressBlockedError,
+      );
+    } finally {
+      guard.uninstall();
+    }
+  });
+
+  it('blocks raw net connects to private addresses outside allowInternal', () => {
+    const net = require('node:net') as typeof import('node:net');
+    const guard = installNodeEgressGuard({ allowInternal: [] });
+
+    try {
+      expect(() => net.connect({ host: '127.0.0.1', port: 80 })).toThrow(EgressBlockedError);
+    } finally {
+      guard.uninstall();
+    }
+  });
+
+  it('allows raw node:http requests to exact configured internal host:port pairs', async () => {
+    const http = require('node:http') as typeof import('node:http');
+    const server = createServer((_request, response) => {
+      response.end('ok');
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('expected TCP server');
+
+    const guard = installNodeEgressGuard({ allowInternal: [`127.0.0.1:${address.port}`] });
+
+    try {
+      await expect(
+        new Promise<string>((resolve, reject) => {
+          http
+            .get(`http://127.0.0.1:${address.port}/health`, (response) => {
+              let body = '';
+              response.setEncoding('utf8');
+              response.on('data', (chunk: string) => {
+                body += chunk;
+              });
+              response.on('end', () => resolve(body));
+            })
+            .on('error', reject);
+        }),
+      ).resolves.toBe('ok');
+    } finally {
+      guard.uninstall();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error === undefined ? resolve() : reject(error)));
+      });
+    }
   });
 });
