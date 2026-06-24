@@ -374,6 +374,7 @@ export const CartActions = component({
         {
           end: source.indexOf('log(') + 'log'.length,
           name: 'log',
+          role: 'call-callee',
           start: source.indexOf('log('),
         },
         {

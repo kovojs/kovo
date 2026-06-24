@@ -519,6 +519,7 @@ describe('server app document boundary', () => {
     expect(response.body).toContain('<h1>Not Found</h1>');
     expect(response.body).not.toContain('private shell detail');
     expect(onError).toHaveBeenCalledWith(shellError, {
+      correlationId: expect.stringMatching(/^kovo-/),
       operation: 'error-shell',
       request,
       status: 404,
@@ -595,6 +596,7 @@ describe('server app document boundary', () => {
     expect(response.body).toBe('<main data-shell="500">configured:500</main>');
     expect(response.body).not.toContain('private route detail');
     expect(onError).toHaveBeenCalledWith(routeError, {
+      correlationId: expect.stringMatching(/^kovo-/),
       operation: 'route-page',
       request,
       routePath: '/broken',

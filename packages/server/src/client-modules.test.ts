@@ -185,6 +185,7 @@ describe('versioned client modules', () => {
     expect(onError).toHaveBeenCalledOnce();
     expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(Error);
     expect(onError.mock.calls[0]?.[1]).toEqual({
+      correlationId: expect.stringMatching(/^kovo-/),
       operation: 'client-module',
       url: '/assets/cart.client.js',
     });

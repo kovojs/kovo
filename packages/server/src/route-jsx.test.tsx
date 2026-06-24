@@ -583,6 +583,7 @@ describe('route JSX pages', () => {
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(renderError, {
+      correlationId: expect.stringMatching(/^kovo-/),
       operation: 'route-page',
       request: {},
       routePath: '/admin',
