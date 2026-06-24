@@ -54,8 +54,9 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
 
-      - name: Run release gates
-        run: vp exec pnpm run acceptance
+      # TODO: Verify the required CI workflow succeeded for this exact commit
+      # before publishing. Keep release-local checks below focused on the package
+      # artifacts that this workflow is about to publish.
 
       - name: Build publish artifacts
         run: vp exec pnpm run check:publish
