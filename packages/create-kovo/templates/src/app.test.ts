@@ -15,7 +15,9 @@ describe('starter app', () => {
   it('redirects anonymous visitors from the guarded home page to /login', async () => {
     const response = await requestHandler(new Request('https://app.test/'));
     expect([302, 303, 307]).toContain(response.status);
-    expect(response.headers.get('location')).toBe('/login');
+    // The home route's KV436 access guard (SPEC §10.2) redirects to login with a
+    // `next` param so sign-in returns the visitor to the page they requested.
+    expect(response.headers.get('location')).toBe('/login?next=%2F');
   });
 
   it('serves the login page', async () => {

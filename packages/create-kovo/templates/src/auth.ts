@@ -6,7 +6,7 @@ import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
 } from '@kovojs/better-auth';
-import { s, session, type CsrfValidationOptions } from '@kovojs/server';
+import { publicAccess, s, session, type CsrfValidationOptions } from '@kovojs/server';
 
 import { appDb, type AppDb } from './db.js';
 import { authSchema } from './schema.js';
@@ -87,7 +87,17 @@ export const appSessionProvider = appSession.provider(
   })),
 );
 
+/**
+ * The app's session-presence guard. Routes and queries that show the signed-in
+ * user's data carry it as their KV436 access decision (SPEC §10.2), matching the
+ * guarded mutations.
+ */
+export const appAuthed = authed<AppRequest>();
+
 export const appSignIn = betterAuthSignInEmailMutation<'auth/sign-in', AppRequest>(auth, {
+  // Sign-in runs before authentication, so its KV436 access decision is public
+  // (SPEC §10.2); CSRF still applies.
+  access: publicAccess('sign-in runs before authentication'),
   csrf: appCsrf,
   defaultRedirectTo: '/',
 });

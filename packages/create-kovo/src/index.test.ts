@@ -353,7 +353,9 @@ describe('create-kovo starter (build integration)', () => {
 
       const home = await fetch(`${origin}/`, { redirect: 'manual' });
       expect([302, 303, 307]).toContain(home.status);
-      expect(home.headers.get('location')).toBe('/login');
+      // The `/` route's KV436 access guard (SPEC §10.2) redirects an unauthenticated
+      // visitor to the login route, carrying `next` so sign-in returns them home.
+      expect(home.headers.get('location')).toBe('/login?next=%2F');
 
       // Full real-auth round trip: the seeded demo account signs in (CSRF token +
       // Better Auth over PGlite), and the guarded home page then renders the

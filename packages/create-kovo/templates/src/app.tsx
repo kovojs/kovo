@@ -4,6 +4,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   layout,
+  publicAccess,
   redirect,
   route,
   stylesheet,
@@ -14,6 +15,7 @@ import * as style from '@kovojs/style';
 import { LoginForm, SignOutForm } from './components/auth-forms.js';
 import { ContactsRegion } from './components/contacts.js';
 import {
+  appAuthed,
   appSessionProvider,
   appSignIn,
   appSignOut,
@@ -89,6 +91,10 @@ const app = createApp({
   sessionProvider: (request) => appSessionProvider(request as unknown as AppRequest),
   routes: [
     route('/', {
+      // The contact book is the signed-in user's data, so this route's KV436 access
+      // decision is the session-presence guard (SPEC §10.2). The redirect below is
+      // the no-JS UX for an unauthenticated visitor.
+      guard: appAuthed,
       meta: {
         description: 'A Kovo starter: a contact book over a real database, gated by real auth.',
         title: 'Kovo Starter',
@@ -103,6 +109,8 @@ const app = createApp({
       },
     }),
     route('/login', {
+      // Sign-in page reachable before authentication — public by design (KV436, §10.2).
+      access: publicAccess('sign-in page reachable before authentication'),
       meta: { description: 'Sign in to the Kovo starter.', title: 'Sign in · Kovo Starter' },
       layout: AppLayout,
       stylesheets,
