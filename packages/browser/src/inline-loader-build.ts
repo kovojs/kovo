@@ -442,12 +442,19 @@ function installInlineKovoLoader(im) {
   };
   const hk = (el) => {
     if (el.tagName !== 'LINK') return '';
-    const rel = (el.getAttribute('rel') || '')
+    let rel = (el.getAttribute('rel') || '')
       .split(/\s+/)
       .filter(Boolean)
       .map((token) => token.toLowerCase())
       .sort()
       .join(' ');
+    if (
+      rel === 'preload' &&
+      el.getAttribute('as') === 'style' &&
+      el.hasAttribute('data-kovo-deferred-style')
+    ) {
+      rel = 'stylesheet';
+    }
     if (rel !== 'stylesheet' && rel !== 'modulepreload') return '';
     const href = el.getAttribute('href');
     if (!href) return '';
@@ -456,7 +463,7 @@ function installInlineKovoLoader(im) {
         'link',
         rel,
         new URL(href, location.href).href,
-        el.getAttribute('as') || '',
+        rel === 'modulepreload' ? el.getAttribute('as') || '' : '',
         el.getAttribute('media') || '',
         el.getAttribute('crossorigin') || '',
         el.getAttribute('integrity') || '',
