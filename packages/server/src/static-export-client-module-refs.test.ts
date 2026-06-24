@@ -199,10 +199,10 @@ describe('server static export', () => {
       };
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
-        code: 'KV229',
+        code: 'KV431',
         diagnostics: [
           {
-            code: 'KV229',
+            code: 'KV431',
             message: expect.stringContaining(
               "client module '/c/cart.client.js?v=cart-1' because the app handler returned status 200 with Content-Type 'text/html; charset=utf-8'",
             ),

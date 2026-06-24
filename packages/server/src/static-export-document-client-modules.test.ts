@@ -29,10 +29,10 @@ describe('server static export client module replay boundary', () => {
         ],
       }),
     ).rejects.toMatchObject({
-      code: 'KV229',
+      code: 'KV431',
       diagnostics: [
         {
-          code: 'KV229',
+          code: 'KV431',
           message: expect.stringContaining('different response snapshots'),
           routePath: '/c/cart.js',
         },
@@ -75,10 +75,10 @@ describe('server static export client module replay boundary', () => {
         ],
       }),
     ).rejects.toMatchObject({
-      code: 'KV229',
+      code: 'KV431',
       diagnostics: [
         {
-          code: 'KV229',
+          code: 'KV431',
           message: expect.stringContaining('different response snapshots'),
           routePath: '/c/cart.js',
         },
@@ -257,10 +257,10 @@ describe('server static export client module replay boundary', () => {
         ],
       }),
     ).rejects.toMatchObject({
-      code: 'KV229',
+      code: 'KV431',
       diagnostics: [
         {
-          code: 'KV229',
+          code: 'KV431',
           message: expect.stringContaining(
             "returned status 200 with Content-Type 'text/html; charset=utf-8'",
           ),

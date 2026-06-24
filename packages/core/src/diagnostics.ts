@@ -69,6 +69,7 @@ export type DiagnosticCode =
   | 'KV424'
   | 'KV425'
   | 'KV426'
+  | 'KV431'
   | 'KV435'
   | 'KV436'
   | 'KV437';
@@ -861,6 +862,17 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Trust escape hatch lacks auditable provenance.',
+  },
+  KV431: {
+    code: 'KV431',
+    help: [
+      'Would lower to: a static/export client-module manifest containing every client module URL referenced by route documents.',
+      'Blocked reason: a route document references a client module that cannot be replayed as immutable same-origin JavaScript, so a static host or CSP manifest would publish an incomplete client runtime.',
+      'Fixes: reference production versioned /c/__v/... client module URLs emitted by Kovo, keep one immutable version per output path, or remove the stale client module reference.',
+      "SPEC §6.6 and §9.5 require client module references to stay same-origin, immutable, and complete under the framework's CSP/export manifest.",
+    ].join('\n'),
+    severity: 'error',
+    message: 'Client module reference is absent from the CSP/export manifest.',
   },
   KV435: {
     code: 'KV435',

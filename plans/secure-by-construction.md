@@ -760,10 +760,16 @@ packages/server/src/static-export-manifest.test.ts packages/server/src/static-ex
     `vp exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts`,
     `vp check packages/core/src packages/server/src packages/cli/src`, and `pnpm run check:api-surface`.
     Remaining gap: automatic graph emission from app config into `kovo explain --capabilities`.
-- [ ] KV431 is a **completeness** gate (every referenced client module is listed/allowed), not byte-integrity —
+- [x] KV431 is a **completeness** gate (every referenced client module is listed/allowed), not byte-integrity —
       browser `import()` has no SRI. Label any integrity manifest advisory; the real module-tamper defense is
       immutable versioned URLs + same-origin + the CSP `'self'` restriction, not SRI. Do not claim a swapped
       module is "inexpressible."
+  - Evidence: `packages/core/src/diagnostics.ts` defines KV431 as a client-module manifest completeness error;
+    `packages/server/src/static-export-client-modules.ts` and `packages/server/src/static-export-response.ts`
+    emit KV431 when a referenced client module cannot replay as one immutable same-origin JavaScript artifact.
+    Verified by
+    `vp exec vitest --run packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-client-module-refs.test.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-manifest.test.ts packages/core/src/diagnostics.test.ts`
+    and `vp check packages/core/src packages/server/src`.
 
 ## Phase 8: Unifying capability surface
 

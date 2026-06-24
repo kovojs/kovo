@@ -57,10 +57,11 @@ export function staticExportDiagnostic(
   routePath: string,
   message: string,
   concretePath?: string,
+  code: DiagnosticCode | 'KV229' = 'KV229',
 ): StaticExportDiagnostic {
   return concretePath === undefined
-    ? { code: 'KV229', message, routePath }
-    : { code: 'KV229', concretePath, message, routePath };
+    ? { code, message, routePath }
+    : { code, concretePath, message, routePath };
 }
 
 /**

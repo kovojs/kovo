@@ -51,7 +51,9 @@ function staticExportReplayResponseDiagnostic(
 
   return staticExportDiagnostic(
     options.path,
-    `KV229 static export cannot copy client module '${options.href}' because the app handler returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
+    `KV431 static export cannot copy client module '${options.href}' because the app handler returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
+    undefined,
+    'KV431',
   );
 }
 

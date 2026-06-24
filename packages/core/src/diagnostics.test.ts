@@ -76,6 +76,7 @@ describe('diagnostic registry', () => {
       'KV424',
       'KV425',
       'KV426',
+      'KV431',
       'KV435',
       'KV436',
       'KV437',
@@ -641,6 +642,15 @@ describe('diagnostic registry', () => {
       Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.
       SPEC §4.8 and §9.1 allow trust escape hatches only when they are explicit and auditable.",
           "message": "Trust escape hatch lacks auditable provenance.",
+          "severity": "error",
+        },
+        "KV431": {
+          "code": "KV431",
+          "help": "Would lower to: a static/export client-module manifest containing every client module URL referenced by route documents.
+      Blocked reason: a route document references a client module that cannot be replayed as immutable same-origin JavaScript, so a static host or CSP manifest would publish an incomplete client runtime.
+      Fixes: reference production versioned /c/__v/... client module URLs emitted by Kovo, keep one immutable version per output path, or remove the stale client module reference.
+      SPEC §6.6 and §9.5 require client module references to stay same-origin, immutable, and complete under the framework's CSP/export manifest.",
+          "message": "Client module reference is absent from the CSP/export manifest.",
           "severity": "error",
         },
         "KV435": {

@@ -74,10 +74,10 @@ describe('server static export replay response boundary', () => {
         }),
       }),
     ).rejects.toMatchObject({
-      code: 'KV229',
+      code: 'KV431',
       diagnostics: [
         {
-          code: 'KV229',
+          code: 'KV431',
           message: expect.stringContaining("cannot copy client module '/c/docs.client.js?v=build'"),
           routePath: '/c/docs.client.js',
         },
