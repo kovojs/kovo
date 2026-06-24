@@ -510,7 +510,7 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
       - Evidence: `packages/server/src/egress.ts` exports `awsCredential`, `gcpCredential`, and
         `azureCredential`; `vp exec vitest --run packages/server/src/egress.test.ts` verifies wrapped providers
         enter the metadata frame while raw metadata access stays denied.
-  - [ ] **Credential API (tiered) + compile-time forgot-it gate (KV427).** Tier 1 — env/WIF/key-file
+  - [x] **Credential API (tiered) + compile-time forgot-it gate (KV427).** Tier 1 — env/WIF/key-file
         deployments touch no identity endpoint, so `new S3Client()`/`new Storage()` need NO Kovo API (starter
         default; floor is free). Tier 2 — metadata-creds deployments declare the cloud once in the shell
         (`createApp({ cloud: { aws: 'instance-role', gcp: 'metadata' } })`) and pass the shared wrapped
@@ -532,10 +532,15 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
           `credentials`/`credential`/`authClient`/provider-specific credential options.
       - Evidence: `vp exec vitest --run packages/compiler/src/cloud-sdk-credentials.test.ts` and
         `vp exec vitest --run packages/cli/src/index.kovo-compile.test.ts -t "KV427 cloud SDK credential"`.
-    - [ ] App-shell wiring still open: derive `registryFacts.cloudMetadataProviders` from
+    - [x] App-shell wiring: derive `registryFacts.cloudMetadataProviders` from
           `createApp({ cloud: ... })` instead of the current compile-visible registry-fact fixture trigger.
-    - [ ] Reverse-mistake lint still open: flag uses of `cloud.<x>` credentials when the app did not declare
+      - Evidence: `packages/compiler/src/scan/parse.ts` extracts `createApp({ cloud })`, app graphs derive
+        `registryFacts.cloudMetadataProviders`, and `packages/server/src/app.ts` records `cloudMetadata`
+        capability facts. Verified by `vp exec vitest --run packages/compiler/src/cloud-sdk-credentials.test.ts packages/server/src/app.test.ts packages/cli/src/index.kovo-explain.test.ts`.
+    - [x] Reverse-mistake lint: flag uses of `cloud.<x>` credentials when the app did not declare
           that cloud provider.
+      - Evidence: `packages/compiler/src/validate/cloud-sdk-credentials.ts` emits KV427 when a module references
+        an undeclared `cloud.<provider>` credential; verified by the focused cloud SDK credential test above.
   - [ ] Fallback when a cloud SDK isn't factory-integrated: the floor **fails closed** (refresh →
         `EgressBlockedError` naming the endpoint + the fix). Prefer workload-identity-federation (IRSA/WIF) or
         env/sidecar creds so the app never HTTP-fetches an identity endpoint (floor is then free; starter

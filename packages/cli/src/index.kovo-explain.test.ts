@@ -764,6 +764,12 @@ describe('kovo explain', () => {
             source: 'otel:4318',
           },
           {
+            detail: 'mode=instance-role',
+            kind: 'cloudMetadata',
+            site: 'app.ts#cloud.aws',
+            source: 'aws',
+          },
+          {
             kind: 'cspAllow',
             reason: 'Stripe checkout frame',
             site: 'app.ts#document.csp.allow.frames',
@@ -814,9 +820,10 @@ describe('kovo explain', () => {
       CAPABILITY capability=acceptUnverified owner=file.storage.static-export surface=upload source="['image/png', 'image/webp']" sink="upload.content-type" site=profile/avatar.ts:18 detail="types=image/png,image/webp" justification="legacy upload picker still gates client-side image types before storage"
       CAPABILITY capability=cspAllow owner=html.dom.output surface=document source="https://checkout.stripe.com" sink="csp-allowlist" site=app.ts#document.csp.allow.frames detail=- justification="Stripe checkout frame"
       CAPABILITY capability=unsafeCookie owner=http.header.cookie surface=response source="builder" sink="Set-Cookie:embed_sid" site=auth/embed.ts:12 detail="class=auth,floor=HttpOnly; Secure; SameSite=None,downgraded=sameSiteNone" justification="embedded checkout flow requires cross-site callback"
+      CAPABILITY capability=cloudMetadata owner=network.egress surface=egress source="aws" sink="cloud-metadata" site=app.ts#cloud.aws detail="mode=instance-role" justification=-
       CAPABILITY capability=egressAllowInternal owner=network.egress surface=egress source="otel:4318" sink="internal-network" site=app.ts#egress.allowInternal[0] detail="host=otel:4318" justification="local telemetry collector"
       CAPABILITY capability=unsafeRegex owner=resource.regex surface=schema source="/^([A-Z]+)+$/" sink="RegExp" site=schema/product.ts:21 detail=- justification="legacy SKU format reviewed for bounded input"
-      SUMMARY total=9
+      SUMMARY total=10
       "
     `);
   });

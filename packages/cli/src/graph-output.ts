@@ -1703,6 +1703,12 @@ function capabilityKindProfile(kind: CoreGraph.CapabilityExplainFact['kind']): {
         sink: 'capability-url',
         surface: 'storage',
       };
+    case 'cloudMetadata':
+      return {
+        owner: 'network.egress',
+        sink: 'cloud-metadata',
+        surface: 'egress',
+      };
     case 'cspAllow':
       return {
         owner: 'html.dom.output',
