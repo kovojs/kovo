@@ -60,10 +60,16 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
   `metadataAllowed` ALS via `awsCredential`/`gcpCredential`/`azureCredential`, `allowInternal`,
   `EgressBlockedError`, bootstrap self-probe; capability-URL HMAC/verify core; SPEC §6.6. Runtime-DiD floor,
   not a proof. _Open: capability-URL framework download route + `ctx.signUrl` threading._
+- [x] **§3 write-reachability foundation → mass-assignment (KV438) / KV429 / KV433 — LANDED** (the big
+  by-construction write lever, branch `agent/secure-write-foundation-20260624-153413`). Governed-column fact +
+  fail-closed write-gate adapter on the Stage-1 extractor; KV438 mass-assignment (examples FP-clean via
+  `serverValue`); KV429 single-row TOCTOU; KV433 read-only-query Stage-2 (Stage-1 documented-blocked). `server`
+  `kovoAnalyzerSummary` kind + opt-in CallExpression branch (inert for KV435/IDOR). See the Tier-2 items below.
 - [ ] **Remaining waves:** sources-sinks enforce (KV424/425/426); explain rendering (`--cookies`/
-  `--capabilities` + SQL producer→graph merge + CSP allowlist app config — the SF-WIRE follow-ups);
-  schema cluster remainder (KV428 upload / KV434 ReDoS); **§3 interprocedural foundation → mass-assignment /
-  KV429 / KV433** (the big by-construction write lever).
+  `--capabilities`/`--writes` + SQL producer→graph merge + CSP allowlist app config — the SF-WIRE follow-ups);
+  schema cluster remainder (KV428 upload / KV434 ReDoS); typed CAS/version primitives + the 409 path (KV429
+  static gate landed; runtime primitives did not); KV433 Stage-1 managed read-only handle (breaking) +
+  interprocedural write-summaries (loader→helper-write residue).
 
 ### Verified state of branch `agent/implement-secure-framework-20260624-114921` (2026-06-24)
 
@@ -257,42 +263,36 @@ Breaking / Annoys). Items cross-reference `secure-by-construction.md` phases whe
 
 ### Tier 2 — Bigger by-construction gates (need the shared interprocedural foundation; see §3)
 
-- [ ] **Build the §11.1 write-effect GATE layer on the existing Stage-1 extractor (shared pass, once).**
-      `extractSymbolicEffectsFromProject` already lowers every insert/update/delete into per-column
-      `SymbolicValue` keyed on the Phase-0 engine (~70% built, sound). The missing piece is **not** a new
-      dataflow pass — it is a `governed`-column schema fact + a thin **fail-closed adapter** (the extractor
-      over-approximates `opaque→opaque`; the write gate needs `opaque→reject`). Prerequisite for the three gates
-      below + SQL write analysis. (`secure-by-construction.md` §11.1.)
-  - **Trade-off** — Gain: one foundation serves mass-assignment + KV433 Stage-2 + KV429; reuses sound, tested
-    machinery. Cost: the governed-column fact + adapter. Ceiling: by-construction. **Risk to actively manage: a
-    parallel agent rebuilding a second write walker instead of consuming this one.**
-- [ ] **Mass-assignment gate (Phase 3).** `governed` fact (auto for `owner:`/PK, explicit `governed:true` for
-      the rest); input-provenance reaching a governed column = blocking. Two-tier escape: `serverValue(v,reason)`
-      (non-input only) + the louder `adminAssign(input.x,reason)`; helper false-positives via a new **`server`**
-      `kovoAnalyzerSummary` return kind, never reflexive `serverValue`.
-  - **Trade-off** — Gain: the highest-value by-construction **write** gate; schema-anchored + AST-provenance is
-    stronger than Rails `strong_parameters` / Django serializer denylists. Cost/Annoys: **FP blast radius is
-    real and probe-measured** — any helper-computed governed value lands `opaque` (no CallExpression branch), so
-    fail-closed forces either FP storms or silent FN; `.values(input)` spread must be rejected wholesale on
-    governed tables (a usability cliff). Hidden prerequisite: the `server` summary kind + a minimal
-    CallExpression branch (§3) **conformance-tested against the KV435/IDOR bypass corpus first**. Ceiling:
-    by-construction. Breaking: yes. **Measure FP noise on `examples/` before flipping fail-closed.**
-- [ ] **TOCTOU primitives + KV429.** Typed compare-and-set + `kovo({version})` optimistic concurrency + a typed
-      409 the enhanced path re-renders (ship independently); then KV429 static gate (option a): read-then-write
-      on a **declared** `atomic`/`version` column without a CAS/version guard. DB `CHECK` constraints are the
-      fail-closed backstop. (`secure-by-construction.md` Phase 6.)
-  - **Trade-off** — Gain: closes single-row lost-update by construction (catching up to a 15-year-old Rails
-    `lock_version` baseline). Cost: 100% unbuilt. Ceiling: by-construction for **single-row declared** columns
-    only — **multi-row/aggregate invariants need SERIALIZABLE + retry and are nobody's by-construction** (provide
-    the tool + guidance, don't pretend). Cross-function check-then-act is a false-negative floor until §3.
-    Breaking: `version` opt-in is easy to forget (which is why KV429 exists).
-- [ ] **Read-only `query()` handle (KV433) — investigate first.** Stage 1: a managed read-only handle (write
-      verbs throw) + Reader type. Stage 2: static no-write-reachable proof. (`secure-by-construction.md` Phase 5.)
-  - **Trade-off** — Gain: by-construction "a loader cannot write." **Structural obstacle found:** Kovo doesn't
-    own the loader's db handle today (`QueryLoadContext={request}`; loaders close over module-scope `db`), so
-    Stage 1 has nothing to intercept until a managed handle is threaded in (breaking authoring change). Stage 2
-    is interprocedural → FP storms or FN on the confused-deputy case without §3's write-summaries. **Verdict:
-    investigate the read-path subset; don't commit to two-stage until §3 lands.**
+- [x] **Build the §11.1 write-effect GATE layer on the existing Stage-1 extractor (shared pass, once).**
+      Landed: the `governed`-column schema fact (auto for `key:`/`owner:`, explicit `kovo({ governed })`) +
+      a fail-closed write-gate adapter over `extractSymbolicEffectsFromProject` (`opaque/input → reject`).
+      Evidence: `extractMassAssignmentFromProject` (packages/drizzle/src/static/derivation.ts); the same
+      machinery hosts KV429 (`extractToctouFromProject`) and KV433 (`extractQueryWriteReachabilityFromProject`).
+      `vp exec vitest --run packages/drizzle/src/index.mass-assignment.test.ts` (14).
+- [x] **Mass-assignment gate (Phase 3) — KV438, fully landed + proven.** `governed` fact (auto `key:`/`owner:`,
+      explicit `kovo({ governed })`); input/unprovable provenance reaching a governed column is the blocking
+      KV438 error (fail-closed). Traces alias/destructure via the Phase-0 engine; `.values(input)`/`{ ...input }`
+      spread rejected on a governed table. Two-tier escape: `serverValue(v,reason)` (non-input only) +
+      `adminAssign(input.x,reason)` (audited) — `@kovojs/server` (write-governance.ts). Helper FPs resolved by
+      `kovoAnalyzerSummary(fn,{returns:{kind:'server'}})` + a minimal opt-in CallExpression branch in
+      symbol-provenance (inert for KV435/IDOR — conformance-tested). **FP measure on examples: crm 0, commerce 2
+      (both server-derived; discharged with `serverValue` — examples now clean).** Wired end-to-end through
+      `kovo check`. SPEC §10.1/§10.3. Evidence: `vp exec vitest --run packages/drizzle/src/index.mass-assignment.test.ts`
+      (14, incl. KV435/IDOR conformance) + `packages/cli/src/index.kovo-check.test.ts` (KV438 fires).
+- [x] **TOCTOU KV429 — single-row gate landed.** `kovo({ atomic })`/`kovo({ version })` declared columns; a
+      self-referential `set({ col: col±x })` to an `atomic` column whose `where()` lacks a CAS eq-guard on that
+      column (or a `version` column) is KV429. Single-row by-construction; **opaque/multi-row matches NOT flagged
+      (honest ceiling — SERIALIZABLE territory).** Reuses the Stage-1 lowering. Evidence:
+      `vp exec vitest --run packages/drizzle/src/index.toctou-readonly.test.ts` (KV429: 6). _Open: typed CAS/
+      version primitives + the 409 path were NOT shipped this slice (the static gate + DB-constraint backstop is
+      the landed lever); cross-function check-then-act is a false-negative floor until interprocedural summaries._
+- [x] **Read-only `query()` handle (KV433) — Stage 2 landed; Stage 1 documented-blocked.** Stage 2: a `query()`
+      loader whose body directly reaches a Drizzle write (insert/update/delete) is KV433; `query.elevated(...)`
+      is the audited escape. **Stage 1 (managed read-only proxy) BLOCKED** as the audit predicted —
+      `QueryLoadContext={request}` threads no db handle (loaders close over module-scope `db`); deferred as a
+      breaking change. **Interprocedural residue** (loader→imported `domain()` write via captured handle) needs
+      the unbuilt write-summaries — documented gap; v1 covers directly-reachable loader-body writes. SPEC §6.6/§9.4.
+      Evidence: `vp exec vitest --run packages/drizzle/src/index.toctou-readonly.test.ts` (KV433: 3).
 
 ### Tier 3 — Differentiators & investigate (high ceiling, high cost/uncertainty)
 
@@ -383,12 +383,16 @@ future by-construction **write** gate (mass-assignment, KV433 Stage-2, KV429, au
 either fail-closed **FP storms** or silent **FN** the moment a value flows through a helper. The interprocedural
 plan ("reuse the touch-graph's bottom-up write-summaries") is currently **unspecified**.
 
-- [ ] **Specify and build minimal interprocedural summaries** (bottom-up, reusing the touch-graph), plus a
-      `server` `kovoAnalyzerSummary` return kind, **conformance-tested against the existing KV435/IDOR alias +
-      destructure bypass corpus before landing** (the branch is shared — a regression there breaks confidentiality).
-  - **Trade-off** — Gain: unlocks Tier 2 + the authz-gates-data dream at acceptable FP. Cost: the hardest
-    analysis work in this plan; touches the engine that backs KV435. Ceiling: by-construction. **This is the
-    real "Phase 0 part 2" — front-load it before committing to any Tier-2 fail-closed flip.**
+- [x] **Minimal interprocedural `server` summary kind landed (the write-gate slice).** Added the `server`
+      `kovoAnalyzerSummary` return kind + a minimal `CallExpression` branch in `symbol-provenance.ts`, gated on
+      an OPT-IN `serverSummaryKeys` set so it is **inert for the KV435/IDOR confidentiality consumers** (they
+      never populate it). Conformance-tested: a server-summary helper resolves to `server`, a plain helper stays
+      `unknown`, and the branch is inert without the opt-in set; the full drizzle suite (KV435/IDOR bypass corpus)
+      stays green. Evidence: `vp exec vitest --run packages/drizzle/src/index.mass-assignment.test.ts` (the
+      `symbol-provenance server-summary branch (KV435/IDOR conformance)` block) + `packages/drizzle` (363).
+      _Open: the FULL bottom-up write-summaries (a helper that itself performs a write, for KV433 interprocedural
+      + authz-gates-data) are NOT built — only the `server`-return interprocedural source landed; that is the
+      slice the write-provenance gate needed._
 
 ---
 
