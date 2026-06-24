@@ -25,10 +25,10 @@ if (mismatched.length > 0) {
 }
 
 if (process.env.SKIP_NPM_PUBLISHED_CHECK !== '1') {
-  const alreadyPublished = packages.filter((pkg) => isPublished(pkg.name, version));
+  const alreadyPublished = packages.filter((pkg) => publishedVersion(pkg.name, version) === version);
   if (alreadyPublished.length > 0) {
-    throw new Error(
-      `Refusing to release ${version}; these packages already exist on npm:\n` +
+    console.log(
+      `Release ${version} is partially published; these packages will be skipped on publish:\n` +
         alreadyPublished.map((pkg) => `  ${pkg.name}@${version}`).join('\n'),
     );
   }
@@ -36,14 +36,15 @@ if (process.env.SKIP_NPM_PUBLISHED_CHECK !== '1') {
 
 console.log(`Release input ${version} is valid for ${packages.length} public packages.`);
 
-function isPublished(name, requestedVersion) {
+function publishedVersion(name, requestedVersion) {
   try {
-    execFileSync('npm', ['view', `${name}@${requestedVersion}`, 'version', '--json'], {
+    return execFileSync('npm', ['view', `${name}@${requestedVersion}`, 'version', '--json'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    return true;
+    })
+      .trim()
+      .replace(/^"|"$/g, '');
   } catch {
-    return false;
+    return null;
   }
 }
