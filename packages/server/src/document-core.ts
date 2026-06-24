@@ -6,7 +6,9 @@ import {
   cspHashAttribute,
   cspSha256,
   mergeCspInlineMetadata,
+  renderDefaultDocumentCsp,
   type CspInlineMetadata,
+  type DocumentCspConfig,
 } from './csp.js';
 import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
 import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
@@ -103,6 +105,27 @@ export interface DocumentRoutePageResponseWithCsp extends DocumentRoutePageRespo
 
 /** @internal */
 export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, 'body'> {
+  /**
+   * SF (secure-framework Tier 3, SPEC §6.6): the strict CSP is auto-attached to every
+   * framework-rendered HTML document by default — Kovo is the sole DOM-writer and emits
+   * no inline app code, so the hash-locked `'self'` policy fits its own output by
+   * construction. This option carries the app-facing third-party allowlist
+   * ({@link DocumentCspConfig.allowlist}) that EXTENDS `script-src`/`style-src`/
+   * `frame-src`/`connect-src`/`img-src` (analytics/Stripe/etc., denied until declared —
+   * there is no report-only ramp), plus the Chromium-only Trusted Types opt-in
+   * (`trustedTypes`). The non-overridable hardening directives stay locked regardless.
+   *
+   * Omitting this still attaches the strict default CSP; an author who needs no CSP at
+   * all sets a `Content-Security-Policy` header on the route response (preserved here,
+   * mirroring the isolation-header opt-out).
+   *
+   * SF-WIRE: the app config surface (`createApp`/`app.document`, NOT owned by this
+   * slice) should thread its allowlist/trustedTypes config through the
+   * `renderRouteDocumentResponse` call site (`app-document.ts`) into this field so apps
+   * can declare third-party origins. Until wired, every document still ships the strict
+   * `'self'`-only CSP by default.
+   */
+  csp?: DocumentCspConfig;
   /**
    * bugs-1 F34 / SPEC §8: a guarded or session-dependent route document carries
    * `Cache-Control: no-store` so the browser's bfcache can never restore an
@@ -288,7 +311,7 @@ export function renderRouteDocumentResponse(
   response: DocumentRoutePageResponse,
   options: DocumentResponseOptions = {},
 ): DocumentRoutePageResponseWithCsp {
-  const { noStore, secure, ...assemblyOptions } = options;
+  const { csp: cspConfig, noStore, secure, ...assemblyOptions } = options;
   const contentType = readHeader(response.headers, 'Content-Type');
   if (
     response.status !== 200 ||
@@ -337,6 +360,24 @@ export function renderRouteDocumentResponse(
       // Each is applied only when the route response didn't already set it, so an author
       // opt-out is preserved. See `DOCUMENT_ISOLATION_HEADERS` for the per-header rationale.
       ...documentIsolationHeaders(response.headers),
+      // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): the STRICT CSP is
+      // auto-attached to every framework-rendered HTML document by default. Kovo is the
+      // sole DOM-writer and emits no inline app code, so the hash-locked `'self'` policy
+      // (plus the non-overridable `base-uri`/`object-src`/`form-action`/`frame-ancestors`
+      // hardening directives) fits its own output by construction. `cspConfig` carries
+      // the app-facing third-party allowlist that EXTENDS the per-fetch directives —
+      // there is no report-only ramp, so a third-party embed is denied until declared.
+      // Applied only when the route response did not already set a
+      // `Content-Security-Policy`, so an author who needs full control (or wants no CSP)
+      // can override on the route response — same opt-out posture as the isolation headers.
+      ...(findHeaderRecordName(response.headers, 'Content-Security-Policy') === undefined
+        ? {
+            'Content-Security-Policy': renderDefaultDocumentCsp(
+              document.csp,
+              cspConfig ?? {},
+            ),
+          }
+        : {}),
       // SPEC §6.6: HSTS is attached ONLY on a prod+HTTPS document so a non-HTTPS or
       // dev/localhost request is never pinned to https. Gated by the call site's
       // `secure` flag (SF-WIRE in DocumentResponseOptions) plus prod detection.
@@ -428,6 +469,11 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
       // opt-out, so the static baseline applies unconditionally. HSTS is intentionally
       // omitted here: error documents render without the request's secure context.
       ...DOCUMENT_ISOLATION_HEADERS,
+      // SF (secure-framework Tier 3): error documents are framework-rendered HTML with
+      // the same inline loader/hashes, so they carry the strict default-on CSP too. No
+      // route response means no author allowlist here — the plain strict `'self'` policy
+      // (with the non-overridable hardening directives) applies unconditionally.
+      'Content-Security-Policy': renderDefaultDocumentCsp(document.csp),
     },
     status: options.status,
   };

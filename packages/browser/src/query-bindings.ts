@@ -8,6 +8,7 @@ import type {
 import { morphDomElement } from './morph.js';
 import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
+import { kovoCreateHTML } from './trusted-types.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryBindingElement
@@ -334,7 +335,8 @@ function domTemplateStampElement(
   item: TemplateStampItem,
 ): Element | null {
   const parser = template.ownerDocument.createElement('template');
-  parser.innerHTML = item.html.trim();
+  // SF (secure-framework Tier 3): Trusted Types policy seam (see trusted-types.ts).
+  parser.innerHTML = kovoCreateHTML(item.html.trim());
   const element = parser.content.firstElementChild;
   if (!element) return null;
 

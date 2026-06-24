@@ -1,5 +1,20 @@
 import type { FragmentChunk } from './wire-response-scanner.js';
 
+// SF-WIRE (secure-framework Tier 3, Trusted Types — DEFERRED): the `p` and `d` helpers
+// below (their `insertAdjacentHTML('beforeend', …)` and `t.innerHTML = h` raw-HTML write
+// sinks) are EXTRACTED VERBATIM into the always-on inline loader by `inline-loader-build.ts`
+// (the `responseApply` spec; a byte-parity test pins the generated `inline-loader.ts`), and
+// that extractor forbids referencing any top-level binding. So unlike the module-side sinks
+// in `morph.ts`/`query-bindings.ts` — which DO route through `kovoCreateHTML` (trusted-types.ts)
+// and are verified non-breaking by the browser suite — these two sinks CANNOT call
+// `kovoCreateHTML`. Routing them needs the `kovo` Trusted Types policy embedded INSIDE the
+// extracted closures (and minified under the 8.75KB §4.4 budget) via `inline-loader-build.ts`,
+// which is outside this slice's edited files. This is the load-bearing reason the strict CSP's
+// `require-trusted-types-for 'script'` directive (server `csp.ts` `trustedTypes`) stays OPT-IN
+// and is NEVER default-on: enabling it before this always-on loader is routed would BRICK
+// Kovo's own hydration on Chromium. CSP (Task 1) is the cross-browser floor and IS default-on;
+// Trusted Types is Chromium-only DiD and ships opt-in until this loader path is wired.
+
 export interface ResponseFragmentApplyOptions<Target> {
   appendFragment(target: Target, html: string): void;
   findFragmentTarget(target: string): Target | null | undefined;

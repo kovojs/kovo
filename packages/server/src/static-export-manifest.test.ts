@@ -68,6 +68,8 @@ describe('server static export', () => {
     expect(staticExportInventory(result)).toEqual([
       {
         headers: {
+          'content-security-policy':
+            "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
           'content-type': 'text/html; charset=utf-8',
           link: `<${cartHref}>; rel=modulepreload`,
           'referrer-policy': 'strict-origin-when-cross-origin',
@@ -243,6 +245,8 @@ describe('server static export', () => {
       files: [
         {
           headers: {
+            'content-security-policy':
+              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
             'content-type': 'text/html; charset=utf-8',
             link: `<${cartHref}>; rel=modulepreload`,
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -257,6 +261,8 @@ describe('server static export', () => {
         },
         {
           headers: {
+            'content-security-policy':
+              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -292,6 +298,8 @@ describe('server static export', () => {
       routeDocuments: [
         {
           headers: {
+            'content-security-policy':
+              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
             'content-type': 'text/html; charset=utf-8',
             link: `<${cartHref}>; rel=modulepreload`,
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -305,6 +313,8 @@ describe('server static export', () => {
         },
         {
           headers: {
+            'content-security-policy':
+              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
             'referrer-policy': 'strict-origin-when-cross-origin',

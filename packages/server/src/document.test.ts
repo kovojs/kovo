@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { inlineKovoLoaderInstallerSource } from '@kovojs/browser/internal/inline-loader';
 
-import { cspSha256, renderContentSecurityPolicy } from './csp.js';
+import {
+  cspSha256,
+  renderContentSecurityPolicy,
+  renderDefaultDocumentCsp,
+} from './csp.js';
 import {
   renderDeferredDocument,
   renderDocument,
@@ -369,6 +373,118 @@ describe('server app shell document assembly', () => {
         const unwired = renderRouteDocumentResponse(htmlResponse());
         expect(unwired.headers['Strict-Transport-Security']).toBeUndefined();
       });
+    });
+  });
+
+  // SF (secure-framework Tier 3, SPEC §6.6): the strict CSP is auto-attached to every
+  // framework-rendered document by default (was previously opt-in via `document.csp`).
+  describe('strict default-on Content-Security-Policy (SF Tier 3)', () => {
+    const htmlResponse = () => ({
+      body: '<main>Orders</main>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200 as const,
+    });
+
+    it('attaches a strict Content-Security-Policy by default with no config', () => {
+      const policy = renderRouteDocumentResponse(htmlResponse()).headers[
+        'Content-Security-Policy'
+      ] as string;
+      expect(policy).toBeDefined();
+      // Hash-locked `'self'` script-src (the loader/inline hashes ride here).
+      expect(policy).toContain("script-src 'self' 'sha256-");
+      expect(policy).toContain("style-src 'self'");
+      expect(policy).toContain("default-src 'self'");
+      // The non-overridable hardening directives stay locked at their secure defaults.
+      expect(policy).toContain("base-uri 'self'");
+      expect(policy).toContain("object-src 'none'");
+      expect(policy).toContain("form-action 'self'");
+      expect(policy).toContain("frame-ancestors 'none'");
+      // No third-party origin and no Trusted Types directive without explicit opt-in.
+      expect(policy).not.toContain('require-trusted-types-for');
+    });
+
+    it('extends script/style/frame/connect/img directives via the third-party allowlist', () => {
+      const policy = renderRouteDocumentResponse(htmlResponse(), {
+        csp: {
+          allowlist: {
+            connectSrc: ['https://api.stripe.com'],
+            frameSrc: ['https://js.stripe.com'],
+            imgSrc: ['https://cdn.example.com'],
+            scriptSrc: ['https://js.stripe.com'],
+            styleSrc: ['https://fonts.googleapis.com'],
+          },
+        },
+      }).headers['Content-Security-Policy'] as string;
+
+      expect(policy).toContain("script-src 'self' https://js.stripe.com 'sha256-");
+      expect(policy).toContain("style-src 'self' https://fonts.googleapis.com");
+      expect(policy).toContain("connect-src 'self' https://api.stripe.com");
+      expect(policy).toContain('frame-src https://js.stripe.com');
+      expect(policy).toContain("img-src 'self' data: https://cdn.example.com");
+    });
+
+    it('keeps base-uri/object-src/form-action/frame-ancestors locked even with an allowlist', () => {
+      // The allowlist surface CANNOT reach the hardening directives (no field for them);
+      // assert they retain their secure defaults regardless of what the app declares.
+      const policy = renderRouteDocumentResponse(htmlResponse(), {
+        csp: {
+          allowlist: {
+            // Even if an app tries to widen script-src wildly, hardening stays locked.
+            scriptSrc: ['*', 'https://evil.example'],
+          },
+        },
+      }).headers['Content-Security-Policy'] as string;
+      expect(policy).toContain("base-uri 'self'");
+      expect(policy).toContain("object-src 'none'");
+      expect(policy).toContain("form-action 'self'");
+      expect(policy).toContain("frame-ancestors 'none'");
+    });
+
+    it('appends Trusted Types directives only when opted in', () => {
+      const off = renderRouteDocumentResponse(htmlResponse()).headers[
+        'Content-Security-Policy'
+      ] as string;
+      expect(off).not.toContain('require-trusted-types-for');
+      expect(off).not.toContain('trusted-types');
+
+      const on = renderRouteDocumentResponse(htmlResponse(), {
+        csp: { trustedTypes: true },
+      }).headers['Content-Security-Policy'] as string;
+      expect(on).toContain("require-trusted-types-for 'script'");
+      expect(on).toContain('trusted-types kovo');
+    });
+
+    it('preserves an author-set Content-Security-Policy instead of overriding it', () => {
+      const wrapped = renderRouteDocumentResponse({
+        body: '<main>Custom</main>',
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'content-security-policy': "default-src 'none'",
+        },
+        status: 200,
+      });
+      const cspKeys = Object.keys(wrapped.headers).filter(
+        (name) => name.toLowerCase() === 'content-security-policy',
+      );
+      expect(cspKeys).toHaveLength(1);
+      expect(wrapped.headers[cspKeys[0]!]).toBe("default-src 'none'");
+    });
+
+    it('attaches the strict CSP to error documents too', () => {
+      const error = renderErrorDocument({ status: 404 });
+      const policy = error.headers['Content-Security-Policy'] as string;
+      expect(policy).toContain("script-src 'self'");
+      expect(policy).toContain("base-uri 'self'");
+      expect(policy).toContain("frame-ancestors 'none'");
+    });
+
+    it('renderDefaultDocumentCsp folds allowlist additively over self without mutating hardening', () => {
+      const policy = renderDefaultDocumentCsp(
+        { scripts: [], styles: [] },
+        { allowlist: { scriptSrc: ['https://plausible.io'] } },
+      );
+      expect(policy).toContain("script-src 'self' https://plausible.io");
+      expect(policy).toContain("object-src 'none'");
     });
   });
 

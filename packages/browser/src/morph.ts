@@ -2,6 +2,7 @@ import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handler-c
 import type { IslandSignalScope } from './handler-context.js';
 import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
 import { applyResponseFragments } from './response-fragment-apply.js';
+import { kovoCreateHTML } from './trusted-types.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -33,13 +34,17 @@ export class DomMorphTarget implements MorphTarget {
 
   appendHtml(html: string): void {
     const template = document.createElement('template');
-    template.innerHTML = html.trim();
+    // SF (secure-framework Tier 3): route framework-assembled HTML through Kovo's sole
+    // Trusted Types policy so this sink survives a strict `require-trusted-types-for`
+    // CSP on Chromium (transparent passthrough elsewhere — see trusted-types.ts).
+    template.innerHTML = kovoCreateHTML(html.trim());
     this.element.append(...Array.from(template.content.childNodes));
   }
 
   replaceWithHtml(html: string): void {
     const template = document.createElement('template');
-    template.innerHTML = html.trim();
+    // SF (secure-framework Tier 3): Trusted Types policy seam (see appendHtml).
+    template.innerHTML = kovoCreateHTML(html.trim());
     const next = firstMorphElement(template.content);
     const activeState = captureActiveDomState(this.element);
     const scrollStates = captureDomScrollStates(this.element);
