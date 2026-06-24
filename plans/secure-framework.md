@@ -38,9 +38,19 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
   - Integration verified: api-surface 0 new violations; tsc at the 34-error pre-existing baseline (no new
     errors in any production file); 2124 touched-package tests pass (1 pre-existing `spec-coverage-map`
     failure, unrelated — examples/reference auth-flow citation).
-- [ ] **Wave 2+ (next):** redacted() PII wrapper; schema-engine cluster (KV430 DoS / KV428 upload / KV434
-  ReDoS); env validation + refuse-to-boot; CSP default-on + Trusted Types; sources-sinks enforce
-  (KV424/425/426); KV436 default-deny wiring + access migration; explain rendering (`--cookies`/`--capabilities`);
+- [x] **redacted() PII wrapper** — `redacted()`/`isRedacted()`/`revealRedacted()`/`Redacted<T>` in core;
+  poison-to-mask DiD sibling of `secret()`. 18 secret/redacted tests. Commit `ce365d08`.
+- [x] **Env validation** (`agent/sf-env`, merged) — `createApp` refuses to boot in prod on missing/weak
+  framework secret (`CreateAppBootError`); optional `createApp({ env })`; committed-secret heuristic lint.
+- [x] **CSP default-on** (`agent/sf-csp`, merged) — strict CSP auto-attached to every document (kept the
+  `data-kovo-csp-hash` model); third-party allowlist config shape; non-overridable hardening directives.
+  Trusted Types: framework `kovo` policy + module-side sinks routed, shipped **opt-in** (the always-on
+  inline-loader `p`/`d` sinks need routing via `inline-loader-build.ts` before default-on — SF-WIRE).
+- [ ] **Schema-engine cluster (REDO — agent session-limited mid-run, worktree discarded):** KV430 input-shape
+  DoS budget; KV428 upload inline-XSS gate (remove `.mime()`, sniff-based content-type, attachment-default);
+  KV434 ReDoS-safe validators.
+- [ ] **Remaining waves:** sources-sinks enforce (KV424/425/426); KV436 default-deny wiring + access
+  migration; explain rendering (`--cookies`/`--capabilities` + SQL graph-merge + CSP allowlist app config);
   §3 interprocedural foundation → mass-assignment / KV429 / KV433; egress/SSRF + capability-URL.
 - SPEC normative contracts land WITH each feature (per the plan's "land contracts with each feature" rule),
   not ahead — so `SPEC.md` edits are deferred into the slice that implements the behavior.
