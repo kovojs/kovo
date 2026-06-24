@@ -764,6 +764,13 @@ type TypeExpr =
   | { kind: 'reference'; name: string }
   | { kind: 'union'; members: readonly TypeExpr[] };
 
+const enum TypeExprPrecedence {
+  none = 0,
+  union = 1,
+  array = 2,
+  primary = 3,
+}
+
 interface TypeExprField {
   key: string;
   optional: boolean;
@@ -843,14 +850,16 @@ function typeExprFromRevealedQueryShape(shape: QueryShape): TypeExpr {
     }
   }
   if (typeof shape === 'object' && shape !== null) {
-    const fields = Object.entries(shape).map(([key, value]) => {
-      const optional = isQueryShapeWrapper(value) && value.kind === 'optional';
-      return {
-        key,
-        optional,
-        type: typeExprFromRevealedQueryShape(optional ? value.shape : value),
-      };
-    });
+    const fields = Object.entries(shape)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => {
+        const optional = isQueryShapeWrapper(value) && value.kind === 'optional';
+        return {
+          key,
+          optional,
+          type: typeExprFromRevealedQueryShape(optional ? value.shape : value),
+        };
+      });
     if (fields.length === 0) return { kind: 'reference', name: 'Record<string, unknown>' };
     return { fields, kind: 'object' };
   }
@@ -873,24 +882,46 @@ function unionTypeExpr(members: readonly TypeExpr[]): TypeExpr {
   return { kind: 'union', members: flattened };
 }
 
-function printTypeExpr(type: TypeExpr, parent: 'array' | 'none' | 'union' = 'none'): string {
+function printTypeExpr(type: TypeExpr, parentPrecedence = TypeExprPrecedence.none): string {
+  const precedence = typeExprPrecedence(type);
+  let printed: string;
   switch (type.kind) {
     case 'array': {
-      const item = printTypeExpr(type.item, 'array');
-      return `${item}[]`;
+      const item = printTypeExpr(type.item, TypeExprPrecedence.array);
+      printed = `${item}[]`;
+      break;
     }
     case 'import-generic':
-      return `import('${type.importPath}').${type.name}<${type.args
+      printed = `import('${type.importPath}').${type.name}<${type.args
         .map((arg) => printTypeExpr(arg))
         .join(', ')}>`;
+      break;
     case 'object':
-      return `{ ${type.fields.map(printTypeExprField).join(' ')} }`;
+      printed = `{ ${type.fields.map(printTypeExprField).join(' ')} }`;
+      break;
     case 'reference':
-      return type.name;
+      printed = type.name;
+      break;
     case 'union': {
-      const printed = type.members.map((member) => printTypeExpr(member, 'union')).join(' | ');
-      return parent === 'array' ? `(${printed})` : printed;
+      printed = type.members
+        .map((member) => printTypeExpr(member, TypeExprPrecedence.union))
+        .join(' | ');
+      break;
     }
+  }
+  return precedence < parentPrecedence ? `(${printed})` : printed;
+}
+
+function typeExprPrecedence(type: TypeExpr): TypeExprPrecedence {
+  switch (type.kind) {
+    case 'union':
+      return TypeExprPrecedence.union;
+    case 'array':
+      return TypeExprPrecedence.array;
+    case 'import-generic':
+    case 'object':
+    case 'reference':
+      return TypeExprPrecedence.primary;
   }
 }
 
