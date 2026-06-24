@@ -1,5 +1,6 @@
 import type { JsonValue } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import type { CapabilityExplainFact } from '@kovojs/core/internal/graph';
 import type {
   AlgebraicField,
   AlgebraicQueryShape,
@@ -317,6 +318,53 @@ export function governedWriteDiagnosticsFromProject(
   }
 }
 
+/** @internal */
+export function governedWriteCapabilityFactsFromProject(
+  options: TouchGraphProjectOptions,
+): CapabilityExplainFact[] {
+  const extraction = createDeriveExtraction(options);
+  try {
+    const facts: CapabilityExplainFact[] = [];
+    extraction.sourceFiles.forEach((sourceFile, index) => {
+      const file = extraction.files[index];
+      if (!file) return;
+
+      const namespaceTableNames = projectNamespaceTableNamesByLocal(
+        sourceFile,
+        extraction.tableNamesBySymbol,
+      );
+      const resolveTable = (node: Node): string | undefined => {
+        const synthetic = projectTableNameForNode(
+          node,
+          extraction.tableNamesBySymbol,
+          namespaceTableNames,
+        );
+        if (!synthetic) return undefined;
+        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+        if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
+        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+      };
+
+      for (const callback of deriveWriteCallbacks(sourceFile)) {
+        const receivers = projectDrizzleReceivers(callback.fn);
+        for (const call of touchBodyCallExpressions(callback.body)) {
+          facts.push(
+            ...governedCapabilityFactsForWriteCall(call, {
+              file,
+              governedColumnsByRealTable: extraction.governedColumnsByRealTable,
+              receivers,
+              resolveTable,
+            }),
+          );
+        }
+      }
+    });
+    return facts.sort(compareCapabilityFacts);
+  } finally {
+    extraction.dispose();
+  }
+}
+
 function tableSyntheticNameForDerivation(synthetic: string): string {
   const namespaceIndex = synthetic.lastIndexOf('.');
   return namespaceIndex === -1 ? synthetic : synthetic.slice(namespaceIndex + 1);
@@ -376,6 +424,13 @@ interface WriteCallContext {
 
 interface GovernedWriteContext extends Omit<WriteCallContext, 'writeKey'> {
   governedColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
+}
+
+interface GovernedCapabilityContext {
+  file: SourceFileInput;
+  governedColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
+  receivers: ProjectDrizzleReceivers;
+  resolveTable: (node: Node) => string | undefined;
 }
 
 function symbolicEffectForWriteCall(
@@ -509,6 +564,46 @@ function governedDiagnosticsForWriteCall(
   return [];
 }
 
+function governedCapabilityFactsForWriteCall(
+  call: CallExpression,
+  context: GovernedCapabilityContext,
+): CapabilityExplainFact[] {
+  if (!isDrizzleWriteCall(call)) return [];
+
+  const expression = call.getExpression();
+  const operation = staticAccessName(expression);
+  const receiver = staticAccessExpression(expression);
+  if (!operation || !receiver) return [];
+  if (!isProjectDrizzleReceiverIdentifier(receiver, context.receivers)) return [];
+
+  const tableArgument = call.getArguments()[0];
+  if (!tableArgument) return [];
+  const table = context.resolveTable(tableArgument);
+  if (!table) return [];
+  const governedColumns = context.governedColumnsByRealTable.get(table) ?? [];
+  if (governedColumns.length === 0) return [];
+
+  const chain = drizzleWriteChainRoot(call);
+  const site = `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`;
+  if (operation === 'insert') {
+    return [
+      ...governedCapabilityFactsForPayload(chain, 'values', table, governedColumns, site),
+      ...governedCapabilityFactsForPayload(
+        chain,
+        'onConflictDoUpdate',
+        table,
+        governedColumns,
+        site,
+        'set',
+      ),
+    ];
+  }
+  if (operation === 'update') {
+    return governedCapabilityFactsForPayload(chain, 'set', table, governedColumns, site);
+  }
+  return [];
+}
+
 function governedDiagnosticsForPayload(
   chain: Node,
   method: string,
@@ -565,6 +660,7 @@ function governedDiagnosticsForPayload(
     const valueNode = Node.isShorthandPropertyAssignment(property)
       ? property.getNameNode()
       : property.getInitializer();
+    if (valueNode && governedAssignmentIsAllowed(valueNode, context)) continue;
     const value = valueNode
       ? symbolicValueFromExpression(
           valueNode,
@@ -581,6 +677,93 @@ function governedDiagnosticsForPayload(
     }
   }
   return diagnostics;
+}
+
+function governedCapabilityFactsForPayload(
+  chain: Node,
+  method: string,
+  table: string,
+  governedColumns: readonly string[],
+  site: string,
+  nestedProperty?: string,
+): CapabilityExplainFact[] {
+  const call = chainCallByName(chain, method);
+  let argument = call?.getArguments()[0];
+  if (!argument) return [];
+  if (nestedProperty) {
+    const object = unwrappedStaticExpressionNode(argument);
+    if (!Node.isObjectLiteralExpression(object)) return [];
+    argument = objectPropertyInitializer(object, nestedProperty);
+    if (!argument) return [];
+  }
+
+  const payload = unwrappedStaticExpressionNode(argument);
+  if (!Node.isObjectLiteralExpression(payload)) return [];
+
+  const facts: CapabilityExplainFact[] = [];
+  for (const property of payload.getProperties()) {
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      continue;
+    }
+    const column = propertyNameText(property.getNameNode());
+    if (!column || !governedColumns.includes(column)) continue;
+    const valueNode = Node.isShorthandPropertyAssignment(property)
+      ? property.getNameNode()
+      : property.getInitializer();
+    const fact = valueNode ? adminAssignCapabilityFact(valueNode, site, table, column) : undefined;
+    if (fact) facts.push(fact);
+  }
+  return facts;
+}
+
+function governedAssignmentIsAllowed(node: Node, context: GovernedWriteContext): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression)) return false;
+  if (isKovoDrizzleEscapeCall(expression, 'adminAssign')) {
+    return adminAssignStaticReason(expression) !== undefined;
+  }
+  if (!isKovoDrizzleEscapeCall(expression, 'serverValue')) return false;
+
+  const [value] = expression.getArguments();
+  return value !== undefined && expressionIsProvenNonInput(value, context);
+}
+
+function expressionIsProvenNonInput(node: Node, context: GovernedWriteContext): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (literalJsonValue(expression) !== undefined) return true;
+  if (privateScopeForExpression(expression, context.sessionContext)) return true;
+
+  const provenance = symbolProvenanceForExpression(expression, context.symbolContext);
+  return provenance.kind === 'literal' || provenance.kind === 'server';
+}
+
+function adminAssignCapabilityFact(
+  node: Node,
+  site: string,
+  table: string,
+  column: string,
+): CapabilityExplainFact | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression) || !isKovoDrizzleEscapeCall(expression, 'adminAssign')) {
+    return undefined;
+  }
+  const [value] = expression.getArguments();
+  const reasonText = adminAssignStaticReason(expression);
+  if (reasonText === undefined) return undefined;
+  return {
+    column,
+    kind: 'adminAssign',
+    site,
+    table,
+    reason: reasonText,
+    ...(value === undefined ? {} : { source: value.getText() }),
+  };
+}
+
+function adminAssignStaticReason(call: CallExpression): string | undefined {
+  const reason = call.getArguments()[1];
+  const value = reason ? staticStringLiteral(reason) : undefined;
+  return value && value.trim() ? value : undefined;
 }
 
 function symbolicValueIsInputOrUnknown(value: SymbolicValue): boolean {
@@ -615,7 +798,7 @@ function governedWriteDiagnostic(
   const definition = diagnosticDefinitions.KV437;
   return {
     code: 'KV437',
-    message: `${definition.message} Write to ${table}.${columns.join(', ')} receives ${source}; derive the value on the server or use an audited admin assignment escape once it lands.`,
+    message: `${definition.message} Write to ${table}.${columns.join(', ')} receives ${source}; derive the value on the server or use audited adminAssign(...).`,
     severity: definition.severity,
     site,
   };
@@ -933,16 +1116,102 @@ function symbolicValueFromExpression(
   if (sqlArith) return sqlArith;
 
   if (Node.isCallExpression(expression)) {
+    const escaped = governedEscapeSymbolicValue(
+      expression,
+      paramSymbolKeys,
+      sessionContext,
+      selfColumn,
+      symbolContext,
+    );
+    if (escaped) return escaped;
+
     return { kind: 'opaque', expr: unsummarizedHelperReason(expression) };
   }
 
   return { kind: 'opaque', expr: expression.getText() };
 }
 
+function governedEscapeSymbolicValue(
+  call: CallExpression,
+  paramSymbolKeys: ReadonlySet<string>,
+  sessionContext: SessionProvenanceContext,
+  selfColumn: SelfColumnResolver | undefined,
+  symbolContext: SymbolProvenanceContext,
+): SymbolicValue | undefined {
+  if (
+    !isKovoDrizzleEscapeCall(call, 'adminAssign') &&
+    !isKovoDrizzleEscapeCall(call, 'serverValue')
+  ) {
+    return undefined;
+  }
+  const value = call.getArguments()[0];
+  return value
+    ? symbolicValueFromExpression(value, paramSymbolKeys, sessionContext, selfColumn, symbolContext)
+    : { kind: 'opaque', expr: call.getText() };
+}
+
 function unsummarizedHelperReason(call: CallExpression): string {
   const callee = unwrappedStaticExpressionNode(call.getExpression());
   const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
   return name ? `unsummarized-helper:${name}` : 'unsummarized-helper';
+}
+
+function isKovoDrizzleEscapeCall(
+  call: CallExpression,
+  name: 'adminAssign' | 'serverValue',
+): boolean {
+  const callee = unwrappedStaticExpressionNode(call.getExpression());
+  if (Node.isIdentifier(callee)) {
+    const imports = kovoDrizzleImports(call.getSourceFile());
+    return imports.named.get(callee.getText()) === name;
+  }
+  if (Node.isPropertyAccessExpression(callee) || Node.isElementAccessExpression(callee)) {
+    const method = staticAccessName(callee);
+    if (method !== name) return false;
+    const base = callee.getExpression();
+    return (
+      Node.isIdentifier(base) &&
+      kovoDrizzleImports(call.getSourceFile()).namespaces.has(base.getText())
+    );
+  }
+  return false;
+}
+
+function kovoDrizzleImports(sourceFile: SourceFile): {
+  named: ReadonlyMap<string, 'adminAssign' | 'serverValue'>;
+  namespaces: ReadonlySet<string>;
+} {
+  const named = new Map<string, 'adminAssign' | 'serverValue'>();
+  const namespaces = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== '@kovojs/drizzle') continue;
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) namespaces.add(namespace.getText());
+    for (const specifier of declaration.getNamedImports()) {
+      const imported = specifier.getAliasNode()
+        ? specifier.getNameNode().getText()
+        : specifier.getName();
+      if (imported !== 'adminAssign' && imported !== 'serverValue') continue;
+      named.set(specifier.getAliasNode()?.getText() ?? specifier.getName(), imported);
+    }
+  }
+  return { named, namespaces };
+}
+
+function staticStringLiteral(node: Node): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  return Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression)
+    ? expression.getLiteralText()
+    : undefined;
+}
+
+function compareCapabilityFacts(left: CapabilityExplainFact, right: CapabilityExplainFact): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.site.localeCompare(right.site) ||
+    (left.table ?? '').localeCompare(right.table ?? '') ||
+    (left.column ?? '').localeCompare(right.column ?? '')
+  );
 }
 
 /** Parse `sql`${A} <op> ${B}`` (a two-interpolation binary template) into an Arith value. */

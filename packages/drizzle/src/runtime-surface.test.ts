@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { validateManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
-import { sql, staticSql, trustedSql } from './runtime.js';
+import { adminAssign, serverValue, sql, staticSql, trustedSql } from './runtime.js';
 
 interface DrizzlePackageJson {
   dependencies?: Record<string, string>;
@@ -63,6 +63,12 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(() => sql.identifier('users', { allow: ['products'] })).toThrow(/KV422/);
     expect(() => sql.allow('drop table users', ['asc', 'desc'])).toThrow(/KV422/);
     expect(() => staticSql`select ${'dynamic' as never}`).toThrow(/staticSql/);
+  });
+
+  it('exports governed-write escape helpers from the runtime surface', () => {
+    expect(serverValue('u1', 'session owner')).toBe('u1');
+    expect(adminAssign('admin', 'support role correction')).toBe('admin');
+    expect(() => adminAssign('admin', '   ')).toThrow(/adminAssign requires/);
   });
 
   it('keeps the runtime annotation entrypoint separate from static extraction', async () => {

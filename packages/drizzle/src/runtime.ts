@@ -12,18 +12,20 @@ import {
 export type {
   KovoAnalyzerFunctionSummary,
   KovoAnalyzerPrivateScopeKind,
+  KovoAdminAssignment,
   KovoColumnRef,
   KovoDomainTableAnnotation,
   KovoFanAnnotation,
   KovoGovernedColumnAnnotation,
   KovoSecretColumnAnnotation,
+  KovoServerValue,
   KovoTableAnnotation,
   KovoTableExtraConfig,
   KovoViewAnnotation,
   KovoViewExtraConfig,
   KovoViewExtraConfigAnnotation,
 } from './drizzle-surface.js';
-export { kovo, kovoAnalyzerSummary } from './drizzle-surface.js';
+export { adminAssign, kovo, kovoAnalyzerSummary, serverValue } from './drizzle-surface.js';
 
 /**
  * Kovo-branded parameterized SQL value accepted by framework-managed DB handles.
