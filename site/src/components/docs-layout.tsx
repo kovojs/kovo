@@ -278,10 +278,10 @@ export function SectionIndex({ section }: { section: SectionIndexInput }): strin
   return (
     <div data-section-index>
       <div style={docsLayoutStyles.sectionHead}>
-        <h1 style={docsLayoutStyles.sectionHeadTitle}>{escapeHtml(section.title)}</h1>
+        <h1 style={docsLayoutStyles.sectionHeadTitle}>{section.title}</h1>
         {SECTION_INTROS[section.key] ? (
           <p style={docsLayoutStyles.sectionHeadIntro}>
-            {escapeHtml(SECTION_INTROS[section.key]!)}
+            {SECTION_INTROS[section.key]!}
           </p>
         ) : (
           ''
@@ -306,11 +306,11 @@ export function SectionIndex({ section }: { section: SectionIndexInput }): strin
                     section.key === 'api' ? docsLayoutStyles.sectionMonoTitle : null,
                   ]}
                 >
-                  {escapeHtml(title)}
+                  {title}
                 </h2>
                 {page.description ? (
                   <p style={docsLayoutStyles.sectionCardDescription}>
-                    {escapeHtml(page.description)}
+                    {page.description}
                   </p>
                 ) : (
                   ''

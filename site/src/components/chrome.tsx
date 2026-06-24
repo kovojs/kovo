@@ -737,7 +737,8 @@ export const DocsSidebar = component({
   render: ({ activePath = '', groups }: DocsSidebarProps) => (
     <nav style={chromeStyles.docSidebar} aria-label="Documentation">
       {groups.map((group) => {
-        const activeGroup = group.pages.some((page) => page.url === activePath);
+        const activeGroup =
+          activePath === `/${group.key}/` || group.pages.some((page) => page.url === activePath);
         return (
           <details style={chromeStyles.sideGroupDisclosure} open={activeGroup ? true : undefined}>
             <summary style={chromeStyles.sideGroupHeading}>
