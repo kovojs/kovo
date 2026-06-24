@@ -15,47 +15,47 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
 ## Implementation status (live ledger — branch `agent/implement-secure-framework-20260624-114921`)
 
 - [x] **Runtime `Secret` poison wrapper** (§4 / §5 follow-up). `secret()`/`isSecret()`/`revealSecret()`/
-  `SecretValue<T>` in `packages/core/src/secret.ts`; poisons toString/toJSON/JSON.stringify/coercion/inspect →
-  `[secret]`; module-private `Symbol()` brand (unforgeable); private `#value`; `reveal()`/`map()`/constant-time
-  `equals()`. Evidence: `vp exec vitest --run packages/core/src/secret.test.ts` (13 tests). Commit `b4aae9d5`.
+      `SecretValue<T>` in `packages/core/src/secret.ts`; poisons toString/toJSON/JSON.stringify/coercion/inspect →
+      `[secret]`; module-private `Symbol()` brand (unforgeable); private `#value`; `reveal()`/`map()`/constant-time
+      `equals()`. Evidence: `vp exec vitest --run packages/core/src/secret.test.ts` (13 tests). Commit `b4aae9d5`.
 - [x] **Pre-allocated diagnostic codes** KV428-434/437 with full help text (so parallel slices don't collide on
-  `diagnostics.ts`). Evidence: `packages/core/src/diagnostics.test.ts` (5 tests). Commit `da677eba`.
+      `diagnostics.ts`). Evidence: `packages/core/src/diagnostics.test.ts` (5 tests). Commit `da677eba`.
 - [x] **Wave 1 (landed + integrated, 5 parallel slices merged conflict-free):**
   - [x] **SQL KV422** — runtime brands hardened to module-private `Symbol()`, `{text}`-carrier laundering
-    rejected, prod floor flipped to `enforce`, KV422 finding family + `compile drizzle-static` exit 1 (the
-    primary by-construction gate). Evidence: 133 focused + 846 server/core tests. _Follow-up: real-app-build
-    graph merge of `sqlSafetyDiagnostics` so `kovo check` surfaces it too (compile-static gate already fires)._
+        rejected, prod floor flipped to `enforce`, KV422 finding family + `compile drizzle-static` exit 1 (the
+        primary by-construction gate). Evidence: 133 focused + 846 server/core tests. _Follow-up: real-app-build
+        graph merge of `sqlSafetyDiagnostics` so `kovo check` surfaces it too (compile-static gate already fires)._
   - [x] **Free isolation headers** — XFO:DENY, COOP, Permissions-Policy deny-all, Referrer-Policy on every
-    document; HSTS prod+HTTPS-gated (wired via the `secure` flag); CORP:same-origin on `/c/__v/` assets.
+        document; HSTS prod+HTTPS-gated (wired via the `secure` flag); CORP:same-origin on `/c/__v/` assets.
   - [x] **KV414 join-keyed IDOR** — owner read via a join keyed on the joined table now flags `scope:'args'`;
-    session-via-local tracing fixes the prior CRM false-positive. Evidence: 363 drizzle tests.
+        session-via-local tracing fixes the prior CRM false-positive. Evidence: 363 drizzle tests.
   - [x] **Named-import secret-emit gate (KV437)** — whole-channel fail-closed; client-safe = callee-position
-    or `publishToClient`; 0/47 example FPs.
+        or `publishToClient`; 0/47 example FPs.
   - [x] **Cookie floor (KV432) + CSRF Origin/Sec-Fetch floor** — class-derived HttpOnly/Secure(prod)/SameSite
-    at the `serializeCookie` sink; `unsafeCookie` escape; forwarded better-auth cookies floored at the
-    document sink; cross-site unsafe-verb rejected before the token check. _Follow-up: migrate the framework's
-    own classless cookie sites (anonymous-CSRF) to declare a class for default-on coverage._
+        at the `serializeCookie` sink; `unsafeCookie` escape; forwarded better-auth cookies floored at the
+        document sink; cross-site unsafe-verb rejected before the token check. _Follow-up: migrate the framework's
+        own classless cookie sites (anonymous-CSRF) to declare a class for default-on coverage._
   - Integration verified: api-surface 0 new violations; tsc at the 34-error pre-existing baseline (no new
     errors in any production file); 2124 touched-package tests pass (1 pre-existing `spec-coverage-map`
     failure, unrelated — examples/reference auth-flow citation).
 - [x] **redacted() PII wrapper** — `redacted()`/`isRedacted()`/`revealRedacted()`/`Redacted<T>` in core;
-  poison-to-mask DiD sibling of `secret()`. 18 secret/redacted tests. Commit `ce365d08`.
+      poison-to-mask DiD sibling of `secret()`. 18 secret/redacted tests. Commit `ce365d08`.
 - [x] **Env validation** (`agent/sf-env`, merged) — `createApp` refuses to boot in prod on missing/weak
-  framework secret (`CreateAppBootError`); optional `createApp({ env })`; committed-secret heuristic lint.
+      framework secret (`CreateAppBootError`); optional `createApp({ env })`; committed-secret heuristic lint.
 - [x] **CSP default-on** (`agent/sf-csp`, merged) — strict CSP auto-attached to every document (kept the
-  `data-kovo-csp-hash` model); third-party allowlist config shape; non-overridable hardening directives.
-  Trusted Types: framework `kovo` policy + module-side sinks routed, shipped **opt-in** (the always-on
-  inline-loader `p`/`d` sinks need routing via `inline-loader-build.ts` before default-on — SF-WIRE).
+      `data-kovo-csp-hash` model); third-party allowlist config shape; non-overridable hardening directives.
+      Trusted Types: framework `kovo` policy + module-side sinks routed, shipped **opt-in** (the always-on
+      inline-loader `p`/`d` sinks need routing via `inline-loader-build.ts` before default-on — SF-WIRE).
 - [x] **KV430 input-shape DoS budget** — iterative depth/breadth/node budget at the `parseSchemaAsync` wire
-  entry (`schema.ts`); the 4000-deep array attack is rejected before descent and the check can't itself
-  stack-overflow. 7 tests. Commit `52041325`. _Rest of the schema cluster below remains._
+      entry (`schema.ts`); the 4000-deep array attack is rejected before descent and the check can't itself
+      stack-overflow. 7 tests. Commit `52041325`. _Rest of the schema cluster below remains._
 - [ ] **Schema cluster remainder:** KV428 upload inline-XSS gate (remove `.mime()`, sniff-based content-type,
-  attachment-default); KV434 ReDoS-safe validators; per-schema `.max()` overrides; FormData-breadth +
-  sync-parse-entry coverage. _(The agent assigned this session-limited mid-run; worktree discarded.)_
+      attachment-default); KV434 ReDoS-safe validators; per-schema `.max()` overrides; FormData-breadth +
+      sync-parse-entry coverage. _(The agent assigned this session-limited mid-run; worktree discarded.)_
 - [ ] **Remaining waves:** sources-sinks enforce (KV424/425/426); **KV436 default-deny wiring + access
-  migration** (breaking — touches every surface); explain rendering (`--cookies`/`--capabilities` + SQL
-  producer→graph merge + CSP allowlist app config — the SF-WIRE follow-ups); **§3 interprocedural foundation
-  → mass-assignment / KV429 / KV433** (the big by-construction write lever); **egress/SSRF + capability-URL** (XL).
+      migration** (breaking — touches every surface); explain rendering (`--cookies`/`--capabilities` + SQL
+      producer→graph merge + CSP allowlist app config — the SF-WIRE follow-ups); **§3 interprocedural foundation
+      → mass-assignment / KV429 / KV433** (the big by-construction write lever); **egress/SSRF + capability-URL** (XL).
 
 ### Verified state of branch `agent/implement-secure-framework-20260624-114921` (2026-06-24)
 
@@ -68,6 +68,7 @@ production file**; `check:api-surface` 0 new violations; `git diff --check` clea
 `sqlSafetyDiagnostics` → real-app-build check graph; cookie-class adoption at the framework's own classless
 cookie sites; `kovo explain --cookies`/`--capabilities` rendering; CSP third-party allowlist `createApp` config;
 Trusted Types inline-loader sink routing; committed-secret compiler-AST check.
+
 - SPEC normative contracts land WITH each feature (per the plan's "land contracts with each feature" rule),
   not ahead — so `SPEC.md` edits are deferred into the slice that implements the behavior.
 

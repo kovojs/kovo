@@ -20,9 +20,9 @@ const sessionId = () => 'session-1';
 describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () => {
   describe('production: refuses boot (by-construction at the chokepoint)', () => {
     it('throws CreateAppBootError on an empty csrf secret', () => {
-      expect(() =>
-        validateAppEnv({ csrfSecret: '' }, { mode: 'production' }),
-      ).toThrow(CreateAppBootError);
+      expect(() => validateAppEnv({ csrfSecret: '' }, { mode: 'production' })).toThrow(
+        CreateAppBootError,
+      );
     });
 
     it('throws on a too-short csrf secret with an actionable message', () => {
@@ -35,7 +35,11 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
       expect(isCreateAppBootError(caught)).toBe(true);
       const error = caught as CreateAppBootError;
       expect(error.issues).toHaveLength(1);
-      expect(error.issues[0]).toMatchObject({ code: 'too-short', path: 'csrf.secret', fatal: true });
+      expect(error.issues[0]).toMatchObject({
+        code: 'too-short',
+        path: 'csrf.secret',
+        fatal: true,
+      });
       expect(error.message).toContain('csrf.secret');
       expect(error.message).toContain('randomBytes');
     });
@@ -195,9 +199,7 @@ describe('createApp boot integration (the chokepoint)', () => {
     try {
       expect(() => createApp({ csrf: { secret: '', sessionId } })).toThrow(CreateAppBootError);
       // a strong secret boots fine even in production
-      expect(() =>
-        createApp({ csrf: { secret: STRONG_SECRET, sessionId } }),
-      ).not.toThrow();
+      expect(() => createApp({ csrf: { secret: STRONG_SECRET, sessionId } })).not.toThrow();
     } finally {
       if (previous === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previous;

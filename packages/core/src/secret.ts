@@ -166,8 +166,7 @@ export function secret<T>(value: T): SecretValue<T> {
  */
 export function isSecret(value: unknown): value is SecretValue<unknown> {
   return (
-    isPoisonBox(value) &&
-    (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'secret'
+    isPoisonBox(value) && (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'secret'
   );
 }
 

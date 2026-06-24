@@ -39,6 +39,7 @@ import type { ComponentModuleModel } from '../scan/parse.js';
 
 const PUBLISH_TO_CLIENT = 'publishToClient';
 const CORE_MODULE = '@kovojs/core';
+const PUBLISH_TO_CLIENT_REASON_PROPERTY = 'reason';
 
 interface ImportBinding {
   /** Local name the handler closure can reference. */
@@ -239,7 +240,7 @@ function publishToClientReason(call: ts.CallExpression): string {
     if (
       ts.isPropertyAssignment(property) &&
       ts.isIdentifier(property.name) &&
-      property.name.text === 'reason' &&
+      property.name.text === PUBLISH_TO_CLIENT_REASON_PROPERTY &&
       ts.isStringLiteralLike(property.initializer)
     ) {
       return property.initializer.text;

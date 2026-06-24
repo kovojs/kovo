@@ -187,9 +187,7 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
 
   it('does NOT treat secure:false in dev as a downgrade (dev login must keep working)', () => {
     process.env.NODE_ENV = 'development';
-    expect(() =>
-      serializeCookie('sid', 'abc', { class: 'session', secure: false }),
-    ).not.toThrow();
+    expect(() => serializeCookie('sid', 'abc', { class: 'session', secure: false })).not.toThrow();
   });
 
   it('allows a downgrade with unsafeCookie and records a justification fact', () => {

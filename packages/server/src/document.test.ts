@@ -2,11 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { inlineKovoLoaderInstallerSource } from '@kovojs/browser/internal/inline-loader';
 
-import {
-  cspSha256,
-  renderContentSecurityPolicy,
-  renderDefaultDocumentCsp,
-} from './csp.js';
+import { cspSha256, renderContentSecurityPolicy, renderDefaultDocumentCsp } from './csp.js';
 import {
   renderDeferredDocument,
   renderDocument,

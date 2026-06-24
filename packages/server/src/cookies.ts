@@ -343,7 +343,10 @@ function parseSetCookieHeader(raw: string): ParsedSetCookie | undefined {
     if (attrEq < 0) {
       attributes.set(trimmed.toLowerCase(), true);
     } else {
-      attributes.set(trimmed.slice(0, attrEq).trim().toLowerCase(), trimmed.slice(attrEq + 1).trim());
+      attributes.set(
+        trimmed.slice(0, attrEq).trim().toLowerCase(),
+        trimmed.slice(attrEq + 1).trim(),
+      );
     }
   }
   return { attributes, name, value };
@@ -386,8 +389,7 @@ export function normalizeForwardedSetCookie(
   // brought UP to the floor; we never downgrade a forwarded credential cookie, so no `unsafe` escape
   // is involved here. To preserve the upstream's intent where it set SameSite=None (a deliberate
   // cross-site embed), we keep it but pair it with Secure (browsers require Secure for SameSite=None).
-  const productionSecure =
-    typeof process !== 'undefined' && process.env?.NODE_ENV === 'production';
+  const productionSecure = typeof process !== 'undefined' && process.env?.NODE_ENV === 'production';
   const floorHttpOnly = isCredentialClass(cookieClass) ? true : upstreamHttpOnly;
   const floorSecure = isCredentialClass(cookieClass)
     ? upstreamSecure || productionSecure || sameSite === 'none'
@@ -404,9 +406,7 @@ export function normalizeForwardedSetCookie(
   if (floorSecure) parts.push('Secure');
   const effectiveSameSite = sameSite ?? (isCredentialClass(cookieClass) ? 'lax' : undefined);
   if (effectiveSameSite !== undefined) {
-    parts.push(
-      `SameSite=${{ lax: 'Lax', none: 'None', strict: 'Strict' }[effectiveSameSite]}`,
-    );
+    parts.push(`SameSite=${{ lax: 'Lax', none: 'None', strict: 'Strict' }[effectiveSameSite]}`);
   }
   // Preserve Priority and Partitioned exactly as upstream set them (part-3 I1).
   if (attributes.has('priority')) parts.push(`Priority=${attributes.get('priority') as string}`);

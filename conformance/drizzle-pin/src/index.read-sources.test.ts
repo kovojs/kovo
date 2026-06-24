@@ -125,6 +125,7 @@ describe('Drizzle pinned subset conformance', () => {
     });
     expect(extractQueryFactsFromProject({ files })).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'product',
           key: 'arg:id',
@@ -252,6 +253,7 @@ describe('Drizzle pinned subset conformance', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:id',
@@ -374,6 +376,7 @@ describe('Drizzle pinned subset conformance', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:id',
@@ -418,6 +421,7 @@ describe('Drizzle pinned subset conformance', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:id',
@@ -477,6 +481,7 @@ describe('Drizzle pinned subset conformance', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:id',

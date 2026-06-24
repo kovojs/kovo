@@ -274,6 +274,7 @@ describe('Drizzle pinned subset conformance', () => {
       }),
     ).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'product',
           key: 'arg:id',

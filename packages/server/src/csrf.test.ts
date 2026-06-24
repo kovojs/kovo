@@ -302,25 +302,29 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
   }
 
   it('rejects an unsafe-verb cross-site request', () => {
-    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'cross-site' }), csrf)).toBe(false);
+    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'cross-site' }), csrf)).toBe(
+      false,
+    );
   });
 
   it('allows same-origin / same-site / none Sec-Fetch-Site', () => {
-    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'same-origin' }), csrf)).toBe(true);
+    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'same-origin' }), csrf)).toBe(
+      true,
+    );
     expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'same-site' }), csrf)).toBe(true);
     expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'none' }), csrf)).toBe(true);
   });
 
   it('rejects a cross-origin Origin not in trustedOrigins', () => {
-    expect(
-      verifyCsrfRequestOriginFloor(post({ origin: 'https://evil.example.test' }), csrf),
-    ).toBe(false);
+    expect(verifyCsrfRequestOriginFloor(post({ origin: 'https://evil.example.test' }), csrf)).toBe(
+      false,
+    );
   });
 
   it('allows a same-origin Origin', () => {
-    expect(
-      verifyCsrfRequestOriginFloor(post({ origin: 'https://shop.example.test' }), csrf),
-    ).toBe(true);
+    expect(verifyCsrfRequestOriginFloor(post({ origin: 'https://shop.example.test' }), csrf)).toBe(
+      true,
+    );
   });
 
   it('honors the trustedOrigins allowlist for a cross-origin Origin', () => {

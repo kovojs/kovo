@@ -225,10 +225,7 @@ export function renderContentSecurityPolicy(
     // so an attacker cannot mint a bypassing policy. Other browsers ignore both
     // directives, leaving the cross-browser CSP floor above intact.
     ...(options.trustedTypes
-      ? [
-          "require-trusted-types-for 'script'",
-          `trusted-types ${KOVO_TRUSTED_TYPES_POLICY}`,
-        ]
+      ? ["require-trusted-types-for 'script'", `trusted-types ${KOVO_TRUSTED_TYPES_POLICY}`]
       : []),
   ].filter((item): item is string => item !== undefined);
 

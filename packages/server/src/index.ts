@@ -3,11 +3,7 @@ export { createApp, createRequestHandler } from './app.js';
 // validation at the createApp chokepoint. `CreateAppBootError` is the typed boot
 // refusal a deploy/test catches; `committedSecretWaiver` is the audited escape for
 // the committed-secret heuristic.
-export {
-  committedSecretWaiver,
-  CreateAppBootError,
-  isCreateAppBootError,
-} from './env.js';
+export { committedSecretWaiver, CreateAppBootError, isCreateAppBootError } from './env.js';
 export type { EnvValidationIssue } from './env.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';

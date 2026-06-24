@@ -361,6 +361,9 @@ export async function viteRedGreenBuildFixtureFact(
         `      '@kovojs/core/internal/sql-safety': ${JSON.stringify(
           join(options.projectRoot, 'dist/core/src/internal/sql-safety.mjs'),
         )},`,
+        `      '@kovojs/core/internal/diagnostics': ${JSON.stringify(
+          join(options.projectRoot, 'dist/core/src/internal/diagnostics.mjs'),
+        )},`,
         `      '@kovojs/core': ${JSON.stringify(options.coreAlias)},`,
         "      'react/jsx-dev-runtime': jsxRuntimeAlias,",
         "      'react/jsx-runtime': jsxRuntimeAlias,",

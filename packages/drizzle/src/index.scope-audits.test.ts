@@ -322,9 +322,9 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       }),
     );
 
-    expect(
-      audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope })),
-    ).toEqual([{ domain: 'order', scope: 'session' }]);
+    expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
+      { domain: 'order', scope: 'session' },
+    ]);
   });
 
   // Session-via-local-variable tracing (SPEC §11.1, KV414). A non-nullable session value
@@ -359,9 +359,9 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       }),
     );
 
-    expect(
-      audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope })),
-    ).toEqual([{ domain: 'order', scope: 'session' }]);
+    expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
+      { domain: 'order', scope: 'session' },
+    ]);
   });
 
   // Fail-closed boundary check: the join-keyed branch fires only when the query is

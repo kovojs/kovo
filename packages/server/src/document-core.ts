@@ -372,16 +372,14 @@ export function renderRouteDocumentResponse(
       // can override on the route response — same opt-out posture as the isolation headers.
       ...(findHeaderRecordName(response.headers, 'Content-Security-Policy') === undefined
         ? {
-            'Content-Security-Policy': renderDefaultDocumentCsp(
-              document.csp,
-              cspConfig ?? {},
-            ),
+            'Content-Security-Policy': renderDefaultDocumentCsp(document.csp, cspConfig ?? {}),
           }
         : {}),
       // SPEC §6.6: HSTS is attached ONLY on a prod+HTTPS document so a non-HTTPS or
       // dev/localhost request is never pinned to https. Gated by the call site's
       // `secure` flag (SF-WIRE in DocumentResponseOptions) plus prod detection.
-      ...(secure !== undefined && shouldEmitDocumentHsts(secure) &&
+      ...(secure !== undefined &&
+      shouldEmitDocumentHsts(secure) &&
       findHeaderRecordName(response.headers, 'Strict-Transport-Security') === undefined
         ? { 'Strict-Transport-Security': DOCUMENT_HSTS_VALUE }
         : {}),

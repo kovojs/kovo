@@ -58,7 +58,7 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
   });
 
   it('rejects a { text } carrier with no separated values array (assembled-text laundering)', () => {
-    const injection = "1; drop table products; --";
+    const injection = '1; drop table products; --';
     const result = validateManagedSqlStatement({
       text: `select * from products where id = ${injection}`,
     });

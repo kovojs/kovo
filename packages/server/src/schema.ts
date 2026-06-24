@@ -172,9 +172,11 @@ export const s = {
 
         for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
           try {
-            output[key] = (await parseSchemaAsync(schema, record[String(key)], true)) as InferSchema<
-              Shape[keyof Shape]
-            >;
+            output[key] = (await parseSchemaAsync(
+              schema,
+              record[String(key)],
+              true,
+            )) as InferSchema<Shape[keyof Shape]>;
           } catch (error) {
             throw validationErrorFrom(error, [String(key)]);
           }
@@ -489,7 +491,10 @@ function descendableChildren(value: object): readonly unknown[] | undefined {
  * overflow the call stack while being checked. Fail-closed runtime floor (SPEC §6.6),
  * not a by-construction proof; covers JSON nesting and parsed object/array shape.
  */
-export function assertShapeWithinBudget(input: unknown, budget: ShapeBudget = activeShapeBudget): void {
+export function assertShapeWithinBudget(
+  input: unknown,
+  budget: ShapeBudget = activeShapeBudget,
+): void {
   if (input === null || typeof input !== 'object') return;
   let nodes = 1;
   const stack: Array<readonly [value: object, depth: number]> = [[input, 0]];

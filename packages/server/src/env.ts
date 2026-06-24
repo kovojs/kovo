@@ -101,7 +101,9 @@ export interface ValidateAppEnvOptions {
  * the cookie `Secure` floor does. An explicit `mode` overrides (test seam + adapters that
  * know their posture out-of-band).
  */
-export function resolveBootMode(explicit?: 'production' | 'development'): 'production' | 'development' {
+export function resolveBootMode(
+  explicit?: 'production' | 'development',
+): 'production' | 'development' {
   if (explicit !== undefined) return explicit;
   const nodeEnv = typeof process !== 'undefined' ? process.env?.NODE_ENV : undefined;
   return nodeEnv === 'production' ? 'production' : 'development';
@@ -151,11 +153,7 @@ export function validateAppEnv(
  * not a violation here (CSRF is opt-in per SPEC §6.6; an app with no mutations needs no
  * secret). A *present* secret that is empty/short/weak is the failure this catches.
  */
-function validateFrameworkSecret(
-  value: unknown,
-  path: string,
-  issues: EnvValidationIssue[],
-): void {
+function validateFrameworkSecret(value: unknown, path: string, issues: EnvValidationIssue[]): void {
   // No secret configured at all: not validated here. `csrf` is only consulted when an
   // app declares it; the gate fires on a *declared-but-weak* secret.
   if (value === undefined) return;
