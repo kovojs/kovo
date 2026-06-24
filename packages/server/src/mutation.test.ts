@@ -11,7 +11,7 @@ import {
   runMutation,
 } from './mutation.js';
 import { query } from './query.js';
-import { s } from './schema.js';
+import { s, type Schema } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 declare module '@kovojs/core' {
@@ -122,6 +122,28 @@ describe('server mutation lifecycle', () => {
       ok: false,
       status: 422,
     });
+  });
+
+  it('bounds typed fail payloads to JSON-serializable values', () => {
+    const dateSchema: Schema<Date> = {
+      parse() {
+        return new Date();
+      },
+    };
+    const assertNonJsonFailPayloadRejected = () => {
+      mutation('cart/date-fail', {
+        errors: {
+          BAD_DATE: dateSchema,
+        },
+        input: s.object({ productId: s.string() }),
+        handler(_input, _request, context) {
+          // @ts-expect-error SPEC §9.2 fail() payloads are JsonValue-bound client wire payloads.
+          return context.fail('BAD_DATE', new Date());
+        },
+      });
+    };
+
+    expect(assertNonJsonFailPayloadRejected).toBeTypeOf('function');
   });
 
   it('composes guards with all()', async () => {

@@ -2,6 +2,7 @@ export { csrfField, csrfToken } from '../csrf.js';
 export type { CsrfAnonymousCookieOptions, CsrfOptions, CsrfValidationOptions } from '../csrf.js';
 export { domain, tag } from '../domain.js';
 export type { Domain, Tag } from '../domain.js';
+export type { JsonSerializable } from '../json-boundary.js';
 export { errorBoundary, mutation, stream, write } from '../mutation.js';
 /** Build JSX-spread attributes for a SPEC §6.3 enhanced mutation form. */
 export { mutationFormAttributes } from '../mutation.js';
@@ -27,7 +28,12 @@ export type {
 } from '../mutation.js';
 /** Attribute object returned by `mutationFormAttributes(...)`. */
 export type { MutationFormAttributes } from '../mutation.js';
-export type { QueryDefinition, QueryLoadContext, QueryResult } from '../query.js';
+export type {
+  QueryDeclarationDefinition,
+  QueryDefinition,
+  QueryLoadContext,
+  QueryResult,
+} from '../query.js';
 export { query } from '../query.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {

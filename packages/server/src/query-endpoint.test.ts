@@ -10,6 +10,38 @@ import {
 import { s, type Schema } from './schema.js';
 
 describe('query endpoints', () => {
+  it('bounds query load results to JSON-serializable values', () => {
+    interface CatalogQueryResult {
+      meta: {
+        page: number;
+        source: string | null;
+      };
+      readonly rows: readonly {
+        readonly id: string;
+        readonly tags: readonly string[];
+      }[];
+    }
+
+    const catalogQuery = query('catalog', {
+      load(): CatalogQueryResult {
+        return {
+          meta: { page: 1, source: null },
+          rows: [{ id: 'p1', tags: ['featured'] }],
+        };
+      },
+      reads: [],
+    });
+    const assertNonJsonQueryResultsRejected = () => {
+      // @ts-expect-error SPEC §10.2 query values are JsonValue-bound client wire payloads.
+      query('bad-date-query', { load: () => ({ createdAt: new Date() }), reads: [] });
+      // @ts-expect-error SPEC §10.2 query values cannot carry functions to the client wire.
+      query('bad-function-query', { load: () => ({ format() {} }), reads: [] });
+    };
+
+    expect(catalogQuery.key).toBe('catalog');
+    expect(assertNonJsonQueryResultsRejected).toBeTypeOf('function');
+  });
+
   it('defaults omitted query reads to an empty derived-read placeholder', async () => {
     const productQuery = query('product', {
       load: () => ({ id: 'p1' }),

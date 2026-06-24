@@ -1,10 +1,10 @@
+import type { JsonValue } from '@kovojs/core';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
 import {
   renderHttpGuardFailureResponse,
   resolveLifecycleRequest,
   runGuard,
-  type Guard,
   type GuardFailureResponseOptions,
   type GuardResult,
   type RequestLifecycleOptions,
@@ -19,6 +19,7 @@ import {
   type ValidationFailurePayload,
 } from './schema.js';
 import { renderQueryWireHtml } from './wire-html.js';
+import type { JsonSerializable } from './json-boundary.js';
 
 interface QueryDeltaListMeta {
   domain: string;
@@ -67,7 +68,7 @@ export interface QueryEndpointRegistry<Request = unknown> {
 /** The shape of a query: its key, `load`, `reads` domains, and optional args/output/guard/version. */
 export interface QueryDefinition<
   Key extends string = string,
-  Value = unknown,
+  Value = JsonValue,
   Input = unknown,
   Request = unknown,
 > {
@@ -79,7 +80,9 @@ export interface QueryDefinition<
    * may set it directly.
    */
   delta?: readonly QueryDeltaListMeta[];
-  guard?: Guard<Request>;
+  guard?: {
+    call(request: Request): GuardResult | Promise<GuardResult>;
+  }['call'];
   instanceKey?: ((input: unknown) => string | undefined) | string;
   load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
   key: Key;
@@ -150,14 +153,28 @@ export interface RegisteredQueryDefinition {
   version?: BivariantQueryVersion | number | string;
 }
 
-/** Definition object passed to `query()` before the stable key is attached. */
-export type QueryDeclarationDefinition<Request = unknown> = Omit<
-  RegisteredQueryDefinition,
-  'guard' | 'key' | 'load'
-> & {
-  guard?: BivariantGuard<Request>;
-  load?: { call(input: any, context?: QueryLoadContext<Request>): unknown }['call'];
-};
+/**
+ * Definition object passed to `query()` before the stable key is attached (SPEC §10.2).
+ * Query load values are checked against the public JSON boundary by `query()`.
+ */
+export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue> {
+  args?: Schema<unknown>;
+  /**
+   * Delta-eligible collections for this query (SPEC §9.1.1). The compiler
+   * populates this; framework/test code may set it directly.
+   */
+  delta?: readonly { domain: string; key: string; path: string }[];
+  guard?: {
+    call(request: Request): GuardResult | Promise<GuardResult>;
+  }['call'];
+  instanceKey?: ((input: unknown) => string | undefined) | string;
+  load?: {
+    call(input: any, context?: QueryLoadContext<Request>): Value | Promise<Value>;
+  }['call'];
+  output?: Schema<Value>;
+  reads?: readonly Domain[];
+  version?: ((input: any, value: any) => number | string | undefined) | number | string;
+}
 
 /** App-scoped query factory. `createApp()` uses this to contextually type query callbacks from configured request providers (SPEC §9.5/§10.2). */
 export interface QueryFactory<Request = unknown> {
@@ -172,10 +189,20 @@ export interface QueryFactory<Request = unknown> {
   >(
     key: Key,
     definition: Definition,
+    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
+      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+        ? []
+        : [never]
+      : []
   ): QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] };
-  <const Key extends string, const Definition extends QueryDeclarationDefinition<Request>>(
+  <const Key extends string, const Definition extends QueryDeclarationDefinition<Request, any>>(
     key: Key,
     definition: Definition,
+    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
+      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+        ? []
+        : [never]
+      : []
   ): Definition extends { args: Schema<infer Input> }
     ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] }
     : Definition & { key: Key; reads: readonly Domain[] };
@@ -210,19 +237,30 @@ export function query<
 >(
   key: Key,
   definition: Definition,
+  ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
+    ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+      ? []
+      : [never]
+    : []
 ): QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] };
 export function query<
   const Key extends string,
-  const Definition extends Omit<RegisteredQueryDefinition, 'key'>,
+  const Definition extends QueryDeclarationDefinition<any, any>,
 >(
   key: Key,
   definition: Definition,
+  ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
+    ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+      ? []
+      : [never]
+    : []
 ): Definition extends { args: Schema<infer Input> }
   ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] }
   : Definition & { key: Key; reads: readonly Domain[] };
 export function query<const Key extends string>(
   key: Key,
   definition: Omit<RegisteredQueryDefinition, 'key'>,
+  ..._jsonBoundary: never[]
 ): unknown {
   const queryDefinition = {
     ...definition,
@@ -233,7 +271,10 @@ export function query<const Key extends string>(
 
   return {
     ...queryDefinition,
-    args: queryArgsSchema(definition.args, queryDefinition as QueryDefinition),
+    args: queryArgsSchema(
+      definition.args,
+      queryDefinition as QueryDefinition<string, unknown, unknown, unknown>,
+    ),
   };
 }
 
