@@ -23,12 +23,12 @@ import { createCommerceScenarioClient, seedCartItems } from './app-test-helpers.
 
 const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
 const commercePageHints = renderCommercePageHints();
-// Base + the original headroom, plus ~13.7KB for the @kovojs/ui shadcn-parity UX
-// overhaul (plans/better-components-ux.md): new Dialog/AlertDialog header/footer/
-// close-X families, menu/toolbar button resets, anchored-overlay positioning, and
-// disclosure open/close animations enlarge the monolithic kovo-ui.css that every
-// app links (measured deterministically at 143,447 B from a clean commerce build).
-const phase0CommerceRouteCssBytes = 148_746;
+// Base + the original headroom, plus the @kovojs/ui shadcn-parity UX overhaul
+// (plans/better-components-ux.md) and the focus-safe hover-card/toast/slider CSS
+// additions from plans/secure-framework.md. The monolithic kovo-ui.css is linked
+// by every app route; measured deterministically at 154,437 B from a clean
+// commerce build.
+const phase0CommerceRouteCssBytes = 159_737;
 
 function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
   return renderPageHints(
