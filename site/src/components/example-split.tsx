@@ -251,11 +251,7 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
         </section>
       </div>
       {guideHtml ? (
-        <article
-          style={exampleSplitStyles.guide}
-          data-prose
-          rawHtml={trustedHtml(guideHtml)}
-        />
+        <article style={exampleSplitStyles.guide} data-prose rawHtml={trustedHtml(guideHtml)} />
       ) : (
         ''
       )}

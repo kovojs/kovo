@@ -35,10 +35,7 @@ Possible end state:
 ```tsx
 const DocsLayout = layout({
   render: (_queries, _state, { regions }) => (
-    <DocsShell
-      page={regions.page}
-      sidebar={regions.sidebar}
-    />
+    <DocsShell page={regions.page} sidebar={regions.sidebar} />
   ),
 });
 

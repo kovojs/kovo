@@ -325,20 +325,14 @@ export function SectionIndex({ section }: { section: SectionIndexInput }): strin
       <div style={docsLayoutStyles.sectionHead}>
         <h1 style={docsLayoutStyles.sectionHeadTitle}>{section.title}</h1>
         {SECTION_INTROS[section.key] ? (
-          <p style={docsLayoutStyles.sectionHeadIntro}>
-            {SECTION_INTROS[section.key]!}
-          </p>
+          <p style={docsLayoutStyles.sectionHeadIntro}>{SECTION_INTROS[section.key]!}</p>
         ) : (
           ''
         )}
       </div>
       {groups.map((group, groupIndex) => (
         <section style={groupIndex === 0 ? null : docsLayoutStyles.sectionGroup}>
-          {section.groups ? (
-            <h2 style={docsLayoutStyles.sectionGroupTitle}>{group.title}</h2>
-          ) : (
-            ''
-          )}
+          {section.groups ? <h2 style={docsLayoutStyles.sectionGroupTitle}>{group.title}</h2> : ''}
           <ul style={docsLayoutStyles.sectionGrid}>
             {group.pages.map((page, index) => {
               const title = numbered ? page.title.replace(/^\d+\.\s*/, '') : page.title;

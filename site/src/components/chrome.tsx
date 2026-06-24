@@ -16,6 +16,7 @@ import type { ApiSidebar as ApiSidebarData, Heading, NavGroup, NavLink } from '.
 export interface ClientHrefs {
   code: string;
   search: string;
+  sidebar: string;
   theme: string;
 }
 

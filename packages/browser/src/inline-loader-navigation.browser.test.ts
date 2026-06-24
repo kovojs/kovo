@@ -304,7 +304,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const stylesheet = document.querySelector('link[rel="stylesheet"][href="/assets/site.css"]');
-    const criticalStyle = document.querySelector('style[data-kovo-critical-href="/assets/site.css"]');
+    const criticalStyle = document.querySelector(
+      'style[data-kovo-critical-href="/assets/site.css"]',
+    );
     const movedAssets: string[] = [];
     const insertBefore = document.head.insertBefore.bind(document.head);
     vi.spyOn(document.head, 'insertBefore').mockImplementation((node, child) => {

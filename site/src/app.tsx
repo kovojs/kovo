@@ -52,9 +52,13 @@ function docsRoute(page: SiteRoutePage): SiteRoute {
     meta: page.meta,
     modulepreloads,
     stylesheets: siteStylesheetsForRoute(page.routePath),
-    page: siteRoutePage(page.routePath, function pageRoute() {
-      return <DocsRoutePage clients={clientHrefs} page={page.body} />;
-    }, { stampPage: false }),
+    page: siteRoutePage(
+      page.routePath,
+      function pageRoute() {
+        return <DocsRoutePage clients={clientHrefs} page={page.body} />;
+      },
+      { stampPage: false },
+    ),
   }) as SiteRoute;
 }
 

@@ -41,6 +41,18 @@ function check(condition, label) {
   else failures.push(label);
 }
 
+function normalizeText(text) {
+  return text?.replace(/\s+/g, ' ').trim() ?? '';
+}
+
+function isEagerHandlerRequest(pathname) {
+  if (pathname.endsWith('/kovo-runtime.client.js')) return false;
+  // The docs sidebar is a declared modulepreload for first-paint position sync
+  // (SPEC §4.7 on:load). Keep this gate focused on lazy authored handlers.
+  if (pathname.endsWith('/sidebar.js')) return false;
+  return pathname.startsWith('/c/') || pathname === '/search-index.json';
+}
+
 const server = createServer(async (request, response) => {
   const file = fileFor(request.url ?? '/');
   if (!existsSync(file)) {
@@ -64,13 +76,15 @@ try {
   const noJsPage = await noJs.newPage();
   await noJsPage.goto(`${origin}/`);
   check(
-    (await noJsPage.locator('h1').first().textContent())?.includes(
+    normalizeText(await noJsPage.locator('h1').first().textContent()).includes(
       'The web framework that turns security bugs into build errors',
     ),
     'no-JS: landing hero renders',
   );
   check(
-    (await noJsPage.locator('body').textContent())?.includes('security holes a build error'),
+    normalizeText(await noJsPage.locator('body').textContent()).includes(
+      'security holes a build error',
+    ),
     'no-JS: landing tagline renders',
   );
   await noJsPage.click('a[href="/docs/why-kovo/"]');
@@ -97,10 +111,10 @@ try {
     const url = new URL(request.url());
     if (url.pathname.startsWith('/c/') || url.pathname === '/search-index.json') {
       scriptRequests.push(url.pathname);
-      // SPEC §4.4 allows the framework-owned runtime bootstrap to load
-      // independently from authored handler modules. This smoke gate proves
-      // authored island/search bytes stay lazy until first interaction.
-      if (!url.pathname.endsWith('/kovo-runtime.client.js')) {
+      // SPEC §4.4 allows the framework-owned runtime bootstrap, and route hints
+      // may explicitly preload support modules. This smoke gate proves authored
+      // handler/search bytes stay lazy until first interaction.
+      if (isEagerHandlerRequest(url.pathname)) {
         eagerIslandRequests.push(url.pathname);
       }
     }

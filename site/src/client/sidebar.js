@@ -42,7 +42,9 @@ function updateCurrentSidebar(nav) {
 }
 
 function syncNow(target) {
-  const nav = target?.matches?.(SIDEBAR_SELECTOR) ? target : document.querySelector(SIDEBAR_SELECTOR);
+  const nav = target?.matches?.(SIDEBAR_SELECTOR)
+    ? target
+    : document.querySelector(SIDEBAR_SELECTOR);
   if (!nav || nav.clientHeight === 0) return;
 
   updateCurrentSidebar(nav);

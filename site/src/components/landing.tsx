@@ -916,7 +916,9 @@ function HowItWorks(): string {
             </div>
             <div style={hiwStyles.tbody}>
               <div style={hiwStyles.codeLine}>
-                <span style={hiwStyles.tDim}>{'// name comes straight from the sign-up form (untrusted)'}</span>
+                <span style={hiwStyles.tDim}>
+                  {'// name comes straight from the sign-up form (untrusted)'}
+                </span>
               </div>
               <div style={hiwStyles.codeLine}>
                 {'db.'}
@@ -936,7 +938,9 @@ function HowItWorks(): string {
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>source</span>
-                <span>{'form field name '}&middot;{' request body'}</span>
+                <span>
+                  {'form field name '}&middot;{' request body'}
+                </span>
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>sink</span>
@@ -944,7 +948,9 @@ function HowItWorks(): string {
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>fix</span>
-                <span style={hiwStyles.tOk}>{'db.query(sql`select … where name = ${input.name}`)'}</span>
+                <span style={hiwStyles.tOk}>
+                  {'db.query(sql`select … where name = ${input.name}`)'}
+                </span>
               </div>
             </div>
           </div>
@@ -956,7 +962,9 @@ function HowItWorks(): string {
             </div>
             <div style={hiwStyles.tbody}>
               <div style={hiwStyles.codeLine}>
-                <span style={hiwStyles.tDim}>{'// comment body is user-submitted (untrusted)'}</span>
+                <span style={hiwStyles.tDim}>
+                  {'// comment body is user-submitted (untrusted)'}
+                </span>
               </div>
               <div style={hiwStyles.codeLine}>
                 {'<article>{ '}
@@ -972,7 +980,9 @@ function HowItWorks(): string {
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>source</span>
-                <span>{'comment.body '}&middot;{' request data'}</span>
+                <span>
+                  {'comment.body '}&middot;{' request data'}
+                </span>
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>sink</span>
@@ -980,7 +990,9 @@ function HowItWorks(): string {
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>fix</span>
-                <span style={hiwStyles.tOk}>{'<article>{comment.body}</article> escapes by default'}</span>
+                <span style={hiwStyles.tOk}>
+                  {'<article>{comment.body}</article> escapes by default'}
+                </span>
               </div>
             </div>
           </div>
@@ -1010,7 +1022,9 @@ function HowItWorks(): string {
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>source</span>
-                <span>{'cross-site POST '}&middot;{' forged'}</span>
+                <span>
+                  {'cross-site POST '}&middot;{' forged'}
+                </span>
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>sink</span>
@@ -1018,7 +1032,9 @@ function HowItWorks(): string {
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>fix</span>
-                <span style={hiwStyles.tOk}>{"endpoint('/transfer', (req) => pay(req.session))"}</span>
+                <span style={hiwStyles.tOk}>
+                  {"endpoint('/transfer', (req) => pay(req.session))"}
+                </span>
               </div>
             </div>
           </div>
@@ -1030,7 +1046,9 @@ function HowItWorks(): string {
             </div>
             <div style={hiwStyles.tbody}>
               <div style={hiwStyles.codeLine}>
-                <span style={hiwStyles.tDim}>{'// invoice id comes from the URL (client-supplied)'}</span>
+                <span style={hiwStyles.tDim}>
+                  {'// invoice id comes from the URL (client-supplied)'}
+                </span>
               </div>
               <div style={hiwStyles.codeLine}>
                 {'db.select().from(invoices).where('}
@@ -1046,7 +1064,9 @@ function HowItWorks(): string {
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>source</span>
-                <span>{'params.id '}&middot;{' client-supplied'}</span>
+                <span>
+                  {'params.id '}&middot;{' client-supplied'}
+                </span>
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>sink</span>
@@ -1054,7 +1074,9 @@ function HowItWorks(): string {
               </div>
               <div style={hiwStyles.drow}>
                 <span style={hiwStyles.dlbl}>fix</span>
-                <span style={hiwStyles.tOk}>{'.where(and(eq(invoices.id, params.id), eq(invoices.userId, session.userId)))'}</span>
+                <span style={hiwStyles.tOk}>
+                  {'.where(and(eq(invoices.id, params.id), eq(invoices.userId, session.userId)))'}
+                </span>
               </div>
             </div>
           </div>
