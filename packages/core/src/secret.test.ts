@@ -2,11 +2,15 @@ import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import {
+  isRedacted,
   isSecret,
+  redacted,
+  revealRedacted,
   revealSecret,
   secret,
   trustedReveal,
   type JsonValue,
+  type RedactedValue,
   type Secret,
   type SecretValue,
 } from './index.js';
@@ -116,5 +120,58 @@ describe('Secret type bound (type-only, defeated by any — SPEC §6.6)', () => 
     void leak;
     // Runtime poison is the backstop when `any`/casts defeat the type bound.
     expect(JSON.stringify(s)).toBe('"[secret]"');
+  });
+});
+
+describe('runtime redacted PII wrapper (SPEC §6.6 defense-in-depth)', () => {
+  it('renders the mask (not the raw PII) on every accidental-egress path', () => {
+    const email = redacted('alice@example.com', { mask: 'a•••@example.com' });
+    expect(String(email)).toBe('a•••@example.com');
+    expect(`${email}`).toBe('a•••@example.com');
+    expect(JSON.stringify(email)).toBe('"a•••@example.com"');
+    expect(JSON.stringify({ email })).toBe('{"email":"a•••@example.com"}');
+    expect(inspect(email)).toBe('a•••@example.com');
+    expect(inspect({ email })).not.toContain('alice@example.com');
+    expect(Object.prototype.toString.call(email)).toBe('[object Redacted]');
+    expect(email.mask).toBe('a•••@example.com');
+  });
+
+  it('defaults the mask to [redacted] and reveals the real value explicitly', () => {
+    const ssn = redacted('123-45-6789');
+    expect(String(ssn)).toBe('[redacted]');
+    expect(JSON.stringify(ssn)).not.toContain('6789');
+    expect(ssn.reveal()).toBe('123-45-6789');
+    expect(revealRedacted(ssn)).toBe('123-45-6789');
+    expect(ssn.mask).toBe('[redacted]');
+  });
+
+  it('derives via map() preserving the mask and the redacted brand', () => {
+    const name = redacted('Alice Smith', { mask: 'A.' });
+    const upper = name.map((n) => n.toUpperCase());
+    expect(isRedacted(upper)).toBe(true);
+    expect(String(upper)).toBe('A.');
+    expect(upper.reveal()).toBe('ALICE SMITH');
+    expect(upper.mask).toBe('A.');
+  });
+
+  it('distinguishes redacted from secret boxes by guard, and both fail JsonValue', () => {
+    const r = redacted('pii');
+    const s = secret('key');
+    expect(isRedacted(r)).toBe(true);
+    expect(isSecret(r)).toBe(false);
+    expect(isRedacted(s)).toBe(false);
+    expect(isSecret(s)).toBe(true);
+    const rv: RedactedValue<string> = r;
+    // @ts-expect-error a redacted PII value is intentionally not a JsonValue.
+    const leak: JsonValue = rv;
+    void leak;
+  });
+
+  it('is idempotent and compares in constant time', () => {
+    const r = redacted('tok');
+    expect(redacted(r)).toBe(r);
+    expect(r.equals('tok')).toBe(true);
+    expect(r.equals('nope')).toBe(false);
+    expect(r.equals(redacted('tok'))).toBe(true);
   });
 });

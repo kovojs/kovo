@@ -61,27 +61,49 @@ const secretBoxBrand: unique symbol = Symbol('kovo.secret');
 
 const inspectCustom = Symbol.for('nodejs.util.inspect.custom');
 
-class KovoSecret<T> {
+/** Default poison output for {@link redacted} when no mask is supplied. */
+const REDACTED_MASK = '[redacted]';
+
+type PoisonKind = 'secret' | 'redacted';
+
+/**
+ * Shared runtime poison box backing both {@link secret} and {@link redacted}. The
+ * box holds the value in a true private field and renders `#poison` (a fixed,
+ * safe-to-display string) on every accidental-egress coercion. The brand symbol's
+ * value carries the kind so the guards can distinguish a secret from a redacted box.
+ */
+class KovoPoisonBox<T> {
   /** True private field: invisible to enumeration, JSON, `util.inspect`, and structuredClone. */
   readonly #value: T;
+  readonly #poison: string;
+  readonly #kind: PoisonKind;
 
-  constructor(value: T) {
+  constructor(value: T, poison: string, kind: PoisonKind) {
     this.#value = value;
-    // Non-enumerable brand so the marker never appears in spreads/Object.keys,
-    // while remaining detectable by isSecret within this module.
-    Object.defineProperty(this, secretBoxBrand, { value: true, enumerable: false });
+    this.#poison = poison;
+    this.#kind = kind;
+    // Non-enumerable brand (value = kind) so the marker never appears in
+    // spreads/Object.keys, while remaining detectable by the guards in-module.
+    Object.defineProperty(this, secretBoxBrand, { value: kind, enumerable: false });
   }
 
   reveal(): T {
     return this.#value;
   }
 
-  map<U>(fn: (value: T) => U): SecretValue<U> {
-    return secret(fn(this.#value));
+  /** The masked/poison display form; exposed publicly only on {@link RedactedValue}. */
+  get mask(): string {
+    return this.#poison;
   }
 
-  equals(other: T | Secret<T>): boolean {
-    const right = isSecret(other) ? revealSecret(other) : other;
+  map<U>(fn: (value: T) => U): KovoPoisonBox<U> {
+    return Object.freeze(
+      new KovoPoisonBox(fn(this.#value), this.#poison, this.#kind),
+    ) as unknown as KovoPoisonBox<U>;
+  }
+
+  equals(other: unknown): boolean {
+    const right = isPoisonBox(other) ? (other as KovoPoisonBox<T>).reveal() : other;
     const left = this.#value;
     if (typeof left === 'string' && typeof right === 'string') {
       return timingSafeStringEqual(left, right);
@@ -90,28 +112,35 @@ class KovoSecret<T> {
   }
 
   toString(): string {
-    return REDACTED;
+    return this.#poison;
   }
 
   toJSON(): string {
-    return REDACTED;
+    return this.#poison;
   }
 
   valueOf(): string {
-    return REDACTED;
+    return this.#poison;
   }
 
   [Symbol.toPrimitive](): string {
-    return REDACTED;
+    return this.#poison;
   }
 
   [inspectCustom](): string {
-    return REDACTED;
+    return this.#poison;
   }
 
   get [Symbol.toStringTag](): string {
-    return 'Secret';
+    return this.#kind === 'secret' ? 'Secret' : 'Redacted';
   }
+}
+
+/** Internal: any poison box (secret or redacted). */
+function isPoisonBox(value: unknown): value is KovoPoisonBox<unknown> {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
+  const brand = (value as Record<symbol, unknown>)[secretBoxBrand];
+  return brand === 'secret' || brand === 'redacted';
 }
 
 /**
@@ -126,19 +155,19 @@ class KovoSecret<T> {
  */
 export function secret<T>(value: T): SecretValue<T> {
   if (isSecret(value)) return value as unknown as SecretValue<T>;
-  return Object.freeze(new KovoSecret(value)) as unknown as SecretValue<T>;
+  return Object.freeze(new KovoPoisonBox(value, REDACTED, 'secret')) as unknown as SecretValue<T>;
 }
 
 /**
  * Runtime guard recognizing a {@link secret} box. Framework sinks (and app code)
  * use it to detect-and-refuse a confidential value before serialization. Cannot be
- * forged: the brand is a module-private symbol.
+ * forged: the brand is a module-private symbol. Returns `false` for a {@link redacted}
+ * box — use {@link isRedacted} for that.
  */
 export function isSecret(value: unknown): value is SecretValue<unknown> {
   return (
-    (typeof value === 'object' || typeof value === 'function') &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[secretBoxBrand] === true
+    isPoisonBox(value) &&
+    (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'secret'
   );
 }
 
@@ -150,6 +179,83 @@ export function isSecret(value: unknown): value is SecretValue<unknown> {
  */
 export function revealSecret<T>(value: Secret<T>): T {
   return isSecret(value) ? (value as SecretValue<T>).reveal() : (value as unknown as T);
+}
+
+declare const redactedBrand: unique symbol;
+
+/**
+ * Type-level marker for personally-identifiable or otherwise sensitive values that
+ * **may legitimately travel** to the database, client, or UI, but must never appear
+ * verbatim in a log line or error payload. Like {@link Secret}, a `Redacted<T>` is
+ * intentionally not assignable to `JsonValue`, so reaching a client-bound sink with
+ * the raw box is a type error — send `.reveal()` (the real value) or `.mask` (the
+ * safe display form) explicitly.
+ */
+export interface Redacted<T> {
+  readonly __kovoRedactedBrand: typeof redactedBrand;
+  readonly __kovoRedactedValue?: T;
+}
+
+/**
+ * Runtime PII wrapper produced by {@link redacted}. Distinct from {@link SecretValue}
+ * in policy, not mechanism: a redacted value renders its `mask` (a safe-to-display
+ * partial such as `j•••@example.com`, default `"[redacted]"`) on every accidental-egress
+ * path (`toString`/`JSON.stringify`/coercion/`util.inspect`), so logs and error payloads
+ * show the mask, never the raw PII — while `.reveal()` returns the real value for the
+ * DB/render path that legitimately needs it. Defense-in-depth, not a proof (SPEC §6.6).
+ */
+export interface RedactedValue<T> extends Redacted<T> {
+  /** Returns the real (unmasked) value — the explicit reveal at a DB/render sink. */
+  reveal(): T;
+  /** The safe-to-display masked representation (what every poisoned coercion yields). */
+  readonly mask: string;
+  /** Derives a new redacted value, preserving the mask, without un-poisoning. */
+  map<U>(fn: (value: T) => U): RedactedValue<U>;
+  /** Constant-time equality against another value or redacted/secret box. */
+  equals(other: T | Redacted<T> | Secret<T>): boolean;
+}
+
+/** Options for {@link redacted}. */
+export interface RedactedOptions {
+  /**
+   * The safe-to-display mask rendered on every accidental-egress path. Defaults to
+   * `"[redacted]"`. Provide a partial reveal (e.g. last 4 digits, a masked email) that
+   * is genuinely safe to log and show.
+   */
+  mask?: string;
+}
+
+/**
+ * Wraps a PII / sensitive value that legitimately travels to the database, client, or
+ * UI but must never be logged or surfaced in an error verbatim. The box renders its
+ * {@link RedactedOptions.mask} (default `"[redacted]"`) on every accidental coercion;
+ * call `.reveal()` at the DB/render sink that needs the real value. Idempotent.
+ *
+ * Sibling of {@link secret}: `secret` is for values that must never leave the server
+ * (API keys, tokens); `redacted` is for values that DO travel but must not leak into
+ * logs (emails, names, card suffixes). Both are defense-in-depth (SPEC §6.6), not the
+ * by-construction confidentiality proof (KV435).
+ */
+export function redacted<T>(value: T, options: RedactedOptions = {}): RedactedValue<T> {
+  if (isRedacted(value)) return value as unknown as RedactedValue<T>;
+  const box = new KovoPoisonBox(value, options.mask ?? REDACTED_MASK, 'redacted');
+  return Object.freeze(box) as unknown as RedactedValue<T>;
+}
+
+/**
+ * Runtime guard recognizing a {@link redacted} box. Returns `false` for a {@link secret}
+ * box. Cannot be forged: the brand is a module-private symbol.
+ */
+export function isRedacted(value: unknown): value is RedactedValue<unknown> {
+  return (
+    isPoisonBox(value) &&
+    (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'redacted'
+  );
+}
+
+/** Explicitly un-masks a {@link redacted} box and returns its real value. */
+export function revealRedacted<T>(value: Redacted<T>): T {
+  return isRedacted(value) ? (value as RedactedValue<T>).reveal() : (value as unknown as T);
 }
 
 /** Options for {@link publishToClient}. */

@@ -3,9 +3,21 @@ import type { JsonValue } from './json.js';
 
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type { JsonValue } from './json.js';
-export { isSecret, publishToClient, revealSecret, secret, trustedReveal } from './secret.js';
+export {
+  isRedacted,
+  isSecret,
+  publishToClient,
+  redacted,
+  revealRedacted,
+  revealSecret,
+  secret,
+  trustedReveal,
+} from './secret.js';
 export type {
   PublishToClientOptions,
+  Redacted,
+  RedactedOptions,
+  RedactedValue,
   Secret,
   SecretValue,
   TrustedRevealMethod,
