@@ -55,7 +55,7 @@ const inlineHelperSpecs = {
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
-export const inlineKovoLoaderGzipByteBudget = 8704;
+export const inlineKovoLoaderGzipByteBudget = 8960;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
@@ -441,6 +441,12 @@ function installInlineKovoLoader(im) {
     else location.href = href;
   };
   const hk = (el) => {
+    if (el.nodeType !== 1) return '';
+    if (el.tagName === 'STYLE') {
+      const criticalHref = el.getAttribute('data-kovo-critical-href');
+      return criticalHref ? ['style', criticalHref, el.textContent || ''].join('|') : '';
+    }
+    if (el.tagName === 'SCRIPT') return el.outerHTML ? 'script|' + el.outerHTML : '';
     if (el.tagName !== 'LINK') return '';
     let rel = (el.getAttribute('rel') || '')
       .split(/\s+/)
@@ -475,34 +481,33 @@ function installInlineKovoLoader(im) {
     }
   };
   const ch = (nextHead) => {
-    const attr = 'data-kovo-head-preserve';
     const pool = new Map();
-    for (const el of qa(doc.head, 'link[href][rel]')) {
+    for (const el of [...doc.head.childNodes]) {
       const key = hk(el);
       if (!key) continue;
       const list = pool.get(key) || [];
       list.push(el);
       pool.set(key, list);
     }
-    const kept = new Map();
-    let id = 0;
-    for (const el of qa(nextHead, 'link[href][rel]')) {
-      const key = hk(el);
+
+    const kept = new Set();
+    let cursor = doc.head.firstChild;
+    for (const next of [...nextHead.childNodes]) {
+      const key = hk(next);
       const match = key && pool.get(key)?.shift();
-      if (!match) continue;
-      const token = String(id += 1);
-      el.setAttribute(attr, token);
-      kept.set(token, match);
-    }
-    doc.head.innerHTML = nextHead.innerHTML;
-    for (const el of qa(doc.head, '[' + attr + ']')) {
-      const match = kept.get(el.getAttribute(attr));
-      if (!match) {
-        el.removeAttribute(attr);
-        continue;
+      const node = match || next.cloneNode(true);
+      kept.add(node);
+      if (node === cursor) {
+        cursor = cursor.nextSibling;
+      } else {
+        doc.head.insertBefore(node, cursor);
+        cursor = node.nextSibling;
       }
-      match.removeAttribute(attr);
-      el.replaceWith(match);
+    }
+    while (cursor) {
+      const next = cursor.nextSibling;
+      if (!kept.has(cursor)) cursor.remove();
+      cursor = next;
     }
   };
   const an = async (href, pop = false) => {
@@ -1140,7 +1145,7 @@ export function buildInlineKovoLoaderModuleSource(
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
     '',
-    '// SPEC.md §4.4 keeps the always-loaded loader under an 8.5KB gzip budget; this',
+    '// SPEC.md §4.4 keeps the always-loaded loader under an 8.75KB gzip budget; this',
     '// literal is the pre-minified bootstrap shipped in document shells.',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(

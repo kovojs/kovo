@@ -295,6 +295,7 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const stylesheet = document.querySelector('link[rel="stylesheet"][href="/assets/site.css"]');
+    const criticalStyle = document.querySelector('style[data-kovo-critical-href="/assets/site.css"]');
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       async text() {
@@ -326,6 +327,9 @@ describe('browser inline loader enhanced navigation', () => {
 
     const preserved = document.querySelector('link[href="/assets/site.css"]');
     expect(preserved).toBe(stylesheet);
+    expect(document.querySelector('style[data-kovo-critical-href="/assets/site.css"]')).toBe(
+      criticalStyle,
+    );
     expect(preserved?.getAttribute('rel')).toBe('stylesheet');
     expect(preserved?.hasAttribute('data-kovo-deferred-style')).toBe(false);
     expect(document.head.innerHTML).not.toContain('data-kovo-head-preserve');
