@@ -55,6 +55,7 @@ export interface KovoCheckInput {
   derivedMutations?: readonly DerivedMutationDomainSet[];
   derivedQueries?: readonly QueryReadSet[];
   diagnostics?: readonly StaticDiagnosticFact[];
+  cookies?: readonly CookieExplainFact[];
   endpoints?: readonly EndpointExplain[];
   eventPayloads?: readonly EventPayloadFact[];
   fixpointChecks?: readonly FixpointCheck[];
@@ -120,6 +121,17 @@ export interface CapabilityExplainFact {
   site: string;
   source?: string;
   table?: string;
+}
+
+/** @internal */
+export interface CookieExplainFact {
+  class: 'app-data' | 'auth' | 'session';
+  downgraded?: readonly ('httpOnly' | 'sameSiteNone' | 'secure')[];
+  floor: string;
+  justification?: string;
+  name: string;
+  site?: string;
+  source: 'builder' | 'forwarded';
 }
 
 /** @internal */
@@ -478,6 +490,7 @@ const arrayFields = [
   'access',
   'capabilities',
   'components',
+  'cookies',
   'derivedMutations',
   'derivedQueries',
   'diagnostics',

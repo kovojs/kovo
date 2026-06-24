@@ -29,6 +29,7 @@ export const EXPLAIN_USAGE = [
   '       kovo explain --sources-sinks',
   '       kovo explain --endpoints [graph.json]',
   '       kovo explain --capabilities [graph.json]',
+  '       kovo explain --cookies [graph.json]',
   '       kovo explain --revealed [graph.json]',
   '       kovo explain --trust [graph.json]',
   '       kovo explain --access [--fail-on-findings] [graph.json]',
@@ -42,7 +43,7 @@ export const EXPLAIN_USAGE = [
  * literal here so the drift guard can compare against `explainUsage()`.
  */
 export const EXPLAIN_USAGE_LINE =
-  'kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json] | kovo explain --sources-sinks | kovo explain --endpoints [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
+  'kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json] | kovo explain --sources-sinks | kovo explain --endpoints [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
 
 /** @internal Usage line emitted for `kovo add` (see `addUsage`). */
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
@@ -146,6 +147,11 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
         description: 'List audited capability escapes such as governed-column admin assignments.',
       },
       {
+        flag: '--cookies',
+        description:
+          'List cookie class floors, forwarded provider cookies, and justified insecure downgrades.',
+      },
+      {
         flag: '--revealed',
         description:
           'List confidentiality reveals, distinguishing proof-grade projections from audit-grade arbitrary functions.',
@@ -170,6 +176,7 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
       'kovo explain --sources-sinks',
       'kovo explain --endpoints',
       'kovo explain --capabilities',
+      'kovo explain --cookies',
       'kovo explain --revealed',
       'kovo explain --trust',
       'kovo explain --access --fail-on-findings',

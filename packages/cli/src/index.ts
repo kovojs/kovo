@@ -65,6 +65,7 @@ export type {
   KovoCapabilitiesExplainOptions,
   KovoCheckFamily,
   KovoCheckInput,
+  KovoCookiesExplainOptions,
   KovoEndpointExplainOptions,
   KovoExplainInput,
   KovoExplainOptions,

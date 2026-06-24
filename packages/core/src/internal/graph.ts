@@ -5,6 +5,7 @@ export type {
   CaptureChannel,
   ClockExplain,
   ComponentExplain,
+  CookieExplainFact,
   DerivedMutationDomainSet,
   DeriveExplain,
   EndpointExplain,

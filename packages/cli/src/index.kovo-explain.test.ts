@@ -765,6 +765,42 @@ describe('kovo explain', () => {
     `);
   });
 
+  it('prints cookie floors and downgrades with stable explain output', () => {
+    const result = kovoExplain(
+      {
+        cookies: [
+          {
+            class: 'session',
+            floor: 'HttpOnly; Secure; SameSite=Lax',
+            name: 'sid',
+            site: 'auth/callback.ts:18',
+            source: 'forwarded',
+          },
+          {
+            class: 'auth',
+            downgraded: ['sameSiteNone'],
+            floor: 'HttpOnly; Secure; SameSite=None',
+            justification: 'embedded cross-site login requires CHIPS',
+            name: 'embed_sid',
+            site: 'auth/embed.ts:12',
+            source: 'builder',
+          },
+        ],
+      },
+      { cookies: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      COOKIES
+      COOKIE name=embed_sid class=auth source=builder floor="HttpOnly; Secure; SameSite=None" downgraded=sameSiteNone site=auth/embed.ts:12 justification="embedded cross-site login requires CHIPS"
+      COOKIE name=sid class=session source=forwarded floor="HttpOnly; Secure; SameSite=Lax" downgraded=- site=auth/callback.ts:18 justification=-
+      SUMMARY total=2 forwarded=1 downgraded=1
+      "
+    `);
+  });
+
   it('prints confidentiality reveals with stable explain output', () => {
     const result = kovoExplain(
       {
@@ -845,6 +881,48 @@ describe('kovo explain', () => {
         'REVEALED',
         'REVEAL grade=audit method=arbitrary-fn query=support/user path=tokenPreview site=app/support.ts:9 source=users.apiToken selectedSecret=yes justification="reviewed support-only reveal"',
         'SUMMARY total=1 proof=0 audit=1',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('accepts kovo explain --cookies as a CLI audit mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-cookies-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          cookies: [
+            {
+              class: 'session',
+              floor: 'HttpOnly; Secure; SameSite=Lax',
+              name: 'better-auth.session_token',
+              site: 'auth/callback.ts:18',
+              source: 'forwarded',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--cookies', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      [
+        'kovo-explain/v1',
+        'COOKIES',
+        'COOKIE name=better-auth.session_token class=session source=forwarded floor="HttpOnly; Secure; SameSite=Lax" downgraded=- site=auth/callback.ts:18 justification=-',
+        'SUMMARY total=1 forwarded=1 downgraded=0',
         '',
       ].join('\n'),
     );

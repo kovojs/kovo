@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  cookieClassFloor,
   normalizeForwardedSetCookie,
+  normalizeForwardedSetCookieWithAudit,
   serializeCookie,
+  serializeCookieWithAudit,
   unsafeCookie,
   validateRawSetCookie,
 } from './cookies.js';
@@ -163,5 +166,79 @@ describe('cookie header helpers', () => {
     ).toBe(
       'session_data=cache; Max-Age=60; Path=/; HttpOnly; Secure; SameSite=Lax; Priority=High; Partitioned',
     );
+  });
+
+  it('declares class-derived cookie floors for audit plumbing', () => {
+    expect(cookieClassFloor('session')).toEqual({
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: true,
+    });
+    expect(cookieClassFloor('auth')).toEqual({
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: true,
+    });
+    expect(cookieClassFloor('app-data')).toEqual({
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: true,
+    });
+  });
+
+  it('returns builder cookie audit facts with class floors and unsafe downgrade justifications', () => {
+    expect(
+      serializeCookieWithAudit(
+        'prefs',
+        'compact',
+        { class: 'app-data', path: '/' },
+        { site: 'app/cookies.ts:4' },
+      ),
+    ).toEqual({
+      audit: {
+        class: 'app-data',
+        floor: 'HttpOnly; Secure; SameSite=Lax',
+        name: 'prefs',
+        site: 'app/cookies.ts:4',
+        source: 'builder',
+      },
+      setCookie: 'prefs=compact; Path=/; HttpOnly; Secure; SameSite=Lax',
+    });
+
+    expect(
+      serializeCookieWithAudit('sid', 'tok', {
+        class: 'session',
+        httpOnly: false,
+        unsafe: unsafeCookie({
+          downgrade: 'httpOnly',
+          justification: 'legacy auth package reads the session cookie during migration',
+        }),
+      }).audit,
+    ).toEqual({
+      class: 'session',
+      downgraded: ['httpOnly'],
+      floor: 'HttpOnly=false; Secure; SameSite=Lax',
+      justification: 'legacy auth package reads the session cookie during migration',
+      name: 'sid',
+      source: 'builder',
+    });
+  });
+
+  it('returns forwarded cookie audit facts after applying the class floor', () => {
+    expect(
+      normalizeForwardedSetCookieWithAudit('better-auth.session_token=tok; Path=/', {
+        class: 'auth',
+        site: 'auth/callback.ts:18',
+      }),
+    ).toEqual({
+      audit: {
+        class: 'auth',
+        floor: 'HttpOnly; Secure; SameSite=Lax',
+        name: 'better-auth.session_token',
+        site: 'auth/callback.ts:18',
+        source: 'forwarded',
+      },
+      setCookie: 'better-auth.session_token=tok; Path=/; HttpOnly; Secure; SameSite=Lax',
+    });
   });
 });

@@ -147,6 +147,7 @@ export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query
 export type KovoExplainOptions =
   | KovoAccessExplainOptions
   | KovoCapabilitiesExplainOptions
+  | KovoCookiesExplainOptions
   | KovoEndpointExplainOptions
   | KovoRevealedExplainOptions
   | KovoSourcesSinksExplainOptions
@@ -171,6 +172,14 @@ export interface KovoAccessExplainOptions {
  */
 export interface KovoCapabilitiesExplainOptions {
   capabilities: true;
+}
+
+/**
+ * `kovo explain --cookies` options: emit the Phase 5 cookie class/floor audit,
+ * including forwarded provider cookies and justified KV432 downgrades.
+ */
+export interface KovoCookiesExplainOptions {
+  cookies: true;
 }
 
 /**
@@ -290,6 +299,18 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     }
 
     lines.push(`SUMMARY total=${capabilities.length}`);
+    return ok(lines);
+  }
+
+  if ('cookies' in options) {
+    const cookies = [...(graph.cookies ?? [])].sort(compareCookieExplain);
+    lines.push('COOKIES');
+
+    for (const cookie of cookies) {
+      lines.push(cookieExplainLine(cookie));
+    }
+
+    lines.push(cookieSummary(cookies));
     return ok(lines);
   }
 
@@ -889,6 +910,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   const parsed = parseFlaggedArgs(args, [
     '--access',
     '--capabilities',
+    '--cookies',
     '--endpoints',
     '--fail-on-findings',
     '--layouts',
@@ -905,6 +927,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   const modeFlags = [
     '--access',
     '--capabilities',
+    '--cookies',
     '--endpoints',
     '--revealed',
     '--sources-sinks',
@@ -935,6 +958,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       return explainUsage();
     }
     return { inputPath: positional[0], ok: true, options: { capabilities: true } };
+  }
+
+  if (flags.has('--cookies')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { cookies: true } };
   }
 
   if (flags.has('--sources-sinks')) {
@@ -1575,6 +1610,25 @@ function capabilityExplainLine(capability: CoreGraph.CapabilityExplainFact): str
   ].join(' ');
 }
 
+function cookieExplainLine(cookie: CoreGraph.CookieExplainFact): string {
+  return [
+    'COOKIE',
+    `name=${cookie.name}`,
+    `class=${cookie.class}`,
+    `source=${cookie.source}`,
+    `floor=${stableValue(cookie.floor)}`,
+    `downgraded=${list(cookie.downgraded)}`,
+    `site=${cookie.site ?? '-'}`,
+    `justification=${stableValue(cookie.justification)}`,
+  ].join(' ');
+}
+
+function cookieSummary(cookies: readonly CoreGraph.CookieExplainFact[]): string {
+  const downgraded = cookies.filter((cookie) => (cookie.downgraded ?? []).length > 0).length;
+  const forwarded = cookies.filter((cookie) => cookie.source === 'forwarded').length;
+  return `SUMMARY total=${cookies.length} forwarded=${forwarded} downgraded=${downgraded}`;
+}
+
 function revealExplainLine(reveal: CoreGraph.RevealExplainFact): string {
   return [
     'REVEAL',
@@ -1620,6 +1674,17 @@ function compareCapabilityExplain(
     left.site.localeCompare(right.site) ||
     (left.table ?? '').localeCompare(right.table ?? '') ||
     (left.column ?? '').localeCompare(right.column ?? '')
+  );
+}
+
+function compareCookieExplain(
+  left: CoreGraph.CookieExplainFact,
+  right: CoreGraph.CookieExplainFact,
+): number {
+  return (
+    left.name.localeCompare(right.name) ||
+    left.source.localeCompare(right.source) ||
+    (left.site ?? '').localeCompare(right.site ?? '')
   );
 }
 

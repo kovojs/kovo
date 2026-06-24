@@ -6,6 +6,24 @@ const unsafeCookieTokens = new WeakSet<UnsafeCookieDowngrade>();
  */
 export type CookieClass = 'app-data' | 'auth' | 'session';
 
+export interface CookieAttributeFloor {
+  httpOnly: true;
+  sameSite: 'lax' | 'strict';
+  secure: true;
+}
+
+export type CookieAuditSource = 'builder' | 'forwarded';
+
+export interface CookieAuditFact {
+  class: CookieClass;
+  downgraded?: readonly UnsafeCookieDowngrade['downgrade'][];
+  floor: string;
+  justification?: string;
+  name: string;
+  site?: string;
+  source: CookieAuditSource;
+}
+
 /**
  * Attribute options for a typed `Set-Cookie` header, accepted by mutation
  * `context.setCookie(name, value, options)` (SPEC §9.1.1). Values are encoded,
@@ -30,6 +48,11 @@ export interface CookieOptions {
   sameSite?: 'lax' | 'none' | 'strict';
   secure?: boolean;
   unsafe?: UnsafeCookieDowngrade;
+}
+
+export interface CookieAuditOptions {
+  site?: string;
+  source?: CookieAuditSource;
 }
 
 /**
@@ -68,6 +91,15 @@ export function validateRawSetCookie(value: string): string {
 }
 
 export function serializeCookie(name: string, value: string, options: CookieOptions = {}): string {
+  return serializeCookieWithAudit(name, value, options).setCookie;
+}
+
+export function serializeCookieWithAudit(
+  name: string,
+  value: string,
+  options: CookieOptions = {},
+  auditOptions: CookieAuditOptions = {},
+): { audit: CookieAuditFact; setCookie: string } {
   assertCookieName(name);
   // SPEC §9.1.1:846: reject any control character (B4) before encoding; then
   // percent-encode the value so spaces, commas, equals, etc. cannot inject a
@@ -75,6 +107,124 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
   assertNoHeaderControlCharacters(value, 'cookie value');
   const normalized = normalizeCookieOptions(name, options);
   const encodedValue = encodeURIComponent(value);
+  return {
+    audit: cookieAuditFact(name, options, normalized, {
+      ...auditOptions,
+      source: auditOptions.source ?? 'builder',
+    }),
+    setCookie: serializeNormalizedCookie(name, encodedValue, normalized),
+  };
+}
+
+/**
+ * Normalize a forwarded provider-owned `Set-Cookie` header through the same secure
+ * floor as the typed cookie builder. Used for Better Auth/session-provider refresh
+ * cookies before they are appended to route responses.
+ */
+export function normalizeForwardedSetCookie(
+  value: string,
+  options: { class?: CookieClass } = {},
+): string {
+  return normalizeForwardedSetCookieWithAudit(value, options).setCookie;
+}
+
+export function normalizeForwardedSetCookieWithAudit(
+  value: string,
+  options: { class?: CookieClass; site?: string } = {},
+): { audit: CookieAuditFact; setCookie: string } {
+  validateRawSetCookie(value);
+  const parsed = parseSetCookieHeader(value);
+  const normalized = normalizeCookieOptions(parsed.name, {
+    ...parsed.options,
+    class: options.class ?? 'session',
+  });
+  const auditOptions = {
+    ...(options.site === undefined ? {} : { site: options.site }),
+    source: 'forwarded' as const,
+  };
+  return {
+    audit: cookieAuditFact(
+      parsed.name,
+      { ...parsed.options, class: options.class ?? 'session' },
+      normalized,
+      auditOptions,
+    ),
+    setCookie: serializeNormalizedCookie(
+      parsed.name,
+      parsed.encodedValue,
+      normalized,
+      parsed.passthroughAttributes,
+    ),
+  };
+}
+
+export function cookieClassFloor(cookieClass: CookieClass = 'app-data'): CookieAttributeFloor {
+  if (cookieClass === 'session' || cookieClass === 'auth') {
+    return { httpOnly: true, sameSite: 'lax', secure: true };
+  }
+  return { httpOnly: true, sameSite: 'lax', secure: true };
+}
+
+function normalizeCookieOptions(name: string, options: CookieOptions): CookieOptions {
+  assertHostPrefix(name, options);
+  const floor = cookieClassFloor(options.class);
+  const normalized: CookieOptions = {
+    ...options,
+    httpOnly: options.httpOnly ?? floor.httpOnly,
+    sameSite: options.sameSite ?? floor.sameSite,
+    secure: options.secure ?? floor.secure,
+  };
+  if (name.startsWith('__Host-')) {
+    normalized.path = '/';
+    normalized.secure = true;
+    delete normalized.domain;
+  }
+  assertCookieFloor(name, options, normalized);
+  return normalized;
+}
+
+function cookieAuditFact(
+  name: string,
+  original: CookieOptions,
+  normalized: CookieOptions,
+  options: Required<Pick<CookieAuditOptions, 'source'>> & Pick<CookieAuditOptions, 'site'>,
+): CookieAuditFact {
+  const downgraded = cookieDowngrades(normalized);
+  return {
+    class: original.class ?? 'app-data',
+    ...(downgraded.length === 0 ? {} : { downgraded }),
+    floor: cookieFloorLabel(normalized),
+    ...(original.unsafe === undefined ? {} : { justification: original.unsafe.justification }),
+    name,
+    ...(options.site === undefined ? {} : { site: options.site }),
+    source: options.source,
+  };
+}
+
+function cookieDowngrades(
+  normalized: CookieOptions,
+): readonly UnsafeCookieDowngrade['downgrade'][] {
+  const downgraded: UnsafeCookieDowngrade['downgrade'][] = [];
+  if (normalized.httpOnly === false) downgraded.push('httpOnly');
+  if (normalized.secure === false) downgraded.push('secure');
+  if (normalized.sameSite === 'none') downgraded.push('sameSiteNone');
+  return downgraded;
+}
+
+function cookieFloorLabel(normalized: CookieOptions): string {
+  return [
+    normalized.httpOnly ? 'HttpOnly' : 'HttpOnly=false',
+    normalized.secure ? 'Secure' : 'Secure=false',
+    `SameSite=${normalized.sameSite === undefined ? '-' : formatSameSite(normalized.sameSite)}`,
+  ].join('; ');
+}
+
+function serializeNormalizedCookie(
+  name: string,
+  encodedValue: string,
+  normalized: CookieOptions,
+  passthroughAttributes: readonly string[] = [],
+): string {
   const parts = [`${name}=${encodedValue}`];
 
   if (normalized.maxAge !== undefined) {
@@ -98,81 +248,17 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
   if (normalized.httpOnly) parts.push('HttpOnly');
   if (normalized.secure) parts.push('Secure');
   if (normalized.sameSite !== undefined) {
-    const sameSite = {
-      lax: 'Lax',
-      none: 'None',
-      strict: 'Strict',
-    }[normalized.sameSite];
-    parts.push(`SameSite=${sameSite}`);
+    parts.push(`SameSite=${formatSameSite(normalized.sameSite)}`);
   }
   if (normalized.priority !== undefined) {
-    const priority = {
-      high: 'High',
-      low: 'Low',
-      medium: 'Medium',
-    }[normalized.priority];
-    parts.push(`Priority=${priority}`);
+    parts.push(`Priority=${formatPriority(normalized.priority)}`);
   }
+  for (const attribute of passthroughAttributes) parts.push(attribute);
   // `Partitioned` is a valueless attribute; emit it last so it survives the round-trip
   // through `parseSetCookieHeader` (part-3 I1, SPEC §9.1.1).
   if (normalized.partitioned) parts.push('Partitioned');
 
   return parts.join('; ');
-}
-
-/**
- * Normalize a forwarded provider-owned `Set-Cookie` header through the same secure
- * floor as the typed cookie builder. Used for Better Auth/session-provider refresh
- * cookies before they are appended to route responses.
- */
-export function normalizeForwardedSetCookie(
-  value: string,
-  options: { class?: CookieClass } = {},
-): string {
-  validateRawSetCookie(value);
-  const parsed = parseSetCookieHeader(value);
-  const normalized = normalizeCookieOptions(parsed.name, {
-    ...parsed.options,
-    class: options.class ?? 'session',
-  });
-  const parts = [`${parsed.name}=${parsed.encodedValue}`];
-
-  if (normalized.maxAge !== undefined) parts.push(`Max-Age=${normalized.maxAge}`);
-  if (normalized.domain !== undefined) parts.push(`Domain=${normalized.domain}`);
-  if (normalized.path !== undefined) parts.push(`Path=${normalized.path}`);
-  if (normalized.expires !== undefined) {
-    const expires =
-      normalized.expires instanceof Date ? normalized.expires.toUTCString() : normalized.expires;
-    parts.push(`Expires=${expires}`);
-  }
-  if (normalized.httpOnly) parts.push('HttpOnly');
-  if (normalized.secure) parts.push('Secure');
-  if (normalized.sameSite !== undefined) {
-    parts.push(`SameSite=${formatSameSite(normalized.sameSite)}`);
-  }
-  if (normalized.priority !== undefined)
-    parts.push(`Priority=${formatPriority(normalized.priority)}`);
-  for (const attribute of parsed.passthroughAttributes) parts.push(attribute);
-  if (normalized.partitioned) parts.push('Partitioned');
-
-  return parts.join('; ');
-}
-
-function normalizeCookieOptions(name: string, options: CookieOptions): CookieOptions {
-  assertHostPrefix(name, options);
-  const normalized: CookieOptions = {
-    ...options,
-    httpOnly: options.httpOnly ?? true,
-    sameSite: options.sameSite ?? 'lax',
-    secure: options.secure ?? true,
-  };
-  if (name.startsWith('__Host-')) {
-    normalized.path = '/';
-    normalized.secure = true;
-    delete normalized.domain;
-  }
-  assertCookieFloor(name, options, normalized);
-  return normalized;
 }
 
 function assertCookieFloor(name: string, original: CookieOptions, normalized: CookieOptions): void {
