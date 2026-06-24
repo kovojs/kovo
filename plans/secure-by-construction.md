@@ -692,10 +692,10 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
   - [ ] KV429 static gate, option (a): flag read-then-write on a declared `atomic`/`version` column without a
         CAS/version guard. **Sequence after the §11.1 write-reachability pass** (needs read-then-write
         dataflow); cross-function check-then-act is a false-negative floor until that pass lands.
-    - Partial evidence: `packages/drizzle/src/static/derivation.ts` now requires same-callback version/atomic
-      guards to also return or throw a typed `kovoConflict(...)`/`compareAndSet(...)` zero-row outcome; verified
-      by `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts packages/drizzle/src/runtime-surface.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`.
-      Still open: cross-function/helper read-then-write dataflow and full versioned-read lifecycle coverage.
+    - Partial evidence: `packages/drizzle/src/static/derivation.ts` requires same-callback and direct local-helper
+      version/atomic guards to return or throw a typed `kovoConflict(...)`/`compareAndSet(...)` zero-row outcome;
+      verified by `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts packages/drizzle/src/runtime-surface.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`.
+      Still open: imported/node_modules helper summaries and full versioned-read lifecycle coverage.
   - [ ] DB-constraint backstop (recommended, fail-closed under everything): `CHECK stock >= 0`, unique
         constraints. Multi-row/aggregate invariants need `forUpdate`/`SERIALIZABLE` — documented as NOT
         by-construction (provide the tool + guidance; do not pretend CAS covers them).

@@ -706,6 +706,91 @@ describe('@kovojs/drizzle symbol provenance', () => {
 
     expect(diagnostics).toEqual([]);
   });
+
+  it('reports KV429 when a caller reads and a local helper performs the unguarded write', () => {
+    const diagnostics = atomicityDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'inventory.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '  version: integer("version").notNull(),',
+            '}, kovo({ domain: "product", key: "id", atomic: ["stock"], version: "version" }));',
+            '',
+            'async function writeReservation(db: PgDatabase, input: { id: string; stock: number }) {',
+            '  await db.update(products).set({ stock: input.stock }).where(eq(products.id, input.id));',
+            '}',
+            '',
+            'export async function reserve(db: PgDatabase, input: { id: string; quantity: number }) {',
+            '  const [product] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+            '  if (product.stock < input.quantity) return;',
+            '  await writeReservation(db, { id: input.id, stock: product.stock - input.quantity });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics.map(({ code, message, site }) => ({ code, message, site }))).toEqual([
+      {
+        code: 'KV429',
+        message:
+          'Read-then-write on an atomic value lacks an atomicity guard. Read-before-write updates products.stock without compare-and-set on stock or version guard version.',
+        site: 'inventory.domain.ts:10',
+      },
+    ]);
+  });
+
+  it('reports KV429 when a local helper reads and the caller performs the unguarded write', () => {
+    const diagnostics = atomicityDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'inventory.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '  version: integer("version").notNull(),',
+            '}, kovo({ domain: "product", key: "id", atomic: ["stock"], version: "version" }));',
+            '',
+            'async function readProduct(db: PgDatabase, id: string) {',
+            '  const [product] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, id));',
+            '  return product;',
+            '}',
+            '',
+            'export async function reserve(db: PgDatabase, input: { id: string; quantity: number }) {',
+            '  const product = await readProduct(db, input.id);',
+            '  if (product.stock < input.quantity) return;',
+            '  await db.update(products).set({ stock: product.stock - input.quantity }).where(eq(products.id, input.id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics.map(({ code, message, site }) => ({ code, message, site }))).toEqual([
+      {
+        code: 'KV429',
+        message:
+          'Read-then-write on an atomic value lacks an atomicity guard. Read-before-write updates products.stock without compare-and-set on stock or version guard version.',
+        site: 'inventory.domain.ts:17',
+      },
+    ]);
+  });
 });
 
 function source(sourceText: string) {

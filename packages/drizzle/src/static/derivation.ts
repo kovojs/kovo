@@ -378,12 +378,21 @@ export function atomicityDiagnosticsFromProject(
         return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
       };
 
-      for (const callback of deriveWriteCallbacks(sourceFile)) {
+      const callbacks = deriveWriteCallbacks(sourceFile);
+      const atomicSummaries = atomicCallbackSummaries(callbacks, {
+        atomicColumnsByRealTable: extraction.atomicColumnsByRealTable,
+        file,
+        receivers: projectDrizzleReceivers(sourceFile),
+        resolveTable,
+        versionColumnByRealTable: extraction.versionColumnByRealTable,
+      });
+      for (const callback of callbacks) {
         const receivers = projectDrizzleReceivers(callback.fn);
         diagnostics.push(
           ...atomicityDiagnosticsForCallback(callback, {
             atomicColumnsByRealTable: extraction.atomicColumnsByRealTable,
             file,
+            helperSummaries: atomicSummaries,
             receivers,
             resolveTable,
             versionColumnByRealTable: extraction.versionColumnByRealTable,
@@ -508,6 +517,7 @@ interface GovernedWriteContext extends Omit<WriteCallContext, 'writeKey'> {
 interface AtomicityContext {
   atomicColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
   file: SourceFileInput;
+  helperSummaries?: ReadonlyMap<string, AtomicCallbackSummary>;
   receivers: ProjectDrizzleReceivers;
   resolveTable: (node: Node) => string | undefined;
   versionColumnByRealTable: ReadonlyMap<string, string>;
@@ -523,6 +533,18 @@ interface GovernedCapabilityContext {
 interface AtomicReadSite {
   index: number;
   table: string;
+}
+
+interface AtomicCallbackSummary {
+  callback: DeriveCallback;
+  calls: AtomicHelperCall[];
+  directReads: AtomicReadSite[];
+  receivers: ProjectDrizzleReceivers;
+}
+
+interface AtomicHelperCall {
+  call: CallExpression;
+  target: AtomicCallbackSummary;
 }
 
 function symbolicEffectForWriteCall(
@@ -700,7 +722,13 @@ function atomicityDiagnosticsForCallback(
   callback: DeriveCallback,
   context: AtomicityContext,
 ): TouchGraphDiagnostic[] {
-  const reads = atomicReadSitesForCallback(callback.body, context);
+  const summary = (callback.key ? context.helperSummaries?.get(callback.key) : undefined) ?? {
+    callback,
+    calls: [],
+    directReads: atomicReadSitesForCallback(callback.body, context),
+    receivers: context.receivers,
+  };
+  const reads = atomicReadSitesForSummary(summary, new Set());
   if (reads.length === 0) return [];
 
   const diagnostics: TouchGraphDiagnostic[] = [];
@@ -708,9 +736,44 @@ function atomicityDiagnosticsForCallback(
     (left, right) => left.getStart() - right.getStart(),
   );
   for (const call of calls) {
-    diagnostics.push(...atomicityDiagnosticsForWriteCall(call, reads, context));
+    diagnostics.push(
+      ...atomicityDiagnosticsForWriteCall(call, reads, {
+        ...context,
+        receivers: summary.receivers,
+      }),
+    );
+    diagnostics.push(...atomicityDiagnosticsForHelperCall(call, reads, context));
   }
   return diagnostics;
+}
+
+function atomicCallbackSummaries(
+  callbacks: readonly DeriveCallback[],
+  context: AtomicityContext,
+): ReadonlyMap<string, AtomicCallbackSummary> {
+  const summaries = new Map<string, AtomicCallbackSummary>();
+  for (const callback of callbacks) {
+    if (!callback.key || summaries.has(callback.key)) continue;
+    const receivers = projectDrizzleReceivers(callback.fn);
+    summaries.set(callback.key, {
+      callback,
+      calls: [],
+      directReads: atomicReadSitesForCallback(callback.body, { ...context, receivers }),
+      receivers,
+    });
+  }
+
+  for (const summary of summaries.values()) {
+    const calls: AtomicHelperCall[] = [];
+    for (const call of touchBodyCallExpressions(summary.callback.body)) {
+      const name = callExpressionName(call);
+      if (!name || name === summary.callback.key) continue;
+      const target = summaries.get(name);
+      if (target) calls.push({ call, target });
+    }
+    summary.calls = calls;
+  }
+  return summaries;
 }
 
 function atomicReadSitesForCallback(body: Node, context: AtomicityContext): AtomicReadSite[] {
@@ -726,6 +789,54 @@ function atomicReadSitesForCallback(body: Node, context: AtomicityContext): Atom
     sites.push({ index: call.getStart(), table });
   }
   return sites.sort((left, right) => left.index - right.index);
+}
+
+function atomicReadSitesForSummary(
+  summary: AtomicCallbackSummary | undefined,
+  seen: Set<AtomicCallbackSummary>,
+): AtomicReadSite[] {
+  if (!summary) return [];
+  if (seen.has(summary)) return summary.directReads.slice();
+  seen.add(summary);
+  const sites = [...summary.directReads];
+  for (const helper of summary.calls) {
+    for (const read of atomicReadSitesForSummary(helper.target, seen)) {
+      sites.push({ index: helper.call.getStart(), table: read.table });
+    }
+  }
+  seen.delete(summary);
+  return sites.sort((left, right) => left.index - right.index);
+}
+
+function atomicityDiagnosticsForHelperCall(
+  call: CallExpression,
+  reads: readonly AtomicReadSite[],
+  context: AtomicityContext,
+  seen: Set<string> = new Set(),
+): TouchGraphDiagnostic[] {
+  const name = callExpressionName(call);
+  if (!name) return [];
+  if (seen.has(name)) return [];
+  const target = context.helperSummaries?.get(name);
+  if (!target) return [];
+  const priorReads = reads.filter((read) => read.index < call.getStart());
+  if (priorReads.length === 0) return [];
+
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  const helperReads = priorReads.map((read) => ({ ...read, index: Number.NEGATIVE_INFINITY }));
+  const helperCalls = touchBodyCallExpressions(target.callback.body).sort(
+    (left, right) => left.getStart() - right.getStart(),
+  );
+  const helperContext = { ...context, receivers: target.receivers };
+  seen.add(name);
+  for (const helperCall of helperCalls) {
+    diagnostics.push(...atomicityDiagnosticsForWriteCall(helperCall, helperReads, helperContext));
+    diagnostics.push(
+      ...atomicityDiagnosticsForHelperCall(helperCall, helperReads, helperContext, seen),
+    );
+  }
+  seen.delete(name);
+  return diagnostics;
 }
 
 function queryCallChainReceiverForAtomicity(call: CallExpression): Node | undefined {
