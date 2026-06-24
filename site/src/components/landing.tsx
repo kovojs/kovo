@@ -87,47 +87,97 @@ const landingStyles = style.create(
 // freezes to that consistent state via [data-anim="hero"].
 const heroStyles = style.create(
   {
+    // Full-width headline on top, then a two-column row (copy + live demo)
+    // below — the headline spans the whole measure rather than sharing the
+    // left column with the lede.
+    // Mobile-first: the atomic layer emits max-width media *before* the base
+    // rule in the same layer, so a max-width override loses to the base. Author
+    // the stacked phone layout as the base and opt into the two-column desktop
+    // layout with a min-width query, which sorts after the base and wins.
     hero: {
-      alignItems: 'center',
-      display: 'grid',
-      gap: '3.6rem',
-      gridTemplateColumns: 'minmax(0, 1.02fr) minmax(0, 1.08fr)',
-      padding: '4rem 0 3.6rem',
-      '@media (max-width: 64rem)': {
-        gap: '2.4rem',
-        gridTemplateColumns: '1fr',
-        padding: '2.8rem 0 2.6rem',
+      display: 'block',
+      padding: '2.8rem 0 2.6rem',
+      '@media (min-width: 64rem)': {
+        padding: '4rem 0 3.6rem',
       },
     },
+    row: {
+      alignItems: 'start',
+      display: 'grid',
+      gap: '2.4rem',
+      marginTop: '1.8rem',
+      // No base grid-template-columns: a lone implicit column stacks the copy and
+      // demo on mobile, and the two-column track is added only at min-width. This
+      // mirrors pageStyles.aiUnit — setting a base value and overriding it from a
+      // media query is order-fragile in the atomic layer (the base can win even
+      // at desktop), so the column track lives solely in the min-width rule.
+      '@media (min-width: 64rem)': {
+        gap: '3.6rem',
+        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.05fr)',
+        marginTop: '2.2rem',
+      },
+    },
+    col: { minWidth: 0 },
     h1: {
       color: 'var(--ink)',
       fontFamily: 'var(--font-display)',
-      fontSize: 'clamp(2.7rem, 5.4vw, 4.4rem)',
+      // Min sized so the longest unbreakable line ("The web framework") clears a
+      // ~360px content width without overflow; full-bleed measure earns the cap.
+      fontSize: 'clamp(2.15rem, 5.4vw, 4.4rem)',
       fontWeight: 600,
       letterSpacing: '-0.025em',
-      lineHeight: 1.02,
+      lineHeight: 1.07,
       margin: 0,
-      textWrap: 'balance',
+      // Greedy wrapping by default so the nbsp-locked emphasis phrases always
+      // drop to their own line on phones instead of overflowing; balance the
+      // full-bleed measure only once there is room (min-width sorts correctly in
+      // the atomic layer, unlike a max-width override).
+      textWrap: 'normal',
+      '@media (min-width: 40rem)': {
+        textWrap: 'balance',
+      },
     },
+    // The emphasis phrases read as a hand-applied highlighter stroke: a soft
+    // tint marker that fills the glyph height, sits snug to the text, and is
+    // skewed a hair off-true. The text keeps the fixed semantics (red = the
+    // bug, indigo = the caught/build-error state per DESIGN.md §2).
     bugPhrase: {
       color: 'var(--red)',
-      fontStyle: 'italic',
-      fontWeight: 600,
-      textDecorationColor: 'color-mix(in srgb, var(--red) 70%, transparent)',
-      textDecorationLine: 'underline',
-      textDecorationStyle: 'wavy',
-      textDecorationThickness: '0.08em',
-      textUnderlineOffset: '0.12em',
+      fontStyle: 'normal',
+      padding: '0 0.1em',
+      position: 'relative',
+      zIndex: 0,
+      '::before': {
+        background: 'color-mix(in srgb, var(--red) 20%, transparent)',
+        borderRadius: '3px 5px 4px 6px',
+        bottom: '0.04em',
+        content: '""',
+        left: '-0.03em',
+        position: 'absolute',
+        right: '-0.03em',
+        top: '0.04em',
+        transform: 'rotate(-0.8deg)',
+        zIndex: -1,
+      },
     },
     buildPhrase: {
-      background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-      borderBottom: '0.1em solid var(--accent)',
-      boxDecorationBreak: 'clone',
       color: 'var(--accent)',
       fontStyle: 'normal',
-      fontWeight: 650,
-      padding: '0 0.06em',
-      WebkitBoxDecorationBreak: 'clone',
+      padding: '0 0.1em',
+      position: 'relative',
+      zIndex: 0,
+      '::before': {
+        background: 'color-mix(in srgb, var(--accent) 20%, transparent)',
+        borderRadius: '3px 5px 4px 6px',
+        bottom: '0.04em',
+        content: '""',
+        left: '-0.03em',
+        position: 'absolute',
+        right: '-0.03em',
+        top: '0.04em',
+        transform: 'rotate(0.7deg)',
+        zIndex: -1,
+      },
     },
     lede: {
       color: 'var(--ink)',
@@ -135,7 +185,7 @@ const heroStyles = style.create(
       fontSize: 'clamp(1.2rem, 2vw, 1.55rem)',
       fontWeight: 380,
       lineHeight: 1.34,
-      margin: '1.5rem 0 0',
+      margin: 0,
       maxWidth: '33rem',
     },
     sub: {
@@ -158,6 +208,7 @@ const heroStyles = style.create(
       borderColor: 'var(--green)',
       borderStyle: 'solid',
       borderWidth: 1,
+      minWidth: 0,
       overflow: 'hidden',
       animation: 'hero-unit 15s linear infinite',
     },
@@ -541,6 +592,7 @@ export function LandingRoutePage({ clients }: LandingPageProps): string {
       {SiteHeader.definition.render({ activePath: '/', clients })}
       <div style={landingStyles.wrap}>
         <SecurityHero clients={clients} />
+        <HowItWorks />
         <StaleUiSection />
         <InstantLoad />
         <Credibility />
@@ -553,41 +605,43 @@ export function LandingRoutePage({ clients }: LandingPageProps): string {
 function SecurityHero({ clients }: { clients: ClientHrefs }): string {
   return (
     <section style={heroStyles.hero}>
-      <div>
-        <h1 style={heroStyles.h1}>
-          The web framework that turns <em style={heroStyles.bugPhrase}>security bugs</em> into{' '}
-          <em style={heroStyles.buildPhrase}>build errors</em>
-        </h1>
-        <p style={heroStyles.lede}>Make security holes a build error -- not a 2AM incident.</p>
-        <p style={heroStyles.sub}>
-          The Kovo compiler catches the most common security vulnerabilities --{' '}
-          <b style={heroStyles.strong}>SQL injection</b>, <b style={heroStyles.strong}>XSS</b>,{' '}
-          <b style={heroStyles.strong}>CSRF</b>, <b style={heroStyles.strong}>IDOR</b> -- as soon as
-          your coding agent writes them.
-        </p>
-        <div style={heroStyles.cta}>
-          <div style={landingStyles.cmd}>
-            <span>
-              <span style={landingStyles.dollar}>$</span> <code>npx create-kovo</code>
-            </span>
-            <button
-              type="button"
-              style={landingStyles.copyButton}
-              on:click={`${clients.code}#copy`}
-            >
-              copy
-            </button>
+      <h1 style={heroStyles.h1}>
+        The web framework that turns <em style={heroStyles.bugPhrase}>security&nbsp;bugs</em> into{' '}
+        <em style={heroStyles.buildPhrase}>build&nbsp;errors</em>
+      </h1>
+      <div style={heroStyles.row}>
+        <div style={heroStyles.col}>
+          <p style={heroStyles.lede}>Make security holes a build error -- not a 2AM incident.</p>
+          <p style={heroStyles.sub}>
+            The Kovo compiler catches the most common security vulnerabilities --{' '}
+            <b style={heroStyles.strong}>SQL injection</b>, <b style={heroStyles.strong}>XSS</b>,{' '}
+            <b style={heroStyles.strong}>CSRF</b>, <b style={heroStyles.strong}>IDOR</b> -- as soon
+            as your coding agent writes them.
+          </p>
+          <div style={heroStyles.cta}>
+            <div style={landingStyles.cmd}>
+              <span>
+                <span style={landingStyles.dollar}>$</span> <code>npx create-kovo</code>
+              </span>
+              <button
+                type="button"
+                style={landingStyles.copyButton}
+                on:click={`${clients.code}#copy`}
+              >
+                copy
+              </button>
+            </div>
+            <a style={[landingStyles.link, landingStyles.go]} href="/tutorial/">
+              Start the tutorial
+            </a>
           </div>
-          <a style={[landingStyles.link, landingStyles.go]} href="/tutorial/">
-            Start the tutorial
-          </a>
         </div>
-      </div>
-      <div data-anim="hero" style={heroStyles.unit}>
-        <SecActs />
-        <SecForm />
-        <SecTable />
-        <SecVerdict />
+        <div data-anim="hero" style={heroStyles.unit}>
+          <SecActs />
+          <SecForm />
+          <SecTable />
+          <SecVerdict />
+        </div>
       </div>
     </section>
   );
@@ -691,7 +745,7 @@ function SecVerdict(): string {
           &#10007; the string executes -- <b>DROP TABLE users.</b> Everyone is gone.
         </span>
         <span style={[heroStyles.vLine, heroStyles.vg3]}>
-          &#10007; KV431 -- a build error in Kovo. The query never shipped.
+          &#10007; KV422 -- a build error in Kovo. The query never shipped.
           <span style={heroStyles.vFix}>
             -&gt; parameterized: where(eq(users.name, input.name))
           </span>
@@ -701,6 +755,312 @@ function SecVerdict(): string {
         </span>
       </span>
     </div>
+  );
+}
+
+// ── "Secure by construction": how the security analysis actually works ───────
+// Beat A makes the source -> sink mechanism literal (the SQL case fails
+// unparameterized, the sql`` case is proven safe) and generalizes it to
+// XSS/CSRF/IDOR. Beat B shows the real `kovo check` diagnostic the same code
+// produces, in a dark captured-output evidence frame (DESIGN.md §5). Diagnostic
+// codes are the real ones from site/gen/reference/diagnostics.md:
+// SQL=KV422, XSS=KV424, CSRF=KV418, IDOR=KV414. Mobile-first: multi-column
+// layouts are opted into with min-width media (the atomic layer drops max-width
+// overrides; see pageStyles.aiUnit).
+// ── "Secure by construction": how the security analysis works ────────────────
+// One compact, tabbed evidence panel. Each tab is a real vulnerability class;
+// selecting it swaps in that class's real `kovo check` diagnostic (the line, the
+// rule, the fix) inside a dark captured-output frame (DESIGN.md §5). Tabs are
+// zero-JS radio inputs revealed with :has() (same pattern as pageStyles.aiUnit),
+// so the panels stay keyboard-operable and work with scripting off. Diagnostic
+// codes are the real ones from site/gen/reference/diagnostics.md: SQL=KV422,
+// XSS=KV424, CSRF=KV418, IDOR=KV414. The terminal frame is black in both themes
+// per DESIGN.md §4, so its colors are fixed hex, not theme tokens.
+const hiwStyles = style.create(
+  {
+    unit: {
+      marginTop: '2rem',
+      position: 'relative',
+      // Panels hide by default and reveal when their radio is checked; the id in
+      // :has() raises specificity above the base display:none, so this is robust
+      // to atomic source order (unlike a plain media override).
+      ':has(#sec-sql:checked) [data-panel="sql"]': { display: 'block' },
+      ':has(#sec-xss:checked) [data-panel="xss"]': { display: 'block' },
+      ':has(#sec-csrf:checked) [data-panel="csrf"]': { display: 'block' },
+      ':has(#sec-idor:checked) [data-panel="idor"]': { display: 'block' },
+      ':has(#sec-sql:checked) [data-tab="sql"]': {
+        background: '#000',
+        borderColor: '#1f1f1f',
+        color: '#e9eaee',
+      },
+      ':has(#sec-xss:checked) [data-tab="xss"]': {
+        background: '#000',
+        borderColor: '#1f1f1f',
+        color: '#e9eaee',
+      },
+      ':has(#sec-csrf:checked) [data-tab="csrf"]': {
+        background: '#000',
+        borderColor: '#1f1f1f',
+        color: '#e9eaee',
+      },
+      ':has(#sec-idor:checked) [data-tab="idor"]': {
+        background: '#000',
+        borderColor: '#1f1f1f',
+        color: '#e9eaee',
+      },
+    },
+    radio: { height: 0, opacity: 0, pointerEvents: 'none', position: 'absolute', width: 0 },
+    tabbar: { display: 'flex', flexWrap: 'wrap', gap: '0.3rem', position: 'relative', zIndex: 1 },
+    tab: {
+      alignItems: 'center',
+      borderColor: 'transparent',
+      borderStyle: 'solid',
+      borderWidth: '1px 1px 0',
+      color: 'var(--dim)',
+      cursor: 'pointer',
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.72rem',
+      gap: '0.5rem',
+      letterSpacing: '0.02em',
+      marginBottom: '-1px',
+      padding: '0.55rem 0.9rem',
+      ':hover': { color: 'var(--ink)' },
+    },
+    tabKv: { color: 'var(--faint)', fontSize: '0.66rem' },
+    frame: { background: '#000', borderColor: '#1f1f1f', borderStyle: 'solid', borderWidth: 1 },
+    panel: { display: 'none' },
+    tbar: {
+      borderBottomColor: '#1f1f1f',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      color: '#5a5a5a',
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.62rem',
+      gap: '0.9rem',
+      justifyContent: 'space-between',
+      letterSpacing: '0.13em',
+      padding: '0.5rem 1rem',
+      textTransform: 'uppercase',
+    },
+    tbody: {
+      color: '#dcdee2',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.84rem',
+      lineHeight: 1.7,
+      overflowX: 'auto',
+      padding: '0.85rem 1rem',
+    },
+    codeLine: { whiteSpace: 'pre' },
+    sep: {
+      borderTopColor: '#1f1f1f',
+      borderTopStyle: 'solid',
+      borderTopWidth: 1,
+      margin: '0.65rem 0',
+    },
+    diagHead: { whiteSpace: 'pre' },
+    drow: { display: 'flex', gap: '0.9rem', whiteSpace: 'pre' },
+    dlbl: { color: '#7e828b', flex: 'none', width: '3.4rem' },
+    tErr: { color: '#ff7a72' },
+    tOk: { color: '#5fd0c4' },
+    tDim: { color: '#7e828b' },
+    tLoc: { color: '#cfd2d7' },
+    tStr: { color: '#e8c07d' },
+    underBad: {
+      textDecorationColor: '#ff7a72',
+      textDecorationLine: 'underline',
+      textDecorationStyle: 'wavy',
+      textUnderlineOffset: '3px',
+    },
+  },
+  { namespace: 'site-hiw', source: 'site/src/components/landing.tsx' },
+);
+
+function HowItWorks(): string {
+  return (
+    <section style={pageStyles.section}>
+      <p style={pageStyles.eyebrow}>Secure by construction</p>
+      <h2 style={pageStyles.title}>The unsafe line never compiles.</h2>
+      <p style={pageStyles.lead}>
+        Pick a vulnerability class. The compiler traces untrusted input to the dangerous sink and
+        answers before the code runs: the exact line, the rule, and the fix.
+      </p>
+
+      <div style={hiwStyles.unit}>
+        <input type="radio" name="sec-tab" id="sec-sql" checked style={hiwStyles.radio} />
+        <input type="radio" name="sec-tab" id="sec-xss" style={hiwStyles.radio} />
+        <input type="radio" name="sec-tab" id="sec-csrf" style={hiwStyles.radio} />
+        <input type="radio" name="sec-tab" id="sec-idor" style={hiwStyles.radio} />
+
+        <div style={hiwStyles.tabbar}>
+          <label for="sec-sql" data-tab="sql" style={hiwStyles.tab}>
+            SQL injection <span style={hiwStyles.tabKv}>KV422</span>
+          </label>
+          <label for="sec-xss" data-tab="xss" style={hiwStyles.tab}>
+            XSS <span style={hiwStyles.tabKv}>KV424</span>
+          </label>
+          <label for="sec-csrf" data-tab="csrf" style={hiwStyles.tab}>
+            CSRF <span style={hiwStyles.tabKv}>KV418</span>
+          </label>
+          <label for="sec-idor" data-tab="idor" style={hiwStyles.tab}>
+            IDOR <span style={hiwStyles.tabKv}>KV414</span>
+          </label>
+        </div>
+
+        <div style={hiwStyles.frame}>
+          <div data-panel="sql" style={hiwStyles.panel}>
+            <div style={hiwStyles.tbar}>
+              <span>app/routes/signup.tsx</span>
+              <span>$ kovo check &middot; 0.2s</span>
+            </div>
+            <div style={hiwStyles.tbody}>
+              <div style={hiwStyles.codeLine}>
+                <span style={hiwStyles.tDim}>{'// name comes straight from the sign-up form (untrusted)'}</span>
+              </div>
+              <div style={hiwStyles.codeLine}>
+                {'db.'}
+                <span style={hiwStyles.tOk}>query</span>
+                {'('}
+                <span style={hiwStyles.tStr}>{"`select * from users where name = '"}</span>
+                <span style={[hiwStyles.tStr, hiwStyles.underBad]}>{'${input.name}'}</span>
+                <span style={hiwStyles.tStr}>{"'`"}</span>
+                {')'}
+              </div>
+              <div style={hiwStyles.sep}></div>
+              <div style={hiwStyles.diagHead}>
+                <span style={hiwStyles.tErr}>&#10007; KV422</span>
+                {'  '}
+                <span style={hiwStyles.tLoc}>signup.tsx:14</span>
+                {'  untrusted input reaches SQL as text'}
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>source</span>
+                <span>{'form field name '}&middot;{' request body'}</span>
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>sink</span>
+                <span>{'raw SQL string in db.query()'}</span>
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>fix</span>
+                <span style={hiwStyles.tOk}>{'db.query(sql`select … where name = ${input.name}`)'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div data-panel="xss" style={hiwStyles.panel}>
+            <div style={hiwStyles.tbar}>
+              <span>app/routes/comment.tsx</span>
+              <span>$ kovo check &middot; 0.2s</span>
+            </div>
+            <div style={hiwStyles.tbody}>
+              <div style={hiwStyles.codeLine}>
+                <span style={hiwStyles.tDim}>{'// comment body is user-submitted (untrusted)'}</span>
+              </div>
+              <div style={hiwStyles.codeLine}>
+                {'<article>{ '}
+                <span style={hiwStyles.underBad}>{'raw(comment.body)'}</span>
+                {' }</article>'}
+              </div>
+              <div style={hiwStyles.sep}></div>
+              <div style={hiwStyles.diagHead}>
+                <span style={hiwStyles.tErr}>&#10007; KV424</span>
+                {'  '}
+                <span style={hiwStyles.tLoc}>comment.tsx:22</span>
+                {'  untrusted value reaches an HTML sink'}
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>source</span>
+                <span>{'comment.body '}&middot;{' request data'}</span>
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>sink</span>
+                <span>{'raw HTML output'}</span>
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>fix</span>
+                <span style={hiwStyles.tOk}>{'<article>{comment.body}</article> escapes by default'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div data-panel="csrf" style={hiwStyles.panel}>
+            <div style={hiwStyles.tbar}>
+              <span>app/routes/transfer.ts</span>
+              <span>$ kovo check &middot; 0.2s</span>
+            </div>
+            <div style={hiwStyles.tbody}>
+              <div style={hiwStyles.codeLine}>
+                <span style={hiwStyles.tDim}>{'// money movement, but CSRF is switched off'}</span>
+              </div>
+              <div style={hiwStyles.codeLine}>
+                {'endpoint('}
+                <span style={hiwStyles.tStr}>{"'/transfer'"}</span>
+                {', { '}
+                <span style={hiwStyles.underBad}>{'csrf: false'}</span>
+                {' }, (req) => pay(req.session))'}
+              </div>
+              <div style={hiwStyles.sep}></div>
+              <div style={hiwStyles.diagHead}>
+                <span style={hiwStyles.tErr}>&#10007; KV418</span>
+                {'  '}
+                <span style={hiwStyles.tLoc}>transfer.ts:8</span>
+                {'  csrf-exempt endpoint depends on the session'}
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>source</span>
+                <span>{'cross-site POST '}&middot;{' forged'}</span>
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>sink</span>
+                <span>{'session-authenticated mutation'}</span>
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>fix</span>
+                <span style={hiwStyles.tOk}>{"endpoint('/transfer', (req) => pay(req.session))"}</span>
+              </div>
+            </div>
+          </div>
+
+          <div data-panel="idor" style={hiwStyles.panel}>
+            <div style={hiwStyles.tbar}>
+              <span>app/domain/invoices.ts</span>
+              <span>$ kovo check &middot; 0.2s</span>
+            </div>
+            <div style={hiwStyles.tbody}>
+              <div style={hiwStyles.codeLine}>
+                <span style={hiwStyles.tDim}>{'// invoice id comes from the URL (client-supplied)'}</span>
+              </div>
+              <div style={hiwStyles.codeLine}>
+                {'db.select().from(invoices).where('}
+                <span style={hiwStyles.underBad}>{'eq(invoices.id, params.id)'}</span>
+                {')'}
+              </div>
+              <div style={hiwStyles.sep}></div>
+              <div style={hiwStyles.diagHead}>
+                <span style={hiwStyles.tErr}>&#10007; KV414</span>
+                {'  '}
+                <span style={hiwStyles.tLoc}>invoices.ts:17</span>
+                {'  owner-table read not scoped to the session'}
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>source</span>
+                <span>{'params.id '}&middot;{' client-supplied'}</span>
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>sink</span>
+                <span>{'owner-scoped table read'}</span>
+              </div>
+              <div style={hiwStyles.drow}>
+                <span style={hiwStyles.dlbl}>fix</span>
+                <span style={hiwStyles.tOk}>{'.where(and(eq(invoices.id, params.id), eq(invoices.userId, session.userId)))'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

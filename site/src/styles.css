@@ -63,6 +63,9 @@
   --sky: #0369a1;
   --amber: #b45309;
   --purple: #7e22ce;
+  --scrollbar-thumb: color-mix(in srgb, var(--faint) 46%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 55%, var(--faint));
+  --scrollbar-track: transparent;
 }
 
 .dark {
@@ -82,10 +85,42 @@
   --sky: #7cc5ff;
   --amber: #fbbf24;
   --purple: #c792ea;
+  --scrollbar-thumb: color-mix(in srgb, var(--faint) 56%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 55%, var(--faint));
+  --scrollbar-track: transparent;
 }
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 3px solid var(--bg);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+[data-docs-sidebar],
+[data-api-nav] {
+  scrollbar-gutter: stable;
 }
 
 /* The header GitHub link collapses into the mobile menu below 48rem. This lives

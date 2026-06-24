@@ -208,10 +208,11 @@ const chromeStyles = style.create(
       fontSize: '0.84rem',
       maxHeight: 'calc(100vh - 7rem)',
       overflowY: 'auto',
+      paddingRight: '0.65rem',
       position: 'sticky',
       scrollbarWidth: 'thin',
       top: '5.5rem',
-      width: '15rem',
+      width: '15.65rem',
     },
     footer: {
       borderTopColor: 'var(--edge)',
