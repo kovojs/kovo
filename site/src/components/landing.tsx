@@ -101,6 +101,57 @@ const heroStyles = style.create(
         padding: '4rem 0 3.6rem',
       },
     },
+    // Technical-preview banner: a quiet caution strip above the headline. A left
+    // amber rule + top/bottom hairlines with no fill (no hard box), an outlined
+    // mono chip, and a feedback link to GitHub issues. Amber (not the indigo
+    // --accent) because "not ready for production" is a caution, not a feature.
+    preview: {
+      alignItems: 'center',
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      borderLeftColor: 'var(--amber)',
+      borderLeftStyle: 'solid',
+      borderLeftWidth: 3,
+      borderTopColor: 'var(--edge)',
+      borderTopStyle: 'solid',
+      borderTopWidth: 1,
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '0.5rem 0.7rem',
+      marginBottom: '1.9rem',
+      padding: '0.65rem 0.95rem',
+    },
+    previewBadge: {
+      alignItems: 'center',
+      borderColor: 'color-mix(in srgb, var(--amber) 50%, var(--edge))',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: 'var(--amber)',
+      display: 'inline-flex',
+      flexShrink: 0,
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.6rem',
+      fontWeight: 700,
+      letterSpacing: '0.13em',
+      padding: '0.22rem 0.5rem',
+      textTransform: 'uppercase',
+    },
+    previewText: {
+      color: 'var(--dim)',
+      fontSize: '0.92rem',
+      lineHeight: 1.5,
+    },
+    previewStrong: { color: 'var(--ink)', fontWeight: 600 },
+    previewLink: {
+      borderBottomColor: 'var(--amber)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      color: 'var(--ink)',
+      fontWeight: 600,
+      textDecoration: 'none',
+      ':hover': { color: 'var(--amber)' },
+    },
     row: {
       alignItems: 'start',
       display: 'grid',
@@ -606,6 +657,21 @@ export function LandingRoutePage({ clients }: LandingPageProps): string {
 function SecurityHero({ clients }: { clients: ClientHrefs }): string {
   return (
     <section style={heroStyles.hero}>
+      <div style={heroStyles.preview}>
+        <span style={heroStyles.previewBadge}>Technical Preview</span>
+        <span style={heroStyles.previewText}>
+          <b style={heroStyles.previewStrong}>Not ready for production.</b> Breaking changes and
+          rough edges to be expected &mdash;{' '}
+          <a
+            style={heroStyles.previewLink}
+            href="https://github.com/kovojs/kovo/issues"
+            rel="external"
+          >
+            share feedback
+          </a>
+          .
+        </span>
+      </div>
       <h1 style={heroStyles.h1}>
         The web framework that turns <em style={heroStyles.bugPhrase}>security&nbsp;bugs</em> into{' '}
         <em style={heroStyles.buildPhrase}>build&nbsp;errors</em>
