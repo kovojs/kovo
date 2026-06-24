@@ -1,5 +1,6 @@
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
+import { normalizeForwardedSetCookie } from './cookies.js';
 import { reportServerError, serverErrorHeaders, type ServerErrorReport } from './diagnostics.js';
 import {
   mergeVaryHeader,
@@ -85,8 +86,9 @@ export async function renderAppRouteDocumentResponse({
   );
 
   const withRefreshCookies = (response: RoutePageResponse): RoutePageResponse => {
-    for (const cookie of refreshSetCookies)
-      appendResponseHeader(response.headers, 'Set-Cookie', cookie);
+    for (const cookie of refreshSetCookies) {
+      appendResponseHeader(response.headers, 'Set-Cookie', normalizeForwardedSetCookie(cookie));
+    }
     return response;
   };
 

@@ -339,7 +339,7 @@ describe('server mutation lifecycle', () => {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[]',
         'Set-Cookie': [
-          'kovo_session=s1; Path=/; HttpOnly; SameSite=Lax',
+          'kovo_session=s1; Path=/; HttpOnly; Secure; SameSite=Lax',
           'kovo_csrf=c1; Path=/; HttpOnly; Secure; SameSite=Strict',
         ],
       },
@@ -372,7 +372,7 @@ describe('server mutation lifecycle', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/login',
-        'Set-Cookie': ['kovo_session=; Max-Age=0; Path=/; HttpOnly'],
+        'Set-Cookie': ['kovo_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'],
       },
       status: 303,
     });

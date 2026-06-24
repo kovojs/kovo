@@ -537,6 +537,14 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
         (downgrade path is audit-grade; justification surfaced in `kovo explain --cookies`).
   - [ ] Normalize forwarded `Set-Cookie` (`forwardBetterAuthSetCookie` etc.) through the attribute floor where
         safe and audit them in `--cookies` — closes the integration hole rather than documenting around it.
+        2026-06-24 bounded cookie-floor slice: `packages/server/src/cookies.ts` now floors typed
+        builder output and forwarded session-provider cookies to `HttpOnly; Secure; SameSite=Lax`,
+        rejects KV432 downgrades without `unsafeCookie(...)`, and enforces `__Host-` constraints.
+        Focused proof: `pnpm exec vitest --run packages/server/src/cookies.test.ts
+        packages/server/src/csrf.test.ts packages/server/src/mutation.test.ts
+        packages/server/src/app-document.test.ts`; `vp check packages/server/src`; `git diff --check`.
+        Gap: class declaration/audit plumbing and `kovo explain --cookies` are still open, so this
+        parent item and forwarded-cookie audit subitem remain unchecked.
   - [ ] Optional sound add: HMAC sealing (constant-time verify via `verifier.ts`, framework secret) for
         **app-data** cookies — framed honestly as tamper-evidence, NOT the session-id defense (`HttpOnly` is that).
   - [ ] Fixation: **documented obligation** (app/auth layer rotates the session id on login; `better-auth`

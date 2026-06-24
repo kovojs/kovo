@@ -84,8 +84,9 @@ export type {
   RouteRequest,
   RouteRequestInput,
 } from '../route.js';
-export type { CookieOptions } from '../cookies.js';
+export type { CookieClass, CookieOptions, UnsafeCookieDowngrade } from '../cookies.js';
 export { webhook } from '../webhook.js';
+export { unsafeCookie } from '../cookies.js';
 export type {
   WebhookChangeOptions,
   WebhookDeclaration,

@@ -174,10 +174,12 @@ export {
   respond,
   route,
   session,
+  unsafeCookie,
   webhook,
 } from './api/routing.js';
 export type {
   AuthenticatedRequest,
+  CookieClass,
   CookieOptions,
   DeferredFragmentChunk,
   DeferredPriority,
@@ -246,6 +248,7 @@ export type {
   UnauthenticatedContext,
   UnauthenticatedDenial,
   UnauthenticatedHandler,
+  UnsafeCookieDowngrade,
   WebhookChangeOptions,
   WebhookDeclaration,
   WebhookDefinition,
