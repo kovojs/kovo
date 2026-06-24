@@ -12,7 +12,14 @@ export async function expectAxeClean(
   page: import('@kovojs/test/internal/integration').Page,
 ): Promise<void> {
   axeSource ??= readFile(axePath, 'utf8');
-  await page.addScriptTag({ content: await axeSource });
+  await page.evaluate(
+    (source) => {
+      const windowWithAxe = window as unknown as { axe?: unknown };
+      if (windowWithAxe.axe) return;
+      (0, eval)(source);
+    },
+    await axeSource,
+  );
   const violations = await page.evaluate(async () => {
     const axe = (
       window as unknown as {

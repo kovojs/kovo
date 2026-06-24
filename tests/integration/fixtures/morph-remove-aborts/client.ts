@@ -35,16 +35,11 @@ export async function startAbortable(_event: Event, ctx: { signal: AbortSignal }
     },
     { once: true },
   );
-  await delay(150);
+  await delay(1_000);
   if (!ctx.signal.aborted) {
     state().sideEffects.push('late-handler');
     setStatus('late-handler');
   }
-}
-
-export function visibleSideEffect(): void {
-  state().sideEffects.push('visible');
-  setStatus('visible-fired');
 }
 
 export function touchReplacement(): void {

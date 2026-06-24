@@ -26,9 +26,6 @@ async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
     <abortable-island kovo-c="abortable-island">
       <button type="button" on:click="/client.ts#startAbortable">Start abortable</button>
     </abortable-island>
-    <pending-visible-island kovo-c="pending-visible-island" on:visible="/client.ts#visibleSideEffect" style="display:none">
-      Pending visible trigger
-    </pending-visible-island>
   </section>`;
 }
 

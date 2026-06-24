@@ -1,7 +1,12 @@
 // Morph survival fixture: a keyed scroll container keeps browser-owned
 // scrollTop while server-truth content is reconciled (SPEC §9.1).
-import { createApp, mutation, route, s } from '@kovojs/server';
+/** @jsxImportSource @kovojs/server */
+import { createApp, Document, Head, InlineStyle, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+
+const SCROLL_REGION_CSS =
+  '[data-scroll-region]{height:110px;overflow:auto;border:1px solid currentColor}' +
+  '[data-scroll-region] [data-row]{height:24px;margin:0}';
 
 async function readVersion(db: KovoFixtureRequest['db']): Promise<number> {
   const rows = await db.query<{ version: number }>('select version from scroll_state where id = 1');
@@ -18,11 +23,7 @@ async function renderPanel(db: KovoFixtureRequest['db']): Promise<string> {
   }).join('');
 
   return `<section kovo-fragment-target="scroll-panel" kovo-deps="scroll" kovo-key="scroll-panel">
-    <div
-      kovo-key="scroll-region"
-      data-scroll-region
-      style="height: 110px; overflow: auto; border: 1px solid currentColor;"
-    >
+    <div kovo-key="scroll-region" data-scroll-region>
       ${rows}
     </div>
     <p>Server version <output data-bind="scroll.version">${version}</output></p>
@@ -51,6 +52,18 @@ const homeRoute = route('/', {
 });
 
 const app = createApp({
+  document: (
+    <Document>
+      <Head>
+        <InlineStyle
+          id="morph-scroll-region"
+          source="tests/integration/fixtures/morph-scroll/app.tsx"
+        >
+          {SCROLL_REGION_CSS}
+        </InlineStyle>
+      </Head>
+    </Document>
+  ),
   mutations: [refreshScroll],
   routes: [homeRoute],
   mutationResponses: {

@@ -9,6 +9,9 @@ test('preserves keyed scroll position while reconciling inserted content', async
   await page.goto('/');
 
   const scroller = page.locator('[data-scroll-region]');
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollHeight > element.clientHeight))
+    .toBe(true);
   await scroller.evaluate((element) => {
     element.scrollTop = 180;
   });
