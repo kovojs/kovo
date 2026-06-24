@@ -322,7 +322,7 @@ design.
     projections must use the analyzed `select({ ... })` path. Runtime-only `trustedReveal` calls outside the
     Drizzle static projection analyzer are type-level escapes until a broader non-Drizzle scanner exists.
 
-## Phase 2: Authorization completeness — default-deny (diagnostic code TBD)
+## Phase 2: Authorization completeness — default-deny (KV436)
 
 Decision (2026-06-23): mandatory `access:` field, **no default and no auto-injected `authed`**; `public()`
 reasons live in a reviewed snapshot (a new public surface is a code-review diff); signature-verified machine
@@ -336,14 +336,15 @@ endpoints use `access: verified`; the migration **assigns a real decision at eve
   - Foundation evidence: `packages/core/src/graph.ts` defines structured `AccessExplainFact` rows,
     `packages/cli/src/graph-output.ts` adds `kovo explain --access` from explicit facts plus legacy
     guard/auth derivation, and `packages/core/src/diagnostics.ts` assigns KV436 so explicit missing-access
-    facts fail `kovo check`. Remaining gap: the public `access:` definition API is not yet required or
-    migrated across call sites.
-  - Extractor evidence: `packages/server/src/access-graph.ts` derives opt-in app access facts from
-    assembled `KovoApp` query/mutation/route guard posture and endpoint/webhook auth posture; verified by
-    `vp exec vitest --run packages/server/src/access-graph.test.ts packages/server/src/api/app.test.ts`.
-  - Optional API evidence: `packages/server/src/access.ts` exposes `publicAccess`, `verifiedAccess`, and
-    guard-chain metadata carried by query/mutation/route/endpoint/webhook definitions; verified by
-    `vp exec vitest --run packages/server/src/access.test.ts packages/server/src/access-graph.test.ts`.
+    facts fail `kovo check`.
+  - Current partial evidence: `packages/server/src/{query.ts,mutation/definition.ts,route.ts,endpoint.ts,webhook.ts}`
+    require `access:` in public definition types; `packages/server/src/access.ts` exposes `publicAccess`,
+    `verifiedAccess`, and `guardAccess`; `packages/server/src/access-graph.ts` treats missing explicit
+    access as KV436 even when legacy guards/auth exist. Verified by
+    `vp check packages/server/src packages/better-auth/src`,
+    `vp exec vitest --run packages/server/src/access.test.ts packages/server/src/access-graph.test.ts packages/server/src/app-diagnostics.test.ts`,
+    `pnpm run check:api-surface`, `pnpm run check:exports`, and `git diff --check`.
+  - Remaining gap: broad app/example/site/fixture call sites are still being migrated to real decisions.
 - [ ] Keep the missing-access diagnostic orthogonal to correctness: it proves a decision _exists_, never that it is _correct_ (a
       no-op `return true` guard satisfies it). Retain KV414 (IDOR) and record every `public()` in a reviewed
       `kovo explain --access` snapshot so each public surface is a diff, not an invisible default.
