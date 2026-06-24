@@ -586,9 +586,9 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
         proto-safety path for the counter. Cover JSON nesting, the FormData→object key-count expansion, `/_q/`
         arg coercion, and route params — all through the one budget.
         Evidence: `packages/server/src/schema.ts` enforces default depth/breadth/node budgets in `s.object`,
-        `s.array`, and `entriesToRecord`; `vp exec vitest --run packages/server/src/schema.test.ts
-packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts` covers JSON nesting,
-        FormData key expansion, `/_q/` arg coercion, and route params; `vp check packages/server/src` passed.
+        `s.array`, and `entriesToRecord`; focused server schema/query/route Vitest coverage exercises JSON
+        nesting, FormData key expansion, `/_q/` arg coercion, and route params; `vp check packages/server/src`
+        passed.
   - [ ] Per-schema overrides (`s.array().max(n)`, `s.string().max(len)`) + a global config ceiling so
         legitimate large inputs (bulk imports) declare their bound (declare-once).
   - [ ] KV430 **lint** (not error): flag an unbounded `s.array()`/`s.record()` on a wire-reachable schema with
@@ -669,11 +669,11 @@ function. Classified runtime defense-in-depth: makes a slipped-through XSS inert
       `unsafe-inline`/`unsafe-eval`; the nonce flows through the request shell onto every emitted script tag.
       Build on `packages/server/src/csp.ts` (keep its non-overridable `base-uri`/`object-src`/`form-action`/
       `frame-ancestors`).
-  - Partial evidence: branch `agent/secure-phase7-csp-default-20260624-033222` emits the existing hash-based
-    document CSP by default in `renderRouteDocumentResponse`/`renderErrorDocument`, appends Kovo's policy to
-    author CSP headers, and keeps `base-uri`/`object-src`/`form-action`/`frame-ancestors` fixed; verified by
-    `vp exec vitest --run packages/server/src/document.test.ts packages/server/src/app-dispatch.test.ts` and
-    `vp check packages/server/src`.
+  - Partial evidence: integrated slice emits the existing hash-based document CSP by default in
+    `renderRouteDocumentResponse`/`renderErrorDocument`, appends Kovo's policy to author CSP headers, and keeps
+    `base-uri`/`object-src`/`form-action`/`frame-ancestors` fixed; verified by `vp exec vitest --run
+packages/server/src/document.test.ts packages/server/src/app-dispatch.test.ts` and `vp check
+packages/server/src`.
   - Remaining gap: nonce propagation and `strict-dynamic` default-on are still open; this slice intentionally
     stays on existing hash metadata.
 - [ ] Install a Trusted Types policy with the framework as the SOLE policy (`require-trusted-types-for 'script'`)
