@@ -38,6 +38,6 @@ test('endpoint audit prints auth and CSRF exemption justification', () => {
 
   expect(result.exitCode).toBe(0);
   expect(result.output).toContain(
-    'ENDPOINT webhooks/signed-callback method=POST path=/webhooks/signed-callback mount=exact auth=verifier:demo-hmac csrf=exempt:signed callback verifies raw body writes=-',
+    'ENDPOINT webhooks/signed-callback surface=endpoint method=POST path=/webhooks/signed-callback mount=exact auth=verifier:demo-hmac csrf=exempt:signed callback verifies raw body cache=- body=- bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-',
   );
 });
