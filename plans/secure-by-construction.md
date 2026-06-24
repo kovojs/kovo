@@ -415,8 +415,15 @@ compiler). Derivation is fail-closed.
   - Evidence: `packages/compiler/src/handler-lowering.test.ts` covers `process.env` and `secret()` direct
     captures plus `slice`, object, and conditional derivations; verified by
     `vp exec vitest --run packages/compiler/src/handler-lowering.test.ts`.
-- [ ] `publishToClient(derive, { reason })` is the audited, recorded escape — an author assertion (a loud
+- [x] `publishToClient(derive, { reason })` is the audited, recorded escape — an author assertion (a loud
       `as`), surfaced in `kovo explain --capabilities`; the derivation is NOT checked. Frame honestly.
+  - Evidence: `packages/compiler/src/handler-lowering.test.ts`, `packages/compiler/src/registry.test.ts`,
+    and `packages/cli/src/index.kovo-explain.test.ts` cover non-empty static reasons, KV201 fail-closed
+    missing/non-static reasons, client emission, app graph capability facts, and `kovo explain
+    --capabilities`; verified by `vp exec vitest --run packages/compiler/src/handler-lowering.test.ts
+    packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-explain.test.ts
+    packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/src`, and
+    `git diff --check`.
 - [ ] `ServerOnly<T>` brand, if shipped, is `tsc`-time ergonomic sugar only.
   - Open risk: `process.env` retention changes the `ModuleScopeBindingModel` invariant (non-literal bindings
     are dropped today, `parse.ts`); scope the refactor blast radius.

@@ -252,6 +252,7 @@ export interface NamedImportModel {
 
 export interface ModuleScopeBindingModel {
   name: string;
+  publishToClient?: ModuleScopePublishToClient;
   secretProvenance?: ModuleScopeSecretProvenance;
   source: string;
   staticValue?: StaticLiteralValue;
@@ -259,6 +260,11 @@ export interface ModuleScopeBindingModel {
 
 export interface ModuleScopeSecretProvenance {
   kind: 'process-env' | 'secret-call' | 'derived';
+}
+
+export interface ModuleScopePublishToClient {
+  reason: string;
+  source: string;
 }
 
 export interface ComponentModuleModel {

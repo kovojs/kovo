@@ -53,3 +53,23 @@ export function trustedReveal<T>(value: T, options: TrustedRevealOptions): Trust
   }
   return value as TrustedRevealValue<T>;
 }
+
+export interface PublishToClientOptions {
+  /**
+   * Why this server-derived value is safe to publish into a client module. Keep
+   * the text reviewable and non-sensitive; it is emitted into explain output.
+   */
+  reason: string;
+}
+
+/**
+ * Audited escape hatch for publishing a server-derived value into a generated
+ * client module. The compiler records this assertion for `kovo explain
+ * --capabilities`; it does not prove the derivation safe.
+ */
+export function publishToClient<T>(value: T, options: PublishToClientOptions): T {
+  if (!options.reason.trim()) {
+    throw new Error('publishToClient requires a non-empty reason.');
+  }
+  return value;
+}

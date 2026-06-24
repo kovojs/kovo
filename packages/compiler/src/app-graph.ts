@@ -48,8 +48,13 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   ]);
   const routePages = (options.routePages ?? []).flatMap((routePage) => routePage.routePageFacts);
   const derivedRoutePages = derivedPageFactsFromRoutePages(routePages, components);
+  const capabilities = [
+    ...(options.graph?.capabilities ?? []),
+    ...(options.components ?? []).flatMap((component) => component.capabilities ?? []),
+  ];
   const graph: RegistryGraphInput = {
     ...options.graph,
+    ...(capabilities.length > 0 ? { capabilities } : {}),
     components,
     ...(derivedRoutePages.length > 0 || (options.graph?.pages?.length ?? 0) > 0
       ? { pages: mergeGraphPages(options.graph?.pages ?? [], derivedRoutePages) }
@@ -87,12 +92,17 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
     .flatMap((component) => component.componentGraphFacts)
     .map((fact) => factHash(fact))
     .sort();
+  const capabilityHashes = (options.components ?? [])
+    .flatMap((component) => component.capabilities ?? [])
+    .map((fact) => factHash(fact))
+    .sort();
   const routeHashes = (options.routePages ?? [])
     .flatMap((routePage) => routePage.routePageFacts)
     .map((fact) => factHash(fact))
     .sort();
 
   return factHash({
+    capabilities: capabilityHashes,
     components: componentHashes,
     graph: options.graph ?? null,
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,

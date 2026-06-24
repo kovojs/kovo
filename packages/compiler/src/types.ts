@@ -53,6 +53,9 @@ export type ComponentGraphFact = Pick<
   | 'styleRules'
 >;
 
+/** @internal Audited capability escapes emitted by compiler analysis. */
+export type CapabilityGraphFact = CoreGraph.CapabilityExplainFact;
+
 /**
  * @internal A component's fragment-target fact (target name + props type) used when building
  * the registry. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
@@ -170,7 +173,7 @@ export interface CompileDependencyReads {
  */
 export type RegistryGraphInput = Pick<
   CoreGraph.KovoExplainInput,
-  'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
+  'capabilities' | 'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
 >;
 
 /** @internal Optional mutation/query type maps threaded into registry-fact derivation. */
@@ -180,7 +183,10 @@ export interface RegistryTypeFactOptions {
 }
 
 export interface CompileAppGraphOptions {
-  components?: readonly { componentGraphFacts: readonly ComponentGraphFact[] }[];
+  components?: readonly {
+    capabilities?: readonly CapabilityGraphFact[];
+    componentGraphFacts: readonly ComponentGraphFact[];
+  }[];
   graph?: RegistryGraphInput;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   registryTypes?: RegistryTypeFactOptions;
@@ -305,6 +311,7 @@ export interface CompileArtifactFileNames {
  * hand-write these lowered artifacts (SPEC.md §5.2).
  */
 export interface CompileResult {
+  capabilities: readonly CapabilityGraphFact[];
   clientExports: readonly string[];
   componentGraphFacts: readonly ComponentGraphFact[];
   cssAssets: readonly ComponentCssAsset[];
@@ -491,6 +498,7 @@ export function elementParamNameFromAttribute(attributeName: string): string {
  */
 export function createEmptyCompileResult(): CompileResult {
   return {
+    capabilities: [],
     clientExports: [],
     componentGraphFacts: [],
     cssAssets: [],

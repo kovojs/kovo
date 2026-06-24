@@ -188,11 +188,14 @@ function moduleScopeBindingModels(
 
     const value = staticLiteralValue(declaration.initializer);
     const secretProvenance = moduleScopeSecretProvenance(declaration.initializer, secretBindings);
-    if (value === undefined && secretProvenance === undefined) return [];
+    const publishToClient = moduleScopePublishToClient(sourceFile, source, declaration.initializer);
+    if (value === undefined && secretProvenance === undefined && publishToClient === undefined)
+      return [];
 
     return [
       {
         name: declaration.name.text,
+        ...(publishToClient === undefined ? {} : { publishToClient }),
         ...(secretProvenance === undefined ? {} : { secretProvenance }),
         source: source.slice(
           declaration.initializer.getStart(sourceFile),
@@ -233,10 +236,50 @@ function moduleScopeSecretProvenance(
   return found;
 }
 
+function moduleScopePublishToClient(
+  sourceFile: ts.SourceFile,
+  source: string,
+  initializer: ts.Expression,
+): ModuleScopeBindingModel['publishToClient'] | undefined {
+  const call = unwrapExpression(initializer);
+  if (!ts.isCallExpression(call) || !isPublishToClientCallExpression(call)) return undefined;
+
+  const [value, options] = call.arguments;
+  if (!value || !options || !ts.isObjectLiteralExpression(options)) return undefined;
+
+  const reason = publishToClientReason(options);
+  if (!reason?.trim()) return undefined;
+
+  return {
+    reason,
+    source: source.slice(value.getStart(sourceFile), value.getEnd()),
+  };
+}
+
+function publishToClientReason(options: ts.ObjectLiteralExpression): string | undefined {
+  for (const property of options.properties) {
+    if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== 'reason') {
+      continue;
+    }
+
+    const value = staticLiteralValue(property.initializer);
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  return undefined;
+}
+
 function isSecretCallExpression(node: ts.CallExpression): boolean {
   const callee = unwrapExpression(node.expression);
   if (ts.isIdentifier(callee)) return callee.text === 'secret';
   if (ts.isPropertyAccessExpression(callee)) return callee.name.text === 'secret';
+  return false;
+}
+
+function isPublishToClientCallExpression(node: ts.CallExpression): boolean {
+  const callee = unwrapExpression(node.expression);
+  if (ts.isIdentifier(callee)) return callee.text === 'publishToClient';
+  if (ts.isPropertyAccessExpression(callee)) return callee.name.text === 'publishToClient';
   return false;
 }
 
