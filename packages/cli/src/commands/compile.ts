@@ -1152,6 +1152,7 @@ type DrizzleOptimisticEntryStatus = 'await-fragment' | 'derived' | 'hand-written
 interface DrizzleStaticCommandInput {
   extract?: readonly (
     | 'algebraicShapes'
+    | 'capabilities'
     | 'materializedViewRefreshFacts'
     | 'ownerAudit'
     | 'queryFacts'
@@ -1183,6 +1184,7 @@ async function runCompileDrizzleStaticCommand(
     deriveInvalidationRegistry,
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
+    governedWriteCapabilityFactsFromProject,
     governedWriteDiagnosticsFromProject,
     extractMaterializedViewRefreshFactsFromProject,
     extractOwnerAuditFromProject,
@@ -1204,6 +1206,7 @@ async function runCompileDrizzleStaticCommand(
     const extract = new Set(
       input.extract ?? [
         'algebraicShapes',
+        'capabilities',
         'materializedViewRefreshFacts',
         'ownerAudit',
         'queryFacts',
@@ -1247,6 +1250,9 @@ async function runCompileDrizzleStaticCommand(
     }
     if (extract.has('algebraicShapes'))
       output.algebraicShapes = extractAlgebraicShapesFromProject({ files });
+    if (extract.has('capabilities')) {
+      output.capabilities = governedWriteCapabilityFactsFromProject({ files });
+    }
   }
 
   if (input.invalidation !== undefined) {

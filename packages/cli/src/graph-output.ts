@@ -146,6 +146,7 @@ export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query
  */
 export type KovoExplainOptions =
   | KovoAccessExplainOptions
+  | KovoCapabilitiesExplainOptions
   | KovoEndpointExplainOptions
   | KovoRevealedExplainOptions
   | KovoSourcesSinksExplainOptions
@@ -162,6 +163,14 @@ export type KovoExplainOptions =
 export interface KovoAccessExplainOptions {
   access: true;
   failOnFindings?: boolean;
+}
+
+/**
+ * `kovo explain --capabilities` options: emit audited capability escapes such
+ * as Phase 3 governed-column admin assignments (plans/secure-by-construction.md).
+ */
+export interface KovoCapabilitiesExplainOptions {
+  capabilities: true;
 }
 
 /**
@@ -270,6 +279,18 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
 
     lines.push(accessSummary(access));
     return explainAuditResult(lines, missing, options.failOnFindings);
+  }
+
+  if ('capabilities' in options) {
+    const capabilities = [...(graph.capabilities ?? [])].sort(compareCapabilityExplain);
+    lines.push('CAPABILITIES');
+
+    for (const capability of capabilities) {
+      lines.push(capabilityExplainLine(capability));
+    }
+
+    lines.push(`SUMMARY total=${capabilities.length}`);
+    return ok(lines);
   }
 
   if ('unscoped' in options) {
@@ -867,6 +888,7 @@ type ExplainArgParseResult =
 export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
   const parsed = parseFlaggedArgs(args, [
     '--access',
+    '--capabilities',
     '--endpoints',
     '--fail-on-findings',
     '--layouts',
@@ -882,6 +904,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   const { flags, positional } = parsed;
   const modeFlags = [
     '--access',
+    '--capabilities',
     '--endpoints',
     '--revealed',
     '--sources-sinks',
@@ -900,6 +923,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       ok: true,
       options: { access: true, failOnFindings: flags.has('--fail-on-findings') },
     };
+  }
+
+  if (flags.has('--capabilities')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { capabilities: true } };
   }
 
   if (flags.has('--sources-sinks')) {
@@ -1528,6 +1563,18 @@ function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
   ].join(' ');
 }
 
+function capabilityExplainLine(capability: CoreGraph.CapabilityExplainFact): string {
+  return [
+    'CAPABILITY',
+    `kind=${capability.kind}`,
+    `site=${capability.site}`,
+    `table=${capability.table ?? '-'}`,
+    `column=${capability.column ?? '-'}`,
+    `source=${capability.source ?? '-'}`,
+    `reason=${stableValue(capability.reason)}`,
+  ].join(' ');
+}
+
 function revealExplainLine(reveal: CoreGraph.RevealExplainFact): string {
   return [
     'REVEAL',
@@ -1562,6 +1609,18 @@ function unguardedWarningLine(access: UnguardedAccessFact): string {
 
 function compareUnguardedAccess(left: UnguardedAccessFact, right: UnguardedAccessFact): number {
   return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
+}
+
+function compareCapabilityExplain(
+  left: CoreGraph.CapabilityExplainFact,
+  right: CoreGraph.CapabilityExplainFact,
+): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.site.localeCompare(right.site) ||
+    (left.table ?? '').localeCompare(right.table ?? '') ||
+    (left.column ?? '').localeCompare(right.column ?? '')
+  );
 }
 
 function hasAuthGuard(guards: readonly string[]): boolean {

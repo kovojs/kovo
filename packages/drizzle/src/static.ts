@@ -2518,6 +2518,7 @@ export {
 /** @internal */
 export {
   extractAlgebraicShapesFromProject,
+  governedWriteCapabilityFactsFromProject,
   extractSymbolicEffectsFromProject,
   governedWriteDiagnosticsFromProject,
 } from './static/derivation.js';

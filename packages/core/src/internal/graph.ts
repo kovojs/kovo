@@ -1,6 +1,7 @@
 export type {
   AccessExplainFact,
   AttributeMergeExplain,
+  CapabilityExplainFact,
   CaptureChannel,
   ClockExplain,
   ComponentExplain,

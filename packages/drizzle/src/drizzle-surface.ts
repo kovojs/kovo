@@ -14,6 +14,19 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
 
 export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 
+/** Kovo-branded value explicitly derived on the server for governed-column writes (SPEC §10.3 / KV437). */
+export interface KovoServerValue<T> {
+  readonly __kovoGovernedWriteEscape?: 'serverValue';
+  readonly value: T;
+}
+
+/** Kovo-branded audited assignment from client input into a governed column (SPEC §10.3 / KV437). */
+export interface KovoAdminAssignment<T> {
+  readonly __kovoGovernedWriteEscape?: 'adminAssign';
+  readonly reason: string;
+  readonly value: T;
+}
+
 /** Private server-side provenance kinds that the analyzer may use as proof inputs. */
 export type KovoAnalyzerPrivateScopeKind = 'guard' | 'session' | 'tenant';
 
@@ -124,6 +137,36 @@ export function kovo(annotation: KovoAnnotation): KovoTableExtraConfig | KovoVie
   return Object.assign((() => []) as (self: unknown) => [], annotation) as
     | KovoTableExtraConfig
     | KovoViewExtraConfig;
+}
+
+/**
+ * Mark a governed-column write value as server-derived. The static analyzer only
+ * honors this escape when the wrapped value is proven non-input; wrapping
+ * `input.x` still emits KV437 (SPEC §10.3).
+ *
+ * @param value - A non-client-input value derived on the server.
+ * @param reason - Source-visible reason for the server derivation.
+ * @returns The original value at runtime, branded for TypeScript review.
+ */
+export function serverValue<T>(value: T, reason: string): T & KovoServerValue<T> {
+  void reason;
+  return value as T & KovoServerValue<T>;
+}
+
+/**
+ * Explicitly audit an intentional admin assignment from client input to a
+ * governed column. Unlike {@link serverValue}, this escape is allowed to wrap
+ * client input and is surfaced by `kovo explain --capabilities` (SPEC §10.3).
+ *
+ * @param value - The value being intentionally assigned.
+ * @param reason - Non-empty source-visible administrative reason.
+ * @returns The original value at runtime, branded for TypeScript review.
+ */
+export function adminAssign<T>(value: T, reason: string): T & KovoAdminAssignment<T> {
+  if (!reason.trim()) {
+    throw new Error('adminAssign requires a non-empty reason.');
+  }
+  return value as T & KovoAdminAssignment<T>;
 }
 
 /**

@@ -724,6 +724,33 @@ describe('kovo explain', () => {
     `);
   });
 
+  it('prints capability escapes with stable explain output', () => {
+    const result = kovoExplain(
+      {
+        capabilities: [
+          {
+            column: 'role',
+            kind: 'adminAssign',
+            reason: 'support role correction',
+            site: 'account.domain.ts:10',
+            source: 'input.role',
+            table: 'accounts',
+          },
+        ],
+      },
+      { capabilities: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      CAPABILITIES
+      CAPABILITY kind=adminAssign site=account.domain.ts:10 table=accounts column=role source=input.role reason="support role correction"
+      SUMMARY total=1
+      "
+    `);
+  });
+
   it('prints confidentiality reveals with stable explain output', () => {
     const result = kovoExplain(
       {
