@@ -1186,6 +1186,8 @@ async function runCompileDrizzleStaticCommand(
     extractMaterializedViewRefreshFactsFromProject,
     extractOwnerAuditFromProject,
     extractQueryFactsFromProject,
+    extractQueryWriteReachabilityFromProject,
+    extractToctouFromProject,
     extractSymbolicEffectsFromProject,
     extractTouchGraphFromProject,
     revealFactsFromQueryFacts,
@@ -1207,9 +1209,11 @@ async function runCompileDrizzleStaticCommand(
         'materializedViewRefreshFacts',
         'ownerAudit',
         'queryFacts',
+        'queryWriteReachability',
         'revealed',
         'sqlSafetyDiagnostics',
         'symbolicEffects',
+        'toctouFacts',
         'touchGraph',
       ],
     );
@@ -1228,6 +1232,16 @@ async function runCompileDrizzleStaticCommand(
       // SPEC §11.1 / secure-framework Phase 3: governed-column mass-assignment facts
       // the graph emission feeds to `kovo check` (KV438).
       output.massAssignmentFacts = extractMassAssignmentFromProject({ files });
+    }
+    if (extract.has('queryWriteReachability')) {
+      // SPEC §6.6/§9.4 / secure-framework Phase 5: query-loader write-reachability facts
+      // the graph emission feeds to `kovo check` (KV433 Stage 2).
+      output.queryWriteReachability = extractQueryWriteReachabilityFromProject({ files });
+    }
+    if (extract.has('toctouFacts')) {
+      // SPEC §10.3/§11.1 / secure-framework Phase 6: lost-update (TOCTOU) facts the graph
+      // emission feeds to `kovo check` (KV429).
+      output.toctouFacts = extractToctouFromProject({ files });
     }
     if (extract.has('materializedViewRefreshFacts')) {
       output.materializedViewRefreshFacts = extractMaterializedViewRefreshFactsFromProject({

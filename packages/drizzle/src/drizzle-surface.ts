@@ -75,15 +75,27 @@ export interface KovoViewAnnotation {
  */
 export type KovoGovernedColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
 
+/**
+ * Names columns whose single-row read-modify-write MUST fold the check and the act into
+ * one statement — a compare-and-set / version guard in the `where()` (SPEC §10.3/§11.1,
+ * the KV429 TOCTOU gate). A self-referential `set({ col: col ± x })` on such a column
+ * whose `where()` carries no eq-predicate on that column (nor a declared version column)
+ * is a lost-update race. `atomic` names the contended value column; `version` names an
+ * optimistic-concurrency counter that, when guarded in the `where()`, discharges the gate.
+ */
+export type KovoConcurrencyColumnAnnotation = KovoColumnRef | readonly KovoColumnRef[];
+
 /** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key` and principal `owner`), or an `exempt` marker. */
 export type KovoTableAnnotation =
   | {
+      atomic?: KovoConcurrencyColumnAnnotation;
       domain: string;
       fans?: readonly KovoFanAnnotation[];
       governed?: KovoGovernedColumnAnnotation;
       key?: KovoColumnRef;
       owner?: KovoColumnRef;
       secret?: KovoSecretColumnAnnotation;
+      version?: KovoConcurrencyColumnAnnotation;
     }
   | {
       exempt: true;
@@ -98,12 +110,14 @@ export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation
 
 /** The domain-bearing form of a table annotation: its `domain`, optional `key` column, and optional principal `owner` column (SPEC §10.1). */
 export interface KovoDomainTableAnnotation {
+  atomic?: KovoConcurrencyColumnAnnotation;
   domain: string;
   fans?: readonly KovoFanAnnotation[];
   governed?: KovoGovernedColumnAnnotation;
   key?: KovoColumnRef;
   owner?: KovoColumnRef;
   secret?: KovoSecretColumnAnnotation;
+  version?: KovoConcurrencyColumnAnnotation;
 }
 
 /** The value `kovo(...)` returns: a Drizzle extra-config callback carrying the annotation. */

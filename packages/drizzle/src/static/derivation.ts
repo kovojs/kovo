@@ -12,7 +12,11 @@ import type {
   SymbolicMatch,
   SymbolicValue,
 } from '@kovojs/core/internal/derivation';
-import type { MassAssignmentFact } from '@kovojs/core/internal/graph';
+import type {
+  MassAssignmentFact,
+  QueryWriteReachabilityFact,
+  ToctouFact,
+} from '@kovojs/core/internal/graph';
 import {
   Node,
   SyntaxKind,
@@ -1177,6 +1181,261 @@ function dedupeMassAssignmentFacts(facts: readonly MassAssignmentFact[]): MassAs
       left.site.localeCompare(right.site) ||
       left.via.localeCompare(right.via),
   );
+}
+
+// ── KV429 TOCTOU / lost-update gate (single-row, declared atomic/version) ─────
+//
+// SPEC §10.3/§11.1, secure-framework Phase 6. A self-referential single-row write to a
+// DECLARED `atomic` column — `set({ stock: stock - qty })` (lowered to a SymbolicValue
+// `arith` over a `col` self-reference) — whose `where()` carries NO eq-predicate on the
+// atomic column OR on a declared `version` column is a lost-update race: two concurrent
+// read-decide-write requests survive auth/validation and overwrite each other. The
+// compare-and-set / version guard lives in the WHERE; its presence discharges KV429.
+//
+// Honest ceiling (single-row only): a write whose `match` is opaque (range/IN/no key) or
+// multi-row is NOT flagged — multi-row/aggregate invariants need SERIALIZABLE + retry and
+// are nobody's by-construction. The DB CHECK/unique constraint is the fail-closed backstop.
+
+/**
+ * SPEC §10.3/§11.1 (KV429) — every single-row self-referential write to a declared
+ * `atomic` column whose `where()` lacks a compare-and-set/`version` guard on that column.
+ * Reuses the Stage-1 symbolic-effect lowering. Returns the facts the graph emission turns
+ * into blocking KV429 errors.
+ *
+ * @internal
+ */
+export function extractToctouFromProject(options: TouchGraphProjectOptions): ToctouFact[] {
+  const extraction = createDeriveExtraction(options);
+  try {
+    const concurrencyByTable = new Map<string, ConcurrencyTableInfo>();
+    for (const table of extraction.tablesBySyntheticName.values()) {
+      const info = concurrencyTableInfo(table);
+      if (info) concurrencyByTable.set(table.annotation.name, info);
+    }
+    if (concurrencyByTable.size === 0) return [];
+
+    const facts: ToctouFact[] = [];
+    extraction.sourceFiles.forEach((sourceFile, index) => {
+      const file = extraction.files[index];
+      if (!file) return;
+
+      const namespaceTableNames = projectNamespaceTableNamesByLocal(
+        sourceFile,
+        extraction.tableNamesBySymbol,
+      );
+      const resolveTable = (node: Node): string | undefined => {
+        const synthetic = projectTableNameForNode(
+          node,
+          extraction.tableNamesBySymbol,
+          namespaceTableNames,
+        );
+        if (!synthetic) return undefined;
+        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+        if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
+        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+      };
+
+      for (const callback of deriveWriteCallbacks(sourceFile)) {
+        const receivers = projectDrizzleReceivers(callback.fn);
+        const paramSymbolKeys = callbackParameterSymbolKeys(callback.fn);
+        const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
+        const symbolContext = symbolProvenanceContextForNodes([callback.body], {
+          inputRoots: callbackInputRootNodes(callback.fn),
+        });
+        for (const call of touchBodyCallExpressions(callback.body)) {
+          const result = symbolicEffectForWriteCall(call, {
+            file,
+            paramSymbolKeys,
+            receivers,
+            resolveTable,
+            sessionContext,
+            symbolContext,
+            ...(callback.key ? { writeKey: callback.key } : {}),
+          });
+          if (!result || result.effect.op !== 'update') continue;
+          const info = concurrencyByTable.get(result.effect.table);
+          if (!info) continue;
+          for (const fact of toctouFactsForEffect(result.effect, info, result.site, callback.key)) {
+            facts.push(fact);
+          }
+        }
+      }
+    });
+    return dedupeToctouFacts(facts);
+  } finally {
+    extraction.dispose();
+  }
+}
+
+interface ConcurrencyTableInfo {
+  atomic: ReadonlySet<string>;
+  version: ReadonlySet<string>;
+}
+
+function concurrencyTableInfo(table: ExtractedTable): ConcurrencyTableInfo | undefined {
+  const annotation = table.annotation as { atomic?: readonly string[]; version?: readonly string[] };
+  const atomic = new Set((annotation.atomic ?? []).filter((c): c is string => typeof c === 'string'));
+  const version = new Set(
+    (annotation.version ?? []).filter((c): c is string => typeof c === 'string'),
+  );
+  return atomic.size > 0 || version.size > 0 ? { atomic, version } : undefined;
+}
+
+function toctouFactsForEffect(
+  effect: Extract<SymbolicEffect, { op: 'update' }>,
+  info: ConcurrencyTableInfo,
+  site: string,
+  name: string | undefined,
+): ToctouFact[] {
+  const facts: ToctouFact[] = [];
+  // The set of columns the WHERE guards by an eq-predicate. An opaque/multi-row match
+  // guards nothing the gate can prove — but it is also NOT a single-row CAS, so a
+  // self-referential write under an opaque match still needs the version guard we cannot
+  // see; we conservatively DO NOT flag opaque/non-keys matches (honest single-row ceiling).
+  if (effect.match.kind !== 'keys') return facts;
+  const guardedColumns = new Set(effect.match.eq.map((eq) => eq.column));
+  // A version column guarded anywhere in the WHERE discharges the CAS obligation.
+  const versionGuarded = [...info.version].some((column) => guardedColumns.has(column));
+
+  for (const column of info.atomic) {
+    const setValue = effect.sets[column];
+    if (!setValue || !valueReadsColumn(setValue, column)) continue;
+    // Read-then-write on the atomic column: safe only if the WHERE eq-guards the atomic
+    // column itself (true CAS) OR a declared version column.
+    if (guardedColumns.has(column) || versionGuarded) continue;
+    facts.push({ column, site, table: effect.table, ...(name ? { name } : {}) });
+  }
+  return facts;
+}
+
+/** Whether a SymbolicValue reads `column` of the written row (self-reference) — the read half of read-then-write. */
+function valueReadsColumn(value: SymbolicValue, column: string): boolean {
+  if (value.kind === 'col') return value.column === column;
+  if (value.kind === 'arith') {
+    return valueReadsColumn(value.left, column) || valueReadsColumn(value.right, column);
+  }
+  return false;
+}
+
+function dedupeToctouFacts(facts: readonly ToctouFact[]): ToctouFact[] {
+  const seen = new Set<string>();
+  const deduped: ToctouFact[] = [];
+  for (const fact of facts) {
+    const dedupeKey = `${fact.site}\0${fact.table}\0${fact.column}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    deduped.push(fact);
+  }
+  return deduped.sort(
+    (left, right) =>
+      left.site.localeCompare(right.site) ||
+      left.table.localeCompare(right.table) ||
+      left.column.localeCompare(right.column),
+  );
+}
+
+// ── KV433 read-only query handle (Stage-2 static no-write-reachable) ──────────
+//
+// SPEC §6.6/§9.4, secure-framework Phase 5. A `query('name', { load })` loader is a
+// read surface; reaching a Drizzle write (insert/update/delete) from it is the
+// confused-deputy case (a state change on an idempotent GET). Stage 2 is the
+// by-construction half: a static proof that a loader body contains no DIRECTLY-reachable
+// Drizzle write. `query.elevated('name', …)` is the audited escape (a GET that must be
+// idempotent-safe-to-repeat). Honest scope: this detects writes DIRECTLY in the loader
+// body. The fully interprocedural case (a loader calling an imported `domain()` function
+// that writes through a captured handle) needs the bottom-up write-summaries that are NOT
+// built; that residue is a documented gap, not covered here. Stage 1 (a managed read-only
+// proxy handle) is blocked: `QueryLoadContext = { request }` does not thread a db handle,
+// so loaders close over module-scope `db` and there is nothing to intercept without a
+// breaking authoring change.
+
+/**
+ * SPEC §6.6/§9.4 (KV433 Stage 2) — every `query()` loader whose body directly reaches a
+ * Drizzle write, minus `query.elevated(...)` loaders (the audited escape). Returns the
+ * write-reachability facts the graph emission turns into blocking KV433 errors.
+ *
+ * @internal
+ */
+export function extractQueryWriteReachabilityFromProject(
+  options: TouchGraphProjectOptions,
+): QueryWriteReachabilityFact[] {
+  const extraction = createDeriveExtraction(options);
+  try {
+    const facts: QueryWriteReachabilityFact[] = [];
+    extraction.sourceFiles.forEach((sourceFile, index) => {
+      const file = extraction.files[index];
+      if (!file) return;
+
+      const namespaceTableNames = projectNamespaceTableNamesByLocal(
+        sourceFile,
+        extraction.tableNamesBySymbol,
+      );
+      const resolveTable = (node: Node): string | undefined => {
+        const synthetic = projectTableNameForNode(
+          node,
+          extraction.tableNamesBySymbol,
+          namespaceTableNames,
+        );
+        if (!synthetic) return undefined;
+        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+      };
+
+      for (const loader of readOnlyQueryLoaders(sourceFile)) {
+        const receivers = projectDrizzleReceivers(loader.fn);
+        for (const call of touchBodyCallExpressions(functionBody(loader.fn))) {
+          if (!isDrizzleWriteCall(call)) continue;
+          const expression = call.getExpression();
+          const operation = staticAccessName(expression);
+          const receiver = staticAccessExpression(expression);
+          if (!operation || !receiver) continue;
+          if (!isProjectDrizzleReceiverIdentifier(receiver, receivers)) continue;
+          if (operation !== 'insert' && operation !== 'update' && operation !== 'delete') continue;
+          const tableArgument = call.getArguments()[0];
+          const table = (tableArgument && resolveTable(tableArgument)) || UNRESOLVED_READ_SOURCE_EXPRESSION;
+          facts.push({
+            operation,
+            query: loader.name,
+            site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+            table,
+          });
+        }
+      }
+    });
+    return facts.sort(
+      (left, right) =>
+        left.query.localeCompare(right.query) ||
+        left.site.localeCompare(right.site) ||
+        left.operation.localeCompare(right.operation),
+    );
+  } finally {
+    extraction.dispose();
+  }
+}
+
+/** `query('name', { load })` loaders, excluding `query.elevated(...)` (the audited GET-write escape). */
+function readOnlyQueryLoaders(
+  sourceFile: SourceFile,
+): { fn: Node; name: string }[] {
+  const loaders: { fn: Node; name: string }[] = [];
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const queryCall = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(queryCall)) continue;
+    const expression = queryCall.getExpression();
+    // `query(...)` is a read surface; `query.elevated(...)` is the audited escape.
+    if (!Node.isIdentifier(expression) || expression.getText() !== 'query') continue;
+
+    const [queryArgument, bodyArgument] = queryCall.getArguments();
+    if (!queryArgument || !Node.isStringLiteral(queryArgument)) continue;
+    const body = queryBodyObjectLiteral(bodyArgument, 'project').body;
+    if (!body) continue;
+    const fn = queryLoadCallbackFunctions(body, 'project')[0];
+    if (!fn) continue;
+    loaders.push({ fn, name: queryArgument.getLiteralText() });
+  }
+  return loaders;
 }
 
 // ── Stage 2 (query → AlgebraicQueryShape) ────────────────────────────────────

@@ -414,6 +414,28 @@ describe('kovo check', () => {
     expect(result.exitCode).not.toBe(0);
   });
 
+  it('reports a lost-update read-then-write as KV429 (SPEC §10.3)', () => {
+    const result = kovoCheck({
+      toctouFacts: [{ column: 'stock', name: 'buy', site: 'inventory.domain.ts:5', table: 'products' }],
+    });
+    expect(result.output).toContain(
+      'ERROR KV429 WRITE buy table=products column=stock site=inventory.domain.ts:5',
+    );
+    expect(result.exitCode).not.toBe(0);
+  });
+
+  it('reports a write-reaching query() loader as KV433 (SPEC §9.4)', () => {
+    const result = kovoCheck({
+      queryWriteReachability: [
+        { operation: 'delete', query: 'dashboard', site: 'q.ts:4', table: 'logs' },
+      ],
+    });
+    expect(result.output).toContain(
+      'ERROR KV433 QUERY dashboard operation=delete table=logs site=q.ts:4',
+    );
+    expect(result.exitCode).not.toBe(0);
+  });
+
   it('suppresses KV414 with a recorded public-read justification (SPEC §10.3)', () => {
     const result = kovoCheck({
       ownerDomains: [{ domain: 'order', owner: 'userId' }],

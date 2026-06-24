@@ -65,11 +65,13 @@ export interface KovoCheckInput {
   pages?: readonly PageExplain[];
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
+  queryWriteReachability?: readonly QueryWriteReachabilityFact[];
   requestProviders?: readonly RequestProviderExplain[];
   renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
   revealed?: readonly RevealExplainFact[];
   scopeAudits?: readonly ScopeAuditFact[];
   sqlSafety?: readonly SqlSafetyExplainFact[];
+  toctouFacts?: readonly ToctouFact[];
   touchGraph?: TouchGraph;
   trustEscapes?: readonly TrustEscapeExplain[];
   unregisteredSinks?: readonly UnregisteredSinkFact[];
@@ -372,6 +374,32 @@ export interface MassAssignmentFact {
   site: string;
   /** The table column-write the finding flags. */
   via: 'set' | 'spread' | 'values';
+}
+
+/**
+ * A `query()` loader that reaches a Drizzle write without the `query.elevated`
+ * escape — the §9.4 read-only/no-write-reachable finding (KV433 Stage 2).
+ *
+ * @internal
+ */
+export interface QueryWriteReachabilityFact {
+  operation: string;
+  query: string;
+  site: string;
+  table: string;
+}
+
+/**
+ * A single-row self-referential write to a declared `atomic` column whose `where()`
+ * carries no compare-and-set / `version` guard — the §10.3 lost-update finding (KV429).
+ *
+ * @internal
+ */
+export interface ToctouFact {
+  column: string;
+  name?: string;
+  site: string;
+  table: string;
 }
 
 /** @internal */
@@ -682,11 +710,13 @@ const arrayFields = [
   'pages',
   'queryData',
   'queries',
+  'queryWriteReachability',
   'requestProviders',
   'renderEquivalenceChecks',
   'revealed',
   'scopeAudits',
   'sqlSafety',
+  'toctouFacts',
   'trustEscapes',
   'unregisteredSinks',
   'updateCoverage',

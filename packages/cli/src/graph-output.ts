@@ -754,6 +754,18 @@ export function kovoCheck(
       pushFinding(massAssignmentKv438Line(finding), true);
     }
 
+    // SPEC §6.6/§9.4 / secure-framework Phase 5: a query() loader that directly reaches a
+    // Drizzle write (without query.elevated) is the blocking KV433 confused-deputy error.
+    for (const finding of sortedQueryWriteReachability(graph.queryWriteReachability ?? [])) {
+      pushFinding(queryWriteReachabilityKv433Line(finding), true);
+    }
+
+    // SPEC §10.3/§11.1 / secure-framework Phase 6: a single-row self-referential write to a
+    // declared atomic column without a CAS/version guard is the blocking KV429 lost-update.
+    for (const finding of sortedToctou(graph.toctouFacts ?? [])) {
+      pushFinding(toctouKv429Line(finding), true);
+    }
+
     for (const lint of graph.lints ?? []) {
       pushFinding(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
     }
@@ -2036,6 +2048,52 @@ function massAssignmentKv438Line(fact: CoreGraph.MassAssignmentFact): string {
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+/** The enforced KV429 (lost-update) error line for an unguarded atomic read-then-write (SPEC §10.3). */
+function toctouKv429Line(fact: CoreGraph.ToctouFact): string {
+  return [
+    'ERROR KV429',
+    'WRITE',
+    fact.name ?? '<anonymous>',
+    `table=${fact.table}`,
+    `column=${fact.column}`,
+    `site=${fact.site}`,
+    diagnosticDefinitions.KV429.message,
+  ].join(' ');
+}
+
+function sortedToctou(facts: readonly CoreGraph.ToctouFact[]): readonly CoreGraph.ToctouFact[] {
+  return [...facts].sort(
+    (left, right) =>
+      left.site.localeCompare(right.site) ||
+      left.table.localeCompare(right.table) ||
+      left.column.localeCompare(right.column),
+  );
+}
+
+/** The enforced KV433 (read-only query) error line for a write-reaching loader (SPEC §9.4). */
+function queryWriteReachabilityKv433Line(fact: CoreGraph.QueryWriteReachabilityFact): string {
+  return [
+    'ERROR KV433',
+    'QUERY',
+    fact.query,
+    `operation=${fact.operation}`,
+    `table=${fact.table}`,
+    `site=${fact.site}`,
+    diagnosticDefinitions.KV433.message,
+  ].join(' ');
+}
+
+function sortedQueryWriteReachability(
+  facts: readonly CoreGraph.QueryWriteReachabilityFact[],
+): readonly CoreGraph.QueryWriteReachabilityFact[] {
+  return [...facts].sort(
+    (left, right) =>
+      left.query.localeCompare(right.query) ||
+      left.site.localeCompare(right.site) ||
+      left.operation.localeCompare(right.operation),
+  );
 }
 
 function sortedMassAssignment(

@@ -1622,14 +1622,18 @@ function extractQueryDefinitionsFromSourceFile(
   const owner = columnNamePropertyFromObject(annotationObject, 'owner');
   const secret = secretPropertyFromObject(annotationObject);
   const governed = governedPropertyFromObject(annotationObject);
+  const atomic = concurrencyColumnsFromObject(annotationObject, 'atomic');
+  const version = concurrencyColumnsFromObject(annotationObject, 'version');
   const fans = fanAnnotationsFromObject(annotationObject);
   return {
     domain,
+    ...(atomic === undefined ? {} : { atomic }),
     ...(fans.length > 0 ? { fans } : {}),
     ...(governed === undefined ? {} : { governed }),
     ...(key ? { key } : {}),
     ...(owner ? { owner } : {}),
     ...(secret === undefined ? {} : { secret }),
+    ...(version === undefined ? {} : { version }),
     name: tableName,
   };
 }
@@ -1807,6 +1811,28 @@ function governedPropertyFromObject(object: Node): true | string[] | undefined {
     const initializer = property.getInitializer();
     if (!initializer) return undefined;
     if (initializer.getKind() === SyntaxKind.TrueKeyword) return true;
+    if (Node.isArrayLiteralExpression(initializer)) {
+      const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
+      return columns.length > 0 ? columns : undefined;
+    }
+    const column = columnRefName(initializer);
+    return column === undefined ? undefined : [column];
+  }
+  return undefined;
+}
+
+/**
+ * Parse an `atomic:` / `version:` concurrency annotation (SPEC §10.3/§11.1, KV429) into
+ * the resolved column-name list. A column ref or list of column refs; never `true`.
+ */
+function concurrencyColumnsFromObject(object: Node, name: string): string[] | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) return undefined;
     if (Node.isArrayLiteralExpression(initializer)) {
       const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
       return columns.length > 0 ? columns : undefined;
@@ -2579,7 +2605,9 @@ export {
 export {
   extractAlgebraicShapesFromProject,
   extractMassAssignmentFromProject,
+  extractQueryWriteReachabilityFromProject,
   extractSymbolicEffectsFromProject,
+  extractToctouFromProject,
 } from './static/derivation.js';
 /** @internal */
 /** @internal */ export type { SymbolicEffectFact } from './static/derivation.js';

@@ -2,6 +2,7 @@ export type {
   KovoAnalyzerFunctionSummary,
   KovoAnalyzerPrivateScopeKind,
   KovoColumnRef,
+  KovoConcurrencyColumnAnnotation,
   KovoDomainTableAnnotation,
   KovoGovernedColumnAnnotation,
   KovoSecretColumnAnnotation,
