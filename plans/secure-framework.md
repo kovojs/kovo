@@ -307,11 +307,22 @@ Breaking / Annoys). Items cross-reference `secure-by-construction.md` phases whe
     KV414's `argScopedReads`/`sessionAnchoredReads` are most of the machinery). Cost: XL; high FP (admin
     cross-user reads, join-tenancy, aggregates need a loud audited `crossPrincipalRead`); needs light
     interprocedural session-flow tracing KV414 avoids. **Verdict: investigate the read-path subset; defer write.**
-- [ ] **Cloud-metadata SSRF: `metadataAllowed` ALS capability + dual-layer private-network deny floor
+- [x] **Cloud-metadata SSRF: `metadataAllowed` ALS capability + dual-layer private-network deny floor
       (Phase 5) — ship the ALS idea, scope the floor.** Public egress unrestricted; private/loopback/link-local/
       metadata denied by default, reachable only via narrow `host:port` `allowInternal`; metadata reachable only
       inside the module-private `metadataAllowed` AsyncLocalStorage frame entered by per-cloud credential
       factories; enforced at both a custom undici dispatcher and `node:http`/`net.connect`.
+  - Evidence: `packages/server/src/{egress,egress-undici,egress-credentials,egress-bootstrap}.ts`;
+    `vp exec vitest --run packages/server/src/egress*.test.ts` = 35 pass (metadata denied outside the frame at
+    BOTH layers, allowed inside `kovo.awsCredential()`; private 10.x denied unless allowlisted; public egress
+    unaffected; pooled-socket reuse still gated via the undici dispatcher; ALS propagates into `net.connect` AND
+    the undici connector on Node 24.18 / bundled undici 7.28; self-probe fires when absent; config refuses boot
+    on a metadata IP in `allowInternal`). Wired into `createApp({ egress })` (opt-in). Full server suite 833
+    pass; tsc at baseline (33); api-surface gate at baseline. Prototype-freezing NOT default-enabled. SPEC §6.6
+    "Outbound egress" section added (labeled runtime-DiD). **Residual fail-open (documented, by design):**
+    same-process re-patch of `net.connect`/`setGlobalDispatcher`; worker/child/native-socket paths; per-`fetch`
+    `dispatcher` option (net layer still catches the first dial); provider-shape drift. **Non-goals:** not
+    exfiltration defense (needs a positive allowlist); not a code sandbox.
   - **Trade-off** — Gain: the `metadataAllowed` ALS capability is the **genuinely original idea**
     (provenance-as-current-frame, unforgeable by SSRF, ALS-into-connect-probe confirmed). Cost: the **full floor
     is XL greenfield** monkeypatching two stdlib surfaces the repo has never patched (undici isn't even a dep),
