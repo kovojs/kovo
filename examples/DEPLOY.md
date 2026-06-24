@@ -26,10 +26,13 @@ three services. After the one-time setup below:
 # Once: Artifact Registry repo + Cloud Build deploy permissions
 gcloud artifacts repositories create kovo --repository-format=docker --location=us-central1
 PROJECT_NUMBER=$(gcloud projects describe $(gcloud config get-value project) --format='value(projectNumber)')
-gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
+PROJECT_ID=$(gcloud config get-value project)
+gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/run.admin
-gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/iam.serviceAccountUser
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member=serviceAccount:$PROJECT_NUMBER-compute@developer.gserviceaccount.com --role=roles/secretmanager.secretAccessor
 
 # Build + push + deploy all three (override knobs via --substitutions)
 gcloud builds submit --config cloudbuild.yaml .
@@ -38,6 +41,17 @@ gcloud builds submit --config cloudbuild.yaml .
 Tunables are `cloudbuild.yaml` substitutions (`_REGION`, `_MIN_INSTANCES`,
 `_MEMORY`, `_MAX_SESSIONS`, `_IDLE_MS`, …), e.g.
 `--substitutions=_REGION=europe-west1,_MIN_INSTANCES=0`.
+
+The public demo services run with `NODE_ENV=production`, so each mutation-enabled
+example needs a deployment-specific CSRF secret in Secret Manager:
+
+```bash
+printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create commerce-csrf-secret --data-file=-
+printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create commerce-auth-csrf-secret --data-file=-
+printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create commerce-webhook-secret --data-file=-
+printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create crm-csrf-secret --data-file=-
+printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create stackoverflow-csrf-secret --data-file=-
+```
 
 The manual equivalent is below if you prefer running the steps yourself.
 
@@ -52,12 +66,21 @@ gcloud builds submit --tag $IMAGE .
 # One service per example. State lives in instance memory, so pin to a single
 # instance (no cross-instance session loss) and size RAM for the live session set.
 for EX in commerce crm stackoverflow; do
+  SECRET_FLAGS=()
+  if [ "$EX" = commerce ]; then
+    SECRET_FLAGS=(--set-secrets KOVO_COMMERCE_CSRF_SECRET=commerce-csrf-secret:latest,KOVO_COMMERCE_AUTH_CSRF_SECRET=commerce-auth-csrf-secret:latest,COMMERCE_WEBHOOK_SECRET=commerce-webhook-secret:latest)
+  elif [ "$EX" = crm ]; then
+    SECRET_FLAGS=(--set-secrets KOVO_CRM_CSRF_SECRET=crm-csrf-secret:latest)
+  elif [ "$EX" = stackoverflow ]; then
+    SECRET_FLAGS=(--set-secrets KOVO_STACKOVERFLOW_CSRF_SECRET=stackoverflow-csrf-secret:latest)
+  fi
   gcloud run deploy kovo-$EX \
     --image $IMAGE \
     --region $REGION \
     --allow-unauthenticated \
     --set-env-vars EXAMPLE=$EX,KOVO_DEMO_MAX_SESSIONS=40,KOVO_DEMO_IDLE_MS=1200000 \
-    --memory 2Gi --cpu 1 \
+    "${SECRET_FLAGS[@]}" \
+    --memory 4Gi --cpu 1 \
     --min-instances 1 --max-instances 1 \
     --concurrency 40
 done
