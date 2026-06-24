@@ -402,4 +402,73 @@ describe('source/sink inventory', () => {
       output: expect.stringContaining('CHECK families=11 entries=11 drift-tokens=17'),
     });
   });
+
+  // KV425 (audit-only, internal CI assurance): a NEW dangerous sink token added to a framework file
+  // that has no registry owner and no allowlist entry is unregistered drift → nonzero exit.
+  it('flags an unregistered adversarial-lexicon token as KV425 drift', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sources-sinks-adversarial-'));
+    try {
+      mkdirSync(join(root, 'packages', 'app', 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'packages', 'app', 'src', 'unsafe.ts'),
+        // `document.write` is in the adversarial lexicon, not the registered owner set, and this file
+        // is not in the allowlist → unregistered drift.
+        ['export function render(html: string): void {', '  document.write(html);', '}'].join('\n'),
+      );
+
+      const scan = scanSourceSinkDrift(root);
+      expect(scan.status).toBe('drift');
+      expect(scan.unregistered).toBe(1);
+      expect(scan.unregisteredFindings).toEqual([
+        { count: 1, file: 'packages/app/src/unsafe.ts', token: 'document.write' },
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails kovo check sources-sinks with a nonzero exit on unregistered drift', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sources-sinks-adversarial-exit-'));
+    const previous = process.cwd();
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      mkdirSync(join(root, 'packages', 'app', 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'packages', 'app', 'src', 'evil.ts'),
+        // `new Function(...)` is RCE-class; not a registered owner, not allowlisted → KV425.
+        ['export const make = (body: string) => new Function(body);'].join('\n'),
+      );
+      process.chdir(root);
+
+      // A failing check (exitCode 1) writes to stderr via writeCommandResult.
+      expect(main(['check', 'sources-sinks'])).toBe(1);
+      const printed = stderr.mock.calls.map((call) => String(call[0])).join('');
+      expect(printed).toContain('status=drift');
+      expect(printed).toContain('ERROR KV425 packages/app/src/evil.ts token=Function(');
+    } finally {
+      process.chdir(previous);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not flag registered or allowlisted dangerous sinks as drift', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sources-sinks-allowlist-'));
+    try {
+      mkdirSync(join(root, 'packages', 'app', 'src'), { recursive: true });
+      // `innerHTML` is a REGISTERED owner token (html.dom.output) — accounted, not unregistered.
+      writeFileSync(
+        join(root, 'packages', 'app', 'src', 'ok.ts'),
+        'el.innerHTML = trustedHtml(value);',
+      );
+      const scan = scanSourceSinkDrift(root);
+      expect(scan.status).toBe('accounted');
+      expect(scan.unregistered).toBe(0);
+      expect(scan.unregisteredFindings).toEqual([]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 });

@@ -4,6 +4,7 @@ import type { EgressOptions } from './egress.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import type { Schema } from './schema.js';
+import type { DocumentCspConfig } from './csp.js';
 import type { DocumentConfig, DocumentDeclaration } from './document-structured.js';
 import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpoint.js';
 import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
@@ -78,6 +79,17 @@ export type ErrorShellRenderer = (context: {
 
 /** Document-level options applied by `createApp()` when rendering route documents. */
 export interface AppDocumentOptions {
+  /**
+   * SF (secure-framework Tier 3, SPEC §6.6 runtime DiD, cross-browser floor — NOT a
+   * by-construction proof): app-facing third-party CSP allowlist + Trusted Types opt-in
+   * threaded into the auto-attached strict document CSP. The `allowlist` APPENDS origins
+   * to the overridable per-fetch directives (`script-src`/`style-src`/`frame-src`/
+   * `connect-src`/`img-src`) so analytics/Stripe/Sentry embeds — denied by default since
+   * there is no report-only ramp — can be declared. The non-overridable hardening
+   * directives (`base-uri`/`object-src`/`form-action`/`frame-ancestors`) stay locked and
+   * are unreachable from here (see {@link DocumentCspConfig} / `csp.ts`).
+   */
+  csp?: DocumentCspConfig;
   structured?: DocumentConfig;
   lang?: string;
 }

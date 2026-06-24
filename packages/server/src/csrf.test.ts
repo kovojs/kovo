@@ -78,6 +78,80 @@ describe('csrf helpers', () => {
     expect(validateCsrfToken({ csrf: submitted }, postRequest, anonymousCsrf)).toBe(true);
     expect(validateCsrfToken({ csrf: `${submitted}x` }, postRequest, anonymousCsrf)).toBe(false);
   });
+
+  // SPEC §6.6/§9.1: the framework's anonymous CSRF cookie declares `class: 'session'`, so the
+  // credential floor (HttpOnly + Secure(prod) + SameSite) is default-on at the `serializeCookie`
+  // sink rather than relying on a per-call-site `httpOnly: true`. This is a runtime
+  // defense-in-depth floor — sound at that sink, bypassable by same-process raw `Set-Cookie`.
+  const anonymousCsrf = {
+    field: 'csrf',
+    secret: 'anonymous-secret',
+    sessionId(): string | undefined {
+      return undefined;
+    },
+  };
+
+  function mintAnonymousCsrfCookie(pageRequest: Request): string {
+    const setCookies: string[] = [];
+    const html = runWithJsxRequestContext(
+      pageRequest,
+      { onCsrfSetCookie: (cookie) => setCookies.push(cookie) },
+      () => renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
+    );
+    if (typeof html !== 'string') throw new TypeError('expected synchronous CSRF field render');
+    return setCookies[0]!;
+  }
+
+  it('floors the anonymous CSRF cookie with HttpOnly + SameSite=Lax by default (class: session)', () => {
+    // HTTPS request: Secure is in effect, so the `__Host-` browser-prefix is applied by the floor.
+    const cookie = mintAnonymousCsrfCookie(new Request('https://shop.example.test/login'));
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=Lax');
+    expect(cookie).toContain('Secure');
+    // Credential class adds the `__Host-` prefix once Secure holds (Path=/, no Domain).
+    expect(cookie).toMatch(/^__Host-kovo_csrf=/);
+    expect(cookie).toContain('Path=/');
+  });
+
+  it('forces Secure in production even when the request URL is plain http', () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const cookie = mintAnonymousCsrfCookie(new Request('http://shop.example.test/login'));
+      expect(cookie).toContain('Secure');
+      expect(cookie).toContain('HttpOnly');
+      // With Secure forced by prod, the `__Host-` prefix applies even on an http request URL.
+      expect(cookie).toMatch(/^__Host-kovo_csrf=/);
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
+
+  it('omits Secure on localhost-http dev and round-trips the bare cookie name', () => {
+    // Dev: http request URL, NODE_ENV not production → no Secure, no `__Host-` prefix.
+    const cookie = mintAnonymousCsrfCookie(new Request('http://localhost:3000/login'));
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=Lax');
+    expect(cookie).not.toContain('Secure');
+    expect(cookie).toMatch(/^kovo_csrf=/);
+
+    // The bare (unprefixed) cookie still round-trips through validation in dev.
+    const cookiePair = cookie.split(';')[0]!;
+    const postRequest = new Request('http://localhost:3000/_m/auth/sign-in', {
+      headers: { Cookie: cookiePair },
+      method: 'POST',
+    });
+    // Re-mint the token bound to the same cookie value to validate the round-trip.
+    const html = runWithJsxRequestContext(
+      postRequest,
+      { onCsrfSetCookie: () => {} },
+      () => renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
+    );
+    if (typeof html !== 'string') throw new TypeError('expected synchronous CSRF field render');
+    const token = /value="([^"]+)"/.exec(html)![1]!;
+    expect(validateCsrfToken({ csrf: token }, postRequest, anonymousCsrf)).toBe(true);
+  });
 });
 
 describe('mutation CSRF enforcement', () => {

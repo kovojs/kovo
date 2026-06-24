@@ -1159,6 +1159,8 @@ interface DrizzleStaticCommandInput {
     | 'sqlSafetyDiagnostics'
     | 'symbolicEffects'
     | 'touchGraph'
+    | 'trustEscapes'
+    | 'unregisteredSinks'
   )[];
   files?: readonly unknown[];
   invalidation?: {
@@ -1179,6 +1181,8 @@ async function runCompileDrizzleStaticCommand(
 ): Promise<CliCommandResult> {
   const {
     analyzeSqlSafetyFromProject,
+    collectTrustEscapesFromProject,
+    collectUnregisteredSinksFromProject,
     deriveInvalidationRegistry,
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
@@ -1215,6 +1219,8 @@ async function runCompileDrizzleStaticCommand(
         'symbolicEffects',
         'toctouFacts',
         'touchGraph',
+        'trustEscapes',
+        'unregisteredSinks',
       ],
     );
     let queryFacts: ReturnType<typeof extractQueryFactsFromProject> | undefined;
@@ -1257,6 +1263,19 @@ async function runCompileDrizzleStaticCommand(
     }
     if (extract.has('sqlSafetyDiagnostics')) {
       output.sqlSafetyDiagnostics = analyzeSqlSafetyFromProject({ files });
+    }
+    if (extract.has('trustEscapes')) {
+      // SPEC §6.6 (audit-only): every app-authored trust escape (trustedHtml/Url/Sql, raw
+      // endpoint(), webhook({verify:'none'})) rides into `graph.trustEscapes` so `kovo explain
+      // --trust` enumerates the trust surface and KV426 surfaces missing justifications.
+      output.trustEscapes = collectTrustEscapesFromProject({ files });
+    }
+    if (extract.has('unregisteredSinks')) {
+      // SPEC §6.6 (KV424, error-severity): app handler-body writes/calls to the dangerous imperative
+      // -DOM lexicon (el.innerHTML=, eval, setTimeout('string'), document.write, new Function) ride
+      // into `graph.unregisteredSinks` so `kovo check` fails. Conservative handler-boundary pass;
+      // verified 0 false positives over the example app corpus.
+      output.unregisteredSinks = collectUnregisteredSinksFromProject({ files });
     }
     if (extract.has('symbolicEffects'))
       output.symbolicEffects = extractSymbolicEffectsFromProject({ files });

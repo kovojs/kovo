@@ -112,11 +112,14 @@ function recordCookieDowngradeFact(fact: CookieDowngradeFact): void {
 }
 
 /**
- * Drain and return the recorded cookie-downgrade facts (SPEC §6.6/§9.1). The graph-output renderer
- * consumes these for `kovo explain --cookies`.
+ * Drain and return the recorded cookie-downgrade facts (SPEC §6.6/§9.1, audit-only).
  *
- * SF-WIRE(graph-output): render --cookies downgrades — wire `drainCookieDowngradeFacts()` into
- * `kovo explain --cookies` so each justified downgrade is surfaced in the audit a reviewer runs.
+ * The `kovo explain --cookies` renderer (packages/cli/src/graph-output.ts, the `'cookies' in options`
+ * branch) consumes the typed `graph.cookieDowngrades` field (`CookieDowngradeExplain`, the
+ * core-graph mirror of {@link CookieDowngradeFact}). A build/export step drains these runtime facts
+ * — produced at the `serializeCookie` sink whenever an `unsafeCookie` downgrade is exercised — into
+ * that graph field, so each justified downgrade is surfaced in the audit a reviewer runs. The
+ * downgrade itself is gated at the sink (KV432); this surface is audit-only (enforces nothing).
  */
 export function drainCookieDowngradeFacts(): readonly CookieDowngradeFact[] {
   return cookieDowngradeFacts.splice(0, cookieDowngradeFacts.length);

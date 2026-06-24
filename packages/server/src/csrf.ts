@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
+import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
 import { escapeAttribute } from './html.js';
 import { currentJsxFrameworkContext } from './jsx-context.js';
@@ -221,6 +222,41 @@ function csrfFieldForBinding<Request>(
   return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(createCsrfToken(binding, options.secret))}">`;
 }
 
+/**
+ * Build the `serializeCookie` options for the framework's anonymous CSRF cookie (SPEC §6.6/§9.1).
+ *
+ * The cookie is a credential-bearing binding, so it declares `class: 'session'`. That makes the
+ * HttpOnly + Secure(prod) + SameSite floor default-on at the single `serializeCookie` sink — a
+ * runtime defense-in-depth floor that is sound at that sink but bypassable by a same-process raw
+ * `Set-Cookie`. The floor itself forces HttpOnly, so no per-call `httpOnly: true` is needed.
+ *
+ * Secure is resolved so localhost-http dev keeps working without tripping the credential floor's
+ * KV432 downgrade guard:
+ * - When the caller explicitly set `secure`, it is forwarded as `productionSecure` (the documented
+ *   override that force-sets or force-suppresses the gate without being treated as a downgrade).
+ * - Otherwise, when the request arrived over HTTPS, `secure: true` opts in even outside production
+ *   (dev-over-TLS). On plain http we pass NOTHING and let the floor's env-derived gate decide, so
+ *   production always gets `Secure` (even behind a proxy that reports an http request URL) while
+ *   dev-http simply omits it. We never pass `secure: false`, which the prod floor would reject.
+ */
+function buildAnonymousCsrfCookieOptions(
+  request: unknown,
+  cookieOptions: CsrfAnonymousCookieOptions,
+): CookieOptions {
+  const options: CookieOptions = {
+    class: 'session',
+    maxAge: cookieOptions.maxAge ?? 24 * 60 * 60,
+    path: cookieOptions.path ?? '/',
+    sameSite: cookieOptions.sameSite ?? 'lax',
+  };
+  if (cookieOptions.secure !== undefined) {
+    options.productionSecure = cookieOptions.secure;
+  } else if (requestIsHttps(request)) {
+    options.secure = true;
+  }
+  return options;
+}
+
 function resolveCsrfBinding<Request>(
   request: Request,
   options: CsrfOptions<Request>,
@@ -232,21 +268,32 @@ function resolveCsrfBinding<Request>(
 
   const cookieOptions = options.anonymousCookie ?? {};
   const name = cookieOptions.name ?? DEFAULT_ANONYMOUS_CSRF_COOKIE;
-  const existing = readCookieValue(request, name);
+  // The cookie is set with the `session`-class floor, which prepends a `__Host-`/`__Secure-`
+  // browser-prefix when `Secure` is in effect (SPEC §9.1.1). Read the prefixed names first so the
+  // binding round-trips, falling back to the bare name for the dev/no-Secure case and for cookies
+  // minted before the floor existed.
+  const existing = readAnonymousCsrfCookie(request, name);
   if (isUsableAnonymousCsrfSecret(existing)) return { value: `anonymous:${existing}` };
   if (!mintOptions.mintAnonymous) return undefined;
 
   const anonymousSecret = randomBytes(32).toString('base64url');
   return {
-    setCookie: serializeCookie(name, anonymousSecret, {
-      httpOnly: true,
-      maxAge: cookieOptions.maxAge ?? 24 * 60 * 60,
-      path: cookieOptions.path ?? '/',
-      sameSite: cookieOptions.sameSite ?? 'lax',
-      secure: cookieOptions.secure ?? requestIsHttps(request),
-    }),
+    setCookie: serializeCookie(name, anonymousSecret, buildAnonymousCsrfCookieOptions(request, cookieOptions)),
     value: `anonymous:${anonymousSecret}`,
   };
+}
+
+/**
+ * Read the anonymous CSRF cookie value, tolerating the `__Host-`/`__Secure-` name prefix that the
+ * `session`-class floor adds when `Secure` is in effect (SPEC §6.6/§9.1.1). The binding value is the
+ * same regardless of prefix, so any prefixed variant is accepted under the one logical name.
+ */
+function readAnonymousCsrfCookie(request: unknown, name: string): string | undefined {
+  for (const candidate of [`__Host-${name}`, `__Secure-${name}`, name]) {
+    const value = readCookieValue(request, candidate);
+    if (value !== undefined) return value;
+  }
+  return undefined;
 }
 
 function readCookieValue(request: unknown, name: string): string | undefined {

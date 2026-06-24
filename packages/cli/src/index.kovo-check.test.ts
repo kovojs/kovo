@@ -131,6 +131,76 @@ describe('kovo check', () => {
     expect(kovoCheck({}).exitCode).toBe(0);
   });
 
+  // SPEC §10.2/§11.2: end-to-end producer→graph merge. The KV422 producer
+  // (analyzeSqlSafetyFromProject) runs over app source, its diagnostics ride through deriveAppGraph
+  // into the build→graph.json shape, and `kovo check` fails on the merged graph — proving the gate
+  // fires at `kovo check`, not only at `compile drizzle-static`. By-construction at `kovo check`.
+  it('fails kovo check end-to-end when the SQL-safety producer rides into the merged graph', async () => {
+    const { analyzeSqlSafetyFromProject } = await import('@kovojs/drizzle/internal/static');
+    const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+
+    const sqlSafetyDiagnostics = analyzeSqlSafetyFromProject({
+      files: [
+        {
+          fileName: 'products.ts',
+          source: [
+            'export async function load(input: { id: string }, db: any) {',
+            "  await db.execute(\"select * from products where id = '\" + input.id + \"'\");",
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(sqlSafetyDiagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV422']);
+
+    // Merge the producer output through deriveAppGraph exactly as the real-app-build path would.
+    const merged = deriveAppGraph({
+      graph: { sqlSafetyDiagnostics },
+    } as Parameters<typeof deriveAppGraph>[0]);
+    expect(
+      (merged.graph as { sqlSafetyDiagnostics?: unknown }).sqlSafetyDiagnostics,
+    ).toEqual(sqlSafetyDiagnostics);
+
+    // Serialize/parse to mimic the graph.json on-disk round-trip that `kovo check` consumes.
+    const checkInput = JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoCheck>[0];
+    const result = kovoCheck(checkInput);
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain('ERROR KV422 products.ts');
+    expect(result.output).toContain('request-derived SQL text');
+  });
+
+  // SPEC §6.6 (KV424, error-severity): the dangerous-sink producer rides through deriveAppGraph and
+  // `kovo check` fails on an app handler-body innerHTML/eval write.
+  it('fails kovo check end-to-end when the app dangerous-sink producer rides into the merged graph', async () => {
+    const { collectUnregisteredSinksFromProject } = await import('@kovojs/drizzle/internal/static');
+    const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+
+    const unregisteredSinks = collectUnregisteredSinksFromProject({
+      files: [
+        {
+          fileName: 'widget.tsx',
+          source: [
+            'export const Widget = () => (',
+            '  <div onClick={(e: any) => { e.target.innerHTML = location.hash; }} />',
+            ');',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(unregisteredSinks.length).toBeGreaterThan(0);
+
+    const merged = deriveAppGraph({ graph: { unregisteredSinks } } as Parameters<
+      typeof deriveAppGraph
+    >[0]);
+    const checkInput = JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoCheck>[0];
+    const result = kovoCheck(checkInput);
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain('ERROR KV424 widget.tsx');
+    expect(result.output).toContain('sink=innerHTML');
+  });
+
   it('fails on KV310 optimistic coverage gaps', () => {
     expect(
       kovoCheck({

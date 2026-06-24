@@ -145,6 +145,12 @@ export async function renderAppRouteDocumentResponse({
       // always non-empty so the carve-out is no longer needed (DEPLOY-3).
       buildToken,
       ...(secure ? { secure: true } : {}),
+      // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): thread the app's third-party
+      // CSP allowlist + Trusted Types opt-in (`createApp({ document: { csp } })`) into the
+      // auto-attached strict document CSP so declared analytics/Stripe/embed origins are
+      // APPENDED to the overridable per-fetch directives. Hardening directives stay locked
+      // (the allowlist can never reach them — see csp.ts `renderDefaultDocumentCsp`).
+      ...(app.document.csp === undefined ? {} : { csp: app.document.csp }),
       ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
       hints: mergeAppRouteHints(app, route),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),

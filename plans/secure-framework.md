@@ -61,15 +61,28 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
   `EgressBlockedError`, bootstrap self-probe; capability-URL HMAC/verify core; SPEC §6.6. Runtime-DiD floor,
   not a proof. _Open: capability-URL framework download route + `ctx.signUrl` threading._
 - [x] **§3 write-reachability foundation → mass-assignment (KV438) / KV429 / KV433 — LANDED** (the big
-  by-construction write lever, branch `agent/secure-write-foundation-20260624-153413`). Governed-column fact +
-  fail-closed write-gate adapter on the Stage-1 extractor; KV438 mass-assignment (examples FP-clean via
-  `serverValue`); KV429 single-row TOCTOU; KV433 read-only-query Stage-2 (Stage-1 documented-blocked). `server`
-  `kovoAnalyzerSummary` kind + opt-in CallExpression branch (inert for KV435/IDOR). See the Tier-2 items below.
-- [ ] **Remaining waves:** sources-sinks enforce (KV424/425/426); explain rendering (`--cookies`/
-  `--capabilities`/`--writes` + SQL producer→graph merge + CSP allowlist app config — the SF-WIRE follow-ups);
-  schema cluster remainder (KV428 upload / KV434 ReDoS); typed CAS/version primitives + the 409 path (KV429
-  static gate landed; runtime primitives did not); KV433 Stage-1 managed read-only handle (breaking) +
-  interprocedural write-summaries (loader→helper-write residue).
+  by-construction write lever). Governed-column fact + fail-closed write-gate adapter on the Stage-1 extractor;
+  KV438 mass-assignment (examples FP-clean via `serverValue`); KV429 single-row TOCTOU; KV433 read-only-query
+  Stage-2 (Stage-1 documented-blocked). `server` `kovoAnalyzerSummary` kind + opt-in CallExpression branch
+  (inert for KV435/IDOR).
+- [x] **Sources-sinks enforce + SF-WIRE follow-ups** (consolidation slice).
+  - [x] **KV425 adversarial drift** (audit) — `scanSourceSinkDrift` scans a fixed lexicon broader than the 17
+        registered tokens; a new dangerous token → `ERROR KV425` + nonzero exit; real-tree scan clean.
+  - [x] **KV426 trust collector** (audit) + **KV424 app dangerous-sink** (error, kept REAL — 0 FPs over 97
+        example files) — producers ride `compile drizzle-static` → `deriveAppGraph` → graph facts.
+  - [x] **SQL producer→graph merge** — `sqlSafetyDiagnostics` typed through `deriveAppGraph`; raw
+        `db.execute("..."+input)` fails `kovo check` end-to-end (by-construction at the gate, not only compile).
+  - [x] **`kovo explain --capabilities` / `--cookies`** renderers wired; **CSP third-party allowlist** app
+        config threaded; **cookie-class adoption** — framework anonymous-CSRF cookie carries the floor by default.
+- [x] **Schema cluster remainder** (schema2 slice) — KV428 upload inline-XSS gate landed fully (byte-sniffer +
+  polyglot guard, server-minted random keys, `respond.storedFile`/`verifiedSafe`, `.mime()` removed →
+  `accept()`/`accept.unverified()`); KV434 blessed `email`/`url`/`uuid`/`slug` + `pattern()` static-reject +
+  step-budget + `unsafeRegex` (compiler-side non-literal-pattern lint deferred).
+- [ ] **Remaining (smaller follow-ups):** KV429 runtime CAS/version primitives + the typed 409 path (static
+  gate landed); KV433 Stage-1 managed read-only handle (breaking) + interprocedural write-summaries; the
+  capability-URL framework download route + `ctx.signUrl`; Trusted Types inline-loader sink routing; explain
+  producer threads (publishToClient/egress `allowInternal` → `graph.capabilities`; cookie-downgrade runtime
+  drain); `staticExportPathOverride` trust kind; KV434 compiler-side non-literal-pattern lint.
 
 ### Verified state of branch `agent/implement-secure-framework-20260624-114921` (2026-06-24)
 

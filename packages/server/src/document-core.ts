@@ -119,11 +119,11 @@ export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, '
    * all sets a `Content-Security-Policy` header on the route response (preserved here,
    * mirroring the isolation-header opt-out).
    *
-   * SF-WIRE: the app config surface (`createApp`/`app.document`, NOT owned by this
-   * slice) should thread its allowlist/trustedTypes config through the
-   * `renderRouteDocumentResponse` call site (`app-document.ts`) into this field so apps
-   * can declare third-party origins. Until wired, every document still ships the strict
-   * `'self'`-only CSP by default.
+   * Wired: `app-document.ts` `renderAppRouteDocumentResponse` threads
+   * `createApp({ document: { csp } })` (`app.document.csp`, an {@link AppDocumentOptions})
+   * into this field so apps can declare third-party origins / opt into Trusted Types. The
+   * allowlist can only APPEND to the overridable per-fetch directives; the hardening
+   * directives stay locked. Omitting `document.csp` still ships the strict `'self'`-only CSP.
    */
   csp?: DocumentCspConfig;
   /**
@@ -141,12 +141,11 @@ export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, '
    * headers (`X-Frame-Options`, COOP, `Permissions-Policy`, `Referrer-Policy`) do not
    * depend on this and are always applied.
    *
-   * SF-WIRE: the document call site (`app-document.ts` `renderAppRouteDocumentResponse`,
-   * NOT owned by this slice) must compute this from the request — e.g.
-   * `new URL(request.url).protocol === 'https:' || request.headers.get('x-forwarded-proto') === 'https'`
+   * Wired: `app-document.ts` `renderAppRouteDocumentResponse` computes this from the
+   * request — `new URL(request.url).protocol === 'https:' || request.headers.get('x-forwarded-proto') === 'https'`
    * (mirroring `csrf.ts` `requestIsHttps` and `node.ts`/`build.ts` forwarded-proto
-   * handling) — and pass it as `secure`. Until wired, HSTS stays off (fail-safe: a
-   * missing/false flag simply omits the header).
+   * handling) — and passes it as `secure`. A missing/false flag simply omits the header
+   * (fail-safe: dev/localhost/non-HTTPS is never HSTS-pinned).
    */
   secure?: boolean;
 }

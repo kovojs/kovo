@@ -51,6 +51,8 @@ export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 /** @internal */
 export interface KovoCheckInput {
   access?: readonly AccessExplainFact[];
+  capabilities?: readonly CapabilityExplain[];
+  cookieDowngrades?: readonly CookieDowngradeExplain[];
   derivedMutations?: readonly DerivedMutationDomainSet[];
   derivedQueries?: readonly QueryReadSet[];
   diagnostics?: readonly StaticDiagnosticFact[];
@@ -71,6 +73,7 @@ export interface KovoCheckInput {
   revealed?: readonly RevealExplainFact[];
   scopeAudits?: readonly ScopeAuditFact[];
   sqlSafety?: readonly SqlSafetyExplainFact[];
+  sqlSafetyDiagnostics?: readonly SqlSafetyDiagnosticFact[];
   toctouFacts?: readonly ToctouFact[];
   touchGraph?: TouchGraph;
   trustEscapes?: readonly TrustEscapeExplain[];
@@ -439,6 +442,45 @@ export interface UnregisteredSinkFact {
   source?: string;
 }
 
+/**
+ * @internal A held dangerous *capability* surfaced by `kovo explain --capabilities` (SPEC §6.6,
+ * audit-only). One row per declared escape: a `publishToClient` secret-emit escape (KV437), an
+ * egress `allowInternal` private-network entry, a confidentiality `trustedReveal`, or a
+ * `serverValue`/`unsafeCookie`/`accept.unverified` escape. The renderer collects these from the
+ * merged slice facts so a reviewer can diff the app's entire dangerous-capability surface in one
+ * audited table. Audit-only: surfacing informs review; it enforces nothing.
+ */
+export interface CapabilityExplain {
+  /** The capability family the escape belongs to. */
+  kind:
+    | 'acceptUnverified'
+    | 'egressAllowInternal'
+    | 'publishToClient'
+    | 'serverValue'
+    | 'trustedReveal'
+    | 'unsafeCookie';
+  /** A human justification recorded at the escape site (the audit's load-bearing field). */
+  justification?: string;
+  /** The escape target/value descriptor (e.g. host:port, query path, cookie name). */
+  target?: string;
+  /** The source span of the escape. */
+  site: string;
+}
+
+/**
+ * @internal A recorded insecure cookie downgrade surfaced by `kovo explain --cookies` (SPEC
+ * §6.6/§9.1, audit-only). Mirrors `@kovojs/server`'s runtime `CookieDowngradeFact` so the renderer
+ * can read it off the graph without importing server. One row per `serializeCookie` call that
+ * intentionally weakens a credential cookie's floor through `unsafeCookie`.
+ */
+export interface CookieDowngradeExplain {
+  class: 'app-data' | 'auth' | 'session';
+  downgrade: { httpOnly?: boolean; sameSite?: 'lax' | 'none' | 'strict'; secure?: boolean };
+  justification: string;
+  name: string;
+  site?: string;
+}
+
 /** @internal */
 export interface UpdateCoverageFact {
   component: string;
@@ -514,6 +556,20 @@ export interface StaticDiagnosticFact {
   severity?: DiagnosticSeverity;
   site: string;
   start?: SourcePosition;
+}
+
+/**
+ * @internal A by-construction SQL-safety (KV422) diagnostic produced by the Drizzle static analyzer
+ * (`analyzeSqlSafetyFromProject`, @kovojs/drizzle/internal/static; SPEC §10.2/§11.2). The analyzer
+ * emits `{ code, message, severity, site }` records; they ride from `compile drizzle-static` into the
+ * real-app-build check graph (via {@link deriveAppGraph}) so `kovo check` fails (nonzero exit) on
+ * request-derived text reaching executable SQL — not only at the `compile drizzle-static` gate.
+ */
+export interface SqlSafetyDiagnosticFact {
+  code: DiagnosticCode;
+  message: string;
+  severity: DiagnosticSeverity;
+  site: string;
 }
 
 /** @internal */

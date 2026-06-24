@@ -87,6 +87,17 @@ export {
   serializeMutationTouchRegistry,
 } from './invalidation.js';
 
+/** @internal */
+/** @internal */ export type {
+  TrustEscapeProjectOptions,
+  TrustEscapeSourceFileInput,
+} from './trust-escapes-static.js';
+/** @internal */
+export {
+  collectTrustEscapesFromProject,
+  collectUnregisteredSinksFromProject,
+} from './trust-escapes-static.js';
+
 /** @internal */ export const IGNORED_LOCAL_CALL_NAMES = new Set([
   'eq',
   'for',

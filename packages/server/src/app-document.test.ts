@@ -276,6 +276,100 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 });
 
+// ─── SF (secure-framework Tier 3, SPEC §6.6): app-config CSP allowlist threading ──
+
+describe('createApp({ document: { csp } }) threads CSP allowlist into document CSP', () => {
+  const cspHeader = (headers: Record<string, string | readonly string[]>): string => {
+    const name = Object.keys(headers).find(
+      (key) => key.toLowerCase() === 'content-security-policy',
+    );
+    const value = name === undefined ? undefined : headers[name];
+    return Array.isArray(value) ? value.join('; ') : ((value as string | undefined) ?? '');
+  };
+
+  it('APPENDS the app allowlist origins to the overridable per-fetch directives', async () => {
+    // SPEC §6.6 runtime DiD (cross-browser floor — NOT a by-construction proof): an app
+    // declares its analytics/Stripe/embed origins via `createApp({ document: { csp:
+    // { allowlist } } })`; those origins MUST appear on the auto-attached document CSP.
+    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const app = createApp({
+      document: {
+        csp: {
+          allowlist: {
+            scriptSrc: ['https://cdn.analytics.test'],
+            connectSrc: ['https://api.stripe.test'],
+            frameSrc: ['https://checkout.stripe.test'],
+            imgSrc: ['https://images.cdn.test'],
+            styleSrc: ['https://fonts.cdn.test'],
+          },
+        },
+      },
+      routes: [homeRoute],
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    const csp = cspHeader(response.headers);
+    expect(csp).toContain("script-src 'self' https://cdn.analytics.test");
+    expect(csp).toContain("style-src 'self' https://fonts.cdn.test");
+    expect(csp).toContain("connect-src 'self' https://api.stripe.test");
+    expect(csp).toContain('frame-src https://checkout.stripe.test');
+    expect(csp).toContain("img-src 'self' data: https://images.cdn.test");
+  });
+
+  it('keeps the non-overridable hardening directives locked even when the app tries to widen them', async () => {
+    // The allowlist can only append to per-fetch directives; `base-uri`/`object-src`/
+    // `form-action`/`frame-ancestors` are assembled internally and are unreachable from
+    // `CspAllowlist`. Even passing through an `objectSrc`/`baseUri`-shaped widening
+    // attempt must NOT relax the locked secure defaults.
+    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const app = createApp({
+      document: {
+        csp: {
+          allowlist: {
+            // A bypass attempt: these field names are not part of CspAllowlist, so the
+            // type system already rejects them; cast through to prove the runtime floor.
+            scriptSrc: ['https://cdn.analytics.test'],
+            objectSrc: ['https://evil.test'],
+            baseUri: ['https://evil.test'],
+            formAction: ['https://evil.test'],
+            frameAncestors: ['https://evil.test'],
+          } as never,
+        },
+      },
+      routes: [homeRoute],
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    const csp = cspHeader(response.headers);
+    // Locked secure defaults survive intact.
+    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("form-action 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    // The widening attempt never reached the hardening directives.
+    expect(csp).not.toContain('object-src https://evil.test');
+    expect(csp).not.toContain('base-uri https://evil.test');
+    expect(csp).not.toContain('form-action https://evil.test');
+    expect(csp).not.toContain('frame-ancestors https://evil.test');
+    // The legitimate per-fetch append still went through.
+    expect(csp).toContain('https://cdn.analytics.test');
+  });
+});
+
 describe('server app document boundary', () => {
   it('assembles matched route documents through app render options', async () => {
     const productRoute = route('/products/:id', {

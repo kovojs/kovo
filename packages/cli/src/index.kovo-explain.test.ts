@@ -724,6 +724,128 @@ describe('kovo explain', () => {
     `);
   });
 
+  // SPEC §6.6 (KV426, audit-only): the trust-escape producer rides through deriveAppGraph and
+  // `kovo explain --trust` enumerates an app `trustedHtml(...)` call site.
+  it('surfaces an app trust escape end-to-end through --trust', async () => {
+    const { collectTrustEscapesFromProject } = await import('@kovojs/drizzle/internal/static');
+    const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+
+    const trustEscapes = collectTrustEscapesFromProject({
+      files: [
+        {
+          fileName: 'promo.tsx',
+          source: ['export const body = trustedHtml(cms.promo);'].join('\n'),
+        },
+      ],
+    });
+
+    expect(trustEscapes.map((escape) => escape.kind)).toContain('trustedHtml');
+
+    const merged = deriveAppGraph({ graph: { trustEscapes } } as Parameters<
+      typeof deriveAppGraph
+    >[0]);
+    const result = kovoExplain(
+      JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
+      { trust: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('TRUST kind=trustedHtml site=promo.tsx');
+  });
+
+  it('prints the held dangerous-capability audit table (--capabilities)', () => {
+    const result = kovoExplain(
+      {
+        capabilities: [
+          {
+            justification: 'Stripe SDK is a client-safe published handle',
+            kind: 'publishToClient',
+            site: 'app/checkout.tsx:9',
+            target: 'stripeClient',
+          },
+          {
+            justification: 'internal metrics sidecar on the pod network',
+            kind: 'egressAllowInternal',
+            site: 'app/server.ts:14',
+            target: '10.0.0.5:9090',
+          },
+          {
+            justification: 'admin export reveals masked emails',
+            kind: 'serverValue',
+            site: 'app/admin.ts:3',
+            target: 'export.email',
+          },
+        ],
+        // An audit-grade reveal folds into the table as a trustedReveal capability.
+        revealed: [
+          {
+            grade: 'audit',
+            justification: 'masked email for support tooling',
+            method: 'arbitrary-fn',
+            path: 'email',
+            query: 'supportUser',
+            site: 'app/support.ts:7',
+          },
+          // A proof-grade server projection is NOT an escape — it must be excluded.
+          {
+            grade: 'proof',
+            method: 'server-projection',
+            path: 'name',
+            query: 'publicProfile',
+            site: 'app/profile.ts:2',
+          },
+        ],
+      },
+      { capabilities: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      CAPABILITIES
+      CAPABILITY kind=egressAllowInternal site=app/server.ts:14 target=10.0.0.5:9090 justification="internal metrics sidecar on the pod network"
+      CAPABILITY kind=publishToClient site=app/checkout.tsx:9 target=stripeClient justification="Stripe SDK is a client-safe published handle"
+      CAPABILITY kind=serverValue site=app/admin.ts:3 target=export.email justification="admin export reveals masked emails"
+      CAPABILITY kind=trustedReveal site=app/support.ts:7 target=supportUser.email justification="masked email for support tooling"
+      SUMMARY total=4
+      "
+    `);
+  });
+
+  it('prints the cookie downgrade audit table (--cookies)', () => {
+    const result = kovoExplain(
+      {
+        cookieDowngrades: [
+          {
+            class: 'session',
+            downgrade: { sameSite: 'none' },
+            justification: 'third-party embed login',
+            name: 'embed_sid',
+            site: 'app/embed.ts:5',
+          },
+          {
+            class: 'auth',
+            downgrade: { httpOnly: false },
+            justification: 'legacy JS reads the token',
+            name: 'legacy_token',
+            site: 'app/legacy.ts:2',
+          },
+        ],
+      },
+      { cookies: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      COOKIES
+      COOKIE name=embed_sid class=session site=app/embed.ts:5 downgrade=sameSite=none justification="third-party embed login"
+      COOKIE name=legacy_token class=auth site=app/legacy.ts:2 downgrade=httpOnly justification="legacy JS reads the token"
+      SUMMARY total=2
+      "
+    `);
+  });
+
   it('prints the structured document shell audit view', () => {
     const result = kovoExplain(
       {

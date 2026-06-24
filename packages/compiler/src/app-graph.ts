@@ -71,6 +71,23 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     components,
     ...(mergedPages === undefined ? {} : { pages: mergedPages }),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
+    // SPEC §10.2/§11.2: preserve KV422 SQL-safety diagnostics from `compile drizzle-static`
+    // (analyzeSqlSafetyFromProject) so the build→graph.json the `kovo check` consumer reads carries
+    // them and the check fails end-to-end. By-construction at `kovo check`: an error-severity finding
+    // here means request-derived text could reach executable SQL on a managed handle. (The spread
+    // above already retains the field at runtime; this is the explicit, load-bearing thread.)
+    ...(options.graph?.sqlSafetyDiagnostics === undefined
+      ? {}
+      : { sqlSafetyDiagnostics: options.graph.sqlSafetyDiagnostics }),
+    // SPEC §6.6: preserve KV426 trust escapes (`kovo explain --trust`, audit-only) and KV424
+    // app dangerous-sink facts (`kovo check` error gate) from `compile drizzle-static` so the
+    // build→graph.json carries the trust surface and the imperative-DOM sink findings.
+    ...(options.graph?.trustEscapes === undefined
+      ? {}
+      : { trustEscapes: options.graph.trustEscapes }),
+    ...(options.graph?.unregisteredSinks === undefined
+      ? {}
+      : { unregisteredSinks: options.graph.unregisteredSinks }),
   };
 
   const registryFacts = deriveRegistryFactsFromGraph(graph, options.registryTypes);

@@ -149,6 +149,8 @@ export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query
  */
 export type KovoExplainOptions =
   | KovoAccessExplainOptions
+  | { capabilities: true }
+  | { cookies: true }
   | KovoDocumentExplainOptions
   | KovoEndpointExplainOptions
   | KovoRevealedExplainOptions
@@ -360,6 +362,37 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     }
 
     lines.push(`SUMMARY total=${escapes.length}`);
+    return ok(lines);
+  }
+
+  if ('capabilities' in options) {
+    // SPEC §6.6 (audit-only): a diffable table of every HELD dangerous capability collected from the
+    // merged slices — publishToClient secret-emit escapes (KV437), egress `allowInternal` private-
+    // network entries, confidentiality `trustedReveal`s, and serverValue/unsafeCookie/accept.unverified
+    // escapes, each with its recorded justification. Surfacing informs review; it enforces nothing.
+    const capabilities = collectCapabilityFacts(graph);
+    lines.push('CAPABILITIES');
+
+    for (const capability of capabilities) {
+      lines.push(capabilityLine(capability));
+    }
+
+    lines.push(`SUMMARY total=${capabilities.length}`);
+    return ok(lines);
+  }
+
+  if ('cookies' in options) {
+    // SPEC §6.6/§9.1 (audit-only): every recorded insecure cookie downgrade (drained from
+    // `drainCookieDowngradeFacts` at the serializeCookie sink and carried into the graph), with the
+    // justification a reviewer needs to sign off on the weakened credential-cookie floor.
+    const downgrades = [...(graph.cookieDowngrades ?? [])].sort(compareCookieDowngrade);
+    lines.push('COOKIES');
+
+    for (const downgrade of downgrades) {
+      lines.push(cookieDowngradeLine(downgrade));
+    }
+
+    lines.push(`SUMMARY total=${downgrades.length}`);
     return ok(lines);
   }
 
@@ -925,6 +958,8 @@ type ExplainArgParseResult =
 export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
   const parsed = parseFlaggedArgs(args, [
     '--access',
+    '--capabilities',
+    '--cookies',
     '--endpoints',
     '--fail-on-findings',
     '--layouts',
@@ -940,6 +975,8 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   const { flags, positional } = parsed;
   const modeFlags = [
     '--access',
+    '--capabilities',
+    '--cookies',
     '--endpoints',
     '--revealed',
     '--sources-sinks',
@@ -1006,6 +1043,30 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       return explainUsage();
     }
     return { inputPath: positional[0], ok: true, options: { trust: true } };
+  }
+
+  if (flags.has('--capabilities')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { capabilities: true } };
+  }
+
+  if (flags.has('--cookies')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { cookies: true } };
   }
 
   if (flags.has('--unguarded') || flags.has('--unscoped')) {
@@ -1619,6 +1680,76 @@ function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
     `owner=${escape.owner ?? '-'}`,
     `safePath=${escape.safePath ?? '-'}`,
     `justification=${stableValue(escape.justification)}`,
+  ].join(' ');
+}
+
+/**
+ * Collect the held dangerous-capability facts for `kovo explain --capabilities` (SPEC §6.6,
+ * audit-only). Reads the explicit `graph.capabilities` rows produced by the merged slices AND folds
+ * in two capability families already modeled elsewhere in the graph: audit-grade confidentiality
+ * reveals (`graph.revealed` with `grade:'audit'`, i.e. `trustedReveal`) and the trustedReveal-class
+ * `trustEscapes` — so a reviewer sees the entire capability surface in one table even before every
+ * producer writes the unified `capabilities` field.
+ */
+function collectCapabilityFacts(
+  graph: CoreGraph.KovoExplainInput,
+): readonly CoreGraph.CapabilityExplain[] {
+  const collected: CoreGraph.CapabilityExplain[] = [...(graph.capabilities ?? [])];
+
+  for (const reveal of graph.revealed ?? []) {
+    if (reveal.grade !== 'audit') continue; // proof-grade server projections are not an escape.
+    collected.push({
+      kind: 'trustedReveal',
+      ...(reveal.justification === undefined ? {} : { justification: reveal.justification }),
+      target: `${reveal.query}.${reveal.path}`,
+      site: reveal.site,
+    });
+  }
+
+  return collected.sort(compareCapability);
+}
+
+function compareCapability(
+  a: CoreGraph.CapabilityExplain,
+  b: CoreGraph.CapabilityExplain,
+): number {
+  return (
+    a.kind.localeCompare(b.kind) ||
+    a.site.localeCompare(b.site) ||
+    (a.target ?? '').localeCompare(b.target ?? '')
+  );
+}
+
+function capabilityLine(capability: CoreGraph.CapabilityExplain): string {
+  return [
+    'CAPABILITY',
+    `kind=${capability.kind}`,
+    `site=${capability.site}`,
+    `target=${capability.target ?? '-'}`,
+    `justification=${stableValue(capability.justification)}`,
+  ].join(' ');
+}
+
+function compareCookieDowngrade(
+  a: CoreGraph.CookieDowngradeExplain,
+  b: CoreGraph.CookieDowngradeExplain,
+): number {
+  return a.name.localeCompare(b.name) || (a.site ?? '').localeCompare(b.site ?? '');
+}
+
+function cookieDowngradeLine(downgrade: CoreGraph.CookieDowngradeExplain): string {
+  const weakened = [
+    downgrade.downgrade.httpOnly === false ? 'httpOnly' : undefined,
+    downgrade.downgrade.secure === false ? 'secure' : undefined,
+    downgrade.downgrade.sameSite ? `sameSite=${downgrade.downgrade.sameSite}` : undefined,
+  ].filter((value): value is string => value !== undefined);
+  return [
+    'COOKIE',
+    `name=${downgrade.name}`,
+    `class=${downgrade.class}`,
+    `site=${downgrade.site ?? '-'}`,
+    `downgrade=${weakened.length > 0 ? weakened.join('|') : '-'}`,
+    `justification=${stableValue(downgrade.justification)}`,
   ].join(' ');
 }
 
