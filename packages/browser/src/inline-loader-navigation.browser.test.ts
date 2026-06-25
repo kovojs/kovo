@@ -1800,6 +1800,7 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') {
         return {
+          headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-a' : null) },
           async text() {
             return [
               '<kovo-fragment target="cart-badge">',
@@ -1818,12 +1819,12 @@ describe('browser inline loader enhanced navigation', () => {
             '<meta name="kovo-build" content="build-a">',
             '<title>Cart</title>',
             '</head><body>',
-            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-deps="viewer">',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-live-token="tok_layout" kovo-deps="viewer">',
             '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
             '<form id="cart-form" enhance action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
             '<button type="submit">Save</button>',
             '</form>',
-            '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-deps="cart">Cart</section>',
+            '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-live-token="tok_cart" kovo-deps="cart">Cart</section>',
             '</section>',
             '</main>',
             '</body></html>',
@@ -1862,9 +1863,11 @@ describe('browser inline loader enhanced navigation', () => {
     expect(mutationHeaders['Kovo-Targets']).toContain('cart-badge=cart');
     expect(mutationHeaders['Kovo-Targets']).toContain('layout-shell=viewer');
     expect(mutationHeaders['Kovo-Targets']).not.toContain('old-target');
-    expect(mutationHeaders['Kovo-Live-Targets']).toContain('cart-badge#cart-badge/cart-badge:{}');
     expect(mutationHeaders['Kovo-Live-Targets']).toContain(
-      'layout-shell#layout-shell/layout-shell:{}',
+      'cart-badge#cart-badge/cart-badge@tok_cart:{}',
+    );
+    expect(mutationHeaders['Kovo-Live-Targets']).toContain(
+      'layout-shell#layout-shell/layout-shell@tok_layout:{}',
     );
   });
 });

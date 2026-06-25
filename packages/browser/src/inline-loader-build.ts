@@ -592,7 +592,7 @@ function installInlineKovoLoader(im) {
       const nextSegments = ns(nextBody);
       if (!nextSegments.length) throw Error();
       let triggerRoot;
-      if (qa(nextBody, ks).length || !currentSegments.length || currentSegments.length !== nextSegments.length) {
+      if (nextDoc.querySelector(ks) || !currentSegments.length || currentSegments.length !== nextSegments.length) {
         for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
         triggerRoot = rbd(nextBody);
       } else {
@@ -639,7 +639,7 @@ function installInlineKovoLoader(im) {
         });
       }
       else globalThis.scrollTo?.(0, 0);
-      if (triggerRoot) setTimeout(() => tr(triggerRoot));
+      if (triggerRoot) setTimeout(tr);
       cu = finalUrl.href;
       dispatchEvent(new CustomEvent('kovo:navigate', { detail: { url: finalUrl.href } }));
     } catch {
@@ -739,7 +739,7 @@ function installInlineKovoLoader(im) {
     }
     applyInlineMutationResponseChunks({ fragments }, { findFragmentTarget: ft });
   };
-  const ab = (body, build) => {
+  const ab = (body, build = kb()) => {
     const chunks = readInlineMutationResponseBodyChunks(body);
     const skew = kb() && (!build || build !== kb());
     if (skew) {
@@ -1011,7 +1011,7 @@ function installInlineKovoLoader(im) {
   // document emits the loader in <head>. Defer the scan one task so the parser can
   // continue into the body; event delegation above is installed immediately.
   ps();
-  setTimeout(() => tr(doc));
+  setTimeout(tr);
 }
 `;
 }

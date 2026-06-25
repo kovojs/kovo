@@ -12,8 +12,8 @@ describe('browser loader behavior', () => {
     root.innerHTML = [
       '<section aria-label="P2 smoke demo">',
       '<nav kovo-c="catalog-tabs" kovo-state="{&quot;selected&quot;:&quot;featured&quot;}">',
-      '<button type="button" aria-controls="featured" aria-selected="true" on:click="/demo/tabs.js#select" data-p-tab="featured">Featured</button>',
-      '<button type="button" aria-controls="sale" aria-selected="false" on:click="/demo/tabs.js#select" data-p-tab="sale">Sale</button>',
+      '<button type="button" aria-controls="featured" aria-selected="true" on:click="/c/demo/tabs.js#select" data-p-tab="featured">Featured</button>',
+      '<button type="button" aria-controls="sale" aria-selected="false" on:click="/c/demo/tabs.js#select" data-p-tab="sale">Sale</button>',
       '</nav>',
       '<section id="featured">Featured products</section>',
       '<section id="sale" hidden>Sale products</section>',
@@ -21,10 +21,10 @@ describe('browser loader behavior', () => {
       '<dialog id="details-dialog"><form method="dialog"><button value="close">Close</button></form></dialog>',
       '<form kovo-c="catalog-filter" kovo-state="{&quot;query&quot;:&quot;&quot;}">',
       '<label for="filter-query">Filter</label>',
-      '<input id="filter-query" name="query" on:input="/demo/filter.js#filter" value="">',
+      '<input id="filter-query" name="query" on:input="/c/demo/filter.js#filter" value="">',
       '<output data-bind="filter.query"></output>',
       '</form>',
-      '<aside kovo-c="sales-chart" on:visible="/demo/chart.js#mount" data-chart-mounted="false">Chart</aside>',
+      '<aside kovo-c="sales-chart" on:visible="/c/demo/chart.js#mount" data-chart-mounted="false">Chart</aside>',
       '</section>',
     ].join('');
     document.body.append(root);
@@ -49,7 +49,7 @@ describe('browser loader behavior', () => {
       async importModule(url) {
         imports.push(url);
 
-        if (url === '/demo/tabs.js') {
+        if (url === '/c/demo/tabs.js') {
           return {
             select(event: Event, ctx: { params: { tab: string }; state: { selected: string } }) {
               ctx.state.selected = ctx.params.tab;
@@ -64,7 +64,7 @@ describe('browser loader behavior', () => {
           };
         }
 
-        if (url === '/demo/filter.js') {
+        if (url === '/c/demo/filter.js') {
           return {
             filter(event: Event, ctx: { state: { query: string } }) {
               ctx.state.query = (event.target as HTMLInputElement).value;
@@ -73,7 +73,7 @@ describe('browser loader behavior', () => {
           };
         }
 
-        if (url === '/demo/chart.js') {
+        if (url === '/c/demo/chart.js') {
           return {
             mount(_event: Event, ctx: { signal: AbortSignal }) {
               chart.dataset.chartMounted = String(!ctx.signal.aborted);
@@ -108,14 +108,14 @@ describe('browser loader behavior', () => {
     filterInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
 
     await vi.waitFor(() => {
-      expect(imports).toEqual(['/demo/filter.js']);
+      expect(imports).toEqual(['/c/demo/filter.js']);
       expect(filterOutput.textContent).toBe('beans');
     });
 
     saleTab.click();
 
     await vi.waitFor(() => {
-      expect(imports).toEqual(['/demo/filter.js', '/demo/tabs.js']);
+      expect(imports).toEqual(['/c/demo/filter.js', '/c/demo/tabs.js']);
       expect(saleTab.getAttribute('aria-selected')).toBe('true');
       expect(root.querySelector<HTMLElement>('#sale')?.hidden).toBe(false);
       expect(root.querySelector<HTMLElement>('#featured')?.hidden).toBe(true);
@@ -124,7 +124,7 @@ describe('browser loader behavior', () => {
     visibleCallback([{ isIntersecting: true, target: chart }]);
 
     await vi.waitFor(() => {
-      expect(imports).toEqual(['/demo/filter.js', '/demo/tabs.js', '/demo/chart.js']);
+      expect(imports).toEqual(['/c/demo/filter.js', '/c/demo/tabs.js', '/c/demo/chart.js']);
       expect(chart.dataset.chartMounted).toBe('true');
     });
   });
@@ -132,7 +132,7 @@ describe('browser loader behavior', () => {
   it('keeps the loader idle until the first delegated interaction', async () => {
     const root = document.createElement('main');
     root.innerHTML =
-      '<button kovo-state="{&quot;count&quot;:0}" on:click="/handlers/cart.js#increment" data-p-product-id="p1">Add</button>';
+      '<button kovo-state="{&quot;count&quot;:0}" on:click="/c/handlers/cart.js#increment" data-p-product-id="p1">Add</button>';
     document.body.append(root);
     const button = root.querySelector('button');
     let imports = 0;
@@ -140,7 +140,7 @@ describe('browser loader behavior', () => {
     installKovoLoader({
       async importModule(url) {
         imports += 1;
-        expect(url).toBe('/handlers/cart.js');
+        expect(url).toBe('/c/handlers/cart.js');
 
         return {
           increment(_event: Event, ctx: { state: { count: number } }) {
