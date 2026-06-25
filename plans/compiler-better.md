@@ -167,17 +167,18 @@ diagnostic in compiler/check gates that claim data-plane security.
 
 ### Phase 0: close concrete fail-open behavior
 
-- [ ] Add adversarial regression tests for every output-context bypass observed in this audit and
+- [x] Add adversarial regression tests for every output-context bypass observed in this audit and
       make them emit `KV236` or a stricter sink-specific diagnostic.
-  - Evidence: adversarial worktree probe showed no diagnostics and emitted unsafe source for
-    non-inline unsafe spreads, computed unsafe spreads, direct lowercase `onclick`, and direct
-    `srcdoc`.
-- [ ] Replace the current partial sink inventory with a single closed inventory for direct attrs,
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/output-context-security.test.ts`
+    passes with KV236 coverage for non-inline unsafe spreads, computed-key unsafe spreads, direct
+    lowercase `onclick`, and direct `srcdoc`.
+- [x] Replace the current partial sink inventory with a single closed inventory for direct attrs,
       inline spreads, non-inline spreads that can be statically resolved, derived attrs, and dynamic
       bindings.
-  - Evidence: `validateElementAttributes` covers direct URL/style/raw HTML plus dynamic
-    `data-bind`/`data-derive` event and `srcdoc` paths, while `validateStaticSpreadEntries` covers
-    only inline literal object entries.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/output-context-security.test.ts` and
+    `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts` pass after scanner facts
+    expanded statically resolvable spreads and output-context validation reused the same sink checks
+    for direct attributes and spread entries.
 - [ ] Surface TypeScript/TSX parse diagnostics before lowering and block emission for malformed
       author input.
   - Evidence: `parseSourceFile` calls `ts.createSourceFile`; the adversarial malformed JSX probe
