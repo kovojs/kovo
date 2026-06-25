@@ -175,11 +175,13 @@ Median job durations across those runs:
   - Evidence when complete: combined browser job timing plus a deliberately failed browser assertion or
     log sample proving the failing suite is obvious.
 
-- [ ] **Keep the `build` dependency path explicit.**
+- [x] **Keep the `build` dependency path explicit.**
   - `build` is short, but it feeds `p10-perf` and `kovo-check`; do not hide it inside an unrelated job
     unless downstream artifact reuse remains clear.
   - Evidence when complete: CI graph still has one authoritative `kovo-dist` producer and downstream jobs
     download that artifact.
+  - Evidence 2026-06-25: local workflow assertion verified `build` is the sole `kovo-dist` artifact
+    uploader and both `p10-perf` and `kovo-check` still `needs: build` and download `kovo-dist`.
 
 - [ ] **Move optional slow breadth checks out of required PR feedback if new checks push wall time above
       5 minutes.**
@@ -288,6 +290,8 @@ tests/integration/specs/respond-file.spec.ts tests/integration/specs/storage-dow
 - `ruby -e 'require "psych"; Psych.load_file(".github/workflows/ci.yml")'`,
   `node -e 'JSON.parse(require("fs").readFileSync("package.json","utf8"))'`, and `git diff --check`
   passed.
+- Local workflow assertion verified the `kovo-dist` build artifact path and final `check` aggregator
+  dependencies.
 
 ## Acceptance Gates
 
@@ -298,5 +302,8 @@ tests/integration/specs/respond-file.spec.ts tests/integration/specs/storage-dow
       page.
 - [ ] **Maintainability gate:** new integration tests have inventory metadata, use public app APIs by
       default, and use shared assertion helpers for common wire/header contracts.
-- [ ] **No coverage regression gate:** the final `check` job still depends on every required shard and
+- [x] **No coverage regression gate:** the final `check` job still depends on every required shard and
       fails on any failure, cancellation, or skipped required job.
+  - Evidence 2026-06-25: local workflow assertion verified `check.needs` covers `static-safety`, `test`,
+    `browser`, `integration`, `build`, `p10-perf`, `conformance`, and `kovo-check`, and the shell guard
+    fails on `failure`, `cancelled`, or `skipped` results.
