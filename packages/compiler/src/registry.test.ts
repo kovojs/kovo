@@ -907,4 +907,64 @@ export const ProductGrid = component({
     // KV436 `missing` set that fails `kovo check`.
     expect(derived.graph.access?.filter((fact) => fact.decision === 'missing')).toHaveLength(3);
   });
+
+  it('derives page access facts from compiled JSX route pages', () => {
+    const routes = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { guards, publicAccess, route } from '@kovojs/server';
+
+const authed = guards.authed();
+
+export const publicDocs = route('/docs', {
+  access: publicAccess('public documentation'),
+  page: () => <DocsPage />,
+});
+
+export const account = route('/account', {
+  guard: authed,
+  page: () => <AccountPage />,
+});
+
+export const missing = route('/missing', {
+  page: () => <MissingPage />,
+});
+`,
+    });
+
+    const derived = deriveAppGraph({ routePages: [routes] });
+
+    expect(derived.graph.pages).toEqual([
+      expect.objectContaining({
+        access: { kind: 'public', reason: 'public documentation' },
+        route: '/docs',
+      }),
+      expect.objectContaining({ guards: ['authed'], route: '/account' }),
+      expect.objectContaining({ route: '/missing' }),
+    ]);
+    expect(derived.graph.access).toEqual([
+      {
+        decision: 'guard',
+        detail: 'guards=authed',
+        kind: 'page',
+        name: '/account',
+        source: 'legacy-guard',
+      },
+      {
+        decision: 'public',
+        detail: 'access=public',
+        justification: 'public documentation',
+        kind: 'page',
+        name: '/docs',
+        source: 'access',
+      },
+      {
+        decision: 'missing',
+        detail: 'guard=-',
+        kind: 'page',
+        name: '/missing',
+        source: 'legacy-guard',
+      },
+    ]);
+  });
 });

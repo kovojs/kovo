@@ -734,6 +734,10 @@ export function kovoCheck(
       pushFinding(unregisteredSinkLine(sink), true);
     }
 
+    for (const diagnostic of endpointMetadataDiagnostics(graph.endpoints ?? [])) {
+      pushFinding(endpointMetadataKv423Line(diagnostic), true);
+    }
+
     for (const coverage of graph.verificationCoverage ?? []) {
       if (!coverage.observed) pushFinding(verificationCoverageGapLine(coverage), true);
     }
@@ -1242,6 +1246,61 @@ function unregisteredSinkLine(sink: CoreGraph.UnregisteredSinkFact): string {
     `ERROR KV424 ${sink.site} sink=${sink.sink}${source} safe=${sink.safePath}`,
     diagnosticDefinitionText('KV424', { includeHelp: true }),
   ].join(' ');
+}
+
+interface EndpointMetadataDiagnostic {
+  detail: string;
+  endpoint: CoreGraph.EndpointExplain;
+}
+
+function endpointMetadataDiagnostics(
+  endpoints: readonly CoreGraph.EndpointExplain[],
+): EndpointMetadataDiagnostic[] {
+  return endpoints.flatMap((endpoint) => {
+    const missing = missingEndpointMetadata(endpoint);
+    return missing.length === 0 ? [] : [{ detail: `missing=${missing.join(',')}`, endpoint }];
+  });
+}
+
+function missingEndpointMetadata(endpoint: CoreGraph.EndpointExplain): string[] {
+  const missing: string[] = [];
+  const surface = endpoint.surface ?? 'endpoint';
+
+  if (!endpoint.method) missing.push('method');
+  if (!endpoint.reason && surface === 'endpoint') missing.push('reason');
+  if (!endpoint.body) missing.push('response.body');
+  if (!endpoint.cache) missing.push('response.cache');
+  if (endpoint.appOwnedSafety !== true && surface === 'endpoint') missing.push('appOwnedSafety');
+  if (endpoint.mount === 'prefix' && !endpoint.mountJustification) {
+    missing.push('mountJustification');
+  }
+  if (endpoint.csrf === 'exempt' && !endpoint.csrfJustification) {
+    missing.push('csrfJustification');
+  }
+
+  if (surface === 'webhook') {
+    if (!endpoint.name) missing.push('name');
+    if (endpoint.method && endpoint.method.toUpperCase() !== 'POST') missing.push('method=POST');
+    if ((endpoint.mount ?? 'exact') !== 'exact') missing.push('mount=exact');
+    if (!endpoint.auth) missing.push('auth');
+    if (endpoint.auth === 'none' && !endpoint.csrfJustification) {
+      missing.push('verifyJustification');
+    }
+  }
+
+  return missing;
+}
+
+function endpointMetadataKv423Line(diagnostic: EndpointMetadataDiagnostic): string {
+  return [
+    `ERROR KV423 ${endpointSurfaceLabel(diagnostic.endpoint)} ${endpointName(diagnostic.endpoint)}`,
+    diagnosticDefinitions.KV423.message,
+    diagnostic.detail,
+  ].join(' ');
+}
+
+function endpointSurfaceLabel(endpoint: CoreGraph.EndpointExplain): string {
+  return endpoint.surface === 'webhook' ? 'WEBHOOK' : 'ENDPOINT';
 }
 
 function diagnosticSite(diagnostic: CoreGraph.StaticDiagnosticFact): string {
