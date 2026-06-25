@@ -31,12 +31,10 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
     `pnpm exec vitest --run packages/drizzle/src/sql-safety-static.test.ts` covers
     request-derived `sql.join(...)` parts.
 
-- [ ] Scope `owns()` guard suppression to the exact domain/key it proves.
-  - Current evidence: `20c0b4a4` plus
-    `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts` now keeps KV414 open for
-    mixed-domain surfaces not covered by a matching `owns()` domain.
-  - Remaining gap: key-exact matching is still open because the graph fact shape does not yet carry
-    the exact guarded owner key.
+- [x] Scope `owns()` guard suppression to the exact domain/key it proves.
+  - Evidence: `27af365d` plus integrated
+    `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts`
+    covers exact `domain + key` suppression and same-domain/different-key KV414 retention.
 
 - [x] Replace name-based privileged helper recognition with source-identity provenance.
   - Evidence: `20c0b4a4` plus
@@ -244,7 +242,13 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
     (`packages/server/src/app.test.ts packages/server/src/response.test.ts packages/server/src/access-graph.test.ts packages/server/src/endpoint.test.ts packages/server/src/webhook.test.ts packages/server/src/node.test.ts packages/server/src/build.test.ts`),
     Drizzle/CLI governance tests, browser inline-loader generation, browser sink tests, compiler
     output-security tests, and the 18-file mutation/live-target/replay suite.
+- [x] Run remaining post-merge focused implementation checks.
+  - Evidence: `pnpm exec vitest --run packages/browser/src/dynamic-import-url.test.ts packages/browser/src/handlers.test.ts packages/browser/src/loader.test.ts packages/compiler/src/client-secret-capture.test.ts packages/core/src/diagnostics.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/emit/bootstrap.test.ts packages/compiler/src/emit/bootstrap-runtime-contract.test.ts`,
+    `pnpm exec vitest --run packages/server/src/build.test.ts packages/server/src/node.test.ts`,
+    and `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts`.
 - [x] Run supply-chain publish and tarball attestation checks.
   - Evidence: `pnpm run check:supply-chain`, `pnpm run check:publish`,
     `node scripts/pack-public-packages.mjs`, and
     `node scripts/publish-packed-packages.mjs --dry-run --tag secure-framework-2`.
+- [x] Run package boundary and source hygiene gates.
+  - Evidence: `pnpm run check:api-surface`, `pnpm run check:imports`, and `git diff --check`.
