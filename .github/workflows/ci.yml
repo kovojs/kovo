@@ -148,7 +148,6 @@ jobs:
         total: [5]
     env:
       KOVO_FAIL_ON_FLAKY: '1'
-      KOVO_PLAYWRIGHT_TIMING_JSON: ${{ runner.temp }}/kovo-integration-timing-history/timing-history.json
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
@@ -167,8 +166,12 @@ jobs:
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp exec playwright test --config tests/integration/playwright.config.ts --shard=${{ matrix.shard }}/${{ matrix.total }}
+        env:
+          KOVO_PLAYWRIGHT_TIMING_JSON: ${{ runner.temp }}/kovo-integration-timing-history/timing-history.json
       - name: Ensure integration timing artifact
         if: always()
+        env:
+          KOVO_PLAYWRIGHT_TIMING_JSON: ${{ runner.temp }}/kovo-integration-timing-history/timing-history.json
         run: |
           mkdir -p "$RUNNER_TEMP/kovo-integration-timing-history"
           test -f "$KOVO_PLAYWRIGHT_TIMING_JSON" || printf '{}\n' > "$KOVO_PLAYWRIGHT_TIMING_JSON"
