@@ -7,6 +7,22 @@ export { committedSecretWaiver, CreateAppBootError, isCreateAppBootError } from 
 export type { EnvValidationIssue } from './env.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
+// SPEC §6.6: agent-exposed server tools are declared through a fail-closed runtime
+// boundary with explicit purpose, authority, allowed capabilities, audit metadata,
+// and ambient browser/session credential posture. This is blast-radius reduction,
+// not prompt-injection immunity or a compiler proof.
+export { AgentToolCapabilityError, agentToolAuditFacts, runAgentTool, tool } from './agent-tool.js';
+export type {
+  AgentToolAmbientCredentials,
+  AgentToolAuditFact,
+  AgentToolAuditMetadata,
+  AgentToolAuthority,
+  AgentToolCapability,
+  AgentToolDeclaration,
+  AgentToolDefinition,
+  AgentToolInvocationContext,
+  AgentToolRequest,
+} from './agent-tool.js';
 export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';
 export type { AdminAssignFact, AdminAssignOptions } from './write-governance.js';
 // SPEC §6.6 / plans/secure-framework.md Phase 5: outbound-egress private-network deny floor

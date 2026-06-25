@@ -136,6 +136,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       a reachable sink is a KV436-pattern build error. _Trade-off:_ sound capability **bounding**, but it does
       **not** eliminate Excessive Agency (a prompt-injected arg into a _granted_ money-move tool is still a call);
       needs a net-new primitive + governed-sink annotations. Pair with OPP-25's honest blast-radius framing.
+      Progress: `packages/server/src/agent-tool.ts` adds the public `tool()`/`runAgentTool()` runtime substrate
+      with required purpose, authority, capabilities, audit owner, and ambient-credential posture; focused tests,
+      `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap: reachable-sink classification
+      and `kovo explain`/compiler audit integration.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -143,6 +147,8 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       agent-tool boundary so a tool acts under the **end-user's** authority, not server-wide ambient credentials.
       _Trade-off:_ reusing KV418's _symbol-identity_ pattern is sound, but generalized to arbitrary "ambient
       credentials" it degrades to author-assertion/audit-only. **Defer** behind OPP-07.
+      Progress: `runAgentTool()` rejects `Cookie`/`Authorization`/session-bearing requests by default and requires
+      explicit justification for ambient credential opt-in. Remaining gap: audit/explain wiring for the posture.
 
 - [ ] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
