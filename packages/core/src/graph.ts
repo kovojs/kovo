@@ -461,6 +461,8 @@ export interface CapabilityExplain {
     | 'unsafeCookie';
   /** A human justification recorded at the escape site (the audit's load-bearing field). */
   justification?: string;
+  /** Source module for module-scoped escapes such as `publishToClient`. */
+  moduleSpecifier?: string;
   /** The escape target/value descriptor (e.g. host:port, query path, cookie name). */
   target?: string;
   /** The source span of the escape. */
@@ -750,6 +752,7 @@ function compareAccessExplainFact(left: AccessExplainFact, right: AccessExplainF
 
 const arrayFields = [
   'access',
+  'capabilities',
   'components',
   'derivedMutations',
   'derivedQueries',

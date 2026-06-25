@@ -1716,6 +1716,7 @@ function compareCapability(
   return (
     a.kind.localeCompare(b.kind) ||
     a.site.localeCompare(b.site) ||
+    (a.moduleSpecifier ?? '').localeCompare(b.moduleSpecifier ?? '') ||
     (a.target ?? '').localeCompare(b.target ?? '')
   );
 }
@@ -1725,6 +1726,7 @@ function capabilityLine(capability: CoreGraph.CapabilityExplain): string {
     'CAPABILITY',
     `kind=${capability.kind}`,
     `site=${capability.site}`,
+    `module=${capability.moduleSpecifier ?? '-'}`,
     `target=${capability.target ?? '-'}`,
     `justification=${stableValue(capability.justification)}`,
   ].join(' ');

@@ -63,6 +63,7 @@ export type {
   MutationInputFieldCoercion,
   MutationInputFieldFact,
   PackageComponentPrefixFact,
+  PublishToClientFact,
   QueryDeriveFact,
   RegistryFacts,
   RegistryGraphInput,

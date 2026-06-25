@@ -16,6 +16,7 @@ function compileResult(source: string): CompileResult {
     loweredSource: source,
     outputContextFacts: [],
     platformSubstitutions: [],
+    publishToClientFacts: [],
     queryUpdatePlans: [],
     renderEquivalenceChecks: [],
     updateCoverage: [],

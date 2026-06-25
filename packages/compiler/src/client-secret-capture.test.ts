@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { deriveAppGraph } from './graph.js';
 import { compileComponentModule } from './index.js';
 import { parseComponentModule } from './scan/parse.js';
 import { analyzeClientCaptures } from './validate/client-capture.js';
@@ -168,7 +169,64 @@ export const PayButton = component({
         localName: 'STRIPE_PUBLISHABLE_KEY',
         moduleSpecifier: './config',
         reason: 'publishable key is public',
+        site: 'pay-button.tsx:7',
       });
+
+      const result = compile(source);
+      expect(result.publishToClientFacts).toEqual(analysis.publishFacts);
+
+      expect(
+        deriveAppGraph({
+          components: [
+            {
+              componentGraphFacts: result.componentGraphFacts,
+              publishToClientFacts: result.publishToClientFacts,
+            },
+          ],
+        }).graph.capabilities,
+      ).toEqual([
+        {
+          justification: 'publishable key is public',
+          kind: 'publishToClient',
+          moduleSpecifier: './config',
+          site: 'pay-button.tsx:7',
+          target: 'STRIPE_PUBLISHABLE_KEY',
+        },
+      ]);
+    });
+
+    it('rejects publishToClient escapes with a missing reason', () => {
+      const source = `
+import { component, publishToClient } from '@kovojs/core';
+import { STRIPE_PUBLISHABLE_KEY } from './config';
+
+export const PayButton = component({
+  render: () => (
+    <button onClick={() => mountStripe(publishToClient(STRIPE_PUBLISHABLE_KEY))}>Pay</button>
+  ),
+});
+`;
+      const result = compile(source);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV437');
+      expect(result.publishToClientFacts).toEqual([]);
+      expect(clientSource(source)).not.toContain('import { STRIPE_PUBLISHABLE_KEY } from "./config";');
+    });
+
+    it('rejects publishToClient escapes with an empty reason', () => {
+      const source = `
+import { component, publishToClient } from '@kovojs/core';
+import { STRIPE_PUBLISHABLE_KEY } from './config';
+
+export const PayButton = component({
+  render: () => (
+    <button onClick={() => mountStripe(publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: '   ' }))}>Pay</button>
+  ),
+});
+`;
+      const result = compile(source);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV437');
+      expect(result.publishToClientFacts).toEqual([]);
+      expect(clientSource(source)).not.toContain('import { STRIPE_PUBLISHABLE_KEY } from "./config";');
     });
 
     it('does not treat a handler-local shadow of an import name as a captured import', () => {
