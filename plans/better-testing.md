@@ -246,12 +246,15 @@ Median job durations across those runs:
     `respond-file`, and `storage-download-route` specs use `@kovojs/test/headers`; helper tests passed,
     and the five converted specs passed under Chromium.
 
-- [ ] **Keep semantic snapshots narrow and audited.**
+- [x] **Keep semantic snapshots narrow and audited.**
   - Continue using semantic snapshots only where DOM shape is the behavior.
   - Prefer explicit role/text/state assertions for workflows; snapshot allowlist drift should remain
     covered by `tests/snapshot-allowlist.meta.test.ts`.
   - Evidence when complete: one snapshot-heavy spec converted to explicit assertions and the meta-test
     remains green.
+  - Evidence 2026-06-25: `fragment-append.spec.ts` replaced its semantic snapshot with explicit row
+    assertions and removed `feed-semantic.txt`; `tests/snapshot-allowlist.meta.test.ts` and the converted
+    Chromium spec passed.
 
 - [x] **Add assertion failure message quality checks for custom helpers.**
   - Custom assertions should say what behavior failed, show the received wire/header/DOM fragment, and
@@ -294,6 +297,9 @@ tests/integration/specs/respond-file.spec.ts tests/integration/specs/storage-dow
   passed.
 - Local workflow assertion verified the `kovo-dist` build artifact path and final `check` aggregator
   dependencies.
+- `vp exec vitest --run tests/snapshot-allowlist.meta.test.ts --reporter=dot` and `vp exec playwright
+test --config tests/integration/playwright.config.ts --project=chromium
+tests/integration/specs/fragment-append.spec.ts` passed.
 
 ## Acceptance Gates
 

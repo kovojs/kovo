@@ -19,6 +19,8 @@ test('append fragments add rows without replacing existing keyed content', async
   ]);
 
   await expect(page.locator('[kovo-fragment-target="feed"] article')).toHaveCount(3);
+  await expect(page.locator('[data-row="1"]')).toHaveText('Item 1');
+  await expect(page.locator('[data-row="2"]')).toHaveText('Item 2');
   await expect(page.locator('[data-row="3"]')).toHaveText('Item 3');
   expect(await firstRow!.evaluate((element) => element.isConnected)).toBe(true);
 
@@ -28,7 +30,4 @@ test('append fragments add rows without replacing existing keyed content', async
     { id: 2, title: 'Item 2' },
     { id: 3, title: 'Item 3' },
   ]);
-  expect(await kovoApp.semantic('[kovo-fragment-target="feed"]')).toMatchSnapshot(
-    'feed.semantic.txt',
-  );
 });
