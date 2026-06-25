@@ -14,6 +14,7 @@ import {
   type UnauthenticatedHandler,
 } from './guards.js';
 import type { PageHintOptions } from './hints.js';
+import type { SignUrlContext } from './capability-route.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { AccessDecision } from './access.js';
@@ -162,7 +163,7 @@ export interface LayoutFactory<Request = unknown> {
   ): LayoutDeclaration<Request, Queries, Page>;
 }
 
-/** The typed context a route `page` receives: parsed `params`, `search`, and the `path`. */
+/** The typed context a route `page` receives: parsed `params`, `search`, the `path`, and `signUrl`. */
 export interface RouteRequest<
   Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
@@ -171,6 +172,15 @@ export interface RouteRequest<
   params: RouteParamsFor<Path, ParamsSchema>;
   path: Path;
   search: RouteSearchFor<SearchSchema>;
+  /**
+   * Mint a signed, short-lived, scope-bound capability URL for a stored object (SPEC §6.6 / §9.1).
+   * The URL points at the framework-owned download route, whose verify sink runs before any storage
+   * read so an object is un-dereferenceable without a token minted for that exact object. Present
+   * only when the app configured a framework signing secret (`createApp({ csrf: { secret } })`);
+   * `undefined` otherwise, so a page must handle its absence. The minted URL is a BEARER credential
+   * (leakage mitigated by short expiry / narrow scope / optional one-time, NOT proven).
+   */
+  signUrl?: SignUrlContext['signUrl'];
 }
 
 /** The body of a route passed to `route()`: `page`, param/search schemas, guards, and meta/hints. */
@@ -229,6 +239,11 @@ export interface RouteDeclaration<
 export interface RouteRequestInput {
   params?: unknown;
   search?: unknown;
+  /**
+   * The `ctx.signUrl` capability the dispatcher threads onto the route context (SPEC §6.6 / §9.1).
+   * Built from the framework signing secret via `createSignUrl`; omitted when no secret is configured.
+   */
+  signUrl?: SignUrlContext['signUrl'];
 }
 
 /**
@@ -392,6 +407,8 @@ export function parseRouteRequest<
     params: params as RouteParamsFor<Path, ParamsSchema>,
     path: definition.path,
     search: search as RouteSearchFor<SearchSchema>,
+    // Thread `ctx.signUrl` onto the page context when the dispatcher supplied it (SPEC §6.6 / §9.1).
+    ...(input.signUrl === undefined ? {} : { signUrl: input.signUrl }),
   };
 }
 

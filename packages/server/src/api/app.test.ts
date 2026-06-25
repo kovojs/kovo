@@ -16,6 +16,7 @@ import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
 import * as writeGovernanceApi from '../write-governance.js';
 import * as capabilityUrlApi from '../capability-url.js';
+import * as capabilityRouteApi from '../capability-route.js';
 import * as egressApi from '../egress.js';
 import * as egressBootstrapApi from '../egress-bootstrap.js';
 import * as egressCredentialsApi from '../egress-credentials.js';
@@ -398,6 +399,15 @@ describe('server app-shell public API barrels', () => {
       createMemoryCapabilityReplayStore: capabilityUrlApi.createMemoryCapabilityReplayStore,
       signCapability: capabilityUrlApi.signCapability,
       verifyCapability: capabilityUrlApi.verifyCapability,
+      // SPEC.md §6.6 / §9.1 / plans/secure-framework.md Phase 5 follow-up: the framework-owned
+      // storage download route that hosts the capability verify sink + the `ctx.signUrl` mint
+      // (also reachable on the route page context) + the audit-fact drain. Public at the root barrel.
+      CAPABILITY_TOKEN_PARAM: capabilityRouteApi.CAPABILITY_TOKEN_PARAM,
+      DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH: capabilityRouteApi.DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
+      createSignUrl: capabilityRouteApi.createSignUrl,
+      createStorageDownloadEndpoint: capabilityRouteApi.createStorageDownloadEndpoint,
+      deriveDownloadKey: capabilityRouteApi.deriveDownloadKey,
+      drainCapabilityMintFacts: capabilityRouteApi.drainCapabilityMintFacts,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
       // create-kovo starter template's vite.config.ts.
       createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,
