@@ -254,11 +254,16 @@ Median job durations across those runs:
     generated/internal ABI.
   - Evidence when complete: documented rule plus a meta-test or lint check for
     `tests/integration/**` internal imports with an allowlist.
+  - Progress 2026-06-25: `tests/integration/README.md` documents the rule for integration specs, and
+    `tests/integration-import-boundary.meta.test.ts` enforces allowlisted non-harness internal imports
+    in `tests/integration/specs/**`. Fixture app-source imports remain open under the lowered-IR/public
+    fixture migration item.
 
 ## Latest Verification
 
 - Focused Vitest gate passed: `scripts/ci-shards.test.mjs`, `scripts/ci-timing-report.test.mjs`,
   and `tests/flaky-reporter.meta.test.ts` (9 tests).
+- `vp exec vitest --run tests/integration-import-boundary.meta.test.ts --reporter=dot` passed.
 - CI-mode shard generation with `RUNNER_TEMP="$(mktemp -d)"` wrote the selected manifest under
   `$RUNNER_TEMP/kovo-shards`.
 - `node scripts/ci-timing-report.mjs --limit 3` successfully summarized the latest three completed CI
