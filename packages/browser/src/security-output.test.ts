@@ -14,6 +14,8 @@ import {
   kovoStyleProperties,
   kovoStyleProperty,
   kovoTrustedHtmlContent,
+  safeRichHtml,
+  sanitizeRichHtml,
   trustedHtml,
   trustedUrl,
 } from './security-output.js';
@@ -108,6 +110,27 @@ describe('runtime output-context helpers', () => {
     expect(kovoTrustedHtmlContent(browserTrustedHtml)).toBe('<i>browser trusted</i>');
     expect(kovoTrustedHtmlContent('<img src=x onerror=alert(1)>')).toBe('');
     expect(kovoTrustedHtmlContent({ toString: () => '<i>not branded</i>' })).toBe('');
+  });
+
+  it('sanitizes CMS rich HTML before returning a trusted HTML brand', () => {
+    const rich = safeRichHtml(
+      '<p onclick="steal()">Hello <strong>world</strong><script>alert(1)</script>' +
+        '<a href="javascript:alert(1)" target="popup" rel="noopener evil">link</a>' +
+        '<img src="data:text/html,<svg onload=alert(1)>" srcset="/safe.png 1x, javascript:bad 2x" onerror="bad()">' +
+        '<custom-tag data-x="<ok>">text</custom-tag></p>',
+      { reason: 'cms body', source: 'posts.body' },
+    );
+
+    expect(rich.reason).toBe('cms body');
+    expect(rich.source).toBe('posts.body');
+    expect(kovoTrustedHtmlContent(rich)).toBe(
+      '<p>Hello <strong>world</strong><a href="#" rel="noopener">link</a>' +
+        '<img src="#" srcset="/safe.png 1x">text</p>',
+    );
+  });
+
+  it('escapes malformed rich HTML text and closes allowed elements', () => {
+    expect(sanitizeRichHtml('<p>one < two <em>three')).toBe('<p>one &lt; two <em>three</em></p>');
   });
 
   // F2: runtime must neutralize on* and srcdoc attribute sinks (KV236/SPEC §4.8:348)

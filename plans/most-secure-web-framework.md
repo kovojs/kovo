@@ -217,12 +217,17 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       Evidence: `secure-framework-3.md` verifies shared server/browser sanitizer parity across
       `response-fragment-apply`, inline-loader extraction, `sink-policy`, and static-export CSP hash fixtures.
 
-- [ ] **OPP-27 — Blessed safe-rich-HTML sanitizing sink through the `kovo` Trusted Types policy.**
+- [x] **OPP-27 — Blessed safe-rich-HTML sanitizing sink through the `kovo` Trusted Types policy.**
       runtime-DiD (+ by-construction sole-policy transport) · lev 6 · L · non-breaking. TT correctly throws on raw
       user-HTML but leaves no safe path for the legitimate CMS/rich-text case. Provide `sanitizeHtml`: server-side
       allowlist parse (drop script/handlers/`javascript:`/`data:`), browser-side native Sanitizer API `setHTML()`.
       _Trade-off:_ trades an audited per-feature escape for a framework sanitizer floor — a bypassable allowlist,
       not a by-construction XSS kill.
+      Evidence: `packages/browser/src/security-output.ts` adds `safeRichHtml()`/`sanitizeRichHtml()` with an
+      allowlist floor and routes branded output through the `kovo` Trusted Types policy; server
+      `safe-html.ts` re-exports that sink for rendering. `pnpm exec vitest run
+packages/browser/src/security-output.test.ts packages/browser/src/trusted-types.test.ts
+packages/browser/src/index-exports.test.ts packages/server/src/safe-rich-html.test.ts` passed.
 
 - [ ] **OPP-19 — Deserialization / prototype-pollution floor.** runtime-DiD (decode/null-proto) +
       by-construction (static sink ban, statically-visible subset) · lev 6 · M · non-breaking. Route all body

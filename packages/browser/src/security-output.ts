@@ -3,6 +3,7 @@ import {
   drainRuntimeSinkSecurityEvent,
   runtimeSinkFamilyForAttribute,
 } from '@kovojs/core/internal/sink-policy';
+import { kovoCreateHTML } from './trusted-types.js';
 
 /**
  * Optional provenance attached to explicit trust escape hatches.
@@ -17,6 +18,18 @@ export interface TrustedOutputMetadata {
  * structured provenance object.
  */
 export type TrustedOutputMetadataInput = string | TrustedOutputMetadata;
+
+/**
+ * Conservative rich-HTML sanitizer options for CMS/user-authored HTML. This is a
+ * runtime defense-in-depth floor, not a by-construction XSS proof (SPEC §6.6).
+ */
+export interface SafeRichHtmlOptions extends TrustedOutputMetadata {
+  /**
+   * Optional additional element names to admit. Attribute filtering and URL-sink
+   * checks still apply.
+   */
+  readonly allowedTags?: readonly string[];
+}
 
 /**
  * Browser Trusted Types `TrustedHTML` values accepted by Kovo raw HTML sinks.
@@ -68,6 +81,37 @@ export function trustedHtml(
     toString: { value: stringify },
   });
   return trusted;
+}
+
+/**
+ * Sanitizes legitimate CMS/rich-text HTML through Kovo's conservative allowlist,
+ * then returns the existing explicit trusted-HTML brand. Browser calls also route
+ * the sanitized string through Kovo's sole Trusted Types policy before it reaches a
+ * DOM raw-HTML sink.
+ *
+ * This is a runtime-DiD sanitizer floor for rich text, not a by-construction XSS
+ * elimination claim; app-authored raw strings still need the explicit
+ * {@link trustedHtml} escape hatch.
+ */
+export function safeRichHtml(value: string, options?: SafeRichHtmlOptions): TrustedHtml {
+  const sanitized = sanitizeRichHtml(value, options);
+  return trustedHtml(
+    kovoCreateHTML(sanitized) as unknown as string | BrowserTrustedHTML,
+    options?.source === undefined
+      ? { reason: options?.reason ?? 'safe rich HTML sanitizer floor' }
+      : { reason: options.reason ?? 'safe rich HTML sanitizer floor', source: options.source },
+  );
+}
+
+/**
+ * Sanitizes a CMS/rich-text HTML fragment with a conservative element/attribute
+ * allowlist and Kovo's existing URL/event/raw-sink runtime policy.
+ */
+export function sanitizeRichHtml(value: string, options?: SafeRichHtmlOptions): string {
+  const allowedTags = new Set(
+    [...DEFAULT_RICH_HTML_TAGS, ...(options?.allowedTags ?? [])].map((tag) => tag.toLowerCase()),
+  );
+  return sanitizeRichHtmlFragment(value, allowedTags);
 }
 
 /**
@@ -246,6 +290,311 @@ function trustedOutputMetadata(
     ...(metadata.reason === undefined ? {} : { reason: metadata.reason }),
     ...(metadata.source === undefined ? {} : { source: metadata.source }),
   };
+}
+
+const DEFAULT_RICH_HTML_TAGS = [
+  'a',
+  'abbr',
+  'article',
+  'b',
+  'blockquote',
+  'br',
+  'caption',
+  'cite',
+  'code',
+  'col',
+  'colgroup',
+  'dd',
+  'del',
+  'details',
+  'dfn',
+  'div',
+  'dl',
+  'dt',
+  'em',
+  'figcaption',
+  'figure',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'hr',
+  'i',
+  'img',
+  'ins',
+  'kbd',
+  'li',
+  'mark',
+  'ol',
+  'p',
+  'pre',
+  'q',
+  's',
+  'samp',
+  'small',
+  'span',
+  'strong',
+  'sub',
+  'summary',
+  'sup',
+  'table',
+  'tbody',
+  'td',
+  'tfoot',
+  'th',
+  'thead',
+  'tr',
+  'u',
+  'ul',
+  'var',
+] as const;
+
+const RICH_HTML_DROP_SUBTREE_TAGS = new Set([
+  'base',
+  'embed',
+  'iframe',
+  'link',
+  'math',
+  'meta',
+  'noscript',
+  'object',
+  'script',
+  'style',
+  'svg',
+  'template',
+]);
+
+const GLOBAL_RICH_HTML_ATTRIBUTES = new Set([
+  'aria-describedby',
+  'aria-hidden',
+  'aria-label',
+  'aria-labelledby',
+  'class',
+  'dir',
+  'id',
+  'lang',
+  'role',
+  'title',
+]);
+
+const RICH_HTML_ATTRIBUTES_BY_TAG = new Map<string, ReadonlySet<string>>([
+  ['a', new Set(['href', 'rel', 'target'])],
+  ['blockquote', new Set(['cite'])],
+  ['col', new Set(['span'])],
+  ['colgroup', new Set(['span'])],
+  ['img', new Set(['alt', 'height', 'loading', 'src', 'srcset', 'width'])],
+  ['q', new Set(['cite'])],
+  ['td', new Set(['colspan', 'headers', 'rowspan'])],
+  ['th', new Set(['abbr', 'colspan', 'headers', 'rowspan', 'scope'])],
+]);
+
+const VOID_RICH_HTML_TAGS = new Set(['br', 'col', 'hr', 'img']);
+
+function sanitizeRichHtmlFragment(value: string, allowedTags: ReadonlySet<string>): string {
+  let html = '';
+  let offset = 0;
+  const stack: string[] = [];
+  const droppedSubtrees: string[] = [];
+
+  while (offset < value.length) {
+    const tagStart = value.indexOf('<', offset);
+    if (tagStart === -1) {
+      html += escapeHtmlText(value.slice(offset));
+      break;
+    }
+
+    if (droppedSubtrees.length === 0) {
+      html += escapeHtmlText(value.slice(offset, tagStart));
+    }
+
+    if (value.startsWith('<!--', tagStart)) {
+      const commentEnd = value.indexOf('-->', tagStart + 4);
+      offset = commentEnd === -1 ? value.length : commentEnd + 3;
+      continue;
+    }
+
+    const token = readHtmlTagToken(value, tagStart);
+    if (token === null) {
+      html += '&lt;';
+      offset = tagStart + 1;
+      continue;
+    }
+    offset = token.end;
+
+    if (droppedSubtrees.length > 0) {
+      if (token.closing && token.name === droppedSubtrees[droppedSubtrees.length - 1]) {
+        droppedSubtrees.pop();
+      } else if (!token.closing && RICH_HTML_DROP_SUBTREE_TAGS.has(token.name)) {
+        droppedSubtrees.push(token.name);
+      }
+      continue;
+    }
+
+    if (RICH_HTML_DROP_SUBTREE_TAGS.has(token.name)) {
+      if (!token.closing && !token.selfClosing) droppedSubtrees.push(token.name);
+      continue;
+    }
+
+    if (!allowedTags.has(token.name)) continue;
+
+    if (token.closing) {
+      const lastIndex = stack.lastIndexOf(token.name);
+      if (lastIndex === -1) continue;
+      for (let index = stack.length - 1; index >= lastIndex; index -= 1) {
+        const tag = stack.pop();
+        if (tag !== undefined) html += `</${tag}>`;
+      }
+      continue;
+    }
+
+    const attrs = sanitizeRichHtmlAttributes(token.name, token.attributes);
+    html += `<${token.name}${attrs}>`;
+    if (!token.selfClosing && !VOID_RICH_HTML_TAGS.has(token.name)) stack.push(token.name);
+  }
+
+  while (stack.length > 0) {
+    html += `</${stack.pop()}>`;
+  }
+
+  return html;
+}
+
+interface HtmlTagToken {
+  readonly attributes: string;
+  readonly closing: boolean;
+  readonly end: number;
+  readonly name: string;
+  readonly selfClosing: boolean;
+}
+
+function readHtmlTagToken(value: string, start: number): HtmlTagToken | null {
+  let offset = start + 1;
+  let closing = false;
+  if (value[offset] === '/') {
+    closing = true;
+    offset += 1;
+  }
+
+  while (isAsciiWhitespace(value[offset])) offset += 1;
+  const nameStart = offset;
+  while (/[A-Za-z0-9:-]/.test(value[offset] ?? '')) offset += 1;
+  if (offset === nameStart) return null;
+
+  const name = value.slice(nameStart, offset).toLowerCase();
+  let quote: '"' | "'" | undefined;
+  for (; offset < value.length; offset += 1) {
+    const char = value[offset];
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '>') {
+      const rawInside = value.slice(nameStart + name.length, offset);
+      if (containsLessThanOutsideQuotes(rawInside)) return null;
+      return {
+        attributes: closing ? '' : rawInside,
+        closing,
+        end: offset + 1,
+        name,
+        selfClosing: /\/\s*$/.test(rawInside),
+      };
+    }
+  }
+
+  return null;
+}
+
+function containsLessThanOutsideQuotes(value: string): boolean {
+  let quote: '"' | "'" | undefined;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '<') return true;
+  }
+  return false;
+}
+
+function sanitizeRichHtmlAttributes(tag: string, raw: string): string {
+  const tagAttributes = RICH_HTML_ATTRIBUTES_BY_TAG.get(tag);
+  const attributes: string[] = [];
+  const seen = new Set<string>();
+  const pattern = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(raw)) !== null) {
+    const name = (match[1] ?? '').toLowerCase();
+    if (!isAllowedRichHtmlAttribute(name, tagAttributes) || seen.has(name)) continue;
+    seen.add(name);
+
+    const value = match[2] ?? match[3] ?? match[4] ?? '';
+    const sanitized = sanitizeRichHtmlAttributeValue(tag, name, value);
+    if (sanitized === null) continue;
+    attributes.push(`${name}="${escapeHtmlAttribute(sanitized)}"`);
+  }
+
+  return attributes.length === 0 ? '' : ` ${attributes.join(' ')}`;
+}
+
+function isAllowedRichHtmlAttribute(
+  name: string,
+  tagAttributes: ReadonlySet<string> | undefined,
+): boolean {
+  if (name.startsWith('data-')) return true;
+  return GLOBAL_RICH_HTML_ATTRIBUTES.has(name) || tagAttributes?.has(name) === true;
+}
+
+function sanitizeRichHtmlAttributeValue(tag: string, name: string, value: string): string | null {
+  const decision = decideRuntimeAttributeWrite(name, value);
+  drainRuntimeSinkSecurityEvent(decision.event);
+  if (decision.action === 'remove') return null;
+  if (decision.action === 'neutralize') return decision.value ?? '';
+
+  if (tag === 'a' && name === 'target') {
+    return value === '_blank' || value === '_self' || value === '_parent' || value === '_top'
+      ? value
+      : null;
+  }
+
+  if (tag === 'a' && name === 'rel') {
+    const rel = sanitizeRelList(value);
+    return rel === '' ? null : rel;
+  }
+
+  return decision.value ?? value;
+}
+
+function sanitizeRelList(value: string): string {
+  const allowed = new Set(['nofollow', 'noopener', 'noreferrer']);
+  return value
+    .split(/\s+/)
+    .map((part) => part.toLowerCase())
+    .filter((part, index, parts) => allowed.has(part) && parts.indexOf(part) === index)
+    .join(' ');
+}
+
+function escapeHtmlText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return escapeHtmlText(value).replace(/"/g, '&quot;');
+}
+
+function isAsciiWhitespace(value: string | undefined): boolean {
+  return value === ' ' || value === '\n' || value === '\r' || value === '\t' || value === '\f';
 }
 
 function sanitizeCssIdentifier(value: string): string {

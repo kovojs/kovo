@@ -13,7 +13,7 @@ import * as output from './internal/output.js';
 import { derive } from './derive.js';
 import { handler } from './handlers.js';
 import { tempId } from './optimism.js';
-import { trustedHtml, trustedUrl } from './security-output.js';
+import { safeRichHtml, trustedHtml, trustedUrl } from './security-output.js';
 
 describe('runtime public export boundaries', () => {
   it('keeps the root to app-authored primitives', () => {
@@ -21,12 +21,14 @@ describe('runtime public export boundaries', () => {
     expect(root.derive).toBe(derive);
     expect(root.handler).toBe(handler);
     expect(root.tempId).toBe(tempId);
+    expect(root.safeRichHtml).toBe(safeRichHtml);
     expect(root.trustedHtml).toBe(trustedHtml);
     expect(root.trustedUrl).toBe(trustedUrl);
 
     expect(Object.keys(root).sort()).toEqual([
       'derive',
       'handler',
+      'safeRichHtml',
       'tempId',
       'trustedHtml',
       'trustedUrl',

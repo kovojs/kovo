@@ -5,6 +5,7 @@ import {
   kovoCreateHTML,
   kovoCreateScriptURL,
 } from './trusted-types.js';
+import { kovoTrustedHtmlContent, safeRichHtml } from './security-output.js';
 
 // SF (secure-framework Tier 3): the framework Trusted Types policy seam. These tests pin
 // the two load-bearing properties the CSP floor depends on: (1) where Trusted Types is
@@ -76,5 +77,31 @@ describe('kovo Trusted Types policy seam', () => {
 
     // A create failure must never break hydration — fall back to the raw string.
     expect(kovoCreateHTML('<p>safe</p>')).toBe('<p>safe</p>');
+  });
+
+  it('routes safeRichHtml output through the kovo policy after sanitizing', () => {
+    const htmlInputs: string[] = [];
+    globalWithTrustedTypes.trustedTypes = {
+      createPolicy(_name: string, rules: { createHTML?: (s: string) => string }) {
+        return {
+          createHTML(input: string) {
+            htmlInputs.push(input);
+            return {
+              [Symbol.toStringTag]: 'TrustedHTML',
+              toString: () => rules.createHTML?.(input) ?? input,
+            };
+          },
+          createScriptURL(input: string) {
+            return { toString: () => input };
+          },
+        };
+      },
+    };
+    __resetKovoTrustedTypePolicyForTest();
+
+    const rich = safeRichHtml('<p onclick="bad()">ok<script>bad()</script></p>');
+
+    expect(htmlInputs).toEqual(['<p>ok</p>']);
+    expect(kovoTrustedHtmlContent(rich)).toBe('<p>ok</p>');
   });
 });

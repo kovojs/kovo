@@ -11,9 +11,10 @@ export type {
   OptimisticQueryKey,
   OptimisticTransform,
 } from './optimism.js';
-export { trustedHtml, trustedUrl } from './security-output.js';
+export { safeRichHtml, trustedHtml, trustedUrl } from './security-output.js';
 export type {
   BrowserTrustedHTML,
+  SafeRichHtmlOptions,
   TrustedHtml,
   TrustedOutputMetadata,
   TrustedOutputMetadataInput,
