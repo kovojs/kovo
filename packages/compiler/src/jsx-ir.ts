@@ -95,7 +95,6 @@ export function createJsxIrTree(
   model: ComponentModuleModel,
   options: { fileName: string; source: string },
 ): JsxIrTree {
-  const elementsByStart = new Map<number, JsxIrElement>();
   const elements = [...model.jsxElements]
     .sort((left, right) => left.start - right.start || right.end - left.end)
     .map((element) => {
@@ -123,29 +122,10 @@ export function createJsxIrTree(
         selfClosing: element.selfClosing,
         tag: element.tag,
       };
-      elementsByStart.set(element.start, irElement);
       return irElement;
     });
 
-  const roots: JsxIrElement[] = [];
-  for (const element of elements) {
-    const parent = [...elements]
-      .filter(
-        (candidate) =>
-          candidate !== element &&
-          candidate.element.start < element.element.start &&
-          candidate.element.end > element.element.end,
-      )
-      .sort(
-        (left, right) =>
-          left.element.end - left.element.start - (right.element.end - right.element.start),
-      )[0];
-    if (parent) {
-      element.parent = parent;
-    } else {
-      roots.push(element);
-    }
-  }
+  const { childrenByParent, roots } = assignElementParents(elements);
 
   const expressionsByContainer = new Map(
     model.jsxExpressions.map((expression) => [
@@ -157,13 +137,51 @@ export function createJsxIrTree(
   for (const element of elements) {
     element.children = childrenForElement(
       element,
-      elementsByStart,
+      childrenByParent.get(element) ?? [],
       expressionsByContainer,
       options,
     );
   }
 
   return { elements, roots, source: options.source };
+}
+
+function assignElementParents(elements: readonly JsxIrElement[]): {
+  childrenByParent: Map<JsxIrElement, JsxIrElement[]>;
+  roots: JsxIrElement[];
+} {
+  const childrenByParent = new Map<JsxIrElement, JsxIrElement[]>();
+  const roots: JsxIrElement[] = [];
+  const stack: JsxIrElement[] = [];
+
+  for (const element of elements) {
+    while (true) {
+      const top = topElement(stack);
+      if (!top || top.element.end > element.element.start) break;
+      stack.pop();
+    }
+
+    const parent = topElement(stack);
+    if (parent && contains(parent, element)) {
+      element.parent = parent;
+      const children = childrenByParent.get(parent);
+      if (children) {
+        children.push(element);
+      } else {
+        childrenByParent.set(parent, [element]);
+      }
+    } else {
+      roots.push(element);
+    }
+
+    stack.push(element);
+  }
+
+  return { childrenByParent, roots };
+}
+
+function topElement(stack: readonly JsxIrElement[]): JsxIrElement | undefined {
+  return stack[stack.length - 1];
 }
 
 export function jsxIrText(source: string, start = 0): JsxIrText {
@@ -283,15 +301,12 @@ export function jsxIrAttributeValue(attribute: JsxIrAttribute): string | undefin
 
 function childrenForElement(
   element: JsxIrElement,
-  elementsByStart: ReadonlyMap<number, JsxIrElement>,
+  directElements: readonly JsxIrElement[],
   expressionsByContainer: ReadonlyMap<string, JsxExpressionModel>,
   options: { fileName: string; source: string },
 ): JsxIrChild[] {
   if (element.selfClosing || !element.childBody) return [];
 
-  const directElements = [...elementsByStart.values()]
-    .filter((candidate) => candidate.parent === element)
-    .sort((left, right) => left.element.start - right.element.start);
   const directExpressions = element.element.childExpressionContainers
     .map((span) => ({ expression: expressionsByContainer.get(`${span.start}:${span.end}`), span }))
     .filter(

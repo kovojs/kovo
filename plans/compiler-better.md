@@ -259,10 +259,12 @@ diagnostic in compiler/check gates that claim data-plane security.
       original, lowered, mapped, or graph.
   - Evidence: validators currently choose among `originalDiagnostics`, `loweredDiagnostics`, and
     `mappedDiagnostics` manually.
-- [ ] Make JSX IR tree construction linear or near-linear and add stress tests for large component
+- [x] Make JSX IR tree construction linear or near-linear and add stress tests for large component
       trees.
-  - Evidence: `createJsxIrTree` scans and sorts the element list while assigning parents, which can
-    scale poorly on deeply nested or broad JSX.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/jsx-ir.test.ts` and
+    `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts` pass after
+    `createJsxIrTree` switched parent assignment to a stack-based pass with a deep-tree regression
+    test.
 - [ ] Either make persistent compile-cache reads footprint-aware across process restarts or remove
       the misleading persisted footprint field.
   - Evidence: Vite writes persistent entries under the broad key even when the result has a learned
