@@ -206,6 +206,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       establish sink rotates on auth (fixation floor). _Trade-off:_ opaque-default genuinely kills the JWT family
       by construction, but only fires if Kovo reverses §6.5 and **owns** the session sink — a large architectural
       commitment. **Revisit** vs. the `better-auth` delegation.
+      Progress: `packages/better-auth/src/session.ts` now treats Better Auth session-clearing cookies as immediate
+      revocation at the Kovo provider boundary; focused Better Auth session tests, `pnpm run check:vp`, and
+      `pnpm run check:api-surface` passed. Remaining gap: Kovo still delegates the opaque session store to Better
+      Auth, so the default-session ownership claim is not complete.
 
 - [ ] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
