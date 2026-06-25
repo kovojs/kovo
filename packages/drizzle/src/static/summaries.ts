@@ -46,6 +46,7 @@ import {
   type ExtractedWriteCall,
   type FunctionTouchSummary,
   type MaterializedViewRefreshFact,
+  type OwnerPrivateScopeKey,
   type OwnerScopeKey,
   type QueryFact,
   type QueryInstanceKeyComparison,
@@ -441,22 +442,32 @@ import {
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): readonly string[] {
   const domains = new Set<string>();
-  for (const comparison of comparisons.instanceKey) {
-    const domain = ownerSessionAnchoredDomainFromEqOperands(
-      comparison.left,
-      comparison.right,
-      tables,
-    );
-    if (domain) domains.add(domain);
+  for (const scoped of queryOwnerPrivateScopedKeys(comparisons, tables)) {
+    domains.add(scoped.domain);
   }
   return [...domains].sort();
 }
 
-function ownerSessionAnchoredDomainFromEqOperands(
+/** @internal */ export function queryOwnerPrivateScopedKeys(
+  comparisons: QueryInstanceKeyComparisons,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): readonly OwnerPrivateScopeKey[] {
+  const keys = new Map<string, OwnerPrivateScopeKey>();
+  for (const comparison of comparisons.instanceKey) {
+    const scoped = ownerPrivateScopedKeyFromEqOperands(comparison.left, comparison.right, tables);
+    if (scoped) keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+  }
+  return [...keys.values()].sort(
+    (left, right) =>
+      left.domain.localeCompare(right.domain) || left.privateKey.localeCompare(right.privateKey),
+  );
+}
+
+function ownerPrivateScopedKeyFromEqOperands(
   left: QueryInstanceKeyOperand,
   right: QueryInstanceKeyOperand,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
-): string | null {
+): OwnerPrivateScopeKey | null {
   const candidates = [
     { privateKey: right.privateKey, tableKey: left.tableKey },
     { privateKey: left.privateKey, tableKey: right.tableKey },
@@ -469,7 +480,7 @@ function ownerSessionAnchoredDomainFromEqOperands(
       candidate.privateKey,
       tables,
     );
-    if (domain) return domain;
+    if (domain) return { domain, privateKey: candidate.privateKey };
   }
 
   return null;
