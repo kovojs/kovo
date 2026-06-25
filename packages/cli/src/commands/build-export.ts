@@ -22,6 +22,10 @@ import {
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 
+function isKovoServerHandlerExternalDependency(id: string): boolean {
+  return id === '@node-rs/argon2' || id.startsWith('@node-rs/argon2-');
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -866,6 +870,9 @@ async function bundleKovoServerHandler(
         minify: false,
         outDir,
         rollupOptions: {
+          // SPEC 6.6 keeps Argon2 as the runtime password sink. Do not make apps that import the
+          // @kovojs/server barrel evaluate native optional packages during server-handler bundling.
+          external: isKovoServerHandlerExternalDependency,
           input: entryPath,
           output: {
             entryFileNames: 'handler.mjs',
@@ -891,7 +898,7 @@ async function bundleKovoServerHandler(
         ],
       },
       root: process.cwd(),
-      ssr: { noExternal: [/^@kovojs\//] },
+      ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
     });
 
     return await readFile(join(outDir, 'handler.mjs'), 'utf8');
