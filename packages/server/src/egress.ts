@@ -151,7 +151,23 @@ export interface EgressOptions {
    * the metadata endpoint can NEVER be allowlisted here.
    */
   allowInternal?: readonly string[];
+  /**
+   * Optional same-process tamper hardening for the transport monkeypatches.
+   *
+   * - `off` (default): only self-probes detect later monkeypatch drift.
+   * - `warn`: installs a warning setter around `net.Socket.prototype.connect`, so ordinary
+   *   late reassignment is reported immediately. Undici global-dispatcher drift is still
+   *   detected by self-probes because its ESM export cannot be frozen reliably here.
+   * - `freeze`: makes the net-connect descriptor non-writable against ordinary reassignment.
+   *
+   * SPEC §6.6: this remains a runtime defense-in-depth floor, not sandbox protection.
+   * Privileged same-process code can still bypass it with `defineProperty`, workers/children
+   * need their own bootstrap, and native sockets are out of scope.
+   */
+  hardening?: 'off' | 'warn' | 'freeze';
 }
+
+type EgressHardeningMode = NonNullable<EgressOptions['hardening']>;
 
 const METADATA_ALLOWLIST_REJECT =
   'The cloud instance-metadata endpoint can never be allowlisted via egress.allowInternal ' +
@@ -483,6 +499,8 @@ function ipInCidr(ip: string, cidr: string): boolean {
 
 const ORIGINAL_CONNECT = Symbol.for('kovo.egress.originalConnect');
 const FLOOR_INSTALLED = Symbol.for('kovo.egress.installed');
+const FLOOR_WRAPPER = Symbol.for('kovo.egress.connectWrapper');
+const FLOOR_HARDENING = Symbol.for('kovo.egress.hardening');
 
 interface ConnectOptions {
   host?: string;
@@ -497,6 +515,11 @@ type ConnectFn = (...args: unknown[]) => net.Socket;
 interface FlooredNetModule {
   [ORIGINAL_CONNECT]?: ConnectFn;
   [FLOOR_INSTALLED]?: EgressPolicy;
+  [FLOOR_WRAPPER]?: ConnectFn;
+  [FLOOR_HARDENING]?: {
+    mode: EgressHardeningMode;
+    warn: (message: string) => void;
+  };
 }
 
 /**
@@ -512,13 +535,18 @@ interface FlooredNetModule {
  *   - A Unix-domain-socket connect (`path`, no host) is allowed through (no IP to classify);
  *     SSRF to a metadata IP cannot ride a UDS, so this is safe for the threat model.
  */
-export function installNetConnectFloor(policy: EgressPolicy): () => void {
+export function installNetConnectFloor(
+  policy: EgressPolicy,
+  hardening: EgressHardeningMode = 'off',
+  warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
+): () => void {
   const proto = net.Socket.prototype as unknown as { connect: ConnectFn };
   const flooredNet = net as unknown as FlooredNetModule;
 
   if (flooredNet[ORIGINAL_CONNECT]) {
     // Already installed — just swap the active policy.
     flooredNet[FLOOR_INSTALLED] = policy;
+    applyNetConnectHardening(flooredNet, proto, hardening, warn);
     return makeUninstall(flooredNet, proto);
   }
 
@@ -526,7 +554,7 @@ export function installNetConnectFloor(policy: EgressPolicy): () => void {
   flooredNet[ORIGINAL_CONNECT] = original;
   flooredNet[FLOOR_INSTALLED] = policy;
 
-  proto.connect = function patchedConnect(this: net.Socket, ...args: unknown[]): net.Socket {
+  const patchedConnect = function patchedConnect(this: net.Socket, ...args: unknown[]): net.Socket {
     const activePolicy = flooredNet[FLOOR_INSTALLED];
     if (!activePolicy) return original.apply(this, args) as net.Socket;
 
@@ -577,6 +605,10 @@ export function installNetConnectFloor(policy: EgressPolicy): () => void {
     return original.apply(this, args) as net.Socket;
   } as ConnectFn;
 
+  flooredNet[FLOOR_WRAPPER] = patchedConnect;
+  proto.connect = patchedConnect;
+  applyNetConnectHardening(flooredNet, proto, hardening, warn);
+
   return makeUninstall(flooredNet, proto);
 }
 
@@ -584,11 +616,63 @@ function makeUninstall(flooredNet: FlooredNetModule, proto: { connect: ConnectFn
   return () => {
     const original = flooredNet[ORIGINAL_CONNECT];
     if (original) {
-      proto.connect = original;
+      Object.defineProperty(proto, 'connect', {
+        value: original,
+        writable: true,
+        configurable: true,
+      });
       delete flooredNet[ORIGINAL_CONNECT];
       delete flooredNet[FLOOR_INSTALLED];
+      delete flooredNet[FLOOR_WRAPPER];
+      delete flooredNet[FLOOR_HARDENING];
     }
   };
+}
+
+function applyNetConnectHardening(
+  flooredNet: FlooredNetModule,
+  proto: { connect: ConnectFn },
+  mode: EgressHardeningMode,
+  warn: (message: string) => void,
+): void {
+  const wrapper = flooredNet[FLOOR_WRAPPER];
+  if (!wrapper) return;
+  flooredNet[FLOOR_HARDENING] = { mode, warn };
+  if (mode === 'off') {
+    Object.defineProperty(proto, 'connect', {
+      value: wrapper,
+      writable: true,
+      configurable: true,
+    });
+    return;
+  }
+  if (mode === 'freeze') {
+    Object.defineProperty(proto, 'connect', {
+      value: wrapper,
+      writable: false,
+      configurable: true,
+    });
+    return;
+  }
+
+  let current: ConnectFn = wrapper;
+  Object.defineProperty(proto, 'connect', {
+    configurable: true,
+    get() {
+      return current;
+    },
+    set(next: ConnectFn) {
+      if (next !== wrapper) {
+        warn(
+          'TAMPER: net.Socket.prototype.connect was reassigned after Kovo installed the ' +
+            'egress floor. The net.connect layer is no longer trusted in this process; ' +
+            're-install installEgressFloor() before serving requests. This warning is a ' +
+            'runtime defense-in-depth signal, not sandbox protection (SPEC §6.6).',
+        );
+      }
+      current = next;
+    },
+  });
 }
 
 /**
@@ -637,10 +721,28 @@ function normalizeConnectOptions(args: unknown[]): ConnectOptions | null {
  * LOUDLY warn when a server starts without the floor active (SPEC §6.6).
  */
 export function isNetConnectFloorInstalled(): boolean {
-  return Boolean((net as unknown as FlooredNetModule)[ORIGINAL_CONNECT]);
+  return netConnectFloorTamperStatus().installed;
 }
 
 /** The policy currently enforced by the net-connect floor, if installed. */
 export function activeEgressPolicy(): EgressPolicy | undefined {
   return (net as unknown as FlooredNetModule)[FLOOR_INSTALLED];
+}
+
+/** Inspect whether the active net-connect hook is still Kovo's wrapper (SPEC §6.6 self-probe). */
+export function netConnectFloorTamperStatus(): {
+  installed: boolean;
+  tampered: boolean;
+  hardening: EgressHardeningMode;
+} {
+  const proto = net.Socket.prototype as unknown as { connect: ConnectFn };
+  const flooredNet = net as unknown as FlooredNetModule;
+  const wrapper = flooredNet[FLOOR_WRAPPER];
+  const original = flooredNet[ORIGINAL_CONNECT];
+  const installed = Boolean(original && wrapper && proto.connect === wrapper);
+  return {
+    installed,
+    tampered: Boolean(original && wrapper && proto.connect !== wrapper),
+    hardening: flooredNet[FLOOR_HARDENING]?.mode ?? 'off',
+  };
 }

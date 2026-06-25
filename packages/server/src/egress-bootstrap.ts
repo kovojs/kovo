@@ -1,6 +1,7 @@
 import {
   isNetConnectFloorInstalled,
   installNetConnectFloor,
+  netConnectFloorTamperStatus,
   resolveEgressPolicy,
   type EgressOptions,
 } from './egress.js';
@@ -29,7 +30,9 @@ async function loadUndiciFloorModule(): Promise<UndiciFloorModule> {
  *
  * RESIDUAL FAIL-OPEN (enumerated honestly — this is a FLOOR, never a by-construction proof):
  *   1. Same-process app code can re-patch `net.Socket.prototype.connect` or call
- *      `setGlobalDispatcher` after us, removing either layer.
+ *      `setGlobalDispatcher` after us, removing either layer. `egress.hardening: "warn" |
+ *      "freeze"` adds same-process tamper signals for the net layer, and self-probes detect
+ *      both net and undici drift, but this is still not sandbox-level protection.
  *   2. `Worker` threads and `child_process` do not inherit the monkeypatch; each must re-install.
  *   3. Native addons / FFI that open sockets outside `net` are never seen by either layer.
  *   4. A per-`fetch(url, { dispatcher })` option bypasses the global undici dispatcher (the
@@ -74,7 +77,7 @@ export function installEgressFloor(
   // refuses boot. Layer (b) is also installed synchronously so raw node:http is floored before
   // the undici import resolves.
   const policy = resolveEgressPolicy(options, warn);
-  const uninstallNet = installNetConnectFloor(policy);
+  const uninstallNet = installNetConnectFloor(policy, options?.hardening ?? 'off', warn);
 
   return (async (): Promise<EgressFloorInstall> => {
     let uninstallUndici: () => void = () => {};
@@ -117,21 +120,55 @@ export function installEgressFloor(
  */
 export function selfProbe(
   warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
+  options: {
+    /**
+     * Label for the process boundary being probed. Use `worker` or `child-process` in
+     * adapter/starter bootstraps so missing re-install diagnostics name the real boundary.
+     */
+    boundary?: 'process' | 'worker' | 'child-process';
+    /** Throw instead of warn when the probe finds a missing/partial/tampered floor. */
+    failure?: 'warn' | 'throw';
+  } = {},
 ): { netConnectInstalled: boolean; undiciInstalled: boolean } {
-  const net = isNetConnectFloorInstalled();
-  const undici = undiciFloorModule?.isUndiciFloorInstalled() ?? false;
+  const netStatus = netConnectFloorTamperStatus();
+  const undiciStatus = undiciFloorModule?.undiciFloorTamperStatus() ?? {
+    installed: false,
+    tampered: false,
+  };
+  const net = netStatus.installed;
+  const undici = undiciStatus.installed;
+  const boundary = options.boundary ?? 'process';
+  const emit = (message: string): void => {
+    if (options.failure === 'throw') throw new Error(`[kovo egress] ${message}`);
+    warn(message);
+  };
   if (!net && !undici) {
-    warn(
+    emit(
       'SELF-PROBE: the outbound-egress private-network deny floor is NOT installed in this ' +
-        'process. SSRF to cloud metadata / internal services is UNGATED here. If this is a ' +
-        'Worker/child process, re-run createApp({ egress }) or installEgressFloor() in its ' +
+        `${boundary}. SSRF to cloud metadata / internal services is UNGATED here. If this is a ` +
+        'Worker/child process, re-run createApp({ egress }) or installEgressFloor() in that ' +
         'bootstrap (SPEC §6.6; the floor does not cross worker boundaries).',
     );
   } else if (!net || !undici) {
-    warn(
+    emit(
       `SELF-PROBE: the egress floor is only PARTIALLY installed (net.connect=${net}, ` +
         `undici=${undici}). One transport path is ungated — a single layer fails open ` +
         '(undici pooled reuse bypasses net.connect; raw node:http bypasses undici).',
+    );
+  }
+  if (netStatus.tampered) {
+    emit(
+      'SELF-PROBE: TAMPER detected: net.Socket.prototype.connect no longer points at the ' +
+        'Kovo egress wrapper. Re-install installEgressFloor() before serving requests. ' +
+        'This is a runtime defense-in-depth signal, not sandbox protection (SPEC §6.6).',
+    );
+  }
+  if (undiciStatus.tampered) {
+    emit(
+      'SELF-PROBE: TAMPER detected: undici.getGlobalDispatcher() no longer returns the Kovo ' +
+        'egress dispatcher. A late setGlobalDispatcher() removed the fetch layer; re-install ' +
+        'installEgressFloor() before serving requests. This is a runtime defense-in-depth ' +
+        'signal, not sandbox protection (SPEC §6.6).',
     );
   }
   return { netConnectInstalled: net, undiciInstalled: undici };

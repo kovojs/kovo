@@ -176,7 +176,7 @@ code, and current supply-chain/build surfaces.
   - Acceptance: starter `check` fails on a mismatched raw endpoint cache/body/content-type/header
     posture without requiring a live production request.
 
-- [ ] **Harden egress floor propagation and tamper detection.**
+- [x] **Harden egress floor propagation and tamper detection.**
   - Evidence: the egress bootstrap honestly documents residual fail-open holes: same-process re-patching,
     worker/child-process boundaries, per-fetch dispatcher bypass, and provider shape drift
     (`packages/server/src/egress-bootstrap.ts:30`). The net layer repeats worker and same-process
@@ -187,6 +187,13 @@ code, and current supply-chain/build surfaces.
   - Acceptance: tests simulate worker bootstrap omission, late `setGlobalDispatcher`, and late
     `net.connect` re-patching; each produces a loud failure or warning without claiming sandbox-level
     protection.
+  - Verified 2026-06-25: `packages/server/src/egress.ts` and
+    `packages/server/src/egress-undici.ts` expose net/undici tamper status;
+    `installEgressFloor()` accepts `hardening: 'off' | 'warn' | 'freeze'`; and `selfProbe()` can
+    label worker/child-process boundaries and throw on missing/tampered floors. `pnpm exec vitest run
+packages/server/src/egress-bootstrap.test.ts packages/server/src/egress.test.ts
+packages/server/src/egress-undici.test.ts` proves worker/child omission diagnostics, late
+    net-connect re-patch warnings, and late undici dispatcher drift detection/reinstall.
 
 ## Tier 3 - Filesystem, Static Export, And Supply Chain
 

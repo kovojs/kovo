@@ -1,5 +1,5 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
-import { Agent, type Dispatcher } from 'undici';
+import { Agent, getGlobalDispatcher, setGlobalDispatcher, type Dispatcher } from 'undici';
 
 import {
   EgressBlockedError,
@@ -170,18 +170,20 @@ let installedDispatcher: EgressGatingDispatcher | undefined;
  * `net.connect` layer remains the backstop for those cases (it still catches the FIRST dial).
  */
 export async function installUndiciFloor(policy: EgressPolicy): Promise<() => void> {
-  const undici = await import('undici');
   if (installedDispatcher) {
     installedDispatcher.setPolicy(policy);
+    if (getGlobalDispatcher() !== installedDispatcher) {
+      setGlobalDispatcher(installedDispatcher);
+    }
     return () => {};
   }
-  const previous = undici.getGlobalDispatcher();
+  const previous = getGlobalDispatcher();
   const dispatcher = new EgressGatingDispatcher(policy);
   installedDispatcher = dispatcher;
-  undici.setGlobalDispatcher(dispatcher);
+  setGlobalDispatcher(dispatcher);
   return () => {
     if (installedDispatcher === dispatcher) {
-      undici.setGlobalDispatcher(previous);
+      setGlobalDispatcher(previous);
       installedDispatcher = undefined;
       void dispatcher.close().catch(() => {});
     }
@@ -190,7 +192,20 @@ export async function installUndiciFloor(policy: EgressPolicy): Promise<() => vo
 
 /** Whether the undici egress floor is currently installed (used by the bootstrap self-probe). */
 export function isUndiciFloorInstalled(): boolean {
-  return installedDispatcher !== undefined;
+  return undiciFloorTamperStatus().installed;
+}
+
+/** Inspect whether the process-global undici dispatcher is still Kovo's wrapper. */
+export function undiciFloorTamperStatus(): {
+  installed: boolean;
+  tampered: boolean;
+} {
+  if (!installedDispatcher) return { installed: false, tampered: false };
+  const current = getGlobalDispatcher();
+  return {
+    installed: current === installedDispatcher,
+    tampered: current !== installedDispatcher,
+  };
 }
 
 /** Re-export the classifier so a single import surface covers both layers in bootstrap. */

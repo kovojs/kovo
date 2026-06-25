@@ -1,6 +1,7 @@
 import http from 'node:http';
-import type { AddressInfo } from 'node:net';
+import net, { type AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
+import { Agent, setGlobalDispatcher } from 'undici';
 
 import { createApp } from './app.js';
 import { EGRESS_BLOCKED_ERROR_NAME, EgressConfigError } from './egress.js';
@@ -24,6 +25,17 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     expect(warnings.join('\n')).toContain('NOT installed');
   });
 
+  it('worker/child-process starter self-probes can fail loudly when bootstrap omitted', () => {
+    expect(() => selfProbe(() => {}, { boundary: 'worker', failure: 'throw' })).toThrow(
+      /NOT installed.*worker/,
+    );
+
+    const warnings: string[] = [];
+    selfProbe((m) => warnings.push(m), { boundary: 'child-process' });
+    expect(warnings.join('\n')).toContain('child-process');
+    expect(warnings.join('\n')).toContain('NOT installed');
+  });
+
   it('installs both layers and the self-probe goes quiet', async () => {
     const warnings: string[] = [];
     const install = await installEgressFloor({ allowInternal: [] }, (m) => warnings.push(m));
@@ -35,6 +47,40 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     expect(probe.undiciInstalled).toBe(true);
     expect(warnings.join('\n')).not.toContain('NOT installed');
     expect(warnings.join('\n')).not.toContain('PARTIALLY');
+  });
+
+  it('warns when net.Socket.prototype.connect is re-patched after install', async () => {
+    const warnings: string[] = [];
+    const install = await installEgressFloor({ allowInternal: [], hardening: 'warn' }, (m) =>
+      warnings.push(m),
+    );
+    teardown = install.uninstall;
+
+    const replacement = function replacedConnect(
+      this: net.Socket,
+      ..._args: unknown[]
+    ): net.Socket {
+      return this;
+    };
+    net.Socket.prototype.connect = replacement as typeof net.Socket.prototype.connect;
+
+    expect(warnings.join('\n')).toContain('TAMPER');
+    const probe = selfProbe((m) => warnings.push(m));
+    expect(probe.netConnectInstalled).toBe(false);
+    expect(warnings.join('\n')).toContain('net.Socket.prototype.connect no longer points');
+  });
+
+  it('warns when undici setGlobalDispatcher replaces the floor after install', async () => {
+    const warnings: string[] = [];
+    const install = await installEgressFloor({ allowInternal: [] }, (m) => warnings.push(m));
+    teardown = install.uninstall;
+
+    const replacement = new Agent();
+    setGlobalDispatcher(replacement);
+    const probe = selfProbe((m) => warnings.push(m));
+    expect(probe.undiciInstalled).toBe(false);
+    expect(warnings.join('\n')).toContain('setGlobalDispatcher');
+    await replacement.close();
   });
 
   it('refuses boot synchronously on a metadata IP in allowInternal', () => {
