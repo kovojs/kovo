@@ -203,18 +203,22 @@ diagnostic in compiler/check gates that claim data-plane security.
     find an equivalent compiler-owned graph extraction/gate for `KV423`.
 - [x] Make missing query-shape facts a fail-closed condition for components that declare queries in
       production/security-check modes.
-  - Evidence: `pnpm exec vitest --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`
     passes with production render-plan-gated KV435 coverage for component-declared queries missing
     query-shape facts.
 - [x] Reject duplicate or conflicting query-shape facts before registry emission, render-plan token
       input, or confidentiality checks.
-  - Evidence: `pnpm exec vitest --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`
     passes after duplicate query-shape facts emit KV240 and conflicted queries are omitted from
     `queryShapesFromFacts` instead of silently first-writer-winning.
-- [ ] Expose `PublishToClientFact` from compilation and include it in graph capabilities/explain
+- [x] Expose `PublishToClientFact` from compilation and include it in graph capabilities/explain
       output with a non-empty reason.
-  - Evidence: `validate/client-capture.ts` produces publish facts and documents the intended graph
-    handoff, but `CompileResult` does not expose them.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/client-secret-capture.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-compile.test.ts --reporter verbose`,
+    `pnpm exec vitest --configLoader runner --run packages/core/src/diagnostics.test.ts packages/core/src/graph.test.ts --reporter verbose`,
+    `pnpm --filter @kovojs/compiler run build:dist`, `pnpm --filter @kovojs/cli run build:dist`,
+    and `pnpm run check:api-surface` pass after `PublishToClientFact` was exposed on compile
+    results, threaded into graph capabilities, printed with `module=`, and blank reasons were
+    rejected with KV437.
 - [ ] Decide whether `KV330` is blocking. If it remains lint, add a written soundness proof and an
       acceptance test showing data-plane security claims do not depend on it.
   - Evidence: core diagnostics define `KV330` as lint while its help text says direct DB access

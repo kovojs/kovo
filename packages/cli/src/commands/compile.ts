@@ -1084,7 +1084,11 @@ async function runCompileComponentCommand(
   if (options.emitClientFiles) {
     for (const file of result.files) {
       if (file.kind === 'client') {
-        artifacts.push({ kind: 'client', path: file.fileName, source: file.source });
+        artifacts.push({
+          kind: 'client',
+          path: join(dirname(options.outPath), basename(file.fileName)),
+          source: file.source,
+        });
       }
     }
   }
