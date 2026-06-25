@@ -39,7 +39,9 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
       load: () => ({
         ...largeCartValue(),
         items: largeCartValue().items.map((item) =>
-          item.productId === 'p0' ? { ...item, qty: 2 } : item,
+          item.productId === 'p0'
+            ? { ...item, qty: 2, title: '<img src=x onerror="alert(1)">' }
+            : item,
         ),
       }),
       reads: [cart],
@@ -79,6 +81,24 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     expect(response.body).not.toContain('"productId":"p10"');
     // It should contain the updated item for p0 in a delta envelope (lists or set).
     expect(response.body).toContain('"productId":"p0"');
+    expect(response.body).not.toContain('<img src=x onerror=');
+
+    const wire = parseSingleQueryWire(response.body);
+    expect(wire).toMatchObject({ delta: true, name: 'cart' });
+    expect(wire.value).toMatchObject({
+      lists: {
+        items: {
+          key: 'productId',
+          upsert: [
+            {
+              productId: 'p0',
+              qty: 2,
+              title: '<img src=x onerror="alert(1)">',
+            },
+          ],
+        },
+      },
+    });
   });
 
   it('emits a full query chunk when change records have no scoped keys (delta unsound)', async () => {
@@ -176,6 +196,33 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     expect(response.body).toContain('"count":1');
   });
 });
+
+function parseSingleQueryWire(body: string): {
+  delta: boolean;
+  name: string;
+  value: unknown;
+} {
+  const match = /^<kovo-query\s+([^>]*)>([\s\S]*)<\/kovo-query>$/.exec(body.trim());
+  if (!match) throw new Error(`Expected one kovo-query chunk, got: ${body}`);
+  const [, attributes = '', encodedJson = ''] = match;
+  const nameMatch = /\bname="([^"]+)"/.exec(attributes);
+  if (!nameMatch) throw new Error(`Missing query name in: ${body}`);
+
+  return {
+    delta: /\sdelta(?:\s|$)/.test(` ${attributes} `),
+    name: decodeHtmlText(nameMatch[1] ?? ''),
+    value: JSON.parse(decodeHtmlText(encodedJson)),
+  };
+}
+
+function decodeHtmlText(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&');
+}
 
 describe('Kovo-Build header (SPEC §5.1, §9.1.1)', () => {
   it('emits Kovo-Build header on 200 when buildToken is set in the wire request', async () => {
