@@ -52,7 +52,7 @@ Median job durations across those runs:
     or retire another slot first.
   - Evidence when complete: the workflow graph has no more than 16 required jobs runnable before the
     final aggregator.
-  - Evidence 2026-06-25: local workflow assertion counted 13 required slots before `check`;
+  - Evidence 2026-06-25: local workflow assertion counted 12 required slots before `check`;
     `.github/workflows/ci.yml` parses with Ruby Psych.
 
 - [x] **Prohibit hand-maintained shard file lists.**
@@ -166,8 +166,9 @@ Median job durations across those runs:
   - Evidence when complete: conformance jobs land in the 2-5 minute band on three completed CI runs.
   - Progress 2026-06-25: `.github/workflows/ci.yml` now runs one `conformance` job with named steps for
     `drizzle-pin`, `better-auth-pin`, `auth-spike`, `webhook-spike`, and `app-shell-spike`; local
-    `vp run conformance` passed. Remaining evidence is completed GitHub CI timing for the consolidated
-    job.
+    `vp run conformance` passed. CI run
+    [28185788267](https://github.com/kovojs/kovo/actions/runs/28185788267) completed the consolidated
+    job in 2m36s. Remaining evidence is two more completed GitHub CI timings for the consolidated job.
 
 - [ ] **Consolidate tiny `kovo-check` shards.**
   - Keep `server-browser` standalone while it is near 3 minutes.
@@ -177,8 +178,9 @@ Median job durations across those runs:
     than rebuilding dist.
   - Progress 2026-06-25: `.github/workflows/ci.yml` now runs one `kovo-check` job that downloads
     `kovo-dist` and executes the default `vp exec node scripts/kovo-check.mjs` aggregate; local
-    `vp run build` followed by `vp run kovo-check` passed. Remaining evidence is a completed GitHub CI
-    timing for the consolidated job.
+    `vp run build` followed by `vp run kovo-check` passed. CI run
+    [28185788267](https://github.com/kovojs/kovo/actions/runs/28185788267) completed `kovo-check` in
+    3m45s after downloading `kovo-dist`.
 
 - [ ] **Evaluate combining `browser` and `gallery-browser` setup.**
   - Both jobs install Playwright/browser assets and are below 2 minutes on median.
@@ -186,10 +188,10 @@ Median job durations across those runs:
     harder to identify.
   - Evidence when complete: combined browser job timing plus a deliberately failed browser assertion or
     log sample proving the failing suite is obvious.
-  - Progress 2026-06-25: `.github/workflows/ci.yml` keeps root browser and gallery browser as named
-    steps in one `browser` job and adds the Chromium-backed `P10 perf` step after downloading
-    `kovo-dist`; local `vp run p10-perf` passed. Remaining evidence is completed GitHub CI timing and a
-    failed-log sample.
+  - Progress 2026-06-25: `.github/workflows/ci.yml` keeps root browser, gallery browser, and Chromium
+    `P10 perf` as named steps in the artifact-producing `build + browser` job so the combined required
+    slot should land in range while keeping browser failures step-visible. Remaining evidence is
+    completed GitHub CI timing and a failed-log sample.
 
 - [x] **Keep the `build` dependency path explicit.**
   - `build` is short, but it feeds `p10-perf` and `kovo-check`; do not hide it inside an unrelated job
@@ -197,8 +199,8 @@ Median job durations across those runs:
   - Evidence when complete: CI graph still has one authoritative `kovo-dist` producer and downstream jobs
     download that artifact.
   - Evidence 2026-06-25: local workflow assertion verified `build` is the sole `kovo-dist` artifact
-    uploader; `browser` and `kovo-check` both `needs: build`, download `kovo-dist`, and run the
-    artifact-consuming `P10 perf` and `Kovo check suite` steps.
+    uploader; the `build + browser` job runs the artifact-consuming `P10 perf` step after upload, and
+    `kovo-check` has `needs: build`, downloads `kovo-dist`, and runs `Kovo check suite`.
 
 - [ ] **Move optional slow breadth checks out of required PR feedback if new checks push wall time above
       5 minutes.**
@@ -322,8 +324,11 @@ tests/integration/specs/respond-file.spec.ts tests/integration/specs/storage-dow
 - `ruby -e 'require "psych"; Psych.load_file(".github/workflows/ci.yml")'`,
   `node -e 'JSON.parse(require("fs").readFileSync("package.json","utf8"))'`, and `git diff --check`
   passed.
-- Local workflow assertion verified 13 required slots before `check`, the `kovo-dist` build artifact
+- Local workflow assertion verified 12 required slots before `check`, the `kovo-dist` build artifact
   path, and final `check` aggregator dependencies.
+- Build/browser consolidation checks passed: `vp run build`, `vp run browser`,
+  `KOVO_GALLERY_BROWSER_HEADED=1 vp exec pnpm --filter @kovojs/example-gallery run test:browser`, and
+  `vp run p10-perf`.
 - Consolidated topology checks passed: `vp run build`, `vp run conformance`, `vp run kovo-check`,
   `vp run p10-perf`, and `vp exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts
 tests/config.meta.test.ts --reporter=dot`.
@@ -351,5 +356,5 @@ tests/integration/specs/fragment-append.spec.ts` passed.
 - [x] **No coverage regression gate:** the final `check` job still depends on every required shard and
       fails on any failure, cancellation, or skipped required job.
   - Evidence 2026-06-25: local workflow assertion verified `check.needs` covers `static-safety`, `test`,
-    `browser`, `integration`, `build`, `conformance`, and `kovo-check`, and the shell guard fails on
-    `failure`, `cancelled`, or `skipped` results.
+    `integration`, `build`, `conformance`, and `kovo-check`, and the shell guard fails on `failure`,
+    `cancelled`, or `skipped` results.
