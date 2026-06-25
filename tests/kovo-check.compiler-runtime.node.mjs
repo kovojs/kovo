@@ -722,6 +722,7 @@ void test('P10 starter template stays wired to the current app-shell contract', 
   assert.deepEqual(Object.keys(packageJson.scripts).sort(), [
     'build:prod',
     'check',
+    'check:endpoint-posture',
     'check:sound-subset',
     'dev',
     'serve',
