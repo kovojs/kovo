@@ -1,4 +1,4 @@
-import { publicAccess, query, s, type QueryLoadContext } from '@kovojs/server';
+import { publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
 import { and, asc, eq, sum } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
@@ -8,7 +8,13 @@ import { answers, questions, votes } from './schema.js';
 // Drizzle selects stay inline so the generated StackOverflow artifacts can
 // inspect query shapes and register derived query-read domains.
 
-type SoQueryLoadContext = QueryLoadContext<SoRequest> & { db?: SoDb };
+// SPEC §9.4/§10.3 (MARQUEE): a query loader destructures the framework-owned read-only handle
+// `{ db }` (typed `Reader<SoDb>` — the write verbs are removed at the type level and throw
+// `KovoReadonlyHandleError` at runtime). The loader no longer brings its own db; the framework
+// threads the SQL-safe, read-only managed handle as `context.db`. A write in a loader is a `tsc`
+// error AND a runtime throw AND a KV433 static-gate error. `session` rides the request for the
+// per-session row scope; mutations (model.ts `SoRequest`) keep the read-write `request.db`.
+type SoQueryLoadContext = QueryLoadContext<SoRequest, SoDb>;
 
 // The list is ordered by stable id so a vote changes the score without reshuffling
 // rows while a fragment response is being applied.
@@ -145,10 +151,13 @@ export const questionScore = query('questionScore', {
   },
 });
 
-function requireSoQueryDb(context?: SoQueryLoadContext): SoDb {
-  const db = context?.db ?? context?.request?.db;
+// SPEC §9.4 (MARQUEE): the framework provides `context.db` as the read-only managed handle. A loader
+// reads it directly; this guard surfaces a clear error when a loader is invoked without the
+// framework-threaded handle (e.g. a direct `query.load()` call missing its db).
+function requireSoQueryDb(context?: SoQueryLoadContext): Reader<SoDb> {
+  const db = context?.db;
   if (!db) {
-    throw new Error('stackoverflow query loaders require context.db or request.db');
+    throw new Error('stackoverflow query loaders require the framework-provided context.db');
   }
   return db;
 }
