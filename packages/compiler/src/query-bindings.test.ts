@@ -278,25 +278,19 @@ export const CartBadge = component({
 `,
     });
 
-    expect(queryShapesFromFacts(queryShapeFacts)).toEqual({
-      cart: {
-        count: 'number',
-      },
-    });
-    expect(result.diagnostics).toMatchInlineSnapshot(`
-      [
-        {
-          "code": "KV240",
-          "fileName": "cart-badge.tsx",
-          "help": "Would lower to: one query-shape fact per query name for server render, client updates, and binding validation.
-      Blocked reason: duplicate query-shape facts would make graph indexing silently choose one shape for all generated bindings.
-      Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
-      SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
-          "message": "Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-refresh.shape.ts, generated/queries/cart.shape.ts",
-          "severity": "error",
-        },
-      ]
-    `);
+    expect(queryShapesFromFacts(queryShapeFacts)).toEqual({});
+    expect(result.files[2]?.source).not.toContain(`'cart':`);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV240',
+          fileName: 'cart-badge.tsx',
+          message:
+            'Duplicate query-shape fact for one query name. query="cart" sources=generated/queries/cart-refresh.shape.ts, generated/queries/cart.shape.ts',
+          severity: 'error',
+        }),
+      ]),
+    );
   });
 
   it('reports KV240 when duplicate query-shape facts have the same shape', () => {
@@ -331,6 +325,7 @@ export const CartBadge = component({
         },
       ]
     `);
+    expect(queryShapesFromFacts(queryShapeFacts)).toEqual({});
   });
 
   it('accepts distinct query-shape fact names', () => {
@@ -471,6 +466,55 @@ export const UserCard = component({
         }),
       ]),
     );
+  });
+
+  it('reports KV435 in production when a component-declared query has no query-shape fact', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      productionRenderPlanGate: {
+        previous: {},
+      },
+      source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span>{user.id}</span>
+    </user-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV435',
+          fileName: 'user-card.tsx',
+          message:
+            'Secret query value reaches the client wire. query="user" missing query-shape fact for production query-wire validation',
+          severity: 'error',
+        }),
+      ]),
+    );
+  });
+
+  it('keeps isolated component compiles permissive when query-shape facts are absent', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span>{user.id}</span>
+    </user-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV435')).toEqual([]);
   });
 
   it('does not report KV435 for explicitly revealed query shape fields', () => {

@@ -12,18 +12,36 @@ export function validateSecretQueryWire(
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
   const queryShapes = componentQueryShapes(options);
-  if (!queryShapes) return [];
-
   const queryNames = componentOptionObjectKeys(model, 'queries');
-  return queryNames.flatMap((query) =>
-    secretQueryShapePaths(queryShapes[query]).map((path) =>
-      diagnostics.at(
-        'KV435',
-        undefined,
-        `query="${query}" path="${pathForDiagnostic(query, path)}"`,
+  const missingShapeDiagnostics = requiresClosedQueryShapeFacts(options)
+    ? queryNames
+        .filter((query) => !queryShapes?.[query])
+        .map((query) =>
+          diagnostics.at(
+            'KV435',
+            undefined,
+            `query="${query}" missing query-shape fact for production query-wire validation`,
+          ),
+        )
+    : [];
+  if (!queryShapes) return missingShapeDiagnostics;
+
+  return [
+    ...missingShapeDiagnostics,
+    ...queryNames.flatMap((query) =>
+      secretQueryShapePaths(queryShapes[query]).map((path) =>
+        diagnostics.at(
+          'KV435',
+          undefined,
+          `query="${query}" path="${pathForDiagnostic(query, path)}"`,
+        ),
       ),
     ),
-  );
+  ];
+}
+
+function requiresClosedQueryShapeFacts(options: CompileComponentOptions): boolean {
+  return options.productionRenderPlanGate !== undefined;
 }
 
 function secretQueryShapePaths(
