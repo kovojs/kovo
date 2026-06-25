@@ -347,11 +347,14 @@ scripts/check-pack-security.test.mjs` passed; `pnpm run check:pack-security -- -
       Evidence: `SPEC.md`, `site/content/guides/security.md`, and `site/src/components/landing.tsx` state that
       Kovo does not claim prompt-injection immunity and frame the claim as blast-radius reduction.
 
-- [ ] **OPP-02 — KV433 Stage-2 honesty + optional widening.** by-construction (directly-reachable subset,
+- [x] **OPP-02 — KV433 Stage-2 honesty + optional widening.** by-construction (directly-reachable subset,
       already ships) · lev 3 · S · non-breaking. The directly-reachable read-loader no-write gate already ships
       and is tested; the honest remaining work is correcting the "still deferred" comment (folds into OPP-24) and
       optionally widening the static verb set. _Trade-off:_ mostly a relabel; the interprocedural tail stays a
       runtime-DiD proxy backstop.
+      Evidence: `packages/drizzle/src/static/derivation.ts` now states the shipped runtime proxy scope and widens
+      the direct KV433 static gate to `execute`/`run`/`batch` alongside table writes; focused Drizzle tests and
+      `pnpm run check:vp` passed.
 
 ### Research / defer
 

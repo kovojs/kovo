@@ -1396,17 +1396,25 @@ function dedupeToctouFacts(facts: readonly ToctouFact[]): ToctouFact[] {
 // ── KV433 read-only query handle (Stage-2 static no-write-reachable) ──────────
 //
 // SPEC §6.6/§9.4, secure-framework Phase 5. A `query('name', { load })` loader is a
-// read surface; reaching a Drizzle write (insert/update/delete) from it is the
+// read surface; reaching a Drizzle write (insert/update/delete/execute/run/batch) from it is the
 // confused-deputy case (a state change on an idempotent GET). Stage 2 is the
 // by-construction half: a static proof that a loader body contains no DIRECTLY-reachable
 // Drizzle write. `query.elevated('name', …)` is the audited escape (a GET that must be
 // idempotent-safe-to-repeat). Honest scope: this detects writes DIRECTLY in the loader
 // body. The fully interprocedural case (a loader calling an imported `domain()` function
 // that writes through a captured handle) needs the bottom-up write-summaries that are NOT
-// built; that residue is a documented gap, not covered here. Stage 1 (a managed read-only
-// proxy handle) is blocked: `QueryLoadContext = { request }` does not thread a db handle,
-// so loaders close over module-scope `db` and there is nothing to intercept without a
-// breaking authoring change.
+// built; that residue is a documented gap, not covered here. Stage 1 is the shipped managed
+// read-only proxy handle where Kovo owns `context.db`; it is a runtime floor, while this
+// direct static check is the by-construction gate.
+
+const KV433_DIRECT_WRITE_OPERATIONS = new Set([
+  'batch',
+  'delete',
+  'execute',
+  'insert',
+  'run',
+  'update',
+]);
 
 /**
  * SPEC §6.6/§9.4 (KV433 Stage 2) — every `query()` loader whose body directly reaches a
@@ -1446,13 +1454,12 @@ export function extractQueryWriteReachabilityFromProject(
           moduleScopeDrizzleReceivers(sourceFile),
         );
         for (const call of touchBodyCallExpressions(functionBody(loader.fn))) {
-          if (!isDrizzleWriteCall(call)) continue;
           const expression = call.getExpression();
           const operation = staticAccessName(expression);
           const receiver = staticAccessExpression(expression);
           if (!operation || !receiver) continue;
+          if (!KV433_DIRECT_WRITE_OPERATIONS.has(operation)) continue;
           if (!isProjectDrizzleReceiverIdentifier(receiver, receivers)) continue;
-          if (operation !== 'insert' && operation !== 'update' && operation !== 'delete') continue;
           const tableArgument = call.getArguments()[0];
           const table =
             (tableArgument && resolveTable(tableArgument)) || UNRESOLVED_READ_SOURCE_EXPRESSION;

@@ -123,7 +123,7 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
       files: [
         writeDbTypes,
         pgDatabaseTypes([
-          'delete(table: unknown): { where(value: unknown): Promise<void> }; insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'delete(table: unknown): { where(value: unknown): Promise<void> }; execute(sql: unknown): Promise<void>; insert(table: unknown): { values(value: unknown): Promise<void> };',
         ]),
         {
           fileName: 'schema.ts',
@@ -163,6 +163,27 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
   it('does not flag a query.elevated loader (the audited escape)', () => {
     const result = reach(
       `${QHEAD}export const dashboard = query.elevated("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.delete(logs).where(eq(logs.id, "x")); return { ok: true }; } });`,
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('flags a query() loader that directly reaches a raw Drizzle write verb', () => {
+    const result = reach(
+      `${QHEAD}export const dashboard = query("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.execute("vacuum"); return { ok: true }; } });`,
+    );
+    expect(result).toEqual([
+      {
+        operation: 'execute',
+        query: 'dashboard',
+        site: 'q.ts:4',
+        table: '__kovoUnresolvedReadSource',
+      },
+    ]);
+  });
+
+  it('keeps query.elevated as the escape for direct raw Drizzle write verbs', () => {
+    const result = reach(
+      `${QHEAD}export const dashboard = query.elevated("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.execute("vacuum"); return { ok: true }; } });`,
     );
     expect(result).toEqual([]);
   });
