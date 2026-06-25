@@ -1893,7 +1893,7 @@ function BatLogo({
   kind,
   inspired,
 }: {
-  kind: 'dom' | 'shadcn' | 'stylex' | 'typescript' | 'betterauth' | 'drizzle';
+  kind: 'dom' | 'shadcn' | 'stylex' | 'typescript' | 'betterauth' | 'vite' | 'drizzle';
   inspired?: boolean;
 }): string {
   const box = inspired ? [pageStyles.batLogo, pageStyles.batLogoInsp] : pageStyles.batLogo;
@@ -1954,6 +1954,17 @@ function BatLogo({
             d="M16 2.66667V29.3333C19.5362 29.3333 22.9276 27.9286 25.4281 25.4281C27.9286 22.9276 29.3333 19.5362 29.3333 16C29.3333 12.4638 27.9286 9.07239 25.4281 6.57191C22.9276 4.07142 19.5362 2.66667 16 2.66667Z"
           />
         </svg>
+      ) : kind === 'vite' ? (
+        // Official Vite lightning-bolt mark, single color. The viewBox is cropped
+        // to the bolt's bounds so it centers in the 1.45rem box like the others.
+        <svg
+          viewBox="143 0 184 331"
+          fill="currentColor"
+          style={pageStyles.batLogoSvg}
+          aria-hidden="true"
+        >
+          <path d="M292.965 1.5744L156.801 28.2552C154.563 28.6937 152.906 30.5903 152.771 32.8664L144.395 174.33C144.198 177.662 147.258 180.248 150.51 179.498L188.42 170.749C191.967 169.931 195.172 173.055 194.443 176.622L183.18 231.775C182.422 235.487 185.907 238.661 189.532 237.56L212.947 230.446C216.577 229.344 220.065 232.527 219.297 236.242L201.398 322.875C200.278 328.294 207.486 331.249 210.492 326.603L323.454 102.072C325.312 98.3645 322.108 94.137 318.036 94.9209L279.014 102.434C275.347 103.14 272.227 99.7316 273.262 96.1422L298.731 7.86689C299.767 4.27314 296.636 0.860668 292.965 1.5744Z" />
+        </svg>
       ) : (
         <svg
           viewBox="0 0 24 24"
@@ -1980,7 +1991,7 @@ function BatRow({
   inspired,
   last,
 }: {
-  kind: 'dom' | 'shadcn' | 'stylex' | 'typescript' | 'betterauth' | 'drizzle';
+  kind: 'dom' | 'shadcn' | 'stylex' | 'typescript' | 'betterauth' | 'vite' | 'drizzle';
   kicker: string;
   name: unknown;
   desc: unknown;
@@ -2064,6 +2075,12 @@ function BatteriesIncluded(): string {
                 every guarantee runs on.
               </span>
             }
+          />
+          <BatRow
+            kind="vite"
+            kicker="Build"
+            name="Vite"
+            desc="Dev server and bundler. Kovo's compiler runs as a Vite plugin, and HMR morphs the DOM in place."
           />
           <BatRow
             kind="betterauth"
