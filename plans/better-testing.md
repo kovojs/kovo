@@ -52,7 +52,7 @@ Median job durations across those runs:
     or retire another slot first.
   - Evidence when complete: the workflow graph has no more than 16 required jobs runnable before the
     final aggregator.
-  - Evidence 2026-06-25: local workflow assertion counted exactly 16 required slots before `check`;
+  - Evidence 2026-06-25: local workflow assertion counted 13 required slots before `check`;
     `.github/workflows/ci.yml` parses with Ruby Psych.
 
 - [x] **Prohibit hand-maintained shard file lists.**
@@ -71,7 +71,7 @@ Median job durations across those runs:
     native Playwright `--shard=1..5/5`, and named conformance/kovo-check suite groups; no checked-in
     shard manifest files were added.
 
-- [ ] **Add deterministic generated shard support.**
+- [x] **Add deterministic generated shard support.**
   - Create a shared script, likely `scripts/ci-shards.mjs`, that can generate per-job shard manifests
     under `$RUNNER_TEMP/kovo-shards`.
   - The script must discover tests at runtime, load a machine-generated duration history when present,
@@ -88,11 +88,13 @@ Median job durations across those runs:
     enough to justify the added critical-path dependency.
   - Evidence when complete: unit tests for bin packing, unknown-duration fallback, and duplicate/missing
     validation, plus a CI run showing generated shard files are created only under `$RUNNER_TEMP`.
-  - Progress 2026-06-25: `scripts/ci-shards.mjs` implements LPT generation, fallback estimates,
-    assignment validation, and history merging; focused tests cover the algorithm and validation. The
-    remaining checkbox evidence is a completed CI run proving `$RUNNER_TEMP` manifest creation.
+  - Evidence 2026-06-25: `scripts/ci-shards.mjs` implements LPT generation, fallback estimates,
+    assignment validation, and history merging; `vp exec vitest --run scripts/ci-shards.test.mjs`
+    covers the algorithm and validation. CI run
+    [28158242925](https://github.com/kovojs/kovo/actions/runs/28158242925) completed the generated
+    root shard jobs whose workflow command writes manifests to `$RUNNER_TEMP/kovo-shards`.
 
-- [ ] **Persist timing history as a machine-generated artifact.**
+- [x] **Persist timing history as a machine-generated artifact.**
   - Add a reporter or post-processing step that emits per-file durations for root Vitest and Playwright
     integration suites.
   - Upload the latest timing history as a CI artifact, and let shard jobs download the newest successful
@@ -102,9 +104,11 @@ Median job durations across those runs:
   - Key Playwright durations by project plus file when multiple browser projects run the same spec.
   - Evidence when complete: uploaded timing artifact, documented JSON shape, and a local merge test for
     old/new duration histories.
-  - Progress 2026-06-25: CI uploads per-shard root and integration timing artifacts shaped as
-    `{ "<project:file or file>": { "seconds": number } }`, and `scripts/ci-shards.test.mjs` covers
-    rolling history merge. The remaining checkbox evidence is a completed CI artifact upload.
+  - Evidence 2026-06-25: CI run
+    [28158242925](https://github.com/kovojs/kovo/actions/runs/28158242925) uploaded all three
+    `kovo-root-timing-history-*` artifacts and all five `kovo-integration-timing-history-*` artifacts
+    from commit `f5ea07359259e1cf1d6ae2d204a071ed66887106`; `scripts/ci-shards.test.mjs` covers the
+    `{ "<project:file or file>": { "seconds": number } }` merge shape and rolling average.
 
 - [x] **Add a CI timing report script.**
   - Produce a checked-in script, likely `scripts/ci-timing-report.mjs`, that can summarize the last
@@ -160,6 +164,10 @@ Median job durations across those runs:
   - Group `better-auth-pin`, `auth-spike`, `webhook-spike`, and `app-shell-spike` into one or two
     balanced conformance jobs instead of four sub-minute jobs.
   - Evidence when complete: conformance jobs land in the 2-5 minute band on three completed CI runs.
+  - Progress 2026-06-25: `.github/workflows/ci.yml` now runs one `conformance` job with named steps for
+    `drizzle-pin`, `better-auth-pin`, `auth-spike`, `webhook-spike`, and `app-shell-spike`; local
+    `vp run conformance` passed. Remaining evidence is completed GitHub CI timing for the consolidated
+    job.
 
 - [ ] **Consolidate tiny `kovo-check` shards.**
   - Keep `server-browser` standalone while it is near 3 minutes.
@@ -167,6 +175,10 @@ Median job durations across those runs:
     minutes after artifact download.
   - Evidence when complete: `kovo-check` jobs are in range and still use the `build` artifact rather
     than rebuilding dist.
+  - Progress 2026-06-25: `.github/workflows/ci.yml` now runs one `kovo-check` job that downloads
+    `kovo-dist` and executes the default `vp exec node scripts/kovo-check.mjs` aggregate; local
+    `vp run build` followed by `vp run kovo-check` passed. Remaining evidence is a completed GitHub CI
+    timing for the consolidated job.
 
 - [ ] **Evaluate combining `browser` and `gallery-browser` setup.**
   - Both jobs install Playwright/browser assets and are below 2 minutes on median.
@@ -174,6 +186,10 @@ Median job durations across those runs:
     harder to identify.
   - Evidence when complete: combined browser job timing plus a deliberately failed browser assertion or
     log sample proving the failing suite is obvious.
+  - Progress 2026-06-25: `.github/workflows/ci.yml` keeps root browser and gallery browser as named
+    steps in one `browser` job and adds the Chromium-backed `P10 perf` step after downloading
+    `kovo-dist`; local `vp run p10-perf` passed. Remaining evidence is completed GitHub CI timing and a
+    failed-log sample.
 
 - [x] **Keep the `build` dependency path explicit.**
   - `build` is short, but it feeds `p10-perf` and `kovo-check`; do not hide it inside an unrelated job
@@ -181,7 +197,8 @@ Median job durations across those runs:
   - Evidence when complete: CI graph still has one authoritative `kovo-dist` producer and downstream jobs
     download that artifact.
   - Evidence 2026-06-25: local workflow assertion verified `build` is the sole `kovo-dist` artifact
-    uploader and both `p10-perf` and `kovo-check` still `needs: build` and download `kovo-dist`.
+    uploader; `browser` and `kovo-check` both `needs: build`, download `kovo-dist`, and run the
+    artifact-consuming `P10 perf` and `Kovo check suite` steps.
 
 - [ ] **Move optional slow breadth checks out of required PR feedback if new checks push wall time above
       5 minutes.**
@@ -305,8 +322,13 @@ tests/integration/specs/respond-file.spec.ts tests/integration/specs/storage-dow
 - `ruby -e 'require "psych"; Psych.load_file(".github/workflows/ci.yml")'`,
   `node -e 'JSON.parse(require("fs").readFileSync("package.json","utf8"))'`, and `git diff --check`
   passed.
-- Local workflow assertion verified the `kovo-dist` build artifact path and final `check` aggregator
-  dependencies.
+- Local workflow assertion verified 13 required slots before `check`, the `kovo-dist` build artifact
+  path, and final `check` aggregator dependencies.
+- Consolidated topology checks passed: `vp run build`, `vp run conformance`, `vp run kovo-check`,
+  `vp run p10-perf`, and `vp exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts
+tests/config.meta.test.ts --reporter=dot`.
+- Maintainability meta-tests passed: `vp exec vitest --run tests/integration-inventory.meta.test.ts
+tests/integration-import-boundary.meta.test.ts packages/test/src/headers.test.ts --reporter=dot`.
 - `vp exec vitest --run tests/snapshot-allowlist.meta.test.ts --reporter=dot` and `vp exec playwright
 test --config tests/integration/playwright.config.ts --project=chromium
 tests/integration/specs/fragment-append.spec.ts` passed.
@@ -320,10 +342,14 @@ tests/integration/specs/fragment-append.spec.ts` passed.
 - [ ] **Signal gate:** a failed static check, failed conformance test, failed browser test, and failed
       integration shard each identify the failing suite/spec from the GitHub job list and first visible log
       page.
-- [ ] **Maintainability gate:** new integration tests have inventory metadata, use public app APIs by
+- [x] **Maintainability gate:** new integration tests have inventory metadata, use public app APIs by
       default, and use shared assertion helpers for common wire/header contracts.
+  - Evidence 2026-06-25: `tests/integration-inventory.meta.test.ts` requires inventory metadata for
+    every integration spec, `tests/integration-import-boundary.meta.test.ts` fails closed on new
+    non-public integration imports, and `packages/test/src/headers.test.ts` verifies shared wire/header
+    helper behavior; the combined focused Vitest command passed.
 - [x] **No coverage regression gate:** the final `check` job still depends on every required shard and
       fails on any failure, cancellation, or skipped required job.
   - Evidence 2026-06-25: local workflow assertion verified `check.needs` covers `static-safety`, `test`,
-    `browser`, `integration`, `build`, `p10-perf`, `conformance`, and `kovo-check`, and the shell guard
-    fails on `failure`, `cancelled`, or `skipped` results.
+    `browser`, `integration`, `build`, `conformance`, and `kovo-check`, and the shell guard fails on
+    `failure`, `cancelled`, or `skipped` results.

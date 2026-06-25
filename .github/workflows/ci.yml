@@ -110,7 +110,7 @@ jobs:
           path: ${{ runner.temp }}/kovo-root-timing-history/timing-history.json
           retention-days: 7
 
-  browser:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -128,6 +128,37 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - run: vp run build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-dist
+          path: dist
+          retention-days: 1
+
+  browser:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+        with:
+          node-version: 22.15.0
+      - run: vp install
+      - id: compiler-cache-key
+        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            .kovo/cache
+            **/.kovo/cache
+          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kovo-dist
+          path: dist
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - name: Root browser suite
         run: vp run browser
@@ -138,6 +169,8 @@ jobs:
           vp exec pnpm --filter @kovojs/example-gallery run test:browser
         env:
           KOVO_GALLERY_BROWSER_HEADED: '1'
+      - name: P10 perf
+        run: vp run p10-perf
 
   integration:
     runs-on: ubuntu-latest
@@ -183,64 +216,8 @@ jobs:
           path: ${{ runner.temp }}/kovo-integration-timing-history/timing-history.json
           retention-days: 7
 
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 22.15.0
-      - run: vp install
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - run: vp run build
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          if-no-files-found: error
-          name: kovo-dist
-          path: dist
-          retention-days: 1
-
-  p10-perf:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 22.15.0
-      - run: vp install
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: kovo-dist
-          path: dist
-      - run: vp exec playwright install --with-deps chromium
-      - run: vp run p10-perf
-
   conformance:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [drizzle-pin, small]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
@@ -257,24 +234,20 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - name: Conformance suite
-        run: |
-          if [ '${{ matrix.suite }}' = 'drizzle-pin' ]; then
-            vp exec pnpm --filter @kovojs/conformance-drizzle-pin test
-          else
-            vp exec pnpm --filter @kovojs/conformance-better-auth-pin test
-            vp exec pnpm --filter @kovojs/conformance-auth-spike test
-            vp exec pnpm --filter @kovojs/conformance-webhook-spike test
-            vp exec pnpm --filter @kovojs/conformance-app-shell-spike test
-          fi
+      - name: Drizzle pinned conformance
+        run: vp exec pnpm --filter @kovojs/conformance-drizzle-pin test
+      - name: Better Auth pinned conformance
+        run: vp exec pnpm --filter @kovojs/conformance-better-auth-pin test
+      - name: Auth spike conformance
+        run: vp exec pnpm --filter @kovojs/conformance-auth-spike test
+      - name: Webhook spike conformance
+        run: vp exec pnpm --filter @kovojs/conformance-webhook-spike test
+      - name: App shell spike conformance
+        run: vp exec pnpm --filter @kovojs/conformance-app-shell-spike test
 
   kovo-check:
     runs-on: ubuntu-latest
     needs: build
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [core, server-browser]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
@@ -296,13 +269,7 @@ jobs:
           name: kovo-dist
           path: dist
       - name: Kovo check suite
-        run: |
-          if [ '${{ matrix.suite }}' = 'server-browser' ]; then
-            vp exec node scripts/kovo-check.mjs --suite server-browser
-          else
-            vp exec node scripts/kovo-check.mjs --suite compiler-runtime
-            vp exec node scripts/kovo-check.mjs --suite project
-          fi
+        run: vp exec node scripts/kovo-check.mjs
 
   check:
     runs-on: ubuntu-latest
@@ -312,7 +279,6 @@ jobs:
       - browser
       - integration
       - build
-      - p10-perf
       - conformance
       - kovo-check
     if: always()
