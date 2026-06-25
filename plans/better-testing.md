@@ -243,10 +243,13 @@ Median job durations across those runs:
   - Evidence when complete: one snapshot-heavy spec converted to explicit assertions and the meta-test
     remains green.
 
-- [ ] **Add assertion failure message quality checks for custom helpers.**
+- [x] **Add assertion failure message quality checks for custom helpers.**
   - Custom assertions should say what behavior failed, show the received wire/header/DOM fragment, and
     avoid opaque deep-equality dumps for large HTML.
   - Evidence when complete: helper unit tests include at least one expected failure message.
+  - Evidence 2026-06-25: `packages/test/src/assertions.test.ts` asserts expected failure messages for
+    optimistic prediction mismatches and typed mutation error mismatches; `vp exec vitest --run
+packages/test/src/assertions.test.ts packages/test/src/headers.test.ts --reporter=dot` passed.
 
 - [ ] **Codify when package-internal imports are allowed in tests.**
   - Unit tests may import internals to lock implementation invariants.
@@ -264,6 +267,8 @@ Median job durations across those runs:
 - Focused Vitest gate passed: `scripts/ci-shards.test.mjs`, `scripts/ci-timing-report.test.mjs`,
   and `tests/flaky-reporter.meta.test.ts` (9 tests).
 - `vp exec vitest --run tests/integration-import-boundary.meta.test.ts --reporter=dot` passed.
+- `vp exec vitest --run packages/test/src/assertions.test.ts packages/test/src/headers.test.ts
+--reporter=dot` passed (12 tests).
 - CI-mode shard generation with `RUNNER_TEMP="$(mktemp -d)"` wrote the selected manifest under
   `$RUNNER_TEMP/kovo-shards`.
 - `node scripts/ci-timing-report.mjs --limit 3` successfully summarized the latest three completed CI
