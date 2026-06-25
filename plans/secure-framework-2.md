@@ -73,13 +73,11 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
     `pnpm exec vitest --run packages/server/src/response.test.ts` covers reserved framework response
     headers and raw `Set-Cookie` filtering for route file/stream outcomes.
 
-- [ ] Gate same-file serializable module constants before emitting them into client modules.
-  - Evidence: `packages/compiler/src/lower/handlers.ts:226`/`:314` and
-    `packages/compiler/src/emit/client.ts:129` permit same-file module constants in client output.
-  - Probe: `packages/compiler/src/client-secret-capture.test.ts` currently accepts a serializable
-    module constant capture.
-  - Acceptance: KV437 or a new diagnostic covers same-file literal leaks that are not explicitly
-    public/client-safe.
+- [x] Gate same-file serializable module constants before emitting them into client modules.
+  - Evidence: `ac72cb19` plus integrated
+    `pnpm exec vitest --run packages/compiler/src/client-secret-capture.test.ts packages/core/src/diagnostics.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts`
+    covers KV437 for same-file serializable constants unless explicitly `publishToClient(...)`
+    justified, and lowering withholds blocked constants from emitted client modules.
 
 ## Tier 1 - Runtime and Wire Defenses
 
@@ -148,12 +146,11 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
     `pnpm exec vitest --run packages/browser/src/inline-loader-security.test.ts packages/browser/src/security-output.test.ts`
     and `pnpm --filter @kovojs/browser run check:inline-loader`.
 
-- [ ] Enforce a runtime allowlist for handler and derive dynamic import URLs.
-  - Current evidence: `016cc57f` plus
-    `pnpm exec vitest --run packages/browser/src/handlers.test.ts packages/browser/src/inline-loader-delegated.test.ts`
-    rejects cross-origin/data URLs and build-token-mismatched versioned `/c/__v/...` URLs.
-  - Remaining gap: compiler-emitted manifest membership is not yet available, so unversioned
-    same-origin `/c/` module URLs are guarded by path/origin but not manifest membership.
+- [x] Enforce a runtime allowlist for handler and derive dynamic import URLs.
+  - Evidence: `ac72cb19` plus integrated
+    `pnpm exec vitest --run packages/browser/src/dynamic-import-url.test.ts packages/browser/src/handlers.test.ts packages/browser/src/loader.test.ts packages/compiler/src/emit/bootstrap.test.ts packages/compiler/src/emit/bootstrap-runtime-contract.test.ts`
+    covers same-origin/build-token checks, explicit `allowedClientModuleUrls`, modulepreload
+    discovery, and loader runtime contract wiring.
 
 - [x] Reuse safe attribute sinks for fragment/morph attribute copying.
   - Evidence: `016cc57f` plus
@@ -167,18 +164,17 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
 
 ## Tier 3 - Adapter, Starter, Devtool, and Supply Chain
 
-- [ ] Make generated Node/Vercel adapters share the hardened Node bridge or prove parity.
-  - Evidence: generated adapter templates in `packages/server/src/build.ts:411`/`:423`/`:711`/`:723`
-    duplicate response bridging, while `packages/server/src/node.ts` has dedicated `Set-Cookie` and
-    stream-error handling.
-  - Acceptance: generated adapters preserve multiple `Set-Cookie` headers, propagate aborts, handle
-    mid-stream errors safely, and share body-limit behavior with the source Node adapter.
+- [x] Make generated Node/Vercel adapters share the hardened Node bridge or prove parity.
+  - Evidence: `2d45809b` plus integrated
+    `pnpm exec vitest --run packages/server/src/build.test.ts packages/server/src/node.test.ts`
+    covers generated Node/Vercel parity for multiple `Set-Cookie`, abort propagation,
+    pseudo-header filtering, committed stream errors, and request-limit behavior.
 
-- [ ] Add deployment-preset static header parity checks.
-  - Evidence: generated static serving in `packages/server/src/build.ts:595` sets cache and content
-    type, but not the same CORP/nosniff/security posture proven in runtime client-module paths.
-  - Acceptance: Node/Vercel/Cloudflare/static outputs have conformance tests for client modules,
-    assets, HTML, and error responses with expected `nosniff`, CORP/CORS, cache, and cookie variance.
+- [x] Add deployment-preset static header parity checks.
+  - Evidence: `2d45809b` plus integrated
+    `pnpm exec vitest --run packages/server/src/build.test.ts packages/server/src/node.test.ts`
+    covers Node, Vercel, Cloudflare, and static-only preset output headers for client modules,
+    assets, HTML, and static errors.
 
 - [x] Emit the SPEC §6.6 sound-subset policy in generated starters.
   - Evidence: `e8565287` plus
