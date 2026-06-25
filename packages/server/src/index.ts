@@ -37,13 +37,14 @@ export { installEgressFloor, selfProbe } from './egress-bootstrap.js';
 export type { EgressFloorInstall } from './egress-bootstrap.js';
 export { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
 export type { CredentialProvider } from './egress-credentials.js';
-export { createSigningKeyRing } from './keyring.js';
+export { HMAC_SHA256_SIGNING_KEY_TYPE, createSigningKeyRing } from './keyring.js';
 export type {
   SigningInput,
   SigningKey,
   SigningKeyRing,
   SigningKeyRingOptions,
   SigningKeyState,
+  SigningKeyType,
   SigningRejectReason,
   SigningResult,
   SigningSecret,

@@ -3,10 +3,21 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 /** Lifecycle state for one framework signing key in a {@link SigningKeyRing}. */
 export type SigningKeyState = 'active' | 'previous' | 'revoked';
 
-/** One HMAC signing key plus its rotation state. */
+/** Key type supported by the framework signing KeyRing. */
+export type SigningKeyType = 'hmac-sha256';
+
+/** The only signing key type Kovo's framework-owned HMAC token sinks accept. */
+export const HMAC_SHA256_SIGNING_KEY_TYPE: SigningKeyType = 'hmac-sha256';
+
+/** One HMAC-SHA-256 signing key plus its rotation state. */
 export interface SigningKey {
   /** Stable operator-chosen key id used for diagnostics and rotation inventory. */
   id: string;
+  /**
+   * Signing algorithm pinned to this key's type. Omitted keys default to
+   * `hmac-sha256`; any other value is rejected before a token can verify.
+   */
+  type?: SigningKeyType;
   /** Raw HMAC signing material loaded from a secret manager. */
   secret: string | Uint8Array;
   /** Whether this key signs new tokens, verifies old tokens, or is explicitly rejected. */
@@ -15,6 +26,8 @@ export interface SigningKey {
 
 /** First-class framework signing key ring for rotation-aware HMAC token signing. */
 export interface SigningKeyRing {
+  /** Framework-owned verify sinks derive the algorithm from this key type, never token text. */
+  keyType: SigningKeyType;
   /** The id of the single active key used for new signatures. */
   currentKeyId: string;
   /** Sign payload bytes for a required purpose and audience context. */
@@ -111,6 +124,8 @@ export function isSigningKeyRingOptions(value: unknown): value is SigningKeyRing
 }
 
 class HmacSigningKeyRing implements SigningKeyRing {
+  readonly keyType = HMAC_SHA256_SIGNING_KEY_TYPE;
+
   currentKeyId: string;
 
   constructor(
@@ -155,18 +170,25 @@ interface NormalizedSigningKey {
   id: string;
   secret: Buffer;
   state: SigningKeyState;
+  type: SigningKeyType;
 }
 
 function normalizeSigningKey(key: SigningKey): NormalizedSigningKey {
   if (!isSafeKeyId(key.id))
     throw new Error('SigningKeyRing key id must be non-empty base64url-safe text');
+  const type = key.type ?? HMAC_SHA256_SIGNING_KEY_TYPE;
+  if (type !== HMAC_SHA256_SIGNING_KEY_TYPE) {
+    throw new Error(
+      `SigningKeyRing key "${key.id}" has unsupported key type "${String(type)}"; expected ${HMAC_SHA256_SIGNING_KEY_TYPE}`,
+    );
+  }
   if (key.state !== 'active' && key.state !== 'previous' && key.state !== 'revoked') {
     throw new Error(`SigningKeyRing key "${key.id}" has invalid state`);
   }
   const secret = normalizeSecret(key.secret);
   if (secret.byteLength === 0)
     throw new Error(`SigningKeyRing key "${key.id}" has empty signing material`);
-  return { id: key.id, secret, state: key.state };
+  return { id: key.id, secret, state: key.state, type };
 }
 
 function normalizeSecret(secret: string | Uint8Array): Buffer {
@@ -179,6 +201,9 @@ function isSafeKeyId(id: string): boolean {
 }
 
 function signWithKey(key: NormalizedSigningKey, input: SigningInput): string {
+  if (key.type !== HMAC_SHA256_SIGNING_KEY_TYPE) {
+    throw new Error(`SigningKeyRing cannot use unsupported key type "${String(key.type)}"`);
+  }
   return createHmac('sha256', derivePurposeKey(key.secret, input.purpose, input.audience))
     .update(toBytes(input.payload))
     .digest('base64url');
