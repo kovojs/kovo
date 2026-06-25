@@ -238,6 +238,8 @@ export {
    * This is stricter than `sessionAnchoredReads`, which may anchor any table column.
    */
   ownerScopedSessionReads?: readonly string[];
+  /** Exact private principal symbols for `ownerScopedSessionReads`, e.g. `guard:userId`. */
+  ownerScopedPrivateReadKeys?: readonly OwnerPrivateScopeKey[];
   query: string;
   reads: readonly string[];
   /** Domains this query anchors to `req.session.*` (session-scoped, SPEC §11.1). */
@@ -250,6 +252,12 @@ export {
 /** @internal */ export interface OwnerScopeKey {
   domain: string;
   key: string;
+}
+
+/** @internal */
+/** @internal */ export interface OwnerPrivateScopeKey {
+  domain: string;
+  privateKey: string;
 }
 
 interface OwnerDomainScope {
@@ -394,7 +402,19 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
 
       const ownerSessionScoped = (fact.ownerScopedSessionReads ?? []).includes(domain);
       if (ownerSessionScoped) {
-        audits.push({ domain, kind: 'query', name: fact.query, scope: 'session', site: fact.site });
+        const privateKey = (fact.ownerScopedPrivateReadKeys ?? []).find(
+          (scoped) => scoped.domain === domain,
+        )?.privateKey;
+        audits.push({
+          ...(privateKey
+            ? { detail: ownerAuthorizationDataProofDetail(ownerScopes, domain, privateKey) }
+            : {}),
+          domain,
+          kind: 'query',
+          name: fact.query,
+          scope: 'session',
+          site: fact.site,
+        });
         continue;
       }
 
@@ -455,6 +475,16 @@ function ownerAuthorizationDataDetail(
     ? 'session predicate does not compare the owner column to the matching session/principal symbol'
     : 'no owner-column session/principal predicate was proven';
   return `narrow Authorization-gates-DATA subset: ${ownerColumn}; ${reason}`;
+}
+
+function ownerAuthorizationDataProofDetail(
+  owners: readonly OwnerDomainScope[],
+  domain: string,
+  privateKey: string,
+): string {
+  const owner = owners.find((candidate) => candidate.domain === domain);
+  const ownerColumn = owner?.owner ? `owner=${owner.owner}` : 'owner=<unknown>';
+  return `narrow Authorization-gates-DATA subset: ${ownerColumn}; owner column compared to ${privateKey}`;
 }
 
 /**
@@ -1320,6 +1350,10 @@ function extractQueryFactsFromPreparedFiles(
         query.instanceKeyComparisons,
         fileTables,
       );
+      const ownerScopedPrivateReadKeys = queryOwnerPrivateScopedKeys(
+        query.instanceKeyComparisons,
+        fileTables,
+      );
       const instanceKey = queryInstanceKey(query.instanceKeyComparisons, fileTables);
       // A3 (SPEC §10.3): the supplemental owner-column arg signal. Omit any domain the
       // declared-key `instanceKey` already captures as `arg:*` — that domain is already
@@ -1355,6 +1389,7 @@ function extractQueryFactsFromPreparedFiles(
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...(hasClientArgPredicate ? { hasClientArgPredicate } : {}),
         ...instanceKey,
+        ...(ownerScopedPrivateReadKeys.length > 0 ? { ownerScopedPrivateReadKeys } : {}),
         ...(ownerScopedSessionReads.length > 0 ? { ownerScopedSessionReads } : {}),
         query: query.query,
         reads: allReads,
@@ -2599,6 +2634,7 @@ import {
   queryInstanceKeyComparisons,
   queryInstanceKeyOperand,
   queryJoinTableExpressions,
+  queryOwnerPrivateScopedKeys,
   queryOwnerSessionAnchoredDomains,
   queryPrivateScopeKeyOperand,
   queryReadDomains,
@@ -2682,6 +2718,7 @@ export {
   queryInstanceKeyComparisons,
   queryInstanceKeyOperand,
   queryJoinTableExpressions,
+  queryOwnerPrivateScopedKeys,
   queryOwnerSessionAnchoredDomains,
   queryPrivateScopeKeyOperand,
   queryReadDomains,
