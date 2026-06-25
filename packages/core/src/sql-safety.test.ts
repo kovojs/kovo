@@ -6,6 +6,8 @@ import {
   isSqlHandleLike,
   isSqlHandleProperty,
   stampParameterizedSql,
+  stampSqlIdentifier,
+  stampSqlKeyword,
   stampStaticSql,
   stampTrustedSql,
   validateManagedSqlStatement,
@@ -81,10 +83,12 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     ).toBe(true);
   });
 
-  it('accepts legitimately branded parameterized / static / trusted statements', () => {
+  it('accepts legitimately branded parameterized / static / trusted / identifier / keyword statements', () => {
     expect(validateManagedSqlStatement(stampParameterizedSql({})).ok).toBe(true);
     expect(validateManagedSqlStatement(stampStaticSql({})).ok).toBe(true);
     expect(validateManagedSqlStatement(stampTrustedSql({}, 'audited report clause')).ok).toBe(true);
+    expect(validateManagedSqlStatement(stampSqlIdentifier({})).ok).toBe(true);
+    expect(validateManagedSqlStatement(stampSqlKeyword({})).ok).toBe(true);
   });
 
   it('accepts a branded parameterized carrier even when it also exposes a .text string', () => {
@@ -93,7 +97,9 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     expect(validateManagedSqlStatement(stampParameterizedSql({ text: 'select 1' })).ok).toBe(true);
   });
 
-  it('still accepts unbranded object-shaped Drizzle builders (no .text/.sql string)', () => {
-    expect(validateManagedSqlStatement({ queryChunks: [], getSQL() {} }).ok).toBe(true);
+  it('rejects unbranded object-shaped Drizzle/native SQL values by default', () => {
+    const result = validateManagedSqlStatement({ queryChunks: [], getSQL() {} });
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/unbranded object-shaped SQL/);
   });
 });

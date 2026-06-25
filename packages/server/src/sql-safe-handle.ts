@@ -19,23 +19,20 @@ import {
 
 /**
  * Resolve the managed-SQL guard mode (SPEC §10.2/§744). The fail-closed default — in every
- * environment, production included — is `enforce`; an explicit `KOVO_SQL_GUARD` override is honored
- * for a migration window (`warn`/`off`).
+ * environment, production included — is `enforce`. Fail-open `KOVO_SQL_GUARD=warn/off` migration
+ * modes are deliberately ignored for SINK-01: the managed SQL sink is a default-deny runtime floor.
  *
  * @internal
  */
 export function managedSqlSafetyMode(): SqlSafetyMode {
-  const configured =
-    typeof process === 'object' && process !== null ? process.env.KOVO_SQL_GUARD : undefined;
-  if (configured === 'enforce' || configured === 'off' || configured === 'warn') return configured;
   return 'enforce';
 }
 
 /**
  * Wrap a db handle so raw-string SQL on its query/exec/execute/sql/prepare sinks is rejected
- * (KV422, SPEC §10.2). Non-adapter values and `mode === 'off'` pass through untouched. Defaults to
- * the {@link managedSqlSafetyMode} when no mode is given so callers (managed-db.ts) get the
- * fail-closed `enforce` floor.
+ * (KV422, SPEC §10.2). Non-adapter values pass through untouched. Defaults to the
+ * {@link managedSqlSafetyMode} when no mode is given so callers (managed-db.ts) get the fail-closed
+ * `enforce` floor.
  *
  * @internal
  */
@@ -43,7 +40,7 @@ export function wrapManagedDbForSqlSafety<DbValue>(
   db: DbValue,
   mode: SqlSafetyMode = managedSqlSafetyMode(),
 ): DbValue {
-  if (mode === 'off' || !isDbAdapterLike(db)) return db;
+  if (!isDbAdapterLike(db)) return db;
 
   const proxyCache = new WeakMap<object, object>();
   const methodCache = new WeakMap<object, Map<PropertyKey, Function>>();
@@ -203,12 +200,9 @@ function wrapPreparedSqlStatement(
 }
 
 function assertManagedSqlStatement(statement: unknown, mode: SqlSafetyMode): void {
+  void mode;
   const validation = validateManagedSqlStatement(statement);
   if (validation.ok) return;
-  if (mode === 'warn') {
-    console.warn(validation.message);
-    return;
-  }
   throw new Error(validation.message);
 }
 

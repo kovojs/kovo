@@ -317,12 +317,11 @@ describe('server guard and session primitives', () => {
     }
   });
 
-  it('honors an explicit KOVO_SQL_GUARD=warn override for a migration window', async () => {
+  it('ignores fail-open KOVO_SQL_GUARD=warn/off overrides at managed SQL sinks', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const previousNodeEnv = process.env.NODE_ENV;
     const previousGuard = process.env.KOVO_SQL_GUARD;
     process.env.NODE_ENV = 'production';
-    process.env.KOVO_SQL_GUARD = 'warn';
 
     try {
       const calls: unknown[] = [];
@@ -338,9 +337,12 @@ describe('server guard and session primitives', () => {
         },
       );
 
-      expect(request.db.execute('select 1')).toBe('ok');
-      expect(calls).toEqual(['select 1']);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('KV422'));
+      process.env.KOVO_SQL_GUARD = 'warn';
+      expect(() => request.db.execute('select 1')).toThrow(/KV422/);
+      process.env.KOVO_SQL_GUARD = 'off';
+      expect(() => request.db.execute('select 2')).toThrow(/KV422/);
+      expect(calls).toEqual([]);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previousNodeEnv;

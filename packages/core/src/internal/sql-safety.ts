@@ -1,18 +1,22 @@
 import { diagnosticDefinitions } from './diagnostics.js';
 
 // SPEC §6.6/§744: brands are defense-in-depth, not the enforcement mechanism, so they MUST NOT be
-// forgeable from outside this module. Module-private `Symbol()` instances cannot be reconstructed
-// via `Symbol.for('kovo.sql.*')` from app or attacker code; only the `stamp*` helpers exported here
-// can apply them. (The static AST analyzer of §11.1/§11.2 remains the by-construction proof; this
-// runtime guard is the fail-closed floor of §10.2.)
-const parameterizedSqlBrand = Symbol('kovo.sql.parameterized');
-const staticSqlBrand = Symbol('kovo.sql.static');
-const trustedSqlBrand = Symbol('kovo.sql.trusted');
+// forgeable from outside this module. The SQL sink brands live in this module-private witness map;
+// only the `stamp*` helpers exported here can apply them. (The static AST analyzer of §11.1/§11.2
+// remains the by-construction proof; this runtime guard is the fail-closed floor of §10.2.)
+type SqlBlessedSink =
+  | 'parameterized-sql'
+  | 'static-sql'
+  | 'trusted-sql'
+  | 'sql-identifier'
+  | 'sql-keyword';
+
+const sqlBlessedWitnesses = new Map<SqlBlessedSink, WeakSet<object>>();
 const rawSqlChunkBrand = Symbol('kovo.sql.raw-chunk');
 const sqlSafetyMetadataBrand = Symbol('kovo.sql.metadata');
 
 /** @internal */
-export type SqlSafetyMode = 'enforce' | 'off' | 'warn';
+export type SqlSafetyMode = 'enforce';
 
 /** @internal */
 export interface ParameterizedSql {
@@ -29,6 +33,16 @@ export interface TrustedSql {
   readonly __kovoSqlBrand?: 'trusted';
 }
 
+/** @internal */
+export interface SqlIdentifier {
+  readonly __kovoSqlIdentifierBrand?: 'identifier';
+}
+
+/** @internal */
+export interface SqlKeyword {
+  readonly __kovoSqlKeywordBrand?: 'keyword';
+}
+
 interface SqlSafetyMetadata {
   containsRawChunk?: boolean;
   justification?: string;
@@ -39,7 +53,7 @@ export function stampParameterizedSql<T extends object>(
   value: T,
   metadata: SqlSafetyMetadata = {},
 ): T & ParameterizedSql {
-  stamp(value, parameterizedSqlBrand, true);
+  blessSql('parameterized-sql', value);
   stampSqlSafetyMetadata(value, metadata);
   return value as T & ParameterizedSql;
 }
@@ -49,16 +63,28 @@ export function stampStaticSql<T extends object>(
   value: T,
   metadata: SqlSafetyMetadata = {},
 ): T & StaticSqlText {
-  stamp(value, staticSqlBrand, true);
+  blessSql('static-sql', value);
   stampSqlSafetyMetadata(value, metadata);
   return value as T & StaticSqlText;
 }
 
 /** @internal */
 export function stampTrustedSql<T extends object>(value: T, justification: string): T & TrustedSql {
-  stamp(value, trustedSqlBrand, true);
+  blessSql('trusted-sql', value);
   stampSqlSafetyMetadata(value, { ...sqlSafetyMetadata(value), justification });
   return value as T & TrustedSql;
+}
+
+/** @internal */
+export function stampSqlIdentifier<T extends object>(value: T): T & SqlIdentifier {
+  blessSql('sql-identifier', value);
+  return stampStaticSql(value) as T & SqlIdentifier;
+}
+
+/** @internal */
+export function stampSqlKeyword<T extends object>(value: T): T & SqlKeyword {
+  blessSql('sql-keyword', value);
+  return stampStaticSql(value) as T & SqlKeyword;
 }
 
 /** @internal */
@@ -194,9 +220,9 @@ export function validateManagedSqlStatement(statement: unknown): SqlStatementVal
     );
   }
 
-  // Drizzle builders and native SQL objects are object-shaped and intentionally accepted at
-  // runtime; static analysis owns provenance for Drizzle-native raw poisoning.
-  return { ok: true };
+  return unsafeSqlResult(
+    'unbranded object-shaped SQL is not accepted on Kovo-managed DB handles; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), a separated { text, values } carrier, or trustedSql(...).',
+  );
 }
 
 function unsafeSqlResult(message: string): SqlStatementValidationResult {
@@ -207,15 +233,15 @@ function unsafeSqlResult(message: string): SqlStatementValidationResult {
 }
 
 function isParameterizedSql(value: object): boolean {
-  return (value as Record<PropertyKey, unknown>)[parameterizedSqlBrand] === true;
+  return isSqlBlessed('parameterized-sql', value);
 }
 
 function isStaticSql(value: object): boolean {
-  return (value as Record<PropertyKey, unknown>)[staticSqlBrand] === true;
+  return isSqlBlessed('static-sql', value);
 }
 
 function isTrustedSql(value: object): boolean {
-  return (value as Record<PropertyKey, unknown>)[trustedSqlBrand] === true;
+  return isSqlBlessed('trusted-sql', value);
 }
 
 function isSeparatedSqlCarrier(value: object): boolean {
@@ -238,6 +264,19 @@ function carriesUnseparatedSqlText(value: object): boolean {
 
 function stampSqlSafetyMetadata(value: object, metadata: SqlSafetyMetadata): void {
   stamp(value, sqlSafetyMetadataBrand, metadata);
+}
+
+function blessSql(sink: SqlBlessedSink, value: object): void {
+  let witnesses = sqlBlessedWitnesses.get(sink);
+  if (!witnesses) {
+    witnesses = new WeakSet<object>();
+    sqlBlessedWitnesses.set(sink, witnesses);
+  }
+  witnesses.add(value);
+}
+
+function isSqlBlessed(sink: SqlBlessedSink, value: object): boolean {
+  return sqlBlessedWitnesses.get(sink)?.has(value) === true;
 }
 
 function stamp(value: object, key: symbol, propertyValue: unknown): void {
