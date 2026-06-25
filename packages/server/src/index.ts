@@ -119,6 +119,23 @@ export type {
   PasswordHashOptions,
   PasswordVerifyResult,
 } from './password.js';
+// SPEC §6.5 / plans/most-secure-web-framework.md OPP-11: an opt-in Kovo-owned opaque
+// session provider/sink boundary. This does not replace every app `sessionProvider`
+// automatically, but it gives auth flows a framework-owned store that mints opaque ids,
+// rotates on establish, validates only by store lookup, and revokes immediately.
+export { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
+export type {
+  MemoryOpaqueSessionStoreOptions,
+  OpaqueSessionEstablishOptions,
+  OpaqueSessionEstablishResult,
+  OpaqueSessionManager,
+  OpaqueSessionManagerOptions,
+  OpaqueSessionRecord,
+  OpaqueSessionRejectReason,
+  OpaqueSessionRevokeResult,
+  OpaqueSessionStore,
+  OpaqueSessionValidation,
+} from './opaque-session.js';
 export type {
   AccessDecision,
   GuardAccessStep,
