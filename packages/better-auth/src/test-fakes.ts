@@ -40,14 +40,22 @@ export class FakeBetterAuth implements BetterAuthLike<AuthSession, AuthUser> {
   // header that Better Auth writes on `updateAge`/`cookieCache`.
   refreshSetCookie: readonly string[] | string | undefined;
 
+  forceAuthenticated = false;
+
   readonly api = {
     getSession: (options: { headers: Headers; returnHeaders: true }) => {
       this.lastHeaders = options.headers;
 
-      const authenticated = (options.headers.get('cookie') ?? '')
-        .split(';')
-        .map((cookie) => cookie.trim())
-        .includes('kovo_session=s1');
+      const authenticated =
+        this.forceAuthenticated ||
+        (options.headers.get('cookie') ?? '')
+          .split(';')
+          .map((cookie) => cookie.trim())
+          .includes('kovo_session=s1') ||
+        (options.headers.get('cookie') ?? '')
+          .split(';')
+          .map((cookie) => cookie.trim())
+          .includes('better-auth.session_token=opaque-session-1');
       const response = authenticated
         ? {
             session: {

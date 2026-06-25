@@ -40,6 +40,27 @@ describe('betterAuthSession', () => {
     expect(auth.lastHeaders).toBe(headers);
   });
 
+  it('maps an opaque Better Auth browser session cookie by default', async () => {
+    const auth = new FakeBetterAuth();
+    const provider = betterAuthSession(auth, mapSession);
+
+    await expect(
+      provider({
+        headers: new Headers({ cookie: 'better-auth.session_token=opaque-session-1' }),
+      }),
+    ).resolves.toEqual(mappedAppSession);
+  });
+
+  it('fails closed when Better Auth returns a payload without a browser session cookie', async () => {
+    const auth = new FakeBetterAuth();
+    auth.forceAuthenticated = true;
+    const provider = betterAuthSession(auth, () => {
+      throw new Error('delegated non-cookie payloads must not be mapped');
+    });
+
+    await expect(provider({ headers: new Headers() })).resolves.toBeNull();
+  });
+
   it('treats a missing Better Auth session as anonymous', async () => {
     const auth = new FakeBetterAuth();
     const provider = betterAuthSession(auth, mapSession);
