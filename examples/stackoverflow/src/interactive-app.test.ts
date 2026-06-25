@@ -6,6 +6,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
+import { createLiveTargetAttestation } from '@kovojs/server/internal/wire';
 
 import { buildSoInteractiveApp } from './interactive-app.js';
 import { soCsrf } from './mutations.js';
@@ -36,7 +37,8 @@ function liveHeader(
   component: string,
   props: Record<string, unknown> = {},
 ): string {
-  return `${target}#${component}:${JSON.stringify(props)}`;
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 
 function browserCollectedLiveHeaders(html: string): { targets: string; liveTargets: string } {
@@ -53,7 +55,7 @@ function browserCollectedLiveHeaders(html: string): { targets: string; liveTarge
     if (!liveTargets.has(target)) {
       liveTargets.set(
         target,
-        `${target}#${attrs['kovo-live-component'] ?? attrs['kovo-c'] ?? target}:${decodeHtmlAttribute(attrs['kovo-props'] ?? '{}')}`,
+        `${target}#${attrs['kovo-live-component'] ?? attrs['kovo-c'] ?? target}@${attrs['kovo-live-token'] ?? ''}:${decodeHtmlAttribute(attrs['kovo-props'] ?? '{}')}`,
       );
     }
   }

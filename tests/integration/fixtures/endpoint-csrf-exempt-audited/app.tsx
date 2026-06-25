@@ -11,7 +11,10 @@ const webhookEndpoint = endpoint('/webhooks/signed-callback', {
     return new Response(
       `accepted:${request.headers.get('x-demo-signature')}:${await request.text()}`,
       {
-        headers: { 'content-type': 'text/plain; charset=utf-8' },
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+        },
         status: 202,
       },
     );

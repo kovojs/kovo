@@ -702,7 +702,7 @@ export const Reviews = component({
         fragmentTargets: [],
         href: '/assets/components/reviews.css',
         preload: false,
-        sourceFileName: './components/reviews.css',
+        sourceFileName: 'components/reviews.css',
       },
     ]);
   });

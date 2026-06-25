@@ -14,6 +14,7 @@ productId=p1&quantity=99
 HTTP/1.1 422 Unprocessable Content
 Cache-Control: private, no-store
 Content-Type: text/vnd.kovo.fragment+html; charset=utf-8
+Kovo-Build: wire-fixture-test-build
 Kovo-Idem: idem_01HY
 Vary: Cookie
 

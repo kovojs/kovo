@@ -361,6 +361,9 @@ export async function viteRedGreenBuildFixtureFact(
         `      '@kovojs/core/internal/sql-safety': ${JSON.stringify(
           join(options.projectRoot, 'dist/core/src/internal/sql-safety.mjs'),
         )},`,
+        `      '@kovojs/core/internal/sink-policy': ${JSON.stringify(
+          join(options.projectRoot, 'dist/core/src/internal/sink-policy.mjs'),
+        )},`,
         `      '@kovojs/core/internal/diagnostics': ${JSON.stringify(
           join(options.projectRoot, 'dist/core/src/internal/diagnostics.mjs'),
         )},`,

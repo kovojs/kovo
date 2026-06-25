@@ -207,6 +207,7 @@ describe('server mutation response replay', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'replay-test-build',
         'Kovo-Idem': 'idem_reused_body',
         Vary: 'Cookie',
       },
@@ -538,6 +539,7 @@ describe('server mutation response replay', () => {
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Build': 'replay-test-build',
           'Kovo-Idem': 'idem_pending_failure',
           Vary: 'Cookie',
         },
@@ -548,6 +550,7 @@ describe('server mutation response replay', () => {
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Build': 'replay-test-build',
           'Kovo-Idem': 'idem_pending_failure',
           Vary: 'Cookie',
         },
@@ -586,6 +589,7 @@ describe('server mutation response replay', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'replay-test-build',
         'Kovo-Idem': 'idem_422',
         Vary: 'Cookie',
       },
@@ -820,6 +824,7 @@ describe('server mutation response replay', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'replay-test-build',
         'Kovo-Changes': '[{"domain":"cart"}]',
         'Kovo-Idem': 'idem_render_failure',
         Vary: 'Cookie',

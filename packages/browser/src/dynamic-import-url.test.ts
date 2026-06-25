@@ -31,13 +31,13 @@ describe('Kovo dynamic import URL guard', () => {
     }
   });
 
-  it('requires the active build token for versioned client modules', () => {
+  it('allows retained same-origin versioned client modules across build tokens', () => {
     expect(
       isAllowedKovoDynamicImportUrl('/c/__v/cart-v1/cart.client.js', { buildToken: 'cart-v1' }),
     ).toBe(true);
     expect(
       isAllowedKovoDynamicImportUrl('/c/__v/old/cart.client.js', { buildToken: 'cart-v1' }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('requires manifest membership when a compiler-emitted allowlist is present', () => {

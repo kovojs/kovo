@@ -407,7 +407,11 @@ void test('D1 commerce enhanced fragments carry stylesheet hints', async () => {
     },
     failure: {
       body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/styles.css"><form class="cart-form-panel"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
-      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 422,
     },
     pageHints: {
@@ -477,7 +481,9 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     secondRateLimitFailure: 'rateLimited',
   });
   const receiptFile = fact.upload.result.changes[0].input.receipt.file;
+  const receiptStorageKey = fact.upload.stored.key;
   assert.equal(receiptFile instanceof Blob, true);
+  assert.match(receiptStorageKey, /^receipts\/[0-9a-f-]{36}$/);
   assert.deepEqual(fact.upload.result, {
     changes: [
       {
@@ -486,11 +492,11 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
           orderId: 'o1',
           receipt: {
             file: receiptFile,
-            key: 'receipts/receipt.pdf',
+            key: receiptStorageKey,
             storage: {
-              body: new TextEncoder().encode('receipt'),
+              body: new TextEncoder().encode('%PDF-1.'),
               contentType: 'application/pdf',
-              key: 'receipts/receipt.pdf',
+              key: receiptStorageKey,
               metadata: { filename: 'receipt.pdf' },
               size: 7,
             },
@@ -503,13 +509,13 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     value: {
       orderId: 'o1',
       session: 'u1',
-      storageKey: 'receipts/receipt.pdf',
+      storageKey: receiptStorageKey,
     },
   });
   assert.deepEqual(fact.upload.stored, {
-    body: new TextEncoder().encode('receipt'),
+    body: new TextEncoder().encode('%PDF-1.'),
     contentType: 'application/pdf',
-    key: 'receipts/receipt.pdf',
+    key: receiptStorageKey,
     metadata: { filename: 'receipt.pdf' },
     size: 7,
   });
@@ -519,8 +525,11 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.deepEqual(fact.fragmentFailure, {
     body: '<kovo-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/styles.css"><section role="alert">fragment failed</section></kovo-fragment>',
     headers: {
+      'Cache-Control': 'private, no-store',
       'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      'Kovo-Build': 'conformance-server-test-build',
       'Kovo-Changes': '[]',
+      Vary: 'Cookie',
     },
     status: 200,
   });
@@ -713,6 +722,7 @@ void test('P10 starter template stays wired to the current app-shell contract', 
   assert.deepEqual(Object.keys(packageJson.scripts).sort(), [
     'build:prod',
     'check',
+    'check:sound-subset',
     'dev',
     'serve',
     'start',
@@ -1339,7 +1349,7 @@ void test('S1 production build proves the compiler 1:1 emit contract', async () 
   });
   assert.deepEqual(contract.middleware, {
     cartEvents: ['p1'],
-    contentType: 'text/javascript',
+    contentType: 'text/javascript; charset=utf-8',
     invocationResult: 'added:p1',
     nextCallsAfterHit: 0,
     nextCallsAfterStale: 1,

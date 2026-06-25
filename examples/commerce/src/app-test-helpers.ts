@@ -177,11 +177,6 @@ const cartPageTargets = [
   { queries: 'productGrid', target: 'product-grid' },
   { queries: 'orderHistory', target: 'order-history' },
 ];
-const cartPageLiveTargets = [
-  { component: 'components/cart-badge/cart-badge', target: 'cart-badge' },
-  { component: 'components/product-grid/product-grid', target: 'product-grid' },
-  { component: 'components/order-history/order-history', target: 'order-history' },
-];
 
 export function createCommerceScenarioClient(shell = createCommerceApp()): CommerceScenarioClient {
   const cookies = new Map<string, string>();
@@ -282,15 +277,17 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
     input: AddToCartInput,
     options: CommerceScenarioEnhancedOptions = {},
   ): Promise<Response> {
+    const cartPage = await get('/cart');
+    const liveTargets = cartPageLiveTargetHeaders(await cartPage.text());
     const targetHeaders =
       options.target === 'form'
         ? enhancedMutationHeaders({
             formTarget: 'product-grid',
-            liveTargets: cartPageLiveTargets,
+            liveTargets,
             targets: [{ queries: 'productGrid', target: 'product-grid' }],
           })
         : enhancedMutationHeaders({
-            liveTargets: cartPageLiveTargets,
+            liveTargets,
             targets: cartPageTargets,
           });
     return postForm('/_m/cart/add', await addToCartFields(input), {
@@ -332,6 +329,38 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
     addToCartEnhanced,
     addToCartNoJs,
   };
+}
+
+function cartPageLiveTargetHeaders(html: string): string[] {
+  const headers: string[] = [];
+  for (const match of html.matchAll(/<[^>]*\bkovo-fragment-target=(?:"[^"]*"|'[^']*')[^>]*>/g)) {
+    const attrs = readTagAttributes(match[0]);
+    const target = attrs['kovo-fragment-target'];
+    const component = attrs['kovo-live-component'];
+    const token = attrs['kovo-live-token'];
+    if (!target || !component || !token) continue;
+    headers.push(`${target}#${component}@${token}:${attrs['kovo-props'] ?? '{}'}`);
+  }
+  return headers;
+}
+
+function readTagAttributes(tag: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const match of tag.matchAll(/\s([A-Za-z_:][\w:.-]*)=(?:"([^"]*)"|'([^']*)')/g)) {
+    const name = match[1];
+    if (!name) continue;
+    attrs[name] = decodeHtmlAttribute(match[2] ?? match[3] ?? '');
+  }
+  return attrs;
+}
+
+function decodeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
 }
 
 async function formFieldValue(

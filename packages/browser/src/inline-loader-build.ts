@@ -196,14 +196,9 @@ function installInlineKovoLoader(im) {
     try {
       const l = globalThis.location || { href: 'http://localhost/', origin: 'http://localhost' };
       const p = new URL(url, l.href);
-      const b = doc.querySelector?.('meta[name="kovo-build"]')?.getAttribute('content') || '';
       return (
         p.origin === l.origin &&
-        ((/^\/c\//.test(p.pathname) &&
-          (!b ||
-            p.pathname.startsWith('/c/__v/' + encodeURIComponent(b) + '/') ||
-            !p.pathname.startsWith('/c/__v/'))) ||
-          p.pathname.endsWith('ts'))
+        ((/^\/c\//.test(p.pathname)) || p.pathname.endsWith('ts'))
       );
     } catch {
       return false;

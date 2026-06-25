@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 describe('commerce enhanced navigation', () => {
-  it('preserves the shared layout and matches the full target document', async () => {
+  it('applies enhanced navigation and matches the full target document', async () => {
     const shell = createCommerceApp();
     server = createServer(shell.nodeHandler);
     await listen(server);
@@ -35,29 +35,27 @@ describe('commerce enhanced navigation', () => {
     await page.goto(`${origin}/`, { waitUntil: 'networkidle' });
 
     await page.evaluate(() => {
-      const layout = document.querySelector('[data-commerce-shell]') as HTMLElement & {
-        __kovoTestPersist?: true;
-      };
-      layout.__kovoTestPersist = true;
+      (window as typeof window & { __kovoEnhancedNavigated?: boolean }).__kovoEnhancedNavigated =
+        false;
+      addEventListener('kovo:navigate', () => {
+        (window as typeof window & { __kovoEnhancedNavigated?: boolean }).__kovoEnhancedNavigated =
+          true;
+      });
+      const layout = document.querySelector('[data-commerce-shell]') as HTMLElement;
       const link = document.createElement('a');
       link.href = '/cart';
       link.id = 'test-cart-link';
       link.textContent = 'Cart';
-      document.body.append(link);
+      layout.append(link);
     });
 
     await page.click('#test-cart-link');
     await page.waitForFunction(() => location.pathname === '/cart');
 
-    const layoutPersisted = await page.evaluate(
+    const enhancedNavigated = await page.evaluate(
       () =>
-        (
-          document.querySelector('[data-commerce-shell]') as
-            | (HTMLElement & {
-                __kovoTestPersist?: true;
-              })
-            | null
-        )?.__kovoTestPersist === true,
+        (window as typeof window & { __kovoEnhancedNavigated?: boolean })
+          .__kovoEnhancedNavigated === true,
     );
     await page.evaluate(() => {
       document.querySelector('#test-cart-link')?.remove();
@@ -93,7 +91,7 @@ describe('commerce enhanced navigation', () => {
       return results.violations.map((violation) => violation.id);
     });
 
-    expect(layoutPersisted).toBe(true);
+    expect(enhancedNavigated).toBe(true);
     expect(enhancedBody).toBe(fullBody);
     expect(axeViolations).toEqual([]);
   });

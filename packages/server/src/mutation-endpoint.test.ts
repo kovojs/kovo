@@ -140,6 +140,7 @@ describe('server mutation endpoint routing', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-endpoint-test-build',
         Vary: 'Cookie',
       },
       status: 200,
@@ -307,6 +308,7 @@ describe('server mutation endpoint routing', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-endpoint-test-build',
         Vary: 'Cookie',
       },
       status: 422,
@@ -363,6 +365,7 @@ describe('server mutation endpoint routing', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-endpoint-test-build',
         Vary: 'Cookie',
       },
       status: 422,
@@ -390,6 +393,7 @@ describe('server mutation endpoint routing', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-endpoint-test-build',
         Vary: 'Cookie',
       },
       status: 422,

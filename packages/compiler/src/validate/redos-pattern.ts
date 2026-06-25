@@ -54,7 +54,9 @@ export function validateNonLiteralPattern(
 function nonLiteralPatternCall(node: ts.Node): { end: number; start: number } | null {
   if (!ts.isCallExpression(node)) return null;
   const callee = node.expression;
-  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'pattern') return null;
+  if (!ts.isPropertyAccessExpression(callee) || identifierName(callee.name) !== 'pattern') {
+    return null;
+  }
 
   // Only flag a pattern() that is provably part of a wire string schema (`s.string()...`). This is
   // the conservative gate: an unrelated `.pattern(...)` method on some other object is left alone.
@@ -84,9 +86,9 @@ function receiverRootsAtStringSchema(receiver: ts.Expression): boolean {
       if (!ts.isPropertyAccessExpression(callee)) return false;
       // `s.string()` is the root we are looking for: `s` identifier accessed as `.string`.
       if (
-        callee.name.text === 'string' &&
+        identifierName(callee.name) === 'string' &&
         ts.isIdentifier(callee.expression) &&
-        callee.expression.text === 's'
+        identifierName(callee.expression) === 's'
       ) {
         return true;
       }
@@ -126,6 +128,10 @@ function isCompileVisiblePatternLiteral(expression: ts.Expression): boolean {
   if (ts.isTemplateExpression(node)) return false;
 
   return false;
+}
+
+function identifierName(name: ts.MemberName): string | null {
+  return ts.isIdentifier(name) ? String(name.escapedText) : null;
 }
 
 function unwrapExpression(expression: ts.Expression): ts.Expression {

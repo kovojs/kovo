@@ -582,6 +582,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         Vary: 'Cookie',
       },
       status: 422,
@@ -634,6 +635,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         Vary: 'Cookie',
       },
       status: 422,
@@ -702,6 +704,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         'Kovo-Changes': '[{"domain":"cart"}]',
         Vary: 'Cookie',
       },
@@ -950,6 +953,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         'Kovo-Changes': '[]',
         Vary: 'Cookie',
       },
@@ -985,6 +989,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         Vary: 'Cookie',
       },
       status: 500,
@@ -1017,6 +1022,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         Vary: 'Cookie',
       },
       status: 422,
@@ -1045,6 +1051,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         Vary: 'Cookie',
       },
       status: 422,
@@ -1079,6 +1086,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         Vary: 'Cookie',
       },
       status: 422,
@@ -1109,6 +1117,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         Vary: 'Cookie',
       },
       status: 422,

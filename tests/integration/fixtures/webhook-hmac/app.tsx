@@ -5,8 +5,36 @@ import { createApp, domain, s, webhook } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type WebhookRequest = Request & KovoFixtureRequest;
+type ReplayResponse = {
+  body: string;
+  headers: Record<string, string>;
+  status: 200 | 400 | 401 | 422 | 429 | 500;
+};
+
+function createReplayStore() {
+  const entries = new Map<string, ReplayResponse>();
+  const keyFor = (scope: string, idem: string) => `${scope}\0${idem}`;
+
+  return {
+    get(scope, idem) {
+      return entries.get(keyFor(scope, idem));
+    },
+    reserve(scope, idem) {
+      const key = keyFor(scope, idem);
+      return {
+        commit(response: ReplayResponse) {
+          entries.set(key, response);
+        },
+      };
+    },
+    set(scope: string, idem: string, response: ReplayResponse) {
+      entries.set(keyFor(scope, idem), response);
+    },
+  };
+}
 
 const invoiceDomain = domain('invoice');
+const replayStore = createReplayStore();
 
 function providerAmount(input: unknown): number | null {
   if (typeof input !== 'object' || input === null || !('provider_extra' in input)) return null;
@@ -29,6 +57,7 @@ const stripeLite = webhook('stripe-lite', {
   idempotency: (input) => input.id,
   input: s.object({ id: s.string(), type: s.string() }),
   path: '/webhooks/stripe-lite',
+  replayStore,
   verify: hmacSignature({
     encoding: 'hex',
     header: 'x-signature',

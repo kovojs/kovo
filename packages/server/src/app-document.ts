@@ -52,10 +52,12 @@ export async function renderAppRouteDocumentResponse({
   // capability URL for a stored object pointing at the framework download route's verify sink.
   const signUrlContext =
     app.csrf?.secret === undefined ? undefined : createSignUrl({ secret: app.csrf.secret });
+  const signUrl =
+    signUrlContext === undefined ? undefined : signUrlContext.signUrl.bind(signUrlContext);
   const routeInput: RouteRequestInput = {
     params,
     search,
-    ...(signUrlContext === undefined ? {} : { signUrl: signUrlContext.signUrl }),
+    ...(signUrl === undefined ? {} : { signUrl }),
   };
   // part-3 I2 (SPEC §6.5, §9.1.1:854): a rolling/refresh session provider (e.g. Better Auth
   // `updateAge`/`cookieCache`) emits fresh `Set-Cookie` headers on each authenticated GET via the

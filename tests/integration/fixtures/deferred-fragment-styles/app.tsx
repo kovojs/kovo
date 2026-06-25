@@ -50,13 +50,13 @@ const deferredWire = endpoint('/deferred-wire', {
     });
 
     return new Response(response.body, {
-      headers: webResponseHeaders(response.headers),
+      headers: webResponseHeaders(response.headers, 'text/html; charset=utf-8'),
       status: response.status,
     });
   },
 });
 
-function webResponseHeaders(headers: ResponseHeaders): Headers {
+function webResponseHeaders(headers: ResponseHeaders, contentType: string): Headers {
   const webHeaders = new Headers();
   for (const [name, value] of Object.entries(headers)) {
     if (Array.isArray(value)) {
@@ -65,6 +65,8 @@ function webResponseHeaders(headers: ResponseHeaders): Headers {
       webHeaders.set(name, value);
     }
   }
+  webHeaders.set('cache-control', 'no-store');
+  webHeaders.set('content-type', contentType);
 
   return webHeaders;
 }

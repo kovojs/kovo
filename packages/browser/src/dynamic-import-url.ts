@@ -1,5 +1,3 @@
-import { readPageBuildToken } from './build-token.js';
-
 export interface DynamicImportUrlOptions {
   allowedModuleUrls?: readonly string[];
   buildToken?: string;
@@ -38,14 +36,6 @@ export function isAllowedKovoDynamicImportUrl(
   if (parsed.origin !== currentOrigin()) return false;
   if (isAllowedLocalDevSourceModuleUrl(parsed)) return true;
   if (!parsed.pathname.startsWith('/c/')) return false;
-
-  const buildToken = options.buildToken ?? readPageBuildToken();
-  if (buildToken) {
-    const versionPrefix = `/c/__v/${encodeURIComponent(buildToken)}/`;
-    if (!parsed.pathname.startsWith(versionPrefix) && parsed.pathname.startsWith('/c/__v/')) {
-      return false;
-    }
-  }
 
   const manifest = allowedClientModuleUrlManifest(options.allowedModuleUrls);
   if (manifest.size === 0) return true;

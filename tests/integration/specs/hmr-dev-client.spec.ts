@@ -26,7 +26,11 @@ import {
   createKovoAppShellDevDiagnosticLedger,
   type KovoAppShellViteMiddleware,
 } from '@kovojs/server/internal/app-shell-vite';
-import { componentLiveTargetRenderer, type LiveTargetRenderer } from '@kovojs/server/internal/wire';
+import {
+  componentLiveTargetRenderer,
+  createLiveTargetAttestation,
+  type LiveTargetRenderer,
+} from '@kovojs/server/internal/wire';
 
 type ViteMiddleware = (
   request: IncomingMessage,
@@ -34,6 +38,14 @@ type ViteMiddleware = (
   next: (error?: unknown) => void,
 ) => void;
 type OnModuleDiagnostics = Exclude<KovoVitePluginOptions['onModuleDiagnostics'], undefined>;
+
+function liveTargetToken(
+  target: string,
+  component: string,
+  props: Record<string, unknown> = {},
+): string {
+  return createLiveTargetAttestation({ component, props, target }, { request: {} });
+}
 
 test('dev HMR client applies server-rendered live-target fragments without reloading', async ({
   page,
@@ -44,6 +56,7 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
       kovo-c="hmr-card"
       kovo-deps="hmr"
       kovo-live-component="hmr/Card"
+      kovo-live-token="${liveTargetToken('hmr-card', 'hmr/Card', { id: 'one' })}"
       kovo-props='{"id":"one"}'>
       <label for="hmr-input">Draft</label>
       <input id="hmr-input" kovo-key="input" value="server ${renderVersion}">
@@ -89,7 +102,8 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
       }
       const headers = request.headers();
       return (
-        headers['kovo-live-targets']?.includes('hmr-card#hmr/Card:{"id":"one"}') === true &&
+        headers['kovo-live-targets']?.includes('hmr-card#hmr/Card@') === true &&
+        headers['kovo-live-targets']?.includes(':{"id":"one"}') === true &&
         headers['kovo-targets']?.includes('hmr-card=hmr') === true
       );
     });
@@ -145,6 +159,7 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
         kovo-c="product-card"
         kovo-deps="product:${product.id}"
         kovo-live-component="hmr/ProductCard"
+        kovo-live-token="${liveTargetToken('product-card', 'hmr/ProductCard', { productId })}"
         kovo-props='{"productId":"${productId}"}'>
         <label for="product-note">Note</label>
         <input id="product-note" kovo-key="note" value="server ${product.stock}">
@@ -196,7 +211,8 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
       const liveTargets = headers['kovo-live-targets'];
       const targets = headers['kovo-targets'];
       return (
-        liveTargets?.includes('product-card#hmr/ProductCard:{"productId":"p1"}') === true &&
+        liveTargets?.includes('product-card#hmr/ProductCard@') === true &&
+        liveTargets?.includes(':{"productId":"p1"}') === true &&
         targets?.includes('product-card=product:p1') === true
       );
     });
@@ -457,13 +473,27 @@ test('Vite route-shell source edits use full reload fallback with fresh server o
 
 async function refreshSourceEditLiveTarget(page: Page): Promise<void> {
   const body = await page.evaluate(async () => {
+    const sourceCard = document.querySelector('[kovo-fragment-target="hmr-source-card"]');
+    const target =
+      sourceCard?.getAttribute('kovo-fragment-target') ??
+      sourceCard?.getAttribute('id') ??
+      sourceCard?.getAttribute('kovo-c');
+    const component =
+      sourceCard?.getAttribute('kovo-live-component') ??
+      sourceCard?.getAttribute('kovo-c') ??
+      target;
+    const token = sourceCard?.getAttribute('kovo-live-token');
+    const props = sourceCard?.getAttribute('kovo-props') ?? '{}';
+    if (!target || !component || !token) {
+      throw new Error('HMR source card is missing live-target attestation attributes.');
+    }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5_000);
     const response = await fetch('/@kovo/hmr/refresh/live-targets?url=/', {
       headers: {
         'Kovo-Current-Url': location.href,
         'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': 'hmr-source-card#hmr/SourceCard:{}',
+        'Kovo-Live-Targets': `${target}#${component}@${token}:${props}`,
         'Kovo-Targets': 'hmr-source-card=hmr',
       },
       method: 'POST',
@@ -831,6 +861,7 @@ function hmrSourceCard(options: {
     ? `
       kovo-deps="hmr"
       kovo-live-component="hmr/SourceCard"
+      kovo-live-token="${liveTargetToken('hmr-source-card', 'hmr/SourceCard')}"
       kovo-props="{}"`
     : '';
 

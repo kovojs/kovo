@@ -409,9 +409,12 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
     },
     {
       headers: {
+        'cache-control': 'private, no-store',
         'content-type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'kovo-build': 'wire-fixture-test-build',
         'kovo-changes': '[{"domain":"cart"}]',
         'kovo-idem': 'idem_01HX',
+        vary: 'Cookie',
       },
       name: 'enhanced-mutation.http',
       responseIndex: 1,
@@ -446,8 +449,11 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
     },
     {
       headers: {
+        'cache-control': 'private, no-store',
         'content-type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'kovo-build': 'wire-fixture-test-build',
         'kovo-idem': 'idem_01HY',
+        vary: 'Cookie',
       },
       name: 'validation-422-fragment.http',
       responseIndex: 1,
@@ -771,7 +777,8 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
       'Kovo-Form-Target': '',
       'Kovo-Fragment': 'true',
       'Kovo-Idem': 'idem-inline',
-      'Kovo-Live-Targets': 'cart-badge#cart-badge:{}; inventory#inventory:{}',
+      'Kovo-Live-Targets':
+        'cart-badge#cart-badge@tok_cart:{}; inventory#inventory@tok_inventory:{}',
       'Kovo-Targets': 'cart-badge=cart; inventory=inventory stock',
     },
     keepalive: true,
@@ -1435,8 +1442,11 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
     fragmentResponse: {
       body: '<kovo-query name="cart" key="cart:c1">{"cartId":"c1"}</kovo-query>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'conformance-server-test-build',
         'Kovo-Changes': '[{"domain":"cart"}]',
+        Vary: 'Cookie',
       },
       status: 200,
     },
@@ -1477,7 +1487,11 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
     },
     missingRegistryQuery: {
       body: 'Not Found',
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 404,
     },
     success: {
@@ -1659,8 +1673,11 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
     mutationEndpoint: {
       body: '',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'conformance-runtime-test-build',
         'Kovo-Changes': '[{"domain":"product","keys":["p1"]}]',
+        Vary: 'Cookie',
       },
       result: {
         changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],

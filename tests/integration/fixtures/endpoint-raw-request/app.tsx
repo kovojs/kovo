@@ -31,11 +31,16 @@ const exactEndpoint = endpoint('/machine/exact', {
   csrf: false,
   csrfJustification: 'signed machine payload',
   async handler(request) {
-    return Response.json({
-      body: await request.text(),
-      signature: request.headers.get('x-signature'),
-      sessionAmbient: 'session' in request,
-    });
+    return Response.json(
+      {
+        body: await request.text(),
+        signature: request.headers.get('x-signature'),
+        sessionAmbient: 'session' in request,
+      },
+      {
+        headers: { 'cache-control': 'no-store' },
+      },
+    );
   },
   method: 'POST',
   reason: 'signed raw machine request fixture',
@@ -48,7 +53,10 @@ const prefixEndpoint = endpoint('/machine/prefix', {
   async handler(request) {
     const url = new URL(request.url);
     return new Response(`prefix:${url.pathname}:${await request.text()}`, {
-      headers: { 'content-type': 'text/plain; charset=utf-8' },
+      headers: {
+        'cache-control': 'no-store',
+        'content-type': 'text/plain; charset=utf-8',
+      },
     });
   },
   method: 'POST',

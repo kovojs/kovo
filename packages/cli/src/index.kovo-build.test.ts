@@ -423,11 +423,12 @@ describe('kovo build', () => {
       const origin = await listen(server);
 
       try {
+        const homePanelLiveTarget = await homePanelLiveTargetHeader(origin);
         const loginMutationResponse = await fetch(`${origin}/_m/home/touch`, {
           body: new URLSearchParams(),
           headers: {
             'Kovo-Fragment': 'true',
-            'Kovo-Live-Targets': 'home-panel#home-panel/home-panel:{}',
+            'Kovo-Live-Targets': homePanelLiveTarget,
             'Kovo-Targets': 'home-panel=home',
             Referer: `${origin}/login`,
           },
@@ -446,7 +447,7 @@ describe('kovo build', () => {
           body: new URLSearchParams(),
           headers: {
             'Kovo-Fragment': 'true',
-            'Kovo-Live-Targets': 'home-panel#home-panel/home-panel:{}',
+            'Kovo-Live-Targets': homePanelLiveTarget,
             'Kovo-Targets': 'home-panel=home',
             Referer: `${origin}/`,
           },
@@ -742,8 +743,17 @@ describe('kovo build', () => {
         routes: [
           {
             continue: true,
-            headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
             src: '/(?:assets|c)/(.*)',
+          },
+          {
+            continue: true,
+            headers: { 'x-content-type-options': 'nosniff' },
+            src: '/(.*)',
           },
           { handle: 'filesystem' },
           { dest: '/kovo', src: '/(.*)' },
@@ -799,7 +809,26 @@ describe('kovo build', () => {
         '<main>Static Home</main>',
       );
       expect(existsSync(join(outDir, '.vercel/output/functions/kovo.func/index.cjs'))).toBe(false);
-      expect(readBuildJson(join(outDir, '.vercel/output/config.json'))).toEqual({ version: 3 });
+      expect(readBuildJson(join(outDir, '.vercel/output/config.json'))).toEqual({
+        routes: [
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/(?:assets|c)/(.*)',
+          },
+          {
+            continue: true,
+            headers: { 'x-content-type-options': 'nosniff' },
+            src: '/(.*)',
+          },
+          { handle: 'filesystem' },
+        ],
+        version: 3,
+      });
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -1005,6 +1034,14 @@ export default createApp({
 `;
 }
 
+async function homePanelLiveTargetHeader(origin: string): Promise<string> {
+  const response = await fetch(`${origin}/__test/home-live-target`);
+  const html = await response.text();
+  const match = /<code id="home-live-target">([^<]+)<\/code>/.exec(html);
+  if (!match?.[1]) throw new Error(`Expected test live-target header in ${html.slice(-800)}`);
+  return match[1];
+}
+
 function dynamicAppModuleSource(): string {
   return `
 import {
@@ -1126,10 +1163,10 @@ import { SharedCard } from './src/shared-card.js';
 export default createApp({
   routes: [
     route('/', {
-      page: () => <><SharedCard /><HomePanel /></>,
+      page: () => <main><SharedCard /><HomePanel /></main>,
     }),
     route('/login', {
-      page: () => <><SharedCard /><LoginPanel /></>,
+      page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
   ],
   stylesheets: [stylesheet('./styles.css')],
@@ -1150,10 +1187,10 @@ export default createApp({
   document: siteDocument,
   routes: [
     route('/', {
-      page: () => <><SharedCard /><HomePanel /></>,
+      page: () => <main><SharedCard /><HomePanel /></main>,
     }),
     route('/login', {
-      page: () => <><SharedCard /><LoginPanel /></>,
+      page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
   ],
   stylesheets: [stylesheet('./styles.css')],
@@ -1187,6 +1224,7 @@ function mutationFragmentStylesheetAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
 import { createApp, domain, mutation, query, route, s, stylesheet } from '@kovojs/server';
+import { createLiveTargetAttestation } from '@kovojs/server/internal/wire';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
@@ -1197,6 +1235,14 @@ const trustedHtml = (value) => ({
   [Symbol.toPrimitive]: () => String(value),
   toString: () => String(value),
 });
+
+function homeLiveTargetHeader() {
+  const target = 'home-panel';
+  const component = 'home-panel/home-panel';
+  const props = {};
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return target + '#' + component + '@' + token + ':' + JSON.stringify(props);
+}
 
 const home = domain('home');
 const homeQuery = query('home', {
@@ -1227,10 +1273,13 @@ export default createApp({
   queries: [homeQuery],
   routes: [
     route('/', {
-      page: () => <><SharedCard /><HomePanel /></>,
+      page: () => <main><SharedCard /><HomePanel /></main>,
+    }),
+    route('/__test/home-live-target', {
+      page: () => trustedHtml('<code id="home-live-target">' + homeLiveTargetHeader() + '</code>'),
     }),
     route('/login', {
-      page: () => <><SharedCard /><LoginPanel /></>,
+      page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
   ],
   stylesheets: [stylesheet('./styles.css')],

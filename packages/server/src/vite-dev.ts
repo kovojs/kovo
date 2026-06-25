@@ -803,6 +803,8 @@ const qa = (root, selector) => root.querySelectorAll ? [...root.querySelectorAll
 const rd = (value) => (value || "").split(/[\s,]+/).map((dep) => dep.trim()).filter(Boolean);
 const targetIdentity = (el) => el.getAttribute("kovo-fragment-target") || el.id || el.getAttribute("kovo-c") || "";
 const liveTargetIdentity = (el) => el.getAttribute("kovo-live-component") || el.getAttribute("kovo-c") || targetIdentity(el);
+const safeHeaderToken = (value) => value && !/[\x00-\x1f\x7f\s;,#=]/.test(value);
+const safeComponent = (value) => safeHeaderToken(value) && !value.includes(":");
 const liveProps = (el) => {
   try {
     const props = JSON.parse(el.getAttribute("kovo-props") || "{}");
@@ -817,9 +819,12 @@ const liveTargets = () => {
   const targets = [];
   for (const el of qa(document, "[kovo-deps]")) {
     const target = targetIdentity(el);
+    const component = liveTargetIdentity(el);
+    const token = el.getAttribute("kovo-live-token");
+    if (!safeHeaderToken(target) || !safeComponent(component) || !safeHeaderToken(token)) continue;
     if (!target || seen.has(target)) continue;
     seen.add(target);
-    targets.push(target + "#" + liveTargetIdentity(el) + ":" + JSON.stringify(liveProps(el)));
+    targets.push(target + "#" + component + "@" + token + ":" + JSON.stringify(liveProps(el)));
   }
   return targets;
 };
@@ -829,6 +834,7 @@ const dependencyTargets = () => [
       .map((el) => {
         const target = targetIdentity(el);
         const deps = rd(el.getAttribute("kovo-deps"));
+        if (!safeHeaderToken(target) || !deps.every(safeHeaderToken)) return "";
         return target && (deps.length ? target + "=" + deps.join(" ") : target);
       })
       .filter(Boolean),

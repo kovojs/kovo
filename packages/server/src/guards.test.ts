@@ -653,6 +653,7 @@ describe('server guard and session primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'guard-build',
         'Retry-After': '60',
         Vary: 'Cookie',
       },

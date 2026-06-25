@@ -275,9 +275,9 @@ export async function loaderSmokeBehaviorFact(
       calls.push(['visible', context.signal instanceof AbortSignal]);
     },
   };
-  const loadElement = new GeneratedFixtureElement({ 'on:load': '/loader.js#load' });
-  const idleElement = new GeneratedFixtureElement({ 'on:idle': '/loader.js#idle' });
-  const visibleElement = new GeneratedFixtureElement({ 'on:visible': '/loader.js#visible' });
+  const loadElement = new GeneratedFixtureElement({ 'on:load': '/c/loader.js#load' });
+  const idleElement = new GeneratedFixtureElement({ 'on:idle': '/c/loader.js#idle' });
+  const visibleElement = new GeneratedFixtureElement({ 'on:visible': '/c/loader.js#visible' });
   const idleCallbacks: Array<() => void> = [];
   let visibleCallback:
     | ((entries: Array<{ isIntersecting: boolean; target: unknown }>) => void)

@@ -266,7 +266,7 @@ describe('Kovo-Build header (SPEC §5.1, §9.1.1)', () => {
     expect(response.body).toContain('data-error-code="RENDER_ERROR"');
   });
 
-  it('does not emit Kovo-Build header on non-200 responses', async () => {
+  it('emits Kovo-Build header on non-200 responses when buildToken is set', async () => {
     const addToCart = mutation('cart/add', {
       errors: {
         OUT_OF_STOCK: s.object({}),
@@ -285,6 +285,6 @@ describe('Kovo-Build header (SPEC §5.1, §9.1.1)', () => {
     });
 
     expect(response.status).toBe(422);
-    expect((response.headers as Record<string, string>)['Kovo-Build']).toBeUndefined();
+    expect((response.headers as Record<string, string>)['Kovo-Build']).toBe('abc123token');
   });
 });

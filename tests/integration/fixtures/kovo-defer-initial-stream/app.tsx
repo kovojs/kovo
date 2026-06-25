@@ -64,6 +64,7 @@ function webResponseHeaders(headers: ResponseHeaders): Headers {
       webHeaders.set(name, value);
     }
   }
+  webHeaders.set('cache-control', 'no-store');
 
   return webHeaders;
 }

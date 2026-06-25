@@ -69,12 +69,7 @@ import type {
   MutationSuccess,
   RunMutationOptions,
 } from './mutation/definition.js';
-import {
-  isStaleVersionError,
-  staleVersionConflict,
-  StaleVersionError,
-  type StaleVersionConflict,
-} from './mutation/stale-version.js';
+import { isStaleVersionError, staleVersionConflict } from './mutation/stale-version.js';
 export {
   errorBoundary,
   mutation,
@@ -1228,6 +1223,7 @@ function mutationWireResponseHeaders<Request>(
     'Cache-Control': 'private, no-store',
     'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
     Vary: 'Cookie',
+    ...(wireRequest.buildToken ? { 'Kovo-Build': wireRequest.buildToken } : {}),
     ...(wireRequest.idem ? { 'Kovo-Idem': wireRequest.idem } : {}),
   };
 }

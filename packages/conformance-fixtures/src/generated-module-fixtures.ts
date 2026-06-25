@@ -1478,6 +1478,11 @@ export async function executeInlineEnhancedFormLoaderFixture(
       return clone;
     }
 
+    append(...nodes: Array<InlineFixtureElement | InlineFixtureText>): void {
+      appendCalls.push(['beforeend', nodes.map((node) => node.outerHTML).join('')]);
+      this.replaceChildren(...this.childNodes, ...nodes);
+    }
+
     contains(): boolean {
       return false;
     }
@@ -1540,6 +1545,7 @@ export async function executeInlineEnhancedFormLoaderFixture(
       getAttribute(name: string) {
         if (name === 'kovo-deps') return 'cart';
         if (name === 'kovo-fragment-target') return null;
+        if (name === 'kovo-live-token') return 'tok_cart';
         // Real DOM elements expose their `id` via getAttribute('id'); the loader's
         // request-target identity falls back to it when no kovo-fragment-target is
         // present (inline-loader-build.ts targetIdentity, SPEC §9.1).
@@ -1552,6 +1558,7 @@ export async function executeInlineEnhancedFormLoaderFixture(
       getAttribute(name: string) {
         if (name === 'kovo-deps') return 'inventory stock';
         if (name === 'kovo-fragment-target') return 'inventory';
+        if (name === 'kovo-live-token') return 'tok_inventory';
         if (name === 'id') return 'inventory-panel';
         return null;
       },
@@ -1635,10 +1642,15 @@ export async function executeInlineEnhancedFormLoaderFixture(
       createElement(tag: string) {
         if (tag !== 'template') return new InlineFixtureElement(tag.toUpperCase(), tag);
         return {
-          content: { children: [] as InlineFixtureElement[] },
+          content: {
+            childNodes: [] as InlineFixtureElement[],
+            children: [] as InlineFixtureElement[],
+          },
           set innerHTML(html: string) {
             const element = readTemplateElement(html);
-            this.content.children = element ? [element] : [];
+            const nodes = element ? [element] : [];
+            this.content.childNodes = nodes;
+            this.content.children = nodes;
           },
         };
       },

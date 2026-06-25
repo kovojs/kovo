@@ -6,6 +6,7 @@ import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
+import { createLiveTargetAttestation } from '@kovojs/server/internal/wire';
 
 import { buildCrmInteractiveApp } from './interactive-app.js';
 import { crmCsrf } from './mutations.js';
@@ -44,7 +45,8 @@ function liveHeader(
   component: string,
   props: Record<string, unknown> = {},
 ): string {
-  return `${target}#${component}:${JSON.stringify(props)}`;
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 
 async function postForm(
