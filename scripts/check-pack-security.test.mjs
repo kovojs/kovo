@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertSnapshotMatches,
+  collectFirstPartyScopes,
   collectManifestTargets,
   normalizePackedPath,
   parsePackJson,
+  validateFirstPartyScopeRegistryPolicy,
   validatePackedPackage,
 } from './check-pack-security.mjs';
 
@@ -157,6 +159,59 @@ describe('pack-security gate', () => {
     expect(parsePackJson('lifecycle output\n{"filename":"pkg.tgz"}\n')).toEqual({
       filename: 'pkg.tgz',
     });
+  });
+
+  it('collects unique first-party package scopes from workspace names', () => {
+    expect(
+      collectFirstPartyScopes([
+        '@kovojs/core',
+        '@kovojs/server',
+        '@other-scope/pkg',
+        'create-kovo',
+      ]),
+    ).toEqual(['@kovojs', '@other-scope']);
+  });
+
+  it('rejects missing first-party scope registry pins', () => {
+    expect(
+      validateFirstPartyScopeRegistryPolicy({
+        npmConfigText: 'node-options=--experimental-transform-types\n',
+        npmConfigPath: '.npmrc',
+        packageNames: ['@kovojs/core', 'create-kovo'],
+      }),
+    ).toEqual([
+      '.npmrc: missing @kovojs:registry pin; first-party scopes must resolve from https://registry.npmjs.org/',
+    ]);
+  });
+
+  it('rejects misconfigured or non-literal first-party scope registry pins', () => {
+    expect(
+      validateFirstPartyScopeRegistryPolicy({
+        npmConfigText: '@kovojs:registry=https://mirror.example.invalid/\n',
+        npmConfigPath: '.npmrc',
+        packageNames: ['@kovojs/core'],
+      }),
+    ).toEqual([
+      '.npmrc: @kovojs:registry must resolve to https://registry.npmjs.org/; got https://mirror.example.invalid/',
+    ]);
+
+    expect(
+      validateFirstPartyScopeRegistryPolicy({
+        npmConfigText: '@kovojs:registry=${KOVO_REGISTRY}\n',
+        npmConfigPath: '.npmrc',
+        packageNames: ['@kovojs/core'],
+      }),
+    ).toEqual(['.npmrc: @kovojs:registry must be a literal registry URL; got "${KOVO_REGISTRY}"']);
+  });
+
+  it('accepts an explicit npmjs pin for first-party scopes', () => {
+    expect(
+      validateFirstPartyScopeRegistryPolicy({
+        npmConfigText: '@kovojs:registry=https://registry.npmjs.org\n',
+        npmConfigPath: '.npmrc',
+        packageNames: ['@kovojs/core'],
+      }),
+    ).toEqual([]);
   });
 
   it('fails closed when the tarball file snapshot drifts', () => {

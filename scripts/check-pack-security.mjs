@@ -16,9 +16,11 @@ import { derivePublishPlan } from './build-publish.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 
 export const packSecuritySnapshotPath = path.join(repoRoot, 'scripts', 'pack-security.files.json');
+export const rootNpmConfigPath = path.join(repoRoot, '.npmrc');
 
 const maxPackedFileBytes = 16 * 1024 * 1024;
 const allowedTopLevelFiles = new Set(['package.json', 'README.md', 'LICENSE', 'LICENSE.md']);
+const safeFirstPartyRegistry = 'https://registry.npmjs.org/';
 const forbiddenPathSegments = new Set([
   '__fixtures__',
   '__snapshots__',
@@ -46,6 +48,51 @@ const secretPatterns = [
 
 export function normalizePackedPath(entry) {
   return entry.replace(/^package\//, '').replace(/\\/g, '/');
+}
+
+export function collectFirstPartyScopes(packageNames) {
+  return [...new Set(packageNames.flatMap(scopeNameFromPackageName))].sort(compareStrings);
+}
+
+export function validateFirstPartyScopeRegistryPolicy({
+  npmConfigText,
+  npmConfigPath = '.npmrc',
+  packageNames,
+}) {
+  const findings = [];
+  const config = parseIniAssignments(npmConfigText);
+  const scopes = collectFirstPartyScopes(packageNames).filter((scope) => scope.startsWith('@'));
+
+  for (const scope of scopes) {
+    const key = `${scope}:registry`;
+    const configuredRegistry = config.get(key);
+    if (!configuredRegistry) {
+      findings.push(
+        `${npmConfigPath}: missing ${key} pin; first-party scopes must resolve from ${safeFirstPartyRegistry}`,
+      );
+      continue;
+    }
+    if (configuredRegistry.includes('${')) {
+      findings.push(
+        `${npmConfigPath}: ${key} must be a literal registry URL; got ${JSON.stringify(configuredRegistry)}`,
+      );
+      continue;
+    }
+    const normalizedRegistry = normalizeRegistryUrl(configuredRegistry);
+    if (normalizedRegistry === undefined) {
+      findings.push(
+        `${npmConfigPath}: ${key} must be a valid registry URL; got ${JSON.stringify(configuredRegistry)}`,
+      );
+      continue;
+    }
+    if (normalizedRegistry !== safeFirstPartyRegistry) {
+      findings.push(
+        `${npmConfigPath}: ${key} must resolve to ${safeFirstPartyRegistry}; got ${normalizedRegistry}`,
+      );
+    }
+  }
+
+  return findings;
 }
 
 export function validatePackedPackage({ files, manifest, packageName, readTextFile, targetFiles }) {
@@ -235,6 +282,36 @@ function compareStrings(left, right) {
   return left.localeCompare(right);
 }
 
+function scopeNameFromPackageName(packageName) {
+  if (typeof packageName !== 'string' || !packageName.startsWith('@')) return [];
+  const slashIndex = packageName.indexOf('/');
+  if (slashIndex <= 1) return [];
+  return [packageName.slice(0, slashIndex)];
+}
+
+function parseIniAssignments(text) {
+  const assignments = new Map();
+  for (const rawLine of text.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+    const separatorIndex = line.indexOf('=');
+    if (separatorIndex === -1) continue;
+    const key = line.slice(0, separatorIndex).trim();
+    const value = line.slice(separatorIndex + 1).trim();
+    assignments.set(key, value);
+  }
+  return assignments;
+}
+
+function normalizeRegistryUrl(value) {
+  try {
+    const registryUrl = new URL(value);
+    return registryUrl.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function packageDir(pkg) {
   return path.join(repoRoot, 'packages', pkg.dir);
 }
@@ -335,11 +412,22 @@ function readSnapshot() {
   return JSON.parse(readFileSync(packSecuritySnapshotPath, 'utf8'));
 }
 
+function readWorkspacePackageNames() {
+  return readdirSync(path.join(repoRoot, 'packages'))
+    .map((dir) => path.join(repoRoot, 'packages', dir, 'package.json'))
+    .map((manifestPath) => JSON.parse(readFileSync(manifestPath, 'utf8')).name)
+    .filter((name) => typeof name === 'string');
+}
+
 function main() {
   const write = process.argv.includes('--write');
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'kovo-pack-security-'));
   const packedPackages = [];
-  const findings = [];
+  const findings = validateFirstPartyScopeRegistryPolicy({
+    npmConfigText: readFileSync(rootNpmConfigPath, 'utf8'),
+    npmConfigPath: path.relative(repoRoot, rootNpmConfigPath),
+    packageNames: readWorkspacePackageNames(),
+  });
 
   try {
     for (const pkg of publicPackages()) {

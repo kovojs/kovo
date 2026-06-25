@@ -271,11 +271,15 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` pas
       supply-chain secure-defaults, but operator/CI-ownable hardening — do not dress as the runtime "egress floor"
       it isn't; slice overlaps shipped tarball gates.
 
-- [ ] **OPP-23 — Dependency-confusion + tarball-content static gates.** audit-only · lev 5 · M ·
+- [x] **OPP-23 — Dependency-confusion + tarball-content static gates.** audit-only · lev 5 · M ·
       non-breaking. The one statically-decidable supply-chain slice Kovo can own: an `.npmrc` org-scope pin + a
       build-time check that fails closed if an `@org` name resolves from the public registry; a content scan of
       the packed tarball for secrets/maps/absolute paths. _Trade-off:_ real CI hardening, but suppressible
       audit-only, not a by-construction vuln-class kill.
+      Evidence: `.npmrc` pins `@kovojs` to npmjs and `scripts/check-pack-security.mjs` fails closed on missing,
+      env-substituted, or non-npmjs first-party scope registry pins. `pnpm exec vitest run
+scripts/check-pack-security.test.mjs` passed; `pnpm run check:pack-security -- --write` reviewed and
+      refreshed the packed-file snapshot after inspecting every public package.
 
 ### Band 4 — Honesty & positioning (the credibility moat)
 
