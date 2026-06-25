@@ -18,6 +18,7 @@
     "./internal/html-wire": "./src/internal/html-wire.ts",
     "./internal/integration": "./src/integration/index.ts",
     "./internal/integration/define": "./src/integration/define-fixture.ts",
+    "./internal/integration/optimistic-client": "./src/integration/optimistic-client.ts",
     "./internal/page": "./src/page.ts",
     "./internal/sql-observer": "./src/sql-observer.ts",
     "./internal/verifier": "./src/verifier.ts",
@@ -61,6 +62,10 @@
         "types": "./dist/integration/define-fixture.d.mts",
         "default": "./dist/integration/define-fixture.mjs"
       },
+      "./internal/integration/optimistic-client": {
+        "types": "./dist/integration/optimistic-client.d.mts",
+        "default": "./dist/integration/optimistic-client.mjs"
+      },
       "./internal/page": {
         "types": "./dist/page.d.mts",
         "default": "./dist/page.mjs"
@@ -96,11 +101,12 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/internal/html-wire.ts src/integration/define-fixture.ts src/integration/index.ts src/page.ts src/pglite.ts src/sqlite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
+    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/internal/html-wire.ts src/integration/define-fixture.ts src/integration/index.ts src/integration/optimistic-client.ts src/page.ts src/pglite.ts src/sqlite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
+    "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*",
     "better-sqlite3": "^12.11.1",

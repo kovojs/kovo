@@ -223,12 +223,17 @@ Median job durations across those runs:
   - Evidence 2026-06-25: `tests/integration/README.md` defines the three tiers; five brittle Tier 2
     header/wire specs were converted to `@kovojs/test/headers` and passed under Chromium.
 
-- [ ] **Reduce hand-authored lowered-IR coverage in favor of app-authored TSX fixtures.**
+- [x] **Reduce hand-authored lowered-IR coverage in favor of app-authored TSX fixtures.**
   - SPEC.md §5.2 treats hand-authored lowered IR as invalid app source; integration tests should cover
     app-authored TSX for public behavior and reserve internal IR fixtures for compiler-unit tests.
   - Start with `counter`, `optimistic-success`, and one query-backed fixture.
   - Evidence when complete: those fixtures exercise compiler-emitted wiring without direct
     `@kovojs/*/internal` client imports.
+  - Evidence 2026-06-25: `tests/integration-import-boundary.meta.test.ts` now fails closed for the
+    migrated `counter`, `optimistic-success`, and `query-args-search` fixture entries; the query-backed
+    `ProductCard` lives in app-authored TSX, `optimistic-success` moved raw optimism internals behind
+    `@kovojs/test/internal/integration/optimistic-client`, and Chromium runs for `counter-no-js`,
+    `query-args-search`, and `optimistic-success` passed.
 
 - [x] **Add a test-inventory meta-test.**
   - Assert every integration spec has an owner axis (`compiler`, `server`, `browser`, `data`, `security`,

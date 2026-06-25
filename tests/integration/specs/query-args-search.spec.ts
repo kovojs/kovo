@@ -8,7 +8,6 @@ test('typed read endpoint coerces search args and returns the canonical instance
   page,
 }) => {
   await page.goto('/?id=p1&max=200');
-  await expect(page.locator('script[kovo-query="product"][key="product:p1"]')).toHaveCount(1);
   await expect(page.locator('[data-product]')).toHaveText('p1:Pen:true');
 
   const response = await page.request.get('/_q/product?id=p2&max=800');

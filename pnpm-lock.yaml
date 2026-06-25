@@ -618,6 +618,9 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.1
         version: 0.5.1
+      '@kovojs/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core

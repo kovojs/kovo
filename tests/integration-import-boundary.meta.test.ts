@@ -4,12 +4,20 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = 'tests/integration';
-const EXPECTED_ALLOWED_INTERNAL_IMPORTS = 55;
+const EXPECTED_ALLOWED_INTERNAL_IMPORTS = 51;
 
 const HARNESS_IMPORTS = new Set([
   '@kovojs/test/internal/integration',
   '@kovojs/test/internal/integration/define',
+  '@kovojs/test/internal/integration/optimistic-client',
 ]);
+
+const MIGRATED_FIXTURE_FILES = [
+  'tests/integration/fixtures/counter/app.tsx',
+  'tests/integration/fixtures/optimistic-success/client.ts',
+  'tests/integration/fixtures/query-args-search/app.tsx',
+  'tests/integration/fixtures/query-args-search/product-card.tsx',
+] as const;
 
 const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
   'tests/integration/specs/diagnostic-dev-document.spec.ts': {
@@ -92,6 +100,21 @@ describe('integration import boundary', () => {
         '@kovojs/browser/internal/new-abi',
       ),
     ).toBeUndefined();
+  });
+
+  it('keeps migrated fixture entries off package-internal app/client imports', () => {
+    const violations: string[] = [];
+
+    for (const file of MIGRATED_FIXTURE_FILES) {
+      const source = readFileSync(file, 'utf8');
+      for (const specifier of staticImportSpecifiers(source)) {
+        if (!isPackageInternalImport(specifier) || HARNESS_IMPORTS.has(specifier)) continue;
+
+        violations.push(`${file} imports ${specifier}`);
+      }
+    }
+
+    expect(violations).toEqual([]);
   });
 });
 
