@@ -265,9 +265,10 @@ Median job durations across those runs:
     The logical selector currently covers 10 cross-tab, morph, optimistic, and streaming tests; local
     one-pass verification passed. The remaining checkbox evidence is a completed scheduled workflow run
     URL.
-  - Gap 2026-06-25: `gh workflow run 301949424 --ref main` failed with `HTTP 403: Resource not
-accessible by integration`, so this session cannot manually dispatch the workflow with the current
-    token.
+  - Gap 2026-06-25: the race-repeat workflow has no completed runs, and manual dispatch fails with
+    `HTTP 403: Resource not accessible by integration`. The available GitHub App installation auth can
+    push and monitor CI but cannot dispatch this workflow, so the remaining evidence requires the
+    scheduled run or a workflow-capable token.
 
 - [x] **Define assertion tiers for integration specs.**
   - Tier 1: semantic user-visible assertions through `@kovojs/test` page helpers.
