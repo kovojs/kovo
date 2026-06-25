@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -6,27 +6,46 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from './index.js';
 
+const repoRoot = process.cwd();
+
+function symlinkServerPackage(root: string): void {
+  mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+  symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+}
+
 function appModuleSource(options: {
   readonly closed?: boolean;
   readonly exportKind?: 'default' | 'named';
   readonly prelude?: readonly string[];
   readonly route: string;
 }): string {
+  const closed = options.closed !== false;
+  const exportPrefix = options.exportKind === 'named' ? 'export const app = ' : 'export default ';
+
   return [
+    ...(closed ? ["import { createApp } from '@kovojs/server';"] : []),
     ...(options.prelude ?? []),
     'const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });',
-    'const modules = new Map();',
-    'const versionedHref = (module) => `/c/__v/${encodeURIComponent(module.version)}/${module.path.slice("/c/".length)}`;',
-    options.exportKind === 'named' ? 'export const app = {' : 'export default {',
-    '  clientModules: {',
-    "    buildToken() { return 'test'; },",
-    '    entries() { return [...modules.values()]; },',
-    '    put(module) { const href = versionedHref(module); modules.set(new URL(href, "https://kovo.local").pathname, module); return href; },',
-    '    resolve(href) {',
-    '      const module = modules.get(new URL(href ?? "", "https://kovo.local").pathname);',
-    "      return module ? { body: module.source, headers: { 'Content-Type': module.contentType ?? 'text/javascript; charset=utf-8' }, status: 200 } : { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 };",
-    '    },',
-    '  },',
+    ...(closed
+      ? []
+      : [
+          'const modules = new Map();',
+          'const versionedHref = (module) => `/c/__v/${encodeURIComponent(module.version)}/${module.path.slice("/c/".length)}`;',
+        ]),
+    `${exportPrefix}${closed ? 'createApp({' : '{'}`,
+    ...(closed
+      ? []
+      : [
+          '  clientModules: {',
+          "    buildToken() { return 'test'; },",
+          '    entries() { return [...modules.values()]; },',
+          '    put(module) { const href = versionedHref(module); modules.set(new URL(href, "https://kovo.local").pathname, module); return href; },',
+          '    resolve(href) {',
+          '      const module = modules.get(new URL(href ?? "", "https://kovo.local").pathname);',
+          "      return module ? { body: module.source, headers: { 'Content-Type': module.contentType ?? 'text/javascript; charset=utf-8' }, status: 200 } : { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 };",
+          '    },',
+          '  },',
+        ]),
     '  diagnostics: [],',
     '  document: {},',
     '  endpoints: [],',
@@ -35,26 +54,9 @@ function appModuleSource(options: {
     '  mutations: [],',
     '  mutationResponses: {},',
     '  queries: [],',
-    ...(options.closed === false
-      ? []
-      : [
-          '  requestLimits: {',
-          '    global: { max: 20000, maxKeys: 20000, windowMs: 60000 },',
-          '    maxBodyBytes: 1048576,',
-          '    mutations: {',
-          '      global: { max: 5000, maxKeys: 5000, windowMs: 60000 },',
-          '      perIp: { max: 120, maxKeys: 10000, windowMs: 60000 },',
-          '    },',
-          '    perIp: { max: 600, maxKeys: 10000, windowMs: 60000 },',
-          '    queries: {',
-          '      global: { max: 15000, maxKeys: 15000, windowMs: 60000 },',
-          '      perIp: { max: 600, maxKeys: 10000, windowMs: 60000 },',
-          '    },',
-          '  },',
-        ]),
     `  routes: [${options.route}],`,
     '  stylesheets: [],',
-    '};',
+    closed ? '});' : '};',
     '',
   ].join('\n');
 }
@@ -68,6 +70,7 @@ describe('kovo export', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
+      symlinkServerPackage(root);
       writeFileSync(
         appPath,
         appModuleSource({
@@ -103,6 +106,7 @@ describe('kovo export', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
+      symlinkServerPackage(root);
       writeFileSync(
         appPath,
         appModuleSource({
@@ -134,6 +138,7 @@ describe('kovo export', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
+      symlinkServerPackage(root);
       writeFileSync(
         appPath,
         appModuleSource({
@@ -166,6 +171,7 @@ describe('kovo export', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
+      symlinkServerPackage(root);
       writeFileSync(
         appPath,
         appModuleSource({
@@ -207,6 +213,7 @@ describe('kovo export', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
+      symlinkServerPackage(root);
       mkdirSync(join(distDir, '.vite'), { recursive: true });
       mkdirSync(join(distDir, 'assets'), { recursive: true });
       writeFileSync(join(distDir, 'assets', 'app.css'), 'body{color:red}', 'utf8');
@@ -266,6 +273,7 @@ describe('kovo export', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
+      symlinkServerPackage(root);
       mkdirSync(join(distDir, '.vite'), { recursive: true });
       writeFileSync(join(root, 'secret.txt'), 'do-not-copy', 'utf8');
       writeFileSync(
@@ -319,6 +327,7 @@ describe('kovo export', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
+      symlinkServerPackage(root);
       mkdirSync(join(distDir, '.vite'), { recursive: true });
       mkdirSync(join(distDir, 'assets'), { recursive: true });
       writeFileSync(join(distDir, 'assets', 'site.css'), 'html{display:block}', 'utf8');
@@ -379,6 +388,7 @@ describe('kovo export', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
+      symlinkServerPackage(root);
       mkdirSync(srcDir, { recursive: true });
       mkdirSync(join(distDir, '.vite'), { recursive: true });
       mkdirSync(join(distDir, 'assets'), { recursive: true });
