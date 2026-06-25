@@ -17,7 +17,11 @@ const requiredClauses: readonly SpecClause[] = [
   'SPEC.md §4.9',
   'SPEC.md §5.2',
   'SPEC.md §6.1.1',
+  'SPEC.md §5.2.1',
+  'SPEC.md §5.2.2',
+  'SPEC.md §6.6',
   'SPEC.md §6.4',
+  'SPEC.md §10',
   'SPEC.md §11.3/§11.4',
 ];
 
@@ -278,6 +282,85 @@ describe('compiler SPEC coverage map', () => {
         },
         {
           "accepted": [
+            "moves the token when any projected query shape changes (KV416 monotonicity)",
+            "versions handler URLs from the render-plan fingerprint plus emitted client module source",
+          ],
+          "clause": "SPEC.md §5.2.1",
+          "diagnostics": [
+            {
+              "codes": [
+                "KV416",
+              ],
+              "testName": "throws KV416 when a projected-query field rename does NOT move a stubbed non-monotonic token (D4)",
+            },
+          ],
+          "referenceApp": [
+            "examples/commerce/src/app.live-targets.test.ts",
+          ],
+        },
+        {
+          "accepted": [
+            "passes when shapes change AND the token changes",
+            "does NOT throw KV416 when shapes differ and a correct token function moves (real fingerprint)",
+          ],
+          "clause": "SPEC.md §5.2.2",
+          "diagnostics": [
+            {
+              "codes": [
+                "KV416",
+              ],
+              "testName": "wires KV416 into the production compile gate diagnostics",
+            },
+            {
+              "codes": [
+                "KV416",
+              ],
+              "testName": "includes secret query shape metadata in the production render-plan token gate",
+            },
+          ],
+          "referenceApp": [
+            "examples/commerce/src/app.live-targets.test.ts",
+          ],
+        },
+        {
+          "accepted": [
+            "emits a callee-position import (ordinary client util) without KV437",
+            "allows a publishToClient(captured, { reason }) escape: emits and records the fact",
+            "does not report KV435 for explicitly revealed query shape fields",
+          ],
+          "clause": "SPEC.md §6.6",
+          "diagnostics": [
+            {
+              "codes": [
+                "KV437",
+              ],
+              "testName": "fires KV437 for a captured NAMED import in call-argument (value) position",
+            },
+            {
+              "codes": [
+                "KV435",
+              ],
+              "testName": "reports KV435 when a component-declared query shape contains a secret field",
+            },
+            {
+              "codes": [
+                "KV438",
+              ],
+              "testName": "proves security-heavy check-owned diagnostics have accepted and rejected coverage",
+            },
+            {
+              "codes": [
+                "KV438",
+              ],
+              "testName": "formats KV438 mass-assignment diagnostics through the real kovo check CLI command",
+            },
+          ],
+          "referenceApp": [
+            "examples/commerce/src/app.auth.test.ts",
+          ],
+        },
+        {
+          "accepted": [
             "accepts literal navigation targets that match declared routes",
             "lowers static Link navigation sugar to plain anchors",
             "accepts package-prefixed behavior IDREFs that reference ids in component scope",
@@ -310,7 +393,38 @@ describe('compiler SPEC coverage map', () => {
         },
         {
           "accepted": [
-            "guards the authoritative compiler-owned KV2xx/KV3xx code list",
+            "derives registry facts from graph query, mutation, and page facts",
+            "accepts explicit optimistic statuses for every invalidated query",
+            "discharges an owner-domain arg access guarded by owns() (SPEC §10.3)",
+          ],
+          "clause": "SPEC.md §10",
+          "diagnostics": [
+            {
+              "codes": [
+                "KV421",
+              ],
+              "testName": "reports KV421 for duplicate mutation-key facts (today none; invalidations last-write-wins)",
+            },
+            {
+              "codes": [
+                "KV314",
+              ],
+              "testName": "fails KV314 when renderOnce reads a query invalidated by modeled writes",
+            },
+            {
+              "codes": [
+                "KV310",
+              ],
+              "testName": "derives KV310 gaps from mutation invalidations and query read sets",
+            },
+          ],
+          "referenceApp": [
+            "examples/commerce/src/app.test.ts",
+          ],
+        },
+        {
+          "accepted": [
+            "guards the authoritative compiler-owned diagnostic code list",
             "proves every in-scope compiler-owned diagnostic has positive and negative coverage",
             "does not report KV330 for domain-routed mutation handlers",
             "accepts query read domains covered by the touch graph",
@@ -337,7 +451,15 @@ describe('compiler SPEC coverage map', () => {
                 "KV320",
                 "KV330",
               ],
-              "testName": "reports semantic lints for local state, events, and direct db access",
+              "testName": "reports semantic findings for local state, events, and direct db access",
+            },
+            {
+              "codes": [
+                "KV423",
+                "KV424",
+                "KV438",
+              ],
+              "testName": "proves security-heavy check-owned diagnostics have accepted and rejected coverage",
             },
           ],
           "referenceApp": [

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { compilerIrHeader } from '../ir.js';
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
@@ -35,17 +37,12 @@ export interface BootstrapEmittedFile {
  * Public build/codegen helper consumed by an app's bootstrap-emit step.
  */
 /**
- * Deterministic 32-bit FNV-1a hash rendered as a fixed-width hex suffix. Used to derive a
- * collision-resistant-enough, stable local alias per import path so two same-named exports
- * (e.g. two `Demo$queryUpdatePlans` from different files) never share a lexical binding.
+ * Deterministic SHA-256 digest suffix for import-path-derived aliases. Alias uniqueness is still
+ * checked before emission; the digest keeps generated local names stable without relying on a
+ * small 32-bit hash in compiler output (SPEC.md §5.2).
  */
-function importPathHash(importPath: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < importPath.length; index += 1) {
-    hash ^= importPath.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0');
+function importPathDigest(importPath: string): string {
+  return createHash('sha256').update(importPath).digest('hex').slice(0, 16);
 }
 
 /**
@@ -54,7 +51,7 @@ function importPathHash(importPath: string): string {
  * so the emitted module never declares the same lexical binding twice.
  */
 function aliasFor(prefix: string, importPath: string, index: number): string {
-  return `${prefix}_${index}_${importPathHash(importPath)}`;
+  return `${prefix}_${index}_${importPathDigest(importPath)}`;
 }
 
 /**
@@ -79,6 +76,10 @@ export function emitQueryPlanBootstrapModule(
   const clockAliases = inputs.map((input, index) =>
     input.clockExportName ? aliasFor('kovoClockPlans', input.importPath, index) : undefined,
   );
+  assertUniqueAliases([
+    ...queryAliases,
+    ...clockAliases.filter((alias): alias is string => alias !== undefined),
+  ]);
 
   const imports = inputs
     .map((input, index) => {
@@ -165,4 +166,15 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
 }
 `,
   };
+}
+
+function assertUniqueAliases(aliases: readonly string[]): void {
+  const seen = new Set<string>();
+  for (const alias of aliases) {
+    if (!seen.has(alias)) {
+      seen.add(alias);
+      continue;
+    }
+    throw new Error(`Duplicate generated bootstrap import alias "${alias}" (SPEC.md §5.2).`);
+  }
 }

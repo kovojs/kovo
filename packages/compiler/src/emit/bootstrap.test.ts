@@ -97,6 +97,12 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
     ].map((match) => match[1]);
     expect(aliasLines).toHaveLength(2);
     expect(new Set(aliasLines).size).toBe(2); // distinct locals -> no collision
+    expect(aliasLines).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^kovoQueryPlans_0_[0-9a-f]{16}$/),
+        expect.stringMatching(/^kovoQueryPlans_1_[0-9a-f]{16}$/),
+      ]),
+    );
 
     // Parses + runs with no duplicate-binding SyntaxError, and BOTH components' plans reach the
     // merged queryPlans map. Each component owns a different query name here.

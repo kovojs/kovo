@@ -38,6 +38,7 @@ describe('diagnostic registry', () => {
       'KV242',
       'KV243',
       'KV244',
+      'KV245',
       'KV301',
       'KV302',
       'KV303',
@@ -351,6 +352,15 @@ describe('diagnostic registry', () => {
           "message": "defer() used as a JSX child; use <Defer> instead.",
           "severity": "lint",
         },
+        "KV245": {
+          "code": "KV245",
+          "help": "Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.
+      Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.
+      Fixes: correct the TSX syntax at this location and re-run the compiler.
+      SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.",
+          "message": "TypeScript/TSX parse failed.",
+          "severity": "error",
+        },
         "KV301": {
           "code": "KV301",
           "help": "Blocked reason: server/query facts stored in island-local state create a second client-owned copy of server truth.
@@ -465,7 +475,7 @@ describe('diagnostic registry', () => {
       Fixes: move writes behind a domain() module, inject the domain operation into the handler, or use the typed transaction context only inside the domain layer.
       SPEC §11.4 and §14 require writes to flow through domains so invalidation and verifier diagnostics stay complete.",
           "message": "Direct db access in a mutation handler; route through domain.",
-          "severity": "lint",
+          "severity": "error",
         },
         "KV402": {
           "code": "KV402",

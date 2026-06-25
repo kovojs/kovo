@@ -19,6 +19,7 @@ interface IdrefValue {
 }
 
 interface LiteralIdValue {
+  element: JsxElementModel;
   index: number;
   length: number;
   value: string;
@@ -275,16 +276,19 @@ function literalIdValuesForElements(
   elements: readonly JsxElementModel[],
   offset = 0,
 ): LiteralIdValue[] {
-  return jsxAttributesForElements(elements).flatMap((attribute) =>
-    attribute.name === 'id' && attribute.value
-      ? [
-          {
-            index: offset + attribute.start,
-            length: attribute.end - attribute.start,
-            value: attribute.value,
-          },
-        ]
-      : [],
+  return elements.flatMap((element) =>
+    element.attributes.flatMap((attribute) =>
+      attribute.name === 'id' && attribute.value
+        ? [
+            {
+              element,
+              index: offset + attribute.start,
+              length: attribute.end - attribute.start,
+              value: attribute.value,
+            },
+          ]
+        : [],
+    ),
   );
 }
 
@@ -318,8 +322,10 @@ function repeatableLiteralIds(model: ComponentModuleModel): LiteralIdValue[] {
     )
     .map((template) => ({ end: template.closingStart, start: template.openingEnd }));
 
-  return ids.filter((id) =>
-    repeatableTemplateSpans.some((span) => id.index >= span.start && id.index < span.end),
+  return ids.filter(
+    (id) =>
+      id.element.repeatable ||
+      repeatableTemplateSpans.some((span) => id.index >= span.start && id.index < span.end),
   );
 }
 

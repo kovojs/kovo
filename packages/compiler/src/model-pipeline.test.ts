@@ -173,4 +173,20 @@ describe('compiler model pipeline', () => {
       'export const CartBadge = component({ render: () => <button on:click="/c/cart-badge.client.js#CartBadge$button_click">Save</button> });',
     );
   });
+
+  it('reports patch conflicts with phase and writer context', () => {
+    const state = componentPipelineState('cart-badge.tsx', 'abcdef', { spans: [] });
+
+    expect(() =>
+      applyModelPatchPass(
+        state,
+        [
+          { end: 4, replacement: 'x', start: 1 },
+          { end: 5, replacement: 'y', start: 3 },
+        ],
+        () => ({ spans: [] }),
+        { owner: { phase: 'lowering', writer: 'test-pass' } },
+      ),
+    ).toThrow('Source replacement overlap phase=lowering writer=test-pass span=3:5');
+  });
 });

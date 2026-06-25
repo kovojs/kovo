@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
+import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
+import { normalizeComponentFileName } from '../shared.js';
 import type { StaticLiteralValue } from './object.js';
 import type {
   ArrowFunctionPartsModel,
@@ -44,7 +46,44 @@ if (!('ScriptTarget' in mutableTs))
  * (SPEC.md §5.2 rule 9).
  */
 export function parseSourceFile(fileName: string, source: string): ts.SourceFile {
-  return ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  return ts.createSourceFile(
+    normalizeComponentFileName(fileName),
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+}
+
+export { normalizeComponentFileName };
+
+export function parseDiagnosticsForSourceFile(
+  sourceFile: ts.SourceFile,
+  source: string,
+): CompilerDiagnostic[] {
+  const parseDiagnostics =
+    (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] })
+      .parseDiagnostics ?? [];
+
+  return parseDiagnostics.map((diagnostic: ts.Diagnostic) => {
+    const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+    const start = diagnostic.start ?? 0;
+    const length = diagnostic.length ?? Math.max(1, source.length - start);
+    return {
+      code: 'KV245',
+      fileName: sourceFile.fileName,
+      help: [
+        'Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.',
+        'Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.',
+        'Fixes: correct the TSX syntax at this location and re-run the compiler.',
+        'SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.',
+      ].join('\n'),
+      length,
+      message: `TypeScript/TSX parse failed. ${message}`,
+      severity: 'error',
+      start: offsetToPosition(source, start),
+    };
+  });
 }
 
 export function parseComponentModule(fileName: string, source: string): ComponentModuleModel {
@@ -59,6 +98,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const mutationHandlers: MutationHandlerModel[] = [];
   const namedImports: NamedImportModel[] = [];
   const renderSourceReturns: StringRenderModel[] = [];
+  const moduleScopeObjectEntries = moduleScopeObjectEntryModels(sourceFile, source);
 
   const visit = (node: ts.Node): void => {
     const specifier = moduleSpecifierModel(node);
@@ -78,7 +118,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
       if (model) components.push(model);
     }
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
-      jsxElements.push(jsxElementModel(sourceFile, source, node));
+      jsxElements.push(jsxElementModel(sourceFile, source, node, moduleScopeObjectEntries));
     }
     if (ts.isJsxExpression(node)) {
       const comment = jsxCommentModel(sourceFile, source, node);
@@ -192,6 +232,47 @@ function moduleScopeBindingModels(
       },
     ];
   });
+}
+
+function moduleScopeObjectEntryModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+): ReadonlyMap<string, readonly ObjectLiteralEntry[]> {
+  const stringBindings = moduleScopeStaticStringValues(sourceFile);
+  const objectEntries = new Map<string, readonly ObjectLiteralEntry[]>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
+      const initializer = unwrapExpression(declaration.initializer);
+      if (!ts.isObjectLiteralExpression(initializer)) continue;
+
+      objectEntries.set(
+        declaration.name.text,
+        objectLiteralEntries(sourceFile, source, initializer, stringBindings),
+      );
+    }
+  }
+
+  return objectEntries;
+}
+
+function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+  const strings = new Map<string, string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
+      const value = staticLiteralValue(declaration.initializer);
+      if (typeof value === 'string') strings.set(declaration.name.text, value);
+    }
+  }
+
+  return strings;
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
@@ -1074,7 +1155,10 @@ function staticConstructorTypeEntry(
   return {};
 }
 
-function propertyNameText(name: ts.PropertyName): string | null {
+function propertyNameText(
+  name: ts.PropertyName,
+  staticStringValues: ReadonlyMap<string, string> = new Map(),
+): string | null {
   if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
     return name.text;
   }
@@ -1086,6 +1170,10 @@ function propertyNameText(name: ts.PropertyName): string | null {
     return name.expression.text;
   }
 
+  if (ts.isComputedPropertyName(name) && ts.isIdentifier(name.expression)) {
+    return staticStringValues.get(name.expression.text) ?? null;
+  }
+
   return null;
 }
 
@@ -1093,17 +1181,25 @@ function objectLiteralEntries(
   sourceFile: ts.SourceFile,
   source: string,
   expression: ts.ObjectLiteralExpression,
+  staticStringValues: ReadonlyMap<string, string> = new Map(),
 ): ObjectLiteralEntry[] {
   return expression.properties.flatMap((property) => {
     if (ts.isPropertyAssignment(property)) {
-      const key = propertyNameText(property.name);
+      const key = propertyNameText(property.name, staticStringValues);
       if (!key) return [];
 
       return [
         {
           key,
           ...(ts.isObjectLiteralExpression(property.initializer)
-            ? { objectEntries: objectLiteralEntries(sourceFile, source, property.initializer) }
+            ? {
+                objectEntries: objectLiteralEntries(
+                  sourceFile,
+                  source,
+                  property.initializer,
+                  staticStringValues,
+                ),
+              }
             : {}),
           ...staticConstructorTypeEntry(property.initializer),
           ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
@@ -1120,7 +1216,7 @@ function objectLiteralEntries(
     }
 
     if (ts.isMethodDeclaration(property)) {
-      const key = propertyNameText(property.name);
+      const key = propertyNameText(property.name, staticStringValues);
       return key ? [{ key }] : [];
     }
 
@@ -1140,6 +1236,7 @@ function jsxElementModel(
   sourceFile: ts.SourceFile,
   source: string,
   node: ts.JsxElement | ts.JsxSelfClosingElement,
+  moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
 ): JsxElementModel {
   const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
   const closingStart = ts.isJsxElement(node)
@@ -1177,7 +1274,7 @@ function jsxElementModel(
     openingEnd: openingElement.getEnd(),
     openingTagNameEnd: openingElement.tagName.getEnd(),
     openingTagNameStart: openingElement.tagName.getStart(sourceFile),
-    repeatable: isInsideArrayMapCallback(node),
+    repeatable: isInsideStaticRepeatCallback(node),
     selfClosing,
     selfClosingSlashHasLeadingWhitespace: selfClosingSlashHasLeadingWhitespace(
       source,
@@ -1199,6 +1296,11 @@ function jsxElementModel(
       const callArgument = firstCallArgument ? unwrapExpression(firstCallArgument) : undefined;
       const callArgumentBareIdentifierName =
         callArgument && ts.isIdentifier(callArgument) ? callArgument.text : undefined;
+      const objectEntries = ts.isObjectLiteralExpression(unwrapped)
+        ? objectLiteralEntries(sourceFile, source, unwrapped)
+        : bareIdentifierName === undefined
+          ? undefined
+          : moduleScopeObjectEntries.get(bareIdentifierName);
       return [
         {
           end: property.getEnd(),
@@ -1213,9 +1315,7 @@ function jsxElementModel(
                 expressionBareIdentifierName: bareIdentifierName,
                 expressionIsBareIdentifier: true,
               }),
-          ...(ts.isObjectLiteralExpression(expression)
-            ? { objectEntries: objectLiteralEntries(sourceFile, source, expression) }
-            : {}),
+          ...(objectEntries === undefined ? {} : { objectEntries }),
           start: property.getStart(sourceFile),
         },
       ];
@@ -1355,16 +1455,14 @@ function jsxAncestorTags(sourceFile: ts.SourceFile, node: ts.Node): string[] {
   return tags;
 }
 
-function isInsideArrayMapCallback(node: ts.Node): boolean {
+function isInsideStaticRepeatCallback(node: ts.Node): boolean {
   let current = node.parent;
 
   while (current) {
     if (
       (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
       ts.isCallExpression(current.parent) &&
-      current.parent.arguments[0] === current &&
-      ts.isPropertyAccessExpression(current.parent.expression) &&
-      current.parent.expression.name.text === 'map'
+      isStaticRepeatCallback(current.parent, current)
     ) {
       return true;
     }
@@ -1372,6 +1470,22 @@ function isInsideArrayMapCallback(node: ts.Node): boolean {
   }
 
   return false;
+}
+
+function isStaticRepeatCallback(call: ts.CallExpression, callback: ts.Expression): boolean {
+  if (call.arguments[0] === callback && ts.isPropertyAccessExpression(call.expression)) {
+    return call.expression.name.text === 'map' || call.expression.name.text === 'flatMap';
+  }
+
+  if (call.arguments[1] !== callback || !ts.isPropertyAccessExpression(call.expression)) {
+    return false;
+  }
+
+  return (
+    call.expression.name.text === 'from' &&
+    ts.isIdentifier(call.expression.expression) &&
+    call.expression.expression.text === 'Array'
+  );
 }
 
 function staticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {

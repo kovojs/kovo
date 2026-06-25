@@ -35,6 +35,13 @@ test('neutralizes injected HTML/JS across server render, JSON island, wire, and 
   // DOM: the bound text is literal text content, not parsed elements.
   const boundText = page.locator('xss-card output[data-bind="payload.text"]');
   await expect(boundText).toHaveText('</script><script>alert(2)</script>');
+  const authoredTsxOutput = page.locator(
+    '#tsx-authored-output-context tsx-xss-card output[data-bind="payload.text"]',
+  );
+  await expect(authoredTsxOutput).toHaveText('&lt;/script&gt;&lt;script&gt;alert(2)&lt;/script&gt;');
+  await expect(page.locator('#tsx-authored-output-context script')).toHaveCount(0);
+  expect(homeHtml).toContain('<tsx-xss-card');
+  expect(homeHtml).toContain('&amp;lt;/script&amp;gt;&amp;lt;script&amp;gt;alert(2)');
   // Seeded href is the safe value as-is.
   await expect(page.locator('xss-card a[data-bind\\:href="payload.url"]')).toHaveAttribute(
     'href',

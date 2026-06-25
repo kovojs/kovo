@@ -12,7 +12,7 @@ import { compileComponentModule } from './index.js';
 // alongside the CSRF field for no-JS mutation forms.
 
 describe('compiler server emit — F1: URL-scheme sanitizer wiring', () => {
-  it('F1: emitted server module retains dynamic href expression for runtime sanitization', () => {
+  it('F1: generated server artifact preserves dynamic href semantics for runtime sanitization', () => {
     // Red path (pre-fix): the emitted JSX runtime called escapeAttribute which does NOT
     // scheme-check, so `javascript:alert(1)` would survive into the rendered HTML.
     // Green path (post-fix): jsx-runtime routes href through safeUrlAttribute at render time.
@@ -38,7 +38,12 @@ export const LinkList = component({
 
     // No KV236 for dynamic expressions (runtime-checked, not compile-time).
     expect(result.diagnostics.filter((d) => d.code === 'KV236')).toEqual([]);
-    // The dynamic href expression must be present (sanitized at render time by jsx-runtime).
+    expect(result.renderEquivalenceChecks).toHaveLength(1);
+    expect(result.renderEquivalenceChecks[0]).toMatchObject({
+      artifact: 'link-list.server.js',
+      ok: true,
+    });
+    expect(result.renderEquivalenceChecks[0]?.actual).toContain('href={link.url}');
     expect(serverSource).toContain('href={link.url}');
   });
 

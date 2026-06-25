@@ -8,6 +8,77 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { kovoCheck, main } from './index.js';
 
+type KovoCheckInput = Parameters<typeof kovoCheck>[0];
+
+interface CheckDiagnosticMatrixRow {
+  accepted: KovoCheckInput;
+  code: 'KV423' | 'KV424' | 'KV438';
+  rejected: KovoCheckInput;
+  spec: string;
+}
+
+const securityCheckDiagnosticMatrix: readonly CheckDiagnosticMatrixRow[] = [
+  {
+    code: 'KV423',
+    spec: 'SPEC.md §9.1/§11.3',
+    accepted: {
+      endpoints: [
+        {
+          appOwnedSafety: true,
+          auth: 'custom:cron-token',
+          body: 'json',
+          cache: 'no-store',
+          csrf: 'checked',
+          method: 'POST',
+          name: 'sync',
+          path: '/api/sync',
+          reason: 'admin-triggered inventory sync',
+        },
+      ],
+    },
+    rejected: {
+      endpoints: [{ method: 'POST', path: '/api/raw', reason: 'raw sync' }],
+    },
+  },
+  {
+    code: 'KV424',
+    spec: 'SPEC.md §4.8/§5.2/§9.1/§11.3',
+    accepted: {
+      unregisteredSinks: [],
+    },
+    rejected: {
+      unregisteredSinks: [
+        {
+          safePath: 'trustedHtml(...) with provenance or a component text binding',
+          sink: 'innerHTML',
+          site: 'app/promo.tsx:12',
+          source: 'cms.body',
+        },
+      ],
+    },
+  },
+  {
+    code: 'KV438',
+    spec: 'SPEC.md §6.6/§10.3/§11.1/§11.3',
+    accepted: {
+      massAssignmentFacts: [],
+    },
+    rejected: {
+      massAssignmentFacts: [
+        {
+          column: 'role',
+          detail: 'role',
+          domain: 'account',
+          name: 'updateAccount',
+          provenance: 'input',
+          site: 'account.domain.ts:7:13',
+          via: 'set',
+        },
+      ],
+    },
+  },
+];
+
 describe('kovo check', () => {
   it('publishes as @kovojs/cli while preserving the kovo bin command', () => {
     const packageJson = JSON.parse(
@@ -62,6 +133,76 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails raw endpoint and webhook graph rows with incomplete audit metadata (KV423)', () => {
+    const result = kovoCheck({
+      endpoints: [
+        { method: 'POST', path: '/api/raw', reason: 'raw sync' },
+        {
+          auth: 'none',
+          body: 'text',
+          cache: 'no-store',
+          csrf: 'exempt',
+          method: 'GET',
+          name: 'stripe',
+          path: '/webhooks/stripe',
+          surface: 'webhook',
+        },
+      ],
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain(
+      'ERROR KV423 ENDPOINT /api/raw Raw endpoint declaration is missing required audit metadata. missing=response.body,response.cache,appOwnedSafety',
+    );
+    expect(result.output).toContain(
+      'ERROR KV423 WEBHOOK stripe Raw endpoint declaration is missing required audit metadata. missing=csrfJustification,method=POST,verifyJustification',
+    );
+  });
+
+  it('proves security-heavy check-owned diagnostics have accepted and rejected coverage', () => {
+    const coverage = securityCheckDiagnosticMatrix.map((row) => {
+      const accepted = kovoCheck(row.accepted);
+      const rejected = kovoCheck(row.rejected);
+      expect(accepted.output, `${row.code} accepted fixture should not emit ${row.code}`).not.toContain(
+        row.code,
+      );
+      expect(rejected.output, `${row.code} rejected fixture should emit ${row.code}`).toContain(
+        row.code,
+      );
+      expect(rejected.exitCode, `${row.code} rejected fixture should fail kovo check`).toBe(1);
+
+      return {
+        acceptedExitCode: accepted.exitCode,
+        code: row.code,
+        rejectedExitCode: rejected.exitCode,
+        spec: row.spec,
+      };
+    });
+
+    expect(coverage).toMatchInlineSnapshot(`
+      [
+        {
+          "acceptedExitCode": 0,
+          "code": "KV423",
+          "rejectedExitCode": 1,
+          "spec": "SPEC.md §9.1/§11.3",
+        },
+        {
+          "acceptedExitCode": 0,
+          "code": "KV424",
+          "rejectedExitCode": 1,
+          "spec": "SPEC.md §4.8/§5.2/§9.1/§11.3",
+        },
+        {
+          "acceptedExitCode": 0,
+          "code": "KV438",
+          "rejectedExitCode": 1,
+          "spec": "SPEC.md §6.6/§10.3/§11.1/§11.3",
+        },
+      ]
+    `);
+  });
+
   // SPEC §10.2/§6.6: end-to-end default-deny wiring. deriveAppGraph (compiler) classifies
   // every surface into graph.access; an undecided query/mutation/page/endpoint fails KV436,
   // while a guarded/public/verified surface passes. The proof is the static graph fact.
@@ -70,7 +211,24 @@ describe('kovo check', () => {
 
     const undecided = deriveAppGraph({
       graph: {
-        endpoints: [{ method: 'POST', path: '/api/raw' }],
+        endpoints: [
+          {
+            appOwnedSafety: true,
+            body: 'json',
+            cache: 'no-store',
+            method: 'POST',
+            path: '/api/raw',
+            reason: 'raw sync',
+          },
+          {
+            body: 'raw',
+            cache: 'no-store',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+            surface: 'webhook',
+          },
+        ],
         mutations: [{ key: 'cart/clear', writes: ['cart'] }],
         pages: [{ route: '/secret' }],
         queries: [{ domains: ['draft'], query: 'drafts' }],
@@ -86,12 +244,30 @@ describe('kovo check', () => {
       expect.stringContaining('ERROR KV436 MUTATION cart/clear'),
       expect.stringContaining('ERROR KV436 PAGE /secret'),
       expect.stringContaining('ERROR KV436 QUERY drafts'),
+      expect.stringContaining('ERROR KV436 WEBHOOK stripe/webhook'),
     ]);
 
     const decided = deriveAppGraph({
       graph: {
         endpoints: [
-          { access: { kind: 'verified-machine-auth' }, method: 'POST', path: '/api/raw' },
+          {
+            access: { kind: 'verified-machine-auth' },
+            appOwnedSafety: true,
+            body: 'json',
+            cache: 'no-store',
+            method: 'POST',
+            path: '/api/raw',
+            reason: 'raw sync',
+          },
+          {
+            auth: 'verifier:stripe-signature',
+            body: 'raw',
+            cache: 'no-store',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+            surface: 'webhook',
+          },
         ],
         mutations: [{ guards: ['authed'], key: 'cart/clear', writes: ['cart'] }],
         pages: [{ access: { kind: 'public', reason: 'public landing page' }, route: '/secret' }],
@@ -751,7 +927,7 @@ describe('kovo check', () => {
     );
   });
 
-  it('reports semantic lints for local state, events, and direct db access', () => {
+  it('reports semantic findings for local state, events, and direct db access', () => {
     expect(
       kovoCheck({
         lints: [
@@ -773,12 +949,12 @@ describe('kovo check', () => {
         ],
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output: [
         'kovo-check/v1',
         'LINT KV301 CartBadge.client.ts:8 Server fact stored in island-local state. state.cartCount mirrors query cart.count.',
         'LINT KV320 cart.events.ts:3 Event payload overlaps query data; use a transform. event cart:added carries product.unitPrice.',
-        'LINT KV330 cart.mutation.ts:12 Direct db access in a mutation handler; route through domain. handler addToCart receives db.',
+        'ERROR KV330 cart.mutation.ts:12 Direct db access in a mutation handler; route through domain. handler addToCart receives db.',
         '',
       ].join('\n'),
     });
@@ -797,7 +973,7 @@ describe('kovo check', () => {
       }).output,
     ).toMatchInlineSnapshot(`
       "kovo-check/v1
-      LINT KV302 CartBadge.tsx:12 data-bind path is not present in the declared query shape. cart.total
+      ERROR KV302 CartBadge.tsx:12 data-bind path is not present in the declared query shape. cart.total
       "
     `);
   });
@@ -815,7 +991,7 @@ describe('kovo check', () => {
       }).output,
     ).toMatchInlineSnapshot(`
       "kovo-check/v1
-      LINT KV303 CartRow.tsx:7 Fragment target render input is not declared as query data or stamped props. priceList
+      ERROR KV303 CartRow.tsx:7 Fragment target render input is not declared as query data or stamped props. priceList
       "
     `);
   });
@@ -1295,19 +1471,27 @@ describe('kovo check', () => {
         endpoints: [
           {
             auth: 'none',
+            appOwnedSafety: true,
+            body: 'text',
+            cache: 'no-store',
             csrf: 'exempt',
             csrfJustification: 'oauth callback',
             method: 'POST',
             name: 'auth/callback',
             path: '/auth/callback',
+            reason: 'oauth callback',
           },
           {
             auth: 'verifier:stripe-signature',
+            appOwnedSafety: true,
+            body: 'text',
+            cache: 'no-store',
             csrf: 'exempt',
             csrfJustification: 'signed stripe webhook',
             method: 'POST',
             name: 'stripe/webhook',
             path: '/webhooks/stripe',
+            reason: 'signed stripe webhook',
           },
         ],
       }),
@@ -1318,15 +1502,27 @@ describe('kovo check', () => {
     });
   });
 
-  it('warns when endpoint CSRF exemptions are missing the named justification', () => {
+  it('fails when endpoint CSRF exemptions are missing the named justification', () => {
     expect(
       kovoCheck({
-        endpoints: [{ csrf: 'exempt', method: 'POST', name: 'stripe/webhook', path: '/stripe' }],
+        endpoints: [
+          {
+            appOwnedSafety: true,
+            body: 'text',
+            cache: 'no-store',
+            csrf: 'exempt',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/stripe',
+            reason: 'stripe webhook',
+          },
+        ],
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output: [
         'kovo-check/v1',
+        'ERROR KV423 ENDPOINT stripe/webhook Raw endpoint declaration is missing required audit metadata. missing=csrfJustification',
         'WARN UNGUARDED stripe/webhook endpoint is reachable without an auth declaration.',
         'WARN ENDPOINT stripe/webhook csrf exemption requires a named justification.',
         '',
@@ -1482,6 +1678,46 @@ describe('kovo check', () => {
     expect(output).toBe(
       'kovo-check/v1\nWARN KV311 component=CartBadge query=cart.discount position="conditional <dot>" Query/state-dependent DOM position has no update status.\n',
     );
+  });
+
+  it('formats KV438 mass-assignment diagnostics through the real kovo check CLI command', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-kv438-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          massAssignmentFacts: [
+            {
+              column: 'role',
+              detail: 'request body role flowed through destructuring',
+              domain: 'account',
+              name: 'updateAccount',
+              provenance: 'input',
+              site: 'src/account.domain.ts:7:13',
+              via: 'set',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['check', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toMatchInlineSnapshot(`
+      "kovo-check/v1
+      ERROR KV438 WRITE updateAccount domain=account column=role via=set provenance=input site=src/account.domain.ts:7:13 Request input reaches a governed column (mass assignment). value=request body role flowed through destructuring
+      "
+    `);
   });
 
   it('rejects unsupported kovo check families with a stable diagnostic', () => {

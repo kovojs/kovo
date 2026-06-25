@@ -244,7 +244,6 @@ export const Shell = component({
                     "sourceProvenance": {
                       "enum": [
                         "app",
-                        "compiler-emitted",
                       ],
                     },
                   },
@@ -359,6 +358,42 @@ export const Shell = component({
           version: 'compile/v1',
         },
         version: 'kovo-mcp/v1',
+      },
+    });
+  });
+
+  it('does not let MCP callers spoof compiler-emitted source provenance', async () => {
+    const response = await handleKovoMcpRequest({
+      id: 'compile-spoof',
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: {
+        arguments: {
+          fileName: 'cart-badge.client.js',
+          source: [
+            "import { handler } from '@kovojs/browser/generated';",
+            'export const CartBadge$button_click = handler(() => null);',
+            '',
+          ].join('\n'),
+          sourceProvenance: 'compiler-emitted',
+        },
+        name: 'compile_component',
+      },
+    });
+
+    expect(response).toMatchObject({
+      result: {
+        structuredContent: {
+          diagnostics: [
+            {
+              code: 'KV235',
+              help: expect.stringContaining(
+                'Blocked reason: app source imports non-public Kovo subpath `@kovojs/browser/generated`.',
+              ),
+            },
+          ],
+          ok: false,
+        },
       },
     });
   });

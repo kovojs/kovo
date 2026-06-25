@@ -3,10 +3,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { compileComponentModule, type CompileResult } from '../../compiler/src/index.js';
 
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
+import { computeRenderPlanFingerprint } from './client-modules.js';
+import { domain } from './domain.js';
 import { renderedHtml } from './html.js';
+import { mutation } from './mutation.js';
+import { query } from './query.js';
 import { route } from './route.js';
+import { s } from './schema.js';
 import { staticExportManifest } from './static-export-result.js';
 import {
   createKovoAppShellViteBuild,
@@ -48,6 +54,9 @@ const runtimeClientModuleManifestItem = expect.objectContaining({
   path: expect.stringMatching(runtimeClientModulePath),
   status: 200,
 });
+const testRenderPlanFingerprint = computeRenderPlanFingerprint({
+  test: 'field:id',
+});
 
 describe('server app shell Vite build seam', () => {
   it('wires route-entry hints, compiled modules, output files, and static export assets', async () => {
@@ -73,6 +82,7 @@ describe('server app shell Vite build seam', () => {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cartClient = true;',
             version: 'cartclient',
           },
@@ -166,6 +176,220 @@ describe('server app shell Vite build seam', () => {
     }
   });
 
+  it('threads render-plan fingerprints into compiled module hrefs and document build tokens', async () => {
+    const routePath = '/cart';
+    const cartRoute = route(routePath, {
+      modulepreloads: ['/c/cart.client.js?v=manual'],
+      page() {
+        return renderedHtml('<main>Cart</main>');
+      },
+    });
+    const source = 'export const cartClient = true;';
+    const shapeA = computeRenderPlanFingerprint({ cart: 'field:id,count' });
+    const shapeB = computeRenderPlanFingerprint({ cart: 'field:id,total' });
+
+    const buildForShape = (renderPlanFingerprint: string) =>
+      createKovoAppShellViteBuild({
+        app: createApp({ routes: [cartRoute] }),
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            renderPlanFingerprint,
+            source,
+          },
+        ],
+      });
+
+    const buildA = buildForShape(shapeA);
+    const buildB = buildForShape(shapeB);
+    const [moduleA] = buildA.clientModules;
+    const [moduleB] = buildB.clientModules;
+    if (!moduleA || !moduleB) throw new Error('expected compiled modules');
+
+    expect(moduleA.source).toBe(moduleB.source);
+    expect(moduleA.version).toContain(shapeA);
+    expect(moduleB.version).toContain(shapeB);
+    expect(moduleA.href).not.toBe(moduleB.href);
+
+    const responseA = await createRequestHandler(buildA.app)(
+      new Request(`https://example.test${routePath}`),
+    );
+    const responseB = await createRequestHandler(buildB.app)(
+      new Request(`https://example.test${routePath}`),
+    );
+    const tokenA = (await responseA.text()).match(
+      /<meta name="kovo-build" content="([^"]*)"/,
+    )?.[1];
+    const tokenB = (await responseB.text()).match(
+      /<meta name="kovo-build" content="([^"]*)"/,
+    )?.[1];
+
+    expect(tokenA).toBeTruthy();
+    expect(tokenB).toBeTruthy();
+    expect(tokenA).not.toBe(tokenB);
+    expect(buildA.app.clientModules.buildToken()).toBe(tokenA);
+    expect(buildB.app.clientModules.buildToken()).toBe(tokenB);
+  });
+
+  it('moves all build-scoped tokens and hrefs when compiler render-plan shape changes but client bytes do not', async () => {
+    const routePath = '/cart';
+    const cartDomain = domain('cart');
+    const source = `
+import { component } from '@kovojs/core';
+
+export const CartButton = component({
+  queries: { cart: {} },
+  render: () => <button>Add</button>,
+});
+`;
+    const compileForShape = (
+      queryShapes: NonNullable<Parameters<typeof compileComponentModule>[0]['queryShapes']>,
+    ) =>
+      compileComponentModule({
+        fileName: 'components/cart/cart-button.tsx',
+        queryShapes,
+        source,
+      });
+    const compiledA = compileForShape({ cart: { count: 'number' } });
+    const compiledB = compileForShape({ cart: { total: 'number' } });
+    const clientA = compiledClientModule(compiledA);
+    const clientB = compiledClientModule(compiledB);
+
+    expect(compiledA.diagnostics).toEqual([]);
+    expect(compiledB.diagnostics).toEqual([]);
+    expect(clientA.source).toBe(clientB.source);
+    expect(compiledA.renderPlanFingerprint).toBeTruthy();
+    expect(compiledB.renderPlanFingerprint).toBeTruthy();
+    expect(compiledA.renderPlanFingerprint).not.toBe(compiledB.renderPlanFingerprint);
+
+    const buildForCompiled = (compiled: CompileResult, clientSource: string) => {
+      let clientHref = '';
+      const cartQuery = query('cart', {
+        load: () => ({ count: 1, total: 100 }),
+        reads: [cartDomain],
+      });
+      const addToCart = mutation('cart/add-token-proof', {
+        csrf: false,
+        input: s.object({ productId: s.string() }),
+        registry: {
+          queries: [cartQuery],
+          touches: [cartDomain],
+        },
+        handler: (input) => input,
+      });
+      const build = createKovoAppShellViteBuild({
+        app: createApp({
+          mutations: [addToCart],
+          queries: [cartQuery],
+          routes: [
+            route(routePath, {
+              page() {
+                return renderedHtml(
+                  `<main><button on:click="${clientHref}#CartButton$click">Add</button></main>`,
+                );
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/components/cart/cart-button.client.js',
+            renderPlanFingerprint: requiredRenderPlanFingerprint(compiled),
+            source: clientSource,
+          },
+        ],
+      });
+      const module = build.clientModules[0];
+      if (!module) throw new Error('expected built client module');
+      clientHref = module.href;
+
+      return { build, clientHref };
+    };
+
+    const appA = buildForCompiled(compiledA, clientA.source);
+    const appB = buildForCompiled(compiledB, clientB.source);
+    const handlerA = createRequestHandler(appA.build.app);
+    const handlerB = createRequestHandler(appB.build.app);
+    const tokenA = appA.build.app.clientModules.buildToken();
+    const tokenB = appB.build.app.clientModules.buildToken();
+
+    expect(appA.clientHref).not.toBe(appB.clientHref);
+    expect(tokenA).not.toBe(tokenB);
+
+    const [documentA, documentB] = await Promise.all([
+      handlerA(new Request(`https://example.test${routePath}`)),
+      handlerB(new Request(`https://example.test${routePath}`)),
+    ]);
+    const [documentBodyA, documentBodyB] = await Promise.all([
+      documentA.text(),
+      documentB.text(),
+    ]);
+    expect(documentBodyA).toContain(`<meta name="kovo-build" content="${tokenA}">`);
+    expect(documentBodyB).toContain(`<meta name="kovo-build" content="${tokenB}">`);
+    expect(documentBodyA).toContain(appA.clientHref);
+    expect(documentBodyB).toContain(appB.clientHref);
+
+    const [queryA, queryB] = await Promise.all([
+      handlerA(new Request('https://example.test/_q/cart')),
+      handlerB(new Request('https://example.test/_q/cart')),
+    ]);
+    expect(queryA.headers.get('Kovo-Build')).toBe(tokenA);
+    expect(queryB.headers.get('Kovo-Build')).toBe(tokenB);
+
+    const mutationRequest = () =>
+      new Request('https://example.test/_m/cart/add-token-proof', {
+        body: JSON.stringify({ productId: 'p1' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'cart-summary=cart',
+        },
+        method: 'POST',
+      });
+    const [mutationA, mutationB] = await Promise.all([
+      handlerA(mutationRequest()),
+      handlerB(mutationRequest()),
+    ]);
+    expect(mutationA.status).toBe(200);
+    expect(mutationB.status).toBe(200);
+    expect(mutationA.headers.get('Kovo-Build')).toBe(tokenA);
+    expect(mutationB.headers.get('Kovo-Build')).toBe(tokenB);
+    await expect(mutationA.text()).resolves.toContain('<kovo-query name="cart"');
+    await expect(mutationB.text()).resolves.toContain('<kovo-query name="cart"');
+
+    const outDirA = await mkdtemp(join(tmpdir(), 'kovo-render-plan-shape-a-'));
+    const outDirB = await mkdtemp(join(tmpdir(), 'kovo-render-plan-shape-b-'));
+    try {
+      const [exportA, exportB] = await Promise.all([
+        exportKovoAppShellViteBuild(appA.build, { distDir: outDirA }),
+        exportKovoAppShellViteBuild(appB.build, { distDir: outDirB }),
+      ]);
+      expect(exportA.artifacts[0]?.body).toContain(`<meta name="kovo-build" content="${tokenA}">`);
+      expect(exportB.artifacts[0]?.body).toContain(`<meta name="kovo-build" content="${tokenB}">`);
+      expect(exportA.artifacts[0]?.body).toContain(appA.clientHref);
+      expect(exportB.artifacts[0]?.body).toContain(appB.clientHref);
+    } finally {
+      await Promise.all([
+        rm(outDirA, { force: true, recursive: true }),
+        rm(outDirB, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('rejects compiled client modules without a render-plan fingerprint', () => {
+    expect(() =>
+      createKovoAppShellViteBuild({
+        app: createApp({ routes: [] }),
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            source: 'export const cartClient = true;',
+          },
+        ],
+      }),
+    ).toThrow(/missing renderPlanFingerprint.*SPEC §5\.2\.1/);
+  });
+
   it('requires an app when Vite build output is asked to run static export', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-static-export-dist-'));
 
@@ -218,6 +442,7 @@ describe('server app shell Vite build seam', () => {
         clientModules: [
           {
             path: '/c/admin.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const admin = true;',
             version: 'admin-v1',
           },
@@ -275,6 +500,7 @@ describe('server app shell Vite build seam', () => {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cart = true;',
             version: 'cart-v1',
           },
@@ -385,6 +611,7 @@ describe('server app shell Vite build seam', () => {
         clientModules: [
           {
             path: '/c/shop.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const shopClient = true;',
             version: 'shopclient',
           },
@@ -408,7 +635,7 @@ describe('server app shell Vite build seam', () => {
         {
           headers: {
             'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+              "default-src 'self'; script-src 'self' 'sha256-GKlDqFJ9RfBR6s7TKREcSLRzz+wMXZ3Cp5bDI0qkcWI='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/shop.css>; rel=preload; as=style, </assets/shop.js>; rel=modulepreload',
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -784,7 +1011,7 @@ describe('server app shell Vite build seam', () => {
         {
           headers: {
             'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+              "default-src 'self'; script-src 'self' 'sha256-GKlDqFJ9RfBR6s7TKREcSLRzz+wMXZ3Cp5bDI0qkcWI='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/catalog.css>; rel=preload; as=style, </assets/catalog.js>; rel=modulepreload',
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -855,6 +1082,7 @@ describe('server app shell Vite build seam', () => {
       const clientModules = [
         {
           path: '/c/docs.client.js',
+          renderPlanFingerprint: testRenderPlanFingerprint,
           source: 'export const docsClient = true;',
           version: 'docs-v1',
         },
@@ -909,7 +1137,7 @@ describe('server app shell Vite build seam', () => {
           {
             headers: {
               'content-security-policy':
-                "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+                "default-src 'self'; script-src 'self' 'sha256-GKlDqFJ9RfBR6s7TKREcSLRzz+wMXZ3Cp5bDI0qkcWI='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
               'referrer-policy': 'strict-origin-when-cross-origin',
@@ -953,7 +1181,7 @@ describe('server app shell Vite build seam', () => {
           {
             headers: {
               'content-security-policy':
-                "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+                "default-src 'self'; script-src 'self' 'sha256-GKlDqFJ9RfBR6s7TKREcSLRzz+wMXZ3Cp5bDI0qkcWI='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
               'referrer-policy': 'strict-origin-when-cross-origin',
@@ -1068,3 +1296,14 @@ describe('server app shell Vite build seam', () => {
     }
   });
 });
+
+function compiledClientModule(result: CompileResult): { source: string } {
+  const file = result.files.find((candidate) => candidate.kind === 'client');
+  if (!file) throw new Error('expected compiler-emitted client module');
+  return { source: file.source };
+}
+
+function requiredRenderPlanFingerprint(result: CompileResult): string {
+  if (!result.renderPlanFingerprint) throw new Error('expected compiler render-plan fingerprint');
+  return result.renderPlanFingerprint;
+}

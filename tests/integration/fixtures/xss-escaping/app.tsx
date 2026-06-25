@@ -3,6 +3,7 @@ import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/i
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { payloadQuery, readPayload, xssDomain, type PayloadResult } from './shared';
+import { XssCard } from './xss-card';
 
 // Values the mutation writes — exercise the CLIENT update plan (textContent text
 // binding + kovoSafeUrl URL-scheme allowlist, packages/browser/src/security-output.ts).
@@ -14,6 +15,10 @@ function renderCardHtml(p: PayloadResult): string {
     <output data-bind="payload.text">${escapeHtml(p.text)}</output>
     <a data-bind:href="payload.url" href="${escapeAttribute(p.url)}">link</a>
   </xss-card>`;
+}
+
+function renderAuthoredTsxCardHtml(payload: PayloadResult): string {
+  return XssCard.definition.render({ payload }) as unknown as string;
 }
 
 export const updatePayload = mutation('xss/update', {
@@ -36,10 +41,12 @@ const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
     const payload = await readPayload(request.db);
     const rendered = renderCardHtml(payload);
+    const authoredTsxRendered = renderAuthoredTsxCardHtml(payload);
     return `${renderQueryScript({ name: 'payload', value: payload })}
     <script type="module" src="/client.ts"></script>
     <main>
       <kovo-fragment target="xss-card">${rendered}</kovo-fragment>
+      <section id="tsx-authored-output-context">${authoredTsxRendered}</section>
       <form method="post" action="/_m/xss/update" enhance data-mutation="xss/update" kovo-deps="payload">
         <button type="submit">Inject</button>
       </form>

@@ -147,6 +147,61 @@ export const home = route('/', {
     );
   });
 
+  it('threads route and layout access posture through JSX-authored route page facts', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { guards, layout, publicAccess, route, verifiedAccess } from '@kovojs/server';
+
+const authed = guards.authed();
+const AdminLayout = layout({
+  access: { guards: [{ name: 'admin' }], kind: 'guard-chain' },
+  guard: authed,
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+
+export const docs = route('/docs', {
+  access: publicAccess('public docs'),
+  page: () => <DocsPage />,
+});
+
+export const admin = route('/admin', {
+  layout: AdminLayout,
+  page: () => <AdminPage />,
+});
+
+export const signed = route('/signed', {
+  access: verifiedAccess,
+  page: () => <SignedPage />,
+});
+
+export const missing = route('/missing', {
+  page: () => <MissingPage />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.routePageFacts.map((fact) => ({
+        access: fact.access,
+        guards: fact.guards,
+        route: fact.route,
+      })),
+    ).toEqual([
+      { access: { kind: 'public', reason: 'public docs' }, guards: undefined, route: '/docs' },
+      {
+        access: { guards: [{ name: 'admin' }], kind: 'guard-chain' },
+        guards: ['authed'],
+        route: '/admin',
+      },
+      { access: { kind: 'verified-machine-auth' }, guards: undefined, route: '/signed' },
+      { access: undefined, guards: undefined, route: '/missing' },
+    ]);
+    expect(result.files[0]?.source).toContain('"access":{"kind":"public","reason":"public docs"}');
+    expect(result.files[0]?.source).toContain('"guards":["authed"]');
+  });
+
   it('lowers route-level parallel regions to compiler-owned navigation segment metadata', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',

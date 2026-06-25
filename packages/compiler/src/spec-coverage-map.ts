@@ -6,8 +6,12 @@ export type SpecClause =
   | 'SPEC.md §4.8'
   | 'SPEC.md §4.9'
   | 'SPEC.md §5.2'
+  | 'SPEC.md §5.2.1'
+  | 'SPEC.md §5.2.2'
   | 'SPEC.md §6.1.1'
   | 'SPEC.md §6.4'
+  | 'SPEC.md §6.6'
+  | 'SPEC.md §10'
   | 'SPEC.md §11.3/§11.4';
 
 export interface ExecutableCoverageCitation {
@@ -311,6 +315,117 @@ export const compilerSpecCoverageMap = [
     ],
   },
   {
+    clause: 'SPEC.md §5.2.1',
+    promise:
+      'render-plan version tokens are one opaque build-stable contract shared across compiler and runtime URL/version consumers',
+    accepted: [
+      {
+        file: 'packages/compiler/src/render-plan-token-contract.test.ts',
+        testName: 'moves the token when any projected query shape changes (KV416 monotonicity)',
+      },
+      {
+        file: 'packages/compiler/src/handler-lowering.test.ts',
+        testName: 'versions handler URLs from the render-plan fingerprint plus emitted client module source',
+      },
+    ],
+    diagnostics: [
+      {
+        file: 'packages/compiler/src/compile-component.test.ts',
+        testName:
+          'throws KV416 when a projected-query field rename does NOT move a stubbed non-monotonic token (D4)',
+        codes: ['KV416'],
+      },
+    ],
+    referenceApp: [
+      {
+        file: 'examples/commerce/src/app.live-targets.test.ts',
+        testName: 'stamps live-target hooks into the rendered cart document',
+      },
+    ],
+  },
+  {
+    clause: 'SPEC.md §5.2.2',
+    promise:
+      'the production render-plan gate fails builds whose projected shape changes do not move the token',
+    accepted: [
+      {
+        file: 'packages/compiler/src/compile-component.test.ts',
+        testName: 'passes when shapes change AND the token changes',
+      },
+      {
+        file: 'packages/compiler/src/compile-component.test.ts',
+        testName: 'does NOT throw KV416 when shapes differ and a correct token function moves (real fingerprint)',
+      },
+    ],
+    diagnostics: [
+      {
+        file: 'packages/compiler/src/compile-component.test.ts',
+        testName: 'wires KV416 into the production compile gate diagnostics',
+        codes: ['KV416'],
+      },
+      {
+        file: 'packages/compiler/src/compile-component.test.ts',
+        testName: 'includes secret query shape metadata in the production render-plan token gate',
+        codes: ['KV416'],
+      },
+    ],
+    referenceApp: [
+      {
+        file: 'examples/commerce/src/app.live-targets.test.ts',
+        testName: 'stamps live-target hooks into the rendered cart document',
+      },
+    ],
+  },
+  {
+    clause: 'SPEC.md §6.6',
+    promise:
+      'static security facts reject secret client-wire and client-handler capture channels while preserving explicit audited escapes',
+    accepted: [
+      {
+        file: 'packages/compiler/src/client-secret-capture.test.ts',
+        testName: 'emits a callee-position import (ordinary client util) without KV437',
+      },
+      {
+        file: 'packages/compiler/src/client-secret-capture.test.ts',
+        testName: 'allows a publishToClient(captured, { reason }) escape: emits and records the fact',
+      },
+      {
+        file: 'packages/compiler/src/query-bindings.test.ts',
+        testName: 'does not report KV435 for explicitly revealed query shape fields',
+      },
+    ],
+    diagnostics: [
+      {
+        file: 'packages/compiler/src/client-secret-capture.test.ts',
+        testName: 'fires KV437 for a captured NAMED import in call-argument (value) position',
+        codes: ['KV437'],
+      },
+      {
+        file: 'packages/compiler/src/query-bindings.test.ts',
+        testName: 'reports KV435 when a component-declared query shape contains a secret field',
+        codes: ['KV435'],
+      },
+      {
+        file: 'packages/cli/src/index.kovo-check.test.ts',
+        testName:
+          'proves security-heavy check-owned diagnostics have accepted and rejected coverage',
+        codes: ['KV438'],
+      },
+      {
+        file: 'packages/cli/src/index.kovo-check.test.ts',
+        testName:
+          'formats KV438 mass-assignment diagnostics through the real kovo check CLI command',
+        codes: ['KV438'],
+      },
+    ],
+    referenceApp: [
+      {
+        file: 'examples/commerce/src/app.auth.test.ts',
+        testName: 'uses the typed commerce session schema in authenticated mutations',
+      },
+    ],
+  },
+  {
     clause: 'SPEC.md §6.4',
     promise: 'typed navigation, IDREFs, and cross-island event wiring are accepted or diagnosed',
     accepted: [
@@ -357,13 +472,56 @@ export const compilerSpecCoverageMap = [
     ],
   },
   {
+    clause: 'SPEC.md §10',
+    promise:
+      'mutation write domains, invalidation coverage, optimistic status, and guarded ownership checks are statically auditable',
+    accepted: [
+      {
+        file: 'packages/compiler/src/registry.test.ts',
+        testName: 'derives registry facts from graph query, mutation, and page facts',
+      },
+      {
+        file: 'packages/cli/src/index.kovo-check.test.ts',
+        testName: 'accepts explicit optimistic statuses for every invalidated query',
+      },
+      {
+        file: 'packages/cli/src/index.kovo-check.test.ts',
+        testName: 'discharges an owner-domain arg access guarded by owns() (SPEC §10.3)',
+      },
+    ],
+    diagnostics: [
+      {
+        file: 'packages/compiler/src/registry.test.ts',
+        testName:
+          'reports KV421 for duplicate mutation-key facts (today none; invalidations last-write-wins)',
+        codes: ['KV421'],
+      },
+      {
+        file: 'packages/cli/src/index.kovo-check.test.ts',
+        testName: 'fails KV314 when renderOnce reads a query invalidated by modeled writes',
+        codes: ['KV314'],
+      },
+      {
+        file: 'packages/cli/src/index.kovo-check.test.ts',
+        testName: 'derives KV310 gaps from mutation invalidations and query read sets',
+        codes: ['KV310'],
+      },
+    ],
+    referenceApp: [
+      {
+        file: 'examples/commerce/src/app.test.ts',
+        testName: 'dispatches enhanced and no-JS cart mutations through the shared app over HTTP',
+      },
+    ],
+  },
+  {
     clause: 'SPEC.md §11.3/§11.4',
     promise:
       'diagnostic registry, kovo check, explain, and mutation/domain verifier surfaces are mechanically audited',
     accepted: [
       {
         file: 'packages/compiler/src/diagnostic-coverage-matrix.test.ts',
-        testName: 'guards the authoritative compiler-owned KV2xx/KV3xx code list',
+        testName: 'guards the authoritative compiler-owned diagnostic code list',
       },
       {
         file: 'packages/compiler/src/diagnostic-coverage-matrix.test.ts',
@@ -392,8 +550,14 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/cli/src/index.kovo-check.test.ts',
-        testName: 'reports semantic lints for local state, events, and direct db access',
+        testName: 'reports semantic findings for local state, events, and direct db access',
         codes: ['KV301', 'KV320', 'KV330'],
+      },
+      {
+        file: 'packages/cli/src/index.kovo-check.test.ts',
+        testName:
+          'proves security-heavy check-owned diagnostics have accepted and rejected coverage',
+        codes: ['KV423', 'KV424', 'KV438'],
       },
     ],
     referenceApp: [

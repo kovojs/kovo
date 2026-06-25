@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
+import { computeRenderPlanFingerprint } from './client-modules.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 import { createKovoAppShellViteBuild } from './vite-build.js';
@@ -13,6 +14,10 @@ import { exportKovoAppShellViteBuildFromManifestFile } from './vite-static-expor
 import { kovoAppShellVitePlugin } from './internal/app-shell-vite.js';
 import { kovoAppShellViteStaticExportAssets } from './vite-build-assets.js';
 import { renderedHtml } from './html.js';
+
+const testRenderPlanFingerprint = computeRenderPlanFingerprint({
+  test: 'field:id',
+});
 
 describe('server app shell Vite plugin', () => {
   it('turns Vite build asset plans into static-export copy inputs', async () => {
@@ -193,6 +198,7 @@ describe('server app shell Vite plugin', () => {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const client = "cart";',
             version: 'cart-v1',
           },
@@ -360,6 +366,7 @@ describe('server app shell Vite plugin', () => {
             clientModules: [
               {
                 path: '/c/cart.client.js',
+                renderPlanFingerprint: testRenderPlanFingerprint,
                 source: 'export const cartClient = true;',
                 version: 'cart-v1',
               },

@@ -1075,13 +1075,24 @@ async function runCompileComponentCommand(
     artifacts.push({
       kind: 'component-facts',
       path: options.factsOutPath,
-      source: `${JSON.stringify({ componentGraphFacts: result.componentGraphFacts }, null, 2)}\n`,
+      source: `${JSON.stringify(
+        {
+          componentGraphFacts: result.componentGraphFacts,
+          publishToClientFacts: result.publishToClientFacts,
+        },
+        null,
+        2,
+      )}\n`,
     });
   }
   if (options.emitClientFiles) {
     for (const file of result.files) {
       if (file.kind === 'client') {
-        artifacts.push({ kind: 'client', path: file.fileName, source: file.source });
+        artifacts.push({
+          kind: 'client',
+          path: join(dirname(options.outPath), basename(file.fileName)),
+          source: file.source,
+        });
       }
     }
   }

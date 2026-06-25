@@ -407,7 +407,7 @@ function listMcpTools(): {
             queryShapes: { type: 'object' },
             registryFacts: { type: 'object' },
             source: { type: 'string' },
-            sourceProvenance: { enum: ['app', 'compiler-emitted'] },
+            sourceProvenance: { enum: ['app'] },
           },
           required: ['fileName', 'source'],
           type: 'object',
@@ -524,7 +524,7 @@ function assertCompileComponentV1Input(args: unknown): CompileComponentV1Input {
   if (isRecord(args.registryFacts)) {
     input.registryFacts = args.registryFacts as CompileComponentV1Input['registryFacts'];
   }
-  if (args.sourceProvenance === 'app' || args.sourceProvenance === 'compiler-emitted') {
+  if (args.sourceProvenance === 'app') {
     input.sourceProvenance = args.sourceProvenance;
   }
 

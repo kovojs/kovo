@@ -30,6 +30,11 @@ export interface KovoAppShellCompiledClientModule extends Omit<
   VersionedClientModuleInput,
   'version'
 > {
+  /**
+   * @internal Compiler render-plan fingerprint. Required for compiled modules so
+   * SPEC §5.2.1 shape-only render-plan changes move the registry build token.
+   */
+  renderPlanFingerprint?: string;
   version?: string;
 }
 
@@ -247,11 +252,24 @@ function registerCompiledClientModules(
   app: KovoApp,
   modules: readonly KovoAppShellCompiledClientModule[],
 ): KovoAppShellBuiltClientModule[] {
+  const renderPlanFingerprint = compiledClientModulesRenderPlanFingerprint(modules);
+  if (renderPlanFingerprint !== undefined) {
+    if (!app.clientModules.setRenderPlanFingerprint) {
+      throw new TypeError(
+        'createKovoAppShellBuild() requires app.clientModules.setRenderPlanFingerprint() when compiled client modules are registered. SPEC §5.2.1 requires the build token to include the compiler render-plan fingerprint.',
+      );
+    }
+    app.clientModules.setRenderPlanFingerprint(renderPlanFingerprint);
+  }
+
   return modules.map((module) => {
+    const { renderPlanFingerprint: _renderPlanFingerprint, ...registryModule } = module;
     // SPEC §6.6: production client module URLs are immutable and versioned.
-    const version = module.version ?? sourceVersion(module.source);
+    // SPEC §5.2.1: the default version also carries the render-plan fingerprint
+    // so a shape-only render-plan change moves the client href as well as the token.
+    const version = module.version ?? `${module.renderPlanFingerprint}-${sourceVersion(module.source)}`;
     const href = app.clientModules.put({
-      ...module,
+      ...registryModule,
       version,
     });
     const url = new URL(href, 'https://kovo.local');
@@ -267,6 +285,30 @@ function registerCompiledClientModules(
 
     return built;
   });
+}
+
+function compiledClientModulesRenderPlanFingerprint(
+  modules: readonly KovoAppShellCompiledClientModule[],
+): string | undefined {
+  if (modules.length === 0) return undefined;
+
+  let fingerprint: string | undefined;
+  for (const module of modules) {
+    if (!module.renderPlanFingerprint) {
+      throw new TypeError(
+        `Compiled client module ${module.path} is missing renderPlanFingerprint. SPEC §5.2.1 requires the build token to include the compiler render-plan fingerprint.`,
+      );
+    }
+    if (fingerprint === undefined) {
+      fingerprint = module.renderPlanFingerprint;
+    } else if (fingerprint !== module.renderPlanFingerprint) {
+      throw new TypeError(
+        'Compiled client modules in one app-shell build must share one renderPlanFingerprint. SPEC §5.2.1 requires one coherent build token per render plan.',
+      );
+    }
+  }
+
+  return fingerprint;
 }
 
 function viteManifestOptions(base: string | undefined): KovoAppShellViteManifestHintOptions {

@@ -2,6 +2,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
+import {
+  clientModuleContentVersion,
+  clientModuleHrefForSourceFile,
+  parseVersionedClientModuleTarget,
+  versionedClientModuleRequestKey,
+} from '@kovojs/core/internal/client-module-url';
+
 import { CompileCache, compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
@@ -12,7 +19,7 @@ import {
 } from './css.js';
 import {
   persistentCompileCacheDir,
-  readPersistentCompileCacheEntry,
+  readPersistentCompileCacheEntryForInput,
   writePersistentCompileCacheEntry,
 } from './persistent-compile-cache.js';
 import type {
@@ -224,7 +231,10 @@ export function createKovoVitePlugin(
         }
 
         res.statusCode = 200;
-        res.setHeader('Content-Type', 'text/javascript');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+        res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
         res.end(source);
       });
     },
@@ -427,9 +437,8 @@ async function compileCachedViteComponentModule(
     );
   }
   const cacheInput = compileComponentCacheKeyInput(compileOptions);
-  const cacheKey = compileCacheKey(cacheInput);
   const cacheDir = persistentCompileCacheDir(root);
-  return readPersistentCompileCacheEntry<ViteCompileResult>(cacheDir, cacheKey).then(
+  return readPersistentCompileCacheEntryForInput<ViteCompileResult>(cacheDir, cacheInput).then(
     async (persistent) => {
       if (persistent) return persistent;
       const result = await cache.getOrCreate(cacheInput, () =>
@@ -443,6 +452,9 @@ async function compileCachedViteComponentModule(
         ),
       );
       if (result.dependencyFootprint) {
+        const cacheKey = compileCacheKey(
+          compileComponentCacheKeyInput(compileOptions, result.dependencyFootprint),
+        );
         await writePersistentCompileCacheEntry(cacheDir, {
           cacheKey,
           footprint: result.dependencyFootprint,
@@ -517,8 +529,22 @@ function loadViteClientModule(
     source,
   );
   if (isPromiseLike(result)) {
-    return result.then((resolvedResult) => viteClientSource(resolvedResult));
+    return result.then((resolvedResult) =>
+      loadViteClientCompileResult(options, fileName, source, resolvedResult),
+    );
   }
+
+  return loadViteClientCompileResult(options, fileName, source, result);
+}
+
+function loadViteClientCompileResult(
+  options: KovoVitePluginOptions,
+  fileName: string,
+  source: string,
+  result: ViteCompileResult,
+): null | string {
+  const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
+  if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
 
   return viteClientSource(result);
 }
@@ -567,11 +593,15 @@ function recordViteCompileResult(
 ): void {
   for (const file of result.files) {
     if (file.kind === 'client') {
-      clientModules.set(
+      const href =
         result.hmrImpact?.clientHref ??
-          viteClientModuleUrl(fileName, viteClientModuleVersion(file.source)),
-        file.source,
-      );
+        clientModuleHrefForSourceFile(fileName, clientModuleContentVersion(file.source));
+      clientModules.set(href, file.source);
+
+      const target = parseVersionedClientModuleTarget(href);
+      if (target !== undefined) {
+        clientModules.set(`${target.path}?v=${target.version}`, file.source);
+      }
     }
   }
 
@@ -719,32 +749,9 @@ function slashPath(fileName: string): string {
 function devClientModuleKey(url: string | undefined): string | null {
   if (!url) return null;
 
-  const parsed = new URL(url, 'https://kovo.local');
-  if (parsed.pathname.startsWith('/c/__v/')) return parsed.pathname;
-
-  const version = parsed.searchParams.get('v');
-  if (!parsed.pathname.startsWith('/c/') || !version) return null;
-
-  return `${parsed.pathname}?v=${version}`;
-}
-
-function viteClientModuleUrl(fileName: string, version?: string): string {
-  const href = `/c/${replaceViteExtension(fileName, '.client.js').replace(/^\/+/, '')}`;
-  if (!version) return href;
-
-  return `/c/__v/${encodeURIComponent(version)}/${href.slice('/c/'.length)}`;
-}
-
-function replaceViteExtension(fileName: string, extension: string): string {
-  return fileName.replace(/\.[cm]?[jt]sx?$/, extension);
-}
-
-function viteClientModuleVersion(source: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
+  try {
+    return versionedClientModuleRequestKey(url) ?? null;
+  } catch {
+    return null;
   }
-
-  return hash.toString(16).padStart(8, '0');
 }

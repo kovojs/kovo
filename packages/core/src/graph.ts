@@ -302,6 +302,7 @@ export interface PageExplain {
 /** @internal */
 export interface EndpointExplain {
   access?: AccessDecisionFact;
+  appOwnedSafety?: boolean;
   auth?: string;
   body?: string;
   bodySize?: string;
@@ -314,9 +315,11 @@ export interface EndpointExplain {
   headers?: readonly string[];
   method?: string;
   mount?: 'exact' | 'prefix';
+  mountJustification?: string;
   name?: string;
   path: string;
   rateLimit?: string;
+  reason?: string;
   surface?: 'dynamic-export' | 'endpoint' | 'route-file' | 'route-stream' | 'webhook';
   writes?: readonly string[];
 }
@@ -463,6 +466,8 @@ export interface CapabilityExplain {
     | 'unsafeCookie';
   /** A human justification recorded at the escape site (the audit's load-bearing field). */
   justification?: string;
+  /** Source module for module-scoped escapes such as `publishToClient`. */
+  moduleSpecifier?: string;
   /** The escape target/value descriptor (e.g. host:port, query path, cookie name). */
   target?: string;
   /** The source span of the escape. */
@@ -752,6 +757,7 @@ function compareAccessExplainFact(left: AccessExplainFact, right: AccessExplainF
 
 const arrayFields = [
   'access',
+  'capabilities',
   'components',
   'derivedMutations',
   'derivedQueries',

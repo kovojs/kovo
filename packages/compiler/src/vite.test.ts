@@ -2,6 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import {
+  clientModuleContentVersion,
+  clientModuleHrefForSourceFile,
+} from '@kovojs/core/internal/client-module-url';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +30,10 @@ export const CartBadge = component({
 
 const kv201 = diagnosticDefinitions.KV201;
 const kv210 = diagnosticDefinitions.KV210;
+const kv235 = diagnosticDefinitions.KV235;
+const kv236 = diagnosticDefinitions.KV236;
+const kv330 = diagnosticDefinitions.KV330;
+const kv437 = diagnosticDefinitions.KV437;
 
 function createMiddlewareResponse(): {
   body: string;
@@ -142,6 +150,115 @@ export function renderSource() {
     });
   });
 
+  it.each([
+    ['KV235', kv235],
+    ['KV236', kv236],
+    ['KV330', kv330],
+    ['KV437', kv437],
+  ] as const)('blocks Vite transform output for %s error diagnostics', async (code, definition) => {
+    const plugin = createKovoVitePlugin(() => ({
+      diagnostics: [
+        {
+          code,
+          fileName: `src/${code.toLowerCase()}.tsx`,
+          help: definition.help,
+          length: 11,
+          message: definition.message,
+          severity: definition.severity,
+          start: { line: 7, column: 15 },
+        },
+      ],
+      files: [
+        { kind: 'server', source: `export const leakedServer = "${code}";` },
+        { kind: 'client', source: `export const leakedClient = "${code}";` },
+      ],
+    }));
+
+    await expect(plugin.transform('component(', `src/${code.toLowerCase()}.tsx`)).rejects.toThrow(
+      [
+        'Kovo Vite transform failed with 1 error diagnostic.',
+        [
+          `${code} src/${code.toLowerCase()}.tsx:7:15 ${definition.message}`,
+          ...definition.help.split('\n').map((line) => `  help: ${line}`),
+        ].join('\n'),
+      ].join('\n\n'),
+    );
+  });
+
+  it('formats real compiler KV235, KV236, and KV437 diagnostics through Vite transform', async () => {
+    const cases = [
+      {
+        fileName: 'src/real-kv235.tsx',
+        source: `
+import { component } from '@kovojs/core';
+
+export const RealKv235 = component({
+  render: () => \`<real-kv235 kovo-deps="cart"><span data-bind="cart.count">1</span></real-kv235>\`,
+});
+`,
+      },
+      {
+        fileName: 'src/real-kv236.tsx',
+        source: `
+import { component } from '@kovojs/core';
+
+export const RealKv236 = component({
+  render: () => <a href="javascript:alert(1)">bad</a>,
+});
+`,
+      },
+      {
+        fileName: 'src/real-kv437.tsx',
+        source: `
+import { component } from '@kovojs/core';
+import { sendPayment } from './payments';
+import { STRIPE_SECRET_KEY } from './secrets';
+
+export const RealKv437 = component({
+  render: () => <button onClick={() => sendPayment(STRIPE_SECRET_KEY)}>Pay</button>,
+});
+`,
+      },
+    ];
+
+    const messages: string[] = [];
+    const plugin = kovoVitePlugin();
+
+    for (const { fileName, source } of cases) {
+      try {
+        await plugin.transform?.(source, fileName);
+      } catch (error) {
+        messages.push((error as Error).message);
+      }
+    }
+
+    expect(messages).toMatchInlineSnapshot(`
+      [
+        "Kovo Vite transform failed with 1 error diagnostic.
+
+      KV235 src/real-kv235.tsx:5:17 App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.
+        help: Blocked reason: app source is hand-authoring lowered string/render IR instead of TSX.
+        help: Fixes: write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.
+        help: SPEC §5.2: TSX is the sole app-authoring surface.
+        help: Escape: there is no v1 suppression or ejection workflow for hand-authored lowered IR.
+        help: TSX equivalent direction: render with JSX, for example \`render: (...) => (<real-kv235>...</real-kv235>)\`, and use typed expressions such as \`{cart.count}\` instead of data-bind strings.",
+        "Kovo Vite transform failed with 1 error diagnostic.
+
+      KV236 src/real-kv236.tsx:5:20 Unsafe output context requires an explicit trusted Kovo escape hatch. href="javascript:alert(1)" uses an unsafe URL scheme
+        help: Blocked reason: the output context can execute script, navigate unexpectedly, inject unsafe CSS, or bypass normal JSX escaping.
+        help: Fixes: route URLs through typed route helpers; mark intentional external links with external; keep dynamic styling to compiler-generated safe properties; or pass raw HTML only as a Kovo TrustedHtml value.
+        help: SPEC §1 and §5.2 require compiler output to be auditable; unsafe output contexts cannot depend on implicit browser or runtime sanitization.",
+        "Kovo Vite transform failed with 1 error diagnostic.
+
+      KV437 src/real-kv437.tsx:7:52 Server-only value captured into a client handler reaches the client bundle. import="STRIPE_SECRET_KEY" from="./secrets" form=named
+        help: Would lower to: a client handler module whose captured imports and same-file module constants are explicitly proven client-safe before emission.
+        help: Blocked reason: a client handler closure that captures a server-only binding (a secret/process.env-derived value, any cross-module import not provably client-safe, or a same-file literal not explicitly public) re-emits it verbatim into the client bundle, leaking confidential server state to the browser.
+        help: Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain --capabilities.
+        help: SPEC §6.6/§6.2 and secure-framework Phase 4/Tier 0: the emit filter is fail-closed whole-channel (a narrow process.env/brand-only gate is unsound — call-wrapped secrets escape).",
+      ]
+    `);
+  });
+
   it('reports warn, lint, and notice diagnostics without blocking the Vite transform', async () => {
     const onDiagnostic = vi.fn();
     const plugin = createKovoVitePlugin(
@@ -189,6 +306,42 @@ export function renderSource() {
     ]);
   });
 
+  it('does not retain emitted client modules from transforms with error diagnostics', async () => {
+    const plugin = createKovoVitePlugin(() => ({
+      diagnostics: [
+        {
+          code: 'KV236' as const,
+          fileName: 'src/unsafe-link.tsx',
+          message: kv236.message,
+          severity: kv236.severity,
+          start: { line: 4, column: 18 },
+        },
+      ],
+      files: [
+        { kind: 'server', source: 'export const unsafeServer = true;' },
+        { kind: 'client', source: 'export const unsafeClient = true;' },
+      ],
+      hmrImpact: hmrMetadata({ clientHref: '/c/__v/unsafe/src/unsafe-link.client.js' }),
+    }));
+    const middlewares: KovoViteMiddleware[] = [];
+    plugin.configureServer?.({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    await expect(plugin.transform('component(', 'src/unsafe-link.tsx')).rejects.toThrow('KV236');
+
+    const res = createMiddlewareResponse();
+    const next = vi.fn();
+    middlewares[0]?.({ url: '/c/__v/unsafe/src/unsafe-link.client.js' }, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.body).toBe('');
+  });
+
   it('serves emitted client modules from Vite dev middleware', async () => {
     const plugin = kovoVitePlugin();
     const middlewares: KovoViteMiddleware[] = [];
@@ -221,9 +374,49 @@ export function renderSource() {
     middlewares[0]?.({ url: clientRef ?? '' }, res, next);
 
     expect(next).not.toHaveBeenCalled();
-    expect(res.headers['Content-Type']).toBe('text/javascript');
+    expect(res.headers).toEqual({
+      'Cache-Control': 'no-store',
+      'Cross-Origin-Resource-Policy': 'same-origin',
+      'Content-Type': 'text/javascript; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+    });
     expect(res.body).toContain('export const CartBadge$button_click');
     expect(res.body).toContain('return removeItem(ctx.state, ctx.params.id);');
+  });
+
+  it('serves Vite dev client modules through the shared URL ABI request key', async () => {
+    const clientSource = 'export const SharedAbi$button_click = () => true;';
+    const plugin = createKovoVitePlugin(() => ({
+      files: [
+        { kind: 'server', source: 'export function renderSource() {}' },
+        { kind: 'client', source: clientSource },
+      ],
+    }));
+    const middlewares: KovoViteMiddleware[] = [];
+    plugin.configureServer?.({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    await plugin.transform('component(', 'src/shared-abi.tsx');
+
+    const version = clientModuleContentVersion(clientSource);
+    const versionedPath = clientModuleHrefForSourceFile('src/shared-abi.tsx', version);
+    const queryVersionedPath = `/c/src/shared-abi.client.js?v=${version}`;
+    for (const href of [versionedPath, queryVersionedPath]) {
+      const res = createMiddlewareResponse();
+      const next = vi.fn();
+
+      middlewares[0]?.({ url: href }, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.body).toBe(clientSource);
+      expect(res.headers['Cross-Origin-Resource-Policy']).toBe('same-origin');
+      expect(res.headers['Cache-Control']).toBe('no-store');
+    }
   });
 
   it('surfaces a deduped CSS asset manifest for transformed app components', async () => {
@@ -323,6 +516,45 @@ export function renderSource() {
       middlewares[0]?.({ url: clientRef ?? '' }, res, vi.fn());
 
       expect(res.body).toContain('export const CartBadge$button_click');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('blocks direct Vite client-module load when compilation reports an error diagnostic', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-client-load-error-'));
+    const sourceFile = join(root, 'src/secret-button.tsx');
+    const plugin = createKovoVitePlugin(() => ({
+      diagnostics: [
+        {
+          code: 'KV437' as const,
+          fileName: 'src/secret-button.tsx',
+          help: kv437.help,
+          message: kv437.message,
+          severity: kv437.severity,
+          start: { line: 6, column: 28 },
+        },
+      ],
+      files: [
+        { kind: 'server', source: 'export const blockedServer = true;' },
+        { kind: 'client', source: 'export const leakedSecret = true;' },
+      ],
+    }));
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(sourceFile, 'component(');
+      plugin.configResolved?.({ root });
+
+      await expect(plugin.load?.(join(root, 'src/secret-button.client.js'))).rejects.toThrow(
+        [
+          'Kovo Vite transform failed with 1 error diagnostic.',
+          [
+            'KV437 src/secret-button.tsx:6:28 Server-only value captured into a client handler reaches the client bundle.',
+            ...kv437.help.split('\n').map((line) => `  help: ${line}`),
+          ].join('\n'),
+        ].join('\n\n'),
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -510,6 +742,80 @@ export const CartBadge = component({
       secondPlugin.configResolved?.({ root } as never);
       expect((await secondPlugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
         'export const sourceLength = 10;',
+      );
+      expect(secondCompile).not.toHaveBeenCalled();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reuses persistent cache entries across restarts when only facts outside the footprint change', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-persistent-footprint-cache-'));
+    const cartInput = [
+      {
+        coercion: 'number' as const,
+        defaulted: false,
+        name: 'quantity',
+        optional: false,
+        provenance: 'registry' as const,
+        required: true,
+      },
+    ];
+    const compileComponentModule = vi.fn(({ registryFacts }) => ({
+      dependencyFootprint: {
+        reads: { mutationInputKeys: ['cart/add'] },
+        registryFacts: { mutationInputs: { 'cart/add': cartInput } },
+      },
+      files: [
+        {
+          kind: 'server',
+          source: `export const cartInput = ${JSON.stringify(
+            registryFacts?.mutationInputs?.['cart/add'],
+          )};`,
+        },
+      ],
+    }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      registryFacts: {
+        mutationInputs: {
+          'cart/add': cartInput,
+          'product/save': [],
+        },
+      },
+    });
+    plugin.configResolved?.({ root } as never);
+
+    try {
+      expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
+        `export const cartInput = ${JSON.stringify(cartInput)};`,
+      );
+      expect(compileComponentModule).toHaveBeenCalledTimes(1);
+
+      const secondCompile = vi.fn(() => ({
+        dependencyFootprint: {},
+        files: [{ kind: 'server', source: 'export const cacheMiss = true;' }],
+      }));
+      const secondPlugin = createKovoVitePlugin(secondCompile, {
+        registryFacts: {
+          mutationInputs: {
+            'cart/add': cartInput,
+            'product/save': [
+              {
+                coercion: 'string' as const,
+                defaulted: false,
+                name: 'ignored',
+                optional: false,
+                provenance: 'registry' as const,
+                required: true,
+              },
+            ],
+          },
+        },
+      });
+      secondPlugin.configResolved?.({ root } as never);
+
+      expect((await secondPlugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
+        `export const cartInput = ${JSON.stringify(cartInput)};`,
       );
       expect(secondCompile).not.toHaveBeenCalled();
     } finally {

@@ -5,7 +5,8 @@ import type { ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
-import { replaceExtension } from './shared.js';
+import { normalizeComponentFileName, replaceExtension } from './shared.js';
+import type { CompilerEmittedSourceProvenance } from './source-provenance.js';
 
 /**
  * Input to {@link compileComponentModule}: the source file name and contents plus optional
@@ -22,7 +23,13 @@ export interface CompileComponentOptions {
   queryShapes?: Record<string, QueryShape>;
   registryFacts?: RegistryFacts;
   source: string;
-  sourceProvenance?: 'app' | 'compiler-emitted';
+  sourceProvenance?: 'app';
+}
+
+/** @internal Compiler-owned options used when re-reading emitted artifacts for SPEC.md §5.2. */
+export interface InternalCompileComponentOptions
+  extends Omit<CompileComponentOptions, 'sourceProvenance'> {
+  sourceProvenance?: 'app' | CompilerEmittedSourceProvenance;
 }
 
 /**
@@ -171,6 +178,7 @@ export interface CompileDependencyReads {
 export type RegistryGraphInput = Pick<
   CoreGraph.KovoExplainInput,
   | 'access'
+  | 'capabilities'
   | 'components'
   | 'endpoints'
   | 'mutations'
@@ -194,7 +202,10 @@ export interface RegistryTypeFactOptions {
 }
 
 export interface CompileAppGraphOptions {
-  components?: readonly { componentGraphFacts: readonly ComponentGraphFact[] }[];
+  components?: readonly {
+    componentGraphFacts: readonly ComponentGraphFact[];
+    publishToClientFacts?: readonly PublishToClientFact[];
+  }[];
   graph?: RegistryGraphInput;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   registryTypes?: RegistryTypeFactOptions;
@@ -243,9 +254,11 @@ export interface CompileRouteModuleResult {
 
 /** Compiler-derived facts for one JSX-authored `route().page`. */
 export interface RoutePageFact {
+  access?: CoreGraph.AccessDecisionFact;
   css?: RoutePageCssFact;
   components: readonly RoutePageComponentFact[];
   fileName: string;
+  guards?: readonly string[];
   layouts?: readonly RoutePageLayoutFact[];
   navigationSegments?: readonly RouteNavigationSegmentFact[];
   regions?: readonly RouteRegionFact[];
@@ -337,10 +350,22 @@ export interface CompileResult {
   loweredSource: string | null;
   outputContextFacts: readonly GeneratedOutputWriteFact[];
   platformSubstitutions: readonly PlatformSubstitution[];
+  publishToClientFacts: readonly PublishToClientFact[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  renderPlanFingerprint?: string | null;
   renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
   updateCoverage: readonly QueryUpdateCoverageFact[];
   viewTransitions: readonly ViewTransitionStamp[];
+}
+
+/** One audited `publishToClient(import, { reason })` escape for graph capabilities. */
+export interface PublishToClientFact {
+  fileName: string;
+  localName: string;
+  moduleSpecifier: string;
+  reason: string;
+  site: string;
+  start?: number;
 }
 
 /** Compiler-owned HMR impact metadata derived from parsed/lowered facts (SPEC.md §5.2). */
@@ -522,7 +547,9 @@ export function createEmptyCompileResult(): CompileResult {
     loweredSource: null,
     outputContextFacts: [],
     platformSubstitutions: [],
+    publishToClientFacts: [],
     queryUpdatePlans: [],
+    renderPlanFingerprint: null,
     renderEquivalenceChecks: [],
     updateCoverage: [],
     viewTransitions: [],
@@ -537,11 +564,12 @@ export function emittedFileKind(fileName: string): EmittedFile['kind'] {
 }
 
 export function compileArtifactFileNames(fileName: string): CompileArtifactFileNames {
+  const confinedFileName = normalizeComponentFileName(fileName);
   return {
-    client: replaceExtension(fileName, '.client.js'),
-    css: replaceExtension(fileName, '.css'),
+    client: replaceExtension(confinedFileName, '.client.js'),
+    css: replaceExtension(confinedFileName, '.css'),
     registry: 'generated/registries.d.ts',
-    server: replaceExtension(fileName, '.server.js'),
+    server: replaceExtension(confinedFileName, '.server.js'),
   };
 }
 
@@ -754,9 +782,15 @@ export interface QueryShapeFact {
  */
 export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
   const shapes: Record<string, QueryShape> = {};
+  const duplicateQueries = new Set<string>();
 
   for (const fact of facts) {
-    if (!(fact.query in shapes)) shapes[fact.query] = fact.shape;
+    if (fact.query in shapes) {
+      duplicateQueries.add(fact.query);
+      delete shapes[fact.query];
+      continue;
+    }
+    if (!duplicateQueries.has(fact.query)) shapes[fact.query] = fact.shape;
   }
 
   return shapes;

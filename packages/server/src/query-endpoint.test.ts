@@ -478,6 +478,28 @@ describe('query endpoints', () => {
     expect(result.headers.Vary).toBe('Cookie');
   });
 
+  it('renders /_q success payloads as inert kovo-query JSON data', async () => {
+    const payload = {
+      text: '</kovo-query><script>alert(1)</script>',
+      url: 'javascript:alert(1)',
+    };
+    const payloadQuery = query('payload', {
+      load: () => payload,
+      reads: [],
+    });
+
+    const result = await renderQueryEndpointResponse(payloadQuery, { request: {} });
+
+    expect(result.status).toBe(200);
+    expect(result.body).not.toContain('</kovo-query><script>');
+    expect(result.body).not.toContain('<script>alert(1)</script>');
+    expect(parseSingleQueryWire(result.body)).toEqual({
+      delta: false,
+      name: 'payload',
+      value: payload,
+    });
+  });
+
   it('L3: a still-throwing success render returns 500 carrying the private-cache posture', async () => {
     // A value that JSON.stringify cannot serialize even after normalization (a circular ref)
     // must NOT let the throw escape the success branch and drop the mandated headers.
@@ -508,4 +530,31 @@ function alienValidationSchema<T>(message: string, path: readonly string[]): Sch
       throw error;
     },
   };
+}
+
+function parseSingleQueryWire(body: string): {
+  delta: boolean;
+  name: string;
+  value: unknown;
+} {
+  const match = /^<kovo-query\s+([^>]*)>([\s\S]*)<\/kovo-query>$/.exec(body.trim());
+  if (!match) throw new Error(`Expected one kovo-query chunk, got: ${body}`);
+  const [, attributes = '', encodedJson = ''] = match;
+  const nameMatch = /\bname="([^"]+)"/.exec(attributes);
+  if (!nameMatch) throw new Error(`Missing query name in: ${body}`);
+
+  return {
+    delta: /\sdelta(?:\s|$)/.test(` ${attributes} `),
+    name: decodeHtmlText(nameMatch[1] ?? ''),
+    value: JSON.parse(decodeHtmlText(encodedJson)),
+  };
+}
+
+function decodeHtmlText(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&');
 }

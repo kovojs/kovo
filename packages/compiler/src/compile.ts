@@ -13,7 +13,13 @@ import {
   mergeQueryUpdatePlans,
   mergeStyleUpdateCoverage,
 } from './compile-result.js';
-import { componentCssAssetForFile, dedupeCss, emitCssModule } from './css.js';
+import type { CompilerDiagnostic } from './diagnostics.js';
+import {
+  componentCssAssetForFile,
+  dedupeCss,
+  emitCssModule,
+  type ComponentCssAsset,
+} from './css.js';
 import { deriveComponentNames } from './component-names.js';
 import { emitClientModule } from './emit/client.js';
 import { removeUnreferencedNamedImports } from './emit/dead-imports.js';
@@ -21,9 +27,11 @@ import { appendLiveTargetRendererExports } from './emit/live-target-renderers.js
 import { emitRegistryModule } from './emit/registry.js';
 import {
   emitServerModule,
+  type EmittedServerModule,
   mutationFormExplainFacts,
   semanticRenderEquivalenceCheck,
   serverRenderLowering,
+  type ServerRenderLowering,
 } from './emit/server.js';
 import { componentGraphFact, findFragmentTargetFacts, findLiveTargetFacts } from './app-graph.js';
 import { cssIrHeader } from './ir.js';
@@ -38,30 +46,41 @@ import { runLoweringPipeline } from './lowering-pipeline.js';
 import {
   inferComponentName,
   jsxElements,
+  normalizeComponentFileName,
   parseComponentModule as parseComponentModuleModel,
+  parseDiagnosticsForSourceFile,
   firstComponentModel,
   componentOptionObjectEntries,
   type ComponentModuleModel,
   type ObjectLiteralEntry,
 } from './scan/parse.js';
-import { applyTerminalEmitPatches, componentPipelineState } from './model-pipeline.js';
+import {
+  applyTerminalEmitPatches,
+  componentPipelineState,
+  type ComponentPipelineState,
+} from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
   packageComponentPrefixesForModule,
 } from './package-prefixes.js';
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
+import { analyzeClientCaptures } from './validate/client-capture.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
+import { compilerEmittedSourceProvenanceToken } from './source-provenance.js';
 import type {
   CompileComponentOptions,
   CompileResult,
   ClockUpdatePlanFact,
   CompileDependencyFootprint,
+  ComponentGraphFact,
+  HandlerLowering,
   QueryUpdatePlanFact,
   QueryShape,
   QueryShapeWrapper,
+  RenderEquivalenceCheck,
   StateDeriveFact,
   StateDeriveReferenceFact,
   RegistryFacts,
@@ -87,113 +106,309 @@ if (!('ScriptTarget' in mutableTs))
  * compiler's invariants. Re-compiling a `compiler-emitted` artifact is a no-op pass-through
  * so the pipeline reaches a fixpoint (SPEC.md §5.2; hand-authored lowered IR is KV235).
  */
-export function compileComponentModule(options: CompileComponentOptions): CompileResult {
+export function compileComponentModule(rawOptions: CompileComponentOptions): CompileResult {
+  const parsed = parseComponentPhase(rawOptions);
+  if (parsed.kind === 'compiler-ir') return compilerIrPassThroughResult(parsed);
+  if (parsed.kind === 'parse-error') return parseErrorResult(parsed);
+
+  const lowered = lowerComponentPhase(parsed);
+  const validated = validateComponentPhase(parsed, lowered);
+  const client = emitClientPhase(parsed, lowered, validated);
+  const registryCss = emitRegistryCssPhase(parsed, lowered, validated, client);
+  const server = emitServerPhase(parsed, lowered, validated, client, registryCss);
+  const verified = verifyComponentPhase(parsed, lowered, validated, client, server);
+
+  return assembleCompileResult(parsed, lowered, validated, client, registryCss, server, verified);
+}
+
+type ComponentNames = ReturnType<typeof deriveComponentNames>;
+type ClientCaptureAnalysis = ReturnType<typeof analyzeClientCaptures>;
+type MutationFormFacts = ReturnType<typeof mutationFormExplainFacts>;
+
+interface CompileComponentPhaseBase {
+  readonly options: CompileComponentOptions;
+}
+
+interface CompilerIrPhaseResult extends CompileComponentPhaseBase {
+  readonly authoringSurfaceDiagnostics: readonly CompilerDiagnostic[];
+  readonly kind: 'compiler-ir';
+}
+
+interface ParseErrorPhaseResult extends CompileComponentPhaseBase {
+  readonly kind: 'parse-error';
+  readonly parseDiagnostics: readonly CompilerDiagnostic[];
+}
+
+interface ParsedComponentPhaseResult extends CompileComponentPhaseBase {
+  readonly authoringSurfaceDiagnostics: readonly CompilerDiagnostic[];
+  readonly compileOptions: CompileComponentOptions;
+  readonly componentName: string;
+  readonly componentNames: ComponentNames;
+  readonly kind: 'parsed';
+  readonly originalModel: ComponentModuleModel;
+  readonly originalState: ComponentPipelineState<ComponentModuleModel>;
+}
+
+type ParseComponentPhaseResult =
+  | CompilerIrPhaseResult
+  | ParseErrorPhaseResult
+  | ParsedComponentPhaseResult;
+
+interface LowerComponentPhaseResult {
+  readonly lowering: ReturnType<typeof runLoweringPipeline>;
+  readonly model: ComponentModuleModel;
+  readonly source: string;
+}
+
+interface ValidateComponentPhaseResult {
+  readonly clientCaptureAnalysis: ClientCaptureAnalysis;
+  readonly clockUpdatePlans: readonly ClockUpdatePlanFact[];
+  readonly handlers: readonly HandlerLowering[];
+  readonly packagePrefixDiagnostics: readonly CompilerDiagnostic[];
+  readonly queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  readonly updateCoverage: ReturnType<typeof mergeStyleUpdateCoverage>;
+  readonly validationDiagnostics: readonly CompilerDiagnostic[];
+}
+
+interface EmitClientPhaseResult {
+  readonly clientHref: string;
+  readonly clientSource: string;
+  readonly renderPlanFingerprint: string;
+  readonly renderPlanFingerprintInput: RenderPlanFingerprintInput;
+  readonly stateDeriveReferences: readonly StateDeriveReferenceFact[];
+  readonly stateDerives: readonly StateDeriveFact[];
+  readonly versionedHandlers: readonly HandlerLowering[];
+}
+
+interface EmitRegistryCssPhaseResult {
+  readonly componentGraphFacts: readonly ComponentGraphFact[];
+  readonly cssAssets: readonly ComponentCssAsset[];
+  readonly cssSource: string;
+  readonly fileNames: ReturnType<typeof compileArtifactFileNames>;
+  readonly fragmentTargetFacts: ReturnType<typeof findFragmentTargetFacts>;
+  readonly fragmentTargets: readonly string[];
+  readonly liveTargetFacts: ReturnType<typeof findLiveTargetFacts>;
+  readonly mutationForms: MutationFormFacts;
+  readonly registrySource: string;
+}
+
+interface EmitServerPhaseResult {
+  readonly serverModule: EmittedServerModule;
+  readonly serverRender: ServerRenderLowering;
+  readonly serverRenderedSource: string;
+}
+
+interface VerifyComponentPhaseResult {
+  readonly diagnostics: readonly CompilerDiagnostic[];
+  readonly renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
+}
+
+function parseComponentPhase(rawOptions: CompileComponentOptions): ParseComponentPhaseResult {
+  const options = {
+    ...rawOptions,
+    fileName: normalizeComponentFileName(rawOptions.fileName),
+  };
+
   if (isCompilerIrArtifact(options.source)) {
-    const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
     return {
-      ...createEmptyCompileResult(),
-      dependencyFootprint: compileDependencyFootprint(options),
-      diagnostics: authoringSurfaceDiagnostics,
-      files: [
-        {
-          fileName: options.fileName,
-          kind: emittedFileKind(options.fileName),
-          source: options.source,
-        },
-      ],
+      authoringSurfaceDiagnostics: validateAuthoringSurface(options),
+      kind: 'compiler-ir',
+      options,
     };
   }
 
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
+  const parseDiagnostics = parseDiagnosticsForSourceFile(originalModel.sourceFile, options.source);
+  if (parseDiagnostics.length > 0) return { kind: 'parse-error', options, parseDiagnostics };
+
   const packageComponentPrefixes = mergePackageComponentPrefixFacts(
     packageComponentPrefixesForModule(options, originalModel),
     options.packageComponentPrefixes,
   );
   const compileOptions = { ...options, packageComponentPrefixes };
-  const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
-  const componentName = inferComponentName(options.fileName, originalModel);
-  const componentNames = deriveComponentNames(options.fileName, firstComponentModel(originalModel));
-  const originalState = componentPipelineState(options.fileName, options.source, originalModel);
+
+  return {
+    authoringSurfaceDiagnostics: validateAuthoringSurface(options, originalModel),
+    compileOptions,
+    componentName: inferComponentName(options.fileName, originalModel),
+    componentNames: deriveComponentNames(options.fileName, firstComponentModel(originalModel)),
+    kind: 'parsed',
+    options,
+    originalModel,
+    originalState: componentPipelineState(options.fileName, options.source, originalModel),
+  };
+}
+
+function compilerIrPassThroughResult(parsed: CompilerIrPhaseResult): CompileResult {
+  return {
+    ...createEmptyCompileResult(),
+    dependencyFootprint: compileDependencyFootprint(parsed.options),
+    diagnostics: parsed.authoringSurfaceDiagnostics,
+    files: [
+      {
+        fileName: parsed.options.fileName,
+        kind: emittedFileKind(parsed.options.fileName),
+        source: parsed.options.source,
+      },
+    ],
+  };
+}
+
+function parseErrorResult(parsed: ParseErrorPhaseResult): CompileResult {
+  return {
+    ...createEmptyCompileResult(),
+    dependencyFootprint: compileDependencyFootprint(parsed.options),
+    diagnostics: parsed.parseDiagnostics,
+  };
+}
+
+function lowerComponentPhase(parsed: ParsedComponentPhaseResult): LowerComponentPhaseResult {
   // FN5 (plans/compiler-refactoring.md): the lowering stage runs as a declarative pass list
   // (probe -> structural -> standalone-href -> reparse -> style-extract -> reparse).
-  const lowering = runLoweringPipeline(originalState, componentName, compileOptions);
-  const { styleSpanProbe, structuralLowering, styleExtraction } = lowering;
-  const source = lowering.source;
-  const diagnosticSource = options.source;
-  const validationOffsetMap = lowering.validationOffsetMap;
-  const model = lowering.model;
-  const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
+  const lowering = runLoweringPipeline(
+    parsed.originalState,
+    parsed.componentName,
+    parsed.compileOptions,
+  );
+  return {
+    lowering,
+    model: lowering.model,
+    source: lowering.source,
+  };
+}
+
+function validateComponentPhase(
+  parsed: ParsedComponentPhaseResult,
+  lowered: LowerComponentPhaseResult,
+): ValidateComponentPhaseResult {
+  const { styleSpanProbe, styleExtraction } = lowered.lowering;
+  const clientCaptureAnalysis = analyzeClientCaptures(lowered.model);
+  const handlers = lowerEventHandlers(
+    { ...parsed.compileOptions, source: lowered.source },
+    parsed.componentName,
+    lowered.model,
+  );
   const queryUpdatePlans = mergeQueryUpdatePlans([
-    ...collectQueryUpdatePlans(model, componentName),
+    ...collectQueryUpdatePlans(lowered.model, parsed.componentName),
     ...styleExtraction.queryUpdatePlans,
   ]);
-  const clockUpdatePlans = collectClockUpdatePlans(model, componentName, queryUpdatePlans);
+  const clockUpdatePlans = collectClockUpdatePlans(
+    lowered.model,
+    parsed.componentName,
+    queryUpdatePlans,
+  );
   const updateCoverage = mergeStyleUpdateCoverage(
-    collectQueryUpdateCoverage(model, compileOptions, componentName),
+    collectQueryUpdateCoverage(lowered.model, parsed.compileOptions, parsed.componentName),
     styleExtraction.updateCoverage,
     styleExtraction.handledSpans,
   );
-  const packagePrefixDiagnostics = validatePackageComponentPrefixes(
-    compileOptions.packageComponentPrefixes,
-    options.fileName,
-  );
-  const validationDiagnostics = collectCompilerDiagnostics({
-    componentName,
-    model,
-    options: compileOptions,
-    originalModel,
-    diagnosticSource,
-    source,
-    sourceOffsetMap: validationOffsetMap,
-    styleOwnedSpans: styleSpanProbe.handledSpans,
-    updateCoverage,
-  });
-  const fileNames = compileArtifactFileNames(options.fileName);
-  const stateDerives = [...structuralLowering.stateDerives, ...styleExtraction.stateDerives];
 
-  const clientSource = emitClientModule(
-    handlers,
-    queryUpdatePlans,
-    stateDerives,
-    componentName,
+  return {
+    clientCaptureAnalysis,
     clockUpdatePlans,
+    handlers,
+    packagePrefixDiagnostics: validatePackageComponentPrefixes(
+      parsed.compileOptions.packageComponentPrefixes,
+      parsed.options.fileName,
+    ),
+    queryUpdatePlans,
+    updateCoverage,
+    validationDiagnostics: collectCompilerDiagnostics({
+      componentName: parsed.componentName,
+      diagnosticSource: parsed.options.source,
+      model: lowered.model,
+      options: parsed.compileOptions,
+      originalModel: parsed.originalModel,
+      source: lowered.source,
+      sourceOffsetMap: lowered.lowering.validationOffsetMap,
+      styleOwnedSpans: styleSpanProbe.handledSpans,
+      updateCoverage,
+    }),
+  };
+}
+
+function emitClientPhase(
+  parsed: ParsedComponentPhaseResult,
+  lowered: LowerComponentPhaseResult,
+  validated: ValidateComponentPhaseResult,
+): EmitClientPhaseResult {
+  const stateDerives = [
+    ...lowered.lowering.structuralLowering.stateDerives,
+    ...lowered.lowering.styleExtraction.stateDerives,
+  ];
+  const clientSource = emitClientModule(
+    [...validated.handlers],
+    validated.queryUpdatePlans,
+    stateDerives,
+    parsed.componentName,
+    validated.clockUpdatePlans,
   );
-  const renderPlanFingerprintInput = renderPlanFingerprintInputForOptions(compileOptions);
+  const renderPlanFingerprintInput = renderPlanFingerprintInputForOptions(parsed.compileOptions);
   const renderPlanFingerprint = computeCompilerRenderPlanFingerprint(renderPlanFingerprintInput);
   const clientHref = clientModuleUrl(
-    options.fileName,
+    parsed.options.fileName,
     `${renderPlanFingerprint}-${clientModuleVersion(clientSource)}`,
   );
-  const versionedHandlers = handlers.map((handler) =>
-    versionHandlerLowering(handler, options.fileName, clientHref),
+  const versionedHandlers = validated.handlers.map((handler) =>
+    versionHandlerLowering(handler, parsed.options.fileName, clientHref),
   );
-  const componentCssSource = emitCssModule(componentNames.domName, model);
-  const styleCssSource = styleExtraction.css ? `${cssIrHeader}\n${styleExtraction.css}` : null;
+
+  return {
+    clientHref,
+    clientSource,
+    renderPlanFingerprint,
+    renderPlanFingerprintInput,
+    stateDeriveReferences: collectStateDeriveReferenceFacts(
+      lowered.model,
+      stateDerives,
+      clientHref,
+    ),
+    stateDerives,
+    versionedHandlers,
+  };
+}
+
+function emitRegistryCssPhase(
+  parsed: ParsedComponentPhaseResult,
+  lowered: LowerComponentPhaseResult,
+  validated: ValidateComponentPhaseResult,
+  client: EmitClientPhaseResult,
+): EmitRegistryCssPhaseResult {
+  const fileNames = compileArtifactFileNames(parsed.options.fileName);
+  const componentCssSource = emitCssModule(parsed.componentNames.domName, lowered.model);
+  const styleCssSource = lowered.lowering.styleExtraction.css
+    ? `${cssIrHeader}\n${lowered.lowering.styleExtraction.css}`
+    : null;
   const cssSource =
     componentCssSource && styleCssSource
       ? dedupeCss([componentCssSource, styleCssSource])
       : (componentCssSource ?? styleCssSource ?? '');
-  const fragmentTargetFacts = findFragmentTargetFacts(componentNames.registryKey, model);
+  const fragmentTargetFacts = findFragmentTargetFacts(
+    parsed.componentNames.registryKey,
+    lowered.model,
+  );
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
   const liveTargetFacts = findLiveTargetFacts(
-    componentNames.domName,
-    componentNames.registryKey,
-    model,
-    updateCoverage,
+    parsed.componentNames.domName,
+    parsed.componentNames.registryKey,
+    lowered.model,
+    validated.updateCoverage,
   );
-  const mutationForms = mutationFormExplainFacts(model, {
-    fileName: options.fileName,
-    ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
-    source,
+  const mutationForms = mutationFormExplainFacts(lowered.model, {
+    fileName: parsed.options.fileName,
+    ...(parsed.compileOptions.registryFacts
+      ? { registryFacts: parsed.compileOptions.registryFacts }
+      : {}),
+    source: lowered.source,
   });
   const componentGraphFacts = [
     componentGraphFact(
-      componentNames.registryKey,
-      componentNames.domName,
-      model,
+      parsed.componentNames.registryKey,
+      parsed.componentNames.domName,
+      lowered.model,
       fragmentTargets,
-      styleExtraction.ruleUsages,
-      firstComponentModel(originalModel)?.localName,
+      lowered.lowering.styleExtraction.ruleUsages,
+      firstComponentModel(parsed.originalModel)?.localName,
       mutationForms,
     ),
   ];
@@ -202,124 +417,212 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
         {
           ...componentCssAssetForFile(
             fileNames.css,
-            componentNames.domName,
+            parsed.componentNames.domName,
             fragmentTargets,
             {},
             cssSource,
           ),
-          ...(styleExtraction.ruleUsages.length > 0
-            ? { styleRuleUsages: styleExtraction.ruleUsages }
+          ...(lowered.lowering.styleExtraction.ruleUsages.length > 0
+            ? { styleRuleUsages: lowered.lowering.styleExtraction.ruleUsages }
             : {}),
         },
       ]
     : [];
-  const serverRender = serverRenderLowering(versionedHandlers, model, componentNames.domName, {
-    fileName: options.fileName,
-    registryComponentName: componentNames.registryKey,
-    ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
-    source,
-  });
-  const stateDeriveReferences = collectStateDeriveReferenceFacts(model, stateDerives, clientHref);
+
+  return {
+    componentGraphFacts,
+    cssAssets,
+    cssSource,
+    fileNames,
+    fragmentTargetFacts,
+    fragmentTargets,
+    liveTargetFacts,
+    mutationForms,
+    registrySource: emitRegistryModule({
+      clientFileName: fileNames.client,
+      cssAssets,
+      componentName: parsed.componentName,
+      domComponentName: parsed.componentNames.domName,
+      fragmentTargetFacts,
+      handlers: client.versionedHandlers,
+      liveTargetFacts,
+      platformSubstitutions: lowered.lowering.structuralLowering.platformSubstitutions,
+      ...(parsed.options.queryShapeFacts ? { queryShapeFacts: parsed.options.queryShapeFacts } : {}),
+      queryUpdatePlans: validated.queryUpdatePlans,
+      ...(parsed.options.registryFacts ? { registryFacts: parsed.options.registryFacts } : {}),
+      registryComponentName: parsed.componentNames.registryKey,
+      viewTransitions: lowered.lowering.structuralLowering.viewTransitionStamps,
+    }),
+  };
+}
+
+function emitServerPhase(
+  parsed: ParsedComponentPhaseResult,
+  lowered: LowerComponentPhaseResult,
+  validated: ValidateComponentPhaseResult,
+  client: EmitClientPhaseResult,
+  registryCss: EmitRegistryCssPhaseResult,
+): EmitServerPhaseResult {
+  const serverRender = serverRenderLowering(
+    client.versionedHandlers,
+    lowered.model,
+    parsed.componentNames.domName,
+    {
+      fileName: parsed.options.fileName,
+      registryComponentName: parsed.componentNames.registryKey,
+      ...(parsed.compileOptions.registryFacts
+        ? { registryFacts: parsed.compileOptions.registryFacts }
+        : {}),
+      source: lowered.source,
+    },
+  );
   const serverRenderReplacements = [
     ...serverRender.replacements,
-    ...componentDescriptorNameAssignments(model, componentNames.registryKey),
-    ...versionStateDeriveReferences(stateDeriveReferences),
+    ...componentDescriptorNameAssignments(lowered.model, parsed.componentNames.registryKey),
+    ...versionStateDeriveReferences(client.stateDeriveReferences),
   ];
   const serverRenderedSource = removeUnreferencedNamedImports(
     appendLiveTargetRendererExports({
-      componentExpression: componentName,
-      liveTargetFacts,
-      source: applyTerminalEmitPatches(lowering.terminalState, serverRenderReplacements),
+      componentExpression: parsed.componentName,
+      liveTargetFacts: registryCss.liveTargetFacts,
+      source: applyTerminalEmitPatches(lowered.lowering.terminalState, serverRenderReplacements, {
+        phase: 'server-emit',
+        writer: 'compileComponentModule',
+      }),
     }),
   );
-  const serverModule = emitServerModule(serverRenderedSource);
-  const registrySource = emitRegistryModule({
-    clientFileName: fileNames.client,
-    cssAssets,
-    componentName,
-    domComponentName: componentNames.domName,
-    registryComponentName: componentNames.registryKey,
-    fragmentTargetFacts,
-    handlers: versionedHandlers,
-    liveTargetFacts,
-    platformSubstitutions: structuralLowering.platformSubstitutions,
-    ...(options.queryShapeFacts ? { queryShapeFacts: options.queryShapeFacts } : {}),
-    queryUpdatePlans,
-    ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
-    viewTransitions: structuralLowering.viewTransitionStamps,
-  });
+
+  return {
+    serverModule: emitServerModule(serverRenderedSource),
+    serverRender,
+    serverRenderedSource,
+  };
+}
+
+function verifyComponentPhase(
+  parsed: ParsedComponentPhaseResult,
+  lowered: LowerComponentPhaseResult,
+  validated: ValidateComponentPhaseResult,
+  client: EmitClientPhaseResult,
+  server: EmitServerPhaseResult,
+): VerifyComponentPhaseResult {
   const diagnostics = [
-    ...authoringSurfaceDiagnostics,
-    ...versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
-    ...structuralLowering.diagnostics,
-    ...styleExtraction.diagnostics,
-    ...serverRender.diagnostics,
-    ...packagePrefixDiagnostics,
-    ...validationDiagnostics,
-    ...productionRenderPlanGateDiagnostics(compileOptions, renderPlanFingerprintInput),
-  ];
-  const renderEquivalenceChecks = [
-    semanticRenderEquivalenceCheck(
-      fileNames.server,
-      model,
-      serverModule.executableSource,
-      compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {},
+    ...parsed.authoringSurfaceDiagnostics,
+    ...client.versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
+    ...lowered.lowering.structuralLowering.diagnostics,
+    ...lowered.lowering.styleExtraction.diagnostics,
+    ...server.serverRender.diagnostics,
+    ...validated.packagePrefixDiagnostics,
+    ...validated.validationDiagnostics,
+    ...productionRenderPlanGateDiagnostics(
+      parsed.compileOptions,
+      client.renderPlanFingerprintInput,
     ),
   ];
 
   return {
-    componentGraphFacts,
-    dependencyFootprint: compileDependencyFootprint(compileOptions, {
-      fileName: options.fileName,
-      fragmentTargets,
-      model,
-      mutationForms,
-      queryUpdatePlans,
-      viewTransitionNames: structuralLowering.viewTransitionStamps.map((stamp) => stamp.name),
-    }),
     diagnostics,
-    files: [
-      { fileName: fileNames.server, kind: 'server', source: serverModule.source },
-      { fileName: fileNames.client, kind: 'client', source: clientSource },
-      ...(cssSource ? [{ fileName: fileNames.css, kind: 'css' as const, source: cssSource }] : []),
-      { fileName: fileNames.registry, kind: 'registry', source: registrySource },
-    ],
-    clientExports: [
-      ...versionedHandlers.map((handler) => handler.exportName),
-      ...stateDerives.map((derive) => derive.exportName),
-    ],
-    handlerExports: versionedHandlers.map((handler) => handler.exportName),
-    hmrImpact: createComponentHmrImpactMetadata({
-      clientHref,
-      componentGraphFacts,
-      cssAssets,
-      diagnostics,
-      liveTargetFacts,
-      queryUpdatePlans,
-      renderEquivalenceChecks,
-      sourceFileName: options.fileName,
-      ...(cssSource
-        ? { stylesheetSources: [{ source: cssSource, sourceFileName: fileNames.css }] }
-        : {}),
-    }),
-    loweredSource: serverRenderedSource,
-    cssAssets,
-    outputContextFacts: dedupeOutputContextFacts([
-      ...structuralLowering.outputContexts,
-      ...serverRender.outputContexts,
-      ...styleExtraction.outputContexts,
-      ...collectTrustedHtmlOutputContextFacts(originalModel),
-      ...queryUpdatePlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
-      ...stateDerives.map((derive) => derive.outputContext),
-    ]),
-    platformSubstitutions: structuralLowering.platformSubstitutions,
-    queryUpdatePlans,
     // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
     // independently, then ignore only generated runtime stamps with an explicit allowlist.
-    renderEquivalenceChecks,
-    updateCoverage,
-    viewTransitions: structuralLowering.viewTransitionStamps,
+    renderEquivalenceChecks: [
+      semanticRenderEquivalenceCheck(
+        registryFileName(parsed),
+        lowered.model,
+        server.serverModule.executableSource,
+        parsed.compileOptions.registryFacts ? { registryFacts: parsed.compileOptions.registryFacts } : {},
+      ),
+    ],
   };
+}
+
+function assembleCompileResult(
+  parsed: ParsedComponentPhaseResult,
+  lowered: LowerComponentPhaseResult,
+  validated: ValidateComponentPhaseResult,
+  client: EmitClientPhaseResult,
+  registryCss: EmitRegistryCssPhaseResult,
+  server: EmitServerPhaseResult,
+  verified: VerifyComponentPhaseResult,
+): CompileResult {
+  return {
+    componentGraphFacts: registryCss.componentGraphFacts,
+    dependencyFootprint: compileDependencyFootprint(parsed.compileOptions, {
+      fileName: parsed.options.fileName,
+      fragmentTargets: registryCss.fragmentTargets,
+      model: lowered.model,
+      mutationForms: registryCss.mutationForms,
+      queryUpdatePlans: validated.queryUpdatePlans,
+      viewTransitionNames: lowered.lowering.structuralLowering.viewTransitionStamps.map(
+        (stamp) => stamp.name,
+      ),
+    }),
+    diagnostics: verified.diagnostics,
+    files: [
+      {
+        fileName: registryCss.fileNames.server,
+        kind: 'server',
+        source: server.serverModule.source,
+      },
+      { fileName: registryCss.fileNames.client, kind: 'client', source: client.clientSource },
+      ...(registryCss.cssSource
+        ? [
+            {
+              fileName: registryCss.fileNames.css,
+              kind: 'css' as const,
+              source: registryCss.cssSource,
+            },
+          ]
+        : []),
+      {
+        fileName: registryCss.fileNames.registry,
+        kind: 'registry',
+        source: registryCss.registrySource,
+      },
+    ],
+    clientExports: [
+      ...client.versionedHandlers.map((handler) => handler.exportName),
+      ...client.stateDerives.map((derive) => derive.exportName),
+    ],
+    cssAssets: registryCss.cssAssets,
+    handlerExports: client.versionedHandlers.map((handler) => handler.exportName),
+    hmrImpact: createComponentHmrImpactMetadata({
+      clientHref: client.clientHref,
+      componentGraphFacts: registryCss.componentGraphFacts,
+      cssAssets: registryCss.cssAssets,
+      diagnostics: verified.diagnostics,
+      liveTargetFacts: registryCss.liveTargetFacts,
+      queryUpdatePlans: validated.queryUpdatePlans,
+      renderEquivalenceChecks: verified.renderEquivalenceChecks,
+      sourceFileName: parsed.options.fileName,
+      ...(registryCss.cssSource
+        ? {
+            stylesheetSources: [
+              { source: registryCss.cssSource, sourceFileName: registryCss.fileNames.css },
+            ],
+          }
+        : {}),
+    }),
+    loweredSource: server.serverRenderedSource,
+    outputContextFacts: dedupeOutputContextFacts([
+      ...lowered.lowering.structuralLowering.outputContexts,
+      ...server.serverRender.outputContexts,
+      ...lowered.lowering.styleExtraction.outputContexts,
+      ...collectTrustedHtmlOutputContextFacts(parsed.originalModel),
+      ...validated.queryUpdatePlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
+      ...client.stateDerives.map((derive) => derive.outputContext),
+    ]),
+    platformSubstitutions: lowered.lowering.structuralLowering.platformSubstitutions,
+    publishToClientFacts: validated.clientCaptureAnalysis.publishFacts,
+    queryUpdatePlans: validated.queryUpdatePlans,
+    renderEquivalenceChecks: verified.renderEquivalenceChecks,
+    renderPlanFingerprint: client.renderPlanFingerprint,
+    updateCoverage: validated.updateCoverage,
+    viewTransitions: lowered.lowering.structuralLowering.viewTransitionStamps,
+  };
+}
+
+function registryFileName(parsed: ParsedComponentPhaseResult): string {
+  return compileArtifactFileNames(parsed.options.fileName).server;
 }
 
 interface CompileDependencyFootprintUsage {
@@ -594,7 +897,13 @@ function versionStateDeriveReferences(
  */
 export function assertFixpoint(result: CompileResult): void {
   for (const file of result.files) {
-    const recompiled = compileComponentModule({ ...file, sourceProvenance: 'compiler-emitted' });
+    const recompileOptions = {
+      ...file,
+      sourceProvenance: compilerEmittedSourceProvenanceToken(),
+    };
+    const recompiled = compileComponentModule(
+      recompileOptions as unknown as CompileComponentOptions,
+    );
     const sameFile =
       recompiled.files.length === 1 &&
       recompiled.files[0]?.fileName === file.fileName &&
