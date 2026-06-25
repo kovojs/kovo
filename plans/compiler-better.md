@@ -187,9 +187,12 @@ diagnostic in compiler/check gates that claim data-plane security.
   - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/compile-component.test.ts packages/core/src/diagnostics.test.ts`
     passes with traversal-shaped component file names confined before deriving emitted artifact
     names and `/c/` URLs.
-- [ ] Extend static ID analysis to repeated JSX containers such as `.map()` and other loop-like
+- [x] Extend static ID analysis to repeated JSX containers such as `.map()` and other loop-like
       render patterns.
-  - Evidence: adversarial probe found repeated `id="row"` inside `.map()` with no diagnostic.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/id-content-model.test.ts`
+    and `pnpm exec vitest --configLoader runner --run packages/compiler/src/id-content-model.test.ts packages/compiler/src/compile-component.test.ts`
+    pass after scanner repeatability facts covered `.map()`, `.flatMap()`, and `Array.from(...,
+    mapper)`, and KV224 consumes those typed facts.
 
 ### Phase 1: make security graph facts mandatory at compiler boundaries
 
