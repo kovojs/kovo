@@ -1236,7 +1236,13 @@ function extractQueryFactsFromPreparedFiles(
             query.query,
             [...query.opaquePaths, ...query.unresolvedPaths],
             query.shape,
-            query.tableExpressions,
+            // SPEC §10.2 (F2, plans/compiler-soundness.md): the KV435 secret backstop must run over
+            // the FULL folded read set — statically-extracted table expressions PLUS the author's
+            // declared `reads:` set — not `tableExpressions` alone. Otherwise an opaque projection
+            // that references a secret table only via raw SQL text (invisible to `tableExpressions`)
+            // leaks the secret column to the client wire even when the author honestly declares the
+            // table in `reads:`. Both inputs are symbol-identity table facts (hard-rule #9).
+            [...query.tableExpressions, ...query.declaredReadExpressions],
             columnShapes,
             fileTables,
             site,
