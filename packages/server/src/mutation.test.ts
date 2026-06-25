@@ -375,7 +375,7 @@ describe('server mutation lifecycle', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/login',
-        'Set-Cookie': ['kovo_session=; Max-Age=0; Path=/; HttpOnly'],
+        'Set-Cookie': ['kovo_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax'],
       },
       status: 303,
     });

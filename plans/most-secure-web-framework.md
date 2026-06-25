@@ -85,13 +85,17 @@ This is where Kovo's secure-default bias (technical-preview: prefer security-imp
       dev-lenient or it bricks every localhost DB/Redis/OTel/Ollama the AI-agent audience runs. Tracked open
       in `secure-framework-3.md` ("harden egress floor propagation") — elevate to default-on here.
 
-- [ ] **OPP-03 — Close the class-less cookie passthrough.** by-construction (app-data half) + runtime-DiD
+- [x] **OPP-03 — Close the class-less cookie passthrough.** by-construction (app-data half) + runtime-DiD
       (session half) · lev 6 · M · breaking. `cookies.ts` lets an unclassed cookie ship with no
       HttpOnly/Secure/SameSite and no prefix (lines 42/179/265), so the "insecure credential cookie
       inexpressible by default" claim only holds for _classed_ cookies. Remove the passthrough: unclassed →
       app-data floor (SameSite=Lax min); session/auth-shaped names → full credential floor + `__Host-` prefix.
       _Trade-off:_ the app-data default is sound by construction; the "session cookie always hardened" half is
       a name-heuristic runtime floor — label it as such.
+      Evidence: `packages/server/src/cookies.ts` defaults classless app-data cookies to `SameSite=Lax` and
+      applies the credential floor to session/auth-shaped names. `pnpm exec vitest
+packages/server/src/cookies.test.ts packages/server/src/mutation.test.ts packages/server/src/response.test.ts
+packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` passed.
 
 - [x] **OPP-18 — Bound the rate-limiter key cardinality.** runtime-DiD · lev 6 · S · non-breaking.
       `app-load-shed.ts` uses unbounded `Map<string,RateBucket>` keyed per-request (global + perIp); an

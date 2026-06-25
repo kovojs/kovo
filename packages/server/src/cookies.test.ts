@@ -29,7 +29,7 @@ describe('cookie header helpers', () => {
   it('rejects invalid cookie names and attributes', () => {
     expect(() => serializeCookie('bad name', 'value')).toThrow('Cookie name must be an HTTP token');
     // B2: semicolons are now percent-encoded rather than rejected; 'bad;value' → 'bad%3Bvalue'
-    expect(serializeCookie('name', 'bad;value')).toBe('name=bad%3Bvalue');
+    expect(serializeCookie('name', 'bad;value')).toBe('name=bad%3Bvalue; SameSite=Lax');
     expect(() => serializeCookie('name', 'value', { maxAge: 1.5 })).toThrow(
       'Cookie maxAge must be an integer',
     );
@@ -42,8 +42,10 @@ describe('cookie header helpers', () => {
   // (CHIPS) — the correctness-critical attribute for cross-site (`SameSite=None`) login —
   // and `Priority`, so `forwardBetterAuthSetCookie` round-trips them instead of dropping.
   it('emits Partitioned and Priority when set (part-3 I1)', () => {
-    expect(serializeCookie('sid', 'tok', { partitioned: true })).toBe('sid=tok; Partitioned');
-    expect(
+    expect(serializeCookie('sid', 'tok', { partitioned: true })).toBe(
+      'sid=tok; Path=/; HttpOnly; SameSite=Lax; Partitioned',
+    );
+    expect(() =>
       serializeCookie('sid', 'tok', {
         httpOnly: true,
         partitioned: true,
@@ -51,17 +53,30 @@ describe('cookie header helpers', () => {
         sameSite: 'none',
         secure: true,
       }),
-    ).toBe('sid=tok; Path=/; HttpOnly; Secure; SameSite=None; Partitioned');
-    expect(serializeCookie('sid', 'tok', { priority: 'high' })).toBe('sid=tok; Priority=High');
-    expect(serializeCookie('sid', 'tok', { priority: 'medium' })).toBe('sid=tok; Priority=Medium');
+    ).toThrow(CookieDowngradeError);
+    expect(
+      serializeCookie('embed', 'tok', {
+        httpOnly: true,
+        partitioned: true,
+        path: '/',
+        sameSite: 'none',
+        secure: true,
+      }),
+    ).toBe('embed=tok; Path=/; HttpOnly; Secure; SameSite=None; Partitioned');
+    expect(serializeCookie('pref', 'tok', { priority: 'high' })).toBe(
+      'pref=tok; SameSite=Lax; Priority=High',
+    );
+    expect(serializeCookie('pref', 'tok', { priority: 'medium' })).toBe(
+      'pref=tok; SameSite=Lax; Priority=Medium',
+    );
   });
 
   // B2: SPEC §9.1.1:846 — typed builder must percent-encode the value.
   it('percent-encodes cookie values so special characters cannot inject cookies (B2)', () => {
-    expect(serializeCookie('sid', 'a b,c=d')).toBe('sid=a%20b%2Cc%3Dd');
+    expect(serializeCookie('pref', 'a b,c=d')).toBe('pref=a%20b%2Cc%3Dd; SameSite=Lax');
     // round-trip: decodeURIComponent recovers the original value
-    const serialized = serializeCookie('sid', 'a b,c=d');
-    const encodedValue = serialized.split('=').slice(1).join('=');
+    const serialized = serializeCookie('pref', 'a b,c=d');
+    const encodedValue = serialized.split(';')[0]?.split('=').slice(1).join('=') ?? '';
     expect(decodeURIComponent(encodedValue)).toBe('a b,c=d');
   });
 
@@ -102,11 +117,30 @@ describe('cookie header helpers', () => {
     );
   });
 
-  // SF Phase 5 (SPEC §6.6/§9.1): a caller that passes no `class` keeps exact legacy behavior so the
-  // floor is opt-in by declaring a class (no surprise attribute injection on existing callers).
-  it('leaves classless cookies as a pure legacy passthrough (no forced floor)', () => {
-    expect(serializeCookie('sid', 'tok', { partitioned: true })).toBe('sid=tok; Partitioned');
-    expect(serializeCookie('theme', 'dark')).toBe('theme=dark');
+  // SF Phase 5 (SPEC §6.6/§9.1): classless cookies no longer bypass the floor.
+  it('defaults classless app-data cookies to SameSite=Lax', () => {
+    expect(serializeCookie('theme', 'dark')).toBe('theme=dark; SameSite=Lax');
+    expect(serializeCookie('theme', 'dark', { sameSite: 'strict' })).toBe(
+      'theme=dark; SameSite=Strict',
+    );
+  });
+
+  it('applies the credential floor to classless session/auth-shaped cookie names', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'development';
+      expect(serializeCookie('sid', 'tok')).toBe('sid=tok; Path=/; HttpOnly; SameSite=Lax');
+
+      process.env.NODE_ENV = 'production';
+      expect(serializeCookie('better-auth.session', 'tok')).toBe(
+        '__Host-better-auth.session=tok; Path=/; HttpOnly; Secure; SameSite=Lax',
+      );
+      expect(serializeCookie('sessionToken', 'tok')).toBe(
+        '__Host-sessionToken=tok; Path=/; HttpOnly; Secure; SameSite=Lax',
+      );
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
   });
 });
 

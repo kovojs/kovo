@@ -38,9 +38,9 @@ export interface UnsafeCookieDowngrade {
  */
 export interface CookieOptions {
   /**
-   * The security class that selects the attribute floor (SPEC §6.6/§9.1). When omitted the cookie is
-   * treated as `app-data` (no HttpOnly/Secure floor) for backward compatibility with callers that
-   * predate the floor; credential cookies should declare `'session'`/`'auth'` so the floor applies.
+   * The security class that selects the attribute floor (SPEC §6.6/§9.1). When omitted, Kovo derives
+   * a conservative floor at the sink: session/auth-shaped names use the credential floor, while all
+   * other cookies use the `app-data` floor.
    */
   class?: CookieClass;
   domain?: string;
@@ -159,6 +159,25 @@ function isCredentialClass(cookieClass: CookieClass): boolean {
   return cookieClass === 'session' || cookieClass === 'auth';
 }
 
+function inferCookieClass(name: string): CookieClass {
+  const normalized = name.replace(/^__(?:Host|Secure)-/, '').toLowerCase();
+  const parts = normalized.split(/[^a-z0-9]+/).filter(Boolean);
+  if (
+    parts.some(
+      (part) =>
+        part === 'sid' ||
+        part === 'session' ||
+        part === 'sessionid' ||
+        part === 'sessiontoken' ||
+        part === 'auth' ||
+        part === 'authtoken',
+    )
+  ) {
+    return 'session';
+  }
+  return 'app-data';
+}
+
 /**
  * Apply the class-derived attribute floor (SPEC §6.6/§9.1). Returns the effective attributes a
  * credential cookie must carry, and emits KV432 (via {@link CookieDowngradeError}) on an unjustified
@@ -167,24 +186,14 @@ function isCredentialClass(cookieClass: CookieClass): boolean {
  */
 function applyCookieFloor(
   name: string,
+  cookieClass: CookieClass,
   options: CookieOptions,
 ): {
   httpOnly: boolean | undefined;
   sameSite: 'lax' | 'none' | 'strict' | undefined;
   secure: boolean | undefined;
 } {
-  const cookieClass = options.class;
   const downgrade = options.unsafe?.downgrade;
-
-  // Legacy passthrough: callers that predate the floor (no `class`) keep exact prior behavior so the
-  // floor is opt-in by declaring a class. Credential cookies should declare `'session'`/`'auth'`.
-  if (cookieClass === undefined) {
-    return {
-      httpOnly: options.httpOnly,
-      sameSite: options.sameSite,
-      secure: options.secure,
-    };
-  }
 
   // app-data: do not force HttpOnly/Secure (these cookies are often read by client JS by design),
   // but never leave SameSite silently unset — default to `lax`.
@@ -261,13 +270,13 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
 
   // SPEC §6.6/§9.1 secure-framework Phase 5: resolve the class-derived attribute floor before
   // serialization so an insecure credential cookie is inexpressible by default (KV432 on an
-  // unjustified downgrade); the floor is by-construction at this single Set-Cookie sink. A caller
-  // that passes no `class` keeps exact legacy behavior (no floor, no prefix, no defaulted Path).
-  const cookieClass = options.class;
-  const isCredential = cookieClass !== undefined && isCredentialClass(cookieClass);
-  const floored = applyCookieFloor(name, options);
-  const effectiveName =
-    cookieClass === undefined ? name : applyCookieNamePrefix(name, cookieClass, floored, options);
+  // unjustified downgrade); the floor is by-construction at this single Set-Cookie sink for declared
+  // classes and the app-data default. The name-based credential inference is runtime defense-in-depth
+  // for classless legacy callers, not a static proof.
+  const cookieClass = options.class ?? inferCookieClass(name);
+  const isCredential = isCredentialClass(cookieClass);
+  const floored = applyCookieFloor(name, cookieClass, options);
+  const effectiveName = applyCookieNamePrefix(name, cookieClass, floored, options);
 
   const encodedValue = encodeURIComponent(value);
   const parts = [`${effectiveName}=${encodedValue}`];
