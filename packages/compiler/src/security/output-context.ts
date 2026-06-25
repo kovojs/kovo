@@ -169,6 +169,22 @@ function validateElementAttributes(
       continue;
     }
 
+    if (attribute.name === 'srcdoc') {
+      found.push(...validateRawHtmlAttribute(diagnostics, attribute));
+      continue;
+    }
+
+    if (isDirectHtmlEventHandlerAttribute(attribute)) {
+      found.push(
+        outputContextDiagnostic(
+          diagnostics,
+          `${attribute.name} is an event-handler sink (on* attribute)`,
+          { start: attribute.start, length: attribute.end - attribute.start },
+        ),
+      );
+      continue;
+    }
+
     // KV236: dynamic event-handler attributes (data-bind:on* or data-derive-attr on*)
     if (isDynamicEventHandlerAttribute(attribute)) {
       found.push(
@@ -398,6 +414,11 @@ function dynamicAttributeName(attribute: JsxAttributeModel): string | null {
 function isDynamicEventHandlerAttribute(attribute: JsxAttributeModel): boolean {
   const name = dynamicAttributeName(attribute);
   return name !== null && /^on/i.test(name);
+}
+
+/** Returns true for direct HTML event attributes such as `onclick`, excluding JSX `onClick`. */
+function isDirectHtmlEventHandlerAttribute(attribute: JsxAttributeModel): boolean {
+  return /^on[a-z]/.test(attribute.name);
 }
 
 /** Returns true when the attribute dynamically targets the srcdoc sink. */
