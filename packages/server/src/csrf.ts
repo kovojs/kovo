@@ -1,9 +1,16 @@
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
 import { escapeAttribute } from './html.js';
 import { currentJsxFrameworkContext } from './jsx-context.js';
+import {
+  isSigningKeyRing,
+  signingKeyRingFromSecret,
+  type SigningKeyRing,
+  type SigningKeyRingOptions,
+  type SigningSecret,
+} from './keyring.js';
 import { formLikeToRecord } from './schema.js';
 
 /**
@@ -20,6 +27,9 @@ export interface CsrfAnonymousCookieOptions {
 /** CSRF HMAC secret. Object form supports one previous key during deploy rotation. */
 export type CsrfSecret =
   | string
+  | Uint8Array
+  | SigningKeyRing
+  | SigningKeyRingOptions
   | {
       current: string;
       previous?: string;
@@ -29,6 +39,8 @@ export type CsrfSecret =
 export interface CsrfOptions<Request> {
   /** Configure or disable the anonymous CSRF cookie used when `sessionId` returns undefined. */
   anonymousCookie?: CsrfAnonymousCookieOptions | false;
+  /** Form field name used as the default signing audience when no narrower sink audience is supplied. */
+  field?: string;
   secret: CsrfSecret;
   sessionId: (request: Request) => string | undefined;
   /**
@@ -41,9 +53,7 @@ export interface CsrfOptions<Request> {
 }
 
 /** `CsrfOptions` plus the optional form `field` name to validate against. */
-export interface CsrfValidationOptions<Request> extends CsrfOptions<Request> {
-  field?: string;
-}
+export type CsrfValidationOptions<Request> = CsrfOptions<Request>;
 
 /**
  * Mint a session-bound CSRF synchronizer token for a request (SPEC §6.6).
@@ -60,11 +70,15 @@ export interface CsrfValidationOptions<Request> extends CsrfOptions<Request> {
  *   sessionId: (request: Req) => request.session.id,
  * });
  */
-export function csrfToken<Request>(request: Request, options: CsrfOptions<Request>): string {
+export function csrfToken<Request>(
+  request: Request,
+  options: CsrfOptions<Request>,
+  context: { audience?: string } = {},
+): string {
   const binding = resolveCsrfBinding(request, options);
   if (!binding) throw new Error('csrfToken requires a session id or anonymous CSRF cookie');
 
-  return createCsrfToken(binding.value, options.secret);
+  return createCsrfToken(binding.value, options.secret, csrfAudience(options, context.audience));
 }
 
 /**
@@ -78,9 +92,10 @@ export function csrfToken<Request>(request: Request, options: CsrfOptions<Reques
  */
 export function csrfField<Request>(
   request: Request,
-  options: CsrfOptions<Request> & { field?: string },
+  options: CsrfOptions<Request> & { audience?: string; field?: string },
 ): string {
-  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(csrfToken(request, options))}">`;
+  const context = options.audience === undefined ? {} : { audience: options.audience };
+  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(csrfToken(request, options, context))}">`;
 }
 
 /** @internal Render the framework-owned CSRF field for compiler-emitted mutation forms. */
@@ -95,7 +110,7 @@ export function renderMutationCsrfField<Request>(definition: {
   const binding = resolveCsrfBinding(context.request as Request, csrf, { mintAnonymous: true });
   if (!binding) return '';
   if (binding.setCookie) context.onCsrfSetCookie?.(binding.setCookie);
-  return csrfFieldForBinding(binding.value, csrf);
+  return csrfFieldForBinding(binding.value, csrf, csrfAudience(csrf, definition.key));
 }
 
 /**
@@ -177,6 +192,7 @@ export function validateCsrfToken<Request>(
   rawInput: unknown,
   request: Request,
   options: CsrfValidationOptions<Request>,
+  context: { audience?: string } = {},
 ): boolean {
   // SPEC §6.6/§9.1: run the fail-closed header floor BEFORE the synchronizer-token check so an
   // unsafe-verb cross-site request is rejected even if it somehow carries a valid token. Uniform
@@ -192,11 +208,14 @@ export function validateCsrfToken<Request>(
   const submittedMac = unmaskCsrfToken(submitted);
   if (!submittedMac) return false;
 
-  let valid = false;
-  for (const secret of csrfVerificationSecrets(options.secret)) {
-    valid = secureEqual(submittedMac, createCsrfTokenWithSecret(binding.value, secret)) || valid;
-  }
-  return valid;
+  return (
+    signingKeyRingFromCsrfSecret(options.secret).verify({
+      audience: csrfAudience(options, context.audience),
+      payload: binding.value,
+      purpose: csrfPurpose(binding.value),
+      signature: submittedMac,
+    }).ok === true
+  );
 }
 
 export function mutationCsrfOptions<Request>(
@@ -217,8 +236,9 @@ const DEFAULT_ANONYMOUS_CSRF_COOKIE = 'kovo_csrf';
 function csrfFieldForBinding<Request>(
   binding: string,
   options: CsrfOptions<Request> & { field?: string },
+  audience: string,
 ): string {
-  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(createCsrfToken(binding, options.secret))}">`;
+  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(createCsrfToken(binding, options.secret, audience))}">`;
 }
 
 /**
@@ -329,9 +349,13 @@ function requestIsHttps(request: unknown): boolean {
 const CSRF_MASKED_TOKEN_VERSION = 'v1';
 const CSRF_MAC_BYTES = 32;
 
-function createCsrfToken(binding: string, secret: CsrfSecret): string {
+function createCsrfToken(binding: string, secret: CsrfSecret, audience: string): string {
   const mac = Buffer.from(
-    createCsrfTokenWithSecret(binding, currentCsrfSecret(secret)),
+    signingKeyRingFromCsrfSecret(secret).sign({
+      audience,
+      payload: binding,
+      purpose: csrfPurpose(binding),
+    }).signature,
     'base64url',
   );
   const mask = randomBytes(CSRF_MAC_BYTES);
@@ -341,10 +365,6 @@ function createCsrfToken(binding: string, secret: CsrfSecret): string {
     mask.toString('base64url'),
     maskedMac.toString('base64url'),
   ].join('.');
-}
-
-function createCsrfTokenWithSecret(binding: string, secret: string): string {
-  return createHmac('sha256', secret).update(binding).digest('base64url');
 }
 
 function unmaskCsrfToken(token: string): string | undefined {
@@ -388,19 +408,38 @@ function xorBuffers(left: Buffer, right: Buffer): Buffer {
 
 /** @internal Return the active CSRF/framework signing key for new tokens and non-CSRF attestations. */
 export function currentCsrfSecret(secret: CsrfSecret): string {
-  return typeof secret === 'string' ? secret : secret.current;
+  if (typeof secret === 'string') return secret;
+  if (secret instanceof Uint8Array) return Buffer.from(secret).toString('base64url');
+  if (isSigningKeyRing(secret)) {
+    throw new Error('currentCsrfSecret cannot expose raw material from a SigningKeyRing');
+  }
+  if ('keys' in secret) {
+    const current = secret.keys.find((key) => key.state === 'active');
+    if (current === undefined) throw new Error('csrf secret keyring requires an active key');
+    return typeof current.secret === 'string'
+      ? current.secret
+      : Buffer.from(current.secret).toString('base64url');
+  }
+  return secret.current;
 }
 
-function csrfVerificationSecrets(secret: CsrfSecret): readonly string[] {
-  if (typeof secret === 'string' || secret.previous === undefined)
-    return [currentCsrfSecret(secret)];
-  return secret.previous === secret.current ? [secret.current] : [secret.current, secret.previous];
+export function signingKeyRingFromCsrfSecret(secret: CsrfSecret) {
+  if (typeof secret === 'object' && !(secret instanceof Uint8Array) && 'current' in secret) {
+    const keys = [
+      { id: 'current', secret: secret.current, state: 'active' as const },
+      ...(secret.previous === undefined
+        ? []
+        : [{ id: 'previous', secret: secret.previous, state: 'previous' as const }]),
+    ];
+    return signingKeyRingFromSecret({ keys });
+  }
+  return signingKeyRingFromSecret(secret as SigningSecret);
 }
 
-function secureEqual(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  if (leftBuffer.byteLength !== rightBuffer.byteLength) return false;
+function csrfPurpose(binding: string): string {
+  return binding.startsWith('anonymous:') ? 'anonymous-csrf' : 'csrf';
+}
 
-  return timingSafeEqual(leftBuffer, rightBuffer);
+function csrfAudience(options: { field?: string }, audience?: string): string {
+  return audience ?? `field:${options.field ?? 'kovo-csrf'}`;
 }

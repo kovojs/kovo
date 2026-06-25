@@ -305,9 +305,11 @@ function isOptionalCsrfOptions(value: unknown): boolean {
 function isCsrfSecret(value: unknown): boolean {
   return (
     typeof value === 'string' ||
+    value instanceof Uint8Array ||
     (isRecord(value) &&
-      typeof value.current === 'string' &&
-      (value.previous === undefined || typeof value.previous === 'string'))
+      ((typeof value.current === 'string' &&
+        (value.previous === undefined || typeof value.previous === 'string')) ||
+        Array.isArray(value.keys)))
   );
 }
 

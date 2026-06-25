@@ -143,7 +143,10 @@ export async function runMutation<
   options: RunMutationOptions<Request> = {},
 ): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
   const csrf = mutationCsrfOptions(definition, options.csrf);
-  if (csrf === undefined || (csrf !== false && !validateCsrfToken(rawInput, request, csrf))) {
+  if (
+    csrf === undefined ||
+    (csrf !== false && !validateCsrfToken(rawInput, request, csrf, { audience: definition.key }))
+  ) {
     return {
       error: { code: 'CSRF', payload: {} },
       ok: false,
@@ -298,7 +301,10 @@ export async function renderMutationResponse<
   const csrf = mutationCsrfOptions(definition, wireRequest.csrf);
   if (
     csrf === undefined ||
-    (csrf !== false && !validateCsrfToken(wireRequest.rawInput, wireRequest.request, csrf))
+    (csrf !== false &&
+      !validateCsrfToken(wireRequest.rawInput, wireRequest.request, csrf, {
+        audience: definition.key,
+      }))
   ) {
     return {
       body: await renderFailureFragment(
@@ -751,7 +757,10 @@ export async function renderNoJsMutationResponse<
   // handler-returned CSRF failure so no-JS clients see a consistent response.
   if (
     csrf === undefined ||
-    (csrf !== false && !validateCsrfToken(noJsRequest.rawInput, noJsRequest.request, csrf))
+    (csrf !== false &&
+      !validateCsrfToken(noJsRequest.rawInput, noJsRequest.request, csrf, {
+        audience: definition.key,
+      }))
   ) {
     const failure: MutationFail = {
       error: { code: 'CSRF', payload: {} },

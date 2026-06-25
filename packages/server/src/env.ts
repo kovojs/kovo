@@ -159,6 +159,16 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
   if (value === undefined) return;
 
   if (isRecord(value)) {
+    if (Array.isArray(value.keys)) {
+      value.keys.forEach((key, index) => {
+        if (isRecord(key)) {
+          validateFrameworkSecretValue(key.secret, `${path}.keys.${index}.secret`, issues);
+        } else {
+          validateFrameworkSecretValue(undefined, `${path}.keys.${index}`, issues);
+        }
+      });
+      return;
+    }
     validateFrameworkSecretValue(value.current, `${path}.current`, issues);
     if (value.previous !== undefined) {
       validateFrameworkSecretValue(value.previous, `${path}.previous`, issues);
@@ -174,6 +184,17 @@ function validateFrameworkSecretValue(
   path: string,
   issues: EnvValidationIssue[],
 ): void {
+  if (value instanceof Uint8Array) {
+    if (value.byteLength >= FRAMEWORK_SECRET_MIN_LENGTH) return;
+    issues.push({
+      code: 'too-short',
+      fatal: true,
+      message: `${path} must be at least ${FRAMEWORK_SECRET_MIN_LENGTH} bytes`,
+      path,
+    });
+    return;
+  }
+
   if (typeof value !== 'string') {
     issues.push({
       code: 'invalid',

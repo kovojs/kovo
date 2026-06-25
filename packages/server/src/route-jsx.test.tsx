@@ -267,7 +267,11 @@ describe('route JSX pages', () => {
     // for the golden comparison while still asserting the field is emitted alongside the CSRF field.
     const csrfMatch = /name="kovo-csrf" value="([^"]*)"/.exec(result.body);
     if (!csrfMatch?.[1]) throw new Error(`expected rendered CSRF token in ${result.body}`);
-    expect(validateCsrfToken({ 'kovo-csrf': csrfMatch[1] }, request, csrf)).toBe(true);
+    expect(
+      validateCsrfToken({ 'kovo-csrf': csrfMatch[1] }, request, csrf, {
+        audience: 'cart/add',
+      }),
+    ).toBe(true);
     const normalizedBody = result.body
       .replace(/name="kovo-csrf" value="[^"]*"/, 'name="kovo-csrf" value="<csrf>"')
       .replace(/name="Kovo-Idem" value="[^"]*"/, 'name="Kovo-Idem" value="<idem>"');

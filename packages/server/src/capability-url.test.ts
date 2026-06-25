@@ -6,6 +6,7 @@ import {
   signCapability,
   verifyCapability,
 } from './capability-url.js';
+import { createSigningKeyRing } from './keyring.js';
 
 const SECRET = 'capability-url-test-secret-at-least-32-characters-long';
 
@@ -99,6 +100,65 @@ describe('capability-url: sign + constant-time verify before any storage read', 
       method: 'GET',
     });
     expect(result).toEqual({ ok: false, reason: 'bad-signature' });
+  });
+
+  it('signs with the current KeyRing key and verifies tokens from a previous valid key', async () => {
+    const previousSigner = createSigningKeyRing({
+      keys: [{ id: 'old', secret: 'old-capability-secret', state: 'active' }],
+    });
+    const { token: previousToken } = await signCapability(previousSigner, { key: 'a.pdf' }, 0);
+    const rotated = createSigningKeyRing({
+      keys: [
+        { id: 'new', secret: 'new-capability-secret', state: 'active' },
+        { id: 'old', secret: 'old-capability-secret', state: 'previous' },
+      ],
+    });
+
+    await expect(
+      verifyCapability(rotated, previousToken, { key: 'a.pdf', method: 'GET' }, { now: 1 }),
+    ).resolves.toEqual({
+      ok: true,
+      claims: { expiry: DEFAULT_CAPABILITY_TTL_MS, key: 'a.pdf', method: 'GET' },
+    });
+
+    const { token: currentToken } = await signCapability(rotated, { key: 'a.pdf' }, 0);
+    await expect(
+      verifyCapability(rotated, currentToken, { key: 'a.pdf', method: 'GET' }, { now: 1 }),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it('rejects revoked KeyRing material and wrong verify audience', async () => {
+    const oldSigner = createSigningKeyRing({
+      keys: [{ id: 'old', secret: 'old-capability-secret', state: 'active' }],
+    });
+    const { token } = await signCapability(
+      oldSigner,
+      { audience: 'storage-download:/files', key: 'a.pdf' },
+      0,
+    );
+    const revoked = createSigningKeyRing({
+      keys: [
+        { id: 'new', secret: 'new-capability-secret', state: 'active' },
+        { id: 'old', secret: 'old-capability-secret', state: 'revoked' },
+      ],
+    });
+
+    await expect(
+      verifyCapability(
+        revoked,
+        token,
+        { key: 'a.pdf', method: 'GET' },
+        { audience: 'storage-download:/files', now: 1 },
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'bad-signature' });
+    await expect(
+      verifyCapability(
+        oldSigner,
+        token,
+        { key: 'a.pdf', method: 'GET' },
+        { audience: 'storage-download:/other', now: 1 },
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'bad-signature' });
   });
 
   it('REJECTS malformed tokens without crashing', async () => {

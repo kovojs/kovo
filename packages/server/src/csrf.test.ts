@@ -83,8 +83,49 @@ describe('csrf helpers', () => {
     ).toBe(false);
   });
 
+  it('rejects CSRF tokens verified for the wrong mutation audience or purpose', () => {
+    const current = 'current-secret-at-least-32-characters-long';
+    const previous = 'previous-secret-at-least-32-characters-long';
+    const rotated = {
+      ...csrf,
+      secret: {
+        keys: [
+          { id: 'new', secret: current, state: 'active' as const },
+          { id: 'old', secret: previous, state: 'previous' as const },
+        ],
+      },
+    };
+    const sessionToken = csrfToken(request, rotated);
+    const previousToken = csrfToken(request, { ...csrf, secret: previous });
+
+    expect(validateCsrfToken({ 'csrf<input>': previousToken }, request, rotated)).toBe(true);
+    expect(
+      validateCsrfToken({ 'csrf<input>': sessionToken }, request, rotated, {
+        audience: 'orders/delete',
+      }),
+    ).toBe(false);
+
+    const anonymousCsrf = {
+      field: 'csrf',
+      secret: rotated.secret,
+      sessionId() {
+        return undefined;
+      },
+    };
+    const setCookies: string[] = [];
+    const pageRequest = new Request('https://shop.example.test/login');
+    const html = runWithJsxRequestContext(
+      pageRequest,
+      { onCsrfSetCookie: (cookie) => setCookies.push(cookie) },
+      () => renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
+    );
+    if (typeof html !== 'string') throw new TypeError('expected synchronous CSRF field render');
+    const anonymousToken = fieldValue(html);
+    expect(validateCsrfToken({ csrf: anonymousToken }, request, anonymousCsrf)).toBe(false);
+  });
+
   it('rejects malformed masked CSRF tokens fail-closed', () => {
-    const token = csrfToken(request, csrf);
+    const token = csrfToken(request, csrf, { audience: 'cart/add' });
     const [version, mask, maskedMac] = token.split('.');
     expect(version).toBe('v1');
     expect(mask).toBeDefined();
@@ -141,8 +182,16 @@ describe('csrf helpers', () => {
       method: 'POST',
     });
 
-    expect(validateCsrfToken({ csrf: submitted }, postRequest, anonymousCsrf)).toBe(true);
-    expect(validateCsrfToken({ csrf: `${submitted}x` }, postRequest, anonymousCsrf)).toBe(false);
+    expect(
+      validateCsrfToken({ csrf: submitted }, postRequest, anonymousCsrf, {
+        audience: 'auth/sign-in',
+      }),
+    ).toBe(true);
+    expect(
+      validateCsrfToken({ csrf: `${submitted}x` }, postRequest, anonymousCsrf, {
+        audience: 'auth/sign-in',
+      }),
+    ).toBe(false);
   });
 
   // SPEC §6.6/§9.1: the framework's anonymous CSRF cookie declares `class: 'session'`, so the
@@ -214,7 +263,9 @@ describe('csrf helpers', () => {
     );
     if (typeof html !== 'string') throw new TypeError('expected synchronous CSRF field render');
     const token = /value="([^"]+)"/.exec(html)![1]!;
-    expect(validateCsrfToken({ csrf: token }, postRequest, anonymousCsrf)).toBe(true);
+    expect(
+      validateCsrfToken({ csrf: token }, postRequest, anonymousCsrf, { audience: 'auth/sign-in' }),
+    ).toBe(true);
   });
 });
 
@@ -240,7 +291,7 @@ describe('mutation CSRF enforcement', () => {
         return input.productId;
       },
     });
-    const token = csrfToken(request, csrf);
+    const token = csrfToken(request, csrf, { audience: 'cart/add' });
     const fieldHtml = csrfField(request, csrf);
     const fieldToken = /value="([^"]+)"/.exec(fieldHtml)?.[1];
     if (!fieldToken) throw new Error(`expected CSRF field value in ${fieldHtml}`);
@@ -286,7 +337,12 @@ describe('mutation CSRF enforcement', () => {
     });
 
     await expect(
-      runMutation(addToCart, { csrf: csrfToken(request, csrf) }, request, { csrf }),
+      runMutation(
+        addToCart,
+        { csrf: csrfToken(request, csrf, { audience: 'cart/add' }) },
+        request,
+        { csrf },
+      ),
     ).resolves.toEqual({
       error: {
         code: 'VALIDATION',
@@ -539,8 +595,14 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
       },
       method: 'POST',
     });
-    expect(validateCsrfToken({ csrf: token }, sameOrigin, anonymousCsrf)).toBe(true);
-    expect(validateCsrfToken({ csrf: `${token}x` }, sameOrigin, anonymousCsrf)).toBe(false);
+    expect(
+      validateCsrfToken({ csrf: token }, sameOrigin, anonymousCsrf, { audience: 'auth/sign-in' }),
+    ).toBe(true);
+    expect(
+      validateCsrfToken({ csrf: `${token}x` }, sameOrigin, anonymousCsrf, {
+        audience: 'auth/sign-in',
+      }),
+    ).toBe(false);
 
     const trustedOrigin = new Request('https://shop.example.test/_m/auth/sign-in', {
       headers: {
@@ -551,16 +613,26 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
       method: 'POST',
     });
     expect(
-      validateCsrfToken({ csrf: token }, trustedOrigin, {
-        ...anonymousCsrf,
-        trustedOrigins: ['https://app.example.test'],
-      }),
+      validateCsrfToken(
+        { csrf: token },
+        trustedOrigin,
+        {
+          ...anonymousCsrf,
+          trustedOrigins: ['https://app.example.test'],
+        },
+        { audience: 'auth/sign-in' },
+      ),
     ).toBe(true);
     expect(
-      validateCsrfToken({ csrf: `${token}x` }, trustedOrigin, {
-        ...anonymousCsrf,
-        trustedOrigins: ['https://app.example.test'],
-      }),
+      validateCsrfToken(
+        { csrf: `${token}x` },
+        trustedOrigin,
+        {
+          ...anonymousCsrf,
+          trustedOrigins: ['https://app.example.test'],
+        },
+        { audience: 'auth/sign-in' },
+      ),
     ).toBe(false);
   });
 });

@@ -10,7 +10,7 @@ import {
 } from './document-core.js';
 import { normalizeForwardedSetCookie } from './cookies.js';
 import { createSignUrl } from './capability-route.js';
-import { currentCsrfSecret } from './csrf.js';
+import { signingKeyRingFromCsrfSecret } from './csrf.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
 import { isRenderedHtml, renderHtmlValue, unwrapCoercedRenderedHtml } from './html.js';
@@ -54,7 +54,7 @@ export async function renderAppRouteDocumentResponse({
   const signUrlContext =
     app.csrf?.secret === undefined
       ? undefined
-      : createSignUrl({ secret: currentCsrfSecret(app.csrf.secret) });
+      : createSignUrl({ secret: signingKeyRingFromCsrfSecret(app.csrf.secret) });
   const signUrl =
     signUrlContext === undefined ? undefined : signUrlContext.signUrl.bind(signUrlContext);
   const routeInput: RouteRequestInput = {

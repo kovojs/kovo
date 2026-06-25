@@ -712,19 +712,19 @@ describe('server mutation response replay', () => {
 
     const first = await renderMutationResponse(addToCart, {
       idem: 'idem_shared',
-      rawInput: { csrf: csrfToken(requestA, csrf), productId: 'p1' },
+      rawInput: { csrf: csrfToken(requestA, csrf, { audience: 'cart/add' }), productId: 'p1' },
       replayStore,
       request: requestA,
     });
     const second = await renderMutationResponse(addToCart, {
       idem: 'idem_shared',
-      rawInput: { csrf: csrfToken(requestB, csrf), productId: 'p1' },
+      rawInput: { csrf: csrfToken(requestB, csrf, { audience: 'cart/add' }), productId: 'p1' },
       replayStore,
       request: requestB,
     });
     const replayedFirst = await renderMutationResponse(addToCart, {
       idem: 'idem_shared',
-      rawInput: { csrf: csrfToken(requestA, csrf), productId: 'p1' },
+      rawInput: { csrf: csrfToken(requestA, csrf, { audience: 'cart/add' }), productId: 'p1' },
       replayStore,
       request: requestA,
     });

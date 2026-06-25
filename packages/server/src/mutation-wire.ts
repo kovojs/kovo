@@ -1,7 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
-import { currentCsrfSecret } from './csrf.js';
-import type { CsrfValidationOptions } from './csrf.js';
+import { signingKeyRingFromCsrfSecret, type CsrfValidationOptions } from './csrf.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
@@ -476,14 +475,15 @@ export function createLiveTargetAttestation<Request>(
     request: Request;
   },
 ): string {
-  return createHmac(
-    'sha256',
-    options.csrf === undefined
-      ? liveTargetAttestationSecret
-      : currentCsrfSecret(options.csrf.secret),
-  )
-    .update(liveTargetAttestationPayload(descriptor, options))
-    .digest('base64url');
+  const payload = liveTargetAttestationPayload(descriptor, options);
+  if (options.csrf === undefined) {
+    return createHmac('sha256', liveTargetAttestationSecret).update(payload).digest('base64url');
+  }
+  return signingKeyRingFromCsrfSecret(options.csrf.secret).sign({
+    audience: 'mutation-live-target',
+    payload,
+    purpose: 'live-target-attestation',
+  }).signature;
 }
 
 function verifyLiveTargetDescriptor<Request>(

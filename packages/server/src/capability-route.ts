@@ -43,6 +43,7 @@ import {
   type CapabilityReplayStore,
   type SignedCapability,
 } from './capability-url.js';
+import type { SigningSecret } from './keyring.js';
 import { respond, type RouteStoredFileOptions } from './response.js';
 
 /** The query-parameter name the token rides in on a capability download URL. */
@@ -136,7 +137,7 @@ function buildCapabilityUrl(basePath: string, key: string, token: string): strin
  *   the mints default to (e.g. the request's tenant).
  */
 export function createSignUrl(options: {
-  secret: string | Uint8Array;
+  secret: SigningSecret;
   basePath?: string;
   defaultScope?: string;
   now?: () => number;
@@ -157,6 +158,7 @@ export function createSignUrl(options: {
           key,
           method,
           ...(scope === undefined ? {} : { scope }),
+          audience: capabilityRouteAudience(basePath),
           expiresIn,
           oneTime,
         },
@@ -186,7 +188,7 @@ export interface StorageDownloadEndpointOptions {
   /** The storage capability the verified handler reads from (AFTER the verify sink passes). */
   storage: StorageCapability;
   /** The framework signing secret the token is verified against (NOT app/per-request controlled). */
-  secret: string | Uint8Array;
+  secret: SigningSecret;
   /** Mount path; the route is `prefix`-mounted here. Defaults to `/_kovo/storage`. */
   basePath?: string;
   /** The scope the sink derives from the request and re-checks against the token's claim. */
@@ -278,6 +280,7 @@ export function createStorageDownloadEndpoint(
       },
       {
         ...(options.now === undefined ? {} : { now: options.now() }),
+        audience: capabilityRouteAudience(basePath),
         ...(options.replayStore === undefined ? {} : { replayStore: options.replayStore }),
       },
     );
@@ -326,4 +329,8 @@ export function createStorageDownloadEndpoint(
     response: { appOwnedSafety: false, body: 'bytes', cache: 'private' },
     handler,
   });
+}
+
+function capabilityRouteAudience(basePath: string): string {
+  return `storage-download:${basePath.replace(/\/+$/, '')}`;
 }

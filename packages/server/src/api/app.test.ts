@@ -23,6 +23,7 @@ import * as egressBootstrapApi from '../egress-bootstrap.js';
 import * as egressCredentialsApi from '../egress-credentials.js';
 import * as envApi from '../env.js';
 import * as fileApi from '../file.js';
+import * as keyringApi from '../keyring.js';
 import * as passwordApi from '../password.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
@@ -402,6 +403,7 @@ describe('server app-shell public API barrels', () => {
       awsCredential: egressCredentialsApi.awsCredential,
       gcpCredential: egressCredentialsApi.gcpCredential,
       azureCredential: egressCredentialsApi.azureCredential,
+      createSigningKeyRing: keyringApi.createSigningKeyRing,
       // SPEC.md §6.6 / §9.1 / plans/secure-framework.md Phase 5: capability-URL signing/verify
       // primitive (by-construction at the verify sink). Public at the root barrel; the download
       // route that hosts the sink is open work.

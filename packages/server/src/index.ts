@@ -37,6 +37,19 @@ export { installEgressFloor, selfProbe } from './egress-bootstrap.js';
 export type { EgressFloorInstall } from './egress-bootstrap.js';
 export { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
 export type { CredentialProvider } from './egress-credentials.js';
+export { createSigningKeyRing } from './keyring.js';
+export type {
+  SigningInput,
+  SigningKey,
+  SigningKeyRing,
+  SigningKeyRingOptions,
+  SigningKeyState,
+  SigningRejectReason,
+  SigningResult,
+  SigningSecret,
+  SigningVerifyInput,
+  SigningVerifyResult,
+} from './keyring.js';
 // SPEC §6.6 / §9.1 / plans/secure-framework.md Phase 5: capability-URL primitive — sign a
 // short-lived, scope-bound token over a storage object; constant-time verify BEFORE any storage
 // read (by-construction at the verify sink). The framework download *route* that hosts the sink

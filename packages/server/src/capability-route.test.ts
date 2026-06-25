@@ -184,7 +184,16 @@ describe('capability download route: verify-before-read sink', () => {
       replayStore,
       now: () => 1,
     });
-    const { token } = await signCapability(SECRET, { key, oneTime: true, expiresIn: 60_000 }, 0);
+    const { token } = await signCapability(
+      SECRET,
+      {
+        audience: `storage-download:${BASE}`,
+        key,
+        oneTime: true,
+        expiresIn: 60_000,
+      },
+      0,
+    );
     const first = await runEndpoint(route, new Request(downloadUrl(token, key)));
     expect(first.status).toBe(200);
     expect(reads).toEqual([key]);
@@ -225,7 +234,11 @@ describe('capability download route: verify-before-read sink', () => {
     const key = 'a.pdf';
     const storage = await storageWith(key, 'A');
     const route = createStorageDownloadEndpoint({ secret: SECRET, storage, now: () => 1 });
-    const { token } = await signCapability(SECRET, { key, method: 'HEAD' }, 0);
+    const { token } = await signCapability(
+      SECRET,
+      { audience: `storage-download:${BASE}`, key, method: 'HEAD' },
+      0,
+    );
     const response = await runEndpoint(
       route,
       new Request(downloadUrl(token, key), { method: 'HEAD' }),

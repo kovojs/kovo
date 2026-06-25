@@ -166,15 +166,18 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       _Trade-off:_ proves **intentionality**, not confidentiality (PII-ness isn't a declared provenance fact) —
       ship it as a warning-grade over-serialization floor, not a confidentiality proof.
 
-- [ ] **OPP-06 — Mandatory purpose/audience binding on capability & CSRF tokens.** by-construction (at the
+- [x] **OPP-06 — Mandatory purpose/audience binding on capability & CSRF tokens.** by-construction (at the
       verify sink, cross-context-confusion property) · lev 6 · M · breaking. Mirror ASP.NET purpose strings /
       Phoenix salts: make the signing context a required, branded, type-distinct parameter that participates in
       key derivation, so a token minted for one context cannot verify in another. _Trade-off:_ sound kill of
       cross-context replay, but narrower than a fresh vuln-class and gated on OPP-05's KeyRing.
+      Evidence: `packages/server/src/capability-url.ts` and `packages/server/src/csrf.ts` bind signed tokens to
+      required purpose/audience context via the KeyRing; the focused keyring/capability/CSRF Vitest suite,
+      `pnpm run check:vp`, and `pnpm run check:api-surface` passed.
 
 ### Band 2 — AuthN / crypto gap-closers (prior art owns these; Kovo delegates today)
 
-- [ ] **OPP-05 — First-class signing KeyRing (rotation).** by-construction (refuse-to-boot on missing/
+- [x] **OPP-05 — First-class signing KeyRing (rotation).** by-construction (refuse-to-boot on missing/
       un-versioned key, at the createApp chokepoint) + runtime-DiD (multi-key transparent verify) · lev 6 · L ·
       breaking. CSRF, `signCapability`, and the signed-cookie secret all hang off a single un-versioned secret
       (no rotation/revocation). Introduce a typed KeyRing: `sign()` uses the single Active key; `verify()` tries
@@ -182,6 +185,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       fail-closed verify are sound, but the "rotation by construction / revoked-key inexpressible" headline is a
       **type-only over-claim** (key state is runtime data) — describe verify as a runtime guard. Foundation for
       OPP-06/11/12.
+      Evidence: `packages/server/src/keyring.ts` adds active/previous/revoked signing keys with fail-closed
+      verification and `packages/server/src/env.ts` validates keyring signing material; the OPP-06 focused test
+      command plus `pnpm run check:vp` and `pnpm run check:api-surface` passed.
 
 - [ ] **OPP-10 — First-party password primitive (argon2id-only sink).** by-construction (narrow:
       plaintext-at-rest on the app-Drizzle write surface, KV438 extension) + runtime-DiD (params, auto-rehash,

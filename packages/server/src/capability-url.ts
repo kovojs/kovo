@@ -21,7 +21,11 @@
  * drained for `kovo explain --capabilities`.
  */
 
+import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
+
 const TOKEN_VERSION = 'v1';
+const CAPABILITY_SIGNING_PURPOSE = 'capability-url';
+const DEFAULT_CAPABILITY_AUDIENCE = 'storage-download';
 
 /** HTTP method a capability token authorizes. Downloads are reads; we model GET/HEAD. */
 export type CapabilityMethod = 'GET' | 'HEAD';
@@ -47,6 +51,8 @@ export interface SignCapabilityOptions {
   expiresIn?: number;
   /** When true, the token is single-use: the verifier burns it in a replay store on first use. */
   oneTime?: boolean;
+  /** Verify-sink audience. Storage download routes bind this to their mount surface. */
+  audience?: string;
 }
 
 /** Default token TTL: 5 minutes. Short by design — a leaked capability URL is a bearer secret. */
@@ -128,17 +134,6 @@ function canonicalize(claims: CapabilityClaims): Uint8Array {
   return encoder.encode(parts.join('|'));
 }
 
-async function importHmacKey(secret: string | Uint8Array): Promise<CryptoKey> {
-  const raw = typeof secret === 'string' ? encoder.encode(secret) : secret;
-  return globalThis.crypto.subtle.importKey(
-    'raw',
-    raw as BufferSource,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify'],
-  );
-}
-
 function base64url(bytes: Uint8Array): string {
   let binary = '';
   for (const b of bytes) binary += String.fromCharCode(b);
@@ -158,20 +153,6 @@ function fromBase64url(value: string): Uint8Array | null {
 }
 
 /**
- * Constant-time byte comparison (mirrors `packages/core/src/verifier.ts#constantTimeEqual`):
- * folds the length difference and every byte XOR into one accumulator so the loop cannot
- * short-circuit on the first mismatch (no timing oracle on the signature).
- */
-function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
-  const length = Math.max(left.length, right.length);
-  let difference = left.length ^ right.length;
-  for (let index = 0; index < length; index += 1) {
-    difference |= (left[index] ?? 0) ^ (right[index] ?? 0);
-  }
-  return difference === 0;
-}
-
-/**
  * Mint a capability token over a storage object. Canonicalize-before-sign: the signed bytes are
  * built from the resolved claims, not from any client-supplied string.
  *
@@ -180,7 +161,7 @@ function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
  * @param now - Injectable clock (epoch ms) for tests.
  */
 export async function signCapability(
-  secret: string | Uint8Array,
+  secret: SigningSecret,
   options: SignCapabilityOptions,
   now: number = Date.now(),
 ): Promise<SignedCapability> {
@@ -193,13 +174,15 @@ export async function signCapability(
   const oneTime = options.oneTime === true;
   // A per-token nonce gives one-time tokens a stable replay id even when claims are identical.
   const nonce = oneTime ? base64url(crypto.getRandomValues(new Uint8Array(12))) : '';
-  const key = await importHmacKey(secret);
   const signedBytes = canonicalizeWithNonce(claims, oneTime, nonce);
-  const signature = new Uint8Array(
-    await globalThis.crypto.subtle.sign('HMAC', key, signedBytes as BufferSource),
-  );
+  const signed = signingKeyRingFromSecret(secret).sign({
+    audience: options.audience ?? DEFAULT_CAPABILITY_AUDIENCE,
+    payload: signedBytes,
+    purpose: CAPABILITY_SIGNING_PURPOSE,
+  });
   const payload = {
     v: TOKEN_VERSION,
+    i: signed.keyId,
     m: claims.method,
     k: claims.key,
     e: claims.expiry,
@@ -207,7 +190,7 @@ export async function signCapability(
     ...(oneTime ? { o: 1, n: nonce } : {}),
   };
   const payloadB64 = base64url(encoder.encode(JSON.stringify(payload)));
-  const token = `${payloadB64}.${base64url(signature)}`;
+  const token = `${payloadB64}.${signed.signature}`;
   return { token, claims, oneTime };
 }
 
@@ -239,10 +222,10 @@ function canonicalizeWithNonce(
  *          Callers MUST NOT leak `reason` to the client (return a generic 403/404).
  */
 export async function verifyCapability(
-  secret: string | Uint8Array,
+  secret: SigningSecret,
   token: string,
   expected: { key: string; method: CapabilityMethod; scope?: string },
-  options: { now?: number; replayStore?: CapabilityReplayStore } = {},
+  options: { audience?: string; now?: number; replayStore?: CapabilityReplayStore } = {},
 ): Promise<CapabilityVerifyResult> {
   const now = options.now ?? Date.now();
   const dot = token.indexOf('.');
@@ -256,6 +239,7 @@ export async function verifyCapability(
     m?: string;
     k?: string;
     e?: number;
+    i?: string;
     s?: string;
     o?: number;
     n?: string;
@@ -269,7 +253,8 @@ export async function verifyCapability(
     payload.v !== TOKEN_VERSION ||
     (payload.m !== 'GET' && payload.m !== 'HEAD') ||
     typeof payload.k !== 'string' ||
-    typeof payload.e !== 'number'
+    typeof payload.e !== 'number' ||
+    (payload.i !== undefined && typeof payload.i !== 'string')
   ) {
     return { ok: false, reason: 'malformed' };
   }
@@ -284,15 +269,14 @@ export async function verifyCapability(
   const nonce = typeof payload.n === 'string' ? payload.n : '';
 
   // Recompute the signature over the canonicalized *received* fields and compare in constant time.
-  const key = await importHmacKey(secret);
-  const expectedSig = new Uint8Array(
-    await globalThis.crypto.subtle.sign(
-      'HMAC',
-      key,
-      canonicalizeWithNonce(claims, oneTime, nonce) as BufferSource,
-    ),
-  );
-  if (!constantTimeEqual(expectedSig, signatureBytes)) {
+  const verification = signingKeyRingFromSecret(secret).verify({
+    audience: options.audience ?? DEFAULT_CAPABILITY_AUDIENCE,
+    ...(payload.i === undefined ? {} : { keyId: payload.i }),
+    payload: canonicalizeWithNonce(claims, oneTime, nonce),
+    purpose: CAPABILITY_SIGNING_PURPOSE,
+    signature: base64url(signatureBytes),
+  });
+  if (!verification.ok) {
     return { ok: false, reason: 'bad-signature' };
   }
 

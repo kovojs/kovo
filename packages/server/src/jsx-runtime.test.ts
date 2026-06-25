@@ -106,9 +106,11 @@ describe('server jsx runtime', () => {
 
     // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field
     // alongside the CSRF field. The idem value is a fresh UUID each render.
-    expect(validateCsrfToken({ csrf: hiddenInputValue(rendered, 'csrf') }, request, csrf)).toBe(
-      true,
-    );
+    expect(
+      validateCsrfToken({ csrf: hiddenInputValue(rendered, 'csrf') }, request, csrf, {
+        audience: 'cart/add',
+      }),
+    ).toBe(true);
     expect(rendered).toMatch(/name="Kovo-Idem" value="[^"]+"/);
     expect(rendered).toContain('action="/_m/cart/add"');
     expect(rendered.match(/name="csrf"/g)).toHaveLength(1);
@@ -151,9 +153,11 @@ describe('server jsx runtime', () => {
     );
 
     expect(rendered).toContain('action="/_m/cart/add"');
-    expect(validateCsrfToken({ csrf: hiddenInputValue(rendered, 'csrf') }, request, csrf)).toBe(
-      true,
-    );
+    expect(
+      validateCsrfToken({ csrf: hiddenInputValue(rendered, 'csrf') }, request, csrf, {
+        audience: 'cart/add',
+      }),
+    ).toBe(true);
     expect(rendered.match(/name="csrf"/g)).toHaveLength(1);
   });
 
