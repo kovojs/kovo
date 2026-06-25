@@ -264,16 +264,16 @@ Median job durations across those runs:
     optimistic prediction mismatches and typed mutation error mismatches; `vp exec vitest --run
 packages/test/src/assertions.test.ts packages/test/src/headers.test.ts --reporter=dot` passed.
 
-- [ ] **Codify when package-internal imports are allowed in tests.**
+- [x] **Codify when package-internal imports are allowed in tests.**
   - Unit tests may import internals to lock implementation invariants.
   - Cross-package integration tests should import public app APIs unless the test is explicitly about a
     generated/internal ABI.
   - Evidence when complete: documented rule plus a meta-test or lint check for
     `tests/integration/**` internal imports with an allowlist.
-  - Progress 2026-06-25: `tests/integration/README.md` documents the rule for integration specs, and
-    `tests/integration-import-boundary.meta.test.ts` enforces allowlisted non-harness internal imports
-    in `tests/integration/specs/**`. Fixture app-source imports remain open under the lowered-IR/public
-    fixture migration item.
+  - Evidence 2026-06-25: `tests/integration/README.md` documents the rule, and
+    `tests/integration-import-boundary.meta.test.ts` scans all `tests/integration/**` sources, allows the
+    integration harness, requires explicit reasons for non-harness internal/generated imports, and
+    asserts the current 55 allowlisted legacy/ABI imports so future additions fail closed.
 
 ## Latest Verification
 
