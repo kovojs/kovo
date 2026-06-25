@@ -4,6 +4,7 @@ import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
+import type { AgentToolModuleSource } from './scan/agent-tools.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import { normalizeComponentFileName, replaceExtension } from './shared.js';
 import type { CompilerEmittedSourceProvenance } from './source-provenance.js';
@@ -209,6 +210,7 @@ export interface RegistryTypeFactOptions {
 }
 
 export interface CompileAppGraphOptions {
+  agentToolModules?: readonly AgentToolModuleSource[];
   components?: readonly {
     componentGraphFacts: readonly ComponentGraphFact[];
     publishToClientFacts?: readonly PublishToClientFact[];

@@ -1000,6 +1000,67 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from direct framework-owned tool handler AST', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'export const notify = tool({',
+            "  name: 'orders.notify',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+            '  async handler() {',
+            '    const token = process.env.SENDGRID_TOKEN;',
+            "    await fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '      headers: { authorization: token },',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+      graph: {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'src/tools/orders.ts:2',
+            target: 'orders.notify',
+          },
+        ],
+      },
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-body-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:10:11',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notify',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-body-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:9:19',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notify',
+      },
+    ]);
+  });
+
   it('derives page access facts from compiled JSX route pages', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',
