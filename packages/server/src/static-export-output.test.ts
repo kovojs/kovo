@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -372,6 +372,195 @@ describe('server static export output boundary', () => {
     } finally {
       await rm(outDir, { force: true, recursive: true });
       await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects symlinked output parent directories with KV229 before writes escape the root', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-parent-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-source-'));
+    const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-outside-'));
+    try {
+      const cssSource = path.join(sourceDir, 'app.css');
+      await writeFile(cssSource, 'body { color: black; }\n', 'utf8');
+      await symlink(outsideDir, path.join(outDir, 'assets'), 'dir');
+
+      const plan = createStaticExportOutputPlan({
+        artifacts: [],
+        assets: [
+          {
+            headers: {},
+            path: '/assets/app.css',
+            source: cssSource,
+            status: 200,
+          },
+        ],
+        clientModules: [],
+        outDir,
+      });
+
+      await expect(writeStaticExportOutput(plan)).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          {
+            code: 'KV229',
+            message: expect.stringContaining("output parent '"),
+            routePath: '/assets/app.css',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outsideDir, 'app.css'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+      await rm(outsideDir, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a symlinked output root with KV229', async () => {
+    const parentDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-root-'));
+    const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-outside-'));
+    const outDir = path.join(parentDir, 'dist');
+    try {
+      await symlink(outsideDir, outDir, 'dir');
+
+      const plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home</main>',
+            headers: {},
+            path: '/index.html',
+            status: 200,
+          },
+        ],
+        assets: [],
+        clientModules: [],
+        outDir,
+      });
+
+      await expect(writeStaticExportOutput(plan)).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          {
+            code: 'KV229',
+            message: expect.stringContaining("output root '"),
+            routePath: outDir,
+          },
+        ],
+      });
+      await expect(readFile(path.join(outsideDir, 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(parentDir, { force: true, recursive: true });
+      await rm(outsideDir, { force: true, recursive: true });
+    }
+  });
+
+  it('replaces only a symlinked file target during the staged rename commit', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-target-'));
+    const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-outside-'));
+    try {
+      const outsideTarget = path.join(outsideDir, 'index.html');
+      await writeFile(outsideTarget, '<!doctype html><main>outside</main>', 'utf8');
+      await symlink(outsideTarget, path.join(outDir, 'index.html'));
+
+      const plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home</main>',
+            headers: {},
+            path: '/index.html',
+            status: 200,
+          },
+        ],
+        assets: [],
+        clientModules: [],
+        outDir,
+      });
+
+      await writeStaticExportOutput(plan);
+
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain('Home');
+      await expect(readFile(outsideTarget, 'utf8')).resolves.toContain('outside');
+      await expect(lstat(path.join(outDir, 'index.html'))).resolves.toSatisfy((stats) =>
+        stats.isFile(),
+      );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(outsideDir, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects parent swaps between target preflight and commit with KV229', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-swap-'));
+    const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-outside-'));
+    try {
+      await mkdir(path.join(outDir, 'assets'));
+
+      const plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home</main>',
+            headers: {},
+            path: '/assets/index.html',
+            status: 200,
+          },
+        ],
+        assets: [],
+        clientModules: [],
+        outDir,
+      });
+
+      const mutablePlan = plan as unknown as {
+        writes: {
+          write(targetPath: string): Promise<void>;
+        }[];
+      };
+      const originalWrite = mutablePlan.writes[0]!.write;
+      mutablePlan.writes[0]!.write = async (targetPath) => {
+        await originalWrite(targetPath);
+        await rm(path.join(outDir, 'assets'), { force: true, recursive: true });
+        await symlink(outsideDir, path.join(outDir, 'assets'), 'dir');
+      };
+
+      await expect(writeStaticExportOutput(plan)).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          {
+            code: 'KV229',
+            routePath: '/assets/index.html',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outsideDir, 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(outsideDir, { force: true, recursive: true });
+    }
+  });
+
+  it('does not follow symlinked directories while pruning stale route documents', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-prune-link-'));
+    const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-outside-'));
+    try {
+      await writeFile(path.join(outsideDir, 'index.html'), '<!doctype html><main>outside</main>');
+      await symlink(outsideDir, path.join(outDir, 'old'), 'dir');
+
+      const plan = createStaticExportOutputPlan({
+        artifacts: [],
+        assets: [],
+        clientModules: [],
+        outDir,
+      });
+      await writeStaticExportOutput(plan);
+
+      await expect(readFile(path.join(outsideDir, 'index.html'), 'utf8')).resolves.toContain(
+        'outside',
+      );
+      await expect(lstat(path.join(outDir, 'old'))).resolves.toSatisfy((stats) =>
+        stats.isSymbolicLink(),
+      );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(outsideDir, { force: true, recursive: true });
     }
   });
 });

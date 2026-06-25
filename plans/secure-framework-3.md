@@ -190,7 +190,7 @@ code, and current supply-chain/build surfaces.
 
 ## Tier 3 - Filesystem, Static Export, And Supply Chain
 
-- [ ] **Make static export writes symlink/race aware.**
+- [x] **Make static export writes symlink/race aware.**
   - Evidence: static export validates parent directories and target directories with `lstat`
     (`packages/server/src/static-export-output.ts:318`), writes into a staging root, then commits with
     `rename()` into final targets (`packages/server/src/static-export-output.ts:387`). Path traversal
@@ -201,6 +201,11 @@ code, and current supply-chain/build surfaces.
     documented refusal to write into symlinked output trees.
   - Acceptance: export either rejects symlinked/swap targets with KV229 or proves it replaces only the
     symlink itself; stale-route pruning must not follow symlinks outside the output root.
+  - Verified 2026-06-25: `packages/server/src/static-export-output.ts` validates the output root and
+    target parents with `lstat()` before preflight and again immediately before staged rename commit.
+    `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export-output-targets.test.ts`
+    proves KV229 rejection for symlinked output roots/parents and parent swaps, safe replacement of a
+    symlinked file target, and stale-route pruning that does not follow symlinked directories.
 
 - [ ] **Add a publish tarball content security gate.**
   - Evidence: `scripts/build-publish.mjs` builds every public package and verifies `publishConfig`

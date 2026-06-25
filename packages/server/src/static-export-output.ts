@@ -126,6 +126,7 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
     await assertReadableStaticExportAssetSource(artifact);
   }
 
+  await assertStaticExportOutputRoot(plan.root);
   await assertWritableStaticExportTargets(plan);
   if (plan.writes.length === 0) {
     // C2/SPEC §9.5: even when this export emits nothing, prior route documents must be reconciled so
@@ -317,12 +318,31 @@ interface StaticExportPlannedWrite extends StaticExportOutputTarget {
 
 async function assertWritableStaticExportTargets(plan: StaticExportOutputPlan): Promise<void> {
   for (const write of plan.writes) {
-    await assertStaticExportTargetParentDirectories(plan.root, write);
+    await ensureStaticExportTargetParentDirectories(plan.root, write);
     await assertStaticExportTargetIsNotDirectory(write);
   }
 }
 
-async function assertStaticExportTargetParentDirectories(
+async function assertStaticExportOutputRoot(root: string): Promise<void> {
+  let rootStat: Awaited<ReturnType<typeof lstat>>;
+  try {
+    rootStat = await lstat(root);
+  } catch {
+    await mkdir(root, { recursive: true });
+    rootStat = await lstat(root);
+  }
+
+  if (rootStat.isDirectory()) return;
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      root,
+      `KV229 static export cannot write output because output root '${root}' is not a directory.`,
+    ),
+  ]);
+}
+
+async function ensureStaticExportTargetParentDirectories(
   root: string,
   write: StaticExportPlannedWrite,
 ): Promise<void> {
@@ -333,14 +353,24 @@ async function assertStaticExportTargetParentDirectories(
   for (const segment of segments) {
     current = path.join(current, segment);
 
-    let targetStat: Awaited<ReturnType<typeof lstat>>;
+    let parentStat: Awaited<ReturnType<typeof lstat>>;
     try {
-      targetStat = await lstat(current);
+      parentStat = await lstat(current);
     } catch {
-      continue;
+      await mkdir(current);
+      parentStat = await lstat(current);
     }
 
-    if (!targetStat.isDirectory()) {
+    if (parentStat.isSymbolicLink()) {
+      throw new StaticExportError([
+        staticExportDiagnostic(
+          write.diagnosticPath,
+          `KV229 static export cannot write ${write.kind} '${write.diagnosticPath}' because output parent '${current}' is a symbolic link.`,
+        ),
+      ]);
+    }
+
+    if (!parentStat.isDirectory()) {
       throw new StaticExportError([
         staticExportDiagnostic(
           write.diagnosticPath,
@@ -390,7 +420,9 @@ async function commitStaticExportStagedOutput(
 ): Promise<void> {
   for (const write of plan.writes) {
     const stagedPath = staticExportStagedTargetPath(plan.root, stagingRoot, write.targetPath);
-    await mkdir(path.dirname(write.targetPath), { recursive: true });
+    await assertStaticExportOutputRoot(plan.root);
+    await ensureStaticExportTargetParentDirectories(plan.root, write);
+    await assertStaticExportTargetIsNotDirectory(write);
     await rename(stagedPath, write.targetPath);
   }
 }
