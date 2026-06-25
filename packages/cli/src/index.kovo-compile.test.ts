@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -200,6 +200,57 @@ export const CartActions = component({
       expect(output).toContain(`CHECK component path=${JSON.stringify(outPath)} status=current`);
       expect(output).toContain(`CHECK client path=${JSON.stringify(clientPath)} status=current`);
       expect(output).toContain('SUMMARY artifacts=3 diagnostics=0');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses component and client artifact writes when error diagnostics are present', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-component-error-'));
+    const sourcePath = join(root, 'payment-button.tsx');
+    const outPath = join(root, 'generated/payment-button.tsx');
+    const clientPath = join(root, 'generated/payment-button.client.js');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        sourcePath,
+        `
+import { component } from '@kovojs/core';
+import { sendPayment } from './payments';
+import { STRIPE_SECRET_KEY } from './secrets';
+
+export const PaymentButton = component({
+  render: () => <button onClick={() => sendPayment(STRIPE_SECRET_KEY)}>Pay</button>,
+});
+`,
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          join(root, 'generated/payment-button.tsx'),
+          '--emit-client-files',
+          '--allow-diagnostic',
+          'KV210',
+        ]),
+      ).resolves.toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('ERROR KV437');
+      expect(output).toContain('SUMMARY artifacts=0 diagnostics=1');
+      expect(existsSync(outPath)).toBe(false);
+      expect(existsSync(clientPath)).toBe(false);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

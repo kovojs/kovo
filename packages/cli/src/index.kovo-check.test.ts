@@ -211,7 +211,24 @@ describe('kovo check', () => {
 
     const undecided = deriveAppGraph({
       graph: {
-        endpoints: [{ method: 'POST', path: '/api/raw' }],
+        endpoints: [
+          {
+            appOwnedSafety: true,
+            body: 'json',
+            cache: 'no-store',
+            method: 'POST',
+            path: '/api/raw',
+            reason: 'raw sync',
+          },
+          {
+            body: 'raw',
+            cache: 'no-store',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+            surface: 'webhook',
+          },
+        ],
         mutations: [{ key: 'cart/clear', writes: ['cart'] }],
         pages: [{ route: '/secret' }],
         queries: [{ domains: ['draft'], query: 'drafts' }],
@@ -227,11 +244,31 @@ describe('kovo check', () => {
       expect.stringContaining('ERROR KV436 MUTATION cart/clear'),
       expect.stringContaining('ERROR KV436 PAGE /secret'),
       expect.stringContaining('ERROR KV436 QUERY drafts'),
+      expect.stringContaining('ERROR KV436 WEBHOOK stripe/webhook'),
     ]);
 
     const decided = deriveAppGraph({
       graph: {
-        endpoints: [{ access: { kind: 'verified-machine-auth' }, method: 'POST', path: '/api/raw' }],
+        endpoints: [
+          {
+            access: { kind: 'verified-machine-auth' },
+            appOwnedSafety: true,
+            body: 'json',
+            cache: 'no-store',
+            method: 'POST',
+            path: '/api/raw',
+            reason: 'raw sync',
+          },
+          {
+            auth: 'verifier:stripe-signature',
+            body: 'raw',
+            cache: 'no-store',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+            surface: 'webhook',
+          },
+        ],
         mutations: [{ guards: ['authed'], key: 'cart/clear', writes: ['cart'] }],
         pages: [{ access: { kind: 'public', reason: 'public landing page' }, route: '/secret' }],
         queries: [{ domains: ['draft'], guards: ['authed'], query: 'drafts' }],

@@ -324,14 +324,15 @@ data-plane security.
     passes after adding accepted/rejected check-owned matrix rows for `KV423`, `KV424`, and
     `KV438`, and citing those paths from the spec coverage map without reclassifying them as
     component-compiler diagnostics.
-- [ ] Add build-blocking tests that prove `error` diagnostics prevent Vite/build output and prevent
+- [x] Add build-blocking tests that prove `error` diagnostics prevent Vite/build output and prevent
       serving emitted modules, while lint/notice diagnostics stay non-blocking where intended.
-  - Evidence: many current tests assert diagnostic presence but not artifact refusal.
   - 2026-06-25 slice evidence: `pnpm exec vitest --run packages/compiler/src/vite.test.ts --configLoader runner`
     passes after `KV235`, `KV236`, and `KV437` error diagnostics block Vite transform output,
     error transforms do not register dev middleware client modules, direct `.client.js` loads
-    re-use the error gate, and warn/lint/notice diagnostics still pass. Full Vite production build
-    output is not separately proven by this slice, so the checkbox remains open.
+    re-use the error gate, and warn/lint/notice diagnostics still pass.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/server/src/access-graph.test.ts`
+    passes after `kovo compile component --emit-client-files` refuses both component and client
+    artifact writes when an error diagnostic is present.
 - [x] Convert high-risk substring tests into generated-artifact execution tests for server HTML,
       client module behavior, mutation delta behavior, and `/_q` response behavior.
   - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/server-emit-security.test.ts packages/compiler/src/output-context-payloads.test.ts packages/server/src/mutation-delta.test.ts packages/server/src/query-endpoint.test.ts`
@@ -360,19 +361,44 @@ data-plane security.
 
 Do not claim this remediation complete until all of the following are true:
 
-- [ ] Every Phase 0 adversarial case has a checked-in regression test and a blocking diagnostic or
+- [x] Every Phase 0 adversarial case has a checked-in regression test and a blocking diagnostic or
       fail-closed compile error.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/id-content-model.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/client-secret-capture.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/core/src/diagnostics.test.ts`
+    passes with checked-in regressions for output-context bypasses, malformed TSX, path
+    confinement, repeatable static IDs, and fail-closed source replacement conflicts.
 - [x] A shape-only render-plan change moves the compiler href, document token, mutation response
       token, full response token, and query response token in an end-to-end test.
   - Evidence: `pnpm exec vitest --configLoader runner --run packages/server/src/vite-build.test.ts packages/server/src/mutation-delta.test.ts packages/server/src/app.test.ts packages/server/src/query-endpoint.test.ts --reporter verbose`
     passes with the compiler-to-server render-plan fixture in `packages/server/src/vite-build.test.ts`.
-- [ ] Missing/conflicting query-shape facts cannot silently suppress `KV435` or produce stale
+- [x] Missing/conflicting query-shape facts cannot silently suppress `KV435` or produce stale
       render-plan tokens in production/check modes.
-- [ ] Route, query, mutation, endpoint, and webhook access posture all appear in one app graph
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/id-content-model.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/client-secret-capture.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/core/src/diagnostics.test.ts`
+    passes with missing query-shape `KV435`, conflicting shape `KV240`, and token-producing
+    component compile regressions.
+- [x] Route, query, mutation, endpoint, and webhook access posture all appear in one app graph
       explain/check path with default-deny behavior proven by tests.
-- [ ] `publishToClient` escapes are visible in explain output and require a non-empty reason.
-- [ ] All compiler-owned `error` diagnostics in the security set are proven to block output.
-- [ ] The compiler phase graph is documented in types, and no phase can read a product that an
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/server/src/access-graph.test.ts`
+    passes with default-deny `KV436` coverage for page, query, mutation, endpoint, and webhook
+    graph facts plus stable access explain output.
+- [x] `publishToClient` escapes are visible in explain output and require a non-empty reason.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/id-content-model.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/client-secret-capture.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/core/src/diagnostics.test.ts`
+    and `pnpm exec vitest --configLoader runner --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/server/src/access-graph.test.ts`
+    pass with `publishToClient` graph capability output and missing/blank reason `KV437`
+    rejections.
+- [x] All compiler-owned `error` diagnostics in the security set are proven to block output.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/id-content-model.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/client-secret-capture.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/spec-coverage-map.test.ts packages/compiler/src/server-emit-security.test.ts packages/compiler/src/output-context-payloads.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/server/src/vite-build.test.ts packages/server/src/mutation-delta.test.ts packages/server/src/app.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/access-graph.test.ts packages/core/src/diagnostics.test.ts packages/core/src/graph.test.ts`
+    passes with Vite error-diagnostic transform/serving gates and CLI artifact refusal coverage.
+- [x] The compiler phase graph is documented in types, and no phase can read a product that an
       earlier phase has not declared.
-- [ ] Full repo gates relevant to compiler/security pass, including the focused compiler suite,
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/id-content-model.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/client-secret-capture.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/core/src/diagnostics.test.ts`
+    passes after `compileComponentModule` phase result interfaces and the lowering pass product
+    graph enforce declared phase products.
+- [x] Full repo gates relevant to compiler/security pass, including the focused compiler suite,
       Vite/build tests, `kovo check` tests, and generated-artifact integration tests.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/id-content-model.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/client-secret-capture.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/spec-coverage-map.test.ts packages/compiler/src/server-emit-security.test.ts packages/compiler/src/output-context-payloads.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/server/src/vite-build.test.ts packages/server/src/mutation-delta.test.ts packages/server/src/app.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/access-graph.test.ts packages/core/src/diagnostics.test.ts packages/core/src/graph.test.ts`
+    passed 27 files / 488 tests.
+  - Evidence: `pnpm --filter @kovojs/compiler run build:dist`,
+    `pnpm --filter @kovojs/server run build:dist`, `pnpm --filter @kovojs/cli run build:dist`,
+    `pnpm run check:api-surface`,
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/xss-escaping.spec.ts`,
+    and `git diff --check` pass.
