@@ -10,6 +10,7 @@ test('coalesces concurrent duplicate enhanced mutation submissions', async ({
   kovoApp,
 }) => {
   await page.goto('/');
+  const origin = new URL(page.url()).origin;
   const token = await page.locator('input[name="kovo-csrf"]').inputValue();
   const post = () =>
     request.post('/_m/mutation-idempotency-concurrent/record', {
@@ -18,6 +19,7 @@ test('coalesces concurrent duplicate enhanced mutation submissions', async ({
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem-concurrent-1',
         'Kovo-Targets': 'idem-concurrent-status',
+        origin,
       },
     });
 

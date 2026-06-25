@@ -18,6 +18,8 @@ import {
 import { isSchemaValidationError } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 
+const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
+
 /** @internal */
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
 /** @internal */
@@ -222,7 +224,12 @@ export function webhook<
     name,
     path: definition.path,
     reason: `webhook:${name}`,
-    response: { appOwnedSafety: false, body: 'text', cache: 'no-store' },
+    response: {
+      appOwnedSafety: false,
+      body: 'text',
+      cache: 'no-store',
+      reservedHeaders: WEBHOOK_RESPONSE_RESERVED_HEADERS,
+    },
     webhook: true,
     webhookDefinition: definition,
   } satisfies WebhookDeclaration<Name, Path, InputSchema, Value, Tx>;

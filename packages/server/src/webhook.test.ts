@@ -56,6 +56,12 @@ describe('server webhook primitive', () => {
       mount: 'exact',
       name: 'provider',
       path: '/webhooks/provider',
+      response: {
+        appOwnedSafety: false,
+        body: 'text',
+        cache: 'no-store',
+        reservedHeaders: ['Kovo-*'],
+      },
       webhook: true,
     });
   });

@@ -9,6 +9,7 @@ test('replays duplicate idempotency keys without executing the write twice', asy
   kovoApp,
 }) => {
   await page.goto('/');
+  const origin = new URL(page.url()).origin;
   const token = await page.locator('input[name="kovo-csrf"]').inputValue();
 
   const first = await request.post('/_m/idempotent-mutation/record', {
@@ -17,6 +18,7 @@ test('replays duplicate idempotency keys without executing the write twice', asy
       'Kovo-Fragment': 'true',
       'Kovo-Idem': 'idem-integration-1',
       'Kovo-Targets': 'idem-status',
+      origin,
     },
   });
   const firstBody = await first.text();
@@ -29,6 +31,7 @@ test('replays duplicate idempotency keys without executing the write twice', asy
       'Kovo-Fragment': 'true',
       'Kovo-Idem': 'idem-integration-1',
       'Kovo-Targets': 'idem-status',
+      origin,
     },
   });
   expect(duplicate.status()).toBe(200);
