@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  decideRuntimeAttributeWrite,
   setRuntimeSinkSecurityEventHandler,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
@@ -150,6 +151,30 @@ describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
     }
     expect(JSON.stringify(events)).not.toContain('secret-token');
     expect(JSON.stringify(events)).not.toContain('alert');
+  });
+
+  it('keeps server runtime attribute decisions in parity with the shared KV236 sink policy', () => {
+    // SPEC.md §4.8/KV236: server render and browser fragment adoption share the
+    // same runtime sink decision table for URL/srcset/CSS/raw-HTML attributes.
+    for (const testCase of [
+      { name: 'href', value: 'java\nscript:alert(1)' },
+      { name: 'xlink:href', value: 'java\tscript:alert(1)' },
+      {
+        name: 'srcset',
+        value: '/safe.png 1x, url("https://cdn.test/a,b.png") 2x, javascript:alert(1) 3x',
+      },
+      { name: 'srcset', value: 'java\tscript:alert(1) 1x' },
+      { name: 'imagesrcset', value: '/safe.png 1x, data:text/html 2x' },
+      { name: 'style', value: 'min-height: 120px; overflow: auto' },
+      { name: 'style', value: 'background-image: url("java\nscript:alert(1)")' },
+      { name: 'InNeRhTmL', value: '<img src=x onerror=alert(1)>' },
+    ]) {
+      const decision = decideRuntimeAttributeWrite(testCase.name, testCase.value);
+      const expected =
+        decision.action === 'remove' ? null : escapeAttribute(decision.value ?? testCase.value);
+
+      expect(safeRuntimeAttribute(testCase.name, testCase.value), testCase.name).toBe(expected);
+    }
   });
 
   it('still HTML-escapes safe URL attribute values', () => {

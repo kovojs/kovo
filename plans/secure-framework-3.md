@@ -122,7 +122,7 @@ code, and current supply-chain/build surfaces.
 
 ## Tier 1 - Browser Sink Parity
 
-- [ ] **Generate the inline fragment sanitizer from the shared sink policy, or prove byte-level parity.**
+- [x] **Generate the inline fragment sanitizer from the shared sink policy, or prove byte-level parity.**
   - Evidence: `response-fragment-apply.ts` still carries local mini-sanitizer functions for fragment
     adoption (`packages/browser/src/response-fragment-apply.ts:153`, `packages/browser/src/response-fragment-apply.ts:173`,
     `packages/browser/src/response-fragment-apply.ts:184`, `packages/browser/src/response-fragment-apply.ts:193`),
@@ -135,6 +135,15 @@ code, and current supply-chain/build surfaces.
   - Acceptance: adversarial cases for `srcset` commas, `imagesrcset`, CSS text, mixed-case raw HTML,
     `xlink:href`, and obfuscated schemes pass identically in server, modular browser, and extracted
     inline-loader paths.
+  - Verified 2026-06-25: `packages/browser/src/response-fragment-apply.ts` now mirrors KV236
+    URL/srcset/CSS/raw-HTML decisions for modular and extracted inline fragment adoption.
+    `vp run browser packages/browser/src/response-fragment-apply.browser.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts`
+    proves browser parity across Chromium, WebKit, and Firefox; `pnpm exec vitest run
+packages/core/src/sink-policy.test.ts packages/server/src/html.test.ts
+packages/browser/src/inline-loader-build.test.ts` proves shared server/browser decision parity and
+    generated inline-loader freshness; `pnpm exec vitest run packages/server/src/static-export-manifest.test.ts
+packages/server/src/static-export-replay.test.ts packages/server/src/vite-build.test.ts` proves the
+    refreshed inline CSP hash fixtures match static export output.
 
 - [ ] **Separate Trusted Types inline routing from sanitizer parity and track both gates independently.**
   - Evidence: `packages/server/src/csp.ts:220` keeps `require-trusted-types-for 'script'` opt-in because
@@ -252,6 +261,6 @@ scripts/check-pack-security.test.mjs` proves negative cases; `pnpm run check:pac
 
 ## Latest Verification
 
-- `rg -n "^- \[[ x]\]" plans/secure-framework-3.md` reports 14 open task-list items.
-- `git diff --no-index --check /dev/null plans/secure-framework-3.md` emitted no whitespace
-  diagnostics. Exit status is nonzero only because `/dev/null` and the new file differ.
+- `rg -n "^- \[[ x]\]" plans/secure-framework-3.md` reports 14 task-list items, with 2 still open.
+- `git diff --check --cached && git diff --check` and `pnpm run check:vp` pass for the latest
+  integrated inline-sanitizer parity slice.

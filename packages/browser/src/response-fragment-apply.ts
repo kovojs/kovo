@@ -202,9 +202,14 @@ function sa(e: Element, name: string, v: string): void {
     e.removeAttribute(name);
     return;
   }
-  if (n === 'srcset') {
+  if (n === 'style' && c(v)) {
+    e.removeAttribute(name);
+    return;
+  }
+  if (n === 'srcset' || n === 'imagesrcset') {
     const s = y(v);
-    e.setAttribute(name, s || '#');
+    if (s) e.setAttribute(name, s);
+    else e.removeAttribute(name);
     return;
   }
   if (/^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/.test(n)) {
@@ -217,7 +222,9 @@ function sa(e: Element, name: string, v: string): void {
 }
 
 function r(n: string): boolean {
-  return /^on[^:]|^(srcdoc|style|innerhtml)$/.test(n);
+  return /^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/.test(
+    n,
+  );
 }
 
 function g(e: Element): Element {
@@ -229,18 +236,63 @@ function g(e: Element): Element {
 
 function y(v: string): string | null {
   const r: string[] = [];
-  for (const c of v.split(',')) {
-    const x = c.trim();
-    if (x && !w(x.split(/\s/)[0]!)) r.push(x);
+  let q: '"' | "'" | undefined;
+  let d = 0;
+  let s = 0;
+  const a = (p: string) => {
+    const x = p.trim();
+    if (!x) return;
+    if (w(x)) return;
+    let i = -1;
+    for (let j = 0; j < x.length; j += 1) {
+      const c = x.charCodeAt(j);
+      if (c === 9 || c === 10 || c === 12 || c === 13 || c === 32) {
+        i = j;
+        break;
+      }
+    }
+    const u = i < 0 ? x : x.slice(0, i);
+    const u2 =
+      (u.startsWith('"') && u.endsWith('"')) || (u.startsWith("'") && u.endsWith("'"))
+        ? u.slice(1, -1)
+        : u;
+    if (!w(u2)) r.push(x);
+  };
+  for (let i = 0; i < v.length; i += 1) {
+    const x = v[i];
+    if (q) {
+      if (x === q) q = undefined;
+    } else if (x === '"' || x === "'") q = x;
+    else if (x === '(') d += 1;
+    else if (x === ')' && d > 0) d -= 1;
+    else if (x === ',' && d === 0) {
+      a(v.slice(s, i));
+      s = i + 1;
+    }
   }
+  a(v.slice(s));
   return r.length ? r.join(', ') : null;
+}
+
+function c(v: string): boolean {
+  const p = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"']*?))\s*\)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = p.exec(v)) !== null) if (w((m[1] ?? m[2] ?? m[3] ?? '').trim())) return true;
+  return /\bexpression\s*\(/i.test(v) || /-moz-binding\s*:/i.test(v);
 }
 
 function w(v: string): boolean {
   // eslint-disable-next-line no-control-regex -- Short spelling keeps SPEC.md §4.4 inline-loader budget stable.
   const s = v.replace(/[\x00-\x20]/g, '').toLowerCase();
-  return /^[a-z][^:]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
+  return /^[a-z][a-z0-9+.-]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
 }
+
+export const __responseFragmentApplySanitizerParityForTests = {
+  hasUnsafeCssText: c,
+  hasUnsafeUrlScheme: w,
+  sanitizeAttribute: sa,
+  sanitizeSrcset: y,
+};
 
 function u(c: Element, n: Element): void {
   const b = new Map(

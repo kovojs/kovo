@@ -59,9 +59,11 @@ type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpec
 // (1) the concurrent loader-hardening raise to 9472, and (2) the Trusted Types `trustedHtml`
 // shim that routes the always-on `p`/`d` raw-HTML write sinks (response-fragment-apply.ts)
 // through the framework `kovo` policy — what lets Trusted Types ship DEFAULT-ON without bricking
-// Kovo's own hydration on Chromium. The TT API tokens (`trustedTypes`/`createPolicy`/`createHTML`)
-// are irreducible over the hardened loader; future increases require comparable XSS-sink evidence.
-export const inlineKovoLoaderGzipByteBudget = 9600;
+// Kovo's own hydration on Chromium; (3) the extracted fragment sanitizer now byte-tracks the shared
+// KV236 sink policy for imagesrcset, comma-aware srcset, CSS text, and raw-HTML sink names. The TT API
+// tokens (`trustedTypes`/`createPolicy`/`createHTML`) and sanitizer grammar are irreducible over the
+// hardened loader; future increases require comparable XSS-sink evidence.
+export const inlineKovoLoaderGzipByteBudget = 10000;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
@@ -1220,7 +1222,7 @@ export function buildInlineKovoLoaderModuleSource(
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
     '',
-    '// SPEC.md §4.4 keeps the always-loaded loader under an 8.875KB gzip budget; this',
+    '// SPEC.md §4.4 keeps the always-loaded loader under the checked gzip budget; this',
     '// literal is the pre-minified bootstrap shipped in document shells.',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
