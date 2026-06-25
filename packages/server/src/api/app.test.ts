@@ -610,10 +610,19 @@ describe('server app-shell public API barrels', () => {
     ]);
     expect(packageInternalEscapeApi).toEqual(internalEscapeApi);
     expect(moduleValueKeys(packageInternalExecutionApi)).toEqual([
+      // SPEC §6.6/§9.4/§10.3 (MARQUEE): the framework-owned managed DB handle error +
+      // composition primitives (`managedDb`/`readonlyDb` are @internal-only here; the typed
+      // `KovoReadonlyHandleError` is also re-exported at the root barrel) plus the
+      // `query.elevated(...)` capability-fact drain are reachable on the internal execution subpath
+      // so adapters/tests can resolve a read-only/read-write handle the same way the shell does.
+      'KovoReadonlyHandleError',
       'accessFactsFromApp',
       'createMemoryMutationReplayStore',
+      'drainElevatedQueryFacts',
       'endpointMatches',
       'invalidate',
+      'managedDb',
+      'readonlyDb',
       'registerGeneratedMutationTouchRegistry',
       'registerGeneratedQueryReadRegistry',
       'resolveLifecycleRequest',
