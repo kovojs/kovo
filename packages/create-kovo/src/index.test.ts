@@ -98,6 +98,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(agents).toContain('<!-- kovo-rules-version: 0.1.1 -->');
       expect(agents).toContain('`kovo check`');
       expect(agents).toContain('Docs root: `./.kovo/docs/`.');
+      expect(agents).toContain('- Getting Started (`getting-started/`): why-kovo, quickstart');
       expect(agents).toContain('- Guides (`guides/`): routing, layouts, queries, live-queries');
       expect(agents).not.toContain('## Read First');
       expect(agents).not.toContain('./.kovo/docs/spec.md');
@@ -109,6 +110,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(realpathSync(join(root, 'CLAUDE.md'))).toBe(realpathSync(join(root, 'AGENTS.md')));
 
       expect(readFileSync(join(root, '.kovo/docs/kovo-rules.md'), 'utf8')).toContain('## Commands');
+      expect(existsSync(join(root, '.kovo/docs/getting-started/why-kovo.md'))).toBe(true);
       expect(readFileSync(join(root, '.kovo/docs/llms.txt'), 'utf8')).toContain(
         'Compact local docs index',
       );

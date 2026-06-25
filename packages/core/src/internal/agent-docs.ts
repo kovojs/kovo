@@ -26,15 +26,27 @@ interface KovoRulesTocEntry {
 
 export const kovoRulesTocSections: readonly KovoRulesTocSection[] = [
   {
-    directory: 'docs/',
+    directory: 'getting-started/',
     title: 'Getting Started',
     entries: [
-      { title: 'Why Kovo?', path: 'docs/why-kovo.md', slug: 'why-kovo' },
-      { title: 'Quickstart', path: 'docs/quickstart.md', slug: 'quickstart' },
-      { title: 'Thinking in Kovo', path: 'docs/mental-model.md', slug: 'mental-model' },
-      { title: 'Installation', path: 'docs/installation.md', slug: 'installation' },
-      { title: 'Project structure', path: 'docs/project-structure.md', slug: 'project-structure' },
-      { title: 'Stability & Versioning', path: 'docs/stability.md', slug: 'stability' },
+      { title: 'Why Kovo?', path: 'getting-started/why-kovo.md', slug: 'why-kovo' },
+      { title: 'Quickstart', path: 'getting-started/quickstart.md', slug: 'quickstart' },
+      {
+        title: 'Thinking in Kovo',
+        path: 'getting-started/mental-model.md',
+        slug: 'mental-model',
+      },
+      { title: 'Installation', path: 'getting-started/installation.md', slug: 'installation' },
+      {
+        title: 'Project structure',
+        path: 'getting-started/project-structure.md',
+        slug: 'project-structure',
+      },
+      {
+        title: 'Stability & Versioning',
+        path: 'getting-started/stability.md',
+        slug: 'stability',
+      },
     ],
   },
   {
@@ -160,7 +172,7 @@ export function bundledKovoRulesSource(): string {
     '## Table Of Contents',
     '',
     'Docs root: `./.kovo/docs/`.',
-    'Path rule: `why-kovo` in `docs/` means `./.kovo/docs/docs/why-kovo.md`; `core` in `api/` means `./.kovo/docs/api/core.md`.',
+    'Path rule: `why-kovo` in `getting-started/` means `./.kovo/docs/getting-started/why-kovo.md`; `core` in `api/` means `./.kovo/docs/api/core.md`.',
     '',
     ...kovoRulesTocSections.map(
       (section) =>
@@ -237,7 +249,7 @@ export function bundledKovoDocsMirrorFiles({
       '- Spec: `./spec.md`',
       '- Full docs corpus: `./llms-full.txt`',
       '- Kovo rules: `./kovo-rules.md`',
-      '- Project structure: `./docs/project-structure.md`',
+      '- Project structure: `./getting-started/project-structure.md`',
       '- CLI: `./guides/cli.md`',
       '- Diagnostics: `./reference/diagnostics.md`',
       '',

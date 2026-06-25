@@ -44,7 +44,7 @@ describe('site static Cloud Run server', () => {
     servers.push(served);
 
     const origin = `http://127.0.0.1:${served.port}`;
-    const page = await fetch(`${origin}/docs`);
+    const page = await fetch(`${origin}/getting-started`);
     expect(page.status).toBe(200);
     expect(page.headers.get('content-type')).toContain('text/html');
     expect(await page.text()).toBe('<h1>Docs</h1>');
@@ -59,11 +59,11 @@ describe('site static Cloud Run server', () => {
 async function createStaticRoot() {
   const root = await mkdtemp(path.join(tmpdir(), 'kovo-site-static-'));
   roots.push(root);
-  await mkdir(path.join(root, 'docs'), { recursive: true });
+  await mkdir(path.join(root, 'getting-started'), { recursive: true });
   await mkdir(path.join(root, 'c'), { recursive: true });
   await writeFile(path.join(root, 'index.html'), '<h1>Home</h1>');
   await writeFile(path.join(root, '404.html'), '<h1>Not found</h1>');
-  await writeFile(path.join(root, 'docs', 'index.html'), '<h1>Docs</h1>');
+  await writeFile(path.join(root, 'getting-started', 'index.html'), '<h1>Docs</h1>');
   await writeFile(path.join(root, 'c', 'search.js'), 'export {};');
   return root;
 }

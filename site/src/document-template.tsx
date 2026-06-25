@@ -137,7 +137,7 @@ const searchInputClass = style.attrs(searchStyles.input).class ?? '';
 const searchResultsClass = style.attrs(searchStyles.results).class ?? '';
 
 const SEARCH_DEFAULT_RESULTS = [
-  ['start', 'Quickstart', 'Getting Started', '/docs/quickstart/'],
+  ['start', 'Quickstart', 'Getting Started', '/getting-started/quickstart/'],
   ['guide', 'Tutorial', 'Build the app', '/tutorial/'],
   ['api', 'API Reference', 'Packages and symbols', '/api/'],
   ['app', 'Examples', 'Runnable apps', '/examples/'],

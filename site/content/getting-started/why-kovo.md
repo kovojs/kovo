@@ -105,8 +105,8 @@ wiring to be a _type error when it's wrong_, that's the gap Kovo fills.
 
 ## Next steps
 
-- [Quickstart](/docs/quickstart/) — get a page rendering and see the checks fire.
-- [Thinking in Kovo](/docs/mental-model/) — the mental model, built through one small app.
+- [Quickstart](/getting-started/quickstart/) — get a page rendering and see the checks fire.
+- [Thinking in Kovo](/getting-started/mental-model/) — the mental model, built through one small app.
 - [Tutorial](/tutorial/) — build a real commerce app end to end.
 
 <details>

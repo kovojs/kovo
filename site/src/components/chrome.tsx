@@ -31,7 +31,7 @@ interface NavItem extends NavLink {
 // "Reference" nav entry (a /reference/ landing hub links to all three); their
 // URLs are unchanged.
 const NAV: NavItem[] = [
-  { url: '/docs/why-kovo/', title: 'Docs' },
+  { url: '/getting-started/why-kovo/', title: 'Docs' },
   { url: '/tutorial/', title: 'Tutorial' },
   { url: '/guides/', title: 'Guides' },
   { url: '/components/', title: 'Components' },
@@ -43,14 +43,14 @@ const NAV: NavItem[] = [
 // path (Getting Started + Tutorial + Guides) should not also see the whole
 // Components/Examples/API/Reference tree, and vice versa. Group keys map to one
 // of two families; the sidebar renders only the family of the active page.
-const LEARN_FAMILY = new Set(['docs', 'tutorial']);
+const LEARN_FAMILY = new Set(['getting-started', 'tutorial']);
 
 function isLearnGroup(group: NavGroup): boolean {
   return LEARN_FAMILY.has(group.key) || group.key.startsWith('guides-');
 }
 
 function sidebarFamilyForPath(activePath: string): 'learn' | 'reference' {
-  return ['/docs', '/tutorial', '/guides'].some(
+  return ['/getting-started', '/tutorial', '/guides'].some(
     (prefix) => activePath === prefix || activePath.startsWith(`${prefix}/`),
   )
     ? 'learn'

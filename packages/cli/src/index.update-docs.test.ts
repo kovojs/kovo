@@ -53,6 +53,9 @@ describe('kovo update-docs', () => {
       expect(agents).not.toContain('# stale');
 
       expect(readFileSync(join(root, '.kovo/docs/llms.txt'), 'utf8')).toBe('# fetched llms.txt\n');
+      expect(readFileSync(join(root, '.kovo/docs/getting-started/why-kovo.md'), 'utf8')).toBe(
+        '# fetched getting-started/why-kovo.md\n',
+      );
       expect(readFileSync(join(root, '.kovo/docs/guides/cli.md'), 'utf8')).toBe(
         '# fetched guides/cli.md\n',
       );
@@ -89,11 +92,13 @@ describe('kovo update-docs', () => {
       expect(agents).toContain('Local instructions.');
       expect(agents).toContain('<!-- BEGIN:kovo-rules -->');
       expect(agents).toContain('`kovo check`');
-      expect(agents).toContain('- Spec: `./.kovo/docs/spec.md`');
+      expect(agents).toContain('- Getting Started (`getting-started/`): why-kovo, quickstart');
+      expect(agents).not.toContain('./.kovo/docs/spec.md');
       expect(readFileSync(join(root, '.kovo/docs/kovo-rules.md'), 'utf8')).toContain('## Commands');
       expect(readFileSync(join(root, '.kovo/docs/kovo-rules.md'), 'utf8')).not.toContain(
         './.kovo/docs/llms.txt',
       );
+      expect(existsSync(join(root, '.kovo/docs/getting-started/quickstart.md'))).toBe(true);
       expect(existsSync(join(root, '.kovo/docs/reference/diagnostics.md'))).toBe(true);
       expect(existsSync(join(root, '.kovo/docs/guides/live-queries.md'))).toBe(true);
       expect(existsSync(join(root, '.kovo/docs/api/core.md'))).toBe(true);

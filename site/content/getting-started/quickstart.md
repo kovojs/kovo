@@ -124,12 +124,12 @@ When the feature crosses data domains or relies on optimistic behavior, add a gr
 
 `vp` is the toolchain runner (`vp dev`, `vp check`, `vp test`, `vp build`) and `kovo` is the
 framework CLI (`kovo check`, `kovo explain`, `kovo add`). The full table - and the rule for which
-binary does what - lives in [Installation > The everyday commands](/docs/installation/#the-everyday-commands).
+binary does what - lives in [Installation > The everyday commands](/getting-started/installation/#the-everyday-commands).
 
 ## Next steps
 
-- [Thinking in Kovo](/docs/mental-model/) - how components become self-describing HTML.
-- [Installation](/docs/installation/) - prerequisites and what the scaffold sets up.
+- [Thinking in Kovo](/getting-started/mental-model/) - how components become self-describing HTML.
+- [Installation](/getting-started/installation/) - prerequisites and what the scaffold sets up.
 - [Examples](/examples/) - larger apps built from the same route/query/mutation facts.
 - [Commerce example](/examples/commerce/) - a larger authenticated storefront built the same way.
 

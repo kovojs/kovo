@@ -98,9 +98,9 @@ and scaffold tests prove those behaviors.
     metadata, and overwrite/idempotency behavior.
   - Done evidence: `kovoDocsMirrorRemotes` in
     `packages/core/src/internal/agent-docs.ts` defines `kovo-rules.md`,
-    `llms.txt`, `llms-full.txt`, `spec.md`, selected `docs/`, `guides/`, and
-    `reference/` files; `packages/cli/src/index.update-docs.test.ts` verifies
-    fetched and bundled metadata plus mirror writes.
+    `llms.txt`, `llms-full.txt`, `spec.md`, selected `getting-started/`,
+    `guides/`, and `reference/` files; `packages/cli/src/index.update-docs.test.ts`
+    verifies fetched and bundled metadata plus mirror writes.
 
 - [x] **Document version freshness semantics.**
   - Deliverable: update the relevant CLI, starter, or docs-site material to say

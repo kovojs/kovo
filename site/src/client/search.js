@@ -15,7 +15,12 @@ let queryVersion = 0;
 let selectedIndex = -1;
 
 const DEFAULT_ENTRIES = [
-  { kind: 'start', section: 'Getting Started', title: 'Quickstart', url: '/docs/quickstart/' },
+  {
+    kind: 'start',
+    section: 'Getting Started',
+    title: 'Quickstart',
+    url: '/getting-started/quickstart/',
+  },
   { kind: 'guide', section: 'Build the app', title: 'Tutorial', url: '/tutorial/' },
   { kind: 'api', section: 'Packages and symbols', title: 'API Reference', url: '/api/' },
   { kind: 'app', section: 'Runnable apps', title: 'Examples', url: '/examples/' },

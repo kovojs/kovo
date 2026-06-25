@@ -20,9 +20,9 @@ describe('agent docs rules block', () => {
     expect(block).toContain('`kovo update-docs`');
     expect(block).toContain('Docs root: `./.kovo/docs/`.');
     expect(block).toContain(
-      'Path rule: `why-kovo` in `docs/` means `./.kovo/docs/docs/why-kovo.md`',
+      'Path rule: `why-kovo` in `getting-started/` means `./.kovo/docs/getting-started/why-kovo.md`',
     );
-    expect(block).toContain('- Getting Started (`docs/`): why-kovo, quickstart');
+    expect(block).toContain('- Getting Started (`getting-started/`): why-kovo, quickstart');
     expect(block).toContain('- Tutorial (`tutorial/`): 01-first-page');
     expect(block).toContain('- Guides (`guides/`): routing, layouts, queries, live-queries');
     expect(block).toContain('- API Reference (`api/`): core, icons, server');

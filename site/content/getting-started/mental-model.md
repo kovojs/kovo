@@ -175,7 +175,7 @@ build.
 
 ## Next steps
 
-- [Quickstart](/docs/quickstart/) — get this running on your machine.
+- [Quickstart](/getting-started/quickstart/) — get this running on your machine.
 - [Queries & invalidation](/guides/queries/) — the data loop in depth.
 - [Tutorial](/tutorial/) — build the whole shop, step by step.
 
