@@ -714,7 +714,7 @@ describe('kovo check', () => {
     );
   });
 
-  it('reports semantic lints for local state, events, and direct db access', () => {
+  it('reports semantic findings for local state, events, and direct db access', () => {
     expect(
       kovoCheck({
         lints: [
@@ -736,12 +736,12 @@ describe('kovo check', () => {
         ],
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output: [
         'kovo-check/v1',
         'LINT KV301 CartBadge.client.ts:8 Server fact stored in island-local state. state.cartCount mirrors query cart.count.',
         'LINT KV320 cart.events.ts:3 Event payload overlaps query data; use a transform. event cart:added carries product.unitPrice.',
-        'LINT KV330 cart.mutation.ts:12 Direct db access in a mutation handler; route through domain. handler addToCart receives db.',
+        'ERROR KV330 cart.mutation.ts:12 Direct db access in a mutation handler; route through domain. handler addToCart receives db.',
         '',
       ].join('\n'),
     });
@@ -760,7 +760,7 @@ describe('kovo check', () => {
       }).output,
     ).toMatchInlineSnapshot(`
       "kovo-check/v1
-      LINT KV302 CartBadge.tsx:12 data-bind path is not present in the declared query shape. cart.total
+      ERROR KV302 CartBadge.tsx:12 data-bind path is not present in the declared query shape. cart.total
       "
     `);
   });
@@ -778,7 +778,7 @@ describe('kovo check', () => {
       }).output,
     ).toMatchInlineSnapshot(`
       "kovo-check/v1
-      LINT KV303 CartRow.tsx:7 Fragment target render input is not declared as query data or stamped props. priceList
+      ERROR KV303 CartRow.tsx:7 Fragment target render input is not declared as query data or stamped props. priceList
       "
     `);
   });

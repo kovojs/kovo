@@ -224,10 +224,12 @@ diagnostic in compiler/check gates that claim data-plane security.
     and `pnpm run check:api-surface` pass after `PublishToClientFact` was exposed on compile
     results, threaded into graph capabilities, printed with `module=`, and blank reasons were
     rejected with KV437.
-- [ ] Decide whether `KV330` is blocking. If it remains lint, add a written soundness proof and an
+- [x] Decide whether `KV330` is blocking. If it remains lint, add a written soundness proof and an
       acceptance test showing data-plane security claims do not depend on it.
-  - Evidence: core diagnostics define `KV330` as lint while its help text says direct DB access
-    bypasses domain write analysis.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/core/src/diagnostics.test.ts packages/compiler/src/direct-db.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/vite.test.ts packages/cli/src/index.kovo-check.test.ts -u`
+    passes after `KV330` became an error diagnostic, Vite error-diagnostic blocking includes
+    `KV330`, and `kovo check` fails direct-DB semantic graph findings instead of printing them as
+    non-blocking lint.
 
 ### Phase 2: harden render-plan and generated-output ABI
 

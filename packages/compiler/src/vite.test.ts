@@ -32,6 +32,7 @@ const kv201 = diagnosticDefinitions.KV201;
 const kv210 = diagnosticDefinitions.KV210;
 const kv235 = diagnosticDefinitions.KV235;
 const kv236 = diagnosticDefinitions.KV236;
+const kv330 = diagnosticDefinitions.KV330;
 const kv437 = diagnosticDefinitions.KV437;
 
 function createMiddlewareResponse(): {
@@ -152,6 +153,7 @@ export function renderSource() {
   it.each([
     ['KV235', kv235],
     ['KV236', kv236],
+    ['KV330', kv330],
     ['KV437', kv437],
   ] as const)('blocks Vite transform output for %s error diagnostics', async (code, definition) => {
     const plugin = createKovoVitePlugin(() => ({

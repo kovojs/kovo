@@ -475,7 +475,7 @@ describe('diagnostic registry', () => {
       Fixes: move writes behind a domain() module, inject the domain operation into the handler, or use the typed transaction context only inside the domain layer.
       SPEC §11.4 and §14 require writes to flow through domains so invalidation and verifier diagnostics stay complete.",
           "message": "Direct db access in a mutation handler; route through domain.",
-          "severity": "lint",
+          "severity": "error",
         },
         "KV402": {
           "code": "KV402",

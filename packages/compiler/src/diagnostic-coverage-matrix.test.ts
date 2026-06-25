@@ -1015,7 +1015,7 @@ describe('compiler diagnostic coverage matrix', () => {
       SPEC §11.4 and §14 require writes to flow through domains so invalidation and verifier diagnostics stay complete.",
           "length": 10,
           "message": "Direct db access in a mutation handler; route through domain.",
-          "severity": "lint",
+          "severity": "error",
           "start": {
             "column": 5,
             "line": 4,

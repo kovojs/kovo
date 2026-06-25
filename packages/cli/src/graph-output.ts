@@ -804,11 +804,19 @@ export function kovoCheck(
     }
 
     for (const lint of graph.lints ?? []) {
-      pushFinding(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
+      const severity = semanticLintSeverity(lint);
+      pushFinding(
+        `${severity.toUpperCase()} ${lint.code} ${lint.site} ${lintMessage(lint)}`,
+        severity === 'error',
+      );
     }
 
     for (const lint of eventPayloadQueryLints(graph.eventPayloads ?? [], graph.queryData ?? [])) {
-      pushFinding(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
+      const severity = semanticLintSeverity(lint);
+      pushFinding(
+        `${severity.toUpperCase()} ${lint.code} ${lint.site} ${lintMessage(lint)}`,
+        severity === 'error',
+      );
     }
 
     for (const failure of fixpointFailures(graph.fixpointChecks ?? [])) {
@@ -2423,6 +2431,10 @@ function lintMessage(lint: CoreGraph.SemanticLint): string {
   const base = diagnosticDefinitions[lint.code].message;
 
   return lint.detail ? `${base} ${lint.detail}` : base;
+}
+
+function semanticLintSeverity(lint: CoreGraph.SemanticLint): DiagnosticSeverity {
+  return diagnosticDefinitions[lint.code].severity;
 }
 
 function missedQueryInvalidations(
