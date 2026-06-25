@@ -61,7 +61,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
   });
 
   // End-to-end producer: project source -> ownerDomains + scopeAudits.
-  it('extracts ownerDomains + scopeAudits from a project, flagging only the arg-keyed read', () => {
+  it('extracts ownerDomains + scopeAudits from a project, flagging arg-keyed and unproven owner reads', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -96,10 +96,17 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
 
     expect(audit.ownerDomains).toEqual([{ domain: 'order', owner: 'userId' }]);
-    // Only the client-arg-keyed read is flagged; the local-var-keyed read emits nothing.
     expect(
-      audit.scopeAudits.map((a) => ({ name: a.name, domain: a.domain, scope: a.scope })),
-    ).toEqual([{ name: 'order', domain: 'order', scope: 'args' }]);
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, domain: a.domain, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'order', domain: 'order', scope: 'args' },
+      { name: 'orderMine', domain: 'order', scope: 'unknown' },
+    ]);
+    expect(audit.scopeAudits.find((a) => a.name === 'orderMine')?.detail).toContain(
+      'narrow Authorization-gates-DATA subset',
+    );
   });
 
   // A1 (SPEC §10.3 / KV414): the IDOR gate covers "a query OR write" reaching an
@@ -408,11 +415,46 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  // Fail-closed boundary check: the join-keyed branch fires only when the query is
-  // client-arg-reachable. An owner read with NO `input.*` predicate (a literal-keyed local,
-  // mirroring the existing `orderMine` case) is NOT the client-pivotable bypass and must
-  // still emit no fact — guarding against over-flagging legitimate unscoped/admin reads.
-  it('does not flag an owner read keyed only by a literal local (no client arg → no fact)', () => {
+  it('flags a session predicate on a non-owner column as an unproven DATA authorization subset', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const orderBySessionId = query("orderBySessionId", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.id, req.session.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
+      { domain: 'order', scope: 'unknown' },
+    ]);
+    expect(audit.scopeAudits[0]?.detail).toContain(
+      'session predicate does not compare the owner column',
+    );
+  });
+
+  // OPP-28 narrow DATA subset: even without a client arg, a directly reachable owner
+  // read must now carry an honest finding unless the owner column is proven scoped to
+  // the matching session/principal symbol. The scope is `unknown`, not the arg-keyed
+  // join-bypass `args` classification.
+  it('flags an owner read keyed only by a literal local as unproven for the narrow DATA subset', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -440,6 +482,11 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       }),
     );
 
-    expect(audit.scopeAudits).toEqual([]);
+    expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
+      { domain: 'order', scope: 'unknown' },
+    ]);
+    expect(audit.scopeAudits[0]?.detail).toContain(
+      'no owner-column session/principal predicate was proven',
+    );
   });
 });
