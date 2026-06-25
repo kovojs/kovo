@@ -188,4 +188,102 @@ describe('agent tool reachable sink facts', () => {
       },
     ]);
   });
+
+  it('preserves analyzer-produced sound egress and secret-read rows for declared tools', () => {
+    expect(
+      deriveAgentToolReachableSinkFacts({
+        agentToolSinks: [
+          {
+            capability: 'email.send',
+            evidence: 'static-tool-body-egress',
+            grade: 'sound',
+            kind: 'egress',
+            site: 'app/tools/orders.ts:31',
+            target: 'smtp',
+            tool: 'orders.notify',
+          },
+          {
+            capability: 'secrets.read',
+            evidence: 'static-tool-body-secret-read',
+            grade: 'sound',
+            kind: 'secret-read',
+            site: 'app/tools/orders.ts:32',
+            target: 'env.SENDGRID_TOKEN',
+            tool: 'orders.notify',
+          },
+        ],
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['email.send'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'app/tools/orders.ts:4',
+            target: 'orders.notify',
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        capability: 'email.send',
+        evidence: 'static-tool-body-egress',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'app/tools/orders.ts:31',
+        target: 'smtp',
+        tool: 'orders.notify',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-body-secret-read',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'app/tools/orders.ts:32',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notify',
+      },
+    ]);
+  });
+
+  it('downgrades public nested reachable sinks to audit grade even when input claims sound', () => {
+    expect(
+      deriveAgentToolReachableSinkFacts({
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['email.send'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            reachableSinks: [
+              {
+                capability: 'secrets.read',
+                evidence: 'declared-tool-body',
+                grade: 'sound',
+                kind: 'secret-read',
+                site: 'app/tools/orders.ts:32',
+                target: 'env.SENDGRID_TOKEN',
+                tool: 'stale.name.is.ignored',
+              },
+            ],
+            site: 'app/tools/orders.ts:4',
+            target: 'orders.notify',
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        capability: 'secrets.read',
+        evidence: 'declared-tool-body',
+        grade: 'audit',
+        kind: 'secret-read',
+        site: 'app/tools/orders.ts:32',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notify',
+      },
+    ]);
+  });
 });

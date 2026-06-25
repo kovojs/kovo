@@ -180,6 +180,9 @@ export interface CompileDependencyReads {
 export type RegistryGraphInput = Pick<
   CoreGraph.KovoExplainInput,
   | 'access'
+  // SPEC §6.6 / OPP-07: analyzer-owned reachable agent-tool sink rows. Top-level rows may be
+  // sound and enforced; public `tool({ reachableSinks })` rows remain audit-grade in core graph
+  // derivation.
   | 'agentToolSinks'
   | 'capabilities'
   | 'components'

@@ -853,10 +853,20 @@ describe('kovo explain', () => {
         agentToolSinks: [
           {
             capability: 'email.send',
-            grade: 'audit',
+            evidence: 'static-tool-body-egress',
+            grade: 'sound',
             kind: 'egress',
             site: 'app/tools/orders.ts:31',
             target: 'smtp',
+            tool: 'orders.updateStatus',
+          },
+          {
+            capability: 'secrets.read',
+            evidence: 'static-tool-body-secret-read',
+            grade: 'sound',
+            kind: 'secret-read',
+            site: 'app/tools/orders.ts:32',
+            target: 'env.SENDGRID_TOKEN',
             tool: 'orders.updateStatus',
           },
         ],
@@ -867,7 +877,7 @@ describe('kovo explain', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain(
-      'sinks=audit:egress:smtp->email.send@app/tools/orders.ts:31,audit:secret-read:env.SENDGRID_TOKEN->secrets.read@app/tools/orders.ts:29,sound:write:orders->orders.write@mutation:orders.updateStatus',
+      'sinks=audit:secret-read:env.SENDGRID_TOKEN->secrets.read@app/tools/orders.ts:29,sound:egress:smtp->email.send@app/tools/orders.ts:31,sound:secret-read:env.SENDGRID_TOKEN->secrets.read@app/tools/orders.ts:32,sound:write:orders->orders.write@mutation:orders.updateStatus',
     );
   });
 

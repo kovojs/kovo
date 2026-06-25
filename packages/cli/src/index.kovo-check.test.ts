@@ -204,6 +204,53 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails when analyzer-produced sound egress and secret-read rows are not declared', () => {
+    expect(
+      kovoCheck({
+        agentToolSinks: [
+          {
+            capability: 'email.send',
+            evidence: 'static-tool-body-egress',
+            grade: 'sound',
+            kind: 'egress',
+            site: 'app/tools/orders.ts:31',
+            target: 'smtp',
+            tool: 'orders.notify',
+          },
+          {
+            capability: 'secrets.read',
+            evidence: 'static-tool-body-secret-read',
+            grade: 'sound',
+            kind: 'secret-read',
+            site: 'app/tools/orders.ts:32',
+            target: 'env.SENDGRID_TOKEN',
+            tool: 'orders.notify',
+          },
+        ],
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['orders.write'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'app/tools/orders.ts:12',
+            target: 'orders.notify',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR AGENT_TOOL_CAPABILITY orders.notify sink=egress:smtp required=email.send site=app/tools/orders.ts:31 Declared tool capabilities do not cover statically reachable sink.',
+        'ERROR AGENT_TOOL_CAPABILITY orders.notify sink=secret-read:env.SENDGRID_TOKEN required=secrets.read site=app/tools/orders.ts:32 Declared tool capabilities do not cover statically reachable sink.',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('fails raw endpoint and webhook graph rows with incomplete audit metadata (KV423)', () => {
     const result = kovoCheck({
       endpoints: [
@@ -2260,7 +2307,7 @@ describe('kovo check', () => {
     });
   });
 
-  it('does not enforce audit-grade sinks nested on agent-tool capability rows', () => {
+  it('does not enforce public nested agent-tool sink rows even if input claims sound', () => {
     expect(
       kovoCheck({
         capabilities: [
@@ -2275,7 +2322,7 @@ describe('kovo check', () => {
               {
                 capability: 'secrets.read',
                 evidence: 'declared-tool-body',
-                grade: 'audit',
+                grade: 'sound',
                 kind: 'secret-read',
                 site: 'app/tools/orders.ts:31',
                 target: 'env.SENDGRID_TOKEN',

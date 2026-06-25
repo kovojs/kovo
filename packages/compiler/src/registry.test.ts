@@ -911,6 +911,26 @@ export const ProductGrid = component({
   it('threads framework-owned agent-tool reachable sink facts into the app graph', () => {
     const derived = deriveAppGraph({
       graph: {
+        agentToolSinks: [
+          {
+            capability: 'email.send',
+            evidence: 'static-tool-body-egress',
+            grade: 'sound',
+            kind: 'egress',
+            site: 'app/tools/orders.ts:42',
+            target: 'smtp',
+            tool: 'orders.updateStatus',
+          },
+          {
+            capability: 'secrets.read',
+            evidence: 'static-tool-body-secret-read',
+            grade: 'sound',
+            kind: 'secret-read',
+            site: 'app/tools/orders.ts:43',
+            target: 'env.SENDGRID_TOKEN',
+            tool: 'orders.updateStatus',
+          },
+        ],
         capabilities: [
           {
             ambientBrowserCredentials: 'rejected',
@@ -941,6 +961,24 @@ export const ProductGrid = component({
     });
 
     expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'email.send',
+        evidence: 'static-tool-body-egress',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'app/tools/orders.ts:42',
+        target: 'smtp',
+        tool: 'orders.updateStatus',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-body-secret-read',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'app/tools/orders.ts:43',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.updateStatus',
+      },
       {
         capability: 'auditLog.write',
         evidence: 'graph-write-domain',
