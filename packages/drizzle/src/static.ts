@@ -1321,6 +1321,11 @@ function extractQueryFactsFromPreparedFiles(
         query.opaquePaths,
         site,
         query.hasOutputSchema,
+        // SPEC §10.2 (F2 fix #1, plans/compiler-soundness.md): an opaque projection with an `output`
+        // schema but NO declared `reads:` set is still a KV410 error. The declared `reads:` set is the
+        // only typed-table fact (hard-rule #9) that exposes a secret/exempt table referenced solely in
+        // raw SQL text to the confidentiality backstop, so its absence must fail the build closed.
+        query.declaredReadExpressions.length > 0,
       )
         .concat(
           secretProjectionBackstopDiagnostics(

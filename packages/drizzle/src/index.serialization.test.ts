@@ -201,6 +201,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         '    }).from(products);',
         '  },',
         '  output: {},',
+        '  reads: [products],',
         '});',
         '',
       ].join('\n'),
