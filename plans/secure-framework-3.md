@@ -144,7 +144,7 @@ code, and current supply-chain/build surfaces.
 
 ## Tier 2 - Raw Escape Hatches And Operator Controls
 
-- [ ] **Add reserved-header posture for raw endpoints.**
+- [x] **Add reserved-header posture for raw endpoints.**
   - Evidence: `runEndpoint()` returns the handler's raw `Response` after posture assertion
     (`packages/server/src/endpoint.ts:170`), and the current dev/opt-in assertion checks cache,
     body kind, and content type only (`packages/server/src/endpoint.ts:263`). Route file/stream
@@ -156,6 +156,11 @@ code, and current supply-chain/build surfaces.
   - Acceptance: endpoint tests cover accidental `Kovo-Reauth`, `Kovo-Build`, `Kovo-Changes`,
     `Set-Cookie`, `Location`, and CSP overrides with precise diagnostics and a documented opt-out for
     legitimate machine endpoints.
+  - Verified 2026-06-25: `EndpointResponsePosture.reservedHeaders` declares intentional raw endpoint
+    writes to framework protocol, credential, redirect, and security-policy headers; the dev/CI
+    endpoint posture verifier rejects undeclared `Kovo-Reauth`, `Kovo-Build`, `Kovo-Changes`,
+    `Set-Cookie`, `Location`, and `Content-Security-Policy`. `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts`
+    proves the diagnostics and declared opt-out path.
 
 - [ ] **Promote endpoint posture verification into a first-class CI/starter gate.**
   - Evidence: endpoint posture verification is skipped outside development unless

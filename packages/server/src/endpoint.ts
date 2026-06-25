@@ -22,6 +22,12 @@ export interface EndpointResponsePosture {
   appOwnedSafety: boolean;
   body: EndpointResponseBody;
   cache: EndpointCachePosture;
+  /**
+   * Reserved response headers this raw endpoint intentionally writes. Framework protocol,
+   * credential, redirect, and security-policy headers are rejected by the dev/CI posture verifier
+   * unless named here, because raw endpoints bypass the framework response header sinks.
+   */
+  reservedHeaders?: readonly string[];
 }
 
 /** Records an explicit, justified opt-out of default-on CSRF for an endpoint (SPEC §6.6). */
@@ -291,6 +297,7 @@ function assertEndpointResponsePosture(
   if (definition.response.body === 'html' && !/\bhtml\b/i.test(contentType)) {
     failures.push('declared body=html but response content type is not HTML');
   }
+  assertEndpointReservedHeaders(definition, response, failures);
   if (failures.length === 0) return;
   throw new Error(
     `Endpoint ${definition.method} ${definition.path} response posture mismatch: ${failures.join(
@@ -298,3 +305,43 @@ function assertEndpointResponsePosture(
     )}.`,
   );
 }
+
+function assertEndpointReservedHeaders(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  response: Response,
+  failures: string[],
+): void {
+  const allowed = new Set(
+    (definition.response.reservedHeaders ?? []).map((header) => header.toLowerCase()),
+  );
+  for (const [header] of response.headers) {
+    const reserved = endpointReservedHeader(header);
+    if (reserved === undefined) continue;
+    if (allowed.has(header.toLowerCase()) || allowed.has(reserved.toLowerCase())) continue;
+    failures.push(
+      `reserved response header ${reserved} was written without response.reservedHeaders declaration`,
+    );
+  }
+}
+
+function endpointReservedHeader(header: string): string | undefined {
+  const lower = header.toLowerCase();
+  if (lower.startsWith('kovo-')) return 'Kovo-*';
+  if (lower === 'set-cookie') return 'Set-Cookie';
+  if (lower === 'location') return 'Location';
+  if (ENDPOINT_SECURITY_HEADERS.has(lower)) return header;
+  return undefined;
+}
+
+const ENDPOINT_SECURITY_HEADERS = new Set([
+  'content-security-policy',
+  'content-security-policy-report-only',
+  'cross-origin-embedder-policy',
+  'cross-origin-opener-policy',
+  'cross-origin-resource-policy',
+  'permissions-policy',
+  'referrer-policy',
+  'strict-transport-security',
+  'x-content-type-options',
+  'x-frame-options',
+]);

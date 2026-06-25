@@ -304,6 +304,71 @@ describe('server endpoints', () => {
     }
   });
 
+  it('flags reserved raw endpoint response headers unless explicitly declared', async () => {
+    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
+    try {
+      for (const [header, value, expected] of [
+        ['Kovo-Reauth', '/login', 'Kovo-*'],
+        ['Kovo-Build', 'build-a', 'Kovo-*'],
+        ['Kovo-Changes', '[]', 'Kovo-*'],
+        ['Set-Cookie', 'sid=1; Path=/', 'Set-Cookie'],
+        ['Location', '/login', 'Location'],
+        ['Content-Security-Policy', "default-src 'self'", 'content-security-policy'],
+      ] as const) {
+        const accidental = endpoint(`/machine/reserved/${header.toLowerCase()}`, {
+          csrf: false,
+          csrfJustification: 'runtime reserved header verification test',
+          handler: () =>
+            new Response('ok', { headers: { 'Cache-Control': 'no-store', [header]: value } }),
+          method: 'POST',
+          reason: 'runtime reserved header verification test',
+          response: rawTextResponse,
+        });
+
+        await expect(
+          runEndpoint(
+            accidental,
+            new Request(`https://example.test/machine/reserved/${header.toLowerCase()}`, {
+              method: 'POST',
+            }),
+          ),
+        ).rejects.toThrow(new RegExp(expected, 'iu'));
+      }
+
+      const declared = endpoint('/machine/reserved/declared', {
+        csrf: false,
+        csrfJustification: 'runtime reserved header declaration test',
+        handler: () =>
+          new Response('ok', {
+            headers: {
+              'Cache-Control': 'no-store',
+              'Content-Security-Policy': "default-src 'self'",
+              'Kovo-Reauth': '/login',
+              Location: '/login',
+              'Set-Cookie': 'sid=1; Path=/',
+            },
+          }),
+        method: 'POST',
+        reason: 'runtime reserved header declaration test',
+        response: {
+          ...rawTextResponse,
+          reservedHeaders: ['Content-Security-Policy', 'Kovo-*', 'Location', 'Set-Cookie'],
+        },
+      });
+
+      await expect(
+        runEndpoint(
+          declared,
+          new Request('https://example.test/machine/reserved/declared', { method: 'POST' }),
+        ),
+      ).resolves.toMatchObject({ status: 200 });
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
+    }
+  });
+
   it('matches exact and prefix endpoint mounts without routing side effects', () => {
     const exact = endpoint('/downloads/orders.bin', {
       handler: () => new Response('orders'),
