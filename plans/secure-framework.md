@@ -92,11 +92,35 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
   polyglot guard, server-minted random keys, `respond.storedFile`/`verifiedSafe`, `.mime()` removed →
   `accept()`/`accept.unverified()`); KV434 blessed `email`/`url`/`uuid`/`slug` + `pattern()` static-reject +
   step-budget + `unsafeRegex` (compiler-side non-literal-pattern lint deferred).
-- [ ] **Remaining (smaller follow-ups):** KV429 runtime CAS/version primitives + the typed 409 path (static
-  gate landed); KV433 Stage-1 managed read-only handle (breaking) + interprocedural write-summaries; the
-  capability-URL framework download route + `ctx.signUrl`; Trusted Types inline-loader sink routing; explain
-  producer threads (publishToClient/egress `allowInternal` → `graph.capabilities`; cookie-downgrade runtime
-  drain); `staticExportPathOverride` trust kind; KV434 compiler-side non-literal-pattern lint.
+- [x] **KV433 Stage-1 managed read-only handle (breaking) — LANDED + loaders migrated.** The framework now
+  OWNS the handle and threads it into the loader chokepoint: `QueryLoadContext<Request, Db>.db` is
+  `Reader<Db>` (write verbs insert/update/delete/execute/run/batch removed at the type level); the runtime
+  `managedDb(raw,'read')` = KV422 SQL-safe wrap + KV433 read-only proxy (a loader write throws
+  `KovoReadonlyHandleError`); `managedDb(raw,'write')` (mutation + `query.elevated`) is the read-write handle.
+  EVERY app query loader migrated off "bring-your-own-db" to destructuring the framework `{ db }`: commerce
+  (`examples/commerce/src/queries.ts`), crm (`examples/crm/src/queries.ts`), stackoverflow
+  (`examples/stackoverflow/src/queries.ts`), the create-kovo starter (`packages/create-kovo/templates/src/queries.ts`).
+  KV436 access decisions + KV414/M9 owner scoping preserved; mutations keep the read-write `request.db`.
+  Evidence: `vp exec vitest --run packages/server/src/managed-db.test.ts` (30 — neg: a loader `context.db.insert`
+  throws `KovoReadonlyHandleError`; pos: loader reads work + `query.elevated` allows the write + KV422 raw-string
+  still rejected through the managed handle, the unification) + per-example `tsc -p` clean. SPEC §6.6/§9.4/§10.3.
+  _Residual: integration Playwright fixtures (counter/stock/…) keep harness-attached `request.db` — they use
+  literal raw test SQL that the KV422 SQL-safe read handle rejects; migrating them needs a sql\`…\` fixture
+  rewrite or a guard-off harness seam (deferred). Conformance fixtures need no migration (loaders carry no db)._
+- [x] **KV429 runtime CAS/version primitives + the typed 409 path — LANDED.** `@kovojs/drizzle`
+  `compareAndSet(update)` folds check+act into one `UPDATE…WHERE` → typed `CasResult` (`{ok:true}` on ≥1 row;
+  `{ok:false,conflict:true}` on 0 rows = stale-version/lost-update; handles pg `rowCount`/sqlite
+  `changes`/generic `rowsAffected`). `@kovojs/server` `StaleVersionError` (thrown on a CAS 0-row conflict) +
+  the typed `StaleVersionConflict` 409: `runMutation` catches it → typed 409 (distinct from the
+  replay-idempotency 409); `renderMutationResponse` treats it non-replayable (abandons the reservation) so the
+  enhanced lifecycle refetches the fresh version and retries. Evidence: `packages/drizzle/src/cas.test.ts` (12)
+  + `packages/server/src/mutation-stale-version.test.ts` (10). SPEC §10.3/§11.1.
+- [ ] **Remaining (smaller follow-ups):** `query.elevated(...)` audit row in `kovo explain --capabilities`
+  (the elevated GET-write capability — runtime + KV433 static gate landed; the audit-table emission is a
+  `graph.capabilities` producer thread still open); the capability-URL framework download route + `ctx.signUrl`;
+  Trusted Types inline-loader sink routing; explain producer threads (publishToClient/egress `allowInternal` →
+  `graph.capabilities`; cookie-downgrade runtime drain); `staticExportPathOverride` trust kind; KV434
+  compiler-side non-literal-pattern lint.
 
 ### Verified state of branch `agent/implement-secure-framework-20260624-114921` (2026-06-24)
 
@@ -306,20 +330,30 @@ Breaking / Annoys). Items cross-reference `secure-by-construction.md` phases whe
       (both server-derived; discharged with `serverValue` — examples now clean).** Wired end-to-end through
       `kovo check`. SPEC §10.1/§10.3. Evidence: `vp exec vitest --run packages/drizzle/src/index.mass-assignment.test.ts`
       (14, incl. KV435/IDOR conformance) + `packages/cli/src/index.kovo-check.test.ts` (KV438 fires).
-- [x] **TOCTOU KV429 — single-row gate landed.** `kovo({ atomic })`/`kovo({ version })` declared columns; a
-      self-referential `set({ col: col±x })` to an `atomic` column whose `where()` lacks a CAS eq-guard on that
-      column (or a `version` column) is KV429. Single-row by-construction; **opaque/multi-row matches NOT flagged
-      (honest ceiling — SERIALIZABLE territory).** Reuses the Stage-1 lowering. Evidence:
-      `vp exec vitest --run packages/drizzle/src/index.toctou-readonly.test.ts` (KV429: 6). _Open: typed CAS/
-      version primitives + the 409 path were NOT shipped this slice (the static gate + DB-constraint backstop is
-      the landed lever); cross-function check-then-act is a false-negative floor until interprocedural summaries._
-- [x] **Read-only `query()` handle (KV433) — Stage 2 landed; Stage 1 documented-blocked.** Stage 2: a `query()`
-      loader whose body directly reaches a Drizzle write (insert/update/delete) is KV433; `query.elevated(...)`
-      is the audited escape. **Stage 1 (managed read-only proxy) BLOCKED** as the audit predicted —
-      `QueryLoadContext={request}` threads no db handle (loaders close over module-scope `db`); deferred as a
-      breaking change. **Interprocedural residue** (loader→imported `domain()` write via captured handle) needs
-      the unbuilt write-summaries — documented gap; v1 covers directly-reachable loader-body writes. SPEC §6.6/§9.4.
-      Evidence: `vp exec vitest --run packages/drizzle/src/index.toctou-readonly.test.ts` (KV433: 3).
+- [x] **TOCTOU KV429 — single-row static gate + runtime CAS/version/409 LANDED.** `kovo({ atomic })`/
+      `kovo({ version })` declared columns; a self-referential `set({ col: col±x })` to an `atomic` column whose
+      `where()` lacks a CAS eq-guard on that column (or a `version` column) is KV429. Single-row by-construction;
+      **opaque/multi-row matches NOT flagged (honest ceiling — SERIALIZABLE territory).** Reuses the Stage-1
+      lowering. Static evidence: `vp exec vitest --run packages/drizzle/src/index.toctou-readonly.test.ts`
+      (KV429: 6). **Runtime tools now shipped:** `compareAndSet(update)` (`@kovojs/drizzle`) folds check+act into
+      one `UPDATE…WHERE` → typed `CasResult` (0 rows → `{ok:false,conflict:true}`); `StaleVersionError` +
+      `StaleVersionConflict` (`@kovojs/server`) → a handler throw on a CAS 0-row conflict becomes a typed HTTP 409
+      that `renderMutationResponse` renders non-replayably so the enhanced lifecycle refetches+retries. Evidence:
+      `packages/drizzle/src/cas.test.ts` (12) + `packages/server/src/mutation-stale-version.test.ts` (10). SPEC
+      §10.3/§11.1. _Open: cross-function check-then-act is a false-negative floor until interprocedural summaries._
+- [x] **Read-only `query()` handle (KV433) — Stage 2 + Stage 1 BOTH landed (Stage 1 un-blocked).** Stage 2: a
+      `query()` loader whose body directly reaches a Drizzle write (insert/update/delete) is KV433;
+      `query.elevated(...)` is the audited escape. **Stage 1 (managed read-only proxy) NOW LANDED** — the prior
+      block is resolved: `QueryLoadContext` carries the framework-owned `Reader<Db>` `context.db`, the chokepoint
+      threads `managedDb(raw,'read')` (read-only proxy + KV422 SQL-safe), a loader write throws
+      `KovoReadonlyHandleError` AND is a `tsc` error (`Reader<Db>`) AND fails the Stage-2 gate. EVERY example +
+      template loader migrated (commerce/crm/stackoverflow/create-kovo). `query.elevated(...)` receives the
+      read-write handle (documented idempotent-safe-to-repeat). See the Tier-1 "KV433 Stage-1 managed read-only
+      handle" item for the full evidence + residuals. **Interprocedural residue** (loader→imported `domain()`
+      write via captured handle) still needs the unbuilt write-summaries — documented gap; v1 covers
+      directly-reachable loader-body writes + the runtime read-only proxy backstop. SPEC §6.6/§9.4. Evidence:
+      `vp exec vitest --run packages/drizzle/src/index.toctou-readonly.test.ts` (KV433: 3) +
+      `packages/server/src/managed-db.test.ts` (30, neg+pos runtime proof).
 
 ### Tier 3 — Differentiators & investigate (high ceiling, high cost/uncertainty)
 
