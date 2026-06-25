@@ -1,4 +1,8 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  clientModuleContentVersion,
+  clientModuleHrefForSourceFile,
+} from '@kovojs/core/internal/client-module-url';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
@@ -11,7 +15,7 @@ import {
   type PropertyAccessPathModel,
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
-import { normalizeComponentFileName, replaceExtension } from '../shared.js';
+import { normalizeComponentFileName } from '../shared.js';
 import { emitAllowedImportLocalNames } from '../validate/client-capture.js';
 import type {
   ClientImportDependency,
@@ -166,20 +170,11 @@ export function versionHandlerLowering(
 }
 
 export function clientModuleUrl(fileName: string, version?: string): string {
-  const href = `/c/${replaceExtension(normalizeComponentFileName(fileName), '.client.js')}`;
-  if (!version) return href;
-
-  return `/c/__v/${encodeURIComponent(version)}/${href.slice('/c/'.length)}`;
+  return clientModuleHrefForSourceFile(normalizeComponentFileName(fileName), version);
 }
 
 export function clientModuleVersion(source: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-
-  return hash.toString(16).padStart(8, '0');
+  return clientModuleContentVersion(source);
 }
 
 function eventAttributeReferences(eventAttribute: {

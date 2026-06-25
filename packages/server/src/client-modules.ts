@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
 import {
+  clientModulePath,
+  parseVersionedClientModuleTarget,
+  versionedClientModuleHref as sharedVersionedClientModuleHref,
+} from '@kovojs/core/internal/client-module-url';
+import {
   RENDER_PLAN_GRAMMAR_VERSION,
   computeRenderPlanFingerprint,
   type RenderPlanFingerprintInput,
@@ -98,9 +103,7 @@ export interface MemoryVersionedClientModuleRegistryOptions {
 
 /** @internal Construct a version-stamped client-module href for framework request-shell output. */
 export function versionedClientModuleHref(href: string, version: string): string {
-  const url = clientModuleUrl(href);
-  const relativePath = url.pathname.slice('/c/'.length);
-  return `/c/__v/${encodeURIComponent(version)}/${relativePath}${url.hash}`;
+  return sharedVersionedClientModuleHref(href, version);
 }
 
 /**
@@ -172,8 +175,7 @@ export function createMemoryVersionedClientModuleRegistry(
         });
     },
     put(module) {
-      const url = clientModuleUrl(module.path);
-      const path = url.pathname;
+      const path = clientModulePath(module.path);
       const href = versionedClientModuleHref(path, module.version);
       const key = versionedClientModuleKey(path, module.version);
 
@@ -184,8 +186,7 @@ export function createMemoryVersionedClientModuleRegistry(
       return href;
     },
     resolve(href) {
-      const url = clientModuleUrl(href);
-      const target = versionedClientModuleTarget(url);
+      const target = parseVersionedClientModuleTarget(href);
       if (target === undefined) return missingClientModuleResponse();
 
       const module = modules.get(versionedClientModuleKey(target.path, target.version));
@@ -217,7 +218,8 @@ export function renderVersionedClientModuleResponse(
 
   let url: URL;
   try {
-    url = clientModuleUrl(href);
+    url = new URL(href, 'https://kovo.local');
+    clientModulePath(href);
   } catch (error) {
     if (typeof request !== 'string') {
       reportServerError(request.onError, error, {
@@ -228,7 +230,7 @@ export function renderVersionedClientModuleResponse(
     return missingClientModuleResponse();
   }
 
-  if (versionedClientModuleTarget(url) === undefined) return missingClientModuleResponse();
+  if (parseVersionedClientModuleTarget(href) === undefined) return missingClientModuleResponse();
 
   return registry.resolve(`${url.pathname}${url.search}${url.hash}`);
 }
@@ -239,47 +241,6 @@ function missingClientModuleResponse(): VersionedClientModuleResponse {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     status: 404,
   };
-}
-
-function clientModuleUrl(href: string): URL {
-  const url = new URL(href, 'https://kovo.local');
-  if (url.origin !== 'https://kovo.local') {
-    throw new Error(`Client module href must be same-origin: ${href}`);
-  }
-  if (!url.pathname.startsWith('/c/')) {
-    throw new Error(`Client module href must live under /c/: ${href}`);
-  }
-  return url;
-}
-
-function versionedClientModuleTarget(url: URL): { path: string; version: string } | undefined {
-  const versionedPath = versionedClientModulePathTarget(url.pathname);
-  if (versionedPath !== undefined) return versionedPath;
-
-  const version = url.searchParams.get('v');
-  if (!version) return undefined;
-  return { path: url.pathname, version };
-}
-
-function versionedClientModulePathTarget(
-  pathname: string,
-): { path: string; version: string } | undefined {
-  if (!pathname.startsWith('/c/__v/')) return undefined;
-
-  const rest = pathname.slice('/c/__v/'.length);
-  const separator = rest.indexOf('/');
-  if (separator <= 0 || separator === rest.length - 1) return undefined;
-
-  let version: string;
-  try {
-    version = decodeURIComponent(rest.slice(0, separator));
-  } catch {
-    return undefined;
-  }
-  const path = `/c/${rest.slice(separator + 1)}`;
-  if (path.startsWith('/c/__v/')) return undefined;
-
-  return { path, version };
 }
 
 function versionedClientModuleKey(path: string, version: string): string {

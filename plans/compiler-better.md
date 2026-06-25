@@ -249,22 +249,27 @@ diagnostic in compiler/check gates that claim data-plane security.
   - Remaining gap: the test uses synthetic core fingerprints at the server boundary; a
     compiler-to-server fixture should consume `CompileResult.renderPlanFingerprint`, and mutation
     plus `/_q` token coverage remains open.
-- [ ] Move client module URL/version encoding and decoding into one shared internal ABI helper used
+- [x] Move client module URL/version encoding and decoding into one shared internal ABI helper used
       by compiler emit, Vite dev serving, and server registry serving.
-  - Evidence: equivalent URL logic exists across compiler and server code paths today.
-- [ ] Align Vite dev client-module responses with production registry safety headers, or document
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/server/src/client-modules.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/output-context-security.test.ts`
+    passes after `@kovojs/core/internal/client-module-url` is imported by compiler lowering,
+    compiler Vite dev serving, and server registry serving, with server/compiler tests covering
+    path-form and query-form versioned requests.
+- [x] Align Vite dev client-module responses with production registry safety headers, or document
       and test why dev is intentionally weaker.
-  - Evidence: Vite dev middleware sets only `Content-Type`; production registry responses set
-    immutable cache control, CORP, and content type.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/vite.test.ts`
+    passes with dev client-module responses asserting `Cache-Control: no-store`, CORP
+    `same-origin`, JavaScript charset content type, and `X-Content-Type-Options: nosniff`.
 - [x] Replace bootstrap 32-bit FNV aliases with collision-checked deterministic aliases or a
       stronger digest.
   - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/emit/bootstrap.test.ts packages/compiler/src/emit/bootstrap-runtime-contract.test.ts`
     and `pnpm exec vitest --configLoader runner --run packages/compiler/src/query-coverage.test.ts -t "emits an app bootstrap"`
     pass after bootstrap aliases switched to SHA-256-derived suffixes plus a uniqueness assertion.
-- [ ] Centralize unsafe URL scheme policy in the core security URL helper and import it from
+- [x] Centralize unsafe URL scheme policy in the core security URL helper and import it from
       compiler output-context validation.
-  - Evidence: compiler output-context logic has local URL-scheme checks while core already owns URL
-    attribute helpers.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts`
+    passes after `packages/compiler/src/security/output-context.ts` imports
+    `hasUnsafeUrlScheme` from `@kovojs/core/internal/security-url`.
 
 ### Phase 3: make phase contracts typed and reviewable
 
