@@ -3,6 +3,7 @@ import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
+  endpoint,
   layout,
   publicAccess,
   redirect,
@@ -67,6 +68,22 @@ const AppLayout = layout({
   render: (_queries, _state, { children }) => <div style={styles.shell}>{children}</div>,
 });
 
+const healthEndpoint = endpoint('/api/health', {
+  auth: { justification: 'public uptime probe', kind: 'none' },
+  csrf: false,
+  csrfJustification: 'read-only machine health probe',
+  handler: () =>
+    Response.json(
+      { ok: true },
+      {
+        headers: { 'Cache-Control': 'no-store' },
+      },
+    ),
+  method: 'GET',
+  reason: 'read-only machine health probe',
+  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+});
+
 function HomePage({ request }: { request: AppRequest }): string {
   return (
     <div>
@@ -86,6 +103,7 @@ const app = createApp({
   clientModules: createMemoryVersionedClientModuleRegistry(),
   db: () => appDb,
   document: { lang: 'en' },
+  endpoints: [healthEndpoint],
   mutations: [addContact, appSignIn, appSignOut],
   queries: [contactsQuery],
   sessionProvider: appSessionProvider,

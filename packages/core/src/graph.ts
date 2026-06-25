@@ -57,6 +57,7 @@ export interface KovoCheckInput {
   derivedQueries?: readonly QueryReadSet[];
   diagnostics?: readonly StaticDiagnosticFact[];
   endpoints?: readonly EndpointExplain[];
+  endpointPosture?: readonly EndpointPostureVerificationFact[];
   eventPayloads?: readonly EventPayloadFact[];
   fixpointChecks?: readonly FixpointCheck[];
   lints?: readonly SemanticLint[];
@@ -322,6 +323,14 @@ export interface EndpointExplain {
   reason?: string;
   surface?: 'dynamic-export' | 'endpoint' | 'route-file' | 'route-stream' | 'webhook';
   writes?: readonly string[];
+}
+
+/** @internal */
+export interface EndpointPostureVerificationFact {
+  endpoint: string;
+  failures?: readonly string[];
+  observed: boolean;
+  site?: string;
 }
 
 /** @internal */
@@ -783,6 +792,7 @@ const arrayFields = [
   'derivedQueries',
   'diagnostics',
   'endpoints',
+  'endpointPosture',
   'eventPayloads',
   'fixpointChecks',
   'lints',

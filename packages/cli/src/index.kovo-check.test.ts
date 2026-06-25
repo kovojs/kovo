@@ -1254,6 +1254,51 @@ describe('kovo check', () => {
     });
   });
 
+  it('prints endpoint posture verifier diagnostics as kovo check findings', () => {
+    expect(
+      kovoCheck(
+        {
+          endpointPosture: [
+            {
+              endpoint: 'GET /api/health',
+              failures: ['declared cache=no-store but response lacks Cache-Control: no-store'],
+              observed: true,
+              site: 'src/endpoint-posture.test.ts',
+            },
+          ],
+        },
+        {
+          family: 'endpoint-posture',
+        },
+      ),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'kovo-check/v1\nERROR ENDPOINT-POSTURE src/endpoint-posture.test.ts GET /api/health declared cache=no-store but response lacks Cache-Control: no-store\n',
+    });
+  });
+
+  it('passes kovo check endpoint-posture for a matching observed endpoint fixture', () => {
+    expect(
+      kovoCheck(
+        {
+          endpointPosture: [
+            {
+              endpoint: 'GET /api/health',
+              failures: [],
+              observed: true,
+              site: 'src/endpoint-posture.test.ts',
+            },
+          ],
+        },
+        { family: 'endpoint-posture' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK ENDPOINT-POSTURE src/endpoint-posture.test.ts GET /api/health\n',
+    });
+  });
+
   it('fails when verifier coverage leaves a query unobserved', () => {
     expect(
       kovoCheck({
@@ -1737,7 +1782,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: unsupported check family "optimstic". expected optimistic, coverage, or sources-sinks.\n',
+      'kovo: unsupported check family "optimstic". expected optimistic, coverage, endpoint-posture, or sources-sinks.\n',
     );
   });
 
@@ -1755,7 +1800,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: usage: kovo check [optimistic|coverage|sources-sinks] [graph.json]\n',
+      'kovo: usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json]\n',
     );
   });
 

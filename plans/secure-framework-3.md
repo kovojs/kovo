@@ -166,7 +166,7 @@ code, and current supply-chain/build surfaces.
     `Set-Cookie`, `Location`, and `Content-Security-Policy`. `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts`
     proves the diagnostics and declared opt-out path.
 
-- [ ] **Promote endpoint posture verification into a first-class CI/starter gate.**
+- [x] **Promote endpoint posture verification into a first-class CI/starter gate.**
   - Evidence: endpoint posture verification is skipped outside development unless
     `KOVO_VERIFY_ENDPOINT_POSTURE=1` is set (`packages/server/src/endpoint.ts:267`), so production and
     most CI runs can silently miss posture drift unless the operator knows the env knob.
@@ -175,6 +175,14 @@ code, and current supply-chain/build surfaces.
     right tool.
   - Acceptance: starter `check` fails on a mismatched raw endpoint cache/body/content-type/header
     posture without requiring a live production request.
+  - Verified 2026-06-25: `kovo check endpoint-posture` reads
+    `endpointPosture` facts and generated starters now run
+    `vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture
+.kovo/endpoint-posture.json` from `npm run check`. `pnpm exec vitest run
+packages/server/src/endpoint.test.ts`, `pnpm exec vitest run
+packages/cli/src/index.kovo-check.test.ts packages/cli/src/commands-manifest.test.ts`, and
+    `pnpm exec vitest run packages/create-kovo/src/index.test.ts` prove mismatch diagnostics,
+    check-family wiring, starter scaffold scripts, and generated-app integration.
 
 - [x] **Harden egress floor propagation and tamper detection.**
   - Evidence: the egress bootstrap honestly documents residual fail-open holes: same-process re-patching,

@@ -11,6 +11,7 @@ export type {
   DerivedMutationDomainSet,
   DeriveExplain,
   EndpointExplain,
+  EndpointPostureVerificationFact,
   EventPayloadFact,
   FixpointCheck,
   GraphInputValidationError,

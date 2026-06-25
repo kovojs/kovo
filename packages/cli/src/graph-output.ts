@@ -30,7 +30,12 @@ interface UnguardedAccessFact {
 type AccessExplainKind = CoreGraph.AccessExplainFact['kind'];
 
 /** Check family selector accepted by {@link kovoCheck} and `kovo check`. */
-export type KovoCheckFamily = 'all' | 'coverage' | 'optimistic' | 'sources-sinks';
+export type KovoCheckFamily =
+  | 'all'
+  | 'coverage'
+  | 'endpoint-posture'
+  | 'optimistic'
+  | 'sources-sinks';
 
 export const outputVersion = 'kovo-check/v1';
 export const explainOutputVersion = 'kovo-explain/v1';
@@ -743,6 +748,14 @@ export function kovoCheck(
     }
   }
 
+  if (includeAll || family === 'endpoint-posture') {
+    for (const fact of graph.endpointPosture ?? []) {
+      for (const line of endpointPostureVerificationLines(fact)) {
+        pushFinding(line, line.startsWith('ERROR '));
+      }
+    }
+  }
+
   if (includeAll || family === 'optimistic') {
     if (family === 'optimistic') {
       for (const line of optimisticProofCheckLines(graph.optimistic ?? [])) {
@@ -917,7 +930,10 @@ function diagnosticSeverity(
 }
 
 export function checkFamilyArg(value: string | undefined): KovoCheckFamily {
-  return value === 'optimistic' || value === 'coverage' || value === 'sources-sinks'
+  return value === 'optimistic' ||
+    value === 'coverage' ||
+    value === 'endpoint-posture' ||
+    value === 'sources-sinks'
     ? value
     : 'all';
 }
@@ -939,7 +955,7 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
 export function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>): number {
   const message =
     error.kind === 'unsupported-family'
-      ? `kovo: unsupported check family ${stableValue(error.family)}. expected optimistic, coverage, or sources-sinks.\n`
+      ? `kovo: unsupported check family ${stableValue(error.family)}. expected optimistic, coverage, endpoint-posture, or sources-sinks.\n`
       : `kovo: ${CHECK_USAGE}\n`;
   process.stderr.write(message);
   return 1;
@@ -1214,6 +1230,22 @@ function verificationDiagnosticLine(diagnostic: CoreGraph.VerificationDiagnostic
 function verificationCoverageGapLine(coverage: CoreGraph.VerificationCoverageFact): string {
   const site = coverage.site ? `${coverage.site} ` : '';
   return `ERROR VERIFY ${site}${coverage.kind} ${coverage.key} has no verifier coverage.`;
+}
+
+function endpointPostureVerificationLines(
+  fact: CoreGraph.EndpointPostureVerificationFact,
+): string[] {
+  const site = fact.site ? `${fact.site} ` : '';
+  if (!fact.observed) {
+    return [`ERROR ENDPOINT-POSTURE ${site}${fact.endpoint} fixture was not observed.`];
+  }
+
+  const failures = fact.failures ?? [];
+  if (failures.length === 0) {
+    return [`OK ENDPOINT-POSTURE ${site}${fact.endpoint}`];
+  }
+
+  return failures.map((failure) => `ERROR ENDPOINT-POSTURE ${site}${fact.endpoint} ${failure}`);
 }
 
 function staticDiagnosticLine(diagnostic: CoreGraph.StaticDiagnosticFact): string {

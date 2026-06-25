@@ -18,7 +18,8 @@
  */
 
 /** @internal Usage line emitted for `kovo check` (see `writeCheckUsageError`). */
-export const CHECK_USAGE = 'usage: kovo check [optimistic|coverage|sources-sinks] [graph.json]';
+export const CHECK_USAGE =
+  'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json]';
 
 /** @internal Usage line emitted for `kovo audit` (see `parseAuditArgs`). */
 export const AUDIT_USAGE = 'usage: kovo audit [--fail-on-findings] [graph.json]';
@@ -122,11 +123,20 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
         description: 'Restrict to the update-coverage slice (KV311) instead of the full check.',
       },
       {
+        flag: 'endpoint-posture',
+        description: 'Restrict to endpoint response posture fixture verification.',
+      },
+      {
         flag: 'sources-sinks',
         description: 'Emit the Phase 1 source/sink inventory and write .kovo/sources-sinks.json.',
       },
     ],
-    examples: ['kovo check', 'kovo check coverage graph.json', 'kovo check sources-sinks'],
+    examples: [
+      'kovo check',
+      'kovo check coverage graph.json',
+      'kovo check endpoint-posture .kovo/endpoint-posture.json',
+      'kovo check sources-sinks',
+    ],
   },
   {
     name: 'explain',

@@ -304,6 +304,65 @@ describe('server endpoints', () => {
     }
   });
 
+  it('fails endpoint posture verification for cache, body, and content-type drift', async () => {
+    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
+    try {
+      const cases = [
+        {
+          handler: () => new Response('ok', { headers: { 'Content-Type': 'text/plain' } }),
+          path: '/machine/posture-cache',
+          response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+          text: /Cache-Control: no-store/u,
+        },
+        {
+          handler: () =>
+            new Response('not a redirect', {
+              headers: { 'Cache-Control': 'no-store', Location: '/login' },
+            }),
+          path: '/machine/posture-body',
+          response: {
+            appOwnedSafety: true,
+            body: 'redirect',
+            cache: 'no-store',
+            reservedHeaders: ['Location'],
+          },
+          text: /body=redirect/u,
+        },
+        {
+          handler: () =>
+            new Response('{"ok":true}', {
+              headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain' },
+            }),
+          path: '/machine/posture-content-type',
+          response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+          text: /content type is not JSON/u,
+        },
+      ] as const;
+
+      for (const fixture of cases) {
+        const mismatched = endpoint(fixture.path, {
+          csrf: false,
+          csrfJustification: 'runtime posture verification test',
+          handler: fixture.handler,
+          method: 'POST',
+          reason: 'runtime posture verification test',
+          response: fixture.response,
+        });
+
+        await expect(
+          runEndpoint(
+            mismatched,
+            new Request(`https://example.test${fixture.path}`, { method: 'POST' }),
+          ),
+        ).rejects.toThrow(fixture.text);
+      }
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
+    }
+  });
+
   it('flags reserved raw endpoint response headers unless explicitly declared', async () => {
     const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
     process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';

@@ -69,6 +69,7 @@ const templateFiles: readonly TemplateFile[] = [
   'src/components/auth-forms.tsx',
   'src/app.tsx',
   'src/app.test.ts',
+  'src/endpoint-posture.test.ts',
   'src/theme.ts',
   'src/styles.css',
 ].map((file) => (typeof file === 'string' ? { path: file } : file));
@@ -118,7 +119,15 @@ function renderEnvExampleFile(): string {
   ].join('\n');
 }
 
-const gitignoreEntries = ['node_modules', 'dist', '.env', '.env.*', '!.env.example', ''].join('\n');
+const gitignoreEntries = [
+  'node_modules',
+  'dist',
+  '.env',
+  '.env.*',
+  '!.env.example',
+  '.kovo/endpoint-posture.json',
+  '',
+].join('\n');
 
 export function createKovoProject(options: CreateKovoOptions): CreateKovoProject {
   const packageName = normalizePackageName(options.name);

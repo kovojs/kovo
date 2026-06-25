@@ -37,6 +37,7 @@ const TEMPLATE_FILES = [
   'src/components/auth-forms.tsx',
   'src/app.tsx',
   'src/app.test.ts',
+  'src/endpoint-posture.test.ts',
   'src/theme.ts',
   'src/styles.css',
 ];
@@ -159,7 +160,9 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
-        check: 'vp check && npm run check:sound-subset',
+        check: 'vp check && npm run check:sound-subset && npm run check:endpoint-posture',
+        'check:endpoint-posture':
+          'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
         'check:sound-subset': 'node scripts/check-sound-subset.mjs',
         dev: 'vp dev',
         serve: 'npm run build:prod && node dist/server/server.mjs',
