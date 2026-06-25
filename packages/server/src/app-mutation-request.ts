@@ -101,7 +101,7 @@ export async function handleAppMutationRequest(
   const buildToken = app.clientModules.buildToken();
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
-    ...(buildToken !== '' ? { buildToken } : {}),
+    buildToken,
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     currentUrl: appRequestUrl(sourceUrl),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
@@ -171,7 +171,7 @@ async function renderPreBodyCsrfFailure(
   const buildToken = app.clientModules.buildToken();
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
-    ...(buildToken !== '' ? { buildToken } : {}),
+    buildToken,
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     currentUrl: appRequestUrl(sourceUrl),
     headers: request.headers,

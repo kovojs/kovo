@@ -55,7 +55,7 @@ export async function dispatchMatchedAppRequest({
     const queryRequest: QueryEndpointRequest<Request> = {
       currentUrl: appRequestUrl(url),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
-      ...(buildToken !== '' ? { buildToken } : {}),
+      buildToken,
       request,
       search: url.searchParams,
       ...(app.db === undefined ? {} : { db: app.db }),

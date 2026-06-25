@@ -59,6 +59,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
 
     const errors: unknown[] = [];
     const response = await renderMutationResponse(updateItem, {
+      buildToken: 'delta-build-token',
       fragment: true,
       onError: (err) => {
         errors.push(err);
@@ -101,6 +102,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     });
 
     const response = await renderMutationResponse(addToCart, {
+      buildToken: 'delta-build-token',
       fragment: true,
       rawInput: { productId: 'p0' },
       request: {},
@@ -133,6 +135,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     });
 
     const response = await renderMutationResponse(addToCart, {
+      buildToken: 'delta-build-token',
       fragment: true,
       rawInput: { productId: 'p1' },
       request: {},
@@ -166,6 +169,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     });
 
     const response = await renderMutationResponse(addToCart, {
+      buildToken: 'delta-build-token',
       fragment: true,
       rawInput: { productId: 'p1' },
       request: {},
@@ -197,7 +201,7 @@ describe('Kovo-Build header (SPEC §5.1, §9.1.1)', () => {
     expect((response.headers as Record<string, string>)['Kovo-Build']).toBe('abc123token');
   });
 
-  it('does not emit Kovo-Build header when buildToken is absent', async () => {
+  it('fails closed when buildToken is absent on a successful mutation wire response', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -211,8 +215,8 @@ describe('Kovo-Build header (SPEC §5.1, §9.1.1)', () => {
       request: {},
     });
 
-    expect(response.status).toBe(200);
-    expect((response.headers as Record<string, string>)['Kovo-Build']).toBeUndefined();
+    expect(response.status).toBe(500);
+    expect(response.body).toContain('data-error-code="RENDER_ERROR"');
   });
 
   it('does not emit Kovo-Build header on non-200 responses', async () => {
