@@ -47,38 +47,38 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
       Trusted Types: framework `kovo` policy + module-side sinks routed, shipped **opt-in** (the always-on
       inline-loader `p`/`d` sinks need routing via `inline-loader-build.ts` before default-on — SF-WIRE).
 - [x] **KV430 input-shape DoS budget** — iterative depth/breadth/node budget at the `parseSchemaAsync` wire
-  entry (`schema.ts`); the 4000-deep array attack is rejected before descent and the check can't itself
-  stack-overflow. 7 tests. Commit `52041325`. _Rest of the schema cluster below remains._
+      entry (`schema.ts`); the 4000-deep array attack is rejected before descent and the check can't itself
+      stack-overflow. 7 tests. Commit `52041325`. _Rest of the schema cluster below remains._
 - [x] **KV428 upload inline-XSS gate** — `respond.*` default `attachment` + `nosniff`; served `Content-Type`
-  minted from SNIFFED bytes (deep sniffer in `upload-sniff.ts`: magic-byte + ZIP/OOXML, rejects
-  HTML/SVG/XML/polyglot inline); inline is a branded opt-in over verified-safe bytes (in-memory sniff, or
-  `verifiedSafe: true` for un-bufferable streams). `s.file().store()` mints opaque server keys (random UUID,
-  no client-filename key → no traversal/overwrite); filename is sanitized download metadata. `.mime()`
-  REMOVED (only test callers) → `accept([...])` (checks SNIFFED type) + audited `accept.unverified([...],
-  justification)` escape (`drainUnverifiedMimeFacts` SF-WIRE). `respond.storedFile(storage, key)` is the
-  runtime sidecar-marker fail-closed path. KV428 = `InlineUnverifiedUploadError`. Honest ceiling: "attacker
-  bytes never render inline as active content", NOT "sniffed type unspoofable" (SPEC §6.6/§9.1). `schema.ts`,
-  `response.ts`, new `upload-sniff.ts`. ~30 new tests (schema/response/upload-sniff suites).
+      minted from SNIFFED bytes (deep sniffer in `upload-sniff.ts`: magic-byte + ZIP/OOXML, rejects
+      HTML/SVG/XML/polyglot inline); inline is a branded opt-in over verified-safe bytes (in-memory sniff, or
+      `verifiedSafe: true` for un-bufferable streams). `s.file().store()` mints opaque server keys (random UUID,
+      no client-filename key → no traversal/overwrite); filename is sanitized download metadata. `.mime()`
+      REMOVED (only test callers) → `accept([...])` (checks SNIFFED type) + audited `accept.unverified([...],
+justification)` escape (`drainUnverifiedMimeFacts` SF-WIRE). `respond.storedFile(storage, key)` is the
+      runtime sidecar-marker fail-closed path. KV428 = `InlineUnverifiedUploadError`. Honest ceiling: "attacker
+      bytes never render inline as active content", NOT "sniffed type unspoofable" (SPEC §6.6/§9.1). `schema.ts`,
+      `response.ts`, new `upload-sniff.ts`. ~30 new tests (schema/response/upload-sniff suites).
 - [ ] **KV434 ReDoS-safe validators (mostly landed):** blessed by-construction `email`/`url`/`uuid`/`slug`
-  matchers (backtracking-free, no `RegExp`); `s.string().pattern(literal)` statically rejects nested/overlapping
-  quantifiers + runs under a runtime input-length step-budget; `unsafeRegex(re, justification)` audited escape
-  (`drainUnsafeRegexFacts` SF-WIRE). New `redos.ts`, 19 tests. _Residual: the compiler-side KV434 lint that
-  flags a NON-LITERAL `pattern()` at the call site (the runtime rejects exponential literals + budgets
-  execution today, but the static "unanalyzable pattern → KV434" call-site diagnostic and the full RE2/DFA
-  linear engine are deferred); per-schema `.max()` overrides; FormData-breadth + sync-parse-entry coverage._
+      matchers (backtracking-free, no `RegExp`); `s.string().pattern(literal)` statically rejects nested/overlapping
+      quantifiers + runs under a runtime input-length step-budget; `unsafeRegex(re, justification)` audited escape
+      (`drainUnsafeRegexFacts` SF-WIRE). New `redos.ts`, 19 tests. _Residual: the compiler-side KV434 lint that
+      flags a NON-LITERAL `pattern()` at the call site (the runtime rejects exponential literals + budgets
+      execution today, but the static "unanalyzable pattern → KV434" call-site diagnostic and the full RE2/DFA
+      linear engine are deferred); per-schema `.max()` overrides; FormData-breadth + sync-parse-entry coverage._
 - [x] **KV436 default-deny + access migration** (breaking) — merged to `main`. `deriveAppGraph` classifies
-  every surface (guard/public/verified/**missing**); KV436 fails `kovo check` on missing; every app surface
-  migrated with a real decision; SPEC §10.2. By-construction that a decision exists (KV414 keeps IDOR).
+      every surface (guard/public/verified/**missing**); KV436 fails `kovo check` on missing; every app surface
+      migrated with a real decision; SPEC §10.2. By-construction that a decision exists (KV414 keeps IDOR).
 - [x] **Egress/SSRF private-network deny floor + capability-URL core** (XL) — merged to `main`. Dual-layer
-  (undici `dispatch` + `node:http`/`net.connect`), per-hop resolve→normalize→pin-to-IP, module-private
-  `metadataAllowed` ALS via `awsCredential`/`gcpCredential`/`azureCredential`, `allowInternal`,
-  `EgressBlockedError`, bootstrap self-probe; capability-URL HMAC/verify core; SPEC §6.6. Runtime-DiD floor,
-  not a proof. _Open: capability-URL framework download route + `ctx.signUrl` threading._
+      (undici `dispatch` + `node:http`/`net.connect`), per-hop resolve→normalize→pin-to-IP, module-private
+      `metadataAllowed` ALS via `awsCredential`/`gcpCredential`/`azureCredential`, `allowInternal`,
+      `EgressBlockedError`, bootstrap self-probe; capability-URL HMAC/verify core; SPEC §6.6. Runtime-DiD floor,
+      not a proof. _Open: capability-URL framework download route + `ctx.signUrl` threading._
 - [x] **§3 write-reachability foundation → mass-assignment (KV438) / KV429 / KV433 — LANDED** (the big
-  by-construction write lever). Governed-column fact + fail-closed write-gate adapter on the Stage-1 extractor;
-  KV438 mass-assignment (examples FP-clean via `serverValue`); KV429 single-row TOCTOU; KV433 read-only-query
-  Stage-2 (Stage-1 documented-blocked). `server` `kovoAnalyzerSummary` kind + opt-in CallExpression branch
-  (inert for KV435/IDOR).
+      by-construction write lever). Governed-column fact + fail-closed write-gate adapter on the Stage-1 extractor;
+      KV438 mass-assignment (examples FP-clean via `serverValue`); KV429 single-row TOCTOU; KV433 read-only-query
+      Stage-2 (Stage-1 documented-blocked). `server` `kovoAnalyzerSummary` kind + opt-in CallExpression branch
+      (inert for KV435/IDOR).
 - [x] **Sources-sinks enforce + SF-WIRE follow-ups** (consolidation slice).
   - [x] **KV425 adversarial drift** (audit) — `scanSourceSinkDrift` scans a fixed lexicon broader than the 17
         registered tokens; a new dangerous token → `ERROR KV425` + nonzero exit; real-tree scan clean.
@@ -89,38 +89,38 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
   - [x] **`kovo explain --capabilities` / `--cookies`** renderers wired; **CSP third-party allowlist** app
         config threaded; **cookie-class adoption** — framework anonymous-CSRF cookie carries the floor by default.
 - [x] **Schema cluster remainder** (schema2 slice) — KV428 upload inline-XSS gate landed fully (byte-sniffer +
-  polyglot guard, server-minted random keys, `respond.storedFile`/`verifiedSafe`, `.mime()` removed →
-  `accept()`/`accept.unverified()`); KV434 blessed `email`/`url`/`uuid`/`slug` + `pattern()` static-reject +
-  step-budget + `unsafeRegex` (compiler-side non-literal-pattern lint deferred).
+      polyglot guard, server-minted random keys, `respond.storedFile`/`verifiedSafe`, `.mime()` removed →
+      `accept()`/`accept.unverified()`); KV434 blessed `email`/`url`/`uuid`/`slug` + `pattern()` static-reject +
+      step-budget + `unsafeRegex` (compiler-side non-literal-pattern lint deferred).
 - [x] **KV433 Stage-1 managed read-only handle (breaking) — LANDED + loaders migrated.** The framework now
-  OWNS the handle and threads it into the loader chokepoint: `QueryLoadContext<Request, Db>.db` is
-  `Reader<Db>` (write verbs insert/update/delete/execute/run/batch removed at the type level); the runtime
-  `managedDb(raw,'read')` = KV422 SQL-safe wrap + KV433 read-only proxy (a loader write throws
-  `KovoReadonlyHandleError`); `managedDb(raw,'write')` (mutation + `query.elevated`) is the read-write handle.
-  EVERY app query loader migrated off "bring-your-own-db" to destructuring the framework `{ db }`: commerce
-  (`examples/commerce/src/queries.ts`), crm (`examples/crm/src/queries.ts`), stackoverflow
-  (`examples/stackoverflow/src/queries.ts`), the create-kovo starter (`packages/create-kovo/templates/src/queries.ts`).
-  KV436 access decisions + KV414/M9 owner scoping preserved; mutations keep the read-write `request.db`.
-  Evidence: `vp exec vitest --run packages/server/src/managed-db.test.ts` (30 — neg: a loader `context.db.insert`
-  throws `KovoReadonlyHandleError`; pos: loader reads work + `query.elevated` allows the write + KV422 raw-string
-  still rejected through the managed handle, the unification) + per-example `tsc -p` clean. SPEC §6.6/§9.4/§10.3.
-  _Residual: integration Playwright fixtures (counter/stock/…) keep harness-attached `request.db` — they use
-  literal raw test SQL that the KV422 SQL-safe read handle rejects; migrating them needs a sql\`…\` fixture
-  rewrite or a guard-off harness seam (deferred). Conformance fixtures need no migration (loaders carry no db)._
+      OWNS the handle and threads it into the loader chokepoint: `QueryLoadContext<Request, Db>.db` is
+      `Reader<Db>` (write verbs insert/update/delete/execute/run/batch removed at the type level); the runtime
+      `managedDb(raw,'read')` = KV422 SQL-safe wrap + KV433 read-only proxy (a loader write throws
+      `KovoReadonlyHandleError`); `managedDb(raw,'write')` (mutation + `query.elevated`) is the read-write handle.
+      EVERY app query loader migrated off "bring-your-own-db" to destructuring the framework `{ db }`: commerce
+      (`examples/commerce/src/queries.ts`), crm (`examples/crm/src/queries.ts`), stackoverflow
+      (`examples/stackoverflow/src/queries.ts`), the create-kovo starter (`packages/create-kovo/templates/src/queries.ts`).
+      KV436 access decisions + KV414/M9 owner scoping preserved; mutations keep the read-write `request.db`.
+      Evidence: `vp exec vitest --run packages/server/src/managed-db.test.ts` (30 — neg: a loader `context.db.insert`
+      throws `KovoReadonlyHandleError`; pos: loader reads work + `query.elevated` allows the write + KV422 raw-string
+      still rejected through the managed handle, the unification) + per-example `tsc -p` clean. SPEC §6.6/§9.4/§10.3.
+      _Residual: integration Playwright fixtures (counter/stock/…) keep harness-attached `request.db` — they use
+      literal raw test SQL that the KV422 SQL-safe read handle rejects; migrating them needs a sql\`…\` fixture
+      rewrite or a guard-off harness seam (deferred). Conformance fixtures need no migration (loaders carry no db)._
 - [x] **KV429 runtime CAS/version primitives + the typed 409 path — LANDED.** `@kovojs/drizzle`
-  `compareAndSet(update)` folds check+act into one `UPDATE…WHERE` → typed `CasResult` (`{ok:true}` on ≥1 row;
-  `{ok:false,conflict:true}` on 0 rows = stale-version/lost-update; handles pg `rowCount`/sqlite
-  `changes`/generic `rowsAffected`). `@kovojs/server` `StaleVersionError` (thrown on a CAS 0-row conflict) +
-  the typed `StaleVersionConflict` 409: `runMutation` catches it → typed 409 (distinct from the
-  replay-idempotency 409); `renderMutationResponse` treats it non-replayable (abandons the reservation) so the
-  enhanced lifecycle refetches the fresh version and retries. Evidence: `packages/drizzle/src/cas.test.ts` (12)
-  + `packages/server/src/mutation-stale-version.test.ts` (10). SPEC §10.3/§11.1.
+      `compareAndSet(update)` folds check+act into one `UPDATE…WHERE` → typed `CasResult` (`{ok:true}` on ≥1 row;
+      `{ok:false,conflict:true}` on 0 rows = stale-version/lost-update; handles pg `rowCount`/sqlite
+      `changes`/generic `rowsAffected`). `@kovojs/server` `StaleVersionError` (thrown on a CAS 0-row conflict) +
+      the typed `StaleVersionConflict` 409: `runMutation` catches it → typed 409 (distinct from the
+      replay-idempotency 409); `renderMutationResponse` treats it non-replayable (abandons the reservation) so the
+      enhanced lifecycle refetches the fresh version and retries. Evidence: `packages/drizzle/src/cas.test.ts` (12)
+  - `packages/server/src/mutation-stale-version.test.ts` (10). SPEC §10.3/§11.1.
 - [ ] **Remaining (smaller follow-ups):** `query.elevated(...)` audit row in `kovo explain --capabilities`
-  (the elevated GET-write capability — runtime + KV433 static gate landed; the audit-table emission is a
-  `graph.capabilities` producer thread still open); the capability-URL framework download route + `ctx.signUrl`;
-  Trusted Types inline-loader sink routing; explain producer threads (publishToClient/egress `allowInternal` →
-  `graph.capabilities`; cookie-downgrade runtime drain); `staticExportPathOverride` trust kind; KV434
-  compiler-side non-literal-pattern lint.
+      (the elevated GET-write capability — runtime + KV433 static gate landed; the audit-table emission is a
+      `graph.capabilities` producer thread still open); the capability-URL framework download route + `ctx.signUrl`;
+      Trusted Types inline-loader sink routing; explain producer threads (publishToClient/egress `allowInternal` →
+      `graph.capabilities`; cookie-downgrade runtime drain); `staticExportPathOverride` trust kind; KV434
+      compiler-side non-literal-pattern lint.
 
 ### Verified state of branch `agent/implement-secure-framework-20260624-114921` (2026-06-24)
 
@@ -451,8 +451,7 @@ plan ("reuse the touch-graph's bottom-up write-summaries") is currently **unspec
       `unknown`, and the branch is inert without the opt-in set; the full drizzle suite (KV435/IDOR bypass corpus)
       stays green. Evidence: `vp exec vitest --run packages/drizzle/src/index.mass-assignment.test.ts` (the
       `symbol-provenance server-summary branch (KV435/IDOR conformance)` block) + `packages/drizzle` (363).
-      _Open: the FULL bottom-up write-summaries (a helper that itself performs a write, for KV433 interprocedural
-      + authz-gates-data) are NOT built — only the `server`-return interprocedural source landed; that is the
+      _Open: the FULL bottom-up write-summaries (a helper that itself performs a write, for KV433 interprocedural + authz-gates-data) are NOT built — only the `server`-return interprocedural source landed; that is the
       slice the write-provenance gate needed._
 
 ---

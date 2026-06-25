@@ -25,8 +25,8 @@ over-claims rather than shipping them.
 
 The strategy is four moves, in leverage order:
 
-1. **Close the secure-default gaps** — Kovo has *built, tested, fail-closed floors that are opt-in or
-   have legacy passthroughs*. Flipping them on is the highest leverage/risk ratio in the whole plan.
+1. **Close the secure-default gaps** — Kovo has _built, tested, fail-closed floors that are opt-in or
+   have legacy passthroughs_. Flipping them on is the highest leverage/risk ratio in the whole plan.
 2. **Ship the marquee novel by-construction wins** no other framework can express — the unified
    **sink-token-brand** substrate (§3), agent-capability least-privilege, confidential-at-rest, and
    the over-serialization gate.
@@ -39,28 +39,28 @@ The strategy is four moves, in leverage order:
 
 ## 1. Coverage matrix (Kovo vs. prior-art best vs. residual gap)
 
-Honest current posture across the threat taxonomy. "Tier" is Kovo's *current* honest tier.
+Honest current posture across the threat taxonomy. "Tier" is Kovo's _current_ honest tier.
 
-| Class | Kovo today (tier) | Prior-art best | Residual gap → item |
-| --- | --- | --- | --- |
-| **A01 Broken Access Control / BOLA (IDOR)** | KV436 default-deny + KV414 owner-shape (by-construction *that a decision exists*) | Rails/Django/Spring runtime policies | KV436 proves a decision exists, not that it's **correct** (`return true` satisfies it). Predicate-correctness → OPP-28 |
-| **A03 SQL injection** | KV422 static gate + tamper-resistant floor (by-construction + runtime-DiD) | ORMs parameterize builder; raw escape unchecked | `warn/off` knob fails open; native-object fall-through default-allow → **SINK-01** |
-| **A03 XSS (all contexts)** | AST output-context escaping (by-construction) + Trusted Types/CSP (runtime-DiD) | React/Svelte auto-escape HTML-text only | Inline fragment sanitizer drift (local mini-sanitizers) → OPP-26; no safe rich-HTML sink → OPP-27 |
-| **A03 ReDoS** | KV434 blessed linear validators (by-construction, narrow) + budgets | Zod/Yup ship raw `RegExp` | `pattern(literal)` "floor" is **false** vs catastrophic backtracking; non-literal lint open → **SINK-06** |
-| **API3 Mass assignment / BOPLA** | KV438 write-provenance (by-construction, fail-closed) | Rails strong params, Laravel `$fillable` | Non-secret whole-row over-serialization crosses freely → OPP-21 |
-| **A02 Confidential data (in flight)** | secret()/redacted() + KV435/KV437 wire ineligibility (by-construction + DiD) | Rails Active Record Encryption (at rest) | No confidential-**at-rest** classification → OPP-04 |
-| **A05 Security headers** | strict CSP/COOP/COEP/Permissions default-on (secure-default + DiD) | Django/Spring checklists; Laravel ships none | No SRI on emitted modules → OPP-13; no reporting → OPP-14; no Clear-Site-Data/OAC → OPP-15 |
-| **A07 AuthN failures** | KV418 + CSRF + cookie floor (by-construction + DiD); strength out-of-scope | Rails 8 first-party auth, opaque sessions | No password hasher (OPP-10), key rotation (OPP-05), opaque session (OPP-11), enumeration-safe (OPP-09) |
-| **A08 Deserialization / proto-pollution** | shape-validated decode (runtime-DiD) | SAST flags known sinks | No stated floor that *all* body decode is schema-bound, null-proto, reviver-free → OPP-19 |
-| **A10 SSRF (metadata, rebind)** | dual-layer egress deny floor (runtime-DiD, 5 enumerated residuals) — **OPT-IN** | nobody else has any SSRF control | Opt-in contradicts secure-default bias → **OPP-01** |
-| **API4 Resource consumption** | KV430 shape budget (runtime-DiD); rate-limit un-hardened | Rails 8 `rate_limit`, APIM | Limiter key map unbounded (DoS) → OPP-18; no pagination/body caps → OPP-29 |
-| **Lost-update / TOCTOU** | KV429 static flag + CAS helper (static-analysis + library) | optimistic-locking columns | Not by-construction; multi-row invariants need `forUpdate` → (CAS hardening, secure-framework.md) |
-| **CSRF** | synchronizer token + Origin floor + KV418 (library + by-construction gate) | SvelteKit Origin default-on | Both-headers-absent compat fallback; no BREACH mask → OPP-16 |
-| **Supply chain** | publish tarball sha/file-list gates (static-analysis, Kovo's own tarball) | pnpm-10 default-deny scripts, provenance | No tarball **content** scan, no dep-confusion gate, no build-egress floor → OPP-22/OPP-23 |
-| **AI: prompt injection (LLM01)** | out-of-scope as a proof (correct) | StruQ/CaMeL privilege separation | Not framed as a **blast-radius** story → OPP-25 |
-| **AI: excessive agency (LLM06)** | **MISSING** | MCP gateways / hand-wired allow-lists | No agent-tool capability least-privilege layer → **OPP-07/OPP-08** |
-| **CWE-22 Path traversal / file serving** | upload keys + capability downloads (by-construction); generic serve unclear | canonicalize-then-contain | No general opaque-key file-serve primitive → OPP-20 / **SINK-03** |
-| **Stale-UI / cache completeness** | static write touch-set (by-construction) + fail-closed executor | nobody proves this statically | Gated on unbuilt interprocedural write-summaries (signature feature, tracked elsewhere) |
+| Class                                       | Kovo today (tier)                                                                 | Prior-art best                                  | Residual gap → item                                                                                                    |
+| ------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **A01 Broken Access Control / BOLA (IDOR)** | KV436 default-deny + KV414 owner-shape (by-construction _that a decision exists_) | Rails/Django/Spring runtime policies            | KV436 proves a decision exists, not that it's **correct** (`return true` satisfies it). Predicate-correctness → OPP-28 |
+| **A03 SQL injection**                       | KV422 static gate + tamper-resistant floor (by-construction + runtime-DiD)        | ORMs parameterize builder; raw escape unchecked | `warn/off` knob fails open; native-object fall-through default-allow → **SINK-01**                                     |
+| **A03 XSS (all contexts)**                  | AST output-context escaping (by-construction) + Trusted Types/CSP (runtime-DiD)   | React/Svelte auto-escape HTML-text only         | Inline fragment sanitizer drift (local mini-sanitizers) → OPP-26; no safe rich-HTML sink → OPP-27                      |
+| **A03 ReDoS**                               | KV434 blessed linear validators (by-construction, narrow) + budgets               | Zod/Yup ship raw `RegExp`                       | `pattern(literal)` "floor" is **false** vs catastrophic backtracking; non-literal lint open → **SINK-06**              |
+| **API3 Mass assignment / BOPLA**            | KV438 write-provenance (by-construction, fail-closed)                             | Rails strong params, Laravel `$fillable`        | Non-secret whole-row over-serialization crosses freely → OPP-21                                                        |
+| **A02 Confidential data (in flight)**       | secret()/redacted() + KV435/KV437 wire ineligibility (by-construction + DiD)      | Rails Active Record Encryption (at rest)        | No confidential-**at-rest** classification → OPP-04                                                                    |
+| **A05 Security headers**                    | strict CSP/COOP/COEP/Permissions default-on (secure-default + DiD)                | Django/Spring checklists; Laravel ships none    | No SRI on emitted modules → OPP-13; no reporting → OPP-14; no Clear-Site-Data/OAC → OPP-15                             |
+| **A07 AuthN failures**                      | KV418 + CSRF + cookie floor (by-construction + DiD); strength out-of-scope        | Rails 8 first-party auth, opaque sessions       | No password hasher (OPP-10), key rotation (OPP-05), opaque session (OPP-11), enumeration-safe (OPP-09)                 |
+| **A08 Deserialization / proto-pollution**   | shape-validated decode (runtime-DiD)                                              | SAST flags known sinks                          | No stated floor that _all_ body decode is schema-bound, null-proto, reviver-free → OPP-19                              |
+| **A10 SSRF (metadata, rebind)**             | dual-layer egress deny floor (runtime-DiD, 5 enumerated residuals) — **OPT-IN**   | nobody else has any SSRF control                | Opt-in contradicts secure-default bias → **OPP-01**                                                                    |
+| **API4 Resource consumption**               | KV430 shape budget (runtime-DiD); rate-limit un-hardened                          | Rails 8 `rate_limit`, APIM                      | Limiter key map unbounded (DoS) → OPP-18; no pagination/body caps → OPP-29                                             |
+| **Lost-update / TOCTOU**                    | KV429 static flag + CAS helper (static-analysis + library)                        | optimistic-locking columns                      | Not by-construction; multi-row invariants need `forUpdate` → (CAS hardening, secure-framework.md)                      |
+| **CSRF**                                    | synchronizer token + Origin floor + KV418 (library + by-construction gate)        | SvelteKit Origin default-on                     | Both-headers-absent compat fallback; no BREACH mask → OPP-16                                                           |
+| **Supply chain**                            | publish tarball sha/file-list gates (static-analysis, Kovo's own tarball)         | pnpm-10 default-deny scripts, provenance        | No tarball **content** scan, no dep-confusion gate, no build-egress floor → OPP-22/OPP-23                              |
+| **AI: prompt injection (LLM01)**            | out-of-scope as a proof (correct)                                                 | StruQ/CaMeL privilege separation                | Not framed as a **blast-radius** story → OPP-25                                                                        |
+| **AI: excessive agency (LLM06)**            | **MISSING**                                                                       | MCP gateways / hand-wired allow-lists           | No agent-tool capability least-privilege layer → **OPP-07/OPP-08**                                                     |
+| **CWE-22 Path traversal / file serving**    | upload keys + capability downloads (by-construction); generic serve unclear       | canonicalize-then-contain                       | No general opaque-key file-serve primitive → OPP-20 / **SINK-03**                                                      |
+| **Stale-UI / cache completeness**           | static write touch-set (by-construction) + fail-closed executor                   | nobody proves this statically                   | Gated on unbuilt interprocedural write-summaries (signature feature, tracked elsewhere)                                |
 
 ---
 
@@ -72,230 +72,230 @@ OPP-28/29/30 were tiered by the main thread (their verdict agents hit the sessio
 
 ### Band 0 — Secure-default corrections (flip built floors on; highest leverage/risk)
 
-These ship *no new mechanism* — they correct a default on an already-built, tested, fail-closed floor.
+These ship _no new mechanism_ — they correct a default on an already-built, tested, fail-closed floor.
 This is where Kovo's secure-default bias (technical-preview: prefer security-improving breaks) pays off.
 
 - [ ] **OPP-01 — SSRF egress floor default-ON, prod refuse-to-boot.** runtime-DiD · lev 8 · M · breaking.
-  `createApp` installs the dual-layer metadata/private-network deny floor only when `egress` config is
-  present (`app.ts:101`), so **by default an app has zero SSRF protection** — the sharpest contradiction
-  of the secure-default bias. Install unconditionally; dev stays lenient (loud self-probe, never bricks
-  localhost), **production refuses BOOT** (mirror `env.ts` `resolveBootMode`, not first-request) when the
-  floor is absent/disabled without an audited opt-out. Keep empty-allowlist deny semantics; metadata stays
-  non-allowlistable. *Trade-off:* amends normative SPEC §6.6 ("ships an opt-in floor") and **must** stay
-  dev-lenient or it bricks every localhost DB/Redis/OTel/Ollama the AI-agent audience runs. Tracked open
-  in `secure-framework-3.md` ("harden egress floor propagation") — elevate to default-on here.
+      `createApp` installs the dual-layer metadata/private-network deny floor only when `egress` config is
+      present (`app.ts:101`), so **by default an app has zero SSRF protection** — the sharpest contradiction
+      of the secure-default bias. Install unconditionally; dev stays lenient (loud self-probe, never bricks
+      localhost), **production refuses BOOT** (mirror `env.ts` `resolveBootMode`, not first-request) when the
+      floor is absent/disabled without an audited opt-out. Keep empty-allowlist deny semantics; metadata stays
+      non-allowlistable. _Trade-off:_ amends normative SPEC §6.6 ("ships an opt-in floor") and **must** stay
+      dev-lenient or it bricks every localhost DB/Redis/OTel/Ollama the AI-agent audience runs. Tracked open
+      in `secure-framework-3.md` ("harden egress floor propagation") — elevate to default-on here.
 
 - [ ] **OPP-03 — Close the class-less cookie passthrough.** by-construction (app-data half) + runtime-DiD
-  (session half) · lev 6 · M · breaking. `cookies.ts` lets an unclassed cookie ship with no
-  HttpOnly/Secure/SameSite and no prefix (lines 42/179/265), so the "insecure credential cookie
-  inexpressible by default" claim only holds for *classed* cookies. Remove the passthrough: unclassed →
-  app-data floor (SameSite=Lax min); session/auth-shaped names → full credential floor + `__Host-` prefix.
-  *Trade-off:* the app-data default is sound by construction; the "session cookie always hardened" half is
-  a name-heuristic runtime floor — label it as such.
+      (session half) · lev 6 · M · breaking. `cookies.ts` lets an unclassed cookie ship with no
+      HttpOnly/Secure/SameSite and no prefix (lines 42/179/265), so the "insecure credential cookie
+      inexpressible by default" claim only holds for _classed_ cookies. Remove the passthrough: unclassed →
+      app-data floor (SameSite=Lax min); session/auth-shaped names → full credential floor + `__Host-` prefix.
+      _Trade-off:_ the app-data default is sound by construction; the "session cookie always hardened" half is
+      a name-heuristic runtime floor — label it as such.
 
 - [ ] **OPP-18 — Bound the rate-limiter key cardinality.** runtime-DiD · lev 6 · S · non-breaking.
-  `app-load-shed.ts` uses unbounded `Map<string,RateBucket>` keyed per-request (global + perIp); an
-  attacker-varied `clientIp`/`X-Forwarded-For` exhausts memory — the limiter is itself a DoS vector.
-  Replace with bounded LRU + conservative `maxKeys` + periodic sweep; treat `clientIp` cardinality as a DoS
-  *input*. *Trade-off:* bounds memory but per-IP limiting stays meaningless under forgeable `X-Forwarded-For`
-  until a trusted-proxy hop count is configured. Tracked open in `secure-framework-3.md`.
+      `app-load-shed.ts` uses unbounded `Map<string,RateBucket>` keyed per-request (global + perIp); an
+      attacker-varied `clientIp`/`X-Forwarded-For` exhausts memory — the limiter is itself a DoS vector.
+      Replace with bounded LRU + conservative `maxKeys` + periodic sweep; treat `clientIp` cardinality as a DoS
+      _input_. _Trade-off:_ bounds memory but per-IP limiting stays meaningless under forgeable `X-Forwarded-For`
+      until a trusted-proxy hop count is configured. Tracked open in `secure-framework-3.md`.
 
 - [ ] **OPP-17 / SINK-05 — Sanitize the browser `Kovo-Reauth` redirect.** runtime-DiD · lev 8 · S ·
-  non-breaking. `inline-loader-build.ts` (~873) does `location.assign(reauth)` on a raw 401 header with no
-  client re-sanitization — a live open-redirect/scheme-injection hole if the upstream is compromised. Route
-  both the modular and inline mutation-fetch sinks through `sanitizeReauth` (same-origin, single leading
-  slash, reject `//`/`/\`/scheme/host/encoded-control, fail closed to `/`). *Trade-off:* the server already
-  emits a safe value, so this hardens the upstream-compromise edge; ship it as a **function-call chokepoint**,
-  not a brand object (the value is a runtime header the AST can't see — by-construction is impossible).
-  This is the LIVE open item in `secure-framework-3.md`.
+      non-breaking. `inline-loader-build.ts` (~873) does `location.assign(reauth)` on a raw 401 header with no
+      client re-sanitization — a live open-redirect/scheme-injection hole if the upstream is compromised. Route
+      both the modular and inline mutation-fetch sinks through `sanitizeReauth` (same-origin, single leading
+      slash, reject `//`/`/\`/scheme/host/encoded-control, fail closed to `/`). _Trade-off:_ the server already
+      emits a safe value, so this hardens the upstream-compromise edge; ship it as a **function-call chokepoint**,
+      not a brand object (the value is a runtime header the AST can't see — by-construction is impossible).
+      This is the LIVE open item in `secure-framework-3.md`.
 
 ### Band 1 — Marquee novel by-construction wins (things no other framework can express)
 
 - [ ] **§3 Sink-Token Brands** — the unified `Blessed<Sink>` substrate. See the dedicated section below;
-  the flagship by-construction items are **SINK-01** (SQL identifier/keyword channel + kill the fail-open
-  knobs) and **SINK-03** (rooted file-serve). lev 7–9.
+      the flagship by-construction items are **SINK-01** (SQL identifier/keyword channel + kill the fail-open
+      knobs) and **SINK-03** (rooted file-serve). lev 7–9.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
-  (capability *bounding*) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
-  audience is AI-agent builders, yet there is **no** by-construction least-privilege layer for agent tools —
-  the single biggest unclaimed opportunity. Define `tool()` as a first-class declaration whose body's
-  reachable **sinks** are classified by the existing analyzers (write verbs via `domain-writes.ts`, egress
-  via the SSRF classification, secret reads via confidentiality); a granted capability set that doesn't cover
-  a reachable sink is a KV436-pattern build error. *Trade-off:* sound capability **bounding**, but it does
-  **not** eliminate Excessive Agency (a prompt-injected arg into a *granted* money-move tool is still a call);
-  needs a net-new primitive + governed-sink annotations. Pair with OPP-25's honest blast-radius framing.
+      (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
+      audience is AI-agent builders, yet there is **no** by-construction least-privilege layer for agent tools —
+      the single biggest unclaimed opportunity. Define `tool()` as a first-class declaration whose body's
+      reachable **sinks** are classified by the existing analyzers (write verbs via `domain-writes.ts`, egress
+      via the SSRF classification, secret reads via confidentiality); a granted capability set that doesn't cover
+      a reachable sink is a KV436-pattern build error. _Trade-off:_ sound capability **bounding**, but it does
+      **not** eliminate Excessive Agency (a prompt-injected arg into a _granted_ money-move tool is still a call);
+      needs a net-new primitive + governed-sink annotations. Pair with OPP-25's honest blast-radius framing.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
-  narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
-  lev 3 · XL · breaking. Generalize KV418 ("a `csrf:false` handler may not read ambient session") to the
-  agent-tool boundary so a tool acts under the **end-user's** authority, not server-wide ambient credentials.
-  *Trade-off:* reusing KV418's *symbol-identity* pattern is sound, but generalized to arbitrary "ambient
-  credentials" it degrades to author-assertion/audit-only. **Defer** behind OPP-07.
+      narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
+      lev 3 · XL · breaking. Generalize KV418 ("a `csrf:false` handler may not read ambient session") to the
+      agent-tool boundary so a tool acts under the **end-user's** authority, not server-wide ambient credentials.
+      _Trade-off:_ reusing KV418's _symbol-identity_ pattern is sound, but generalized to arbitrary "ambient
+      credentials" it degrades to author-assertion/audit-only. **Defer** behind OPP-07.
 
 - [ ] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
-  *gate*, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
-  secrets can't reach the wire (KV435) but a `secret`/confidential value can be written to a plaintext DB
-  column. Add a `confidentialAtRest` column classification; extend the KV438 write-provenance engine so a
-  write of such a column not flowing through the blessed authenticated-encryption sink is a build error.
-  *Trade-off:* anchor the gate on the **destination column declaration**, not on `secret()` *source*
-  provenance (provenance dies at `.reveal()` — that framing is an unsound over-claim and must be dropped). The
-  cryptographic guarantee itself is runtime-DiD.
+      _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
+      secrets can't reach the wire (KV435) but a `secret`/confidential value can be written to a plaintext DB
+      column. Add a `confidentialAtRest` column classification; extend the KV438 write-provenance engine so a
+      write of such a column not flowing through the blessed authenticated-encryption sink is a build error.
+      _Trade-off:_ anchor the gate on the **destination column declaration**, not on `secret()` _source_
+      provenance (provenance dies at `.reveal()` — that framing is an unsound over-claim and must be dropped). The
+      cryptographic guarantee itself is runtime-DiD.
 
 - [ ] **OPP-21 — Non-secret over-serialization gate.** by-construction (shape/intentionality, **not**
-  confidentiality) · lev 5 · M · breaking. KV435 catches secret columns on the wire, but a whole DB row of
-  non-secret PII crosses freely (the universal Prisma/Drizzle full-row leak). Extend `confidentiality.ts` so
-  any value with DB/table provenance crossing the wire boundary needs an explicit projection allowlist.
-  *Trade-off:* proves **intentionality**, not confidentiality (PII-ness isn't a declared provenance fact) —
-  ship it as a warning-grade over-serialization floor, not a confidentiality proof.
+      confidentiality) · lev 5 · M · breaking. KV435 catches secret columns on the wire, but a whole DB row of
+      non-secret PII crosses freely (the universal Prisma/Drizzle full-row leak). Extend `confidentiality.ts` so
+      any value with DB/table provenance crossing the wire boundary needs an explicit projection allowlist.
+      _Trade-off:_ proves **intentionality**, not confidentiality (PII-ness isn't a declared provenance fact) —
+      ship it as a warning-grade over-serialization floor, not a confidentiality proof.
 
 - [ ] **OPP-06 — Mandatory purpose/audience binding on capability & CSRF tokens.** by-construction (at the
-  verify sink, cross-context-confusion property) · lev 6 · M · breaking. Mirror ASP.NET purpose strings /
-  Phoenix salts: make the signing context a required, branded, type-distinct parameter that participates in
-  key derivation, so a token minted for one context cannot verify in another. *Trade-off:* sound kill of
-  cross-context replay, but narrower than a fresh vuln-class and gated on OPP-05's KeyRing.
+      verify sink, cross-context-confusion property) · lev 6 · M · breaking. Mirror ASP.NET purpose strings /
+      Phoenix salts: make the signing context a required, branded, type-distinct parameter that participates in
+      key derivation, so a token minted for one context cannot verify in another. _Trade-off:_ sound kill of
+      cross-context replay, but narrower than a fresh vuln-class and gated on OPP-05's KeyRing.
 
 ### Band 2 — AuthN / crypto gap-closers (prior art owns these; Kovo delegates today)
 
 - [ ] **OPP-05 — First-class signing KeyRing (rotation).** by-construction (refuse-to-boot on missing/
-  un-versioned key, at the createApp chokepoint) + runtime-DiD (multi-key transparent verify) · lev 6 · L ·
-  breaking. CSRF, `signCapability`, and the signed-cookie secret all hang off a single un-versioned secret
-  (no rotation/revocation). Introduce a typed KeyRing: `sign()` uses the single Active key; `verify()` tries
-  every non-Revoked key; keys carry activation/expiry/revoked state. *Trade-off:* the boot gate + runtime
-  fail-closed verify are sound, but the "rotation by construction / revoked-key inexpressible" headline is a
-  **type-only over-claim** (key state is runtime data) — describe verify as a runtime guard. Foundation for
-  OPP-06/11/12.
+      un-versioned key, at the createApp chokepoint) + runtime-DiD (multi-key transparent verify) · lev 6 · L ·
+      breaking. CSRF, `signCapability`, and the signed-cookie secret all hang off a single un-versioned secret
+      (no rotation/revocation). Introduce a typed KeyRing: `sign()` uses the single Active key; `verify()` tries
+      every non-Revoked key; keys carry activation/expiry/revoked state. _Trade-off:_ the boot gate + runtime
+      fail-closed verify are sound, but the "rotation by construction / revoked-key inexpressible" headline is a
+      **type-only over-claim** (key state is runtime data) — describe verify as a runtime guard. Foundation for
+      OPP-06/11/12.
 
 - [ ] **OPP-10 — First-party password primitive (argon2id-only sink).** by-construction (narrow:
-  plaintext-at-rest on the app-Drizzle write surface, KV438 extension) + runtime-DiD (params, auto-rehash,
-  alg-pinned verify) · lev 5 · L · breaking. Kovo ships no hasher. Expose a `Password` type whose only
-  persistence path is the blessed argon2id hasher (no fast-hash mode reachable, Laravel-style); a
-  request-derived value written to a password column without passing the hasher is a build error.
-  *Trade-off:* a strong unconditional default + a narrow real plaintext-at-rest gate around a mostly
-  runtime-DiD floor; by-construction reach is blunted where `better-auth` owns the credential sink.
+      plaintext-at-rest on the app-Drizzle write surface, KV438 extension) + runtime-DiD (params, auto-rehash,
+      alg-pinned verify) · lev 5 · L · breaking. Kovo ships no hasher. Expose a `Password` type whose only
+      persistence path is the blessed argon2id hasher (no fast-hash mode reachable, Laravel-style); a
+      request-derived value written to a password column without passing the hasher is a build error.
+      _Trade-off:_ a strong unconditional default + a narrow real plaintext-at-rest gate around a mostly
+      runtime-DiD floor; by-construction reach is blunted where `better-auth` owns the credential sink.
 
 - [ ] **OPP-11 — Opaque, instantly-revocable Session as the DEFAULT (JWT opt-in).** runtime-DiD
-  (rotation/revocation) + by-construction-for-the-JWT-class (only if Kovo owns the session sink) · lev 5 ·
-  XL · breaking. Default to opaque server-stored sessions, sidestepping the entire JWT vuln family; the
-  establish sink rotates on auth (fixation floor). *Trade-off:* opaque-default genuinely kills the JWT family
-  by construction, but only fires if Kovo reverses §6.5 and **owns** the session sink — a large architectural
-  commitment. **Revisit** vs. the `better-auth` delegation.
+      (rotation/revocation) + by-construction-for-the-JWT-class (only if Kovo owns the session sink) · lev 5 ·
+      XL · breaking. Default to opaque server-stored sessions, sidestepping the entire JWT vuln family; the
+      establish sink rotates on auth (fixation floor). _Trade-off:_ opaque-default genuinely kills the JWT family
+      by construction, but only fires if Kovo reverses §6.5 and **owns** the session sink — a large architectural
+      commitment. **Revisit** vs. the `better-auth` delegation.
 
 - [ ] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
-  M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
-  the algorithm from the **key type** (HMAC vs public-key are distinct KeyRing types), never the token header
-  `alg` — making `alg:none` and RS256→HS256 confusion inexpressible. *Trade-off:* correct and tier-1 at the
-  sink, but defends a format Kovo may not ship — adopt only **inside** OPP-11, not standalone.
+      M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
+      the algorithm from the **key type** (HMAC vs public-key are distinct KeyRing types), never the token header
+      `alg` — making `alg:none` and RS256→HS256 confusion inexpressible. _Trade-off:_ correct and tier-1 at the
+      sink, but defends a format Kovo may not ship — adopt only **inside** OPP-11, not standalone.
 
 - [ ] **OPP-09 — Account-enumeration-safe credential verification.** runtime-DiD (constant-**work** timing
-  floor) · lev 5 · M · non-breaking. Provide `verifyCredential()` that always runs a full argon2id compare
-  (dummy hash against a fixed decoy on user-miss) so response time/shape don't branch on existence.
-  *Trade-off:* a genuinely novel framework-owned timing floor, but it neither eliminates the class by
-  construction nor covers app-authored existence-branched responses elsewhere (that check is audit-only).
+      floor) · lev 5 · M · non-breaking. Provide `verifyCredential()` that always runs a full argon2id compare
+      (dummy hash against a fixed decoy on user-miss) so response time/shape don't branch on existence.
+      _Trade-off:_ a genuinely novel framework-owned timing floor, but it neither eliminates the class by
+      construction nor covers app-authored existence-branched responses elsewhere (that check is audit-only).
 
 ### Band 3 — Floor hardening & free browser headers
 
 - [ ] **OPP-29 — API4 fail-closed defaults: pagination ceiling + body-size cap.** runtime-DiD · lev ~6 · M ·
-  breaking *(main-thread tier; verdict agent hit the limit)*. Default request-body size cap + default
-  result-count ceiling on list loaders at the runtime sink; an unbounded `.list()` with no `.max/.limit`
-  gets a conservative cap + a build warning. *Trade-off:* a real secure-default that closes the forgotten-
-  pagination DoS; must pick caps that don't surprise legitimate large reads (opt-up is explicit).
+      breaking _(main-thread tier; verdict agent hit the limit)_. Default request-body size cap + default
+      result-count ceiling on list loaders at the runtime sink; an unbounded `.list()` with no `.max/.limit`
+      gets a conservative cap + a build warning. _Trade-off:_ a real secure-default that closes the forgotten-
+      pagination DoS; must pick caps that don't surprise legitimate large reads (opt-up is explicit).
 
 - [ ] **OPP-26 — Single-source the inline fragment sanitizer.** runtime-DiD · lev 6 · M · non-breaking.
-  `response-fragment-apply.ts` carries local mini-sanitizers while the decision table lives in
-  `sink-policy.ts` — a drift-XSS surface. Generate the inline helper from the shared policy at build time (or
-  ship a parity corpus). *Trade-off:* a real drift fix that single-sources an XSS floor — label runtime-DiD,
-  not the by-construction the original sketch claimed. Tracked open in `secure-framework-3.md`.
+      `response-fragment-apply.ts` carries local mini-sanitizers while the decision table lives in
+      `sink-policy.ts` — a drift-XSS surface. Generate the inline helper from the shared policy at build time (or
+      ship a parity corpus). _Trade-off:_ a real drift fix that single-sources an XSS floor — label runtime-DiD,
+      not the by-construction the original sketch claimed. Tracked open in `secure-framework-3.md`.
 
 - [ ] **OPP-27 — Blessed safe-rich-HTML sanitizing sink through the `kovo` Trusted Types policy.**
-  runtime-DiD (+ by-construction sole-policy transport) · lev 6 · L · non-breaking. TT correctly throws on raw
-  user-HTML but leaves no safe path for the legitimate CMS/rich-text case. Provide `sanitizeHtml`: server-side
-  allowlist parse (drop script/handlers/`javascript:`/`data:`), browser-side native Sanitizer API `setHTML()`.
-  *Trade-off:* trades an audited per-feature escape for a framework sanitizer floor — a bypassable allowlist,
-  not a by-construction XSS kill.
+      runtime-DiD (+ by-construction sole-policy transport) · lev 6 · L · non-breaking. TT correctly throws on raw
+      user-HTML but leaves no safe path for the legitimate CMS/rich-text case. Provide `sanitizeHtml`: server-side
+      allowlist parse (drop script/handlers/`javascript:`/`data:`), browser-side native Sanitizer API `setHTML()`.
+      _Trade-off:_ trades an audited per-feature escape for a framework sanitizer floor — a bypassable allowlist,
+      not a by-construction XSS kill.
 
 - [ ] **OPP-19 — Deserialization / prototype-pollution floor.** runtime-DiD (decode/null-proto) +
-  by-construction (static sink ban, statically-visible subset) · lev 6 · M · non-breaking. Route all body
-  decode through `s.*` decoders building null-prototype objects, no reviver; static-ban `__proto__`/reflective
-  attacker-key deref where visible. Object lesson: the Next RSC Flight pre-auth RCE (CVE-2025-55182).
-  *Trade-off:* real and worth building, but a labeled floor + a KV422-shaped (bounded) static ban — **not**
-  the blanket by-construction elimination first proposed.
+      by-construction (static sink ban, statically-visible subset) · lev 6 · M · non-breaking. Route all body
+      decode through `s.*` decoders building null-prototype objects, no reviver; static-ban `__proto__`/reflective
+      attacker-key deref where visible. Object lesson: the Next RSC Flight pre-auth RCE (CVE-2025-55182).
+      _Trade-off:_ real and worth building, but a labeled floor + a KV422-shaped (bounded) static ban — **not**
+      the blanket by-construction elimination first proposed.
 
 - [ ] **OPP-20 / SINK-03 — General path-traversal-safe file-serving primitive.** see SINK-03. lev 6–7 · L.
 
 - [ ] **OPP-13 — SRI integrity on emitted module/style tags.** runtime-DiD (browser-enforced; cross-origin
-  subresources only) · lev 2 · M · non-breaking. Kovo already content-hashes immutable modules and inline
-  scripts, so the digests are in hand — attach `integrity=sha384-…` to emitted first-party tags. *Trade-off:*
-  a narrow real floor for app-allowlisted cross-origin subresources; **inapplicable** to the same-origin
-  `import()`/modulepreload execution path it primarily targets — do not sell it as by-construction.
+      subresources only) · lev 2 · M · non-breaking. Kovo already content-hashes immutable modules and inline
+      scripts, so the digests are in hand — attach `integrity=sha384-…` to emitted first-party tags. _Trade-off:_
+      a narrow real floor for app-allowlisted cross-origin subresources; **inapplicable** to the same-origin
+      `import()`/modulepreload execution path it primarily targets — do not sell it as by-construction.
 
 - [ ] **OPP-14 — Framework-owned Reporting pipeline (`report-to`).** audit-only · lev 6 · M · non-breaking.
-  Strict CSP ships with **no** reporting, so a blocked attack/regression emits zero signal — bad for
-  AI-operated apps with no human watching. Emit `Reporting-Endpoints` + per-directive `report-to` (CSP/COOP/
-  Permissions) to a framework endpoint; aggregate redacted reports; rescue the built-then-dropped KV236 events.
-  *Trade-off:* cheap observability that converts blind floors into auditable ones, but introduces an
-  attacker-triggerable report channel that must be rate-limited and redacted.
+      Strict CSP ships with **no** reporting, so a blocked attack/regression emits zero signal — bad for
+      AI-operated apps with no human watching. Emit `Reporting-Endpoints` + per-directive `report-to` (CSP/COOP/
+      Permissions) to a framework endpoint; aggregate redacted reports; rescue the built-then-dropped KV236 events.
+      _Trade-off:_ cheap observability that converts blind floors into auditable ones, but introduces an
+      attacker-triggerable report channel that must be rate-limited and redacted.
 
 - [ ] **OPP-15 — Clear-Site-Data on logout + `Origin-Agent-Cluster: ?1`.** runtime-DiD · lev 4 · M ·
-  non-breaking. Ship OAC `?1` now (one-line origin-keyed isolation). Emit `Clear-Site-Data:
-  "cookies","storage","executionContexts"` on session-revocation. *Trade-off:* OAC is a clean DiD floor now;
-  defer Clear-Site-Data until a framework-owned logout/revoke sink exists to emit it by construction rather
-  than as an app-ownable header. The "inexpressible" framing is an over-claim.
+      non-breaking. Ship OAC `?1` now (one-line origin-keyed isolation). Emit `Clear-Site-Data:
+"cookies","storage","executionContexts"` on session-revocation. _Trade-off:_ OAC is a clean DiD floor now;
+      defer Clear-Site-Data until a framework-owned logout/revoke sink exists to emit it by construction rather
+      than as an app-ownable header. The "inexpressible" framing is an over-claim.
 
 - [ ] **OPP-16 — BREACH-mask the CSRF token (per-response XOR).** runtime-DiD · lev 6 · S · breaking.
-  `csrf.ts` emits a stable token into compressible HTML over TLS → inherits the BREACH oracle. XOR-mask the
-  session-bound secret with fresh per-request randomness (Spring 6 / Django default); unmask before the
-  constant-time compare. *Trade-off:* real low-cost hardening of a live oracle in Kovo's default-compressed
-  stack — DiD-on-DiD, not a class kill.
+      `csrf.ts` emits a stable token into compressible HTML over TLS → inherits the BREACH oracle. XOR-mask the
+      session-bound secret with fresh per-request randomness (Spring 6 / Django default); unmask before the
+      constant-time compare. _Trade-off:_ real low-cost hardening of a live oracle in Kovo's default-compressed
+      stack — DiD-on-DiD, not a class kill.
 
 - [ ] **OPP-30 — Centralize framework system-response posture.** runtime-DiD · lev ~5 · S · non-breaking
-  *(main-thread tier)*. Pre-dispatch 429/413/normalization-redirect responses carry only Content-Type/
-  Retry-After, missing the `Cache-Control: private,no-store` / `Vary: Cookie` / build-token posture of
-  post-dispatch responses. One helper stamps all framework 3xx/4xx/5xx system responses. *Trade-off:*
-  low-risk consistency fix closing a cache-poisoning/posture-leak edge. Tracked open in `secure-framework-3.md`.
+      _(main-thread tier)_. Pre-dispatch 429/413/normalization-redirect responses carry only Content-Type/
+      Retry-After, missing the `Cache-Control: private,no-store` / `Vary: Cookie` / build-token posture of
+      post-dispatch responses. One helper stamps all framework 3xx/4xx/5xx system responses. _Trade-off:_
+      low-risk consistency fix closing a cache-poisoning/posture-leak edge. Tracked open in `secure-framework-3.md`.
 
 - [ ] **OPP-22 — Build-time egress deny floor (harden-runner analog).** runtime-DiD (CI scaffolding) +
-  audit-only (release-age cooldown) · lev 4 · M · non-breaking. Secure-default CI: script-blocking install +
-  egress allowlist for the build/install step (the Shai-Hulud worm vector). *Trade-off:* genuinely useful
-  supply-chain secure-defaults, but operator/CI-ownable hardening — do not dress as the runtime "egress floor"
-  it isn't; slice overlaps shipped tarball gates.
+      audit-only (release-age cooldown) · lev 4 · M · non-breaking. Secure-default CI: script-blocking install +
+      egress allowlist for the build/install step (the Shai-Hulud worm vector). _Trade-off:_ genuinely useful
+      supply-chain secure-defaults, but operator/CI-ownable hardening — do not dress as the runtime "egress floor"
+      it isn't; slice overlaps shipped tarball gates.
 
 - [ ] **OPP-23 — Dependency-confusion + tarball-content static gates.** audit-only · lev 5 · M ·
-  non-breaking. The one statically-decidable supply-chain slice Kovo can own: an `.npmrc` org-scope pin + a
-  build-time check that fails closed if an `@org` name resolves from the public registry; a content scan of
-  the packed tarball for secrets/maps/absolute paths. *Trade-off:* real CI hardening, but suppressible
-  audit-only, not a by-construction vuln-class kill.
+      non-breaking. The one statically-decidable supply-chain slice Kovo can own: an `.npmrc` org-scope pin + a
+      build-time check that fails closed if an `@org` name resolves from the public registry; a content scan of
+      the packed tarball for secrets/maps/absolute paths. _Trade-off:_ real CI hardening, but suppressible
+      audit-only, not a by-construction vuln-class kill.
 
 ### Band 4 — Honesty & positioning (the credibility moat)
 
 - [ ] **OPP-24 — Honesty pass on stale tier framing.** audit-only · lev 5 · S · non-breaking. (a)
-  `managed-db.ts`: until OPP-02 lands, stop implying KV433 Stage-2 ships — state current protection is
-  runtime-DiD proxy + type-only, by-construction proof DEFERRED. (b) `capability-url.ts`: fix the stale
-  comment (one literal false statement). (c) Tier the auth out-of-scope surface explicitly so silence doesn't
-  read as coverage. *Trade-off:* cheap and real — corrects a false source statement and removes
-  coverage-by-silence on three OWASP categories; enforces nothing.
+      `managed-db.ts`: until OPP-02 lands, stop implying KV433 Stage-2 ships — state current protection is
+      runtime-DiD proxy + type-only, by-construction proof DEFERRED. (b) `capability-url.ts`: fix the stale
+      comment (one literal false statement). (c) Tier the auth out-of-scope surface explicitly so silence doesn't
+      read as coverage. _Trade-off:_ cheap and real — corrects a false source statement and removes
+      coverage-by-silence on three OWASP categories; enforces nothing.
 
 - [ ] **OPP-25 — Prompt-injection blast-radius thesis.** audit-only · lev 6 · S · non-breaking. The
-  community is unanimous: prompt injection is unsolvable inside current LLMs. Document that Kovo does **not**
-  claim injection-proofing (the unsafe state is in the model token stream, not compiled code) and position the
-  by-construction/floor controls (KV436 default-deny, egress floor, OPP-07 capability bounding) as the
-  **blast-radius bound**. *Trade-off:* high-honesty, high-audience-value — but **revisit** the exact wording
-  until OPP-01/07 land, since the bound it describes partly depends on them (an opt-in egress floor is not a
-  bound). The composite bound is only as strong as its weakest (bypassable) link.
+      community is unanimous: prompt injection is unsolvable inside current LLMs. Document that Kovo does **not**
+      claim injection-proofing (the unsafe state is in the model token stream, not compiled code) and position the
+      by-construction/floor controls (KV436 default-deny, egress floor, OPP-07 capability bounding) as the
+      **blast-radius bound**. _Trade-off:_ high-honesty, high-audience-value — but **revisit** the exact wording
+      until OPP-01/07 land, since the bound it describes partly depends on them (an opt-in egress floor is not a
+      bound). The composite bound is only as strong as its weakest (bypassable) link.
 
 - [ ] **OPP-02 — KV433 Stage-2 honesty + optional widening.** by-construction (directly-reachable subset,
-  already ships) · lev 3 · S · non-breaking. The directly-reachable read-loader no-write gate already ships
-  and is tested; the honest remaining work is correcting the "still deferred" comment (folds into OPP-24) and
-  optionally widening the static verb set. *Trade-off:* mostly a relabel; the interprocedural tail stays a
-  runtime-DiD proxy backstop.
+      already ships) · lev 3 · S · non-breaking. The directly-reachable read-loader no-write gate already ships
+      and is tested; the honest remaining work is correcting the "still deferred" comment (folds into OPP-24) and
+      optionally widening the static verb set. _Trade-off:_ mostly a relabel; the interprocedural tail stays a
+      runtime-DiD proxy backstop.
 
 ### Research / defer
 
 - [ ] **OPP-28 — Authorization-gates-DATA (guard-principal == WHERE-predicate).** by-construction aspiration ·
-  XL · high false-positive *(main-thread tier; verdict agent hit the limit)*. The deferred IDOR-completeness
-  dream: prove the guard's principal symbol equals the symbol scoping the returned rows' WHERE predicate. The
-  now-present `CallExpression` interprocedural branch makes a narrow, fail-closed read-path subset newly
-  feasible. *Trade-off:* the highest-value access-control deepening, but XL and FP-prone — scope to a narrow
-  directly-reachable subset first, keep KV414 as the shipped floor. **Research spike before committing.**
+      XL · high false-positive _(main-thread tier; verdict agent hit the limit)_. The deferred IDOR-completeness
+      dream: prove the guard's principal symbol equals the symbol scoping the returned rows' WHERE predicate. The
+      now-present `CallExpression` interprocedural branch makes a narrow, fail-closed read-path subset newly
+      feasible. _Trade-off:_ the highest-value access-control deepening, but XL and FP-prone — scope to a narrow
+      directly-reachable subset first, keep KV414 as the shipped floor. **Research spike before committing.**
 
 ---
 
@@ -303,7 +303,7 @@ This is where Kovo's secure-default bias (technical-preview: prefer security-imp
 
 The general form of Kovo's existing Trusted-Types / SQL-witness / capability-URL controls: a dangerous
 sink accepts **only** an unforgeable blessed value whose **only** constructor is the framework's
-validated/escaped path (a *constructor monopoly*). One kernel, parameterized by sink — not N bespoke
+validated/escaped path (a _constructor monopoly_). One kernel, parameterized by sink — not N bespoke
 wrappers. This generalizes the already-shipped SQL `Symbol`-witness (`core/internal/sql-safety.ts`) and
 makes Trusted Types its browser-enforced special case.
 
@@ -317,7 +317,7 @@ makes Trusted Types its browser-enforced special case.
   boxed carrier (the `Object.defineProperty(..., {enumerable:false})` trick `stamp()` already uses). Witnesses
   use `Symbol()` **not** `Symbol.for()` so app/attacker code can't reconstruct them.
 - **Constructor monopoly:** the only functions that call `bless(sink, value)` live inside the owning module
-  and *are* the validators/escapers (`root.resolve` → SafePath, no-shell `cmd()` → ShellArgv, `sanitizeNext`
+  and _are_ the validators/escapers (`root.resolve` → SafePath, no-shell `cmd()` → ShellArgv, `sanitizeNext`
   → RedirectTarget). There is deliberately **no** generic public `bless`/`trust` (the egress.ts "no generic
   `withMetadataAccess`" discipline). Audited escapes (`trustedSql`, `unsafeRegex`) mint the same brand **and**
   record a KV426 provenance fact surfaced in `kovo explain`.
@@ -338,7 +338,7 @@ catches `any`/cast/missing-tsc) → **(c) by-construction** (AST proof). A sink 
 BOTH**: **(i)** the framework **owns the sink call-site** (framework-authored/emitted IR, or every app path
 is forced through a framework chokepoint the AST can pin), **AND (ii)** the value-path stays in the **sound
 subset**. If (i) fails (the dangerous call is a third-party API — `pgDriver.query`, `child_process.exec`,
-`fs.readFile`, `new RegExp`, `eval`), the honest ceiling is **type-only + lint** (+ a runtime floor *only* if
+`fs.readFile`, `new RegExp`, `eval`), the honest ceiling is **type-only + lint** (+ a runtime floor _only_ if
 Kovo interposes a wrapper). If (i) holds but (ii) fails on a path (a cast launders the brand), that call
 degrades to the (b) floor and the laundering site is reported (**KV440**) — never silent.
 
@@ -349,19 +349,19 @@ degrades to the (b) floor and the laundering site is reported (**KV440**) — ne
 
 ### 3.3 Ranked brand candidates
 
-| ID | Brand · sink | Honest tier | Lev | Effort | Recommendation |
-| --- | --- | --- | --- | --- | --- |
-| **SINK-01** | `SqlText`/`SqlIdentifier`/`SqlKeyword` · managed DB handle (CWE-89) | **by-construction** at the managed sink (string/template SQL); floor for object-shaped & identifier channels | 9 | S | **build** — fold ident/keyword into the kernel; **kill the `KOVO_SQL_GUARD` warn/off knob; flip native-object fall-through from default-allow to default-deny** |
-| **SINK-03** | `SafePath` · rooted file serve (CWE-22) | **by-construction** for storage-key surface; floor at `root.resolve` (realpath containment); type-only+KV424 at raw `fs.*` | 7 | M | build-as-floor — ship `root.resolve` cap-handle + witness; `respond.file` already owns disposition |
-| **SINK-05** | `RedirectTarget` (client) · `Kovo-Reauth` nav | runtime-DiD floor (sanitize-on-navigate) | 8 | S | build — **drop the brand object**, keep a `sanitizeReauth` call chokepoint (= OPP-17; live hole) |
-| **SINK-02** | `Command`/`ShellProgram` · `child_process` (CWE-78) | runtime-DiD floor at `cmd()` + type-only sig + KV424 at raw sinks | 6 | M | build-as-floor — `cmd(program, argv[])` execFile, no shell; **not** by-construction (`node:child_process` is an unpinnable peer import) |
-| **SINK-04** | `RedirectTarget` (server) · Location header (CWE-601) | runtime-DiD floor (`sanitizeNext` re-validate) + type-only route surface | 5 | S | build-as-floor — add a runtime witness; `isRedirect()` currently accepts any `{status:303, location:string}` plain object (forgeable) |
-| **SINK-06** | `LinearSafePattern` · RegExp-from-input (CWE-1333) | **split:** blessed formats = by-construction; `pattern(literal)` "floor" is **FALSE**; `new RegExp(input)` = type-only+lint | 4 | M (RE2) | build-as-floor — **honesty-critical: the 4096-char length cap is NOT a CPU bound** (`/^(a\|a)*$/` burns 33s at 31 chars and passes today). Ship RE2-class linear engine or relabel `pattern()` as unsafe |
-| **SINK-09** | `MongoFilter` · NoSQL operator injection (CWE-943) | scalar-coercion half by-construction (declared fields); filter-build half floor + type-only at unowned driver | 3 | M | build-as-floor — needs a managed Mongo handle to own the sink (none today) |
-| **SINK-11** | (channel, no brand) · log forging (CWE-117) | runtime-DiD floor at the framework logger only | 3 | S | build-as-floor — structured logger neutralizes CR/LF/control/ANSI on emit (**KV439**); `console.log` stays unowned |
-| **SINK-10** | `EmailHeader` · SMTP header injection (CWE-93) | runtime-DiD floor (CRLF reject) — contingent on a mail primitive | 3 | M | **defer** — no owned mail sink today; KV424 registry covers it for now |
-| **SINK-08** | `ParsedShape` · deserialization (CWE-502) | wire already by-construction via the JSON-only parser monopoly; brand buys nothing | 3 | S | **type-only-lint** — add KV424 for unowned app deserializers; drop the brand (folds into OPP-19) |
-| **SINK-07** | (none) · `eval`/`Function`/`vm` (CWE-95) | audit-only — KV424 **hard ban** | 4 | S | **defer/no-brand** — there is no safe value to bless; "blessed arbitrary code" is a contradiction (CSP/TT refuse it too) |
+| ID          | Brand · sink                                                        | Honest tier                                                                                                                 | Lev | Effort  | Recommendation                                                                                                                                                                                           |
+| ----------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SINK-01** | `SqlText`/`SqlIdentifier`/`SqlKeyword` · managed DB handle (CWE-89) | **by-construction** at the managed sink (string/template SQL); floor for object-shaped & identifier channels                | 9   | S       | **build** — fold ident/keyword into the kernel; **kill the `KOVO_SQL_GUARD` warn/off knob; flip native-object fall-through from default-allow to default-deny**                                          |
+| **SINK-03** | `SafePath` · rooted file serve (CWE-22)                             | **by-construction** for storage-key surface; floor at `root.resolve` (realpath containment); type-only+KV424 at raw `fs.*`  | 7   | M       | build-as-floor — ship `root.resolve` cap-handle + witness; `respond.file` already owns disposition                                                                                                       |
+| **SINK-05** | `RedirectTarget` (client) · `Kovo-Reauth` nav                       | runtime-DiD floor (sanitize-on-navigate)                                                                                    | 8   | S       | build — **drop the brand object**, keep a `sanitizeReauth` call chokepoint (= OPP-17; live hole)                                                                                                         |
+| **SINK-02** | `Command`/`ShellProgram` · `child_process` (CWE-78)                 | runtime-DiD floor at `cmd()` + type-only sig + KV424 at raw sinks                                                           | 6   | M       | build-as-floor — `cmd(program, argv[])` execFile, no shell; **not** by-construction (`node:child_process` is an unpinnable peer import)                                                                  |
+| **SINK-04** | `RedirectTarget` (server) · Location header (CWE-601)               | runtime-DiD floor (`sanitizeNext` re-validate) + type-only route surface                                                    | 5   | S       | build-as-floor — add a runtime witness; `isRedirect()` currently accepts any `{status:303, location:string}` plain object (forgeable)                                                                    |
+| **SINK-06** | `LinearSafePattern` · RegExp-from-input (CWE-1333)                  | **split:** blessed formats = by-construction; `pattern(literal)` "floor" is **FALSE**; `new RegExp(input)` = type-only+lint | 4   | M (RE2) | build-as-floor — **honesty-critical: the 4096-char length cap is NOT a CPU bound** (`/^(a\|a)*$/` burns 33s at 31 chars and passes today). Ship RE2-class linear engine or relabel `pattern()` as unsafe |
+| **SINK-09** | `MongoFilter` · NoSQL operator injection (CWE-943)                  | scalar-coercion half by-construction (declared fields); filter-build half floor + type-only at unowned driver               | 3   | M       | build-as-floor — needs a managed Mongo handle to own the sink (none today)                                                                                                                               |
+| **SINK-11** | (channel, no brand) · log forging (CWE-117)                         | runtime-DiD floor at the framework logger only                                                                              | 3   | S       | build-as-floor — structured logger neutralizes CR/LF/control/ANSI on emit (**KV439**); `console.log` stays unowned                                                                                       |
+| **SINK-10** | `EmailHeader` · SMTP header injection (CWE-93)                      | runtime-DiD floor (CRLF reject) — contingent on a mail primitive                                                            | 3   | M       | **defer** — no owned mail sink today; KV424 registry covers it for now                                                                                                                                   |
+| **SINK-08** | `ParsedShape` · deserialization (CWE-502)                           | wire already by-construction via the JSON-only parser monopoly; brand buys nothing                                          | 3   | S       | **type-only-lint** — add KV424 for unowned app deserializers; drop the brand (folds into OPP-19)                                                                                                         |
+| **SINK-07** | (none) · `eval`/`Function`/`vm` (CWE-95)                            | audit-only — KV424 **hard ban**                                                                                             | 4   | S       | **defer/no-brand** — there is no safe value to bless; "blessed arbitrary code" is a contradiction (CSP/TT refuse it too)                                                                                 |
 
 ### 3.4 New diagnostics (KV439–442)
 
