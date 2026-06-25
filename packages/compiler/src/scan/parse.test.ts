@@ -571,6 +571,29 @@ export const ProductList = component({
     expect(forms.map((form) => form.repeatable)).toEqual([false, true]);
   });
 
+  it('marks JSX elements inside statically recognizable repeat callbacks as repeatable', () => {
+    const source = `
+export const ProductList = component({
+  render: ({ products }) => (
+    <section>
+      {products.featured.flatMap((item) => <article>{item.name}</article>)}
+      {Array.from(products.items, function itemCard(item) {
+        return <form enhance mutation={save}><input name="id" value={item.id} /></form>;
+      })}
+    </section>
+  ),
+});
+`;
+    const elements = jsxElements(parseComponentModule('product-list.tsx', source));
+    const article = elements.find((element) => element.tag === 'article');
+    const form = elements.find((element) => element.tag === 'form');
+    const input = elements.find((element) => element.tag === 'input');
+
+    expect(article?.repeatable).toBe(true);
+    expect(form?.repeatable).toBe(true);
+    expect(input?.repeatable).toBe(true);
+  });
+
   it('records JSX spread call facts for model-driven diagnostics', () => {
     const source = `
 export const ProductList = component({

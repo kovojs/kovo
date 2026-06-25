@@ -1274,7 +1274,7 @@ function jsxElementModel(
     openingEnd: openingElement.getEnd(),
     openingTagNameEnd: openingElement.tagName.getEnd(),
     openingTagNameStart: openingElement.tagName.getStart(sourceFile),
-    repeatable: isInsideArrayMapCallback(node),
+    repeatable: isInsideStaticRepeatCallback(node),
     selfClosing,
     selfClosingSlashHasLeadingWhitespace: selfClosingSlashHasLeadingWhitespace(
       source,
@@ -1455,16 +1455,14 @@ function jsxAncestorTags(sourceFile: ts.SourceFile, node: ts.Node): string[] {
   return tags;
 }
 
-function isInsideArrayMapCallback(node: ts.Node): boolean {
+function isInsideStaticRepeatCallback(node: ts.Node): boolean {
   let current = node.parent;
 
   while (current) {
     if (
       (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
       ts.isCallExpression(current.parent) &&
-      current.parent.arguments[0] === current &&
-      ts.isPropertyAccessExpression(current.parent.expression) &&
-      current.parent.expression.name.text === 'map'
+      isStaticRepeatCallback(current.parent, current)
     ) {
       return true;
     }
@@ -1472,6 +1470,22 @@ function isInsideArrayMapCallback(node: ts.Node): boolean {
   }
 
   return false;
+}
+
+function isStaticRepeatCallback(call: ts.CallExpression, callback: ts.Expression): boolean {
+  if (call.arguments[0] === callback && ts.isPropertyAccessExpression(call.expression)) {
+    return call.expression.name.text === 'map' || call.expression.name.text === 'flatMap';
+  }
+
+  if (call.arguments[1] !== callback || !ts.isPropertyAccessExpression(call.expression)) {
+    return false;
+  }
+
+  return (
+    call.expression.name.text === 'from' &&
+    ts.isIdentifier(call.expression.expression) &&
+    call.expression.expression.text === 'Array'
+  );
 }
 
 function staticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {
