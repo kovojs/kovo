@@ -38,7 +38,7 @@ export type AppRequest = {
 export class FakeBetterAuth implements BetterAuthLike<AuthSession, AuthUser> {
   // Set to a raw Set-Cookie string to simulate a rolling-session / cookie-cache refresh
   // header that Better Auth writes on `updateAge`/`cookieCache`.
-  refreshSetCookie: string | undefined;
+  refreshSetCookie: readonly string[] | string | undefined;
 
   readonly api = {
     getSession: (options: { headers: Headers; returnHeaders: true }) => {
@@ -61,7 +61,11 @@ export class FakeBetterAuth implements BetterAuthLike<AuthSession, AuthUser> {
 
       const headers = new Headers();
       if (this.refreshSetCookie !== undefined) {
-        headers.append('set-cookie', this.refreshSetCookie);
+        for (const cookie of Array.isArray(this.refreshSetCookie)
+          ? this.refreshSetCookie
+          : [this.refreshSetCookie]) {
+          headers.append('set-cookie', cookie);
+        }
       }
       return { headers, response };
     },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSigningKeyRing } from './keyring.js';
+import { HMAC_SHA256_SIGNING_KEY_TYPE, createSigningKeyRing } from './keyring.js';
 
 describe('SigningKeyRing', () => {
   it('signs with the single active key and verifies with previous non-revoked keys', () => {
@@ -34,6 +34,47 @@ describe('SigningKeyRing', () => {
         signature: old.signature,
       }),
     ).toEqual({ ok: true, keyId: 'old' });
+    expect(rotated.keyType).toBe(HMAC_SHA256_SIGNING_KEY_TYPE);
+  });
+
+  it('pins verification to the configured key type and rejects non-HMAC key records', () => {
+    expect(() =>
+      createSigningKeyRing({
+        keys: [
+          {
+            id: 'public',
+            secret: 'public-key-material',
+            state: 'active',
+            type: 'rsa-public' as never,
+          },
+        ],
+      }),
+    ).toThrow(/unsupported key type/);
+
+    const keyRing = createSigningKeyRing({
+      keys: [
+        {
+          id: 'current',
+          secret: 'hmac-signing-secret',
+          state: 'active',
+          type: HMAC_SHA256_SIGNING_KEY_TYPE,
+        },
+      ],
+    });
+
+    const signature = keyRing.sign({
+      audience: 'storage-download:/files',
+      payload: 'payload',
+      purpose: 'capability-url',
+    });
+    expect(
+      keyRing.verify({
+        audience: 'storage-download:/files',
+        payload: 'payload',
+        purpose: 'capability-url',
+        signature: signature.signature,
+      }),
+    ).toEqual({ ok: true, keyId: 'current' });
   });
 
   it('rejects revoked-key signatures without accepting them as ordinary rotation', () => {
