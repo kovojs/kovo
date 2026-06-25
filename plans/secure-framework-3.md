@@ -214,7 +214,7 @@ packages/server/src/egress-undici.test.ts` proves worker/child omission diagnost
     proves KV229 rejection for symlinked output roots/parents and parent swaps, safe replacement of a
     symlinked file target, and stale-route pruning that does not follow symlinked directories.
 
-- [ ] **Add a publish tarball content security gate.**
+- [x] **Add a publish tarball content security gate.**
   - Evidence: `scripts/build-publish.mjs` builds every public package and verifies `publishConfig`
     targets exist (`scripts/build-publish.mjs:199`), but it does not inspect the final `pnpm pack`
     file list or payload contents. Package `files` entries limit tarballs to `dist`, while the root
@@ -225,6 +225,12 @@ packages/server/src/egress-undici.test.ts` proves worker/child omission diagnost
   - Acceptance: gate snapshots each public tarball's files, proves every exported target exists in the
     tarball, and includes negative fixtures for leaked `.env`, absolute local paths, and high-entropy
     secret-like strings.
+  - Verified 2026-06-25: `scripts/check-pack-security.mjs` packs each public package, validates
+    publish targets and manifest export/bin targets, rejects source/test/env payloads, absolute
+    sourcemap paths, oversized files, and secret-like text, and compares the reviewed
+    `scripts/pack-security.files.json` snapshot. `pnpm exec vitest run
+scripts/check-pack-security.test.mjs` proves negative cases; `pnpm run check:pack-security`
+    proves the regenerated integrated snapshot is stable.
 
 - [ ] **Normalize static-export asset/header policy through a shared header sink.**
   - Evidence: static asset headers are converted with `new Headers(asset.headers)` and sorted in

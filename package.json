@@ -17,6 +17,7 @@
     "check:build": "pnpm run check:inline-loader && vp run build",
     "check:exports": "node scripts/exported-symbols.mjs --duplicates --check",
     "check:imports": "node scripts/import-boundary.mjs",
+    "check:pack-security": "node scripts/check-pack-security.mjs",
     "check:publish": "node scripts/build-publish.mjs",
     "check:supply-chain": "node scripts/supply-chain-gates.mjs",
     "check:kovo": "vp run kovo-check",
