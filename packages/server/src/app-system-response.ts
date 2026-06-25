@@ -1,11 +1,16 @@
 import { mergeVaryHeader } from './document-core.js';
+import {
+  blessRedirectResponse,
+  isBlessedRedirectResponse,
+  redirectLocationHeaderValue,
+} from './response.js';
 import type { ResponseHeaders, ResponseHeaderValue } from './response.js';
 
 export type AppSystemResponseSurface = 'mutation' | 'query' | 'other';
 
 interface AppSystemResponseInit {
   buildToken?: string | undefined;
-  headers?: HeadersInit | undefined;
+  headers?: HeadersInit | ResponseHeaders | undefined;
   status: number;
   surface: AppSystemResponseSurface;
 }
@@ -18,24 +23,36 @@ interface AppSystemResponseInit {
  * @internal
  */
 export function appSystemResponse(body: BodyInit | null, init: AppSystemResponseInit): Response {
-  return new Response(body, {
+  const response = {
+    body,
     headers: appSystemResponseHeaders(init.headers, {
       buildToken: init.buildToken,
       hasBody: body !== null,
       surface: init.surface,
     }),
     status: init.status,
+  };
+  if (response.status >= 300 && response.status < 400 && readHeader(response.headers, 'Location')) {
+    blessRedirectResponse(response);
+  }
+  return new Response(body, {
+    headers: recordToHeaders(
+      response.headers,
+      response.status,
+      isBlessedRedirectResponse(response),
+    ),
+    status: init.status,
   });
 }
 
 function appSystemResponseHeaders(
-  initHeaders: HeadersInit | undefined,
+  initHeaders: HeadersInit | ResponseHeaders | undefined,
   options: {
     buildToken?: string | undefined;
     hasBody: boolean;
     surface: AppSystemResponseSurface;
   },
-): Headers {
+): ResponseHeaders {
   let headers = headersInitToRecord(initHeaders);
 
   if (options.surface === 'mutation' || options.surface === 'query') {
@@ -48,10 +65,14 @@ function appSystemResponseHeaders(
     setHeader(headers, 'X-Content-Type-Options', 'nosniff');
   }
 
-  return recordToHeaders(headers);
+  return headers;
 }
 
-function headersInitToRecord(initHeaders: HeadersInit | undefined): ResponseHeaders {
+function headersInitToRecord(
+  initHeaders: HeadersInit | ResponseHeaders | undefined,
+): ResponseHeaders {
+  if (isHeaderRecord(initHeaders)) return { ...initHeaders };
+
   const headers = new Headers(initHeaders);
   const record: ResponseHeaders = {};
   headers.forEach((value, name) => {
@@ -60,9 +81,18 @@ function headersInitToRecord(initHeaders: HeadersInit | undefined): ResponseHead
   return record;
 }
 
-function recordToHeaders(headers: ResponseHeaders): Headers {
+function recordToHeaders(
+  headers: ResponseHeaders,
+  status: number,
+  blessedRedirect: boolean,
+): Headers {
   const result = new Headers();
   for (const [name, value] of Object.entries(headers)) {
+    if (status >= 300 && status < 400 && name.toLowerCase() === 'location') {
+      result.set(name, redirectLocationHeaderValue(value, blessedRedirect));
+      continue;
+    }
+
     if (Array.isArray(value)) {
       for (const entry of value) result.append(name, entry);
     } else {
@@ -70,6 +100,18 @@ function recordToHeaders(headers: ResponseHeaders): Headers {
     }
   }
   return result;
+}
+
+function isHeaderRecord(
+  value: HeadersInit | ResponseHeaders | undefined,
+): value is ResponseHeaders {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !(value instanceof Headers) &&
+    !Array.isArray(value) &&
+    typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] !== 'function'
+  );
 }
 
 function setHeader(headers: ResponseHeaders, name: string, value: ResponseHeaderValue): void {

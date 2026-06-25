@@ -12,7 +12,6 @@ import {
   guardFailureIsUnauthenticated,
   resolveLifecycleRequest,
   runGuard,
-  sanitizeNext,
   type RequestLifecycleOptions,
   type ResolvedGuardFailure,
 } from './guards.js';
@@ -24,6 +23,8 @@ import type { RegisteredQueryDefinition } from './query.js';
 import type { JsonSerializable } from './json-boundary.js';
 import {
   appendResponseHeader,
+  blessRedirectResponse,
+  redirectLocationHeader,
   retryAfterHeaders,
   type MutationResponseHeaders,
 } from './response.js';
@@ -874,17 +875,19 @@ export async function renderNoJsMutationResponse<
       };
     }
 
-    const successResponse: NoJsMutationResponse = {
+    const successResponse: NoJsMutationResponse = blessRedirectResponse({
       body: '',
       headers: mergeMutationResponseHeaders(
         {
           'Cache-Control': 'no-store',
-          Location: mutationRedirectLocation(noJsRequest.redirectTo, result),
+          Location: redirectLocationHeader(
+            mutationRedirectLocation(noJsRequest.redirectTo, result),
+          ),
         },
         result.responseHeaders,
       ),
       status: 303,
-    };
+    });
     reservation?.commit(successResponse);
     return successResponse;
   }
@@ -922,17 +925,17 @@ export async function renderNoJsMutationResponse<
     };
   }
 
-  return {
+  return blessRedirectResponse({
     body: '',
     headers: mergeMutationResponseHeaders(
       {
         'Cache-Control': 'no-store',
-        Location: mutationRedirectLocation(noJsRequest.redirectTo, result),
+        Location: redirectLocationHeader(mutationRedirectLocation(noJsRequest.redirectTo, result)),
       },
       result.responseHeaders,
     ),
-    status: 303,
-  };
+    status: 303 as const,
+  });
 }
 
 /**
@@ -985,7 +988,7 @@ function mutationRedirectLocation<Value>(
   redirectTo: string | ((result: MutationSuccess<Value>) => string),
   result: MutationSuccess<Value>,
 ): string {
-  return sanitizeNext(typeof redirectTo === 'function' ? redirectTo(result) : redirectTo, []);
+  return redirectLocationHeader(typeof redirectTo === 'function' ? redirectTo(result) : redirectTo);
 }
 
 function noJsMutationServerErrorResponse(): NoJsMutationResponse {
@@ -1272,14 +1275,14 @@ function noJsMutationReauthResponse<Request>(
 ): NoJsMutationResponse | undefined {
   if (!guardFailureIsUnauthenticated(guardFailure, request)) return undefined;
 
-  return {
+  return blessRedirectResponse({
     body: '',
     headers: {
       'Cache-Control': 'no-store',
-      Location: loginLocation(options.currentUrl ?? '/'),
+      Location: redirectLocationHeader(loginLocation(options.currentUrl ?? '/')),
     },
-    status: 303,
-  };
+    status: 303 as const,
+  });
 }
 
 function mutationGuardFailureStatus(guardFailure: ResolvedGuardFailure): 403 | 422 | 429 {

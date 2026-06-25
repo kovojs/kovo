@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
+import { setRuntimeSinkSecurityEventHandler } from '@kovojs/core/internal/sink-policy';
 
 import {
+  blessRedirectResponse,
   isHeaderSource,
   readHeader,
+  redirectLocationHeader,
   respond,
   routeOutcomeResponse,
   routeResponseToDocumentResponse,
@@ -92,6 +95,66 @@ describe('server response adapters', () => {
     expect(response.status).toBe(304);
     expect(response.headers.get('etag')).toBe('"orders-v1"');
     await expect(response.text()).resolves.toBe('');
+  });
+
+  it('allows blessed same-origin redirect Location headers at the web response boundary', () => {
+    const response = serverResponseToWebResponse(
+      blessRedirectResponse({
+        body: '',
+        headers: { Location: redirectLocationHeader('/account?tab=orders#paid') },
+        status: 303,
+      }),
+      { method: 'GET' },
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/account?tab=orders#paid');
+  });
+
+  it('neutralizes unsafe blessed redirect Location targets before the web boundary', () => {
+    for (const target of [
+      'https://evil.example/phish',
+      '//evil.example/phish',
+      '/\\evil.example/phish',
+      '/account\nSet-Cookie:owned=true',
+    ]) {
+      const response = serverResponseToWebResponse(
+        blessRedirectResponse({
+          body: '',
+          headers: { Location: redirectLocationHeader(target) },
+          status: 303,
+        }),
+        { method: 'GET' },
+      );
+
+      expect(response.headers.get('location')).toBe('/');
+    }
+  });
+
+  it('fails closed for unblessed redirect Location headers at the web response boundary', () => {
+    const events: unknown[] = [];
+    const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
+    try {
+      const response = serverResponseToWebResponse(
+        {
+          body: '',
+          headers: { Location: '/admin' },
+          status: 303,
+        },
+        { method: 'GET' },
+      );
+
+      expect(response.headers.get('location')).toBe('/');
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        action: 'neutralize',
+        code: 'KV236',
+        family: 'header',
+        sink: 'Location',
+      });
+    } finally {
+      restore();
+    }
   });
 
   it('normalizes ArrayBuffer bodies before document wrapping', () => {
