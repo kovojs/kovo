@@ -641,7 +641,10 @@ function isPostParseGuardedFile(path: string): boolean {
     path === 'packages/compiler/src/app-graph.ts' ||
     path === 'packages/compiler/src/compile.ts' ||
     path === 'packages/compiler/src/graph.ts' ||
-    /^packages\/compiler\/src\/(lower|validate|analyze|emit)\//.test(path)
+    // `security/` is a post-parse decision surface (output-context KV236 classification) and must be
+    // policed by the same hard-rule #9 guard; its prior exclusion let the KV236 trusted-brand gate
+    // make a `/^trustedHtml\(/` raw-source-text decision (F1, plans/compiler-soundness.md).
+    /^packages\/compiler\/src\/(lower|validate|analyze|emit|security)\//.test(path)
   );
 }
 

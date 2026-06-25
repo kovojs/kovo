@@ -2,7 +2,11 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
-import { isUrlAttribute, type GeneratedOutputWriteFact } from '../output-context-facts.js';
+import {
+  isUrlAttribute,
+  trustedHtmlBrandLocalNames,
+  type GeneratedOutputWriteFact,
+} from '../output-context-facts.js';
 import { literalStringValue } from '../scan/object.js';
 import {
   jsxElements,
@@ -35,9 +39,11 @@ export function validateOutputContexts(
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
 
+  const trustedBrandNames = trustedHtmlBrandLocalNames(model);
+
   for (const element of jsxElements(model)) {
     found.push(...validateElementAttributes(diagnostics, element, compilerOwnedStyleSpans));
-    found.push(...validateRawtextElementText(diagnostics, model, element));
+    found.push(...validateRawtextElementText(diagnostics, model, element, trustedBrandNames));
   }
 
   found.push(...validateComponentCssText(diagnostics, model));
@@ -57,12 +63,13 @@ function validateRawtextElementText(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   element: JsxElementModel,
+  trustedBrandNames: ReadonlySet<string>,
 ): CompilerDiagnostic[] {
   if (element.tag !== 'script' && element.tag !== 'style') return [];
 
   const found: CompilerDiagnostic[] = [];
   for (const child of directChildExpressions(model, element)) {
-    if (!isDynamicExpression(child) || isTrustedHtmlExpression(child)) continue;
+    if (!isDynamicExpression(child) || isTrustedBrandCall(child, trustedBrandNames)) continue;
     found.push(
       outputContextDiagnostic(diagnostics, `dynamic <${element.tag}> element text`, {
         start: child.containerStart,
@@ -96,9 +103,25 @@ function isDynamicExpression(expression: JsxExpressionModel): boolean {
   return expression.references.length > 0 || expression.propertyAccesses.length > 0;
 }
 
-/** SPEC §4.8 escape hatch: a `trustedHtml(...)` brand is the only suppression of KV236. */
-function isTrustedHtmlExpression(expression: JsxExpressionModel): boolean {
-  return /^trustedHtml\s*\(/.test(expression.expression.trim());
+/**
+ * SPEC §4.8 escape hatch: a `trustedHtml(...)`/`safeRichHtml(...)` brand is the only suppression of
+ * KV236 in a rawtext context. SPEC §6.6(1) / §5.2 rule 9 require this be decided by AST
+ * symbol-identity (typed facts), never by the raw expression text. The suppression therefore holds
+ * ONLY when the whole expression is EXACTLY a single call (`expression.callName`, set by the parser
+ * only for an un-decorated `name(...)` after unwrapping parens/casts) to a name bound to the real
+ * `@kovojs/browser` brand export. Consequences, all fail-closed:
+ *   - a binary/concatenated expression (`trustedHtml("x") + user.code`) has `callName === undefined`,
+ *     so the attacker-influenced operand can no longer ride a prefix `trustedHtml(` match into the sink;
+ *   - a shadowing local `const trustedHtml = …` or a same-named import from a non-Kovo module is
+ *     absent from `trustedBrandNames`, so it cannot vouch for the value;
+ *   - a method/optional-chain/await wrapper (`trustedHtml(x).slice(1)`, `trustedHtml(x) ?? y`) is not
+ *     a bare call, so `callName` is undefined and KV236 fires.
+ */
+function isTrustedBrandCall(
+  expression: JsxExpressionModel,
+  trustedBrandNames: ReadonlySet<string>,
+): boolean {
+  return expression.callName !== undefined && trustedBrandNames.has(expression.callName);
 }
 
 export function collectTrustedHtmlOutputContextFacts(
