@@ -40,6 +40,7 @@ import {
 } from './mutation-wire.js';
 import {
   commitReservedMutationReplay,
+  MutationReplayConflictError,
   mutationReplayContext,
   readMutationReplay,
   reserveMutationReplayBeforeRun,
@@ -337,10 +338,18 @@ export async function renderMutationResponse<
     ...wireRequest,
     mutationKey: definition.key,
   });
-  const replayed = await readMutationReplay(replay);
+  let replayed: BufferedMutationWireResponse | undefined;
+  try {
+    replayed = await readMutationReplay(replay);
+  } catch (error) {
+    if (error instanceof MutationReplayConflictError)
+      return renderReplayConflictFragment(wireRequest);
+    throw error;
+  }
   if (replayed) return replayed;
 
   const reservationResult = await reserveMutationReplayBeforeRun(replay);
+  if (reservationResult.kind === 'conflict') return renderReplayConflictFragment(wireRequest);
   if (reservationResult.kind === 'replayed') return reservationResult.response;
   if (reservationResult.kind === 'unavailable') return renderReplayUnavailableFragment(wireRequest);
   const reservation =
@@ -535,6 +544,19 @@ function mutationServerErrorResponse<Request>(
     body: renderMutationServerErrorFragment(wireRequest),
     headers: mutationWireResponseHeaders(wireRequest),
     status: 500,
+  };
+}
+
+function renderReplayConflictFragment<Request>(
+  wireRequest: MutationWireRequest<Request>,
+): BufferedMutationWireResponse {
+  return {
+    body: renderFragmentWireHtml({
+      html: '<output role="alert" data-error-code="IDEMPOTENCY_CONFLICT">Conflict</output>',
+      target: mutationFailureTarget(wireRequest),
+    }),
+    headers: mutationWireResponseHeaders(wireRequest),
+    status: 409,
   };
 }
 
@@ -1175,7 +1197,10 @@ function mutationWireResponseHeaders<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): Record<string, string> {
   return {
+    'Cache-Control': 'private, no-store',
     'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+    Vary: 'Cookie',
+    ...(wireRequest.buildToken ? { 'Kovo-Build': wireRequest.buildToken } : {}),
     ...(wireRequest.idem ? { 'Kovo-Idem': wireRequest.idem } : {}),
   };
 }
@@ -1192,7 +1217,7 @@ function enhancedMutationReauthResponse<Request>(
   return {
     body: '',
     headers: {
-      'Cache-Control': 'no-store',
+      ...mutationWireResponseHeaders({} as MutationWireRequest<Request>),
       'Kovo-Reauth': loginLocation(options.currentUrl ?? '/'),
     },
     status: 401,

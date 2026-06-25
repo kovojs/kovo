@@ -43,7 +43,7 @@ describe('loader enhanced mutation submits', () => {
     );
     const progressElement = new FakeElement({ 'kovo-upload-progress': '', max: '100', value: '0' });
     form.progressElements = [progressElement];
-    mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge' }];
+    mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge', token: 'tok_cart' }];
     mutationRoot.targets.set('cart-badge', new FakeMorphTarget());
     formData.set('productId', 'p1');
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
@@ -93,7 +93,7 @@ describe('loader enhanced mutation submits', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_loader',
-        'Kovo-Live-Targets': 'cart-badge#cart-badge:{}',
+        'Kovo-Live-Targets': 'cart-badge#cart-badge@tok_cart:{}',
         'Kovo-Targets': 'cart-badge=cart',
       },
       keepalive: true,

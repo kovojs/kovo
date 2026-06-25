@@ -134,6 +134,7 @@ export class InlineParityRoot {
     kovoC?: string;
     props?: string;
     target?: string;
+    token?: string;
   }[] = [];
 
   findFragmentTarget(): null {
@@ -150,6 +151,7 @@ export class InlineParityRoot {
         if (name === 'kovo-fragment-target') return dep.target ?? null;
         if (name === 'kovo-live-component') return dep.component ?? null;
         if (name === 'kovo-props') return dep.props ?? null;
+        if (name === 'kovo-live-token') return dep.token ?? null;
         if (name === 'kovo-deps') return dep.deps ?? null;
         if (name === 'kovo-c') return dep.kovoC ?? null;
         return null;

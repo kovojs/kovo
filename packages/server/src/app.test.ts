@@ -17,6 +17,16 @@ import { layout, route } from './route.js';
 import { s } from './schema.js';
 import { stylesheet } from './hints.js';
 import { renderedHtml } from './html.js';
+import { createLiveTargetAttestation } from './mutation-wire.js';
+
+function attestedLiveTargetHeader(
+  target: string,
+  component: string,
+  props: Record<string, unknown> = {},
+): string {
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+}
 
 const rawTextResponse = {
   appOwnedSafety: true,
@@ -829,7 +839,7 @@ describe('server createApp request shell', () => {
         body: form,
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart#components/cart/badge:{}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge')}`,
           'Kovo-Targets': 'cart=cart',
         },
         method: 'POST',
@@ -988,7 +998,7 @@ describe('server createApp request shell', () => {
         body: enhancedForm,
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart#components/cart/badge:{}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge')}`,
           'Kovo-Targets': 'cart=cart',
         },
         method: 'POST',
@@ -1057,7 +1067,7 @@ describe('server createApp request shell', () => {
         body: form,
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{"cartId":"c1"}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-panel', 'components/cart/panel', { cartId: 'c1' })}`,
           'Kovo-Targets': 'cart-panel=cart',
         },
         method: 'POST',

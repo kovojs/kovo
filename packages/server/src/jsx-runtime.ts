@@ -26,6 +26,7 @@ import {
   unwrapCoercedRenderedHtml,
 } from './html.js';
 import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
+import { createLiveTargetAttestation } from './mutation-wire.js';
 import { runQuery, type QueryDefinition } from './query.js';
 import { renderServerRenderable } from './renderable.js';
 
@@ -551,6 +552,18 @@ function stampKovoComponentRoot(
   );
   attrs = setOrAppendAttribute(attrs, 'kovo-fragment-target', metadata.target);
   attrs = setOrAppendAttribute(attrs, 'kovo-live-component', metadata.componentName);
+  const context = currentJsxFrameworkContext();
+  attrs = setOrAppendAttribute(
+    attrs,
+    'kovo-live-token',
+    createLiveTargetAttestation(
+      { component: metadata.componentName, props: metadata.props ?? {}, target: metadata.target },
+      {
+        ...(context?.csrf === undefined ? {} : { csrf: context.csrf }),
+        request: context?.request,
+      },
+    ),
+  );
   if (metadata.props !== undefined) {
     attrs = setOrAppendAttribute(attrs, 'kovo-props', JSON.stringify(metadata.props));
   }

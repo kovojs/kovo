@@ -125,6 +125,25 @@ describe('query endpoints', () => {
     });
   });
 
+  it('stamps unknown query 404s with private cache and build headers', async () => {
+    await expect(
+      renderQueryRegistryEndpointResponse({ queries: [] }, 'missing', {
+        buildToken: 'build-q',
+        request: {},
+        search: new URLSearchParams(),
+      }),
+    ).resolves.toEqual({
+      body: 'Not Found',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Kovo-Build': 'build-q',
+        Vary: 'Cookie',
+      },
+      status: 404,
+    });
+  });
+
   it('keeps parameterized query args parseable while supporting component prop bindings', () => {
     const productQuery = query('product', {
       args: s.object({ id: s.string() }),
@@ -277,7 +296,11 @@ describe('query endpoints', () => {
       }),
     ).resolves.toEqual({
       body: 'Not Found',
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 404,
     });
   });
