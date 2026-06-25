@@ -287,9 +287,12 @@ diagnostic in compiler/check gates that claim data-plane security.
     `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts` pass after
     `LOWERING_PASSES` declared required/provided products and `runLoweringPipeline` removed its
     non-null assertions.
-- [ ] Introduce a phase-owned source replacement accumulator that records writer, phase, original
+- [x] Introduce a phase-owned source replacement accumulator that records writer, phase, original
       span, generated span, and conflict diagnostics.
-  - Evidence: `applySourceReplacements` throws generic span errors with no writer or phase context.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/compiler/src/compile-component.test.ts`
+    passes after `SourceReplacementAccumulator` records phase/writer original and generated spans,
+    the lowering pipeline adds replacements under pass-owned writers, and conflict errors carry the
+    conflicting phase/writer spans.
 - [x] Replace the manual validator array with typed validator registration by coordinate frame:
       original, lowered, mapped, or graph.
   - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/compile-component.test.ts`,

@@ -1,8 +1,13 @@
 import { navigationStandaloneHrefLowering } from './lower/navigation.js';
 import { lowerStructuralJsx } from './lower/structural-jsx.js';
-import { applyModelPatchPass, type ComponentPipelineState } from './model-pipeline.js';
+import { applyModelPatchPlanPass, type ComponentPipelineState } from './model-pipeline.js';
 import { parseComponentModule, type ComponentModuleModel } from './scan/parse.js';
-import { composeSourceOffsetMaps, type SourceOffsetMap, type SourceReplacement } from './shared.js';
+import {
+  composeSourceOffsetMaps,
+  SourceReplacementAccumulator,
+  type SourceOffsetMap,
+  type SourceReplacement,
+} from './shared.js';
 import { extractKovoStyles } from './style.js';
 import type { CompileComponentOptions } from './types.js';
 
@@ -24,7 +29,7 @@ interface LoweringPipelineContext {
   readonly componentName: string;
   readonly options: CompileComponentOptions;
   state: ComponentPipelineState<ComponentModuleModel>;
-  pending: SourceReplacement[];
+  pending: SourceReplacementAccumulator;
   readonly offsetMaps: SourceOffsetMap[];
   styleSpanProbe?: StyleExtraction;
   structuralLowering?: StructuralLowering;
@@ -47,10 +52,14 @@ interface LoweringPass {
 }
 
 function reparse(ctx: LoweringPipelineContext): void {
-  const patch = applyModelPatchPass(ctx.state, ctx.pending, parseComponentModule);
+  const patch = applyModelPatchPlanPass(
+    ctx.state,
+    ctx.pending.plan(ctx.state.source.length),
+    parseComponentModule,
+  );
   ctx.state = patch.state;
   ctx.offsetMaps.push(patch.sourceOffsetMap);
-  ctx.pending = [];
+  ctx.pending.clear();
 }
 
 /**
@@ -86,14 +95,18 @@ export const LOWERING_PASSES: readonly LoweringPass[] = [
         ...ctx.options,
         skipInlineAttributeDeriveSpans: styleSpanProbe.handledSpans,
       });
-      ctx.pending.push(...ctx.structuralLowering.replacements);
+      addPendingReplacements(ctx, 'structural-jsx', ctx.structuralLowering.replacements);
     },
   },
   {
     name: 'navigation-standalone-href',
     kind: 'lower',
     run(ctx) {
-      ctx.pending.push(...navigationStandaloneHrefLowering(ctx.state.model));
+      addPendingReplacements(
+        ctx,
+        'navigation-standalone-href',
+        navigationStandaloneHrefLowering(ctx.state.model),
+      );
     },
   },
   // Reparse boundary 1: structural + standalone-href patches applied to the original source.
@@ -117,7 +130,7 @@ export const LOWERING_PASSES: readonly LoweringPass[] = [
         ctx.componentName,
         ctx.options,
       );
-      ctx.pending.push(...ctx.styleExtraction.replacements);
+      addPendingReplacements(ctx, 'style-extraction', ctx.styleExtraction.replacements);
     },
   },
   // Reparse boundary 2: StyleX-extraction patches applied to the structurally-lowered source.
@@ -167,7 +180,7 @@ export function runLoweringPipeline(
     componentName,
     options,
     state: originalState,
-    pending: [],
+    pending: new SourceReplacementAccumulator(),
     offsetMaps: [],
   };
 
@@ -191,6 +204,14 @@ export function runLoweringPipeline(
     structuralLowering: requireStructuralLowering(ctx, 'final result'),
     styleExtraction: requireStyleExtraction(ctx, 'final result'),
   };
+}
+
+function addPendingReplacements(
+  ctx: LoweringPipelineContext,
+  writer: string,
+  replacements: readonly SourceReplacement[],
+): void {
+  ctx.pending.add({ phase: 'lowering', writer }, replacements);
 }
 
 function assertPassRequirements(

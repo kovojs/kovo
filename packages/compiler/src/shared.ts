@@ -108,6 +108,66 @@ export interface SourceReplacement {
   start: number;
 }
 
+export interface SourceReplacementOwner {
+  phase: string;
+  writer: string;
+}
+
+export interface SourceReplacementRecord extends SourceReplacementOwner {
+  generatedEnd: number;
+  generatedStart: number;
+  originalEnd: number;
+  originalStart: number;
+  replacement: string;
+}
+
+export interface SourceReplacementConflictDiagnostic extends SourceReplacementOwner {
+  conflicting?: SourceReplacementOwner & {
+    originalEnd: number;
+    originalStart: number;
+  };
+  generatedEnd?: number;
+  generatedStart?: number;
+  kind: 'invalid-span' | 'overlap';
+  message: string;
+  originalEnd: number;
+  originalStart: number;
+}
+
+interface SourceReplacementEntry extends SourceReplacementOwner, SourceReplacement {}
+
+export interface SourceReplacementPlan {
+  diagnostics: readonly SourceReplacementConflictDiagnostic[];
+  records: readonly SourceReplacementRecord[];
+  replacements: readonly SourceReplacement[];
+}
+
+export class SourceReplacementConflictError extends Error {
+  readonly diagnostics: readonly SourceReplacementConflictDiagnostic[];
+
+  constructor(diagnostics: readonly SourceReplacementConflictDiagnostic[]) {
+    super(sourceReplacementDiagnosticsMessage(diagnostics));
+    this.name = 'SourceReplacementConflictError';
+    this.diagnostics = diagnostics;
+  }
+}
+
+export class SourceReplacementAccumulator {
+  private readonly entries: SourceReplacementEntry[] = [];
+
+  add(owner: SourceReplacementOwner, replacements: readonly SourceReplacement[]): void {
+    for (const replacement of replacements) this.entries.push({ ...owner, ...replacement });
+  }
+
+  clear(): void {
+    this.entries.length = 0;
+  }
+
+  plan(originalLength: number, prefixLength = 0): SourceReplacementPlan {
+    return sourceReplacementPlan(originalLength, this.entries, prefixLength);
+  }
+}
+
 export interface SourceOffsetSegment {
   generatedStart: number;
   length: number;
@@ -290,6 +350,14 @@ export function applySourceReplacements(
   return output;
 }
 
+export function applySourceReplacementPlan(
+  source: string,
+  plan: SourceReplacementPlan,
+): string {
+  if (plan.diagnostics.length > 0) throw new SourceReplacementConflictError(plan.diagnostics);
+  return applySourceReplacements(source, plan.replacements);
+}
+
 export function applySourceReplacementsWithOffsetMap(
   source: string,
   replacements: readonly SourceReplacement[],
@@ -299,6 +367,103 @@ export function applySourceReplacementsWithOffsetMap(
     source: `${prefix}${applySourceReplacements(source, replacements)}`,
     sourceOffsetMap: sourceReplacementOffsetMap(source.length, replacements, prefix.length),
   };
+}
+
+export function applySourceReplacementPlanWithOffsetMap(
+  source: string,
+  plan: SourceReplacementPlan,
+  prefix = '',
+): SourcePatchWithOffsetMap {
+  if (plan.diagnostics.length > 0) throw new SourceReplacementConflictError(plan.diagnostics);
+  return {
+    source: `${prefix}${applySourceReplacements(source, plan.replacements)}`,
+    sourceOffsetMap: sourceReplacementOffsetMap(source.length, plan.replacements, prefix.length),
+  };
+}
+
+function sourceReplacementPlan(
+  originalLength: number,
+  replacements: readonly SourceReplacementEntry[],
+  prefixLength: number,
+): SourceReplacementPlan {
+  const diagnostics: SourceReplacementConflictDiagnostic[] = [];
+  const records: SourceReplacementRecord[] = [];
+  const sorted = [...replacements].sort((left, right) => left.start - right.start);
+  let generatedCursor = prefixLength;
+  let originalCursor = 0;
+  let previous: SourceReplacementRecord | undefined;
+
+  for (const replacement of sorted) {
+    const invalid =
+      replacement.start < 0 ||
+      replacement.end < replacement.start ||
+      replacement.end > originalLength;
+    if (invalid) {
+      diagnostics.push(sourceReplacementDiagnostic('invalid-span', replacement));
+      continue;
+    }
+
+    if (replacement.start < originalCursor) {
+      diagnostics.push(sourceReplacementDiagnostic('overlap', replacement, previous));
+      continue;
+    }
+
+    generatedCursor += replacement.start - originalCursor;
+    const record: SourceReplacementRecord = {
+      generatedEnd: generatedCursor + replacement.replacement.length,
+      generatedStart: generatedCursor,
+      originalEnd: replacement.end,
+      originalStart: replacement.start,
+      phase: replacement.phase,
+      replacement: replacement.replacement,
+      writer: replacement.writer,
+    };
+    records.push(record);
+    previous = record;
+    generatedCursor = record.generatedEnd;
+    originalCursor = replacement.end;
+  }
+
+  return {
+    diagnostics,
+    records,
+    replacements: sorted.map(({ end, replacement, start }) => ({ end, replacement, start })),
+  };
+}
+
+function sourceReplacementDiagnostic(
+  kind: SourceReplacementConflictDiagnostic['kind'],
+  replacement: SourceReplacementEntry,
+  conflicting?: SourceReplacementRecord,
+): SourceReplacementConflictDiagnostic {
+  const originalSpan = `${replacement.start}:${replacement.end}`;
+  const conflict = conflicting
+    ? ` conflicts with phase=${conflicting.phase} writer=${conflicting.writer} span=${conflicting.originalStart}:${conflicting.originalEnd}`
+    : '';
+  return {
+    ...(conflicting
+      ? {
+          conflicting: {
+            originalEnd: conflicting.originalEnd,
+            originalStart: conflicting.originalStart,
+            phase: conflicting.phase,
+            writer: conflicting.writer,
+          },
+        }
+      : {}),
+    kind,
+    message: `Source replacement ${kind} phase=${replacement.phase} writer=${replacement.writer} span=${originalSpan}${conflict}`,
+    originalEnd: replacement.end,
+    originalStart: replacement.start,
+    phase: replacement.phase,
+    writer: replacement.writer,
+  };
+}
+
+function sourceReplacementDiagnosticsMessage(
+  diagnostics: readonly SourceReplacementConflictDiagnostic[],
+): string {
+  return diagnostics.map((diagnostic) => diagnostic.message).join('\n');
 }
 
 export function splitDepValue(value: string): string[] {

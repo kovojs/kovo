@@ -248,7 +248,10 @@ export function compileComponentModule(rawOptions: CompileComponentOptions): Com
     appendLiveTargetRendererExports({
       componentExpression: componentName,
       liveTargetFacts,
-      source: applyTerminalEmitPatches(lowering.terminalState, serverRenderReplacements),
+      source: applyTerminalEmitPatches(lowering.terminalState, serverRenderReplacements, {
+        phase: 'server-emit',
+        writer: 'compileComponentModule',
+      }),
     }),
   );
   const serverModule = emitServerModule(serverRenderedSource);

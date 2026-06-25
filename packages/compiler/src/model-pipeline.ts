@@ -1,7 +1,10 @@
 import {
-  applySourceReplacements,
-  applySourceReplacementsWithOffsetMap,
+  applySourceReplacementPlan,
+  applySourceReplacementPlanWithOffsetMap,
+  SourceReplacementAccumulator,
   type SourceOffsetMap,
+  type SourceReplacementPlan,
+  type SourceReplacementOwner,
   type SourceReplacement,
 } from './shared.js';
 
@@ -17,6 +20,7 @@ interface ComponentPipelinePatchResult<Model> {
 }
 
 interface ComponentModelPatchOptions {
+  owner?: SourceReplacementOwner;
   prefix?: string;
 }
 
@@ -34,11 +38,23 @@ export function applyModelPatchPass<Model>(
   parse: (fileName: string, source: string) => Model,
   options: ComponentModelPatchOptions = {},
 ): ComponentPipelinePatchResult<Model> {
-  const patch = applySourceReplacementsWithOffsetMap(
-    previous.source,
-    replacements,
-    options.prefix ?? '',
+  const accumulator = new SourceReplacementAccumulator();
+  accumulator.add(options.owner ?? { phase: 'model-patch', writer: 'anonymous' }, replacements);
+  return applyModelPatchPlanPass(
+    previous,
+    accumulator.plan(previous.source.length, options.prefix?.length ?? 0),
+    parse,
+    options,
   );
+}
+
+export function applyModelPatchPlanPass<Model>(
+  previous: ComponentPipelineState<Model>,
+  plan: SourceReplacementPlan,
+  parse: (fileName: string, source: string) => Model,
+  options: Omit<ComponentModelPatchOptions, 'owner'> = {},
+): ComponentPipelinePatchResult<Model> {
+  const patch = applySourceReplacementPlanWithOffsetMap(previous.source, plan, options.prefix ?? '');
   return {
     sourceOffsetMap: patch.sourceOffsetMap,
     state: {
@@ -53,6 +69,9 @@ export function applyModelPatchPass<Model>(
 export function applyTerminalEmitPatches(
   previous: Pick<ComponentPipelineState<unknown>, 'source'>,
   replacements: readonly SourceReplacement[],
+  owner: SourceReplacementOwner = { phase: 'terminal-emit', writer: 'anonymous' },
 ): string {
-  return applySourceReplacements(previous.source, replacements);
+  const accumulator = new SourceReplacementAccumulator();
+  accumulator.add(owner, replacements);
+  return applySourceReplacementPlan(previous.source, accumulator.plan(previous.source.length));
 }

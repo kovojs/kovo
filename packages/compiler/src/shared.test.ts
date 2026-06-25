@@ -6,6 +6,7 @@ import {
   composeSourceOffsetMaps,
   generatedOffsetToOriginal,
   sourceReplacementOffsetMap,
+  SourceReplacementAccumulator,
 } from './shared.js';
 
 describe('compiler shared source replacements', () => {
@@ -113,5 +114,53 @@ describe('compiler shared source replacements', () => {
     expect(generatedOffsetToOriginal(composed, '<section class="kv-root"'.length - 1)).toBe(
       undefined,
     );
+  });
+
+  it('records phase, writer, original span, and generated span for replacement plans', () => {
+    const accumulator = new SourceReplacementAccumulator();
+    accumulator.add(
+      { phase: 'lowering', writer: 'structural-jsx' },
+      [{ end: 10, replacement: 'BETA-BETA', start: 6 }],
+    );
+
+    expect(accumulator.plan('alpha beta gamma'.length).records).toEqual([
+      {
+        generatedEnd: 15,
+        generatedStart: 6,
+        originalEnd: 10,
+        originalStart: 6,
+        phase: 'lowering',
+        replacement: 'BETA-BETA',
+        writer: 'structural-jsx',
+      },
+    ]);
+  });
+
+  it('records replacement conflict diagnostics with both writers', () => {
+    const accumulator = new SourceReplacementAccumulator();
+    accumulator.add(
+      { phase: 'lowering', writer: 'structural-jsx' },
+      [{ end: 4, replacement: 'x', start: 1 }],
+    );
+    accumulator.add(
+      { phase: 'lowering', writer: 'navigation-standalone-href' },
+      [{ end: 5, replacement: 'y', start: 3 }],
+    );
+
+    expect(accumulator.plan('abcdef'.length).diagnostics).toMatchObject([
+      {
+        conflicting: {
+          originalEnd: 4,
+          originalStart: 1,
+          phase: 'lowering',
+          writer: 'structural-jsx',
+        },
+        kind: 'overlap',
+        originalEnd: 5,
+        originalStart: 3,
+        phase: 'lowering',
+        writer: 'navigation-standalone-href',
+      },
+    ]);
   });
 });
