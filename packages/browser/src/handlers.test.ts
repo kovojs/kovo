@@ -62,6 +62,18 @@ describe('delegated handler reference dispatch', () => {
     ).rejects.toThrow('Invalid handler reference: /c/cart.client.js#');
   });
 
+  it('rejects non-Kovo dynamic import URLs before importing handler modules', async () => {
+    const importModule = vi.fn(async () => ({ missing: vi.fn() }));
+    const element = new FakeElement({
+      'on:click': 'data:text/javascript,export%20const%20missing%20=%201#missing',
+    });
+
+    await expect(
+      dispatchDelegatedEvent({ target: element, type: 'click' }, importModule),
+    ).rejects.toThrow('Disallowed Kovo dynamic import URL: data:text/javascript');
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
   it('invokes chained handler refs left-to-right with one context and persisted state', async () => {
     const calls: string[] = [];
     const first = vi.fn((_event, ctx: { signal: AbortSignal; state: { count: number } }) => {

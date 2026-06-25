@@ -9,6 +9,7 @@ import { morphDomElement } from './morph.js';
 import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
 import { kovoCreateHTML } from './trusted-types.js';
+import { assertAllowedKovoDynamicImportUrl } from './dynamic-import-url.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryBindingElement
@@ -463,6 +464,7 @@ async function applyStateDeriveBindings(
     const ref = parseDeriveReference(refValue);
     if (!ref) continue;
 
+    assertAllowedKovoDynamicImportUrl(ref.url);
     const mod = await importModule(ref.url);
     const derive = mod[ref.exportName];
     const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
@@ -477,6 +479,7 @@ async function applyStateDeriveBindings(
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
 
+      assertAllowedKovoDynamicImportUrl(ref.url);
       const mod = await importModule(ref.url);
       const derive = mod[ref.exportName];
       const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
@@ -494,6 +497,7 @@ async function applyStateDeriveBindings(
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
 
+      assertAllowedKovoDynamicImportUrl(ref.url);
       const mod = await importModule(ref.url);
       const derive = mod[ref.exportName];
       const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
