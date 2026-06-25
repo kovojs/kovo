@@ -365,6 +365,51 @@ export const SpreadUrl = component({
     );
   });
 
+  it('flags non-inline static object spread into an unsafe URL sink (KV236)', () => {
+    const result = compileComponentModule({
+      fileName: 'spread-url-const.tsx',
+      source: `
+const unsafeLinkAttrs = { href: "javascript:alert(1)" };
+
+export const SpreadUrlConst = component({
+  render: () => <a {...unsafeLinkAttrs}>x</a>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: `${kv236} href="javascript:alert(1)" uses an unsafe URL scheme`,
+        }),
+      ]),
+    );
+  });
+
+  it('flags statically resolvable computed object spread into an unsafe URL sink (KV236)', () => {
+    const result = compileComponentModule({
+      fileName: 'spread-url-computed.tsx',
+      source: `
+const urlAttr = "href";
+const unsafeLinkAttrs = { [urlAttr]: "javascript:alert(1)" };
+
+export const SpreadUrlComputed = component({
+  render: () => <a {...unsafeLinkAttrs}>x</a>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: `${kv236} href="javascript:alert(1)" uses an unsafe URL scheme`,
+        }),
+      ]),
+    );
+  });
+
   it('flags static object spread into srcdoc and dangerouslySetInnerHTML sinks (A3)', () => {
     const srcdoc = compileComponentModule({
       fileName: 'spread-srcdoc.tsx',
@@ -385,6 +430,35 @@ export const SpreadRawHtml = component({
 
     expect(srcdoc.diagnostics.filter((d) => d.code === 'KV236')).not.toEqual([]);
     expect(rawHtml.diagnostics.filter((d) => d.code === 'KV236')).not.toEqual([]);
+  });
+
+  it('flags direct lowercase onclick and srcdoc literal sinks as KV236', () => {
+    const result = compileComponentModule({
+      fileName: 'direct-unsafe-sinks.tsx',
+      source: `
+export const DirectUnsafeSinks = component({
+  render: () => (
+    <div>
+      <button onclick="alert(1)">click</button>
+      <iframe srcdoc={"<script>alert(1)</script>"} />
+    </div>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: expect.stringContaining('onclick is an event-handler sink'),
+        }),
+        expect.objectContaining({
+          code: 'KV236',
+          message: `${kv236} srcdoc receives a plain string; use Kovo TrustedHtml`,
+        }),
+      ]),
+    );
   });
 
   it('keeps safe static object spreads (internal href, class) without KV236 (A3)', () => {
