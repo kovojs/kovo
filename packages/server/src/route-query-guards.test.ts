@@ -5,6 +5,7 @@ import { domain } from './domain.js';
 import { guards, session } from './guards.js';
 import { renderedHtml } from './html.js';
 import { query, renderQueryEndpointResponse } from './query.js';
+import { serverResponseToWebResponse } from './response.js';
 import { renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
 
@@ -217,5 +218,27 @@ describe('route and query guard responses', () => {
       },
       status: 403,
     });
+  });
+
+  it('preserves query guard redirect Location blessing through cache/build header wrapping', async () => {
+    type AppRequest = { session?: { user?: { id: string } | null } | null };
+    const accountQuery = query('account', {
+      guard: guards.authed<AppRequest>(),
+      reads: [domain('user')],
+    });
+
+    const endpointResponse = await renderQueryEndpointResponse(accountQuery, {
+      buildToken: 'guard-build',
+      request: { session: null },
+      search: new URLSearchParams([['view', 'summary']]),
+    });
+    const webResponse = serverResponseToWebResponse(endpointResponse, { method: 'GET' });
+
+    expect(webResponse.status).toBe(303);
+    expect(webResponse.headers.get('Location')).toBe(
+      '/login?next=%2F_q%2Faccount%3Fview%3Dsummary',
+    );
+    expect(webResponse.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(webResponse.headers.get('Kovo-Build')).toBe('guard-build');
   });
 });

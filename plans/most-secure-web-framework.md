@@ -133,9 +133,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       rejects nested/overlapping quantified shapes instead of selling the length cap as a CPU bound. Focused
       sink-policy/SQL/file/redirect/ReDoS tests, the diff whitespace gate, `pnpm run check:vp`, and
       `pnpm run check:api-surface` passed. Integration follow-up preserved redirect witnesses through document
-      wrapping, kept the ReDoS validator inside the compiler hard-rule gate, and passed `pnpm run check:build`
-      plus `pnpm run check:kovo`. Remaining gap: other §3 candidates and static by-construction analyzer
-      integration are not complete.
+      and query endpoint wrapping; focused route/query guard tests, the two CI-failing query integration specs,
+      `pnpm run check:build`, and `pnpm run check:kovo` passed. Remaining gap: other §3 candidates and static
+      by-construction analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
