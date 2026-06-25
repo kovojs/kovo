@@ -80,6 +80,9 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - name: Remove transient Microsoft apt sources
+        run: |
+          grep -lR "packages.microsoft.com" /etc/apt/sources.list.d 2>/dev/null | xargs -r sudo rm -f
       - run: vp exec playwright install --with-deps chromium
       - name: Download previous timing history
         env:
@@ -159,6 +162,9 @@ jobs:
         with:
           name: kovo-dist
           path: dist
+      - name: Remove transient Microsoft apt sources
+        run: |
+          grep -lR "packages.microsoft.com" /etc/apt/sources.list.d 2>/dev/null | xargs -r sudo rm -f
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - name: Root browser suite
         run: vp run browser
@@ -197,6 +203,9 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - name: Remove transient Microsoft apt sources
+        run: |
+          grep -lR "packages.microsoft.com" /etc/apt/sources.list.d 2>/dev/null | xargs -r sudo rm -f
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp exec playwright test --config tests/integration/playwright.config.ts --shard=${{ matrix.shard }}/${{ matrix.total }}
         env:
