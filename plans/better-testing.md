@@ -208,13 +208,15 @@ Median job durations across those runs:
   - Evidence when complete: scheduled workflow run URL and a documented logical-suite selection, not a
     hand-maintained per-spec shard list.
 
-- [ ] **Define assertion tiers for integration specs.**
+- [x] **Define assertion tiers for integration specs.**
   - Tier 1: semantic user-visible assertions through `@kovojs/test` page helpers.
   - Tier 2: protocol/header assertions for wire contracts.
   - Tier 3: generated artifact/internal ABI assertions only when the public behavior cannot expose the
     contract.
   - Evidence when complete: a short guide in `tests/integration/README.md` and at least three converted
     brittle specs.
+  - Evidence 2026-06-25: `tests/integration/README.md` defines the three tiers; five brittle Tier 2
+    header/wire specs were converted to `@kovojs/test/headers` and passed under Chromium.
 
 - [ ] **Reduce hand-authored lowered-IR coverage in favor of app-authored TSX fixtures.**
   - SPEC.md §5.2 treats hand-authored lowered IR as invalid app source; integration tests should cover
