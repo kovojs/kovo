@@ -517,8 +517,22 @@ function loadViteClientModule(
     source,
   );
   if (isPromiseLike(result)) {
-    return result.then((resolvedResult) => viteClientSource(resolvedResult));
+    return result.then((resolvedResult) =>
+      loadViteClientCompileResult(options, fileName, source, resolvedResult),
+    );
   }
+
+  return loadViteClientCompileResult(options, fileName, source, result);
+}
+
+function loadViteClientCompileResult(
+  options: KovoVitePluginOptions,
+  fileName: string,
+  source: string,
+  result: ViteCompileResult,
+): null | string {
+  const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
+  if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
 
   return viteClientSource(result);
 }

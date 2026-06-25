@@ -22,13 +22,13 @@ interface DiagnosticSnapshotFact {
 }
 
 describe('compiler diagnostic coverage matrix', () => {
-  it('guards the authoritative compiler-owned KV2xx/KV3xx code list', () => {
+  it('guards the authoritative compiler-owned diagnostic code list', () => {
     expect(matrixCodes()).toEqual(
-      allCompilerOwnedKv2xxKv3xxCodes().filter((code) => !outOfScopeCodeSet().has(code)),
+      allCompilerOwnedDiagnosticCodes().filter((code) => !outOfScopeCodeSet().has(code)),
     );
     expect(
       [...matrixCodes(), ...outOfScopeCompilerDiagnostics.map((row) => row.code)].sort(),
-    ).toEqual(allCompilerOwnedKv2xxKv3xxCodes());
+    ).toEqual(allCompilerOwnedDiagnosticCodes());
     expect(outOfScopeCompilerDiagnostics).toMatchInlineSnapshot(`
       [
         {
@@ -38,6 +38,62 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV314",
           "reason": "Compiler-owned, but emitted by the kovo check coverage graph path (\`packages/cli/src/index.kovo-check.test.ts\`) rather than compileComponentModule/deriveAppGraph/query-shape validation.",
+        },
+        {
+          "code": "KV422",
+          "reason": "Security-heavy, but produced by the Drizzle/static SQL analyzer and carried through compile/check graph diagnostics rather than by component compilation or app graph derivation.",
+        },
+        {
+          "code": "KV423",
+          "reason": "Security-heavy, but raw endpoint metadata ownership currently lives in server/check graph producers; no compiler-owned row is claimed until endpoint extraction is compiler-derived.",
+        },
+        {
+          "code": "KV424",
+          "reason": "Security-heavy, but produced by source/sink and kovo check graph diagnostics for app-authored dangerous sinks rather than component compilation.",
+        },
+        {
+          "code": "KV425",
+          "reason": "Security-heavy, but source/sink drift detection is a repository audit/check path, not compiler component or registry graph output.",
+        },
+        {
+          "code": "KV426",
+          "reason": "Security-heavy, but trust-escape provenance is surfaced by kovo explain/check graph paths; component compilation only preserves facts when supplied.",
+        },
+        {
+          "code": "KV428",
+          "reason": "Security-heavy, but upload content-disposition/type enforcement is runtime/server-owned and not emitted by the compiler diagnostic path.",
+        },
+        {
+          "code": "KV429",
+          "reason": "Security-heavy, but lost-update write provenance is enforced by kovo check graph diagnostics, not component compilation.",
+        },
+        {
+          "code": "KV430",
+          "reason": "Security-heavy, but schema breadth/depth budget linting is schema/check ownership and not emitted by component compilation.",
+        },
+        {
+          "code": "KV431",
+          "reason": "Security-heavy, but client-module manifest completeness is deployment/check ownership rather than compiler-owned component diagnostics.",
+        },
+        {
+          "code": "KV432",
+          "reason": "Security-heavy, but cookie-attribute floors are server/runtime sink ownership rather than compiler-owned component diagnostics.",
+        },
+        {
+          "code": "KV433",
+          "reason": "Security-heavy, but write-reaching query loaders are enforced by kovo check graph diagnostics, not component compilation.",
+        },
+        {
+          "code": "KV434",
+          "reason": "Security-heavy, but regex/schema analyzer ownership is outside the compiler component/registry diagnostic matrix.",
+        },
+        {
+          "code": "KV436",
+          "reason": "Security-heavy, but the compiler derives access facts while kovo check consumes undecided facts as KV436 diagnostics.",
+        },
+        {
+          "code": "KV438",
+          "reason": "Security-heavy, but governed-column mass-assignment is enforced by kovo check graph diagnostics rather than compiler-owned component or registry diagnostics.",
         },
       ]
     `);
@@ -198,6 +254,12 @@ describe('compiler diagnostic coverage matrix', () => {
           "spec": "SPEC.md §8",
         },
         {
+          "code": "KV245",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §5.2",
+        },
+        {
           "code": "KV236",
           "negativeCount": 1,
           "positiveCount": 0,
@@ -304,6 +366,30 @@ describe('compiler diagnostic coverage matrix', () => {
           "negativeCount": 1,
           "positiveCount": 0,
           "spec": "SPEC.md §11.4/§14",
+        },
+        {
+          "code": "KV420",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.5/§4.9/§9.1",
+        },
+        {
+          "code": "KV421",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §6.1/§9.5",
+        },
+        {
+          "code": "KV435",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §6.2/§6.6/§10.2",
+        },
+        {
+          "code": "KV437",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §6.2/§6.6",
         },
       ]
     `);
@@ -635,6 +721,21 @@ describe('compiler diagnostic coverage matrix', () => {
           },
         },
         {
+          "code": "KV245",
+          "fileName": "parse-bad.tsx",
+          "help": "Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.
+      Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.
+      Fixes: correct the TSX syntax at this location and re-run the compiler.
+      SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.",
+          "length": 4,
+          "message": "TypeScript/TSX parse failed. JSX element 'span' has no corresponding closing tag.",
+          "severity": "error",
+          "start": {
+            "column": 27,
+            "line": 3,
+          },
+        },
+        {
           "code": "KV236",
           "fileName": "output-context-bad.tsx",
           "help": "Blocked reason: the output context can execute script, navigate unexpectedly, inject unsafe CSS, or bypass normal JSX escaping.
@@ -920,6 +1021,61 @@ describe('compiler diagnostic coverage matrix', () => {
             "line": 4,
           },
         },
+        {
+          "code": "KV420",
+          "fileName": "stateful-fragment-bad.tsx",
+          "help": "Would lower to: a full-subtree re-render from (declared queries ∪ stamped props) on every fragment patch of the enclosing server-refreshable target.
+      Blocked reason: the fragment morph carries no serialization of island-local kovo-state (§9.1), so re-emitting the enclosing target would reset the nested island to its render-time default and clobber the child's live local state.
+      Fixes: lift the child's state into a declared query so it travels in the refreshable channel, mark the child isomorphic: true so it self-renders rather than being server-refreshed (§4.8), set disableServerRefresh: true on the enclosing component so the child reclassifies under §4.9, or move the stateful island outside the refreshable target.
+      SPEC §4.5/§4.9/§9.1 forbid an island declaring local state from rendering inside another component's inferred server-refreshable fragment target.
+      Escape: document-lifetime-immutable local state is renderOnce and does not trip KV420.",
+          "length": 7,
+          "message": "Island with local state nested inside a server-refreshable fragment target loses its state on refresh. Stepper inside CartPanel.",
+          "severity": "error",
+          "start": {
+            "column": 8,
+            "line": 13,
+          },
+        },
+        {
+          "code": "KV421",
+          "fileName": "app graph mutation table",
+          "help": "Would lower to: one mutation fact per mutation key for the invalidation registry and server dispatch table.
+      Blocked reason: two mutation declarations share one key, so graph indexing silently last-write-wins the invalidation set while server dispatch first-match-wins the handler — the two layers disagree, an invalidation can be computed for a mutation that never runs, and the wrong handler (with the wrong input schema and guards) executes against attacker-shaped input.
+      Fixes: emit exactly one mutation fact per mutation key, or rename one mutation so its key is unique across the app graph.
+      SPEC §6.1 makes the mutation registry key-addressed and §9.5 dispatches a POST to exactly one keyed handler; duplicate mutation keys would otherwise silently last-write-wins the invalidation registry while first-match-wins server dispatch — like routes (KV228), components (KV237), fragment targets (KV238), view transitions (KV239), and query shapes (KV240), mutation keys must be unique.",
+          "length": null,
+          "message": "Duplicate mutation key. mutation key "cart/add" appears 2 times in graph mutations.",
+          "severity": "error",
+          "start": null,
+        },
+        {
+          "code": "KV435",
+          "fileName": "query-wire-bad.tsx",
+          "help": "Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.
+      Blocked reason: the projected query shape contains a secret-classified field, or an opaque/unresolved projection reads a table carrying secret columns, so rendering this query could serialize confidential data onto the client wire.
+      Fixes: remove the secret field or opaque projection, select explicit non-secret columns, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.
+      SPEC §6.2, §10.2, and §11.3 make query results JsonValue-bounded client wire values; a secret-classified or unprovable secret-table projection is ineligible for that boundary.",
+          "length": null,
+          "message": "Secret query value reaches the client wire. query="user" path="user.passwordHash"",
+          "severity": "error",
+          "start": null,
+        },
+        {
+          "code": "KV437",
+          "fileName": "client-capture-bad.tsx",
+          "help": "Would lower to: a client handler module whose captured cross-module imports all resolve to serializable literals or whitelisted client symbols.
+      Blocked reason: a client handler closure that captures a server-only binding (a secret/process.env-derived value, or any cross-module import not provably client-safe) re-emits it verbatim into the client bundle, leaking confidential server state to the browser.
+      Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain --capabilities.
+      SPEC §6.6/§6.2 and secure-framework Phase 4/Tier 0: the emit filter is fail-closed whole-channel (a narrow process.env/brand-only gate is unsound — call-wrapped secrets escape).",
+          "length": 17,
+          "message": "Server-only value captured into a client handler reaches the client bundle. import="STRIPE_SECRET_KEY" from="./secrets" form=named",
+          "severity": "error",
+          "start": {
+            "column": 40,
+            "line": 7,
+          },
+        },
       ]
     `);
   });
@@ -978,15 +1134,31 @@ function outOfScopeCodeSet(): Set<DiagnosticCode> {
   return new Set(outOfScopeCompilerDiagnostics.map((row) => row.code));
 }
 
-function allCompilerOwnedKv2xxKv3xxCodes(): DiagnosticCode[] {
-  return Object.keys(diagnosticDefinitions)
-    .filter(isCompilerOwnedKv2xxKv3xxCode)
-    .sort() as DiagnosticCode[];
+function allCompilerOwnedDiagnosticCodes(): DiagnosticCode[] {
+  return [
+    ...(Object.keys(diagnosticDefinitions).filter(isCompilerOwnedKv2xxKv3xxCode) as DiagnosticCode[]),
+    'KV420',
+    'KV421',
+    'KV422',
+    'KV423',
+    'KV424',
+    'KV425',
+    'KV426',
+    'KV428',
+    'KV429',
+    'KV430',
+    'KV431',
+    'KV432',
+    'KV433',
+    'KV434',
+    'KV435',
+    'KV436',
+    'KV437',
+    'KV438',
+  ].sort();
 }
 
-function isCompilerOwnedKv2xxKv3xxCode(
-  code: string,
-): code is Extract<DiagnosticCode, `KV${2 | 3}${number}${number}`> {
+function isCompilerOwnedKv2xxKv3xxCode(code: string): boolean {
   return /^KV[23]\d{2}$/.test(code);
 }
 
