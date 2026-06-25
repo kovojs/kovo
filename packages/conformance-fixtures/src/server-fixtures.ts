@@ -320,14 +320,14 @@ export async function serverDataPlaneBehaviorFact(
     },
     input: runtime.s.object({ productId: runtime.s.string() }),
   });
-  const token = runtime.csrfToken(request, csrf);
+  const token = runtime.csrfToken(request, csrf, { audience: addToCart.key });
   const success = await runtime.runMutation(addToCart, { csrf: token, productId: 'p1' }, request);
   const guardCallsAfterSuccess = guardCalls;
   const missingToken = await runtime.runMutation(addToCart, { productId: 'p1' }, request);
 
   return {
     csrf: {
-      field: runtime.csrfField(request, csrf),
+      field: runtime.csrfField(request, { ...csrf, audience: addToCart.key }),
       guardCallsAfterFailure: guardCalls,
       guardCallsAfterSuccess,
       missingToken,

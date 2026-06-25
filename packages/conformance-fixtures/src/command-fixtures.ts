@@ -250,6 +250,10 @@ function workflowTaskName(command: string): string | undefined {
     return vpTaskName;
   }
 
+  if (/^vp exec pnpm run check:build(?:\s|$)/.test(command)) {
+    return 'build';
+  }
+
   if (/^vp exec node scripts\/kovo-check\.mjs(?:\s|$)/.test(command)) {
     return 'kovo-check';
   }

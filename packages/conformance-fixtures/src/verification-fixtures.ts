@@ -124,10 +124,10 @@ export async function verificationLayerBehaviorFact(
     },
   });
   const csrfHarness = createKovoTestHarness({ db: {}, request: csrfRequest });
-  const field = csrfField(csrfRequest, csrf);
+  const field = csrfField(csrfRequest, { ...csrf, audience: csrfMutation.key });
   const fieldToken = extractCsrfFieldValue(field, csrf.field);
   const validResult = await csrfHarness.exec(csrfMutation, {
-    csrf: fieldToken ?? csrfToken(csrfRequest, csrf),
+    csrf: fieldToken ?? csrfToken(csrfRequest, csrf, { audience: csrfMutation.key }),
     productId: 'p1',
   });
   const invalidResult = await csrfHarness.exec(csrfMutation, { csrf: 'wrong', productId: 'p2' });

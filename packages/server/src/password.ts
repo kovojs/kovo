@@ -1,4 +1,3 @@
-import { hash as argon2Hash, verify as argon2Verify } from '@node-rs/argon2';
 import type { Options as Argon2Options } from '@node-rs/argon2';
 
 declare const passwordDigestBrand: unique symbol;
@@ -81,6 +80,15 @@ const PHC_BASE64 = /^[A-Za-z0-9+/]+$/;
 const CREDENTIAL_VERIFY_DECOY_DIGEST =
   '$argon2id$v=19$m=19456,t=2,p=1$wUyZMkz0f9Q8lxUmpoYhWQ$lJqAy+vFypMXMsFlJiUhrBBU1Spa3MLjUIbzYeLk6ZA';
 
+type Argon2Module = typeof import('@node-rs/argon2');
+
+let argon2ModulePromise: Promise<Argon2Module> | undefined;
+
+function loadArgon2(): Promise<Argon2Module> {
+  argon2ModulePromise ??= import('@node-rs/argon2');
+  return argon2ModulePromise;
+}
+
 /**
  * Hash a plaintext password with Kovo's first-party argon2id-only sink.
  *
@@ -92,7 +100,8 @@ export async function hashPassword(
   options: PasswordHashOptions = {},
 ): Promise<PasswordDigest> {
   const params = resolvePasswordHashOptions(options);
-  const digest = await argon2Hash(password, params, options.signal ?? null);
+  const { hash } = await loadArgon2();
+  const digest = await hash(password, params, options.signal ?? null);
   if (!isArgon2idPasswordDigest(digest)) {
     throw new Error('Kovo password sink expected @node-rs/argon2 to emit an argon2id PHC digest.');
   }
@@ -155,7 +164,8 @@ async function verifyParsedPasswordDigest(
   signal: AbortSignal | null,
 ): Promise<PasswordVerifyResult> {
   try {
-    const ok = await argon2Verify(digest, password, params, signal);
+    const { verify } = await loadArgon2();
+    const ok = await verify(digest, password, params, signal);
     return { ok, needsRehash: ok && digestNeedsRehash(parsed, params) };
   } catch {
     return { ok: false, needsRehash: false };

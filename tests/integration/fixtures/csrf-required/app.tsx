@@ -26,7 +26,7 @@ const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <kovo-fragment target="csrf-total">${await renderTotal(request.db)}</kovo-fragment>
     <form method="post" action="/_m/csrf-required/deposit" enhance data-mutation="csrf-required/deposit" kovo-deps="csrf">
-      ${csrfField(request, csrf)}
+      ${csrfField(request, { ...csrf, audience: deposit.key })}
       <input type="number" name="amount" value="1">
       <button type="submit">Deposit with csrf</button>
     </form>

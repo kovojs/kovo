@@ -184,6 +184,9 @@ describe('@kovojs/test command fixtures', () => {
       { run: 'vp exec node scripts/kovo-check.mjs --suite ${{ matrix.suite }}' },
     ]);
     expect(workflowVpRunTaskNames(workflow)).toEqual(['build', 'kovo-check']);
+    expect(workflowVpRunTaskNames('steps:\n  - run: vp exec pnpm run check:build')).toEqual([
+      'build',
+    ]);
   });
 
   it('loads Vite+ task configs through the fixture seam', async () => {

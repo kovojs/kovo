@@ -1,5 +1,6 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
-import { Agent, getGlobalDispatcher, setGlobalDispatcher, type Dispatcher } from 'undici';
+import { createRequire } from 'node:module';
+import type { Agent as UndiciAgent, Dispatcher } from 'undici';
 
 import {
   EgressBlockedError,
@@ -8,6 +9,10 @@ import {
   normalizeIpLiteral,
   type EgressPolicy,
 } from './egress.js';
+
+const require = createRequire(import.meta.url);
+const { Agent, getGlobalDispatcher, setGlobalDispatcher } =
+  require('undici') as typeof import('undici');
 
 /**
  * Layer (a) of the outbound-egress floor (SPEC §6.6): a custom undici dispatcher installed as
@@ -46,7 +51,7 @@ export class EgressGatingDispatcher extends Agent {
   // dial classify the SAME IP within a request window (DNS-rebind resistance at this layer too).
   #resolutionCache = new Map<string, PinnedResolution>();
 
-  constructor(policy: EgressPolicy, options?: Agent.Options) {
+  constructor(policy: EgressPolicy, options?: UndiciAgent.Options) {
     super(options);
     this.#policy = policy;
   }

@@ -35,7 +35,7 @@ const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <kovo-fragment target="idem-concurrent-status" kovo-deps="idem">${await renderStatus(request.db)}</kovo-fragment>
     <form method="post" action="/_m/mutation-idempotency-concurrent/record">
-      ${csrfField(request, csrf)}
+      ${csrfField(request, { ...csrf, audience: slowRecord.key })}
       <input name="note" value="race">
       <button type="submit">Record once</button>
     </form>
