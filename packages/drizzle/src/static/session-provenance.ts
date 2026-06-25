@@ -312,6 +312,9 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
   }
 
   if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    const objectProperty = localObjectPropertyPrivateScope(expression, context, depth);
+    if (objectProperty) return objectProperty;
+
     const base = privateScopeForExpression(expression.getExpression(), context, depth + 1);
     const name = staticAccessName(expression);
     return base && name
@@ -330,6 +333,59 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
     }
   }
 
+  return undefined;
+}
+
+function localObjectPropertyPrivateScope(
+  node: Node,
+  context: SessionProvenanceContext,
+  depth: number,
+): PrivateScopeProvenance | undefined {
+  if (depth > 4) return undefined;
+  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
+    return undefined;
+  }
+
+  const property = staticAccessName(node);
+  if (!property) return undefined;
+
+  const base = unwrappedStaticExpressionNode(node.getExpression());
+  if (!Node.isIdentifier(base)) return undefined;
+
+  const symbol = symbolForIdentifierReference(base) ?? base.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  const object = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
+
+  const value = objectLiteralStaticPropertyValue(object, property);
+  if (!value) return undefined;
+  return (
+    privateScopeForExpression(value, context, depth + 1) ?? directPrivateScopeForExpression(value)
+  );
+}
+
+function objectLiteralStaticPropertyValue(
+  object: ObjectLiteralExpression,
+  name: string,
+): Node | undefined {
+  for (const property of object.getProperties()) {
+    if (Node.isPropertyAssignment(property)) {
+      if (propertyNameText(property.getNameNode()) !== name) continue;
+      return property.getInitializer();
+    }
+    if (Node.isShorthandPropertyAssignment(property)) {
+      if (propertyNameText(property.getNameNode()) !== name) continue;
+      return property.getNameNode();
+    }
+  }
   return undefined;
 }
 
