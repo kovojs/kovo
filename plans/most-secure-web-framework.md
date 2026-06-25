@@ -126,13 +126,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
 - [ ] **§3 Sink-Token Brands** — the unified `Blessed<Sink>` substrate. See the dedicated section below;
       the flagship by-construction items are **SINK-01** (SQL identifier/keyword channel + kill the fail-open
       knobs) and **SINK-03** (rooted file-serve). lev 7–9.
-      Progress: `packages/core/src/internal/sql-safety.ts` now uses a module-private SQL witness kernel,
-      `packages/drizzle/src/runtime.ts` mints identifier/keyword witnesses, and managed SQL sinks reject
-      fail-open `KOVO_SQL_GUARD=warn/off` plus unbranded object-shaped SQL. `pnpm exec vitest run
-packages/server/src/guards.test.ts packages/core/src/sql-safety.test.ts
-packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/sql-safety-static.test.ts --run`,
-      `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
-      the full cross-sink `Blessed<Sink>` substrate and other §3 candidates are not complete.
+      Progress: `packages/core/src/internal/sink-policy.ts` now provides a shared module-private
+      `Blessed<Sink>` witness substrate, SQL safety uses that substrate, and `rootedFiles()` mints a
+      `rooted-file-serve` witness for the first non-SQL sink. Focused sink-policy/SQL/file tests, the diff
+      whitespace gate, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap: other §3
+      candidates and static by-construction analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
@@ -147,10 +145,11 @@ packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/sql-safety-sta
       with required purpose, authority, capabilities, audit owner, and ambient-credential posture;
       `packages/cli/src/graph-output.ts` surfaces declared agent-tool coverage in `kovo explain`/`kovo audit`.
       `packages/core/src/graph.ts` and `packages/cli/src/graph-output.ts` now derive/enforce the first sound
-      write-domain subset for framework-owned tool rows and keep audit-grade sink rows visible. Focused
-      graph/check/explain/registry tests, `git diff --check`, `pnpm run check:vp`, and
-      `pnpm run check:api-surface` passed. Remaining gap: arbitrary tool-body AST reachability plus sound
-      egress/secret-read analyzer rows.
+      write-domain subset for framework-owned tool rows and keep audit-grade sink rows visible.
+      `tool({ reachableSinks })` also emits audit-grade egress/secret-read/mutation/write rows for arbitrary
+      declared tool-body sinks without making them enforced. Focused graph/check/explain/registry/agent-tool
+      tests, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
+      arbitrary tool-body AST reachability plus sound egress/secret-read analyzer rows.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -161,8 +160,9 @@ packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/sql-safety-sta
       Progress: `runAgentTool()` rejects `Cookie`/`Authorization`/session-bearing requests by default and requires
       explicit justification for ambient credential opt-in; `kovo explain --capabilities` renders ambient posture
       and `kovo audit --fail-on-findings` flags missing justification for ambient-credential opt-in. The OPP-07
-      graph subset now enforces declared write capabilities for matching framework-owned tool rows. Remaining
-      gap: broader analyzer integration beyond the framework-owned `tool()` boundary.
+      graph subset now enforces declared write capabilities for matching framework-owned tool rows and renders
+      declared audit-grade reachable sinks. Remaining gap: broader analyzer integration beyond the
+      framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
@@ -228,9 +228,10 @@ packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/sql-safety-sta
       establish sink rotates on auth (fixation floor). _Trade-off:_ opaque-default genuinely kills the JWT family
       by construction, but only fires if Kovo reverses §6.5 and **owns** the session sink — a large architectural
       commitment. **Revisit** vs. the `better-auth` delegation.
-      Progress: `packages/better-auth/src/session.ts` now treats Better Auth session-clearing cookies as immediate
-      revocation at the Kovo provider boundary, including mixed refresh/revocation cookie batches. Focused Better
-      Auth/keyring/capability/env tests, `git diff --check`, `pnpm run check:vp`, and
+      Progress: Kovo's Better Auth boundary now requires real session credential cookies for credential flows,
+      rejects JWT-shaped session cookies by default unless `sessionCookieMode: 'jwt'` is explicit, refuses
+      incoming session credential reissue, and fails closed when sign-out does not emit a revocation cookie.
+      Focused Better Auth/keyring/capability/env tests, `git diff --check`, `pnpm run check:vp`, and
       `pnpm run check:api-surface` passed. Remaining gap: Kovo still delegates the opaque session store to Better
       Auth, so the default-session ownership claim is not complete.
 
@@ -410,11 +411,11 @@ scripts/check-pack-security.test.mjs` passed; `pnpm run check:pack-security -- -
       now-present `CallExpression` interprocedural branch makes a narrow, fail-closed read-path subset newly
       feasible. _Trade-off:_ the highest-value access-control deepening, but XL and FP-prone — scope to a narrow
       directly-reachable subset first, keep KV414 as the shipped floor. **Research spike before committing.**
-      Progress: `packages/drizzle/src/static/summaries.ts` and `packages/drizzle/src/static.ts` now produce a
-      narrow owner-column/session-principal proof and emit `scope: unknown` findings when owner reads are not
-      proven by that subset. `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts
-packages/cli/src/index.kovo-check.test.ts --run`, `git diff --check`, `pnpm run check:vp`, and
-      `pnpm run check:api-surface` passed. Remaining gap: this is not full guard-predicate correctness.
+      Progress: `packages/drizzle/src/static/summaries.ts` and `packages/drizzle/src/static.ts` now preserve the
+      exact private guard-principal symbol for accepted owner-column DATA proofs and reject mismatched or
+      unsummarized helper cases as `scope: unknown`. Focused scope-audit tests, `git diff --check`,
+      `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap: this is not full
+      guard-predicate correctness.
 
 ---
 
