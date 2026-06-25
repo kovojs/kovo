@@ -106,6 +106,8 @@ export interface AppRouteRenderContext<Route extends AnyRouteDeclaration = AnyRo
 export interface AppRateLimitOptions {
   /** Maximum accepted requests within `windowMs`. */
   max: number;
+  /** Maximum distinct keys retained for this budget. Defaults to the request-shell key cap. */
+  maxKeys?: number;
   /** Sliding bucket duration in milliseconds. Defaults to the request-shell default window. */
   windowMs?: number;
 }
@@ -142,6 +144,7 @@ export interface AppRequestLimitOptions extends AppRequestRateLimitOptions {
 /** Normalized request-rate budget stored on the app aggregate. */
 export interface ResolvedAppRateLimitOptions {
   max: number;
+  maxKeys: number;
   windowMs: number;
 }
 

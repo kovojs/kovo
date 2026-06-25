@@ -4,6 +4,7 @@ import { trustedHtml } from '@kovojs/browser';
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
 
 import { createApp, createRequestHandler } from './app.js';
+import { appRateLimitKeyCounts } from './app-load-shed.js';
 import { versionedClientModuleHref } from './client-modules.js';
 import { domain } from './domain.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
@@ -73,8 +74,10 @@ describe('server createApp request shell', () => {
     expect(app.sessionProvider).toBe(sessionProvider);
     expect(app.requestLimits.maxBodyBytes).toBeGreaterThan(0);
     expect(app.requestLimits.perIp).toMatchObject({ max: expect.any(Number), windowMs: 60_000 });
+    expect(app.requestLimits.perIp).toMatchObject({ maxKeys: expect.any(Number) });
     expect(app.requestLimits.mutations.perIp).toMatchObject({
       max: expect.any(Number),
+      maxKeys: expect.any(Number),
       windowMs: 60_000,
     });
     expect('use' in app).toBe(false);
@@ -697,6 +700,57 @@ describe('server createApp request shell', () => {
     const trusted = makeHandler(true);
     expect((await trusted(request('cart/proxy-trusted', '203.0.113.1'))).status).toBe(303);
     expect((await trusted(request('cart/proxy-trusted', '203.0.113.2'))).status).toBe(303);
+  });
+
+  it('bounds app request-limit key cardinality across windows while preserving active retry-after', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-25T10:00:00.000Z'));
+    const addToCart = mutation('cart/bounded-rate-keys', {
+      csrf: false,
+      input: s.object({}),
+      handler: () => ({ ok: true }),
+    });
+    const app = createApp({
+      mutations: [addToCart],
+      requestLimits: {
+        global: false,
+        maxBodyBytes: false,
+        mutations: { global: false, perIp: { max: 1, maxKeys: 8, windowMs: 60_000 } },
+        perIp: false,
+        queries: { global: false, perIp: false },
+        trustedProxy: true,
+      },
+    });
+    const handler = createRequestHandler(app);
+    const request = (index: number) =>
+      new Request('https://example.test/_m/cart/bounded-rate-keys', {
+        body: new URLSearchParams(),
+        headers: { 'X-Forwarded-For': `203.0.${Math.floor(index / 255)}.${index % 255}` },
+        method: 'POST',
+      });
+
+    try {
+      for (let windowIndex = 0; windowIndex < 2; windowIndex += 1) {
+        const baseIndex = windowIndex * 1_024;
+        for (let offset = 0; offset < 1_024; offset += 1) {
+          expect((await handler(request(baseIndex + offset))).status).toBe(303);
+          expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
+        }
+
+        const activeLimited = await handler(request(baseIndex + 1_023));
+        expect(activeLimited.status).toBe(429);
+        expect(activeLimited.headers.get('retry-after')).toBe('60');
+        expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
+
+        vi.advanceTimersByTime(60_001);
+      }
+
+      const evictedOldest = await handler(request(0));
+      expect(evictedOldest.status).toBe(303);
+      expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // SPEC §9.5 / §9.4: typed reads also pass through the shell's anonymous-flood

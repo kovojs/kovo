@@ -39,7 +39,7 @@ code, and current supply-chain/build surfaces.
     stamping, reserved normalization redirect stamping, and no cache/build-token bleed into route
     normalization redirects. `pnpm run check:imports` passes for the new module.
 
-- [ ] **Bound app-level rate limiter key cardinality.**
+- [x] **Bound app-level rate limiter key cardinality.**
   - Evidence: app rate state is two unbounded `Map<string, RateBucket>` stores
     (`packages/server/src/app-load-shed.ts:25`), keys are inserted on every request
     (`packages/server/src/app-load-shed.ts:217`), and `appRateState()` creates persistent per-app maps
@@ -50,6 +50,10 @@ code, and current supply-chain/build surfaces.
     input, not just a rate-limit input.
   - Acceptance: tests drive thousands of distinct IP keys across windows and assert bounded memory
     growth plus preserved retry-after behavior for active buckets.
+  - Verified 2026-06-25: `packages/server/src/app-load-shed.ts` normalizes `maxKeys`, prunes expired
+    buckets, and evicts oldest keys before inserting new buckets; `pnpm test packages/server/src/app.test.ts`
+    drives 2,048 trusted-proxy IP keys across two windows while asserting the internal per-IP map
+    stays bounded and active buckets still return `429` plus `Retry-After: 60`.
 
 - [ ] **Sanitize browser `Kovo-Reauth` directives before navigation.**
   - Evidence: modular mutation fetch follows any 401 `Kovo-Reauth` header with `location.assign`

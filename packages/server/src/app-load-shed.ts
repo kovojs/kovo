@@ -33,29 +33,36 @@ interface RateLimitDecision {
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
+const DEFAULT_MAX_RATE_KEYS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
 const DEFAULT_GLOBAL_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   max: 20_000,
+  maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
 const DEFAULT_PER_IP_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   max: 600,
+  maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
 const DEFAULT_MUTATION_GLOBAL_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   max: 5_000,
+  maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
 const DEFAULT_MUTATION_PER_IP_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   max: 120,
+  maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
 const DEFAULT_QUERY_GLOBAL_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   max: 15_000,
+  maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
 const DEFAULT_QUERY_PER_IP_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   max: 600,
+  maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
 
@@ -136,14 +143,18 @@ function normalizeRate(
 ): ResolvedAppRateLimitOptions | false {
   if (options === false) return false;
   const max = options?.max ?? defaults.max;
+  const maxKeys = options?.maxKeys ?? defaults.maxKeys;
   const windowMs = options?.windowMs ?? defaults.windowMs;
   if (!Number.isSafeInteger(max) || max < 1) {
     throw new TypeError('createApp({ requestLimits.*.max }) must be a positive integer.');
   }
+  if (!Number.isSafeInteger(maxKeys) || maxKeys < 1) {
+    throw new TypeError('createApp({ requestLimits.*.maxKeys }) must be a positive integer.');
+  }
   if (!Number.isSafeInteger(windowMs) || windowMs < 1) {
     throw new TypeError('createApp({ requestLimits.*.windowMs }) must be a positive integer.');
   }
-  return { max, windowMs };
+  return { max, maxKeys, windowMs };
 }
 
 function requestBodySizeFailure(
@@ -222,12 +233,20 @@ function consumeRateLimit(
   limit: ResolvedAppRateLimitOptions,
   now: number,
 ): RateLimitDecision | undefined {
+  evictExpiredRateBuckets(store, limit, now);
+
   const existing = store.get(key);
-  const bucket =
-    existing === undefined || now - existing.windowStart >= limit.windowMs
-      ? { count: 0, windowStart: now }
-      : existing;
+  const bucket = existing === undefined ? { count: 0, windowStart: now } : existing;
   bucket.count += 1;
+  if (existing === undefined) {
+    while (store.size >= limit.maxKeys) {
+      const oldest = store.keys().next().value;
+      if (oldest === undefined) break;
+      store.delete(oldest);
+    }
+  } else {
+    store.delete(key);
+  }
   store.set(key, bucket);
 
   if (bucket.count <= limit.max) return undefined;
@@ -237,12 +256,28 @@ function consumeRateLimit(
   };
 }
 
+function evictExpiredRateBuckets(
+  store: Map<string, RateBucket>,
+  limit: ResolvedAppRateLimitOptions,
+  now: number,
+): void {
+  for (const [key, bucket] of store) {
+    if (now - bucket.windowStart >= limit.windowMs) store.delete(key);
+  }
+}
+
 function appRateState(app: KovoApp): AppRateState {
   const existing = rateStates.get(app);
   if (existing) return existing;
   const next = { global: new Map<string, RateBucket>(), perIp: new Map<string, RateBucket>() };
   rateStates.set(app, next);
   return next;
+}
+
+/** @internal */
+export function appRateLimitKeyCounts(app: KovoApp): { global: number; perIp: number } {
+  const state = appRateState(app);
+  return { global: state.global.size, perIp: state.perIp.size };
 }
 
 /** @internal */

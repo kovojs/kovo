@@ -77,6 +77,8 @@ function isResolvedRateLimit(value: unknown): boolean {
     (isRecord(value) &&
       typeof value.max === 'number' &&
       Number.isSafeInteger(value.max) &&
+      typeof value.maxKeys === 'number' &&
+      Number.isSafeInteger(value.maxKeys) &&
       typeof value.windowMs === 'number' &&
       Number.isSafeInteger(value.windowMs))
   );
