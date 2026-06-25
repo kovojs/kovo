@@ -163,6 +163,21 @@ export interface ResolvedAppRequestLimitOptions extends ResolvedAppRequestRateLi
   trustedProxy: boolean;
 }
 
+/** Audited opt-out from the default-on outbound-egress private-network deny floor. */
+export interface AppEgressOptOut {
+  enabled: false;
+  /** Why this process intentionally serves without the SSRF egress floor (SPEC §6.6). */
+  justification: string;
+}
+
+/**
+ * `createApp({ egress })` posture. Omit it to install the default floor; production uses an
+ * empty internal allowlist while development keeps local/private sidecars reachable except
+ * metadata. Pass an `EgressOptions` object to exercise exact allowlist semantics in any mode.
+ * Disable only through the audited `{ enabled: false, justification }` escape.
+ */
+export type AppEgressOptions = EgressOptions | AppEgressOptOut | false;
+
 /** Options for `createApp`: the routes, queries, mutations, endpoints, document, CSRF, and request providers. */
 export interface CreateAppOptions<
   SessionValue = never,
@@ -193,16 +208,17 @@ export interface CreateAppOptions<
   envSource?: Record<string, unknown>;
   /**
    * Outbound-egress private-network deny floor (SPEC §6.6; `plans/secure-framework.md`
-   * Phase 5). OPT-IN — passing this object installs a fail-closed runtime *defense-in-depth*
-   * floor (NOT a by-construction proof) that DENIES outbound connections to private /
-   * loopback / link-local / cloud-metadata destinations while leaving all public egress
-   * unrestricted. Reach a specific internal destination by listing its `host:port` in
-   * `allowInternal`. Cloud instance-metadata is reachable only from a `kovo` credential
-   * factory, never via `allowInternal`. The floor has a high false-positive cost (every
-   * internal service hard-fails until allowlisted), so it is not default-on. See
-   * {@link EgressOptions}.
+   * Phase 5). DEFAULT-ON fail-closed runtime *defense-in-depth* floor (NOT a by-construction
+   * proof) that DENIES outbound connections to private / loopback / link-local /
+   * cloud-metadata destinations while leaving all public egress unrestricted. Omit this option
+   * to install the floor by default: production uses an empty internal allowlist, while
+   * development keeps localhost/private sidecars reachable except cloud metadata. List a
+   * specific internal destination by `host:port` in `allowInternal` to use exact allowlist
+   * semantics in any mode. Cloud instance-metadata is reachable only from a `kovo` credential
+   * factory, never via `allowInternal`. Disable only with an audited `{ enabled: false,
+   * justification }` opt-out; production refuses a missing/partial or unaudited-disabled floor.
    */
-  egress?: EgressOptions;
+  egress?: AppEgressOptions;
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
   liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];

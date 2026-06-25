@@ -5,15 +5,11 @@ import {
   resolveEgressPolicy,
   type EgressOptions,
 } from './egress.js';
-
-type UndiciFloorModule = typeof import('./egress-undici.js');
-
-let undiciFloorModule: UndiciFloorModule | undefined;
-
-async function loadUndiciFloorModule(): Promise<UndiciFloorModule> {
-  undiciFloorModule ??= await import('./egress-undici.js');
-  return undiciFloorModule;
-}
+import {
+  installUndiciFloor,
+  isUndiciFloorInstalled,
+  undiciFloorTamperStatus,
+} from './egress-undici.js';
 
 /**
  * Bootstrap for the outbound-egress private-network deny floor (SPEC §6.6;
@@ -21,12 +17,12 @@ async function loadUndiciFloorModule(): Promise<UndiciFloorModule> {
  * startup self-probe.
  *
  * WHERE THIS RUNS. The single app-assembly chokepoint is `createApp` (mirroring the env /
- * refuse-to-boot precedent in `env.ts`). `createApp` calls {@link installEgressFloor} when an
- * `egress` config is present (opt-in: the floor has high false-positive cost — every internal
- * service or localhost DB hard-fails until allowlisted — so it is NOT default-on; the operator
- * opts in by passing `egress`). Because monkeypatches do NOT cross `Worker`/`child_process`
- * boundaries, every worker/child bootstrap that serves requests MUST call this again; the
- * self-probe below is the safety net that LOUDLY logs when a process is serving without it.
+ * refuse-to-boot precedent in `env.ts`). `createApp` installs this floor by default: production
+ * and explicit operator config use empty-allowlist deny semantics, while omitted development
+ * config keeps non-metadata private sidecars reachable so localhost boot stays usable. Because
+ * monkeypatches do NOT cross `Worker`/`child_process` boundaries, every worker/child bootstrap
+ * that serves requests MUST call this again; the self-probe below is the safety net that LOUDLY
+ * logs when a process is serving without it.
  *
  * RESIDUAL FAIL-OPEN (enumerated honestly — this is a FLOOR, never a by-construction proof):
  *   1. Same-process app code can re-patch `net.Socket.prototype.connect` or call
@@ -49,6 +45,19 @@ async function loadUndiciFloorModule(): Promise<UndiciFloorModule> {
 
 let bootResult: EgressFloorInstall | undefined;
 
+interface EgressFloorInstallOptions {
+  /**
+   * Internal dev-only posture for omitted `createApp({ egress })`: keep the dual floor
+   * installed, but permit non-metadata private-network destinations.
+   */
+  allowPrivateNetwork?: boolean;
+}
+
+/** Boot refusal for a missing, partial, tampered, or unaudited-disabled egress floor. */
+export class EgressFloorBootError extends Error {
+  override readonly name = 'EgressFloorBootError';
+}
+
 /** What an egress-floor install reports back to the bootstrap caller. */
 export interface EgressFloorInstall {
   /** Whether the synchronous `net.connect` enforcement layer is active. */
@@ -60,11 +69,10 @@ export interface EgressFloorInstall {
 }
 
 /**
- * Synchronously install the egress floor's net.connect layer and resolve+validate the policy,
- * then kick off the asynchronous undici-dispatcher layer (not awaited). Returns immediately so
- * `createApp` stays synchronous. A config error (e.g. a metadata IP in `allowInternal`) throws
- * synchronously here and refuses boot, mirroring the env refuse-to-boot precedent. The returned
- * promise resolves once BOTH layers are settled (tests await it; callers may ignore it).
+ * Synchronously install both egress floor layers and resolve+validate the policy. A config error
+ * (e.g. a metadata IP in `allowInternal`) throws synchronously here and refuses boot, mirroring
+ * the env refuse-to-boot precedent. The public wrapper remains promise-returning for callers that
+ * already await worker/child bootstrap installs.
  *
  * @param options - The `egress` config from `createApp` (the allowInternal allowlist).
  * @param warn - Sink for config + self-probe warnings (defaults to `console.warn`).
@@ -73,44 +81,43 @@ export function installEgressFloor(
   options: EgressOptions | undefined,
   warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
 ): Promise<EgressFloorInstall> {
+  return Promise.resolve(installEgressFloorSync(options, warn));
+}
+
+/**
+ * Synchronous install used by `createApp` so production boot can verify both layers before
+ * returning an app aggregate. Public `installEgressFloor()` remains promise-returning for the
+ * existing worker/child bootstrap surface.
+ *
+ * @internal
+ */
+export function installEgressFloorSync(
+  options: EgressOptions | undefined,
+  warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
+  installOptions: EgressFloorInstallOptions = {},
+): EgressFloorInstall {
   // Resolve + validate synchronously: a bad config (metadata in allowInternal) throws now and
   // refuses boot. Layer (b) is also installed synchronously so raw node:http is floored before
   // the undici import resolves.
-  const policy = resolveEgressPolicy(options, warn);
+  const policy = resolveEgressPolicy(options, warn, installOptions);
   const uninstallNet = installNetConnectFloor(policy, options?.hardening ?? 'off', warn);
+  const uninstallUndici = installUndiciFloor(policy);
 
-  return (async (): Promise<EgressFloorInstall> => {
-    let uninstallUndici: () => void = () => {};
-    let undiciInstalled = false;
-    try {
-      const undiciFloor = await loadUndiciFloorModule();
-      uninstallUndici = await undiciFloor.installUndiciFloor(policy);
-      undiciInstalled = undiciFloor.isUndiciFloorInstalled();
-    } catch (error) {
-      warn(
-        `undici dispatcher layer failed to install (${
-          error instanceof Error ? error.message : String(error)
-        }); the net.connect layer is still active, but pooled-socket fetch reuse is NOT gated. ` +
-          'This is a partial floor — investigate.',
-      );
-    }
+  const result: EgressFloorInstall = {
+    netConnectInstalled: isNetConnectFloorInstalled(),
+    undiciInstalled: isUndiciFloorInstalled(),
+    uninstall() {
+      uninstallUndici();
+      uninstallNet();
+      if (bootResult === result) bootResult = undefined;
+    },
+  };
+  bootResult = result;
 
-    const result: EgressFloorInstall = {
-      netConnectInstalled: isNetConnectFloorInstalled(),
-      undiciInstalled,
-      uninstall() {
-        uninstallUndici();
-        uninstallNet();
-        if (bootResult === result) bootResult = undefined;
-      },
-    };
-    bootResult = result;
-
-    // LOUD self-probe (SPEC §6.6): if EITHER layer is missing after an explicit install request,
-    // say so unmissably. A missing floor is a security regression, not a silent fallback.
-    selfProbe(warn);
-    return result;
-  })();
+  // LOUD self-probe (SPEC §6.6): if EITHER layer is missing after install, say so
+  // unmissably. A missing floor is a security regression, not a silent fallback.
+  selfProbe(warn);
+  return result;
 }
 
 /**
@@ -131,10 +138,7 @@ export function selfProbe(
   } = {},
 ): { netConnectInstalled: boolean; undiciInstalled: boolean } {
   const netStatus = netConnectFloorTamperStatus();
-  const undiciStatus = undiciFloorModule?.undiciFloorTamperStatus() ?? {
-    installed: false,
-    tampered: false,
-  };
+  const undiciStatus = undiciFloorTamperStatus();
   const net = netStatus.installed;
   const undici = undiciStatus.installed;
   const boundary = options.boundary ?? 'process';

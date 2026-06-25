@@ -140,6 +140,11 @@ export interface EgressPolicy {
   readonly allowInternal: ReadonlySet<string>;
   /** Broad-CIDR entries the operator passed (flagged + warned, honored as a fallback). */
   readonly allowInternalCidrs: readonly string[];
+  /**
+   * Internal dev-only posture: keep the floor installed and metadata blocked, but permit
+   * non-metadata private/loopback/link-local destinations so local sidecars do not brick.
+   */
+  readonly allowPrivateNetwork: boolean;
 }
 
 /** Operator-facing config (the `egress` field of `createApp`). */
@@ -169,6 +174,11 @@ export interface EgressOptions {
 
 type EgressHardeningMode = NonNullable<EgressOptions['hardening']>;
 
+interface ResolveEgressPolicyOptions {
+  /** Internal boot posture for omitted `createApp({ egress })` in development. */
+  allowPrivateNetwork?: boolean;
+}
+
 const METADATA_ALLOWLIST_REJECT =
   'The cloud instance-metadata endpoint can never be allowlisted via egress.allowInternal ' +
   '(that would re-open the exact SSRF credential-theft path the floor closes). Remove it; ' +
@@ -178,6 +188,7 @@ const METADATA_ALLOWLIST_REJECT =
 export function resolveEgressPolicy(
   options: EgressOptions | undefined,
   warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
+  policyOptions: ResolveEgressPolicyOptions = {},
 ): EgressPolicy {
   const allowInternal = new Set<string>();
   const allowInternalCidrs: string[] = [];
@@ -213,7 +224,11 @@ export function resolveEgressPolicy(
     }
     allowInternal.add(`${parsed.host.toLowerCase()}:${parsed.port}`);
   }
-  return { allowInternal, allowInternalCidrs };
+  return {
+    allowInternal,
+    allowInternalCidrs,
+    allowPrivateNetwork: policyOptions.allowPrivateNetwork === true,
+  };
 }
 
 /** Boot-time config error for an invalid/forbidden egress allowlist entry. */
@@ -460,6 +475,8 @@ export function evaluateEgress(args: {
   // BOTH the original host token (e.g. "localhost:11434", "otel:4318") and the resolved IP
   // (e.g. "127.0.0.1:11434", "10.0.5.2:6379"). Matching the host token lets operators allowlist
   // a stable name; matching the resolved IP lets them allowlist by address.
+  if (policy.allowPrivateNetwork) return null;
+
   const hostKey = `${host.toLowerCase()}:${port}`;
   const ipKey = `${resolvedIp.toLowerCase()}:${port}`;
   if (policy.allowInternal.has(hostKey) || policy.allowInternal.has(ipKey)) return null;

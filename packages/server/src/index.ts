@@ -92,6 +92,8 @@ export { StaticExportError } from './static-export-diagnostics.js';
  */
 export { createKovoAppShellViteDevIntegration, kovoAppShellViteDevPlugin } from './vite-dev.js';
 export type {
+  AppEgressOptions,
+  AppEgressOptOut,
   AppDiagnostic,
   AppDocumentOptions,
   AppErrorShellOptions,

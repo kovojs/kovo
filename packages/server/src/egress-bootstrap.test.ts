@@ -1,20 +1,30 @@
 import http from 'node:http';
 import net, { type AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agent, setGlobalDispatcher } from 'undici';
 
 import { createApp } from './app.js';
 import { EGRESS_BLOCKED_ERROR_NAME, EgressConfigError } from './egress.js';
-import { activeEgressFloor, installEgressFloor, selfProbe } from './egress-bootstrap.js';
+import {
+  EgressFloorBootError,
+  activeEgressFloor,
+  installEgressFloor,
+  selfProbe,
+} from './egress-bootstrap.js';
 import { awsCredential } from './egress-credentials.js';
 
 describe('egress bootstrap: dual-layer install + self-probe', () => {
   let teardown: (() => void) | undefined;
 
+  beforeEach(() => {
+    activeEgressFloor()?.uninstall();
+  });
+
   afterEach(() => {
     teardown?.();
     teardown = undefined;
     activeEgressFloor()?.uninstall();
+    vi.restoreAllMocks();
   });
 
   it('self-probe LOUDLY warns when the floor is not installed', () => {
@@ -89,17 +99,42 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     );
   });
 
-  it('end-to-end: createApp({ egress }) floors fetch to a private literal IP', async () => {
+  it('end-to-end: createApp() installs a dev-lenient floor and allows loopback', async () => {
+    const server = http.createServer((_req, res) => res.end('ok'));
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as AddressInfo).port;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    createApp();
+    teardown = activeEgressFloor()?.uninstall;
+
+    const ok = await fetch(`http://127.0.0.1:${port}/`);
+    expect(await ok.text()).toBe('ok');
+    await expect(fetch('http://169.254.169.254/latest/meta-data/')).rejects.toBeDefined();
+    expect(warn.mock.calls.join('\n')).toContain('metadata remains blocked');
+
+    server.close();
+  });
+
+  it('end-to-end: createApp({ egress: { allowInternal: [] } }) denies loopback in development', async () => {
+    const server = http.createServer((_req, res) => res.end('ok'));
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as AddressInfo).port;
+
+    createApp({ egress: { allowInternal: [] } });
+    teardown = activeEgressFloor()?.uninstall;
+
+    await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
+
+    server.close();
+  });
+
+  it('end-to-end: createApp({ egress }) keeps explicit internal allowlist semantics', async () => {
     const server = http.createServer((_req, res) => res.end('ok'));
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
     const port = (server.address() as AddressInfo).port;
 
     createApp({ egress: { allowInternal: [`127.0.0.1:${port}`] } });
-    // createApp fires installEgressFloor without awaiting it (it stays synchronous); poll for
-    // the async undici layer to settle.
-    for (let i = 0; i < 50 && !activeEgressFloor()?.undiciInstalled; i += 1) {
-      await new Promise((r) => setTimeout(r, 5));
-    }
     teardown = activeEgressFloor()?.uninstall;
 
     // The allowlisted loopback origin is reachable.
@@ -110,6 +145,69 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     await expect(fetch('http://10.0.5.2:6379/')).rejects.toBeDefined();
 
     server.close();
+  });
+
+  it('refuses production boot when egress is disabled without an audited opt-out', () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      expect(() => createApp({ egress: false })).toThrow(EgressFloorBootError);
+      expect(() => createApp({ egress: { enabled: false, justification: '' } })).toThrow(
+        EgressFloorBootError,
+      );
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
+
+  it('installs a production default empty-allowlist floor and denies loopback', async () => {
+    const server = http.createServer((_req, res) => res.end('ok'));
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as AddressInfo).port;
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      createApp();
+      teardown = activeEgressFloor()?.uninstall;
+      await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
+    } finally {
+      server.close();
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
+
+  it('allows an audited production opt-out and leaves the process floor absent', () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      expect(() =>
+        createApp({
+          egress: {
+            enabled: false,
+            justification: 'runtime runs behind a platform egress proxy with IMDS blocked',
+          },
+        }),
+      ).not.toThrow();
+      expect(activeEgressFloor()).toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
+
+  it('keeps development lenient for unaudited disable but warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(() => createApp({ egress: false })).not.toThrow();
+    expect(activeEgressFloor()).toBeUndefined();
+    expect(warn.mock.calls.join('\n')).toContain('Development stays lenient');
+  });
+
+  it('refuses createApp boot synchronously on a metadata IP in allowInternal', () => {
+    expect(() => createApp({ egress: { allowInternal: ['169.254.169.254:80'] } })).toThrow(
+      EgressConfigError,
+    );
   });
 
   it('kovo.awsCredential() opens the metadata frame; a bare fetch outside it does not', async () => {

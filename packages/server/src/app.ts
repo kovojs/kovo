@@ -11,9 +11,11 @@ import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
 import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
-import { validateAppEnv } from './env.js';
-import { installEgressFloor } from './egress-bootstrap.js';
+import { resolveBootMode, validateAppEnv } from './env.js';
+import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
 export type {
+  AppEgressOptions,
+  AppEgressOptOut,
   AppAuthoringContext,
   AppAuthoringDeclarations,
   AppDocumentOptions,
@@ -40,10 +42,12 @@ export type {
   ResolvedAppRequestLimitOptions,
   ResolvedAppRequestRateLimitOptions,
 } from './app-types.js';
+import type { EgressOptions } from './egress.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryDefinition } from './query.js';
 import type { LayoutDeclaration } from './route.js';
 import type {
+  AppEgressOptions,
   AppAuthoringContext,
   AppAuthoringDeclarations,
   AppLifecycleRequest,
@@ -92,15 +96,7 @@ export function createApp<
     },
   );
 
-  // Outbound-egress private-network deny floor (SPEC §6.6; plans/secure-framework.md Phase 5).
-  // OPT-IN runtime defense-in-depth (NOT a by-construction proof, labeled as a floor): the
-  // synchronous net.connect layer is installed here at the boot chokepoint so it is active for
-  // raw node:http immediately; the undici dispatcher layer installs asynchronously (it imports
-  // `undici`) — kicked off here and not awaited so createApp stays synchronous. A bare config
-  // error (e.g. a metadata IP in allowInternal) throws synchronously and refuses boot.
-  if (options.egress !== undefined) {
-    void installEgressFloor(options.egress);
-  }
+  bootstrapEgressFloor(options.egress);
 
   const authoringContext = appAuthoringContext<AppRequest>();
   const routes = resolveAppAuthoringDeclarations(options.routes, authoringContext);
@@ -146,6 +142,83 @@ export function createApp<
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
   };
+}
+
+function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {
+  const mode = resolveBootMode();
+  const warn = (message: string): void => console.warn(`[kovo egress] ${message}`);
+
+  if (isEgressOptOut(egress)) {
+    if (egress.justification.trim() === '') {
+      refuseOrWarnUnauditedDisabledEgress(mode, warn);
+      return;
+    }
+    if (mode !== 'production') {
+      warn(
+        `createApp({ egress: { enabled: false } }) disables the default SSRF egress floor ` +
+          `in development (${egress.justification}; SPEC §6.6 runtime defense-in-depth).`,
+      );
+    }
+    return;
+  }
+
+  if (egress === false) {
+    refuseOrWarnUnauditedDisabledEgress(mode, warn);
+    return;
+  }
+
+  const devDefault = mode !== 'production' && egress === undefined;
+  // SPEC §6.6 outbound egress: default-on runtime defense-in-depth floor. Production and
+  // explicit operator config preserve empty-allowlist deny semantics. The omitted development
+  // default keeps the floor installed and metadata blocked, but permits localhost/private
+  // sidecars so development boot does not brick ordinary DB/Redis/OTel/Ollama setups.
+  installEgressFloorSync(egress as EgressOptions | undefined, warn, {
+    allowPrivateNetwork: devDefault,
+  });
+  if (devDefault) {
+    warn(
+      'createApp() installed the default outbound-egress floor in development with local ' +
+        'private-network destinations permitted; cloud metadata remains blocked. Pass ' +
+        '`egress: { allowInternal: [] }` to exercise production empty-allowlist semantics.',
+    );
+  }
+  if (mode === 'production') {
+    try {
+      selfProbe(() => {}, { failure: 'throw' });
+    } catch (error) {
+      throw new EgressFloorBootError(
+        `createApp() refused to boot: the default-on outbound-egress floor is missing, ` +
+          `partial, or tampered in production (SPEC §6.6). ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+      );
+    }
+  }
+}
+
+function isEgressOptOut(value: AppEgressOptions | undefined): value is {
+  enabled: false;
+  justification: string;
+} {
+  return (
+    typeof value === 'object' && value !== null && 'enabled' in value && value.enabled === false
+  );
+}
+
+function refuseOrWarnUnauditedDisabledEgress(
+  mode: 'production' | 'development',
+  warn: (message: string) => void,
+): void {
+  const message =
+    'createApp() has the default-on outbound-egress private-network deny floor disabled ' +
+    'without an audited non-empty justification. Use ' +
+    '`createApp({ egress: { enabled: false, justification: "..." } })` only when this ' +
+    'process is intentionally protected by an external SSRF/metadata-control boundary ' +
+    '(SPEC §6.6 runtime defense-in-depth).';
+  if (mode === 'production') {
+    throw new EgressFloorBootError(`createApp() refused to boot: ${message}`);
+  }
+  warn(`${message} Development stays lenient; production refuses to boot.`);
 }
 
 function normalizeAppDocumentOptions(

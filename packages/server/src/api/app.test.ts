@@ -21,6 +21,7 @@ import * as egressApi from '../egress.js';
 import * as egressBootstrapApi from '../egress-bootstrap.js';
 import * as egressCredentialsApi from '../egress-credentials.js';
 import * as envApi from '../env.js';
+import * as fileApi from '../file.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
@@ -409,6 +410,8 @@ describe('server app-shell public API barrels', () => {
       createStorageDownloadEndpoint: capabilityRouteApi.createStorageDownloadEndpoint,
       deriveDownloadKey: capabilityRouteApi.deriveDownloadKey,
       drainCapabilityMintFacts: capabilityRouteApi.drainCapabilityMintFacts,
+      // SPEC §6.6 / §9.1: rooted file serving is the public local-file sink capability.
+      rootedFiles: fileApi.rootedFiles,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
       // create-kovo starter template's vite.config.ts.
       createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,

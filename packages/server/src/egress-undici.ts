@@ -169,7 +169,7 @@ let installedDispatcher: EgressGatingDispatcher | undefined;
  * a per-`fetch` `dispatcher` option also bypasses the global one. This is DEFENSE-IN-DEPTH; the
  * `net.connect` layer remains the backstop for those cases (it still catches the FIRST dial).
  */
-export async function installUndiciFloor(policy: EgressPolicy): Promise<() => void> {
+export function installUndiciFloor(policy: EgressPolicy): () => void {
   if (installedDispatcher) {
     installedDispatcher.setPolicy(policy);
     if (getGlobalDispatcher() !== installedDispatcher) {

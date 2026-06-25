@@ -52,7 +52,7 @@ Honest current posture across the threat taxonomy. "Tier" is Kovo's _current_ ho
 | **A05 Security headers**                    | strict CSP/COOP/COEP/Permissions default-on (secure-default + DiD)                | Django/Spring checklists; Laravel ships none    | No SRI on emitted modules → OPP-13; no reporting → OPP-14; no Clear-Site-Data/OAC → OPP-15                             |
 | **A07 AuthN failures**                      | KV418 + CSRF + cookie floor (by-construction + DiD); strength out-of-scope        | Rails 8 first-party auth, opaque sessions       | No password hasher (OPP-10), key rotation (OPP-05), opaque session (OPP-11), enumeration-safe (OPP-09)                 |
 | **A08 Deserialization / proto-pollution**   | shape-validated decode (runtime-DiD)                                              | SAST flags known sinks                          | No stated floor that _all_ body decode is schema-bound, null-proto, reviver-free → OPP-19                              |
-| **A10 SSRF (metadata, rebind)**             | dual-layer egress deny floor (runtime-DiD, 5 enumerated residuals) — **OPT-IN**   | nobody else has any SSRF control                | Opt-in contradicts secure-default bias → **OPP-01**                                                                    |
+| **A10 SSRF (metadata, rebind)**             | default-on dual-layer egress deny floor (runtime-DiD, 5 enumerated residuals)     | nobody else has any SSRF control                | Dev remains lenient for localhost sidecars; production/explicit config deny by default                                 |
 | **API4 Resource consumption**               | KV430 shape budget (runtime-DiD); rate-limit un-hardened                          | Rails 8 `rate_limit`, APIM                      | Limiter key map unbounded (DoS) → OPP-18; no pagination/body caps → OPP-29                                             |
 | **Lost-update / TOCTOU**                    | KV429 static flag + CAS helper (static-analysis + library)                        | optimistic-locking columns                      | Not by-construction; multi-row invariants need `forUpdate` → (CAS hardening, secure-framework.md)                      |
 | **CSRF**                                    | synchronizer token + Origin floor + KV418 (library + by-construction gate)        | SvelteKit Origin default-on                     | Both-headers-absent compat fallback; no BREACH mask → OPP-16                                                           |
@@ -75,7 +75,7 @@ OPP-28/29/30 were tiered by the main thread (their verdict agents hit the sessio
 These ship _no new mechanism_ — they correct a default on an already-built, tested, fail-closed floor.
 This is where Kovo's secure-default bias (technical-preview: prefer security-improving breaks) pays off.
 
-- [ ] **OPP-01 — SSRF egress floor default-ON, prod refuse-to-boot.** runtime-DiD · lev 8 · M · breaking.
+- [x] **OPP-01 — SSRF egress floor default-ON, prod refuse-to-boot.** runtime-DiD · lev 8 · M · breaking.
       `createApp` installs the dual-layer metadata/private-network deny floor only when `egress` config is
       present (`app.ts:101`), so **by default an app has zero SSRF protection** — the sharpest contradiction
       of the secure-default bias. Install unconditionally; dev stays lenient (loud self-probe, never bricks
@@ -84,6 +84,9 @@ This is where Kovo's secure-default bias (technical-preview: prefer security-imp
       non-allowlistable. _Trade-off:_ amends normative SPEC §6.6 ("ships an opt-in floor") and **must** stay
       dev-lenient or it bricks every localhost DB/Redis/OTel/Ollama the AI-agent audience runs. Tracked open
       in `secure-framework-3.md` ("harden egress floor propagation") — elevate to default-on here.
+      Evidence: `createApp()` now calls `installEgressFloorSync` by default, production refuses unaudited
+      disable, omitted dev config keeps private sidecars reachable while metadata remains blocked, and
+      `SPEC.md` §6.6 records the default-on contract. `pnpm exec vitest run packages/server/src --run` passed.
 
 - [x] **OPP-03 — Close the class-less cookie passthrough.** by-construction (app-data half) + runtime-DiD
       (session half) · lev 6 · M · breaking. `cookies.ts` lets an unclassed cookie ship with no
@@ -441,7 +444,6 @@ escaping (KV236), not by TT. Every audited escape records a `kovo explain` prove
 
 ## 5. Open questions
 
-- OPP-01: exact dev-leniency boundary so localhost sidecars never brick, and the SPEC §6.6 amendment wording.
 - OPP-07/08: does a first-class `tool()` primitive belong in core, and what is the minimal governed-sink
   annotation that keeps capability-bounding sound without over-claiming Excessive-Agency coverage?
 - OPP-11: reverse §6.5 to own the session sink (unlocks opaque-default + JWT-class kill + OPP-12), or stay
