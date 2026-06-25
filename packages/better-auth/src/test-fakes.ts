@@ -44,7 +44,10 @@ export class FakeBetterAuth implements BetterAuthLike<AuthSession, AuthUser> {
     getSession: (options: { headers: Headers; returnHeaders: true }) => {
       this.lastHeaders = options.headers;
 
-      const authenticated = options.headers.get('cookie') === 'kovo_session=s1';
+      const authenticated = (options.headers.get('cookie') ?? '')
+        .split(';')
+        .map((cookie) => cookie.trim())
+        .includes('kovo_session=s1');
       const response = authenticated
         ? {
             session: {
