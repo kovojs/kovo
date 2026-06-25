@@ -8,6 +8,7 @@ import { diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
   outputContextForAttribute,
+  trustedHtmlBrandLocalNames,
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
 import {
@@ -1360,7 +1361,11 @@ function isExplicitHtmlCompositionExpression(
     (item) => item.start >= expression.start && item.end <= expression.end,
   );
   if (!call) return false;
-  if (call.name === 'trustedHtml') return true;
+  // SPEC §6.6(1) / §5.2 rule 9: recognize the `trustedHtml`/`safeRichHtml` brand by AST
+  // symbol-identity (the local name bound to the real `@kovojs/browser` export), never by the raw
+  // call name — so a shadowing local or a same-named foreign import is not treated as trusted
+  // HTML composition.
+  if (trustedHtmlBrandLocalNames(model).has(call.name)) return true;
   const parts = call.name.split('.');
   return parts.at(-2) === 'definition' && parts.at(-1) === 'render';
 }
