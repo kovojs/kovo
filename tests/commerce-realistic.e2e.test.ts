@@ -73,6 +73,7 @@ describe('realistic-app: commerce real stack driven in a browser (B2/S2/S3)', ()
           password: 'correct',
         },
         headers: {
+          origin,
           referer: `${origin}/login?next=%2Fcart`,
           'x-forwarded-for': '203.0.113.90',
         },

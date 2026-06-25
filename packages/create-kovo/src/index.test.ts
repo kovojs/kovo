@@ -454,7 +454,11 @@ describe('create-kovo starter (build integration)', () => {
       });
       const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
         method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: cookieHeader(jar) },
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          origin,
+        },
         body: form.toString(),
         redirect: 'manual',
       });
