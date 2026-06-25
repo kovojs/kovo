@@ -93,21 +93,25 @@ This is where Kovo's secure-default bias (technical-preview: prefer security-imp
       _Trade-off:_ the app-data default is sound by construction; the "session cookie always hardened" half is
       a name-heuristic runtime floor — label it as such.
 
-- [ ] **OPP-18 — Bound the rate-limiter key cardinality.** runtime-DiD · lev 6 · S · non-breaking.
+- [x] **OPP-18 — Bound the rate-limiter key cardinality.** runtime-DiD · lev 6 · S · non-breaking.
       `app-load-shed.ts` uses unbounded `Map<string,RateBucket>` keyed per-request (global + perIp); an
       attacker-varied `clientIp`/`X-Forwarded-For` exhausts memory — the limiter is itself a DoS vector.
       Replace with bounded LRU + conservative `maxKeys` + periodic sweep; treat `clientIp` cardinality as a DoS
       _input_. _Trade-off:_ bounds memory but per-IP limiting stays meaningless under forgeable `X-Forwarded-For`
-      until a trusted-proxy hop count is configured. Tracked open in `secure-framework-3.md`.
+      until a trusted-proxy hop count is configured.
+      Evidence: `secure-framework-3.md` verifies `packages/server/src/app-load-shed.ts` bounds and evicts rate
+      buckets; `pnpm test packages/server/src/app.test.ts` covered the limiter behavior.
 
-- [ ] **OPP-17 / SINK-05 — Sanitize the browser `Kovo-Reauth` redirect.** runtime-DiD · lev 8 · S ·
+- [x] **OPP-17 / SINK-05 — Sanitize the browser `Kovo-Reauth` redirect.** runtime-DiD · lev 8 · S ·
       non-breaking. `inline-loader-build.ts` (~873) does `location.assign(reauth)` on a raw 401 header with no
       client re-sanitization — a live open-redirect/scheme-injection hole if the upstream is compromised. Route
       both the modular and inline mutation-fetch sinks through `sanitizeReauth` (same-origin, single leading
       slash, reject `//`/`/\`/scheme/host/encoded-control, fail closed to `/`). _Trade-off:_ the server already
       emits a safe value, so this hardens the upstream-compromise edge; ship it as a **function-call chokepoint**,
       not a brand object (the value is a runtime header the AST can't see — by-construction is impossible).
-      This is the LIVE open item in `secure-framework-3.md`.
+      Evidence: `secure-framework-3.md` verifies `packages/browser/src/reauth-directive.ts` and
+      `packages/browser/src/inline-loader-build.ts` sanitize modular and inline `Kovo-Reauth`; focused browser
+      tests plus `pnpm --filter @kovojs/browser run check:inline-loader` covered generated freshness.
 
 ### Band 1 — Marquee novel by-construction wins (things no other framework can express)
 
@@ -200,11 +204,13 @@ This is where Kovo's secure-default bias (technical-preview: prefer security-imp
       gets a conservative cap + a build warning. _Trade-off:_ a real secure-default that closes the forgotten-
       pagination DoS; must pick caps that don't surprise legitimate large reads (opt-up is explicit).
 
-- [ ] **OPP-26 — Single-source the inline fragment sanitizer.** runtime-DiD · lev 6 · M · non-breaking.
+- [x] **OPP-26 — Single-source the inline fragment sanitizer.** runtime-DiD · lev 6 · M · non-breaking.
       `response-fragment-apply.ts` carries local mini-sanitizers while the decision table lives in
       `sink-policy.ts` — a drift-XSS surface. Generate the inline helper from the shared policy at build time (or
       ship a parity corpus). _Trade-off:_ a real drift fix that single-sources an XSS floor — label runtime-DiD,
-      not the by-construction the original sketch claimed. Tracked open in `secure-framework-3.md`.
+      not the by-construction the original sketch claimed.
+      Evidence: `secure-framework-3.md` verifies shared server/browser sanitizer parity across
+      `response-fragment-apply`, inline-loader extraction, `sink-policy`, and static-export CSP hash fixtures.
 
 - [ ] **OPP-27 — Blessed safe-rich-HTML sanitizing sink through the `kovo` Trusted Types policy.**
       runtime-DiD (+ by-construction sole-policy transport) · lev 6 · L · non-breaking. TT correctly throws on raw
@@ -247,11 +253,13 @@ This is where Kovo's secure-default bias (technical-preview: prefer security-imp
       constant-time compare. _Trade-off:_ real low-cost hardening of a live oracle in Kovo's default-compressed
       stack — DiD-on-DiD, not a class kill.
 
-- [ ] **OPP-30 — Centralize framework system-response posture.** runtime-DiD · lev ~5 · S · non-breaking
+- [x] **OPP-30 — Centralize framework system-response posture.** runtime-DiD · lev ~5 · S · non-breaking
       _(main-thread tier)_. Pre-dispatch 429/413/normalization-redirect responses carry only Content-Type/
       Retry-After, missing the `Cache-Control: private,no-store` / `Vary: Cookie` / build-token posture of
       post-dispatch responses. One helper stamps all framework 3xx/4xx/5xx system responses. _Trade-off:_
-      low-risk consistency fix closing a cache-poisoning/posture-leak edge. Tracked open in `secure-framework-3.md`.
+      low-risk consistency fix closing a cache-poisoning/posture-leak edge.
+      Evidence: `secure-framework-3.md` verifies `packages/server/src/app-system-response.ts` centralizes
+      reserved system response posture; `pnpm test packages/server/src/app.test.ts` covered 413/429 paths.
 
 - [ ] **OPP-22 — Build-time egress deny floor (harden-runner analog).** runtime-DiD (CI scaffolding) +
       audit-only (release-age cooldown) · lev 4 · M · non-breaking. Secure-default CI: script-blocking install +
