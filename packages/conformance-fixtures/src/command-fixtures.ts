@@ -166,17 +166,56 @@ const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 export function workflowStepCommands(source: string): WorkflowStepCommand[] {
   const steps: WorkflowStepCommand[] = [];
+  let current: WorkflowStepCommand | undefined;
+  let currentRunBlock = false;
+
+  const pushCurrent = () => {
+    if (current?.run !== undefined || current?.uses !== undefined) {
+      steps.push(current);
+    }
+    current = undefined;
+    currentRunBlock = false;
+  };
 
   for (const line of source.split('\n')) {
-    const match = /^\s*-\s+(run|uses):\s*(.+?)\s*$/.exec(line);
-    if (!match) continue;
-    const kind = match[1];
-    const value = match[2];
-    if ((kind === 'run' || kind === 'uses') && value !== undefined) {
-      steps.push({ [kind]: value });
+    if (currentRunBlock) {
+      const command = line.trim();
+      if (command.startsWith('vp ')) {
+        steps.push({ run: command });
+      }
+    }
+
+    const stepStart = /^\s*-\s+(?:(run|uses):\s*(.+?)\s*|name:\s*.+?)$/.exec(line);
+    if (stepStart) {
+      pushCurrent();
+      current = {};
+      const kind = stepStart[1];
+      const value = stepStart[2];
+      if ((kind === 'run' || kind === 'uses') && value !== undefined) {
+        if (kind === 'run' && (value === '|' || value === '>')) {
+          currentRunBlock = true;
+        } else {
+          current[kind] = value;
+        }
+      }
+      continue;
+    }
+
+    const stepCommand = /^\s+(run|uses):\s*(.+?)\s*$/.exec(line);
+    if (current && stepCommand) {
+      const kind = stepCommand[1];
+      const value = stepCommand[2];
+      if ((kind === 'run' || kind === 'uses') && value !== undefined) {
+        if (kind === 'run' && (value === '|' || value === '>')) {
+          currentRunBlock = true;
+        } else {
+          current[kind] = value;
+        }
+      }
     }
   }
 
+  pushCurrent();
   return steps;
 }
 

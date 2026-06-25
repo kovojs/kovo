@@ -12,11 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  renderMutationResponse,
-  runMutation,
-  StaleVersionError,
-} from './mutation.js';
+import { renderMutationResponse, runMutation, StaleVersionError } from './mutation.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 

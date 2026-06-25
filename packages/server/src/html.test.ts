@@ -105,6 +105,7 @@ describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
   it('omits non-URL executable runtime attribute sinks', () => {
     expect(safeRuntimeAttribute('onclick', 'alert(1)')).toBeNull();
     expect(safeRuntimeAttribute('ONERROR', 'alert(1)')).toBeNull();
+    expect(safeRuntimeAttribute('on:click', '/c/client.js#run')).toBe('/c/client.js#run');
     expect(safeRuntimeAttribute('srcdoc', '<script>alert(1)</script>')).toBeNull();
     expect(safeRuntimeAttribute('style', 'background:url(javascript:alert(1))')).toBeNull();
     expect(safeRuntimeAttribute('style', 'min-height: 120px')).toBe('min-height: 120px');

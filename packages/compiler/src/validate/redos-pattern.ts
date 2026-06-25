@@ -118,9 +118,7 @@ function isCompileVisiblePatternLiteral(expression: ts.Expression): boolean {
 
   // `'^a' + '$'`: a `+` concatenation is literal only when both operands are.
   if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
-    return (
-      isCompileVisiblePatternLiteral(node.left) && isCompileVisiblePatternLiteral(node.right)
-    );
+    return isCompileVisiblePatternLiteral(node.left) && isCompileVisiblePatternLiteral(node.right);
   }
 
   // A template literal is compile-visible only if it has no substitutions; a `${...}` makes it

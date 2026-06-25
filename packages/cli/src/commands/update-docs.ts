@@ -22,6 +22,7 @@ interface ResolvedDocs {
   source: 'bundled' | 'fetched';
 }
 
+/** @internal Execute the CLI-only `kovo update-docs` command. */
 export async function runUpdateDocsCommand(
   options: UpdateDocsOptions = {},
 ): Promise<KovoCheckResult> {

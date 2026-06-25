@@ -14,7 +14,12 @@ const appFacingRoots = [
 
 const checkedExtensions = new Set(['.js', '.jsx', '.mjs', '.md', '.ts', '.tsx']);
 
-const explicitlyAllowedInternalImports = new Set([]);
+const explicitlyAllowedInternalImports = new Set([
+  // Framework-owned static docs export emits kovo-rules.md from the same internal
+  // source used by create-kovo and `kovo update-docs`; app-authored site/content
+  // remains covered by the zero-exception default.
+  'site/src/aux.ts -> @kovojs/core/internal/agent-docs',
+]);
 const explicitlyAllowedGeneratedImports = new Set([]);
 
 export async function collectImportBoundaryViolations({

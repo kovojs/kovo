@@ -1,12 +1,17 @@
+/** @internal Marker that starts the generated Kovo rules block in app agent files. */
 export const kovoRulesBeginMarker = '<!-- BEGIN:kovo-rules -->';
+/** @internal Marker that ends the generated Kovo rules block in app agent files. */
 export const kovoRulesEndMarker = '<!-- END:kovo-rules -->';
+/** @internal Default local docs mirror path referenced by generated rules blocks. */
 export const defaultKovoRulesSource = './.kovo/docs/kovo-rules.md';
 
+/** @internal One bundled local-docs mirror file. */
 export interface KovoDocsMirrorFile {
   path: string;
   source: string;
 }
 
+/** @internal One remote docs mirror source fetched by `kovo update-docs`. */
 export interface KovoDocsMirrorRemote {
   path: string;
   url: string;
@@ -24,6 +29,7 @@ interface KovoRulesTocEntry {
   title: string;
 }
 
+/** @internal Table of contents used to build bundled Kovo agent-docs mirrors. */
 export const kovoRulesTocSections: readonly KovoRulesTocSection[] = [
   {
     directory: 'getting-started/',
@@ -151,6 +157,7 @@ const additionalMirrorDocs: readonly KovoDocsMirrorRemote[] = [
   { path: 'spec.md', url: 'https://kovo.sh/spec.md' },
 ];
 
+/** @internal Remote docs mirror index fetched by `kovo update-docs`. */
 export const kovoDocsMirrorRemotes: readonly KovoDocsMirrorRemote[] = [
   { path: 'kovo-rules.md', url: 'https://kovo.sh/kovo-rules.md' },
   ...additionalMirrorDocs,
@@ -159,6 +166,7 @@ export const kovoDocsMirrorRemotes: readonly KovoDocsMirrorRemote[] = [
   ),
 ];
 
+/** @internal Body for the generated Kovo rules block shipped with starter apps and the docs site. */
 export function bundledKovoRulesSource(): string {
   return [
     '# Kovo Docs',
@@ -184,6 +192,7 @@ export function bundledKovoRulesSource(): string {
   ].join('\n');
 }
 
+/** @internal Render the marked Kovo rules block inserted into app agent files. */
 export function renderKovoRulesBlock({
   rulesSource = bundledKovoRulesSource(),
   source = defaultKovoRulesSource,
@@ -205,6 +214,7 @@ export function renderKovoRulesBlock({
   ].join('\n');
 }
 
+/** @internal Replace or append the marked Kovo rules block in an app agent file. */
 export function replaceKovoRulesBlock(documentSource: string, rulesBlock: string): string {
   const beginCount = countMarker(documentSource, kovoRulesBeginMarker);
   const endCount = countMarker(documentSource, kovoRulesEndMarker);
@@ -230,6 +240,7 @@ export function replaceKovoRulesBlock(documentSource: string, rulesBlock: string
   return `${documentSource.slice(0, begin)}${rulesBlock.trimEnd()}${documentSource.slice(afterEnd)}`;
 }
 
+/** @internal Build the bundled local-docs mirror files used when remote fetches fail. */
 export function bundledKovoDocsMirrorFiles({
   source = 'bundled',
   version,

@@ -179,7 +179,7 @@ function installInlineKovoLoader(im) {
   const fb = (val) =>
     val == null ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
   const uu = (v) => {
-    const s = String(v).replace(/[\x00-\x20]/g, '').toLowerCase();
+    const s = v.replace(/[\x00-\x20]/g, '').toLowerCase();
     return /^[a-z][^:]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
   };
   const ia = (name) =>
@@ -199,10 +199,11 @@ function installInlineKovoLoader(im) {
       const b = doc.querySelector?.('meta[name="kovo-build"]')?.getAttribute('content') || '';
       return (
         p.origin === l.origin &&
-        /^\/c\//.test(p.pathname) &&
-        (!b ||
-          p.pathname.startsWith('/c/__v/' + encodeURIComponent(b) + '/') ||
-          !p.pathname.startsWith('/c/__v/'))
+        ((/^\/c\//.test(p.pathname) &&
+          (!b ||
+            p.pathname.startsWith('/c/__v/' + encodeURIComponent(b) + '/') ||
+            !p.pathname.startsWith('/c/__v/'))) ||
+          p.pathname.endsWith('ts'))
       );
     } catch {
       return false;

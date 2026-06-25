@@ -9,10 +9,7 @@ import {
   deriveDownloadKey,
   drainCapabilityMintFacts,
 } from './capability-route.js';
-import {
-  createMemoryCapabilityReplayStore,
-  signCapability,
-} from './capability-url.js';
+import { createMemoryCapabilityReplayStore, signCapability } from './capability-url.js';
 import { runEndpoint } from './endpoint.js';
 
 const SECRET = 'capability-route-test-secret-at-least-32-characters-long';
@@ -219,10 +216,7 @@ describe('capability download route: verify-before-read sink', () => {
     const storage = await storageWith('a.pdf', 'A');
     const { reads, storage: recording } = recordingStorage(storage);
     const route = createStorageDownloadEndpoint({ secret: SECRET, storage: recording });
-    const response = await runEndpoint(
-      route,
-      new Request(`https://app.example${BASE}/a.pdf`),
-    );
+    const response = await runEndpoint(route, new Request(`https://app.example${BASE}/a.pdf`));
     expect(response.status).toBe(404);
     expect(reads).toEqual([]);
   });

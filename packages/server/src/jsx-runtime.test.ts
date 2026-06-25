@@ -219,6 +219,20 @@ describe('server jsx runtime', () => {
     ).toBe('<iframe title="safe"></iframe>');
   });
 
+  it('preserves Kovo delegated handler attributes while omitting native event handlers', () => {
+    // SPEC.md §4.4 uses `on:*` as declarative Kovo handler metadata; only native
+    // `on*` HTML event attributes are executable sinks under SPEC.md §4.8.
+    expect(
+      html(
+        jsx('button', {
+          onclick: 'alert(1)',
+          'on:click': '/c/client.js#run',
+          children: 'Run',
+        }),
+      ),
+    ).toBe('<button on:click="/c/client.js#run">Run</button>');
+  });
+
   it('renders style objects through property-level sanitizers', () => {
     expect(
       html(

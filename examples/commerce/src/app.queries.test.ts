@@ -87,14 +87,18 @@ describe('commerce example queries', () => {
 
     // The mutation handler receives the read-write request (carries `db`); the query loaders below
     // read through the framework-threaded read-only `context.db` (SPEC §9.4 MARQUEE).
-    await addToCart.handler({ productId: 'p1', quantity: 2 }, { db, ...context.request }, {
-      fail(code, payload) {
-        return { error: { code, payload }, ok: false, status: 422 };
+    await addToCart.handler(
+      { productId: 'p1', quantity: 2 },
+      { db, ...context.request },
+      {
+        fail(code, payload) {
+          return { error: { code, payload }, ok: false, status: 422 };
+        },
+        invalidate(domain, options) {
+          return { domain: domain.key, ...options, manual: true };
+        },
       },
-      invalidate(domain, options) {
-        return { domain: domain.key, ...options, manual: true };
-      },
-    });
+    );
 
     await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 2 });
     await expect(Promise.resolve(productGridQuery.load({ limit: 1 }, context))).resolves.toEqual({

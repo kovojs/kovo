@@ -31,6 +31,9 @@ const streamRoute = route('/reports/live.txt', {
       contentType: 'text/plain; charset=utf-8',
       disposition: 'inline',
       filename: 'live.txt',
+      // SPEC §6.6/KV428: this fixture owns the generated text bytes; unbufferable inline streams
+      // require an explicit verified-safe attestation.
+      verifiedSafe: true,
     }),
 });
 

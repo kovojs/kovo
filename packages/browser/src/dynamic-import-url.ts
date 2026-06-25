@@ -36,6 +36,7 @@ export function isAllowedKovoDynamicImportUrl(
   const parsed = parseImportUrl(url);
   if (!parsed) return false;
   if (parsed.origin !== currentOrigin()) return false;
+  if (isAllowedLocalDevSourceModuleUrl(parsed)) return true;
   if (!parsed.pathname.startsWith('/c/')) return false;
 
   const buildToken = options.buildToken ?? readPageBuildToken();
@@ -50,6 +51,19 @@ export function isAllowedKovoDynamicImportUrl(
   if (manifest.size === 0) return true;
 
   return manifest.has(canonicalImportUrl(parsed));
+}
+
+function isAllowedLocalDevSourceModuleUrl(url: URL): boolean {
+  if (!isLocalDevOrigin(url)) return false;
+  if (url.pathname.startsWith('/c/')) return false;
+  return /\.(?:[cm]?tsx?)$/.test(url.pathname);
+}
+
+function isLocalDevOrigin(url: URL): boolean {
+  return (
+    url.protocol === 'http:' &&
+    (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1')
+  );
 }
 
 function parseImportUrl(value: string): URL | null {

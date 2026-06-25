@@ -73,7 +73,7 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
-  it("read mode rejects writes AND raw-string SQL (the unification)", () => {
+  it('read mode rejects writes AND raw-string SQL (the unification)', () => {
     const handle = managedDb(fakeDb([]), 'read');
     // KV433: write verb throws the readonly error.
     expect(() => (handle as { insert(t: string): unknown }).insert('products')).toThrow(
@@ -86,7 +86,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('write mode allows writes but still rejects raw-string SQL (KV422 holds)', async () => {
     const log: string[] = [];
     const handle = managedDb(fakeDb(log), 'write');
-    await (handle as { insert(t: string): { values(): Promise<void> } }).insert('products').values();
+    await (handle as { insert(t: string): { values(): Promise<void> } })
+      .insert('products')
+      .values();
     expect(log).toContain('insert:products');
     expect(() => (handle as { query(s: unknown): unknown }).query('SELECT 1')).toThrow(/KV422/);
   });
@@ -139,7 +141,9 @@ describe('query loader threading (the chokepoint)', () => {
       reads: [product],
       async load(_input, context) {
         // Idempotent-safe-to-repeat write on a read surface — allowed only because elevated.
-        await (context!.db as unknown as { update(t: string): { set(): { where(): Promise<void> } } })
+        await (
+          context!.db as unknown as { update(t: string): { set(): { where(): Promise<void> } } }
+        )
           .update('products')
           .set()
           .where();

@@ -17,6 +17,7 @@ import {
 
 type OptimisticFixturePlan<Input> = OptimisticEnhancedMutationSubmitOptions<Input>['optimistic'];
 
+/** @internal Options for the framework-owned optimistic integration fixture client. */
 export interface OptimisticFixtureClientOptions {
   discardPendingOptimism?: boolean;
   installLoader?: boolean;
@@ -25,12 +26,14 @@ export interface OptimisticFixtureClientOptions {
   queries?: Readonly<Record<string, (value: unknown, root: Document) => void>>;
 }
 
+/** @internal Submit options for the framework-owned optimistic integration fixture client. */
 export interface OptimisticFixtureSubmitOptions<Input> {
   formData?: unknown;
   input: Input;
   optimistic: OptimisticFixturePlan<Input>;
 }
 
+/** @internal Framework-owned optimistic integration fixture client. */
 export interface OptimisticFixtureClient {
   pendingCount(queryName: string): number;
   store: QueryStore;
@@ -41,6 +44,8 @@ export interface OptimisticFixtureClient {
 }
 
 /**
+ * @internal
+ *
  * Framework-owned optimistic integration specs still need the raw optimistic submit ABI
  * while app-facing optimism sugar is not public. Keep that white-box wiring in the test
  * harness so fixture client entries can use public/generated browser surfaces directly.

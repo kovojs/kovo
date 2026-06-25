@@ -675,9 +675,12 @@ void test('Conformance suites are an explicit gate', async () => {
   const workflowCommands = workflowStepCommands(ciWorkflowSource)
     .map((step) => step.run)
     .filter(Boolean);
-  assert.ok(
-    workflowCommands.includes('vp exec pnpm --filter @kovojs/conformance-${{ matrix.suite }} test'),
-  );
+  for (const packageName of Object.values(expectedConformancePackages)) {
+    assert.ok(
+      workflowCommands.includes(`vp exec pnpm --filter ${packageName} test`),
+      `CI conformance job runs ${packageName}`,
+    );
+  }
   for (const suiteName of Object.keys(expectedConformancePackages)) {
     assert.ok(ciWorkflowSource.includes(suiteName), `CI conformance matrix includes ${suiteName}`);
   }

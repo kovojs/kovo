@@ -403,7 +403,8 @@ describe('server app-shell public API barrels', () => {
       // storage download route that hosts the capability verify sink + the `ctx.signUrl` mint
       // (also reachable on the route page context) + the audit-fact drain. Public at the root barrel.
       CAPABILITY_TOKEN_PARAM: capabilityRouteApi.CAPABILITY_TOKEN_PARAM,
-      DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH: capabilityRouteApi.DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
+      DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH:
+        capabilityRouteApi.DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
       createSignUrl: capabilityRouteApi.createSignUrl,
       createStorageDownloadEndpoint: capabilityRouteApi.createStorageDownloadEndpoint,
       deriveDownloadKey: capabilityRouteApi.deriveDownloadKey,

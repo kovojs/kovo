@@ -10,6 +10,7 @@
         "public": ["."],
         "generated": ["./generated"],
         "internal": [
+          "./internal/agent-docs",
           "./internal/derivation",
           "./internal/client-module-url",
           "./internal/diagnostics",
@@ -1888,6 +1889,7 @@
         "internal": [
           "./internal/integration",
           "./internal/integration/define",
+          "./internal/integration/optimistic-client",
           "./internal/harness-operations",
           "./internal/html-wire",
           "./internal/page",

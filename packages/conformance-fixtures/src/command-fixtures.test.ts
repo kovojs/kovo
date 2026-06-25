@@ -165,13 +165,21 @@ describe('@kovojs/test command fixtures', () => {
       '    steps:',
       '      - uses: actions/checkout@v4',
       '      - run: vp install',
+      '      - name: Static safety',
+      '        run: vp exec pnpm run check',
+      '      - name: Shell block',
+      '        run: |',
+      '          vp exec pnpm --filter @kovojs/conformance-small test',
       '      - run: vp run build',
-      '      - run: vp exec node scripts/kovo-check.mjs --suite ${{ matrix.suite }}',
+      '      - name: Kovo check',
+      '        run: vp exec node scripts/kovo-check.mjs --suite ${{ matrix.suite }}',
     ].join('\n');
 
     expect(workflowStepCommands(workflow)).toEqual([
       { uses: 'actions/checkout@v4' },
       { run: 'vp install' },
+      { run: 'vp exec pnpm run check' },
+      { run: 'vp exec pnpm --filter @kovojs/conformance-small test' },
       { run: 'vp run build' },
       { run: 'vp exec node scripts/kovo-check.mjs --suite ${{ matrix.suite }}' },
     ]);

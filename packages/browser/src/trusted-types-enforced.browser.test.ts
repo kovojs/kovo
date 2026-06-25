@@ -17,7 +17,8 @@ import { applyHtmlResponseFragments } from './response-fragment-apply.js';
 //   (2) a value minted by the `kovo` policy (what the inlined `trustedHtml` shim and the
 //       module-side `kovoCreateHTML` produce) is ACCEPTED — Kovo's own hydration survives.
 
-const hasTrustedTypes = typeof (globalThis as { trustedTypes?: unknown }).trustedTypes !== 'undefined';
+const hasTrustedTypes =
+  typeof (globalThis as { trustedTypes?: unknown }).trustedTypes !== 'undefined';
 
 function enforcingFrame(): Promise<HTMLIFrameElement> {
   return new Promise((resolve) => {
@@ -27,7 +28,7 @@ function enforcingFrame(): Promise<HTMLIFrameElement> {
     frame.srcdoc =
       '<!doctype html><html><head>' +
       '<meta http-equiv="Content-Security-Policy" ' +
-      "content=\"require-trusted-types-for 'script'; trusted-types kovo\">" +
+      'content="require-trusted-types-for \'script\'; trusted-types kovo">' +
       '</head><body><div id="t"></div></body></html>';
     frame.addEventListener('load', () => resolve(frame), { once: true });
     document.body.append(frame);

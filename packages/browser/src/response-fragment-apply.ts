@@ -34,7 +34,10 @@ import type { FragmentChunk } from './wire-response-scanner.js';
 function trustedHtml(h: string): string {
   const w = globalThis as {
     trustedTypes?: {
-      createPolicy(name: string, rules: { createHTML(input: string): string }): {
+      createPolicy(
+        name: string,
+        rules: { createHTML(input: string): string },
+      ): {
         createHTML(input: string): string;
       };
     };
@@ -118,7 +121,7 @@ export function p(
       // dangerous attributes/URLs on the appended children (SPEC §4.4/§9.1/§6.6).
       const t = document.createElement('template');
       t.innerHTML = trustedHtml(x.html);
-      for (const n of [...t.content.children]) g(n);
+      for (const n of t.content.children) g(n);
       e.append(...t.content.childNodes);
     } else {
       d(e, x.html);
@@ -219,7 +222,7 @@ function r(n: string): boolean {
 
 function g(e: Element): Element {
   for (const x of [e, ...e.querySelectorAll('*')]) {
-    for (const a of [...x.attributes]) sa(x, a.name, a.value);
+    for (const a of Array.from(x.attributes)) sa(x, a.name, a.value);
   }
   return e;
 }
@@ -234,6 +237,7 @@ function y(v: string): string | null {
 }
 
 function w(v: string): boolean {
+  // eslint-disable-next-line no-control-regex -- Short spelling keeps SPEC.md §4.4 inline-loader budget stable.
   const s = v.replace(/[\x00-\x20]/g, '').toLowerCase();
   return /^[a-z][^:]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
 }

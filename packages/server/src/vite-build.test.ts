@@ -217,12 +217,8 @@ describe('server app shell Vite build seam', () => {
     const responseB = await createRequestHandler(buildB.app)(
       new Request(`https://example.test${routePath}`),
     );
-    const tokenA = (await responseA.text()).match(
-      /<meta name="kovo-build" content="([^"]*)"/,
-    )?.[1];
-    const tokenB = (await responseB.text()).match(
-      /<meta name="kovo-build" content="([^"]*)"/,
-    )?.[1];
+    const tokenA = (await responseA.text()).match(/<meta name="kovo-build" content="([^"]*)"/)?.[1];
+    const tokenB = (await responseB.text()).match(/<meta name="kovo-build" content="([^"]*)"/)?.[1];
 
     expect(tokenA).toBeTruthy();
     expect(tokenB).toBeTruthy();
@@ -320,10 +316,7 @@ export const CartButton = component({
       handlerA(new Request(`https://example.test${routePath}`)),
       handlerB(new Request(`https://example.test${routePath}`)),
     ]);
-    const [documentBodyA, documentBodyB] = await Promise.all([
-      documentA.text(),
-      documentB.text(),
-    ]);
+    const [documentBodyA, documentBodyB] = await Promise.all([documentA.text(), documentB.text()]);
     expect(documentBodyA).toContain(`<meta name="kovo-build" content="${tokenA}">`);
     expect(documentBodyB).toContain(`<meta name="kovo-build" content="${tokenB}">`);
     expect(documentBodyA).toContain(appA.clientHref);

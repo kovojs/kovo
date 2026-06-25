@@ -58,7 +58,7 @@ const rawHtmlSinkNames = new Set<string>(RAW_HTML_SINK_NAMES);
 
 /** @internal True when an attribute/property name is an event-handler sink. */
 export function isEventHandlerAttributeName(name: string): boolean {
-  return /^on/i.test(name);
+  return /^on[^:]/i.test(name);
 }
 
 /** @internal True when an attribute/property name is a srcdoc sink. */

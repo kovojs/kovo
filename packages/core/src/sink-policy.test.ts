@@ -15,6 +15,7 @@ describe('shared runtime sink policy', () => {
     expect(runtimeSinkFamilyForAttribute('srcset')).toBe('srcset');
     expect(runtimeSinkFamilyForAttribute('imagesrcset')).toBe('srcset');
     expect(runtimeSinkFamilyForAttribute('onclick')).toBe('event-handler');
+    expect(runtimeSinkFamilyForAttribute('on:click')).toBe('attribute');
     expect(runtimeSinkFamilyForAttribute('srcdoc')).toBe('srcdoc');
     expect(runtimeSinkFamilyForAttribute('innerHTML')).toBe('raw-html');
     expect(runtimeSinkFamilyForAttribute('style')).toBe('css-text');
@@ -53,6 +54,11 @@ describe('shared runtime sink policy', () => {
         value: { redacted: true },
       },
       family: 'event-handler',
+    });
+    expect(decideRuntimeAttributeWrite('on:click', '/c/client.js#run')).toEqual({
+      action: 'allow',
+      family: 'attribute',
+      value: '/c/client.js#run',
     });
     expect(decideRuntimeAttributeWrite('srcdoc', '<script>alert(1)</script>').action).toBe(
       'remove',

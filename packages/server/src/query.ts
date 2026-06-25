@@ -364,7 +364,10 @@ interface QueryElevated {
     Input,
     Request,
     Value,
-    const Definition extends Omit<QueryArgsDeclarationDefinition<Key, Value, Input, Request>, 'key'>,
+    const Definition extends Omit<
+      QueryArgsDeclarationDefinition<Key, Value, Input, Request>,
+      'key'
+    >,
   >(
     key: Key,
     definition: Definition,
@@ -373,7 +376,11 @@ interface QueryElevated {
         ? []
         : [never]
       : []
-  ): QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[]; elevated: true };
+  ): QueryWithArgsBinding<Definition, Input> & {
+    key: Key;
+    reads: readonly Domain[];
+    elevated: true;
+  };
   <const Key extends string, const Definition extends QueryDeclarationDefinition<any, any>>(
     key: Key,
     definition: Definition,
@@ -383,7 +390,11 @@ interface QueryElevated {
         : [never]
       : []
   ): Definition extends { args: Schema<infer Input> }
-    ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[]; elevated: true }
+    ? QueryWithArgsBinding<Definition, Input> & {
+        key: Key;
+        reads: readonly Domain[];
+        elevated: true;
+      }
     : Definition & { key: Key; reads: readonly Domain[]; elevated: true };
 }
 

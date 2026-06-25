@@ -12,6 +12,25 @@ describe('Kovo dynamic import URL guard', () => {
     expect(isAllowedKovoDynamicImportUrl('/assets/cart.js')).toBe(false);
   });
 
+  it('allows same-origin source modules only on local dev origins', () => {
+    expect(isAllowedKovoDynamicImportUrl('/client.ts')).toBe(true);
+    expect(isAllowedKovoDynamicImportUrl('/state-actions.ts?import')).toBe(true);
+
+    const location = globalThis.location;
+    Reflect.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { href: 'https://shop.example.test/', origin: 'https://shop.example.test' },
+    });
+    try {
+      expect(isAllowedKovoDynamicImportUrl('/client.ts')).toBe(false);
+    } finally {
+      Reflect.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: location,
+      });
+    }
+  });
+
   it('requires the active build token for versioned client modules', () => {
     expect(
       isAllowedKovoDynamicImportUrl('/c/__v/cart-v1/cart.client.js', { buildToken: 'cart-v1' }),
