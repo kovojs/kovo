@@ -3,6 +3,8 @@ import {
   mergeSqlSafetyMetadata,
   stampParameterizedSql,
   stampRawSqlChunk,
+  stampSqlIdentifier,
+  stampSqlKeyword,
   stampStaticSql,
   stampTrustedSql,
   validateSqlAllow,
@@ -59,9 +61,28 @@ export interface KovoTrustedSql {
   readonly __kovoSqlBrand?: 'trusted';
 }
 
+/**
+ * Kovo-branded SQL identifier fragment accepted by framework-managed DB handles.
+ *
+ * Produced by {@link sql.identifier}; dynamic values are grammar-checked and may be constrained
+ * by an allowlist before the witness is minted.
+ */
+export interface KovoSqlIdentifier extends KovoStaticSql {
+  readonly __kovoSqlIdentifierBrand?: 'identifier';
+}
+
+/**
+ * Kovo-branded SQL keyword/clause fragment accepted by framework-managed DB handles.
+ *
+ * Produced by {@link sql.allow}; the value must match the supplied static allowlist.
+ */
+export interface KovoSqlKeyword extends KovoStaticSql {
+  readonly __kovoSqlKeywordBrand?: 'keyword';
+}
+
 type SqlTag = ((strings: TemplateStringsArray, ...values: unknown[]) => KovoParameterizedSql) & {
-  allow(value: string, allow: readonly string[]): KovoStaticSql;
-  identifier(value: string, options?: { allow?: readonly string[] }): KovoStaticSql;
+  allow(value: string, allow: readonly string[]): KovoSqlKeyword;
+  identifier(value: string, options?: { allow?: readonly string[] }): KovoSqlIdentifier;
   join(parts: readonly unknown[], separator?: unknown): KovoParameterizedSql;
   raw(value: string): KovoStaticSql;
 };
@@ -89,12 +110,12 @@ sql.identifier = (value: string, options: { allow?: readonly string[] } = {}) =>
     typeof factory === 'function'
       ? factory(identifier)
       : drizzleSql.raw(quoteSqlIdentifier(identifier));
-  return stampStaticSql(statement);
+  return stampSqlIdentifier(statement);
 };
 
 sql.allow = (value: string, allow: readonly string[]) => {
   const fragment = validateSqlAllow(value, allow);
-  return stampStaticSql(drizzleSql.raw(fragment));
+  return stampSqlKeyword(drizzleSql.raw(fragment));
 };
 
 sql.join = (parts: readonly unknown[], separator: unknown = drizzleSql.raw(', ')) => {

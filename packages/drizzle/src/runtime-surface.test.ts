@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { validateManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
+import { sql as drizzleSql } from 'drizzle-orm';
 import { sql, staticSql, trustedSql } from './runtime.js';
 
 interface DrizzlePackageJson {
@@ -55,6 +56,10 @@ describe('@kovojs/drizzle runtime surface', () => {
       validateManagedSqlStatement(trustedSql(joined, { justification: 'audited order clause' })),
     ).toEqual({
       ok: true,
+    });
+    expect(validateManagedSqlStatement(drizzleSql.raw('select * from products'))).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('unbranded object-shaped SQL'),
     });
   });
 
