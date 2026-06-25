@@ -38,7 +38,9 @@ import { runLoweringPipeline } from './lowering-pipeline.js';
 import {
   inferComponentName,
   jsxElements,
+  normalizeComponentFileName,
   parseComponentModule as parseComponentModuleModel,
+  parseDiagnosticsForSourceFile,
   firstComponentModel,
   componentOptionObjectEntries,
   type ComponentModuleModel,
@@ -87,7 +89,12 @@ if (!('ScriptTarget' in mutableTs))
  * compiler's invariants. Re-compiling a `compiler-emitted` artifact is a no-op pass-through
  * so the pipeline reaches a fixpoint (SPEC.md §5.2; hand-authored lowered IR is KV235).
  */
-export function compileComponentModule(options: CompileComponentOptions): CompileResult {
+export function compileComponentModule(rawOptions: CompileComponentOptions): CompileResult {
+  const options = {
+    ...rawOptions,
+    fileName: normalizeComponentFileName(rawOptions.fileName),
+  };
+
   if (isCompilerIrArtifact(options.source)) {
     const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
     return {
@@ -105,6 +112,15 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   }
 
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
+  const parseDiagnostics = parseDiagnosticsForSourceFile(originalModel.sourceFile, options.source);
+  if (parseDiagnostics.length > 0) {
+    return {
+      ...createEmptyCompileResult(),
+      dependencyFootprint: compileDependencyFootprint(options),
+      diagnostics: parseDiagnostics,
+    };
+  }
+
   const packageComponentPrefixes = mergePackageComponentPrefixFacts(
     packageComponentPrefixesForModule(options, originalModel),
     options.packageComponentPrefixes,

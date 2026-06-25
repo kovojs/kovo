@@ -31,6 +31,7 @@ export type DiagnosticCode =
   | 'KV242'
   | 'KV243'
   | 'KV244'
+  | 'KV245'
   | 'KV301'
   | 'KV302'
   | 'KV303'
@@ -178,6 +179,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV242: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV243: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV244: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
+  KV245: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV301: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV302: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV303: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
@@ -510,6 +512,17 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'lint',
     message: 'defer() used as a JSX child; use <Defer> instead.',
+  },
+  KV245: {
+    code: 'KV245',
+    help: [
+      'Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.',
+      'Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.',
+      'Fixes: correct the TSX syntax at this location and re-run the compiler.',
+      'SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'TypeScript/TSX parse failed.',
   },
   KV301: {
     code: 'KV301',

@@ -5,7 +5,7 @@ import type { ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
-import { replaceExtension } from './shared.js';
+import { normalizeComponentFileName, replaceExtension } from './shared.js';
 
 /**
  * Input to {@link compileComponentModule}: the source file name and contents plus optional
@@ -537,11 +537,12 @@ export function emittedFileKind(fileName: string): EmittedFile['kind'] {
 }
 
 export function compileArtifactFileNames(fileName: string): CompileArtifactFileNames {
+  const confinedFileName = normalizeComponentFileName(fileName);
   return {
-    client: replaceExtension(fileName, '.client.js'),
-    css: replaceExtension(fileName, '.css'),
+    client: replaceExtension(confinedFileName, '.client.js'),
+    css: replaceExtension(confinedFileName, '.css'),
     registry: 'generated/registries.d.ts',
-    server: replaceExtension(fileName, '.server.js'),
+    server: replaceExtension(confinedFileName, '.server.js'),
   };
 }
 
