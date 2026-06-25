@@ -46,6 +46,7 @@ import {
   type ExtractedWriteCall,
   type FunctionTouchSummary,
   type MaterializedViewRefreshFact,
+  type OwnerScopeKey,
   type QueryFact,
   type QueryInstanceKeyComparison,
   type QueryInstanceKeyOperand,
@@ -447,6 +448,45 @@ import {
     if (domain) domains.add(domain);
   }
   return [...domains].sort();
+}
+
+/** @internal */ export function queryArgScopedDomainKeys(
+  comparisons: QueryInstanceKeyComparisons,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): readonly OwnerScopeKey[] {
+  const keys = new Map<string, OwnerScopeKey>();
+  for (const comparison of comparisons.argCandidates) {
+    for (const scoped of argScopedDomainKeysFromEqOperands(
+      comparison.left,
+      comparison.right,
+      tables,
+    )) {
+      keys.set(`${scoped.domain}\0${scoped.key}`, scoped);
+    }
+  }
+  return [...keys.values()].sort(
+    (left, right) => left.domain.localeCompare(right.domain) || left.key.localeCompare(right.key),
+  );
+}
+
+function argScopedDomainKeysFromEqOperands(
+  left: QueryInstanceKeyOperand,
+  right: QueryInstanceKeyOperand,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): readonly OwnerScopeKey[] {
+  const candidates = [
+    { inputKey: right.inputKey, tableKey: left.tableKey },
+    { inputKey: left.inputKey, tableKey: right.tableKey },
+  ];
+
+  const keys: OwnerScopeKey[] = [];
+  for (const candidate of candidates) {
+    if (!candidate.inputKey || !candidate.tableKey) continue;
+    const domain = resolvedQueryOwnerTableDomain(candidate.tableKey, tables);
+    if (domain) keys.push({ domain, key: candidate.inputKey });
+  }
+
+  return keys;
 }
 
 /**

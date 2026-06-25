@@ -442,6 +442,7 @@ describe('kovo check', () => {
       scopeAudits: [
         {
           domain: 'order',
+          key: 'arg:id',
           kind: 'query',
           name: 'orderById',
           scope: 'args',
@@ -455,14 +456,35 @@ describe('kovo check', () => {
         ...base,
         queries: [{ domains: ['order'], guards: ['authed'], query: 'orderById' }],
       }).output,
-    ).toContain('ERROR KV414 QUERY orderById domain=order');
-    // A domain-specific owns() guard in the chain discharges that exact domain (SPEC §10.3).
+    ).toContain('ERROR KV414 QUERY orderById domain=order key=arg:id');
+    // An owns() guard in the chain discharges that exact domain+key (SPEC §10.3).
     expect(
       kovoCheck({
         ...base,
-        queries: [{ domains: ['order'], guards: ['authed', 'owns:order'], query: 'orderById' }],
+        queries: [
+          { domains: ['order'], guards: ['authed', 'owns:order:arg:id'], query: 'orderById' },
+        ],
       }).output,
     ).not.toContain('KV414');
+  });
+
+  it('keeps same-domain different-key owns() accesses flagged as KV414 (SPEC §10.3)', () => {
+    const result = kovoCheck({
+      ownerDomains: [{ domain: 'order', owner: 'userId' }],
+      queries: [{ domains: ['order'], guards: ['authed', 'owns:order:arg:id'], query: 'orderById' }],
+      scopeAudits: [
+        {
+          domain: 'order',
+          key: 'arg:alternateId',
+          kind: 'query',
+          name: 'orderById',
+          scope: 'args',
+          site: 'order.queries.ts:12',
+        },
+      ],
+    }).output;
+
+    expect(result).toContain('ERROR KV414 QUERY orderById domain=order key=arg:alternateId');
   });
 
   it('scopes owns() suppression to the guarded owner domain (SPEC §10.3)', () => {
@@ -472,11 +494,16 @@ describe('kovo check', () => {
         { domain: 'invoice', owner: 'userId' },
       ],
       queries: [
-        { domains: ['account', 'invoice'], guards: ['authed', 'owns:account'], query: 'mixed' },
+        {
+          domains: ['account', 'invoice'],
+          guards: ['authed', 'owns:account:arg:accountId'],
+          query: 'mixed',
+        },
       ],
       scopeAudits: [
         {
           domain: 'account',
+          key: 'arg:accountId',
           kind: 'query',
           name: 'mixed',
           scope: 'args',
@@ -484,6 +511,7 @@ describe('kovo check', () => {
         },
         {
           domain: 'invoice',
+          key: 'arg:invoiceId',
           kind: 'query',
           name: 'mixed',
           scope: 'args',
@@ -493,7 +521,7 @@ describe('kovo check', () => {
     }).output;
 
     expect(result).not.toContain('domain=account');
-    expect(result).toContain('ERROR KV414 QUERY mixed domain=invoice');
+    expect(result).toContain('ERROR KV414 QUERY mixed domain=invoice key=arg:invoiceId');
   });
 
   it('reports a governed-column mass-assignment as KV438 (SPEC §11.1)', () => {

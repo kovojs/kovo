@@ -345,6 +345,8 @@ export interface ScopeAuditFact {
   domain: string;
   /** SPEC §10.3: a recorded public-read justification — suppresses KV414 in `kovo check` while still surfaced by `kovo explain --unscoped`. */
   justification?: string;
+  /** SPEC §10.3: exact client-visible owner key this `args` scope fact is about, e.g. `arg:id`. */
+  key?: string;
   kind: 'query' | 'write';
   name: string;
   scope: 'args' | 'session' | 'unscoped' | 'unknown';
