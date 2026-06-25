@@ -6,6 +6,7 @@ import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/do
 import { createApp, createRequestHandler } from './app.js';
 import { appRateLimitKeyCounts } from './app-load-shed.js';
 import { versionedClientModuleHref } from './client-modules.js';
+import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { domain } from './domain.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
@@ -40,6 +41,48 @@ function expectReservedSystemResponsePosture(response: Response, buildToken: str
   expect(response.headers.get('vary')).toBe('Cookie');
   expect(response.headers.get('kovo-build')).toBe(buildToken);
 }
+
+describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
+  it('accepts browser CSP reports on the reserved framework endpoint', async () => {
+    const handler = createRequestHandler(createApp());
+    const response = await handler(
+      new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`, {
+        body: JSON.stringify([{ type: 'csp-violation', body: { blockedURL: 'inline' } }]),
+        headers: { 'Content-Type': 'application/reports+json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe('');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('accepts CSP reports even when the app body-size cap is smaller than the report', async () => {
+    const handler = createRequestHandler(createApp({ requestLimits: { maxBodyBytes: 1 } }));
+    const response = await handler(
+      new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`, {
+        body: JSON.stringify({ type: 'csp-violation', body: { blockedURL: 'inline' } }),
+        headers: { 'Content-Type': 'application/reports+json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(204);
+  });
+
+  it('rejects non-POST CSP report requests without falling through to app routes', async () => {
+    const appRoute = route(KOVO_CSP_REPORT_ENDPOINT, {
+      page: () => trustedHtml('<main>app route should not win</main>'),
+    });
+    const handler = createRequestHandler(createApp({ routes: [appRoute] }));
+    const response = await handler(new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`));
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('POST');
+    expect(await response.text()).toBe('');
+  });
+});
 
 describe('server createApp request shell', () => {
   it('stores the closed app registries and options without adding middleware', () => {

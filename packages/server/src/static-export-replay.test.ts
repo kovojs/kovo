@@ -9,6 +9,13 @@ import { replayStaticExportApp } from './static-export-replay.js';
 import { renderedHtml } from './html.js';
 
 const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const staticExportDocumentCsp =
+  "default-src 'self'; script-src 'self' 'sha256-zOxaGi2tH4BAw0NScAj/WNUTb87gArEmBY868nVHP9g='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo";
+const staticExportReportingHeaders = {
+  'report-to':
+    '{"endpoints":[{"url":"https://kovo.local/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
+  'reporting-endpoints': 'kovo-csp="https://kovo.local/_kovo/reports/csp"',
+};
 
 describe('server static export app replay boundary', () => {
   it('reconstructs public route-region metadata when the route declaration crosses module instances', async () => {
@@ -72,12 +79,12 @@ describe('server static export app replay boundary', () => {
         {
           body: expect.stringContaining('<button on:click="/c/__v/cart-static/cart.client.js'),
           headers: {
-            'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-zOxaGi2tH4BAw0NScAj/WNUTb87gArEmBY868nVHP9g='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
+            'content-security-policy': staticExportDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             'referrer-policy': 'strict-origin-when-cross-origin',
             'cross-origin-opener-policy': 'same-origin-allow-popups',
             'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+            ...staticExportReportingHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },

@@ -169,6 +169,7 @@ export async function renderAppRouteDocumentResponse({
       hints: mergeAppRouteHints(app, route),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
       loaderRuntimeHref,
+      reportingOrigin: new URL(request.url).origin,
       // bugs-1 F34: a guarded route renders session-dependent content; mark its
       // document no-store so a Back/bfcache restore can't show it after logout.
       // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
@@ -266,6 +267,7 @@ export async function renderAppErrorDocumentResponse(
     ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
+    reportingOrigin: new URL(request.url).origin,
     status,
   });
 }

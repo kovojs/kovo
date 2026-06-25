@@ -54,6 +54,13 @@ const runtimeClientModuleManifestItem = expect.objectContaining({
   path: expect.stringMatching(runtimeClientModulePath),
   status: 200,
 });
+const staticExportDocumentCsp =
+  "default-src 'self'; script-src 'self' 'sha256-zOxaGi2tH4BAw0NScAj/WNUTb87gArEmBY868nVHP9g='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo";
+const staticExportReportingHeaders = {
+  'report-to':
+    '{"endpoints":[{"url":"https://kovo.local/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
+  'reporting-endpoints': 'kovo-csp="https://kovo.local/_kovo/reports/csp"',
+};
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
@@ -627,13 +634,13 @@ export const CartButton = component({
       expect(inventory).toEqual([
         {
           headers: {
-            'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-zOxaGi2tH4BAw0NScAj/WNUTb87gArEmBY868nVHP9g='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
+            'content-security-policy': staticExportDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/shop.css>; rel=preload; as=style, </assets/shop.js>; rel=modulepreload',
             'referrer-policy': 'strict-origin-when-cross-origin',
             'cross-origin-opener-policy': 'same-origin-allow-popups',
             'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+            ...staticExportReportingHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },
@@ -1003,13 +1010,13 @@ export const CartButton = component({
       expect(inventory).toEqual([
         {
           headers: {
-            'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-zOxaGi2tH4BAw0NScAj/WNUTb87gArEmBY868nVHP9g='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
+            'content-security-policy': staticExportDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/catalog.css>; rel=preload; as=style, </assets/catalog.js>; rel=modulepreload',
             'referrer-policy': 'strict-origin-when-cross-origin',
             'cross-origin-opener-policy': 'same-origin-allow-popups',
             'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+            ...staticExportReportingHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },
@@ -1129,13 +1136,13 @@ export const CartButton = component({
         files: [
           {
             headers: {
-              'content-security-policy':
-                "default-src 'self'; script-src 'self' 'sha256-zOxaGi2tH4BAw0NScAj/WNUTb87gArEmBY868nVHP9g='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
+              'content-security-policy': staticExportDocumentCsp,
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
               'referrer-policy': 'strict-origin-when-cross-origin',
               'cross-origin-opener-policy': 'same-origin-allow-popups',
               'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+              ...staticExportReportingHeaders,
               'x-frame-options': 'DENY',
               'x-content-type-options': 'nosniff',
             },
@@ -1173,13 +1180,13 @@ export const CartButton = component({
         routeDocuments: [
           {
             headers: {
-              'content-security-policy':
-                "default-src 'self'; script-src 'self' 'sha256-zOxaGi2tH4BAw0NScAj/WNUTb87gArEmBY868nVHP9g='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
+              'content-security-policy': staticExportDocumentCsp,
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
               'referrer-policy': 'strict-origin-when-cross-origin',
               'cross-origin-opener-policy': 'same-origin-allow-popups',
               'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+              ...staticExportReportingHeaders,
               'x-frame-options': 'DENY',
               'x-content-type-options': 'nosniff',
             },

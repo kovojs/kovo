@@ -338,6 +338,29 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     expect(csp).toContain("img-src 'self' data: https://images.cdn.test");
   });
 
+  it('emits absolute same-origin Reporting API headers for the framework-owned CSP group', async () => {
+    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const app = createApp({ routes: [homeRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    const csp = cspHeader(response.headers);
+    expect(csp).toContain('report-to kovo-csp');
+    expect(response.headers['Report-To']).toBe(
+      '{"endpoints":[{"url":"https://example.test/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
+    );
+    expect(response.headers['Reporting-Endpoints']).toBe(
+      'kovo-csp="https://example.test/_kovo/reports/csp"',
+    );
+    expect(response.headers).not.toHaveProperty('Content-Security-Policy-Report-Only');
+  });
+
   it('keeps the non-overridable hardening directives locked even when the app tries to widen them', async () => {
     // The allowlist can only append to per-fetch directives; `base-uri`/`object-src`/
     // `form-action`/`frame-ancestors` are assembled internally and are unreachable from

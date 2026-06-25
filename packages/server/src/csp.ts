@@ -44,6 +44,12 @@ export interface ContentSecurityPolicyOptions {
    * emitted unconditionally (legacy `<object>`/`<embed>` plugin-content vector).
    */
   objectSrc?: readonly string[];
+  /**
+   * OPP-14 / SPEC §6.6 audit-only telemetry: CSP violation reports are routed to a
+   * framework-owned Reporting API group when present. This does not loosen the enforced
+   * policy and is never a report-only ramp.
+   */
+  reportTo?: string;
   scriptSrc?: readonly string[];
   styleSrc?: readonly string[];
   /**
@@ -100,12 +106,43 @@ export interface CspAllowlist {
 export interface DocumentCspConfig {
   allowlist?: CspAllowlist;
   /**
+   * OPP-14 / SPEC §6.6 audit-only telemetry: omitted/`{}` emits a framework-owned
+   * Reporting API group and CSP `report-to` directive for the strict enforced policy.
+   * Set `false` to opt out. Reports are runtime audit signals, not by-construction
+   * security and not a report-only ramp.
+   */
+  reporting?: CspReportingConfig | false;
+  /**
    * SF (secure-framework Tier 3): the Chromium-only Trusted Types floor, now DEFAULT-ON.
    * Omitted/`true` emits `require-trusted-types-for 'script'` + `trusted-types kovo`; set
    * `false` to opt OUT (e.g. an app embedding a third-party widget that needs its own
    * un-named TT policy, or that writes raw HTML through a sink Kovo does not route).
    */
   trustedTypes?: boolean;
+}
+
+/** Framework-owned CSP Reporting API group name. */
+export const KOVO_CSP_REPORT_GROUP = 'kovo-csp';
+
+/** Framework-owned relative endpoint for browser CSP reports. */
+export const KOVO_CSP_REPORT_ENDPOINT = '/_kovo/reports/csp';
+
+/** Options for the framework-owned CSP reporting group. */
+export interface CspReportingConfig {
+  /**
+   * Reporting API cache lifetime in seconds. Defaults to 10886400 seconds (126 days),
+   * matching common browser examples for long-lived reporting groups.
+   */
+  maxAgeSeconds?: number;
+}
+
+export type CspReportingHeaders = {
+  'Report-To': string;
+  'Reporting-Endpoints': string;
+};
+
+interface CspReportingHeaderOptions {
+  endpointOrigin?: string;
 }
 
 /**
@@ -130,6 +167,7 @@ export function renderDefaultDocumentCsp(
   config: DocumentCspConfig = {},
 ): string {
   const allow = config.allowlist ?? {};
+  const reporting = resolveCspReporting(config.reporting);
   // The allowlist EXTENDS the secure `'self'` base — it never replaces it — and it can
   // only touch the per-fetch directives below. `base-uri`/`object-src`/`form-action`/
   // `frame-ancestors` are assembled by `renderContentSecurityPolicy` from their secure
@@ -144,6 +182,7 @@ export function renderDefaultDocumentCsp(
       ? { connectSrc: ["'self'", ...allow.connectSrc] }
       : {}),
     ...(allow.frameSrc && allow.frameSrc.length > 0 ? { frameSrc: allow.frameSrc } : {}),
+    ...(reporting === undefined ? {} : { reportTo: reporting.group }),
     // SF (secure-framework Tier 3): Trusted Types is now DEFAULT-ON. Every framework-
     // assembled DOM-write sink — the module-side `morph.ts`/`query-bindings.ts` writes AND
     // the always-on inline loader's `insertAdjacentHTML`/`innerHTML` fragment-apply sinks
@@ -157,6 +196,23 @@ export function renderDefaultDocumentCsp(
     // its own un-named TT policy or an unrouted raw-HTML sink).
     ...(config.trustedTypes === false ? {} : { trustedTypes: true }),
   });
+}
+
+export function renderCspReportingHeaders(
+  config: DocumentCspConfig = {},
+  options: CspReportingHeaderOptions = {},
+): CspReportingHeaders | undefined {
+  const reporting = resolveCspReporting(config.reporting);
+  if (reporting === undefined) return undefined;
+  const endpoint = absoluteReportEndpoint(reporting.endpoint, options.endpointOrigin);
+  return {
+    'Report-To': JSON.stringify({
+      endpoints: [{ url: endpoint }],
+      group: reporting.group,
+      max_age: reporting.maxAgeSeconds,
+    }),
+    'Reporting-Endpoints': `${reporting.group}="${escapeStructuredFieldString(endpoint)}"`,
+  };
 }
 
 /**
@@ -235,6 +291,7 @@ export function renderContentSecurityPolicy(
     // and clickjacking vectors respectively; emit with secure defaults.
     directive('form-action', options.formAction ?? ["'self'"]),
     directive('frame-ancestors', options.frameAncestors ?? ["'none'"]),
+    directive('report-to', options.reportTo === undefined ? undefined : [options.reportTo]),
     // SF (secure-framework Tier 3): the Chromium-only Trusted Types floor, now DEFAULT-ON
     // (`renderDefaultDocumentCsp` passes `trustedTypes: true` unless the app opts out).
     // Safe to default-on because EVERY framework DOM-write sink — module-side
@@ -264,4 +321,33 @@ function directive(name: string, values: readonly string[] | undefined): string 
 
 function dedupe(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+function resolveCspReporting(config: CspReportingConfig | false | undefined):
+  | {
+      endpoint: string;
+      group: string;
+      maxAgeSeconds: number;
+    }
+  | undefined {
+  if (config === false) return undefined;
+  return {
+    endpoint: KOVO_CSP_REPORT_ENDPOINT,
+    group: KOVO_CSP_REPORT_GROUP,
+    maxAgeSeconds: normalizeMaxAgeSeconds(config?.maxAgeSeconds),
+  };
+}
+
+function normalizeMaxAgeSeconds(value: number | undefined): number {
+  if (value === undefined) return 10886400;
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.floor(value);
+}
+
+function escapeStructuredFieldString(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+}
+
+function absoluteReportEndpoint(endpoint: string, origin: string | undefined): string {
+  return origin === undefined ? endpoint : new URL(endpoint, origin).toString();
 }

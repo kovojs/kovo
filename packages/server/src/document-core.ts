@@ -6,6 +6,7 @@ import {
   cspHashAttribute,
   cspSha256,
   mergeCspInlineMetadata,
+  renderCspReportingHeaders,
   renderDefaultDocumentCsp,
   type CspInlineMetadata,
   type DocumentCspConfig,
@@ -133,6 +134,11 @@ export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, '
    */
   noStore?: boolean;
   /**
+   * OPP-14: request origin used to turn the framework-owned CSP report path into an
+   * absolute same-origin Reporting API endpoint. Direct document assembly may omit it.
+   */
+  reportingOrigin?: string;
+  /**
    * SPEC §6.6 (runtime defense-in-depth): `true` when the originating request was
    * served over HTTPS. Gates `Strict-Transport-Security` so it is attached ONLY on
    * a prod+HTTPS document (see `shouldEmitDocumentHsts`); a non-HTTPS or dev/
@@ -163,6 +169,7 @@ export interface ErrorDocumentOptions {
   lang?: string;
   loaderRuntimeHref?: string;
   message?: string;
+  reportingOrigin?: string;
   status: 403 | 404 | 500;
   title?: string;
 }
@@ -310,7 +317,7 @@ export function renderRouteDocumentResponse(
   response: DocumentRoutePageResponse,
   options: DocumentResponseOptions = {},
 ): DocumentRoutePageResponseWithCsp {
-  const { csp: cspConfig, noStore, secure, ...assemblyOptions } = options;
+  const { csp: cspConfig, noStore, reportingOrigin, secure, ...assemblyOptions } = options;
   const contentType = readHeader(response.headers, 'Content-Type');
   if (
     response.status !== 200 ||
@@ -335,6 +342,22 @@ export function renderRouteDocumentResponse(
             body: response.body,
           }),
         );
+  const shouldAttachFrameworkCsp =
+    findHeaderRecordName(response.headers, 'Content-Security-Policy') === undefined;
+  const shouldAttachReporting =
+    shouldAttachFrameworkCsp &&
+    findHeaderRecordName(response.headers, 'Report-To') === undefined &&
+    findHeaderRecordName(response.headers, 'Reporting-Endpoints') === undefined;
+  const documentCspConfig: DocumentCspConfig =
+    shouldAttachReporting || cspConfig?.reporting === false
+      ? (cspConfig ?? {})
+      : { ...cspConfig, reporting: false };
+  const reportingHeaders = shouldAttachReporting
+    ? renderCspReportingHeaders(
+        documentCspConfig,
+        reportingOrigin === undefined ? {} : { endpointOrigin: reportingOrigin },
+      )
+    : undefined;
 
   return {
     body: document.html,
@@ -369,11 +392,12 @@ export function renderRouteDocumentResponse(
       // Applied only when the route response did not already set a
       // `Content-Security-Policy`, so an author who needs full control (or wants no CSP)
       // can override on the route response — same opt-out posture as the isolation headers.
-      ...(findHeaderRecordName(response.headers, 'Content-Security-Policy') === undefined
+      ...(shouldAttachFrameworkCsp
         ? {
-            'Content-Security-Policy': renderDefaultDocumentCsp(document.csp, cspConfig ?? {}),
+            'Content-Security-Policy': renderDefaultDocumentCsp(document.csp, documentCspConfig),
           }
         : {}),
+      ...reportingHeaders,
       // SPEC §6.6: HSTS is attached ONLY on a prod+HTTPS document so a non-HTTPS or
       // dev/localhost request is never pinned to https. Gated by the call site's
       // `secure` flag (SF-WIRE in DocumentResponseOptions) plus prod detection.
@@ -471,6 +495,10 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
       // route response means no author allowlist here — the plain strict `'self'` policy
       // (with the non-overridable hardening directives) applies unconditionally.
       'Content-Security-Policy': renderDefaultDocumentCsp(document.csp),
+      ...renderCspReportingHeaders(
+        {},
+        options.reportingOrigin === undefined ? {} : { endpointOrigin: options.reportingOrigin },
+      ),
     },
     status: options.status,
   };

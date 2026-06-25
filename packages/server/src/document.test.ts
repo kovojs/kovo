@@ -382,9 +382,8 @@ describe('server app shell document assembly', () => {
     });
 
     it('attaches a strict Content-Security-Policy by default with no config', () => {
-      const policy = renderRouteDocumentResponse(htmlResponse()).headers[
-        'Content-Security-Policy'
-      ] as string;
+      const wrapped = renderRouteDocumentResponse(htmlResponse());
+      const policy = wrapped.headers['Content-Security-Policy'] as string;
       expect(policy).toBeDefined();
       // Hash-locked `'self'` script-src (the loader/inline hashes ride here).
       expect(policy).toContain("script-src 'self' 'sha256-");
@@ -400,6 +399,14 @@ describe('server app shell document assembly', () => {
       // `kovo` policy, so the strict directive ships by default without an opt-in.
       expect(policy).toContain("require-trusted-types-for 'script'");
       expect(policy).toContain('trusted-types kovo');
+      // OPP-14 / SPEC §6.6: reporting is audit-only telemetry on the enforced policy.
+      expect(policy).toContain('report-to kovo-csp');
+      expect(policy).not.toContain('report-uri');
+      expect(wrapped.headers).not.toHaveProperty('Content-Security-Policy-Report-Only');
+      expect(wrapped.headers['Report-To']).toBe(
+        '{"endpoints":[{"url":"/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
+      );
+      expect(wrapped.headers['Reporting-Endpoints']).toBe('kovo-csp="/_kovo/reports/csp"');
     });
 
     it('extends script/style/frame/connect/img directives via the third-party allowlist', () => {
@@ -462,6 +469,20 @@ describe('server app shell document assembly', () => {
       expect(off).not.toContain('trusted-types');
     });
 
+    it('honors explicit CSP reporting opt-out without changing strict directives', () => {
+      const wrapped = renderRouteDocumentResponse(htmlResponse(), {
+        csp: { reporting: false },
+      });
+      const policy = wrapped.headers['Content-Security-Policy'] as string;
+      expect(policy).toContain("script-src 'self' 'sha256-");
+      expect(policy).toContain("base-uri 'self'");
+      expect(policy).toContain("object-src 'none'");
+      expect(policy).not.toContain('report-to');
+      expect(wrapped.headers['Report-To']).toBeUndefined();
+      expect(wrapped.headers['Reporting-Endpoints']).toBeUndefined();
+      expect(wrapped.headers).not.toHaveProperty('Content-Security-Policy-Report-Only');
+    });
+
     it('preserves an author-set Content-Security-Policy instead of overriding it', () => {
       const wrapped = renderRouteDocumentResponse({
         body: '<main>Custom</main>',
@@ -476,6 +497,8 @@ describe('server app shell document assembly', () => {
       );
       expect(cspKeys).toHaveLength(1);
       expect(wrapped.headers[cspKeys[0]!]).toBe("default-src 'none'");
+      expect(wrapped.headers['Report-To']).toBeUndefined();
+      expect(wrapped.headers['Reporting-Endpoints']).toBeUndefined();
     });
 
     it('attaches the strict CSP to error documents too', () => {
@@ -484,6 +507,10 @@ describe('server app shell document assembly', () => {
       expect(policy).toContain("script-src 'self'");
       expect(policy).toContain("base-uri 'self'");
       expect(policy).toContain("frame-ancestors 'none'");
+      expect(policy).toContain('report-to kovo-csp');
+      expect(error.headers['Report-To']).toBe(
+        '{"endpoints":[{"url":"/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
+      );
     });
 
     it('renderDefaultDocumentCsp folds allowlist additively over self without mutating hardening', () => {

@@ -126,7 +126,7 @@ export type {
 // CSP allowlist config named by `createApp({ document: { csp } })` (recursive publicness,
 // rules/api-surface.md): an app declares third-party analytics/Stripe origins through these.
 // SPEC §6.6: a cross-browser runtime DiD floor, not a by-construction proof.
-export type { CspAllowlist, DocumentCspConfig } from './csp.js';
+export type { CspAllowlist, CspReportingConfig, DocumentCspConfig } from './csp.js';
 // Option/registry types named by `createApp({ clientModules })` and by app
 // consumers that hold a registry reference (recursive publicness,
 // rules/api-surface.md). They also remain on `@kovojs/server/internal/client-modules`.

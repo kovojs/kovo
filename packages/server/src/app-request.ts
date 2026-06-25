@@ -3,6 +3,7 @@ import { reportServerError } from './diagnostics.js';
 import { renderDiagnosticDocument } from './document-diagnostics.js';
 import { matchShellDispatch } from './shell.js';
 import { routeResponseToWebResponse } from './response.js';
+import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import type { KovoApp } from './app-types.js';
 import { appSystemResponse } from './app-system-response.js';
 import {
@@ -43,8 +44,11 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   const loadShed = preDispatchLoadShedResponse(app, request, surface, buildToken);
   if (loadShed) return loadShed;
 
-  const limitedRequest = requestWithBodyLimit(request, app.requestLimits.maxBodyBytes);
+  if (url.pathname === KOVO_CSP_REPORT_ENDPOINT) {
+    return cspReportResponse(request.method);
+  }
 
+  const limitedRequest = requestWithBodyLimit(request, app.requestLimits.maxBodyBytes);
   try {
     return await dispatchMatchedAppRequest({ app, match, request: limitedRequest, url });
   } catch (error) {
@@ -66,6 +70,22 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       request,
     );
   }
+}
+
+function cspReportResponse(method: string): Response {
+  if (method.toUpperCase() !== 'POST') {
+    return appSystemResponse(null, {
+      headers: { Allow: 'POST' },
+      status: 405,
+      surface: 'other',
+    });
+  }
+
+  return appSystemResponse(null, {
+    headers: { 'Cache-Control': 'no-store' },
+    status: 204,
+    surface: 'other',
+  });
 }
 
 function loadShedSurface(kind: string): LoadShedSurface {

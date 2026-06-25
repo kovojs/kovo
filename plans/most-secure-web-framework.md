@@ -266,6 +266,9 @@ packages/server/src/file.test.ts packages/server/src/response.test.ts` passed.
       Permissions) to a framework endpoint; aggregate redacted reports; rescue the built-then-dropped KV236 events.
       _Trade-off:_ cheap observability that converts blind floors into auditable ones, but introduces an
       attacker-triggerable report channel that must be rate-limited and redacted.
+      Progress: default enforced CSP emits `report-to kovo-csp`, `Report-To`, and `Reporting-Endpoints`, plus a
+      reserved `POST /_kovo/reports/csp` collector. Remaining gap: COOP/Permissions reporting and report
+      aggregation/redaction/rate-limit semantics are not complete, so this item stays open.
 
 - [ ] **OPP-15 — Clear-Site-Data on logout + `Origin-Agent-Cluster: ?1`.** runtime-DiD · lev 4 · M ·
       non-breaking. Ship OAC `?1` now (one-line origin-keyed isolation). Emit `Clear-Site-Data:
