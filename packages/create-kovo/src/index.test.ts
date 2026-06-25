@@ -15,6 +15,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
+import { kovoDocsMirrorRemotes } from '@kovojs/core/internal/agent-docs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createKovoProject, demoPasswordEnvVar, main, writeKovoProject } from './index.js';
@@ -42,19 +43,7 @@ const TEMPLATE_FILES = [
 const AGENT_DOC_FILES = [
   'AGENTS.md',
   'CLAUDE.md',
-  '.kovo/docs/kovo-rules.md',
-  '.kovo/docs/llms.txt',
-  '.kovo/docs/llms-full.txt',
-  '.kovo/docs/spec.md',
-  '.kovo/docs/docs/project-structure.md',
-  '.kovo/docs/guides/cli.md',
-  '.kovo/docs/guides/security.md',
-  '.kovo/docs/guides/routing.md',
-  '.kovo/docs/guides/layouts.md',
-  '.kovo/docs/guides/queries.md',
-  '.kovo/docs/guides/mutations.md',
-  '.kovo/docs/guides/testing.md',
-  '.kovo/docs/reference/diagnostics.md',
+  ...kovoDocsMirrorRemotes.map((remote) => `.kovo/docs/${remote.path}`),
   '.kovo/docs/metadata.json',
 ];
 const GENERATED_FILES = [...AGENT_DOC_FILES, '.env', '.env.example', '.gitignore'];
@@ -110,6 +99,10 @@ describe('create-kovo starter (metadata)', () => {
       expect(agents).toContain('`kovo check`');
       expect(agents).toContain('Read the local docs below');
       expect(agents).toContain('- Spec: `./.kovo/docs/spec.md`');
+      expect(agents).toContain('### Guides');
+      expect(agents).toContain('- Live queries: `./.kovo/docs/guides/live-queries.md`');
+      expect(agents).not.toContain('./.kovo/docs/llms.txt');
+      expect(agents).not.toContain('./.kovo/docs/llms-full.txt');
       expect(agents).toContain('<!-- END:kovo-rules -->');
 
       expect(readlinkSync(join(root, 'CLAUDE.md'))).toBe('AGENTS.md');

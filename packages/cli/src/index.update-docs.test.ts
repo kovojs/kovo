@@ -40,7 +40,9 @@ describe('kovo update-docs', () => {
 
       expect(result).toEqual({
         exitCode: 0,
-        output: 'kovo-update-docs/v1\nOK source=fetched files=14\nOK fetched latest docs\n',
+        output: `kovo-update-docs/v1\nOK source=fetched files=${
+          kovoDocsMirrorRemotes.length + 1
+        }\nOK fetched latest docs\n`,
       });
 
       const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
@@ -78,8 +80,9 @@ describe('kovo update-docs', () => {
 
       expect(result).toEqual({
         exitCode: 0,
-        output:
-          'kovo-update-docs/v1\nOK source=bundled files=14\nWARN fetch failed; used bundled docs snapshot\n',
+        output: `kovo-update-docs/v1\nOK source=bundled files=${
+          kovoDocsMirrorRemotes.length + 1
+        }\nWARN fetch failed; used bundled docs snapshot\n`,
       });
 
       const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
@@ -88,7 +91,12 @@ describe('kovo update-docs', () => {
       expect(agents).toContain('`kovo check`');
       expect(agents).toContain('- Spec: `./.kovo/docs/spec.md`');
       expect(readFileSync(join(root, '.kovo/docs/kovo-rules.md'), 'utf8')).toContain('## Commands');
+      expect(readFileSync(join(root, '.kovo/docs/kovo-rules.md'), 'utf8')).not.toContain(
+        './.kovo/docs/llms.txt',
+      );
       expect(existsSync(join(root, '.kovo/docs/reference/diagnostics.md'))).toBe(true);
+      expect(existsSync(join(root, '.kovo/docs/guides/live-queries.md'))).toBe(true);
+      expect(existsSync(join(root, '.kovo/docs/api/core.md'))).toBe(true);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

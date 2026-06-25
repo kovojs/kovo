@@ -12,20 +12,104 @@ export interface KovoDocsMirrorRemote {
   url: string;
 }
 
-export const kovoDocsMirrorRemotes: readonly KovoDocsMirrorRemote[] = [
-  { path: 'kovo-rules.md', url: 'https://kovo.sh/kovo-rules.md' },
+interface KovoRulesTocSection {
+  title: string;
+  entries: readonly KovoRulesTocEntry[];
+}
+
+interface KovoRulesTocEntry {
+  title: string;
+  path: string;
+}
+
+export const kovoRulesTocSections: readonly KovoRulesTocSection[] = [
+  {
+    title: 'Getting Started',
+    entries: [
+      { title: 'Why Kovo?', path: 'docs/why-kovo.md' },
+      { title: 'Quickstart', path: 'docs/quickstart.md' },
+      { title: 'Thinking in Kovo', path: 'docs/mental-model.md' },
+      { title: 'Installation', path: 'docs/installation.md' },
+      { title: 'Project structure', path: 'docs/project-structure.md' },
+      { title: 'Stability & Versioning', path: 'docs/stability.md' },
+    ],
+  },
+  {
+    title: 'Tutorial',
+    entries: [
+      { title: '1. Scaffold & the first page', path: 'tutorial/01-first-page.md' },
+      { title: '2. Components & islands', path: 'tutorial/02-islands.md' },
+      { title: '3. Queries & data binding', path: 'tutorial/03-queries.md' },
+      { title: '4. Mutations & forms', path: 'tutorial/04-mutations.md' },
+      { title: '5. Invalidation & optimistic updates', path: 'tutorial/05-optimistic.md' },
+      { title: '6. Streaming & defer', path: 'tutorial/06-streaming.md' },
+      { title: '7. Testing & verification', path: 'tutorial/07-verification.md' },
+      { title: '8. Wrap-up & deploy', path: 'tutorial/08-wrap-up.md' },
+    ],
+  },
+  {
+    title: 'Guides',
+    entries: [
+      { title: 'Routing & navigation', path: 'guides/routing.md' },
+      { title: 'Layouts', path: 'guides/layouts.md' },
+      { title: 'Queries & invalidation', path: 'guides/queries.md' },
+      { title: 'Live queries', path: 'guides/live-queries.md' },
+      { title: 'Domains, writes & data access', path: 'guides/data-layer.md' },
+      { title: 'Mutations & forms', path: 'guides/mutations.md' },
+      { title: 'Security & authorization', path: 'guides/security.md' },
+      { title: 'Better Auth integration', path: 'guides/auth-better-auth.md' },
+      { title: 'Optimistic updates', path: 'guides/optimistic.md' },
+      { title: 'Interactive islands & client state', path: 'guides/islands.md' },
+      { title: 'Styling with StyleX', path: 'guides/styling.md' },
+      { title: 'Request shell', path: 'guides/request-shell.md' },
+      { title: 'Endpoints & webhooks', path: 'guides/endpoints-webhooks.md' },
+      { title: 'Deployment', path: 'guides/deployment.md' },
+      { title: 'Static export', path: 'guides/static-export.md' },
+      { title: 'Testing with @kovojs/test', path: 'guides/testing.md' },
+      { title: 'Dataflow devtool', path: 'guides/dataflow-devtool.md' },
+      { title: 'The kovo & vp CLIs', path: 'guides/cli.md' },
+      { title: 'Reading kovo check & kovo explain', path: 'guides/kovo-explain.md' },
+      { title: 'Streaming & defer', path: 'guides/streaming.md' },
+      { title: 'Compiler internals', path: 'guides/compiler-internals.md' },
+      { title: 'Accessibility', path: 'guides/accessibility.md' },
+      { title: 'Components & copy-in UI', path: 'guides/components.md' },
+    ],
+  },
+  {
+    title: 'API Reference',
+    entries: [
+      { title: '@kovojs/core', path: 'api/core.md' },
+      { title: '@kovojs/icons', path: 'api/icons.md' },
+      { title: '@kovojs/server', path: 'api/server.md' },
+      { title: '@kovojs/browser', path: 'api/browser.md' },
+      { title: '@kovojs/test', path: 'api/test.md' },
+      { title: '@kovojs/drizzle', path: 'api/drizzle.md' },
+      { title: '@kovojs/headless-ui', path: 'api/headless-ui.md' },
+      { title: '@kovojs/style', path: 'api/style.md' },
+      { title: '@kovojs/better-auth', path: 'api/better-auth.md' },
+      { title: '@kovojs/ui', path: 'api/ui.md' },
+      { title: '@kovojs/cli', path: 'api/cli.md' },
+      { title: 'create-kovo', path: 'api/create-kovo.md' },
+    ],
+  },
+  {
+    title: 'Reference',
+    entries: [{ title: 'Diagnostics', path: 'reference/diagnostics.md' }],
+  },
+];
+
+const additionalMirrorDocs: readonly KovoDocsMirrorRemote[] = [
   { path: 'llms.txt', url: 'https://kovo.sh/llms.txt' },
   { path: 'llms-full.txt', url: 'https://kovo.sh/llms-full.txt' },
   { path: 'spec.md', url: 'https://kovo.sh/spec.md' },
-  { path: 'docs/project-structure.md', url: 'https://kovo.sh/docs/project-structure.md' },
-  { path: 'guides/cli.md', url: 'https://kovo.sh/guides/cli.md' },
-  { path: 'guides/security.md', url: 'https://kovo.sh/guides/security.md' },
-  { path: 'guides/routing.md', url: 'https://kovo.sh/guides/routing.md' },
-  { path: 'guides/layouts.md', url: 'https://kovo.sh/guides/layouts.md' },
-  { path: 'guides/queries.md', url: 'https://kovo.sh/guides/queries.md' },
-  { path: 'guides/mutations.md', url: 'https://kovo.sh/guides/mutations.md' },
-  { path: 'guides/testing.md', url: 'https://kovo.sh/guides/testing.md' },
-  { path: 'reference/diagnostics.md', url: 'https://kovo.sh/reference/diagnostics.md' },
+];
+
+export const kovoDocsMirrorRemotes: readonly KovoDocsMirrorRemote[] = [
+  { path: 'kovo-rules.md', url: 'https://kovo.sh/kovo-rules.md' },
+  ...additionalMirrorDocs,
+  ...kovoRulesTocSections.flatMap((section) =>
+    section.entries.map((entry) => ({ path: entry.path, url: `https://kovo.sh/${entry.path}` })),
+  ),
 ];
 
 export function bundledKovoRulesSource(): string {
@@ -45,15 +129,12 @@ export function bundledKovoRulesSource(): string {
     '## Table Of Contents',
     '',
     '- Spec: `./.kovo/docs/spec.md`',
-    '- Docs index: `./.kovo/docs/llms.txt`',
-    '- Full docs corpus: `./.kovo/docs/llms-full.txt`',
-    '- Project structure: `./.kovo/docs/docs/project-structure.md`',
-    '- CLI: `./.kovo/docs/guides/cli.md`',
-    '- Diagnostics: `./.kovo/docs/reference/diagnostics.md`',
-    '- Security: `./.kovo/docs/guides/security.md`',
-    '- Routes/layouts: `./.kovo/docs/guides/routing.md`, `./.kovo/docs/guides/layouts.md`',
-    '- Queries/mutations: `./.kovo/docs/guides/queries.md`, `./.kovo/docs/guides/mutations.md`',
-    '- Testing: `./.kovo/docs/guides/testing.md`',
+    ...kovoRulesTocSections.flatMap((section) => [
+      '',
+      `### ${section.title}`,
+      '',
+      ...section.entries.map((entry) => `- ${entry.title}: \`./.kovo/docs/${entry.path}\``),
+    ]),
     '',
   ].join('\n');
 }
@@ -141,21 +222,11 @@ export function bundledKovoDocsMirrorFiles({
     ].join('\n'),
   );
   files.set('spec.md', fallbackDoc('Kovo Spec', 'https://kovo.sh/spec.md'));
-  files.set(
-    'docs/project-structure.md',
-    fallbackDoc('Project Structure', 'https://kovo.sh/docs/project-structure.md'),
-  );
-  files.set('guides/cli.md', fallbackDoc('CLI', 'https://kovo.sh/guides/cli.md'));
-  files.set('guides/security.md', fallbackDoc('Security', 'https://kovo.sh/guides/security.md'));
-  files.set('guides/routing.md', fallbackDoc('Routing', 'https://kovo.sh/guides/routing.md'));
-  files.set('guides/layouts.md', fallbackDoc('Layouts', 'https://kovo.sh/guides/layouts.md'));
-  files.set('guides/queries.md', fallbackDoc('Queries', 'https://kovo.sh/guides/queries.md'));
-  files.set('guides/mutations.md', fallbackDoc('Mutations', 'https://kovo.sh/guides/mutations.md'));
-  files.set('guides/testing.md', fallbackDoc('Testing', 'https://kovo.sh/guides/testing.md'));
-  files.set(
-    'reference/diagnostics.md',
-    fallbackDoc('Diagnostics', 'https://kovo.sh/reference/diagnostics.md'),
-  );
+  for (const section of kovoRulesTocSections) {
+    for (const entry of section.entries) {
+      files.set(entry.path, fallbackDoc(entry.title, `https://kovo.sh/${entry.path}`));
+    }
+  }
   files.set(
     'metadata.json',
     `${JSON.stringify(
