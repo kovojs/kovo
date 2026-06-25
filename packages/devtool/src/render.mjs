@@ -12,12 +12,23 @@ const ROW_STEP = 86;
 const X0 = 40;
 const TOP_PAD = 80;
 
-const esc = (s) =>
+const escText = (s) =>
   String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+    .replace(/>/g, '&gt;');
+const escAttr = (s) =>
+  escText(s)
     .replace(/"/g, '&quot;');
+const esc = escText;
+
+function queryHref(params) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
+  }
+  return `?${search.toString()}`;
+}
 
 const accent = (kind) => KIND_META[kind]?.accent ?? '#888';
 const glyph = (kind) => KIND_META[kind]?.glyph ?? '•';
@@ -136,8 +147,8 @@ export function renderPage(opts) {
             .map((r) => {
               const n = byId.get(r.id);
               return (
-                `<a class="result" href="?app=${app}&sel=${encodeURIComponent(n.id)}&q=${encodeURIComponent(q)}">` +
-                `<span class="dot" style="background:${accent(n.kind)}"></span>` +
+                `<a class="result" href="${escAttr(queryHref({ app, sel: n.id, q }))}">` +
+                `<span class="dot" style="background:${escAttr(accent(n.kind))}"></span>` +
                 `<span><b>${esc(n.label)}</b> <span class="chip">${n.kind}</span></span>` +
                 `<span class="matched">${r.matched.join(' ')}</span><span class="score">${r.score.toFixed(2)}</span></a>`
               );
@@ -150,7 +161,7 @@ export function renderPage(opts) {
   const markers = activeLanes
     .map(
       (k) =>
-        `<marker id="ar-${k}" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${accent(k)}"/></marker>`,
+        `<marker id="ar-${escAttr(k)}" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="${escAttr(accent(k))}"/></marker>`,
     )
     .join('');
   const paths = bundle.edges
@@ -163,7 +174,7 @@ export function renderPage(opts) {
       const cls = ['edge', tr ? (active ? 'active animated' : 'dim') : '']
         .filter(Boolean)
         .join(' ');
-      return `<path class="${cls}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" d="${edgePath(a, b)}" stroke="${col}" stroke-opacity="0.32" style="color:${col}" marker-end="url(#ar-${a.kind})"/>`;
+      return `<path class="${escAttr(cls)}" data-from="${escAttr(e.from)}" data-to="${escAttr(e.to)}" d="${escAttr(edgePath(a, b))}" stroke="${escAttr(col)}" stroke-opacity="0.32" style="color:${escAttr(col)}" marker-end="url(#ar-${escAttr(a.kind)})"/>`;
     })
     .join('');
 
@@ -177,9 +188,9 @@ export function renderPage(opts) {
       }
       if (hits.has(n.id)) cls.push('hit');
       const sub = nodeSub(n);
-      const href = `?app=${app}&sel=${encodeURIComponent(n.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+      const href = queryHref({ app, sel: n.id, q });
       return (
-        `<a class="${cls.join(' ')}" data-node-id="${esc(n.id)}" href="${href}" style="left:${n.x}px;top:${n.y}px;width:${W}px;min-height:${H}px">` +
+        `<a class="${escAttr(cls.join(' '))}" data-node-id="${escAttr(n.id)}" href="${escAttr(href)}" style="left:${escAttr(n.x)}px;top:${escAttr(n.y)}px;width:${W}px;min-height:${H}px">` +
         `<span class="label"><span class="glyph">${glyph(n.kind)}</span>${esc(n.label)}</span>` +
         (sub ? `<span class="sub">${esc(sub)}</span>` : '') +
         `</a>`
@@ -191,20 +202,20 @@ export function renderPage(opts) {
     .map((k, i) => {
       const x = X0 + i * COL_STEP + W / 2;
       const m = KIND_META[k];
-      return `<div class="lane-head" style="left:${x}px;color:${m.accent}"><span class="glyph">${m.glyph}</span><span class="name">${m.label}</span><span class="blurb">${m.blurb}</span></div>`;
+      return `<div class="lane-head" style="left:${escAttr(x)}px;color:${escAttr(m.accent)}"><span class="glyph">${esc(m.glyph)}</span><span class="name">${esc(m.label)}</span><span class="blurb">${esc(m.blurb)}</span></div>`;
     })
     .join('');
 
   const legend = activeLanes
     .map(
       (k) =>
-        `<span class="k"><span class="sw" style="background:${accent(k)}"></span>${KIND_META[k].label}</span>`,
+        `<span class="k"><span class="sw" style="background:${escAttr(accent(k))}"></span>${esc(KIND_META[k].label)}</span>`,
     )
     .join('');
   const appTabs = manifest
     .map(
       (a) =>
-        `<a class="app-tab" href="?app=${a.id}" aria-current="${a.id === app}"><b>${esc(a.label)}</b><small>${esc(a.blurb)}</small></a>`,
+        `<a class="app-tab" href="${escAttr(queryHref({ app: a.id }))}" aria-current="${escAttr(a.id === app ? 'true' : 'false')}"><b>${esc(a.label)}</b><small>${esc(a.blurb)}</small></a>`,
     )
     .join('');
 
@@ -214,13 +225,13 @@ export function renderPage(opts) {
     `<header class="topbar">` +
     `<div class="brand"><span class="brand-mark"></span><span class="brand-name">Kovo</span><span class="brand-sub">Dataflow</span></div>` +
     `<form class="search" method="get" action="" role="search">` +
-    `<input type="hidden" name="app" value="${app}"/>` +
+    `<input type="hidden" name="app" value="${escAttr(app)}"/>` +
     `<svg viewBox="0 0 24 24"><path d="M21 21l-4.3-4.3M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>` +
-    `<input name="q" value="${esc(q ?? '')}" placeholder="Trace anything — a component, query, mutation…" autocomplete="off" spellcheck="false"/>` +
+    `<input name="q" value="${escAttr(q ?? '')}" placeholder="Trace anything — a component, query, mutation…" autocomplete="off" spellcheck="false"/>` +
     `<kbd>BM25</kbd>${results}</form>` +
     `<div class="spacer"></div><div class="apps">${appTabs}</div></header>` +
     `<div class="stage"><div class="canvas-wrap">` +
-    `<div class="canvas" data-pz-root kovo-c="dataflow-canvas" kovo-state="{}" on:visible="${pzHref}#Devtool$init" style="width:${width}px;height:${height}px">` +
+    `<div class="canvas" data-pz-root kovo-c="dataflow-canvas" kovo-state="{}" on:visible="${escAttr(pzHref)}#Devtool$init" style="width:${escAttr(width)}px;height:${escAttr(height)}px">` +
     `<div class="pz" data-pz><div class="lane-headers">${laneHeads}</div>` +
     `<svg class="edges" width="${width}" height="${height}"><defs>${markers}</defs>${paths}</svg>${cards}</div></div>` +
     (selNode
@@ -247,16 +258,16 @@ const statusBadge = (s) => {
   if (st === 'derived') return `<span class="badge badge--derived">derived</span>`;
   if (st === 'hand-written') return `<span class="badge badge--hand-written">hand-written</span>`;
   if (s.derivation?.status === 'PUNTED')
-    return `<span class="badge badge--punted" title="${esc(JSON.stringify(s.derivation.reason))}">punted · ${esc(s.derivation.reason?.code ?? '')}</span>`;
+    return `<span class="badge badge--punted" title="${escAttr(JSON.stringify(s.derivation.reason))}">punted · ${esc(s.derivation.reason?.code ?? '')}</span>`;
   if (st === 'await-fragment')
     return `<span class="badge badge--await-fragment">await-fragment</span>`;
   return `<span class="badge badge--none">${esc(st)}</span>`;
 };
 
 function flowrow(app, n, right, q) {
-  const href = `?app=${app}&sel=${encodeURIComponent(n.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+  const href = queryHref({ app, sel: n.id, q });
   return (
-    `<a class="flowrow node--${n.kind}" href="${href}"><span class="dot"></span><span class="name">${esc(n.label)}` +
+    `<a class="flowrow node--${escAttr(n.kind)}" href="${escAttr(href)}"><span class="dot"></span><span class="name">${esc(n.label)}` +
     (n.kind === 'component' && n.data.domName ? ` <small>${esc(n.data.domName)}</small>` : '') +
     `</span><span class="right">${right}</span></a>`
   );
@@ -316,7 +327,7 @@ function renderInspector(bundle, byId, sel) {
     for (const qn of queries)
       for (const m of mutsWriting(qn.data.domains ?? [])) {
         cov.push(
-          `<a class="flowrow node--mutation" href="?app=${app}&sel=${encodeURIComponent(m.id)}"><span class="dot"></span><span class="name">${esc(m.label)} <small>→ ${esc(qn.label)}</small></span><span class="right">${statusBadge(optStatus(m, qn.name))}</span></a>`,
+          `<a class="flowrow node--mutation" href="${escAttr(queryHref({ app, sel: m.id }))}"><span class="dot"></span><span class="name">${esc(m.label)} <small>→ ${esc(qn.label)}</small></span><span class="right">${statusBadge(optStatus(m, qn.name))}</span></a>`,
         );
       }
     body += section(
@@ -426,7 +437,7 @@ function renderInspector(bundle, byId, sel) {
           : sel.kind;
   const guards = sel.data.guards ?? [];
   return (
-    `<div class="insp-head node--${sel.kind}"><span class="insp-kind" style="color:${accent(sel.kind)}">${glyph(sel.kind)} ${sel.kind}</span>` +
+    `<div class="insp-head node--${escAttr(sel.kind)}"><span class="insp-kind" style="color:${escAttr(accent(sel.kind))}">${esc(glyph(sel.kind))} ${esc(sel.kind)}</span>` +
     `<div class="insp-title">${esc(sel.label)}</div><div class="insp-meta">${meta}</div>` +
     (guards.length
       ? `<div class="kv" style="margin-top:8px">${guards.map((g) => `<span class="chip">🛡 ${esc(g)}</span>`).join('')}</div>`
@@ -441,7 +452,7 @@ function overviewInspector(bundle) {
     .filter((k) => bundle.counts[k])
     .map(
       (k) =>
-        `<a class="flowrow node--${k}" href="#"><span class="dot"></span><span class="name">${KIND_META[k].label}</span><span class="right"><span class="chip">${bundle.counts[k]}</span></span></a>`,
+        `<a class="flowrow node--${escAttr(k)}" href="#"><span class="dot"></span><span class="name">${esc(KIND_META[k].label)}</span><span class="right"><span class="chip">${bundle.counts[k]}</span></span></a>`,
     )
     .join('');
   const opt = {};
@@ -482,5 +493,5 @@ const section = (title, count, inner) =>
 const muted = (t) => `<div style="font-size:13px;color:var(--faint)">${esc(t)}</div>`;
 const chipLink = (app, n) =>
   n
-    ? `<a class="chip chip--domain" style="text-decoration:none" href="?app=${app}&sel=${encodeURIComponent(n.id)}">${esc(n.label)}</a>`
+    ? `<a class="chip chip--domain" style="text-decoration:none" href="${escAttr(queryHref({ app, sel: n.id }))}">${esc(n.label)}</a>`
     : '';

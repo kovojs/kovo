@@ -20,10 +20,12 @@ import { createKovoProject, demoPasswordEnvVar, main, writeKovoProject } from '.
 
 const TEMPLATE_FILES = [
   'package.json',
+  'tsconfig.json',
   'kovo.config.ts',
   'vite.config.ts',
   '.github/workflows/ci.yml',
   'README.md',
+  'scripts/check-sound-subset.mjs',
   'src/schema.ts',
   'src/db.ts',
   'src/auth.ts',
@@ -85,27 +87,34 @@ describe('create-kovo starter (metadata)', () => {
         dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
         name?: string;
+        packageManager?: string;
         scripts?: Record<string, string>;
       };
 
       expect(packageJson.name).toBe('my-app');
       expect(packageJson.dependencies).toMatchObject({
         '@electric-sql/pglite': expect.any(String),
-        '@kovojs/better-auth': 'workspace:*',
-        '@kovojs/core': 'workspace:*',
-        '@kovojs/drizzle': 'workspace:*',
-        '@kovojs/server': 'workspace:*',
-        '@kovojs/style': 'workspace:*',
-        '@kovojs/ui': 'workspace:*',
+        '@kovojs/better-auth': expect.stringMatching(/^\d+\.\d+\.\d+/),
+        '@kovojs/core': expect.stringMatching(/^\d+\.\d+\.\d+/),
+        '@kovojs/drizzle': expect.stringMatching(/^\d+\.\d+\.\d+/),
+        '@kovojs/server': expect.stringMatching(/^\d+\.\d+\.\d+/),
+        '@kovojs/style': expect.stringMatching(/^\d+\.\d+\.\d+/),
+        '@kovojs/ui': expect.stringMatching(/^\d+\.\d+\.\d+/),
         'better-auth': expect.any(String),
         'drizzle-orm': expect.any(String),
       });
+      expect(Object.values(packageJson.dependencies ?? {})).not.toContain('workspace:*');
+      expect(Object.values(packageJson.devDependencies ?? {})).not.toContain('workspace:*');
+      expect(packageJson.packageManager).toBe('pnpm@10.12.1');
       expect(packageJson.dependencies).not.toHaveProperty('better-sqlite3');
-      expect(packageJson.devDependencies).toMatchObject({ '@kovojs/cli': 'workspace:*' });
+      expect(packageJson.devDependencies).toMatchObject({
+        '@kovojs/cli': expect.stringMatching(/^\d+\.\d+\.\d+/),
+      });
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
-        check: 'vp check',
+        check: 'vp check && npm run check:sound-subset',
+        'check:sound-subset': 'node scripts/check-sound-subset.mjs',
         dev: 'vp dev',
         serve: 'npm run build:prod && node dist/server/server.mjs',
         start: 'node dist/server/server.mjs',
@@ -129,6 +138,21 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).toContain("import { PGlite } from '@electric-sql/pglite'");
     expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
     expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
+  });
+
+  it('emits SPEC §6.6 sound-subset policy and framework anonymous CSRF binding', () => {
+    const project = createKovoProject({ name: 'Policy Proof' });
+    const files = new Map(project.files.map((file) => [file.path, file.source]));
+
+    expect(files.get('tsconfig.json')).toContain('"strict": true');
+    expect(files.get('tsconfig.json')).toContain('"noUncheckedIndexedAccess": true');
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
+      'SPEC.md §6.6 sound subset bans any',
+    );
+    expect(files.get('src/auth.ts')).toContain(
+      'return request.session?.id ?? request.authCsrfId ?? undefined;',
+    );
+    expect(files.get('src/auth.ts')).not.toContain('kovo-starter-anon');
   });
 
   it('emits the SQLite scaffold variant when requested', () => {
@@ -166,7 +190,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(appSource).not.toContain('Starter$announce');
 
       // No fake graph apparatus or static-export wrappers remain.
-      expect(existsSync(join(root, 'scripts'))).toBe(false);
+      expect(existsSync(join(root, 'scripts/check-sound-subset.mjs'))).toBe(true);
       expect(existsSync(join(root, 'docs'))).toBe(false);
       expect(existsSync(join(root, 'src/app-shell.ts'))).toBe(false);
     } finally {
