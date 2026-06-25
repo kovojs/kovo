@@ -169,24 +169,24 @@ diagnostic in compiler/check gates that claim data-plane security.
 
 - [x] Add adversarial regression tests for every output-context bypass observed in this audit and
       make them emit `KV236` or a stricter sink-specific diagnostic.
-  - Evidence: `pnpm exec vitest --run packages/compiler/src/output-context-security.test.ts`
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/scan/parse.test.ts`
     passes with KV236 coverage for non-inline unsafe spreads, computed-key unsafe spreads, direct
     lowercase `onclick`, and direct `srcdoc`.
 - [x] Replace the current partial sink inventory with a single closed inventory for direct attrs,
       inline spreads, non-inline spreads that can be statically resolved, derived attrs, and dynamic
       bindings.
-  - Evidence: `pnpm exec vitest --run packages/compiler/src/output-context-security.test.ts` and
-    `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts` pass after scanner facts
-    expanded statically resolvable spreads and output-context validation reused the same sink checks
-    for direct attributes and spread entries.
-- [ ] Surface TypeScript/TSX parse diagnostics before lowering and block emission for malformed
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/scan/parse.test.ts`
+    passes after scanner facts expanded statically resolvable spreads and output-context validation
+    reused the same sink checks for direct attributes and spread entries.
+- [x] Surface TypeScript/TSX parse diagnostics before lowering and block emission for malformed
       author input.
-  - Evidence: `parseSourceFile` calls `ts.createSourceFile`; the adversarial malformed JSX probe
-    emitted files with no diagnostic.
-- [ ] Normalize and confine compiler `fileName` before deriving artifact names, import paths, or
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/compile-component.test.ts packages/core/src/diagnostics.test.ts`
+    passes with KV245 coverage for malformed TSX returning diagnostics and no emitted files.
+- [x] Normalize and confine compiler `fileName` before deriving artifact names, import paths, or
       `/c/` URLs.
-  - Evidence: adversarial probe with `../outside/evil.tsx` produced traversal-shaped output names
-    and URLs.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/compile-component.test.ts packages/core/src/diagnostics.test.ts`
+    passes with traversal-shaped component file names confined before deriving emitted artifact
+    names and `/c/` URLs.
 - [ ] Extend static ID analysis to repeated JSX containers such as `.map()` and other loop-like
       render patterns.
   - Evidence: adversarial probe found repeated `id="row"` inside `.map()` with no diagnostic.
