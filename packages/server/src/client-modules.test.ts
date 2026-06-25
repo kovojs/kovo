@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  clientModuleContentVersion,
+  clientModuleHrefForSourceFile,
+  parseVersionedClientModuleTarget,
+  versionedClientModuleRequestKey,
+} from '@kovojs/core/internal/client-module-url';
 
 import {
   computeRenderPlanFingerprint,
   createMemoryVersionedClientModuleRegistry,
   RENDER_PLAN_GRAMMAR_VERSION,
   renderVersionedClientModuleResponse,
+  versionedClientModuleHref,
 } from './client-modules.js';
 
 // ─── D1 + DEPLOY-3: render-plan fingerprint & never-empty token ───────────────
@@ -75,6 +82,23 @@ describe('render-plan fingerprint and grammar version (D1, DEPLOY-3)', () => {
 // (integration test — requires app-document; lives here for co-location with the registry tests)
 
 describe('versioned client modules', () => {
+  it('uses the shared core client-module ABI for hrefs, versions, and request parsing', () => {
+    const version = clientModuleContentVersion('export const ok = true;');
+    const href = clientModuleHrefForSourceFile('components/cart.tsx', version);
+
+    expect(href).toBe(`/c/__v/${version}/components/cart.client.js`);
+    expect(versionedClientModuleHref('/c/components/cart.client.js#Cart$add', version)).toBe(
+      `/c/__v/${version}/components/cart.client.js#Cart$add`,
+    );
+    expect(parseVersionedClientModuleTarget(href)).toEqual({
+      path: '/c/components/cart.client.js',
+      version,
+    });
+    expect(versionedClientModuleRequestKey(`/c/components/cart.client.js?v=${version}`)).toBe(
+      `/c/components/cart.client.js?v=${version}`,
+    );
+  });
+
   it('retains old versioned client module responses after newer deploys register', () => {
     const registry = createMemoryVersionedClientModuleRegistry();
     const oldHref = registry.put({

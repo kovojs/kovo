@@ -11,6 +11,7 @@
         "generated": ["./generated"],
         "internal": [
           "./internal/derivation",
+          "./internal/client-module-url",
           "./internal/diagnostics",
           "./internal/document-protocol",
           "./internal/fragment-target",

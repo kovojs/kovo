@@ -2,6 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import {
+  clientModuleContentVersion,
+  clientModuleHrefForSourceFile,
+} from '@kovojs/core/internal/client-module-url';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -221,9 +225,49 @@ export function renderSource() {
     middlewares[0]?.({ url: clientRef ?? '' }, res, next);
 
     expect(next).not.toHaveBeenCalled();
-    expect(res.headers['Content-Type']).toBe('text/javascript');
+    expect(res.headers).toEqual({
+      'Cache-Control': 'no-store',
+      'Cross-Origin-Resource-Policy': 'same-origin',
+      'Content-Type': 'text/javascript; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+    });
     expect(res.body).toContain('export const CartBadge$button_click');
     expect(res.body).toContain('return removeItem(ctx.state, ctx.params.id);');
+  });
+
+  it('serves Vite dev client modules through the shared URL ABI request key', async () => {
+    const clientSource = 'export const SharedAbi$button_click = () => true;';
+    const plugin = createKovoVitePlugin(() => ({
+      files: [
+        { kind: 'server', source: 'export function renderSource() {}' },
+        { kind: 'client', source: clientSource },
+      ],
+    }));
+    const middlewares: KovoViteMiddleware[] = [];
+    plugin.configureServer?.({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    await plugin.transform('component(', 'src/shared-abi.tsx');
+
+    const version = clientModuleContentVersion(clientSource);
+    const versionedPath = clientModuleHrefForSourceFile('src/shared-abi.tsx', version);
+    const queryVersionedPath = `/c/src/shared-abi.client.js?v=${version}`;
+    for (const href of [versionedPath, queryVersionedPath]) {
+      const res = createMiddlewareResponse();
+      const next = vi.fn();
+
+      middlewares[0]?.({ url: href }, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.body).toBe(clientSource);
+      expect(res.headers['Cross-Origin-Resource-Policy']).toBe('same-origin');
+      expect(res.headers['Cache-Control']).toBe('no-store');
+    }
   });
 
   it('surfaces a deduped CSS asset manifest for transformed app components', async () => {

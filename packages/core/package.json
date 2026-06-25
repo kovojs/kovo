@@ -13,6 +13,7 @@
     ".": "./src/index.ts",
     "./generated": "./src/generated.ts",
     "./internal/component-render": "./src/internal/component-render.ts",
+    "./internal/client-module-url": "./src/internal/client-module-url.ts",
     "./internal/derivation": "./src/internal/derivation.ts",
     "./internal/diagnostics": "./src/internal/diagnostics.ts",
     "./internal/document-protocol": "./src/internal/document-protocol.ts",
@@ -40,6 +41,10 @@
       "./internal/component-render": {
         "types": "./dist/internal/component-render.d.mts",
         "default": "./dist/internal/component-render.mjs"
+      },
+      "./internal/client-module-url": {
+        "types": "./dist/internal/client-module-url.d.mts",
+        "default": "./dist/internal/client-module-url.mjs"
       },
       "./internal/derivation": {
         "types": "./dist/internal/derivation.d.mts",
@@ -96,7 +101,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/event.ts src/internal/fragment-target.ts src/internal/graph.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/render-plan-token.ts src/internal/security-url.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts --dts",
+    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/event.ts src/internal/fragment-target.ts src/internal/graph.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/render-plan-token.ts src/internal/security-url.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {

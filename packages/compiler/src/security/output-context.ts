@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { isUrlAttribute, type GeneratedOutputWriteFact } from '../output-context-facts.js';
@@ -440,24 +441,6 @@ function isRawHtmlAttribute(name: string): boolean {
     name === 'rawHtml' ||
     name === 'html'
   );
-}
-
-const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
-
-function hasUnsafeUrlScheme(value: string): boolean {
-  const normalized = stripAsciiControlAndSpace(value).toLowerCase();
-  const match = /^([a-z][a-z0-9+.-]*):/.exec(normalized);
-  if (!match) return false;
-
-  return !SAFE_URL_SCHEMES.has(match[1] ?? '');
-}
-
-function stripAsciiControlAndSpace(value: string): string {
-  let normalized = '';
-  for (const char of value) {
-    if (char.charCodeAt(0) > 0x20) normalized += char;
-  }
-  return normalized;
 }
 
 function isExternalHttpUrl(value: string): boolean {
