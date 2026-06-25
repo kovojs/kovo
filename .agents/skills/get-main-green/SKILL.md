@@ -8,8 +8,10 @@ description: Restore Kovo's `main` branch to green after the latest pushed commi
 ## Overview
 
 Bring the latest `main` commit back to green on GitHub Actions. Treat the live
-GitHub run state as authoritative, reproduce the failing step as narrowly as
-possible, land a focused repair, push it, and monitor the replacement runs.
+GitHub run state as authoritative, start local diagnosis as soon as logs expose
+actionable evidence, wait for the full latest-commit workflow set before
+pushing, land a focused repair that addresses all observed failures, and monitor
+the replacement runs.
 
 ## Sources To Read
 
@@ -54,9 +56,11 @@ Read these before editing:
    making workflow-specific patches.
 
 Do not assume a stale failure still applies. Always confirm that the failing run belongs to
-the latest `origin/main` SHA before editing. If the latest run is still queued or in progress,
-monitor it until it reaches a useful result unless logs already expose a deterministic setup
-failure.
+the latest `origin/main` SHA before editing. If latest-commit runs are still queued or in
+progress, monitor them while beginning local diagnosis from any available actionable logs.
+You may implement and verify a likely repair locally before the full workflow set finishes,
+but do not push until every relevant latest-commit run has completed or the user explicitly
+accepts pushing earlier.
 
 ## Direct Or Worktree Mode
 
@@ -76,7 +80,9 @@ after integration or explicit abandonment.
 
 ## Diagnose And Fix
 
-Use the failed log line to choose the narrowest local reproduction:
+Use the failed log line to choose the narrowest local reproduction, then keep watching the
+remaining latest-commit runs for additional failures so one push can address the whole CI
+surface:
 
 - Workflow setup or package-manager failure: inspect `.github/workflows/*.yml`,
   `package.json`, `pnpm-lock.yaml`, and `rules/github-workflows.md`.
@@ -97,6 +103,23 @@ Use the failed log line to choose the narrowest local reproduction:
 
 - Browser failure: make sure the workflow installs the matching Playwright browser before
   running the browser gate. In this repo, use `vp exec playwright install --with-deps ...`.
+
+Do not narrow the goal to merely making a red assertion pass. When the failure exposes tests
+that are brittle, flaky, overfit to incidental formatting, or low signal, repair the test
+engineering as part of the fix when it is in scope for the failing area:
+
+- Prefer assertions that express the framework contract from `SPEC.md` or the relevant rule.
+- Use snapshot testing for stable structured output when it reduces noisy hand-written
+  assertions, and mask or normalize volatile data such as paths, timestamps, hashes, random
+  ports, generated IDs, stack line numbers, and platform-specific separators.
+- Avoid snapshots for broad opaque blobs that make regressions hard to review; split or
+  name focused snapshots around meaningful behaviors.
+- Replace sleeps, timing assumptions, order-dependent checks, and hidden global state with
+  deterministic setup, explicit synchronization, isolated fixtures, and clearer helpers.
+- Keep fixture updates intentional and reviewable. Do not bless changed output unless the
+  underlying behavior is correct and the assertion still catches meaningful regressions.
+- When refactoring tests, preserve or improve coverage for the behavior that failed and add
+  narrowly targeted coverage for the repaired invariant when useful.
 
 Repo-specific workflow rules:
 
@@ -128,7 +151,11 @@ Record any skipped check and the reason in the handoff.
 
 ## Commit, Push, And Monitor
 
-1. Stage only files that belong to the repair:
+1. Before pushing, wait for every relevant latest-commit workflow run to reach a terminal
+   conclusion. Inspect any additional failures and fold their root causes into the same
+   local repair when practical.
+
+2. Stage only files that belong to the repair:
 
    ```bash
    git diff --check
@@ -138,7 +165,7 @@ Record any skipped check and the reason in the handoff.
    git push
    ```
 
-2. After pushing, identify the new `main` SHA and monitor the next workflow set:
+3. After pushing, identify the new `main` SHA and monitor the next workflow set:
 
    ```bash
    git fetch origin main
@@ -147,7 +174,7 @@ Record any skipped check and the reason in the handoff.
    gh run watch <run-id> --exit-status
    ```
 
-3. If the follow-up run fails, inspect the failed logs and continue the same loop. Do not
+4. If the follow-up run fails, inspect the failed logs and continue the same loop. Do not
    declare `main` green until the required latest-commit workflows have succeeded or until the
    user explicitly accepts a remaining external failure.
 
