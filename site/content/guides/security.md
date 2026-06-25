@@ -13,6 +13,12 @@ combinators shared by routes, queries, and mutations; typed sessions and the `se
 `owner:`/IDOR authorization story; CSRF; and the three `kovo explain` audits that turn all of it into
 CI gates.
 
+One explicit honesty line up front: Kovo does **not** claim prompt-injection immunity. If an app
+hands adversarial text to a model or lets a model choose tools, OWASP LLM01-class failures are still
+possible. Kovo's claim is narrower: default-deny guards, the outbound-egress floor, structured
+HTML/URL/SQL sinks, and future capability-bounded tool adapters can reduce the consequence of a bad
+model decision, but they do not make prompt-driven apps safe by construction.
+
 ## Guards: one combinator chain everywhere
 
 A guard is a function from a request to `true` or a denial. The same `guards` combinators apply to
@@ -279,6 +285,11 @@ Common app code rules are intentionally blunt:
 - Prefer typed `mutation()`, `query()`, `route()`, `respond.file()`, `respond.stream()`, cookies, and
   verifier helpers over hand-built response strings. When you need an escape hatch, make it show up
   in `kovo explain`.
+
+For agentic or LLM-backed features, treat model output like any other untrusted source until a Kovo
+schema, guard, or sink-specific trust API narrows it. Prompt injection is about confused instructions;
+Kovo can narrow what a compromised model action may touch, not prove the model will ignore malicious
+content.
 
 ## A practical security checklist
 

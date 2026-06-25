@@ -320,20 +320,25 @@ scripts/check-pack-security.test.mjs` passed; `pnpm run check:pack-security -- -
 
 ### Band 4 — Honesty & positioning (the credibility moat)
 
-- [ ] **OPP-24 — Honesty pass on stale tier framing.** audit-only · lev 5 · S · non-breaking. (a)
-      `managed-db.ts`: until OPP-02 lands, stop implying KV433 Stage-2 ships — state current protection is
-      runtime-DiD proxy + type-only, by-construction proof DEFERRED. (b) `capability-url.ts`: fix the stale
+- [x] **OPP-24 — Honesty pass on stale tier framing.** audit-only · lev 5 · S · non-breaking. (a)
+      `managed-db.ts`: stop implying KV433 is either fully deferred or broader than it is — state the shipped
+      runtime proxy, direct static gate, and interprocedural residue honestly. (b) `capability-url.ts`: fix the stale
       comment (one literal false statement). (c) Tier the auth out-of-scope surface explicitly so silence doesn't
       read as coverage. _Trade-off:_ cheap and real — corrects a false source statement and removes
       coverage-by-silence on three OWASP categories; enforces nothing.
+      Evidence: `SPEC.md`, `packages/server/src/managed-db.ts`, and `packages/server/src/capability-url.ts`
+      now state shipped KV433 and capability-route scope without stale deferred claims; the active coverage matrix
+      keeps authn/crypto gaps explicit.
 
-- [ ] **OPP-25 — Prompt-injection blast-radius thesis.** audit-only · lev 6 · S · non-breaking. The
+- [x] **OPP-25 — Prompt-injection blast-radius thesis.** audit-only · lev 6 · S · non-breaking. The
       community is unanimous: prompt injection is unsolvable inside current LLMs. Document that Kovo does **not**
       claim injection-proofing (the unsafe state is in the model token stream, not compiled code) and position the
       by-construction/floor controls (KV436 default-deny, egress floor, OPP-07 capability bounding) as the
       **blast-radius bound**. _Trade-off:_ high-honesty, high-audience-value — but **revisit** the exact wording
       until OPP-01/07 land, since the bound it describes partly depends on them (an opt-in egress floor is not a
       bound). The composite bound is only as strong as its weakest (bypassable) link.
+      Evidence: `SPEC.md`, `site/content/guides/security.md`, and `site/src/components/landing.tsx` state that
+      Kovo does not claim prompt-injection immunity and frame the claim as blast-radius reduction.
 
 - [ ] **OPP-02 — KV433 Stage-2 honesty + optional widening.** by-construction (directly-reachable subset,
       already ships) · lev 3 · S · non-breaking. The directly-reachable read-loader no-write gate already ships

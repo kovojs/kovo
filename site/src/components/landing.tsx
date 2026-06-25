@@ -2116,7 +2116,10 @@ function Credibility(): string {
           <span style={pageStyles.mono}>tsc</span> when wiring is wrong, and{' '}
           <span style={pageStyles.mono}>kovo check</span> returns the exact line, the reason, and
           candidate fixes. The agent loops on edit, check, fixed -- not edit, deploy, bug report.
-          Skills, an MCP server, and LLM-readable docs ship with it.
+          Skills, an MCP server, and LLM-readable docs ship with it. That is not a claim of
+          prompt-injection immunity: the framework narrows blast radius with default-deny guards,
+          structured sinks, and the egress floor, but an app that lets a model read hostile content
+          or call tools still needs its own LLM01 posture.
         </Faq>
         <Faq q="Do I have to throw away React?">
           You keep the model you know: composable components, props, TypeScript. You give up the

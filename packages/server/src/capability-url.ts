@@ -16,10 +16,9 @@
  * produce the same signed bytes (no delimiter-injection / field-confusion). Canonicalize BEFORE
  * signing and verify by re-canonicalizing the *received* fields, never by parsing the signature.
  *
- * THE LOAD-BEARING OPEN GAP (documented): there is no framework storage *download route* yet to
- * host the verify sink. This module is the cryptographic core (sign + constant-time verify +
- * one-time replay) that such a route mounts; the route + storage-read wiring + `ctx.signUrl`
- * context threading remain open work, intentionally out of this slice's scope.
+ * The framework route is shipped in `capability-route.ts`: `createStorageDownloadEndpoint` mounts
+ * the verify-before-read sink, `ctx.signUrl` mints URLs pointing at that route, and mint facts are
+ * drained for `kovo explain --capabilities`.
  */
 
 const TOKEN_VERSION = 'v1';

@@ -1,8 +1,8 @@
 // SPEC §6.6/§9.4/§10.3 (plans/secure-framework.md MARQUEE): the framework-owned managed DB handle.
 //
-// This is the runtime that lands KV433 Stage 1 (the read-only loader proxy) and unifies it with
-// KV422 (the SQL-safe managed handle). The framework owns and threads ONE handle into every loader
-// and mutation handler:
+// This is the shipped KV433 Stage-1 runtime floor (the read-only loader proxy) unified with KV422
+// (the SQL-safe managed handle). Where Kovo owns and threads the handle, loaders receive one
+// managed read handle and mutations receive one managed write handle:
 //
 //   - `managedDb(raw, 'read')`  → SQL-safe (KV422) + read-only proxy (KV433). A `query()` loader's
 //     write verb (insert/update/delete/execute/run/batch) throws `KovoReadonlyHandleError` and is a
@@ -10,13 +10,10 @@
 //   - `managedDb(raw, 'write')` → SQL-safe (KV422) only. A `mutation()` handler (and the audited
 //     `query.elevated(...)` GET-write escape) gets the full read-write handle.
 //
-// Before this change `QueryLoadContext = { request }` did not thread a db handle, so loaders closed
-// over a module-scope `db` and there was nothing to intercept (SPEC §9.4 KV433 "Stage 1 deferred").
-// Threading the handle at the query/mutation chokepoint is the breaking change that un-defers it.
-//
-// The read-only proxy is the safe-default RUNTIME backstop; the KV433 Stage-2 static no-write-
-// reachable proof remains the by-construction guarantee (SPEC §6.6: brands/proxies are defense-in-
-// depth, never sold as the proof).
+// The read-only proxy is the safe-default runtime backstop; the KV433 direct static no-write-
+// reachable check remains the by-construction guarantee, while broader interprocedural write-
+// summary work is still residue (SPEC §6.6/§10.3: proxies are defense-in-depth, never sold as the
+// proof).
 
 import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 
@@ -29,8 +26,8 @@ const WRITE_VERBS = new Set<string>(['insert', 'update', 'delete', 'execute', 'r
 
 /**
  * Thrown when a `query()` loader calls a write verb on its read-only managed handle (SPEC §9.4
- * KV433 Stage 1). This is the fail-closed runtime floor; the static no-write-reachable proof
- * (Stage 2) is the by-construction guarantee. Move the write to a `mutation()`, or use
+ * KV433 Stage 1). This is the fail-closed runtime floor; the direct static no-write-reachable
+ * proof is the by-construction guarantee. Move the write to a `mutation()`, or use
  * `query.elevated(...)` for an idempotent-safe-to-repeat write.
  */
 export class KovoReadonlyHandleError extends Error {
@@ -43,7 +40,7 @@ export class KovoReadonlyHandleError extends Error {
 /**
  * The compile-time mirror of the runtime read-only proxy (SPEC §9.4 KV433). A loader's
  * `context.db` is typed `Reader<Db>` so a `db.insert(...)` in a loader is a `tsc` error in addition
- * to the runtime throw and the static gate. This is ergonomics — the proxy is the runtime proof and
+ * to the runtime throw and the static gate. This is ergonomics — the proxy is the runtime floor and
  * the static gate is the by-construction proof; the type just surfaces the error at authoring time.
  */
 export type Reader<Db> = Omit<Db, 'insert' | 'update' | 'delete' | 'execute' | 'run' | 'batch'>;
