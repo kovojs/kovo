@@ -866,10 +866,11 @@ export interface AgentToolReachabilityInput {
  * @internal Derive the narrow sound subset of agent-tool reachable sink facts from graph data Kovo
  * already models. Today this covers framework-owned `tool()` declarations whose `target` matches a
  * mutation/touch-graph key; write domains require a `${domain}.write` capability. Explicit
- * `agentToolSinks` rows from future/static analyzers are preserved and may opt into `grade:'sound'`.
- * Nested `capabilities[].reachableSinks` rows emitted by the public `tool()` runtime API are
- * preserved as audit-grade tool-body facts; they improve blast-radius review without claiming
- * by-construction reachability.
+ * `agentToolSinks` rows from static analyzers are preserved and may opt into `grade:'sound'`,
+ * including egress and secret-read sinks when their analyzer can prove the tool-body path. Nested
+ * `capabilities[].reachableSinks` rows emitted by the public `tool()` runtime API are downgraded to
+ * audit-grade tool-body facts; they improve blast-radius review without claiming by-construction
+ * reachability.
  */
 export function deriveAgentToolReachableSinkFacts(
   input: AgentToolReachabilityInput,
@@ -883,6 +884,7 @@ export function deriveAgentToolReachableSinkFacts(
     ...toolCapabilities.flatMap((capability) =>
       (capability.reachableSinks ?? []).map((sink) => ({
         ...sink,
+        grade: 'audit' as const,
         tool: capability.target as string,
       })),
     ),
