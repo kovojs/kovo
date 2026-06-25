@@ -111,6 +111,22 @@ export const PayButton = component({
       expect(codes(source)).toContain('KV437');
       expect(clientSource(source)).not.toContain('import { loadSecret }');
     });
+
+    it('fires KV437 for a same-file serializable module constant and withholds it', () => {
+      const source = `
+import { component } from '@kovojs/core';
+
+const LABEL = 'cart';
+
+export const Badge = component({
+  render: () => (
+    <button onClick={() => log(LABEL)}>Track</button>
+  ),
+});
+`;
+      expect(codes(source)).toContain('KV437');
+      expect(clientSource(source)).not.toContain("const LABEL = 'cart';");
+    });
   });
 
   describe('POSITIVE: client-safe captures still compile and emit', () => {
@@ -129,20 +145,30 @@ export const Badge = component({
       expect(clientSource(source)).toContain('import { track } from "./analytics";');
     });
 
-    it('emits a serializable module constant (literal) without KV437', () => {
+    it('allows a publishToClient-wrapped same-file module constant escape', () => {
       const source = `
-import { component } from '@kovojs/core';
+import { component, publishToClient } from '@kovojs/core';
 
 const LABEL = 'cart';
 
 export const Badge = component({
   render: () => (
-    <button onClick={() => log(LABEL)}>Track</button>
+    <button onClick={() => log(publishToClient(LABEL, { reason: 'label is public' }))}>Track</button>
   ),
 });
 `;
       expect(codes(source)).not.toContain('KV437');
+      const client = clientSource(source);
+      expect(client).toContain('import { publishToClient } from "@kovojs/core";');
       expect(clientSource(source)).toContain("const LABEL = 'cart';");
+
+      const analysis = analyzeClientCaptures(parseComponentModule('pay-button.tsx', source));
+      expect(analysis.publishFacts).toHaveLength(1);
+      expect(analysis.publishFacts[0]).toMatchObject({
+        localName: 'LABEL',
+        moduleSpecifier: 'pay-button.tsx#module-scope',
+        reason: 'label is public',
+      });
     });
 
     it('allows a publishToClient(captured, { reason }) escape: emits and records the fact', () => {

@@ -1,8 +1,11 @@
 import { readPageBuildToken } from './build-token.js';
 
 export interface DynamicImportUrlOptions {
+  allowedModuleUrls?: readonly string[];
   buildToken?: string;
 }
+
+export type DynamicImportModule<T = Record<string, unknown>> = (url: string) => Promise<T>;
 
 /** @internal Runtime allowlist for compiler-emitted client-module import refs (SPEC §5.2.1). */
 export function assertAllowedKovoDynamicImportUrl(
@@ -12,6 +15,17 @@ export function assertAllowedKovoDynamicImportUrl(
   if (!isAllowedKovoDynamicImportUrl(url, options)) {
     throw new Error(`Disallowed Kovo dynamic import URL: ${url}`);
   }
+}
+
+/** @internal Wrap a dynamic importer with the same URL allowlist used by handler/derive refs. */
+export function guardKovoDynamicImportModule<T = Record<string, unknown>>(
+  importModule: DynamicImportModule<T>,
+  options: DynamicImportUrlOptions = {},
+): DynamicImportModule<T> {
+  return (url) => {
+    assertAllowedKovoDynamicImportUrl(url, options);
+    return importModule(url);
+  };
 }
 
 /** @internal True when a handler/derive ref points at a same-origin Kovo client module. */
@@ -25,10 +39,17 @@ export function isAllowedKovoDynamicImportUrl(
   if (!parsed.pathname.startsWith('/c/')) return false;
 
   const buildToken = options.buildToken ?? readPageBuildToken();
-  if (!buildToken) return true;
+  if (buildToken) {
+    const versionPrefix = `/c/__v/${encodeURIComponent(buildToken)}/`;
+    if (!parsed.pathname.startsWith(versionPrefix) && parsed.pathname.startsWith('/c/__v/')) {
+      return false;
+    }
+  }
 
-  const versionPrefix = `/c/__v/${encodeURIComponent(buildToken)}/`;
-  return parsed.pathname.startsWith(versionPrefix) || !parsed.pathname.startsWith('/c/__v/');
+  const manifest = allowedClientModuleUrlManifest(options.allowedModuleUrls);
+  if (manifest.size === 0) return true;
+
+  return manifest.has(canonicalImportUrl(parsed));
 }
 
 function parseImportUrl(value: string): URL | null {
@@ -45,4 +66,36 @@ function currentHref(): string {
 
 function currentOrigin(): string {
   return globalThis.location?.origin ?? new URL(currentHref()).origin;
+}
+
+function allowedClientModuleUrlManifest(explicit?: readonly string[]): ReadonlySet<string> {
+  const values = explicit ?? documentModulepreloadClientModules();
+  if (!values || values.length === 0) return new Set();
+
+  const allowed = new Set<string>();
+  for (const value of values) {
+    const parsed = parseImportUrl(value);
+    if (!parsed) continue;
+    if (parsed.origin !== currentOrigin()) continue;
+    if (!parsed.pathname.startsWith('/c/')) continue;
+    allowed.add(canonicalImportUrl(parsed));
+  }
+  return allowed;
+}
+
+function documentModulepreloadClientModules(): readonly string[] | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const links = document.querySelectorAll?.('link[rel~="modulepreload"][href]');
+  if (!links || typeof links[Symbol.iterator] !== 'function') return undefined;
+
+  const hrefs: string[] = [];
+  for (const link of links as Iterable<{ getAttribute?: (name: string) => string | null }>) {
+    const href = link.getAttribute?.('href');
+    if (href) hrefs.push(href);
+  }
+  return hrefs;
+}
+
+function canonicalImportUrl(url: URL): string {
+  return `${url.origin}${url.pathname}${url.search}`;
 }

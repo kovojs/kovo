@@ -12,7 +12,10 @@ import {
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
-import { emitAllowedImportLocalNames } from '../validate/client-capture.js';
+import {
+  emitAllowedImportLocalNames,
+  emitAllowedModuleConstantNames,
+} from '../validate/client-capture.js';
 import type {
   ClientImportDependency,
   ClientConstantDependency,
@@ -39,6 +42,7 @@ export function lowerEventHandlers(
   // import is WITHHELD here so the secret specifier never reaches the bundler; the matching KV437
   // teaching diagnostic is produced by validate/client-capture.ts over the authored source.
   const emitAllowedImports = emitAllowedImportLocalNames(model);
+  const emitAllowedModuleConstants = emitAllowedModuleConstantNames(model);
 
   for (const eventAttribute of eventAttributes(model)) {
     const { attributeEnd, attributeStart, eventName, tag } = eventAttribute;
@@ -111,6 +115,7 @@ export function lowerEventHandlers(
       ...clientConstantDependencies(
         model.moduleScopeBindings,
         handlerReferenceNames(eventAttribute),
+        emitAllowedModuleConstants,
       ),
       ...clientImportDependencies(
         model.namedImports,
@@ -226,9 +231,10 @@ function clientImportDependencies(
 function clientConstantDependencies(
   moduleScopeBindings: readonly ModuleScopeBindingModel[],
   references: ReadonlySet<string>,
+  emitAllowedModuleConstants: ReadonlySet<string>,
 ): { clientConstants: readonly ClientConstantDependency[] } | {} {
   const clientConstants = moduleScopeBindings
-    .filter((item) => references.has(item.name))
+    .filter((item) => references.has(item.name) && emitAllowedModuleConstants.has(item.name))
     .map((item) => ({
       name: item.name,
       source: item.source,

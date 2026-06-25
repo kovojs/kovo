@@ -2,6 +2,7 @@ import type { BrowserKovoRoot } from './browser-root.js';
 import { withDefaultMutationBroadcast } from './broadcast.js';
 import type { ClockUpdatePlan } from './clock-tick-bus.js';
 import { definedProps } from './defined-props.js';
+import { guardKovoDynamicImportModule } from './dynamic-import-url.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
 import { abortIslandSignalScope, createIslandSignalScope } from './handler-context.js';
@@ -37,6 +38,7 @@ export type BrowserEnhancedMutationOptions = Omit<EnhancedMutationLoaderOptions,
  * Options for `installKovoLoader`: the root, module importer, query store/plans, and lifecycle hooks.
  */
 export interface KovoLoaderOptions {
+  allowedClientModuleUrls?: readonly string[];
   discardPendingOptimism?: () => readonly string[] | void;
   enhancedMutations?: BrowserEnhancedMutationOptions;
   events?: readonly string[];
@@ -106,6 +108,12 @@ export const defaultDelegatedEvents = [
 export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
   const events = options.events ?? defaultDelegatedEvents;
   const islandSignalScope = createIslandSignalScope();
+  const importModule =
+    options.allowedClientModuleUrls === undefined
+      ? options.importModule
+      : guardKovoDynamicImportModule(options.importModule, {
+          allowedModuleUrls: options.allowedClientModuleUrls,
+        });
   const disposers: Array<() => void> = [];
   let queryRuntime: InstalledLoaderQueryRuntime | undefined;
   const rememberAppliedQueries = (queries: readonly string[]): void => {
@@ -128,7 +136,12 @@ export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
                 reportRuntimeContextError(options.onError, error, { phase: 'mutation-broadcast' });
               }
             : undefined,
-          importModule: options.enhancedMutations.importModule ?? options.importModule,
+          importModule:
+            options.enhancedMutations.importModule && options.allowedClientModuleUrls !== undefined
+              ? guardKovoDynamicImportModule(options.enhancedMutations.importModule, {
+                  allowedModuleUrls: options.allowedClientModuleUrls,
+                })
+              : (options.enhancedMutations.importModule ?? importModule),
           // K4 / SPEC §4.7: thread the loader's islandSignalScope into the broadcast
           // so a broadcast morph that removes an island correctly aborts its ctx.signal.
           islandSignalScope,
@@ -148,7 +161,7 @@ export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
         onError: options.onError,
       }),
       events,
-      importModule: options.importModule,
+      importModule,
       islandSignalScope,
       onAppliedQueries: rememberAppliedQueries,
       root: options.root,

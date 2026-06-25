@@ -20,11 +20,11 @@ describe('runtime loader module', () => {
 
     expect(loader.events).toEqual(['click']);
     await root.listeners.get('click')?.({
-      target: new FakeElement({ 'on:click': '/client.js#run' }),
+      target: new FakeElement({ 'on:click': '/c/client.js#run' }),
       type: 'click',
     });
 
-    expect(importModule).toHaveBeenCalledWith('/client.js');
+    expect(importModule).toHaveBeenCalledWith('/c/client.js');
     expect(handler).toHaveBeenCalledTimes(1);
 
     loader.dispose();
@@ -52,5 +52,25 @@ describe('runtime loader module', () => {
     });
 
     expect(input.indeterminate).toBe(true);
+  });
+
+  it('guards delegated imports against an explicit compiler client-module allowlist', async () => {
+    const root = new FakeRoot();
+    const handler = vi.fn();
+    const importModule = vi.fn(async () => ({ run: handler }));
+    installKovoLoader({
+      allowedClientModuleUrls: ['/c/allowed.client.js'],
+      events: ['click'],
+      importModule,
+      root,
+    });
+
+    await root.listeners.get('click')?.({
+      target: new FakeElement({ 'on:click': '/c/blocked.client.js#run' }),
+      type: 'click',
+    });
+
+    expect(importModule).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
   });
 });
