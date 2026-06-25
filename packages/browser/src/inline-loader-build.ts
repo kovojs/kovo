@@ -1537,6 +1537,85 @@ export function assertMinifiedInlineKovoLoaderInstallerResponseApplyParity(
   );
 }
 
+export function assertInlineKovoLoaderTrustedTypesRouting(
+  readableInstallerSource = inlineKovoLoaderInstallerReadableSource,
+  minifiedInstallerSource = buildInlineKovoLoaderInstallerSource(readableInstallerSource),
+  responseApplySource: string = readInlineHelperCanonicalSource(inlineHelperSpecs.responseApply),
+): void {
+  const readableApplySource = extractInlineHelperReadableSourceForSpec(
+    inlineHelperSpecs.responseApply,
+    responseApplySource,
+  );
+
+  assertInlineKovoLoaderTrustedTypesReadableRouting(readableApplySource, readableInstallerSource);
+  assertInlineKovoLoaderTrustedTypesMinifiedRouting(
+    minifyInlineJavaScriptSource(compactInlineKovoLoaderInstallerLocalNames(readableApplySource)),
+    minifiedInstallerSource,
+  );
+}
+
+function assertInlineKovoLoaderTrustedTypesReadableRouting(
+  readableApplySource: string,
+  readableInstallerSource: string,
+): void {
+  const readableSinkRoutes = countSubstring(readableApplySource, 'innerHTML = trustedHtml(');
+
+  if (readableSinkRoutes !== 2) {
+    throw new Error(
+      `Inline Kovo loader Trusted Types routing must wrap both readable response-apply innerHTML sinks; found ${readableSinkRoutes}.`,
+    );
+  }
+  if (!readableApplySource.includes('function trustedHtml(h)')) {
+    throw new Error('Inline Kovo loader Trusted Types routing is missing the trustedHtml shim.');
+  }
+  for (const token of [
+    'const t = w.trustedTypes;',
+    "p = t.createPolicy('kovo', { createHTML: (s) => s });",
+    'return p ? p.createHTML(h) : h;',
+  ]) {
+    if (!readableApplySource.includes(token)) {
+      throw new Error(`Inline Kovo loader Trusted Types routing is missing ${token}.`);
+    }
+  }
+  if (!readableInstallerSource.includes(readableApplySource)) {
+    throw new Error(
+      'Inline Kovo loader readable source must embed the Trusted Types-routed response-apply closure.',
+    );
+  }
+}
+
+function assertInlineKovoLoaderTrustedTypesMinifiedRouting(
+  minifiedApplySource: string,
+  minifiedInstallerSource: string,
+): void {
+  const minifiedSinkRoutes =
+    countSubstring(minifiedInstallerSource, 'innerHTML=th(') +
+    countSubstring(minifiedInstallerSource, 'innerHTML=trustedHtml(');
+
+  if (minifiedSinkRoutes !== 2) {
+    throw new Error(
+      `Inline Kovo loader Trusted Types routing must wrap both minified response-apply innerHTML sinks; found ${minifiedSinkRoutes}.`,
+    );
+  }
+  const requiredTokens = [
+    ['function th(h)', 'function trustedHtml(h)'],
+    ['trustedTypes'],
+    ["createPolicy('kovo'"],
+    ['createHTML'],
+    ['p.createHTML(h)'],
+  ];
+  for (const tokens of requiredTokens) {
+    if (
+      !tokens.some((token) => minifiedApplySource.includes(token)) ||
+      !tokens.some((token) => minifiedInstallerSource.includes(token))
+    ) {
+      throw new Error(
+        `Inline Kovo loader minified Trusted Types routing is missing ${tokens.join(' or ')}.`,
+      );
+    }
+  }
+}
+
 function assertInlineKovoLoaderInstallerHelperParity(
   spec: InlineHelperSpec,
   installerSource: string,

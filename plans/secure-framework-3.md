@@ -145,7 +145,7 @@ packages/browser/src/inline-loader-build.test.ts` proves shared server/browser d
 packages/server/src/static-export-replay.test.ts packages/server/src/vite-build.test.ts` proves the
     refreshed inline CSP hash fixtures match static export output.
 
-- [ ] **Separate Trusted Types inline routing from sanitizer parity and track both gates independently.**
+- [x] **Separate Trusted Types inline routing from sanitizer parity and track both gates independently.**
   - Evidence: `packages/server/src/csp.ts:220` keeps `require-trusted-types-for 'script'` opt-in because
     internal browser sinks are not all routed through the framework policy yet, and
     `packages/browser/src/response-fragment-apply.ts:9` names the extracted inline fragment sinks.
@@ -154,6 +154,15 @@ packages/server/src/static-export-replay.test.ts packages/server/src/vite-build.
     hiding policy drift in the generated inline helper.
   - Acceptance: `check:inline-loader` or a companion gate fails on any sanitizer policy drift without
     requiring Chromium Trusted Types support.
+  - Verified 2026-06-25: `packages/browser/src/inline-loader-build.ts` exposes a focused
+    `assertInlineKovoLoaderTrustedTypesRouting()` gate, `package.json` wires
+    `check:inline-loader:trusted-types`, and `packages/browser/src/inline-loader-trusted-types-routing.test.ts`
+    proves Trusted Types raw-HTML sink routing fails independently from sanitizer parity drift.
+    `pnpm exec vitest run packages/browser/src/inline-loader-trusted-types-routing.test.ts
+packages/browser/src/inline-loader-build.test.ts
+packages/browser/src/inline-loader-response-apply-extract.test.ts
+packages/browser/src/inline-loader-security.test.ts`, `pnpm run check:inline-loader:trusted-types`,
+    and `pnpm run check:inline-loader` prove the gate and generated inline-loader artifact.
 
 ## Tier 2 - Raw Escape Hatches And Operator Controls
 
@@ -268,6 +277,6 @@ packages/server/src/static-export-response.test.ts packages/server/src/static-ex
 
 ## Latest Verification
 
-- `rg -n "^- \[[ x]\]" plans/secure-framework-3.md` reports 14 task-list items, with 1 still open.
+- `rg -n "^- \[[ x]\]" plans/secure-framework-3.md` reports 14 task-list items, with 0 still open.
 - `git diff --check --cached && git diff --check` and `pnpm run check:vp` pass for the latest
-  integrated static-export header sink slice.
+  integrated Trusted Types inline-loader gate slice.

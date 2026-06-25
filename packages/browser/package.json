@@ -59,6 +59,7 @@
     "build": "pnpm run build:inline-loader",
     "build:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts",
     "check": "pnpm run check:inline-loader",
+    "check:inline-loader:trusted-types": "vitest run src/inline-loader-trusted-types-routing.test.ts",
     "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check",
     "build:dist": "vp pack src/client.ts src/generated.ts src/index.ts src/internal/delegation.ts src/internal/inline-loader.ts src/internal/morph.ts src/internal/mutation.ts src/internal/output.ts --dts",
     "prepack": "pnpm run build:dist"

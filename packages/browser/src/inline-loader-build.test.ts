@@ -148,10 +148,17 @@ describe('inline loader build source', () => {
     expect(manifest.scripts?.['check:inline-loader']).toBe(
       'node --experimental-strip-types src/inline-loader-build.ts --check',
     );
+    expect(manifest.scripts?.['check:inline-loader:trusted-types']).toBe(
+      'vitest run src/inline-loader-trusted-types-routing.test.ts',
+    );
     expect(rootManifest.scripts?.['check:inline-loader']).toBe(
       'pnpm --filter @kovojs/browser run check:inline-loader',
     );
+    expect(rootManifest.scripts?.['check:inline-loader:trusted-types']).toBe(
+      'pnpm --filter @kovojs/browser run check:inline-loader:trusted-types',
+    );
     expect(rootManifest.scripts?.check).toContain('pnpm run check:inline-loader');
+    expect(rootManifest.scripts?.check).toContain('pnpm run check:inline-loader:trusted-types');
     expect(rootManifest.scripts?.['check:build']).toContain('pnpm run check:inline-loader');
   });
 
