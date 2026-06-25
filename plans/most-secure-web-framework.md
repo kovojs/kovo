@@ -422,7 +422,8 @@ scripts/check-pack-security.test.mjs` passed; `pnpm run check:pack-security -- -
       Progress: `packages/drizzle/src/static/summaries.ts` and `packages/drizzle/src/static.ts` now preserve the
       exact private guard-principal symbol for accepted owner-column DATA proofs and reject mismatched or
       unsummarized helper cases as `scope: unknown`. Recursive object-binding provenance now preserves nested
-      private-scope aliases such as `const { guard: { userId } } = ctx` while rejecting mismatched guard fields.
+      private-scope aliases such as `const { guard: { userId } } = ctx` while rejecting mismatched guard fields;
+      shallow const object-property aliases such as `principal.userId` also prove only exact matching guard fields.
       Focused scope-audit tests, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface`
       passed. Remaining gap: this is not full guard-predicate correctness.
 
