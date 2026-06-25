@@ -42,6 +42,20 @@ describe('server node adapter', () => {
     expect(protocolRelative.url).toBe('https://app.example/evil.example/admin?next=1');
   });
 
+  it('trusts forwarded schemes only when the Node adapter opts into trustedProxy', () => {
+    const request = nodeRequest('/account');
+    request.headers = {
+      host: 'app.example',
+      'x-forwarded-proto': 'https',
+    };
+    (request.socket as Socket & { encrypted?: boolean }).encrypted = false;
+
+    expect(nodeRequestToWebRequest(request).url).toBe('http://app.example/account');
+    expect(nodeRequestToWebRequest(request, { trustedProxy: true }).url).toBe(
+      'https://app.example/account',
+    );
+  });
+
   it('serves web-standard handlers through node:http with request bodies and early hints', async () => {
     const server = await serveWithNode(
       toNodeHandler(async (request) => {
@@ -291,6 +305,51 @@ describe('server node adapter', () => {
         (await server.fetch('/head', { ...requestOptions, method: 'HEAD' })).headers[
           'content-encoding'
         ],
+      ).toBeUndefined();
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('skips default compression for private no-store and cookie-bearing responses', async () => {
+    const server = await serveWithNode(
+      toNodeHandler(async (request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === '/private') {
+          return new Response('private response'.repeat(128), {
+            headers: {
+              'Cache-Control': 'private, no-store',
+              'Content-Type': 'text/plain; charset=utf-8',
+            },
+          });
+        }
+        if (pathname === '/cookie') {
+          return new Response('cookie response'.repeat(128), {
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Set-Cookie': 'session=s1; Path=/; HttpOnly',
+            },
+          });
+        }
+        return new Response('vary cookie response'.repeat(128), {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            Vary: 'Cookie',
+          },
+        });
+      }),
+    );
+
+    try {
+      const requestOptions = { headers: { 'Accept-Encoding': 'br,gzip' } };
+      expect(
+        (await server.fetch('/private', requestOptions)).headers['content-encoding'],
+      ).toBeUndefined();
+      expect(
+        (await server.fetch('/cookie', requestOptions)).headers['content-encoding'],
+      ).toBeUndefined();
+      expect(
+        (await server.fetch('/vary-cookie', requestOptions)).headers['content-encoding'],
       ).toBeUndefined();
     } finally {
       await server.close();

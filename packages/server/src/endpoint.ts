@@ -171,7 +171,9 @@ export async function runEndpoint(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   request: Request,
 ): Promise<Response> {
-  return definition.handler(endpointRequestWithoutSession(request));
+  const response = await definition.handler(endpointRequestWithoutSession(request));
+  assertEndpointResponsePosture(definition, response);
+  return response;
 }
 
 /**
@@ -256,4 +258,43 @@ function endpointAuthFailureResponse(): Response {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     status: 401,
   });
+}
+
+function assertEndpointResponsePosture(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  response: Response,
+): void {
+  if (process.env.NODE_ENV !== 'development' && process.env.KOVO_VERIFY_ENDPOINT_POSTURE !== '1') {
+    return;
+  }
+  const failures: string[] = [];
+  const cacheControl = response.headers.get('cache-control') ?? '';
+  if (definition.response.cache === 'no-store' && !/\bno-store\b/i.test(cacheControl)) {
+    failures.push('declared cache=no-store but response lacks Cache-Control: no-store');
+  }
+  if (definition.response.cache === 'private' && !/\bprivate\b/i.test(cacheControl)) {
+    failures.push('declared cache=private but response lacks Cache-Control: private');
+  }
+  if (definition.response.cache === 'public' && !/\bpublic\b/i.test(cacheControl)) {
+    failures.push('declared cache=public but response lacks Cache-Control: public');
+  }
+  if (
+    definition.response.body === 'redirect' &&
+    (response.status < 300 || response.status >= 400)
+  ) {
+    failures.push('declared body=redirect but response status is not 3xx');
+  }
+  const contentType = response.headers.get('content-type') ?? '';
+  if (definition.response.body === 'json' && !/\bjson\b/i.test(contentType)) {
+    failures.push('declared body=json but response content type is not JSON');
+  }
+  if (definition.response.body === 'html' && !/\bhtml\b/i.test(contentType)) {
+    failures.push('declared body=html but response content type is not HTML');
+  }
+  if (failures.length === 0) return;
+  throw new Error(
+    `Endpoint ${definition.method} ${definition.path} response posture mismatch: ${failures.join(
+      '; ',
+    )}.`,
+  );
 }

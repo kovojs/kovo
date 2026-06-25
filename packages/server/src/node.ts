@@ -11,6 +11,8 @@ export interface NodeHandlerOptions {
   compression?: boolean;
   earlyHints?: boolean;
   origin?: string | ((request: IncomingMessage) => string);
+  /** Trust forwarded scheme headers when constructing Request URLs. Disabled by default. */
+  trustedProxy?: boolean;
 }
 
 export interface WriteWebResponseToNodeOptions {
@@ -182,9 +184,20 @@ function responseCompression(
   if (method === 'HEAD' || response.body === null) return undefined;
   if (response.status === 204 || response.status === 304) return undefined;
   if (response.headers.has('Content-Encoding')) return undefined;
-  if (/\bno-transform\b/i.test(response.headers.get('Cache-Control') ?? '')) return undefined;
+  if (isSensitiveResponse(response.headers)) return undefined;
   if (!isCompressibleContentType(response.headers.get('Content-Type') ?? '')) return undefined;
   return preferredCompression(options.acceptEncoding ?? '');
+}
+
+function isSensitiveResponse(headers: Headers): boolean {
+  const cacheControl = headers.get('Cache-Control') ?? '';
+  if (/\b(no-transform|no-store|private)\b/i.test(cacheControl)) return true;
+  if (headers.has('Set-Cookie')) return true;
+  const vary = headers.get('Vary') ?? '';
+  return vary
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .includes('cookie');
 }
 
 function preferredCompression(acceptEncoding: string): 'br' | 'gzip' | undefined {
@@ -294,7 +307,7 @@ function nodeRequestUrl(request: IncomingMessage, options: NodeHandlerOptions): 
   const origin =
     typeof options.origin === 'function'
       ? options.origin(request)
-      : (options.origin ?? defaultOrigin(request));
+      : (options.origin ?? defaultOrigin(request, options));
 
   if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) {
     const absolute = new URL(rawUrl);
@@ -305,13 +318,15 @@ function nodeRequestUrl(request: IncomingMessage, options: NodeHandlerOptions): 
   return new URL(pathOnly, origin).href;
 }
 
-function defaultOrigin(request: IncomingMessage): string {
+function defaultOrigin(request: IncomingMessage, options: NodeHandlerOptions): string {
   // E2 (SPEC §9.5): under HTTP/2 the `Host` header is often absent — the authority lives in
   // the `:authority` pseudo-header instead. Fall back to it (then `:scheme`) so URL resolution
   // works for HTTP/2 requests, not just HTTP/1.1.
   const pseudoHeaders = request.headers as Record<string, string | string[] | undefined>;
   const host = request.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
-  const forwardedProto = firstHeaderValue(request.headers['x-forwarded-proto']);
+  const forwardedProto = options.trustedProxy
+    ? firstHeaderValue(request.headers['x-forwarded-proto'])
+    : undefined;
   const pseudoScheme = firstHeaderValue(pseudoHeaders[':scheme']);
   const proto =
     forwardedProto ??

@@ -4,7 +4,12 @@ import { renderDiagnosticDocument } from './document-diagnostics.js';
 import { matchShellDispatch } from './shell.js';
 import { routeResponseToWebResponse } from './response.js';
 import type { KovoApp } from './app-types.js';
-import { preDispatchLoadShedResponse, type LoadShedSurface } from './app-load-shed.js';
+import {
+  preDispatchLoadShedResponse,
+  requestWithBodyLimit,
+  RequestBodyLimitExceededError,
+  type LoadShedSurface,
+} from './app-load-shed.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
 
@@ -33,12 +38,20 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   const loadShed = preDispatchLoadShedResponse(app, request, loadShedSurface(match.kind));
   if (loadShed) return loadShed;
 
+  const limitedRequest = requestWithBodyLimit(request, app.requestLimits.maxBodyBytes);
+
   try {
-    return await dispatchMatchedAppRequest({ app, match, request, url });
+    return await dispatchMatchedAppRequest({ app, match, request: limitedRequest, url });
   } catch (error) {
+    if (error instanceof RequestBodyLimitExceededError) {
+      return new Response('Payload Too Large', {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        status: 413,
+      });
+    }
     reportServerError(app.onError, error, {
       operation: 'app-request',
-      request,
+      request: limitedRequest,
       url: appRequestUrl(url),
     });
     return routeResponseToWebResponse(
