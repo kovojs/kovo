@@ -15,36 +15,36 @@ Measured with `gh run list --workflow CI --status completed --limit 12` and `gh 
 on the 12 most recent fully completed CI runs, excluding the in-progress run at
 `2026-06-25T05:58:08Z`.
 
-| Run | Result | Wall time | Notes |
-| --- | --- | ---: | --- |
-| [28145146883](https://github.com/kovojs/kovo/actions/runs/28145146883) | failure | 17m32s | `integration` ran 17m21s |
-| [28136545956](https://github.com/kovojs/kovo/actions/runs/28136545956) | failure | 12m28s | `integration` ran 12m17s |
-| [28135495606](https://github.com/kovojs/kovo/actions/runs/28135495606) | success | 11m31s | green baseline |
-| [28134536706](https://github.com/kovojs/kovo/actions/runs/28134536706) | failure | 11m56s | `integration` ran 11m49s |
-| [28134330476](https://github.com/kovojs/kovo/actions/runs/28134330476) | failure | 12m29s | `integration` ran 12m20s |
-| [28133702807](https://github.com/kovojs/kovo/actions/runs/28133702807) | failure | 12m52s | `integration` ran 12m44s |
-| [28133678709](https://github.com/kovojs/kovo/actions/runs/28133678709) | success | 12m00s | green baseline |
-| [28133134501](https://github.com/kovojs/kovo/actions/runs/28133134501) | success | 12m11s | green baseline |
-| [28131999039](https://github.com/kovojs/kovo/actions/runs/28131999039) | success | 14m39s | `integration` ran 14m32s |
-| [28131488093](https://github.com/kovojs/kovo/actions/runs/28131488093) | success | 12m27s | green baseline |
-| [28131388297](https://github.com/kovojs/kovo/actions/runs/28131388297) | failure | 12m43s | failure baseline |
-| [28131373869](https://github.com/kovojs/kovo/actions/runs/28131373869) | failure | 12m22s | failure baseline |
+| Run                                                                    | Result  | Wall time | Notes                    |
+| ---------------------------------------------------------------------- | ------- | --------: | ------------------------ |
+| [28145146883](https://github.com/kovojs/kovo/actions/runs/28145146883) | failure |    17m32s | `integration` ran 17m21s |
+| [28136545956](https://github.com/kovojs/kovo/actions/runs/28136545956) | failure |    12m28s | `integration` ran 12m17s |
+| [28135495606](https://github.com/kovojs/kovo/actions/runs/28135495606) | success |    11m31s | green baseline           |
+| [28134536706](https://github.com/kovojs/kovo/actions/runs/28134536706) | failure |    11m56s | `integration` ran 11m49s |
+| [28134330476](https://github.com/kovojs/kovo/actions/runs/28134330476) | failure |    12m29s | `integration` ran 12m20s |
+| [28133702807](https://github.com/kovojs/kovo/actions/runs/28133702807) | failure |    12m52s | `integration` ran 12m44s |
+| [28133678709](https://github.com/kovojs/kovo/actions/runs/28133678709) | success |    12m00s | green baseline           |
+| [28133134501](https://github.com/kovojs/kovo/actions/runs/28133134501) | success |    12m11s | green baseline           |
+| [28131999039](https://github.com/kovojs/kovo/actions/runs/28131999039) | success |    14m39s | `integration` ran 14m32s |
+| [28131488093](https://github.com/kovojs/kovo/actions/runs/28131488093) | success |    12m27s | green baseline           |
+| [28131388297](https://github.com/kovojs/kovo/actions/runs/28131388297) | failure |    12m43s | failure baseline         |
+| [28131373869](https://github.com/kovojs/kovo/actions/runs/28131373869) | failure |    12m22s | failure baseline         |
 
 Median job durations across those runs:
 
-| Job | Median | Max | Read |
-| --- | ---: | ---: | --- |
-| `integration` | 12m11s | 17m21s | primary blocker; must shard |
-| `test (3, 4)` | 3m48s | 5m10s | acceptable median, occasional over-budget |
-| `kovo-check (server-browser)` | 2m58s | 3m54s | healthy |
-| `test (1, 4)` / `(2, 4)` / `(4, 4)` | 1m32s-2m43s | 4m43s | shard 4 is too short; matrix is imbalanced |
-| `conformance (drizzle-pin)` | 2m19s | 3m40s | healthy as a standalone shard |
-| `browser`, `gallery-browser`, `publish-check`, `format` | 1m07s-1m33s | 2m57s | useful signal but too short as separate jobs |
-| `p10-perf`, `compiler-perf`, `sql-safety`, `api-surface`, small conformance, small `kovo-check` | 0m21s-0m55s | 1m58s | runner overhead dominates |
+| Job                                                                                             |      Median |    Max | Read                                         |
+| ----------------------------------------------------------------------------------------------- | ----------: | -----: | -------------------------------------------- |
+| `integration`                                                                                   |      12m11s | 17m21s | primary blocker; must shard                  |
+| `test (3, 4)`                                                                                   |       3m48s |  5m10s | acceptable median, occasional over-budget    |
+| `kovo-check (server-browser)`                                                                   |       2m58s |  3m54s | healthy                                      |
+| `test (1, 4)` / `(2, 4)` / `(4, 4)`                                                             | 1m32s-2m43s |  4m43s | shard 4 is too short; matrix is imbalanced   |
+| `conformance (drizzle-pin)`                                                                     |       2m19s |  3m40s | healthy as a standalone shard                |
+| `browser`, `gallery-browser`, `publish-check`, `format`                                         | 1m07s-1m33s |  2m57s | useful signal but too short as separate jobs |
+| `p10-perf`, `compiler-perf`, `sql-safety`, `api-surface`, small conformance, small `kovo-check` | 0m21s-0m55s |  1m58s | runner overhead dominates                    |
 
 ## Target CI Topology
 
-- [ ] **Cap required CI at 16 concurrent jobs.**
+- [x] **Cap required CI at 16 concurrent jobs.**
   - Treat 16 required jobs, excluding the final zero-work aggregator, as the hard topology budget.
   - Reserve the remaining Free-plan concurrency headroom for `pages.yml`, reruns, queued pushes, and
     occasional GitHub scheduling jitter.
@@ -52,8 +52,10 @@ Median job durations across those runs:
     or retire another slot first.
   - Evidence when complete: the workflow graph has no more than 16 required jobs runnable before the
     final aggregator.
+  - Evidence 2026-06-25: local workflow assertion counted exactly 16 required slots before `check`;
+    `.github/workflows/ci.yml` parses with Ruby Psych.
 
-- [ ] **Prohibit hand-maintained shard file lists.**
+- [x] **Prohibit hand-maintained shard file lists.**
   - Use native runner sharding (`vitest --shard`, Playwright `--shard`), stable logical suites, or
     deterministic ephemeral shard manifests generated during CI.
   - Do not maintain manually curated lists like "these 37 specs are shard 1"; they drift and make test
@@ -65,6 +67,9 @@ Median job durations across those runs:
     every discovered test appears exactly once.
   - Evidence when complete: CI sharding is expressed as native shard counts or named suite commands,
     with no checked-in per-shard spec-file manifests.
+  - Evidence 2026-06-25: CI uses generated root Vitest manifests under `$RUNNER_TEMP/kovo-shards`,
+    native Playwright `--shard=1..5/5`, and named conformance/kovo-check suite groups; no checked-in
+    shard manifest files were added.
 
 - [ ] **Add deterministic generated shard support.**
   - Create a shared script, likely `scripts/ci-shards.mjs`, that can generate per-job shard manifests
@@ -83,6 +88,9 @@ Median job durations across those runs:
     enough to justify the added critical-path dependency.
   - Evidence when complete: unit tests for bin packing, unknown-duration fallback, and duplicate/missing
     validation, plus a CI run showing generated shard files are created only under `$RUNNER_TEMP`.
+  - Progress 2026-06-25: `scripts/ci-shards.mjs` implements LPT generation, fallback estimates,
+    assignment validation, and history merging; focused tests cover the algorithm and validation. The
+    remaining checkbox evidence is a completed CI run proving `$RUNNER_TEMP` manifest creation.
 
 - [ ] **Persist timing history as a machine-generated artifact.**
   - Add a reporter or post-processing step that emits per-file durations for root Vitest and Playwright
@@ -94,14 +102,20 @@ Median job durations across those runs:
   - Key Playwright durations by project plus file when multiple browser projects run the same spec.
   - Evidence when complete: uploaded timing artifact, documented JSON shape, and a local merge test for
     old/new duration histories.
+  - Progress 2026-06-25: CI uploads per-shard root and integration timing artifacts shaped as
+    `{ "<project:file or file>": { "seconds": number } }`, and `scripts/ci-shards.test.mjs` covers
+    rolling history merge. The remaining checkbox evidence is a completed CI artifact upload.
 
-- [ ] **Add a CI timing report script.**
+- [x] **Add a CI timing report script.**
   - Produce a checked-in script, likely `scripts/ci-timing-report.mjs`, that can summarize the last
     N completed CI runs by workflow wall time and job duration.
   - It must exclude `in_progress`/`queued` runs, include both success and failure conclusions, and print
     jobs outside the 2-5 minute target.
   - Evidence when complete: command output from the script against recent completed GitHub runs and a
     unit test for duration bucketing.
+  - Evidence 2026-06-25: `node scripts/ci-timing-report.mjs --limit 3` reported completed CI runs
+    `28150112422`, `28145146883`, and `28136545956`, including jobs outside the 2-5 minute target;
+    focused Vitest coverage proves duration bucketing and summary formatting.
 
 - [ ] **Shard `integration` into five CI jobs first.**
   - Replace the single `integration` job with a five-job matrix.
@@ -168,7 +182,7 @@ Median job durations across those runs:
     download that artifact.
 
 - [ ] **Move optional slow breadth checks out of required PR feedback if new checks push wall time above
-  5 minutes.**
+      5 minutes.**
   - Keep required PR checks focused on correctness gates needed before merge.
   - Use scheduled or manual workflows for stress repeats, expanded browser matrices, and broad perf
     sweeps that cannot fit the 5-minute target.
@@ -177,11 +191,14 @@ Median job durations across those runs:
 
 ## Assertion And Harness Quality
 
-- [ ] **Turn flaky retry passes into a hard CI failure.**
+- [x] **Turn flaky retry passes into a hard CI failure.**
   - `tests/integration/playwright.config.ts` already has a flaky reporter and `KOVO_FAIL_ON_FLAKY`.
   - Set the env var in CI so retry-passed tests cannot disappear inside a green run.
   - Evidence when complete: a controlled flaky fixture or reporter unit test proves retry-passed exits
     non-zero in CI mode.
+  - Evidence 2026-06-25: `.github/workflows/ci.yml` sets `KOVO_FAIL_ON_FLAKY=1` on the integration
+    matrix; `tests/flaky-reporter.meta.test.ts` proves a retry-passed flaky outcome calls
+    `process.exit(1)`.
 
 - [ ] **Add a scheduled race-prone repeat workflow or job.**
   - Run a curated list of cross-tab, streaming, optimistic, and morph tests with `--repeat-each=3`.
@@ -238,14 +255,26 @@ Median job durations across those runs:
   - Evidence when complete: documented rule plus a meta-test or lint check for
     `tests/integration/**` internal imports with an allowlist.
 
+## Latest Verification
+
+- Focused Vitest gate passed: `scripts/ci-shards.test.mjs`, `scripts/ci-timing-report.test.mjs`,
+  and `tests/flaky-reporter.meta.test.ts` (9 tests).
+- CI-mode shard generation with `RUNNER_TEMP="$(mktemp -d)"` wrote the selected manifest under
+  `$RUNNER_TEMP/kovo-shards`.
+- `node scripts/ci-timing-report.mjs --limit 3` successfully summarized the latest three completed CI
+  runs and printed out-of-target jobs.
+- `ruby -e 'require "psych"; Psych.load_file(".github/workflows/ci.yml")'`,
+  `node -e 'JSON.parse(require("fs").readFileSync("package.json","utf8"))'`, and `git diff --check`
+  passed.
+
 ## Acceptance Gates
 
 - [ ] **CI runtime gate:** three consecutive completed required CI runs finish in 5 minutes or less, with
-  no required job except the final aggregator below 2 minutes or above 5 minutes.
+      no required job except the final aggregator below 2 minutes or above 5 minutes.
 - [ ] **Signal gate:** a failed static check, failed conformance test, failed browser test, and failed
-  integration shard each identify the failing suite/spec from the GitHub job list and first visible log
-  page.
+      integration shard each identify the failing suite/spec from the GitHub job list and first visible log
+      page.
 - [ ] **Maintainability gate:** new integration tests have inventory metadata, use public app APIs by
-  default, and use shared assertion helpers for common wire/header contracts.
+      default, and use shared assertion helpers for common wire/header contracts.
 - [ ] **No coverage regression gate:** the final `check` job still depends on every required shard and
-  fails on any failure, cancellation, or skipped required job.
+      fails on any failure, cancellation, or skipped required job.

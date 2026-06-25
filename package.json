@@ -23,6 +23,7 @@
     "check:no-committed-generated": "node scripts/no-committed-generated.mjs",
     "check:vp": "vp check >/tmp/kovo-vp-check.log 2>&1 || { code=$?; cat /tmp/kovo-vp-check.log; exit $code; }",
     "check:inline-loader": "pnpm --filter @kovojs/browser run check:inline-loader",
+    "ci:timing-report": "node scripts/ci-timing-report.mjs",
     "bump": "node scripts/bump.mjs",
     "release:bootstrap-placeholders": "node scripts/bootstrap-npm-placeholders.mjs",
     "docs:serve": "pnpm run check:build && pnpm --filter @kovojs/site run build && HOST=0.0.0.0 node site/scripts/serve.mjs",
