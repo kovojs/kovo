@@ -314,6 +314,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ]),
     platformSubstitutions: structuralLowering.platformSubstitutions,
     queryUpdatePlans,
+    renderPlanFingerprint,
     // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
     // independently, then ignore only generated runtime stamps with an explicit allowlist.
     renderEquivalenceChecks,

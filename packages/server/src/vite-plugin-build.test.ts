@@ -5,11 +5,16 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
+import { computeRenderPlanFingerprint } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import { writeKovoAppShellVitePluginBuild } from './vite-plugin-build.js';
 import type { KovoAppShellBuild } from './vite-build.js';
 import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
+
+const testRenderPlanFingerprint = computeRenderPlanFingerprint({
+  test: 'field:id',
+});
 
 describe('server app shell Vite plugin build boundary', () => {
   it('writes plugin build output and static export through the shared Vite build helper', async () => {
@@ -43,6 +48,7 @@ describe('server app shell Vite plugin build boundary', () => {
           clientModules: [
             {
               path: '/c/cart.client.js',
+              renderPlanFingerprint: testRenderPlanFingerprint,
               source: 'export const cartClient = true;',
               version: 'cart-v1',
             },

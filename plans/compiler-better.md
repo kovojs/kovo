@@ -226,10 +226,22 @@ diagnostic in compiler/check gates that claim data-plane security.
       registry, full-page documents, mutation deltas, full responses, and `/_q` responses.
   - Evidence: server `buildToken()` folds `renderPlanFingerprint` only if supplied; `createKovoAppShellBuild`
     registers modules without setting it.
+  - Partial slice evidence: `pnpm exec vitest --run packages/server/src/client-modules.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-build.test.ts`
+    now proves compiled app-shell client modules fail without `renderPlanFingerprint`, and a
+    shape-only fingerprint change moves the registry build token, built client href, and full-page
+    document token.
+  - Remaining gap: mutation deltas, full responses, static export replay breadth, and `/_q`
+    responses still need end-to-end render-plan token threading proof.
 - [ ] Add an end-to-end test where query shape or render-plan grammar changes while client module
       bytes remain identical, and prove all mandatory tokens/hrefs move.
   - Evidence: current server tests cover manual registry fingerprints, not compiler-to-server
     pipeline threading.
+  - Partial slice evidence: `packages/server/src/vite-build.test.ts` covers identical compiled
+    client module bytes with different render-plan fingerprints and proves the build token, client
+    href, and document meta token move through the app-shell build path.
+  - Remaining gap: the test uses synthetic core fingerprints at the server boundary; a
+    compiler-to-server fixture should consume `CompileResult.renderPlanFingerprint`, and mutation
+    plus `/_q` token coverage remains open.
 - [ ] Move client module URL/version encoding and decoding into one shared internal ABI helper used
       by compiler emit, Vite dev serving, and server registry serving.
   - Evidence: equivalent URL logic exists across compiler and server code paths today.
