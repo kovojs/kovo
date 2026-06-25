@@ -207,18 +207,15 @@ const unverifiedMimeFacts: UnverifiedMimeFact[] = [];
  * - `accept.unverified([...types], justification)` — the audited escape: trust the client MIME,
  *   recorded for `kovo explain --capabilities`. Still attachment-forced.
  */
-export const accept = Object.assign(
-  (types: readonly string[]): readonly string[] => types,
-  {
-    unverified(types: readonly string[], justification: string): UnverifiedAcceptance {
-      if (!justification || justification.trim().length === 0) {
-        throw new Error('accept.unverified(...) requires a justification (KV428, SPEC §6.6/§9.1).');
-      }
-      unverifiedMimeFacts.push({ justification, types });
-      return { justification, types, unverified: true };
-    },
+export const accept = Object.assign((types: readonly string[]): readonly string[] => types, {
+  unverified(types: readonly string[], justification: string): UnverifiedAcceptance {
+    if (!justification || justification.trim().length === 0) {
+      throw new Error('accept.unverified(...) requires a justification (KV428, SPEC §6.6/§9.1).');
+    }
+    unverifiedMimeFacts.push({ justification, types });
+    return { justification, types, unverified: true };
   },
-);
+});
 
 /**
  * Drain the recorded `accept.unverified()` capability facts (SPEC §6.6/§9.1).

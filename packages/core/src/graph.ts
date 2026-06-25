@@ -650,11 +650,24 @@ function explicitAccessExplainFact(
   }
 
   if (access.kind === 'verified-machine-auth') {
-    return { decision: 'verified', detail: 'access=verified-machine-auth', kind, name, source: 'access' };
+    return {
+      decision: 'verified',
+      detail: 'access=verified-machine-auth',
+      kind,
+      name,
+      source: 'access',
+    };
   }
 
-  const guards = access.guards.length === 0 ? '-' : access.guards.map((guard) => guard.name).join(',');
-  return { decision: 'guard', detail: `access=guard-chain guards=${guards}`, kind, name, source: 'access' };
+  const guards =
+    access.guards.length === 0 ? '-' : access.guards.map((guard) => guard.name).join(',');
+  return {
+    decision: 'guard',
+    detail: `access=guard-chain guards=${guards}`,
+    kind,
+    name,
+    source: 'access',
+  };
 }
 
 function mutationAccessFact(mutation: MutationExplain): AccessExplainFact {
@@ -710,7 +723,9 @@ function endpointAccessFact(endpoint: EndpointExplain): AccessExplainFact {
     return {
       ...explicit,
       detail: `${explicit.detail} ${detail}`,
-      ...(endpoint.csrfJustification === undefined ? {} : { justification: endpoint.csrfJustification }),
+      ...(endpoint.csrfJustification === undefined
+        ? {}
+        : { justification: endpoint.csrfJustification }),
     };
   }
 
@@ -721,7 +736,9 @@ function endpointAccessFact(endpoint: EndpointExplain): AccessExplainFact {
       kind,
       name,
       source: 'auth',
-      ...(endpoint.csrfJustification === undefined ? {} : { justification: endpoint.csrfJustification }),
+      ...(endpoint.csrfJustification === undefined
+        ? {}
+        : { justification: endpoint.csrfJustification }),
     };
   }
 
@@ -729,7 +746,10 @@ function endpointAccessFact(endpoint: EndpointExplain): AccessExplainFact {
     return { decision: 'verified', detail, kind, name, source: 'auth' };
   }
 
-  const hasGuard = hasAuthGuard(endpoint.guards ?? []) || endpoint.auth === 'authed' || endpoint.auth?.startsWith('role:') === true;
+  const hasGuard =
+    hasAuthGuard(endpoint.guards ?? []) ||
+    endpoint.auth === 'authed' ||
+    endpoint.auth?.startsWith('role:') === true;
   return {
     decision: hasGuard ? 'guard' : 'missing',
     detail,

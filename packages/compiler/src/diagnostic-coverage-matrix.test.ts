@@ -1136,7 +1136,9 @@ function outOfScopeCodeSet(): Set<DiagnosticCode> {
 
 function allCompilerOwnedDiagnosticCodes(): DiagnosticCode[] {
   return [
-    ...(Object.keys(diagnosticDefinitions).filter(isCompilerOwnedKv2xxKv3xxCode) as DiagnosticCode[]),
+    ...(Object.keys(diagnosticDefinitions).filter(
+      isCompilerOwnedKv2xxKv3xxCode,
+    ) as DiagnosticCode[]),
     'KV420',
     'KV421',
     'KV422',

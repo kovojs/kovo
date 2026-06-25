@@ -350,10 +350,7 @@ export function applySourceReplacements(
   return output;
 }
 
-export function applySourceReplacementPlan(
-  source: string,
-  plan: SourceReplacementPlan,
-): string {
+export function applySourceReplacementPlan(source: string, plan: SourceReplacementPlan): string {
   if (plan.diagnostics.length > 0) throw new SourceReplacementConflictError(plan.diagnostics);
   return applySourceReplacements(source, plan.replacements);
 }

@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { registerHooks } from 'node:module';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
@@ -318,7 +318,10 @@ function compileComponentCapture({ allowedDiagnostics = [], fileName, queryShape
       ],
       { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     );
-    const clientPath = resolve(root, fileName.replace(/\.tsx$/, '.client.js'));
+    const clientPath = resolve(
+      dirname(outPath),
+      basename(fileName.replace(/\.tsx$/, '.client.js')),
+    );
 
     return {
       client: existsFile(clientPath) ? readFileSync(clientPath, 'utf8') : '',

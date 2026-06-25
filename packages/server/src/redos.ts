@@ -95,7 +95,7 @@ export const emailFormat: BlessedFormat = {
       if (c === 0x2e /* . */) {
         if (prevDot) return false;
         prevDot = true;
-      } else if (isAsciiLetter(c) || isDigit(c) || '!#$%&\'*+/=?^_`{|}~-'.includes(local[i] ?? '')) {
+      } else if (isAsciiLetter(c) || isDigit(c) || "!#$%&'*+/=?^_`{|}~-".includes(local[i] ?? '')) {
         prevDot = false;
       } else {
         return false;

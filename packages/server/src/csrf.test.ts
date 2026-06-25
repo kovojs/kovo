@@ -143,10 +143,8 @@ describe('csrf helpers', () => {
       method: 'POST',
     });
     // Re-mint the token bound to the same cookie value to validate the round-trip.
-    const html = runWithJsxRequestContext(
-      postRequest,
-      { onCsrfSetCookie: () => {} },
-      () => renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
+    const html = runWithJsxRequestContext(postRequest, { onCsrfSetCookie: () => {} }, () =>
+      renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
     );
     if (typeof html !== 'string') throw new TypeError('expected synchronous CSRF field render');
     const token = /value="([^"]+)"/.exec(html)![1]!;

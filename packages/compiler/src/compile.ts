@@ -447,7 +447,9 @@ function emitRegistryCssPhase(
       handlers: client.versionedHandlers,
       liveTargetFacts,
       platformSubstitutions: lowered.lowering.structuralLowering.platformSubstitutions,
-      ...(parsed.options.queryShapeFacts ? { queryShapeFacts: parsed.options.queryShapeFacts } : {}),
+      ...(parsed.options.queryShapeFacts
+        ? { queryShapeFacts: parsed.options.queryShapeFacts }
+        : {}),
       queryUpdatePlans: validated.queryUpdatePlans,
       ...(parsed.options.registryFacts ? { registryFacts: parsed.options.registryFacts } : {}),
       registryComponentName: parsed.componentNames.registryKey,
@@ -529,7 +531,9 @@ function verifyComponentPhase(
         registryFileName(parsed),
         lowered.model,
         server.serverModule.executableSource,
-        parsed.compileOptions.registryFacts ? { registryFacts: parsed.compileOptions.registryFacts } : {},
+        parsed.compileOptions.registryFacts
+          ? { registryFacts: parsed.compileOptions.registryFacts }
+          : {},
       ),
     ],
   };

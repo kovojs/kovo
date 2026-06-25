@@ -42,18 +42,15 @@ function siteFor(file: TrustEscapeSourceFileInput, node: Node): string {
 }
 
 /** ts-morph has no `isStringLiteralLike`; mirror static.ts's literal predicate. */
-function isStringLiteralLike(
-  node: Node | undefined,
-): node is Node & { getLiteralText(): string } {
-  return (
-    !!node &&
-    (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node))
-  );
+function isStringLiteralLike(node: Node | undefined): node is Node & { getLiteralText(): string } {
+  return !!node && (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node));
 }
 
-function createSyntacticProject(
-  files: readonly TrustEscapeSourceFileInput[],
-): { project: Project; sourceFiles: SourceFile[]; dispose: () => void } {
+function createSyntacticProject(files: readonly TrustEscapeSourceFileInput[]): {
+  project: Project;
+  sourceFiles: SourceFile[];
+  dispose: () => void;
+} {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -188,7 +185,9 @@ function buildTrustedCallEscape(
 ): TrustEscapeExplain {
   const args = Node.isCallExpression(call) ? call.getArguments() : [];
   const justification =
-    optionsObjectJustification(args) ?? trailingStringJustification(args) ?? leadingJustification(call);
+    optionsObjectJustification(args) ??
+    trailingStringJustification(args) ??
+    leadingJustification(call);
   const owner = TRUSTED_CALL_OWNER[name];
   return {
     kind,
@@ -200,17 +199,14 @@ function buildTrustedCallEscape(
   };
 }
 
-function buildRawEndpointEscape(
-  file: TrustEscapeSourceFileInput,
-  call: Node,
-): TrustEscapeExplain {
+function buildRawEndpointEscape(file: TrustEscapeSourceFileInput, call: Node): TrustEscapeExplain {
   const args = Node.isCallExpression(call) ? call.getArguments() : [];
   const definition = args.find((arg) => Node.isObjectLiteralExpression(arg));
   const justification =
     (definition && Node.isObjectLiteralExpression(definition)
-      ? objectStringProperty(definition, 'reason') ??
+      ? (objectStringProperty(definition, 'reason') ??
         objectStringProperty(definition, 'purpose') ??
-        objectStringProperty(definition, 'justification')
+        objectStringProperty(definition, 'justification'))
       : undefined) ?? leadingJustification(call);
   const path = args[0] && isStringLiteralLike(args[0]) ? args[0].getLiteralText() : undefined;
   return {
@@ -239,8 +235,7 @@ function buildWebhookVerifyNoneEscape(
     leadingJustification(call);
   // Webhook name is the first arg: webhook('order-paid', { ... }).
   const nameArg = args[0];
-  const source =
-    nameArg && isStringLiteralLike(nameArg) ? nameArg.getLiteralText() : undefined;
+  const source = nameArg && isStringLiteralLike(nameArg) ? nameArg.getLiteralText() : undefined;
   return {
     kind: 'webhookVerifyNone',
     owner: 'ingress.endpoint.webhook',
@@ -256,8 +251,7 @@ function buildWebhookVerifyNoneEscape(
 function optionsObjectJustification(args: readonly Node[]): string | undefined {
   for (const arg of args) {
     if (!Node.isObjectLiteralExpression(arg)) continue;
-    const value =
-      objectStringProperty(arg, 'justification') ?? objectStringProperty(arg, 'reason');
+    const value = objectStringProperty(arg, 'justification') ?? objectStringProperty(arg, 'reason');
     if (value !== undefined) return value;
   }
   return undefined;
@@ -284,10 +278,7 @@ function leadingJustification(node: Node): string | undefined {
   return undefined;
 }
 
-function objectStringProperty(
-  object: Node,
-  propertyName: string,
-): string | undefined {
+function objectStringProperty(object: Node, propertyName: string): string | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
   const property = object.getProperty(propertyName);
   if (!Node.isPropertyAssignment(property)) return undefined;

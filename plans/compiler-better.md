@@ -192,7 +192,7 @@ data-plane security.
   - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/id-content-model.test.ts`
     and `pnpm exec vitest --configLoader runner --run packages/compiler/src/id-content-model.test.ts packages/compiler/src/compile-component.test.ts`
     pass after scanner repeatability facts covered `.map()`, `.flatMap()`, and `Array.from(...,
-    mapper)`, and KV224 consumes those typed facts.
+mapper)`, and KV224 consumes those typed facts.
 
 ### Phase 1: make security graph facts mandatory at compiler boundaries
 

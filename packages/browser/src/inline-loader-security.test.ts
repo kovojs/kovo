@@ -61,8 +61,7 @@ describe('inline loader output security', () => {
         async () => ({
           setUnsafeUrl(_event: unknown, context: { state: { url: string } }) {
             context.state.url = 'javascript:alert(1)';
-            (context.state as { srcset: string }).srcset =
-              '/safe.png 1x, javascript:alert(1) 2x';
+            (context.state as { srcset: string }).srcset = '/safe.png 1x, javascript:alert(1) 2x';
             (context.state as { style: string }).style = 'background:url(javascript:alert(1))';
           },
         }),

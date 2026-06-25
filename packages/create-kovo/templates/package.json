@@ -1,7 +1,6 @@
 {
   "name": "{{name}}",
   "private": true,
-  "packageManager": "{{package_manager}}",
   "type": "module",
   "scripts": {
     "build:prod": "kovo build ./src/app.tsx",
@@ -35,5 +34,6 @@
   },
   "engines": {
     "node": ">=22.15.0"
-  }
+  },
+  "packageManager": "{{package_manager}}"
 }

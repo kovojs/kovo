@@ -956,12 +956,12 @@ function installInlineKovoLoader(im) {
     return true;
   };
   const tr = (root = doc) => {
-    root.querySelectorAll('[on\\:load]').forEach((el) => to(el, 'load') && trigger('load', el));
-    root
-      .querySelectorAll('[on\\:idle]')
-      .forEach((el) =>
-        to(el, 'idle') && (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),
-      );
+    const matches = (selector) =>
+      root.matches?.(selector) ? [root].concat(qa(root, selector)) : qa(root, selector);
+    matches('[on\\:load]').forEach((el) => to(el, 'load') && trigger('load', el));
+    matches('[on\\:idle]').forEach((el) =>
+      to(el, 'idle') && (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),
+    );
     if (globalThis.IntersectionObserver) {
       const observer = new IntersectionObserver((entries) =>
         entries.forEach((entry) => {
@@ -970,7 +970,7 @@ function installInlineKovoLoader(im) {
           trigger('visible', entry.target);
         }),
       );
-      root.querySelectorAll('[on\\:visible]').forEach((el) => to(el, 'visible') && observer.observe(el));
+      matches('[on\\:visible]').forEach((el) => to(el, 'visible') && observer.observe(el));
     }
   };
   const ps = () => {

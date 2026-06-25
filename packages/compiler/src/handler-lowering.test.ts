@@ -238,10 +238,10 @@ export const CartBadge = component({
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV437']);
     expect(serverSource).toContain('data-p-quantity="{quantity}"');
     expect(clientSource).toContain('import { track } from "./analytics";');
-    expect(clientSource).toContain("const LABEL = 'cart';");
+    expect(clientSource).not.toContain("const LABEL = 'cart';");
     expect(clientSource).toContain('ctx.state.count += ctx.params.quantity;');
     expect(clientSource).toContain('track(LABEL, event.type, ctx.state.count);');
   });

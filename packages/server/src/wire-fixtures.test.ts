@@ -12,6 +12,7 @@ import {
 import { query, renderQueryEndpointResponse } from './query.js';
 import type { MutationResponseHeaderValue } from './response.js';
 import { s } from './schema.js';
+import { createLiveTargetAttestation } from './mutation-wire.js';
 import {
   cartBadgeFragmentHtml,
   createCartMutationFixture,
@@ -84,6 +85,7 @@ describe('server wire fixture contracts', () => {
 
     const response = expectBufferedWireResponse(
       await renderMutationResponse(addToCart, {
+        buildToken: 'wire-fixture-test-build',
         idem: 'idem_01HX',
         liveTargetDescriptors: [
           {
@@ -147,8 +149,15 @@ describe('server wire fixture contracts', () => {
           enhancedAddToCart: async (headers, rawInput) =>
             expectBufferedWireResponse(
               await renderMutationEndpointResponse(addToCart, {
+                buildToken: 'wire-fixture-test-build',
                 failureTarget: 'product-form:p1',
-                headers,
+                headers: {
+                  ...withoutHeader(headers, 'Kovo-Live-Targets'),
+                  'Kovo-Live-Targets': attestedLiveTargetHeader(
+                    'cart-badge',
+                    'components/cart/badge',
+                  ),
+                },
                 liveTargetRenderers: [
                   {
                     component: 'components/cart/badge',
@@ -266,6 +275,7 @@ describe('server wire fixture contracts', () => {
 
     const response = expectBufferedWireResponse(
       await renderMutationResponse(addToCart, {
+        buildToken: 'wire-fixture-test-build',
         failureTarget: 'product-form:p1',
         idem: 'idem_01HY',
         rawInput: { productId: 'p1', quantity: 99 },
@@ -327,6 +337,22 @@ describe('server wire fixture contracts', () => {
     });
   });
 });
+
+function attestedLiveTargetHeader(
+  target: string,
+  component: string,
+  props: Record<string, unknown> = {},
+): string {
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+}
+
+function withoutHeader(headers: Record<string, string>, name: string): Record<string, string> {
+  const normalized = name.toLowerCase();
+  return Object.fromEntries(
+    Object.entries(headers).filter(([candidate]) => candidate.toLowerCase() !== normalized),
+  );
+}
 
 type WireFixtureHandlers = {
   enhancedAddToCart(

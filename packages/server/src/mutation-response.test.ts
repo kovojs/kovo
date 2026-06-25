@@ -6,8 +6,8 @@ import {
   coalesceMutationStreamChunks,
   errorBoundary,
   mutation as defineMutation,
-  renderMutationEndpointResponse,
-  renderMutationResponse,
+  renderMutationEndpointResponse as renderMutationEndpointResponseBase,
+  renderMutationResponse as renderMutationResponseBase,
   stream,
 } from './mutation.js';
 import { renderComponentMutationFailure } from './component-render.js';
@@ -24,6 +24,32 @@ import {
 } from './test-fixtures.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+
+const mutationResponseTestBuildToken = 'mutation-response-test-build';
+
+function withMutationResponseTestBuildToken<T extends { buildToken?: string }>(
+  request: T,
+): T & { buildToken: string } {
+  return { buildToken: mutationResponseTestBuildToken, ...request };
+}
+
+function renderMutationResponse(
+  ...[definition, request]: Parameters<typeof renderMutationResponseBase>
+): ReturnType<typeof renderMutationResponseBase> {
+  return renderMutationResponseBase(
+    definition,
+    withMutationResponseTestBuildToken(request),
+  ) as ReturnType<typeof renderMutationResponseBase>;
+}
+
+function renderMutationEndpointResponse(
+  ...[definition, request]: Parameters<typeof renderMutationEndpointResponseBase>
+): ReturnType<typeof renderMutationEndpointResponseBase> {
+  return renderMutationEndpointResponseBase(
+    definition,
+    withMutationResponseTestBuildToken(request),
+  ) as ReturnType<typeof renderMutationEndpointResponseBase>;
+}
 
 function attestedLiveTargetHeader(
   target: string,
@@ -636,6 +662,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         'Kovo-Changes': '[{"domain":"cart"}]',
         Vary: 'Cookie',
       },
@@ -884,6 +911,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-response-test-build',
         'Kovo-Changes': '[]',
         Vary: 'Cookie',
       },

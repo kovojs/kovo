@@ -329,6 +329,7 @@ describe('server mutation lifecycle', () => {
 
     await expect(
       renderMutationResponse(signIn, {
+        buildToken: 'mutation-test-build',
         rawInput: { email: 'ada@example.test' },
         request: {},
       }),
@@ -338,6 +339,7 @@ describe('server mutation lifecycle', () => {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[]',
+        'Kovo-Build': 'mutation-test-build',
         'Set-Cookie': [
           'kovo_session=s1; Path=/; HttpOnly; SameSite=Lax',
           'kovo_csrf=c1; Path=/; HttpOnly; Secure; SameSite=Strict',
@@ -420,6 +422,7 @@ describe('server mutation lifecycle', () => {
     });
 
     const result = await renderMutationResponse(signIn, {
+      buildToken: 'mutation-test-build',
       rawInput: { email: 'ada@example.test' },
       request: {},
     });
@@ -489,6 +492,7 @@ describe('server mutation lifecycle', () => {
 
     await expect(
       renderMutationResponse(addToCart, {
+        buildToken: 'mutation-test-build',
         fragment: true,
         rawInput: { quantity: 2 },
         request: {},
@@ -528,6 +532,7 @@ describe('server mutation lifecycle', () => {
 
     await expect(
       renderMutationResponse(addToCart, {
+        buildToken: 'mutation-test-build',
         fragment: true,
         rawInput: { productId: 'p1' },
         request: { session: { cartId: 'c1' } },

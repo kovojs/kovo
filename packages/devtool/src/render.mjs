@@ -17,9 +17,7 @@ const escText = (s) =>
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-const escAttr = (s) =>
-  escText(s)
-    .replace(/"/g, '&quot;');
+const escAttr = (s) => escText(s).replace(/"/g, '&quot;');
 const esc = escText;
 
 function queryHref(params) {

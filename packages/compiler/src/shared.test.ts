@@ -118,10 +118,9 @@ describe('compiler shared source replacements', () => {
 
   it('records phase, writer, original span, and generated span for replacement plans', () => {
     const accumulator = new SourceReplacementAccumulator();
-    accumulator.add(
-      { phase: 'lowering', writer: 'structural-jsx' },
-      [{ end: 10, replacement: 'BETA-BETA', start: 6 }],
-    );
+    accumulator.add({ phase: 'lowering', writer: 'structural-jsx' }, [
+      { end: 10, replacement: 'BETA-BETA', start: 6 },
+    ]);
 
     expect(accumulator.plan('alpha beta gamma'.length).records).toEqual([
       {
@@ -138,14 +137,12 @@ describe('compiler shared source replacements', () => {
 
   it('records replacement conflict diagnostics with both writers', () => {
     const accumulator = new SourceReplacementAccumulator();
-    accumulator.add(
-      { phase: 'lowering', writer: 'structural-jsx' },
-      [{ end: 4, replacement: 'x', start: 1 }],
-    );
-    accumulator.add(
-      { phase: 'lowering', writer: 'navigation-standalone-href' },
-      [{ end: 5, replacement: 'y', start: 3 }],
-    );
+    accumulator.add({ phase: 'lowering', writer: 'structural-jsx' }, [
+      { end: 4, replacement: 'x', start: 1 },
+    ]);
+    accumulator.add({ phase: 'lowering', writer: 'navigation-standalone-href' }, [
+      { end: 5, replacement: 'y', start: 3 },
+    ]);
 
     expect(accumulator.plan('abcdef'.length).diagnostics).toMatchObject([
       {

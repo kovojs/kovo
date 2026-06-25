@@ -235,7 +235,9 @@ export const PayButton = component({
       const result = compile(source);
       expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV437');
       expect(result.publishToClientFacts).toEqual([]);
-      expect(clientSource(source)).not.toContain('import { STRIPE_PUBLISHABLE_KEY } from "./config";');
+      expect(clientSource(source)).not.toContain(
+        'import { STRIPE_PUBLISHABLE_KEY } from "./config";',
+      );
     });
 
     it('rejects publishToClient escapes with an empty reason', () => {
@@ -252,7 +254,9 @@ export const PayButton = component({
       const result = compile(source);
       expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV437');
       expect(result.publishToClientFacts).toEqual([]);
-      expect(clientSource(source)).not.toContain('import { STRIPE_PUBLISHABLE_KEY } from "./config";');
+      expect(clientSource(source)).not.toContain(
+        'import { STRIPE_PUBLISHABLE_KEY } from "./config";',
+      );
     });
 
     it('does not treat a handler-local shadow of an import name as a captured import', () => {

@@ -198,6 +198,7 @@ describe('server change records', () => {
     });
 
     const response = await renderMutationResponse(updateProduct, {
+      buildToken: 'change-record-test-build',
       fragment: true,
       rawInput: { productId: 'p1' },
       request: {},
@@ -337,6 +338,7 @@ describe('server change records', () => {
 
     await expect(
       renderMutationResponse(addToCart, {
+        buildToken: 'change-record-test-build',
         rawInput: { cartId: 'c1', note: 'secret café token', productId: 'p1' },
         request: {},
       }),
@@ -363,6 +365,7 @@ describe('server change records', () => {
     });
 
     const response = await renderMutationResponse(addToCart, {
+      buildToken: 'change-record-test-build',
       rawInput: { cartId: '東京-🔐', note: 'secret café token'.repeat(256), productId: 'p1' },
       request: {},
     });

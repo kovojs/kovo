@@ -253,10 +253,7 @@ function hasPipelineProduct(
   }
 }
 
-function requireStyleSpanProbe(
-  ctx: LoweringPipelineContext,
-  consumer: string,
-): StyleExtraction {
+function requireStyleSpanProbe(ctx: LoweringPipelineContext, consumer: string): StyleExtraction {
   if (ctx.styleSpanProbe !== undefined) return ctx.styleSpanProbe;
   throw missingProductError(consumer, 'style-span-probe');
 }
@@ -269,10 +266,7 @@ function requireStructuralLowering(
   throw missingProductError(consumer, 'structural-lowering');
 }
 
-function requireStyleExtraction(
-  ctx: LoweringPipelineContext,
-  consumer: string,
-): StyleExtraction {
+function requireStyleExtraction(ctx: LoweringPipelineContext, consumer: string): StyleExtraction {
   if (ctx.styleExtraction !== undefined) return ctx.styleExtraction;
   throw missingProductError(consumer, 'style-extraction');
 }
@@ -284,16 +278,10 @@ function requireOffsetMap(
 ): SourceOffsetMap {
   const offsetMap = ctx.offsetMaps[index];
   if (offsetMap !== undefined) return offsetMap;
-  throw missingProductError(
-    consumer,
-    index === 0 ? 'structural-reparse' : 'style-reparse',
-  );
+  throw missingProductError(consumer, index === 0 ? 'structural-reparse' : 'style-reparse');
 }
 
-function missingProductError(
-  consumer: string,
-  product: LoweringPipelineProduct,
-): Error {
+function missingProductError(consumer: string, product: LoweringPipelineProduct): Error {
   return new Error(
     `Lowering pipeline consumer "${consumer}" requires missing product "${product}" (SPEC.md §5.2).`,
   );

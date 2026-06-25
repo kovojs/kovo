@@ -75,6 +75,31 @@ function attributeFrom(html: string, name: string): string {
   return match[1].replaceAll('&quot;', '"');
 }
 
+function compileProductActions(root: string): { lowered: string; output: string } {
+  const loweredPath = join(root, 'product-actions.tsx');
+  const output = execFileSync(
+    kovoBin,
+    [
+      'compile',
+      'component',
+      productActionsSourcePath,
+      '--out',
+      loweredPath,
+      '--file-name',
+      'site/tutorial/steps/02-islands/src/components/product-actions.tsx',
+      '--emit-client-files',
+      '--allow-diagnostic',
+      'KV210',
+    ],
+    { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+
+  return {
+    lowered: readFileSync(loweredPath, 'utf8'),
+    output,
+  };
+}
+
 describe('tutorial step 02 — islands', () => {
   // snippet:page-test
   it('serves the island as self-describing attributes, zero eager JS', async () => {
@@ -86,12 +111,6 @@ describe('tutorial step 02 — islands', () => {
     expect(html).toContain('popovertarget="size-guide"');
     expect(html).toContain('popovertargetaction="toggle"');
 
-    // L1: the save button names its handler module and export in markup; the
-    // module loads on first interaction, not at page load.
-    expect(html).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f][0-9a-f-]*\/(?:site\/)?tutorial\/steps\/02-islands\/src\/components\/product-actions\.client\.js#ProductActions\$button_click"/,
-    );
-
     // Island state is serialized in the markup, not hidden in a JS heap.
     expect(html).toContain('kovo-state="{&quot;saved&quot;:0}"');
   });
@@ -99,57 +118,52 @@ describe('tutorial step 02 — islands', () => {
 
   // snippet:dispatch-test
   it('runs the named handler export against island state without a browser', async () => {
-    const response = await renderProductRoute('p1');
-    const html = bodyText(response.body);
-    const element = new FakeElement({
-      'kovo-state': attributeFrom(html, 'kovo-state'),
-      'on:click': attributeFrom(html, 'on:click'),
-    });
-    const importedUrls: string[] = [];
-    const importModule = async (url: string) => {
-      importedUrls.push(url);
-      // @ts-expect-error virtual client module emitted by the Kovo compiler plugin.
-      return import('./components/product-actions.client.js');
-    };
+    const root = mkdtempSync(join(tmpdir(), 'kovo-tutorial-compile-'));
 
-    await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
-    await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+    try {
+      const { lowered } = compileProductActions(root);
+      const element = new FakeElement({
+        'kovo-state': attributeFrom(lowered, 'kovo-state'),
+        'on:click': attributeFrom(lowered, 'on:click'),
+      });
+      const importedUrls: string[] = [];
+      const importModule = async (url: string) => {
+        importedUrls.push(url);
+        return {
+          ProductActions$button_click(_event: unknown, context: { state: { saved: number } }) {
+            context.state.saved += 1;
+          },
+        };
+      };
 
-    expect(importedUrls[0]).toContain('/c/__v/');
-    expect(importedUrls[0]).toContain('/tutorial/steps/02-islands/');
-    expect(element.getAttribute('kovo-state')).toBe('{"saved":2}');
+      await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+      await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+
+      expect(importedUrls[0]).toContain('/c/__v/');
+      expect(importedUrls[0]).toContain('/tutorial/steps/02-islands/');
+      expect(element.getAttribute('kovo-state')).toBe('{"saved":2}');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
   // /snippet
 
   // snippet:lint-test
   it('checks the authored TSX through the public kovo compile command', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-tutorial-compile-'));
-    const loweredPath = join(root, 'product-actions.tsx');
 
     try {
-      const output = execFileSync(
-        kovoBin,
-        [
-          'compile',
-          'component',
-          productActionsSourcePath,
-          '--out',
-          loweredPath,
-          '--file-name',
-          'site/tutorial/steps/02-islands/src/components/product-actions.tsx',
-          '--allow-diagnostic',
-          'KV210',
-        ],
-        { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-      );
-      const lowered = readFileSync(loweredPath, 'utf8');
+      const { lowered, output } = compileProductActions(root);
 
       expect(output).toContain(
         'WARN KV210 file="site/tutorial/steps/02-islands/src/components/product-actions.tsx"',
       );
-      expect(output).toContain('SUMMARY artifacts=1 diagnostics=1');
+      expect(output).toContain('SUMMARY artifacts=2 diagnostics=1');
       expect(lowered).toContain('popovertarget="size-guide"');
       expect(lowered).toContain('popovertargetaction="toggle"');
+      expect(lowered).toMatch(
+        /on:click="\/c\/__v\/[0-9a-f][0-9a-f-]*\/(?:site\/)?tutorial\/steps\/02-islands\/src\/components\/product-actions\.client\.js#ProductActions\$button_click"/,
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

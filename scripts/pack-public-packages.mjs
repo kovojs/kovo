@@ -89,6 +89,8 @@ function assertPackedLifecyclePolicy(manifest, label) {
     if (allowed[name] !== command) findings.push(`scripts.${name}=${command}`);
   }
   if (findings.length > 0) {
-    throw new Error(`${label} packed manifest contains unapproved lifecycle scripts:\n  ${findings.join('\n  ')}`);
+    throw new Error(
+      `${label} packed manifest contains unapproved lifecycle scripts:\n  ${findings.join('\n  ')}`,
+    );
   }
 }

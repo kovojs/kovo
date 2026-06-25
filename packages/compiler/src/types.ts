@@ -27,8 +27,10 @@ export interface CompileComponentOptions {
 }
 
 /** @internal Compiler-owned options used when re-reading emitted artifacts for SPEC.md §5.2. */
-export interface InternalCompileComponentOptions
-  extends Omit<CompileComponentOptions, 'sourceProvenance'> {
+export interface InternalCompileComponentOptions extends Omit<
+  CompileComponentOptions,
+  'sourceProvenance'
+> {
   sourceProvenance?: 'app' | CompilerEmittedSourceProvenance;
 }
 

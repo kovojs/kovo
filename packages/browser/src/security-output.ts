@@ -234,7 +234,9 @@ function trustedHtmlValueContent(value: string | BrowserTrustedHTML): string {
   return typeof value === 'string' ? value : value.toString();
 }
 
-function trustedOutputMetadata(metadata: TrustedOutputMetadataInput | undefined): TrustedOutputMetadata {
+function trustedOutputMetadata(
+  metadata: TrustedOutputMetadataInput | undefined,
+): TrustedOutputMetadata {
   if (metadata === undefined) return {};
   if (typeof metadata === 'string') return { reason: metadata };
   return {

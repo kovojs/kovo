@@ -463,10 +463,7 @@ function accessDecisionFact(
   return undefined;
 }
 
-function accessGuardNames(
-  access: ts.ObjectLiteralExpression,
-  sourceFile: ts.SourceFile,
-): string[] {
+function accessGuardNames(access: ts.ObjectLiteralExpression, sourceFile: ts.SourceFile): string[] {
   const guards = objectPropertyInitializer(access, 'guards');
   if (!guards || !ts.isArrayLiteralExpression(guards)) return [];
 

@@ -255,6 +255,7 @@ export async function serverMutationLifecycleBehaviorFact(
       result: await runtime.runMutation(failing, { productId: 'p1' }, {}),
     },
     fragmentResponse: await runtime.renderMutationResponse(addToCart, {
+      buildToken: 'conformance-server-test-build',
       fragment: true,
       rawInput: { productId: 'p1' },
       request: { session: { cartId: 'c1' } },
@@ -615,9 +616,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
       orderId: runtime.s.string(),
       // KV428: the storage key is server-minted under the `receipts` namespace; the client filename
       // is sanitized metadata only. The accepted-type allowlist is checked against sniffed bytes.
-      receipt: runtime.s
-        .file({ maxBytes: 64 * 1024 })
-        .store({ keyPrefix: 'receipts', storage }),
+      receipt: runtime.s.file({ maxBytes: 64 * 1024 }).store({ keyPrefix: 'receipts', storage }),
     }),
     registry: { touches: [runtime.domain('attachment')] },
   });
@@ -698,6 +697,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
     input: runtime.s.object({ productId: runtime.s.string() }),
   });
   const failureResponse = await runtime.renderMutationEndpointResponse(fragmentFailure, {
+    buildToken: 'conformance-server-test-build',
     fragmentRenderers: [
       runtime.errorBoundary(
         {

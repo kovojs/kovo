@@ -63,7 +63,7 @@ describe('compiler HMR impact facts', () => {
   });
 
   it('keeps HMR facts source-string agnostic under SPEC §5.2 rule 9', () => {
-    const misleadingSourceText = 'queries: { fake: {} }; css: `button { color: hotpink; }`;';
+    const misleadingSourceText = 'queries: fake; css: button color hotpink;';
     const withoutMisleadingText = compile(hmrSource({ visibleText: 'plain text' })).hmrImpact;
     const withMisleadingText = compile(hmrSource({ visibleText: misleadingSourceText })).hmrImpact;
 

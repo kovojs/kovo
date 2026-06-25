@@ -10,6 +10,7 @@ export {
   type GeneratedLiveTargetModule,
 } from '../live-target-registry.js';
 export {
+  createLiveTargetAttestation,
   mutationWireRequestFromHeaders,
   readMutationWireHeaders,
   type BufferedMutationWireResponse,

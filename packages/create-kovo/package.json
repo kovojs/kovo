@@ -12,9 +12,6 @@
     "dist"
   ],
   "type": "module",
-  "kovo": {
-    "starterPackageManager": "pnpm@10.12.1"
-  },
   "publishConfig": {
     "bin": {
       "create-kovo": "./dist/index.mjs"
@@ -39,5 +36,8 @@
     "vite": "8.0.16",
     "vite-plus": "0.1.24",
     "vitest": "4.1.8"
+  },
+  "kovo": {
+    "starterPackageManager": "pnpm@10.12.1"
   }
 }

@@ -40,6 +40,7 @@ function submitAddToCart(
 ) {
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
+    buildToken: 'tutorial-step-06-test-build',
     headers,
     rawInput,
     redirectTo: '/',

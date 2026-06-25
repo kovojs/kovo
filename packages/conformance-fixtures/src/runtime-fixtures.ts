@@ -544,6 +544,7 @@ export async function commerceKeyedOptimisticBehaviorFact(options: {
   });
   const mutationResult = await runtime.runMutation(reserveProduct, { productId: 'p1' }, {});
   const mutationResponse = await runtime.renderMutationEndpointResponse(reserveProduct, {
+    buildToken: 'conformance-runtime-test-build',
     fragmentRenderers: [],
     headers: { 'Kovo-Fragment': 'true' },
     rawInput: { productId: 'p1' },

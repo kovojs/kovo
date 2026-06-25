@@ -578,6 +578,11 @@ describe('inline loader enhanced submit source', () => {
       };
       let streamTargetInserted = false;
       const messagesTarget = {
+        append(...nodes: Array<{ outerHTML?: string }>) {
+          if (nodes.some((node) => node.outerHTML?.includes('data-stream-text="assistant:a1"'))) {
+            streamTargetInserted = true;
+          }
+        },
         insertAdjacentHTML(_position: string, html: string) {
           if (html.includes('data-stream-text="assistant:a1"')) streamTargetInserted = true;
         },
@@ -637,6 +642,27 @@ describe('inline loader enhanced submit source', () => {
         };
         globalRecord.dispatchEvent = vi.fn();
         globalRecord.document = {
+          createElement(name: string) {
+            if (name !== 'template') throw new Error(`unexpected element: ${name}`);
+            const content: { childNodes: unknown[]; children: unknown[] } = {
+              childNodes: [],
+              children: [],
+            };
+            return {
+              content,
+              set innerHTML(html: string) {
+                const node = {
+                  attributes: [],
+                  outerHTML: html,
+                  querySelectorAll() {
+                    return [];
+                  },
+                };
+                content.childNodes = [node];
+                content.children = [node];
+              },
+            };
+          },
           getElementById() {
             return null;
           },

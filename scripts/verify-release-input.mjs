@@ -56,11 +56,9 @@ function verifyExactCommitChecks() {
   }
 
   const checkRuns = JSON.parse(
-    execFileSync(
-      'gh',
-      ['api', `/repos/${repo}/commits/${sha}/check-runs`, '-q', '.check_runs'],
-      { encoding: 'utf8' },
-    ),
+    execFileSync('gh', ['api', `/repos/${repo}/commits/${sha}/check-runs`, '-q', '.check_runs'], {
+      encoding: 'utf8',
+    }),
   );
   const statuses = JSON.parse(
     execFileSync('gh', ['api', `/repos/${repo}/commits/${sha}/status`, '-q', '.statuses'], {

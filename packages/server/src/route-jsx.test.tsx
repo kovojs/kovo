@@ -131,12 +131,16 @@ describe('route JSX pages', () => {
       page: ({ params }) => <ProductDetail productId={params.id} />,
     });
 
-    await expect(
-      renderRoutePageResponse(productRoute, { params: { id: 'p1' } }, {}),
-    ).resolves.toMatchObject({
-      body: '<section data-available="yes" data-product="p1" kovo-c="product-detail" kovo-deps="inventoryStatus productById" kovo-fragment-target="product-detail:p1" kovo-live-component="components/products/product-detail/product-detail" kovo-props="{&quot;productId&quot;:&quot;p1&quot;}">Product p1</section>',
-      status: 200,
-    });
+    const response = await renderRoutePageResponse(productRoute, { params: { id: 'p1' } }, {});
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain(
+      '<section data-available="yes" data-product="p1" kovo-c="product-detail" kovo-deps="inventoryStatus productById" kovo-fragment-target="product-detail:p1" kovo-live-component="components/products/product-detail/product-detail"',
+    );
+    expect(response.body).toMatch(/ kovo-live-token="[A-Za-z0-9_-]+"/);
+    expect(response.body).toContain(
+      ' kovo-props="{&quot;productId&quot;:&quot;p1&quot;}">Product p1</section>',
+    );
   });
 
   it('stamps repeated source-served component instances with distinct live target identities', async () => {

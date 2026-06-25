@@ -325,7 +325,8 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/compiler/src/handler-lowering.test.ts',
-        testName: 'versions handler URLs from the render-plan fingerprint plus emitted client module source',
+        testName:
+          'versions handler URLs from the render-plan fingerprint plus emitted client module source',
       },
     ],
     diagnostics: [
@@ -354,7 +355,8 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/compiler/src/compile-component.test.ts',
-        testName: 'does NOT throw KV416 when shapes differ and a correct token function moves (real fingerprint)',
+        testName:
+          'does NOT throw KV416 when shapes differ and a correct token function moves (real fingerprint)',
       },
     ],
     diagnostics: [
@@ -387,7 +389,8 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/compiler/src/client-secret-capture.test.ts',
-        testName: 'allows a publishToClient(captured, { reason }) escape: emits and records the fact',
+        testName:
+          'allows a publishToClient(captured, { reason }) escape: emits and records the fact',
       },
       {
         file: 'packages/compiler/src/query-bindings.test.ts',

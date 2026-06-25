@@ -6,11 +6,28 @@ import {
   registerGeneratedMutationTouchRegistry,
 } from './generated-mutation-registry.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
-import { renderMutationEndpointResponse } from './mutation.js';
+import { renderMutationEndpointResponse as renderMutationEndpointResponseBase } from './mutation.js';
 import { query } from './query.js';
 import { s, type Schema } from './schema.js';
 import { cartBadgeFragmentHtml, testMutation as mutation } from './test-fixtures.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+
+const mutationEndpointTestBuildToken = 'mutation-endpoint-test-build';
+
+function withMutationEndpointTestBuildToken<T extends { buildToken?: string }>(
+  request: T,
+): T & { buildToken: string } {
+  return { buildToken: mutationEndpointTestBuildToken, ...request };
+}
+
+function renderMutationEndpointResponse(
+  ...[definition, request]: Parameters<typeof renderMutationEndpointResponseBase>
+): ReturnType<typeof renderMutationEndpointResponseBase> {
+  return renderMutationEndpointResponseBase(
+    definition,
+    withMutationEndpointTestBuildToken(request),
+  ) as ReturnType<typeof renderMutationEndpointResponseBase>;
+}
 
 function attestedLiveTargetHeader(
   target: string,
@@ -218,6 +235,7 @@ describe('server mutation endpoint routing', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-endpoint-test-build',
         'Kovo-Changes': '[{"domain":"generated-direct-product","keys":["p1"]}]',
         Vary: 'Cookie',
       },

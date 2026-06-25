@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
 import { createApp } from './app.js';
+import { computeRenderPlanFingerprint } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import { cloudflare, node, vercel } from './build.js';
@@ -20,6 +21,9 @@ import { writeKovoNeutralBuild } from './neutral-build.js';
 
 const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const testRenderPlanFingerprint = computeRenderPlanFingerprint({
+  test: 'field:id',
+});
 
 describe('server build-time deployment API', () => {
   it('exposes the build subpath without promoting it to the runtime root', () => {
@@ -70,6 +74,7 @@ describe('server build-time deployment API', () => {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cart = true;',
             version: 'cart-v1',
           },
@@ -326,6 +331,7 @@ describe('server build-time deployment API', () => {
         clientModules: [
           {
             path: '/c/app.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const app = true;',
             version: 'app-v1',
           },
@@ -445,6 +451,7 @@ describe('server build-time deployment API', () => {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cart = true;',
             version: 'cart-v1',
           },
@@ -635,6 +642,7 @@ export default async function handler(request) {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cart = true;',
             version: 'cart-v1',
           },
@@ -783,6 +791,7 @@ export default async function handler(request) {
         clientModules: [
           {
             path: '/c/static.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const staticClient = true;',
             version: 'static-v1',
           },
@@ -1096,6 +1105,7 @@ export default async function handler(request) {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cart = true;',
             version: 'cart-v1',
           },

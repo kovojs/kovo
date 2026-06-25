@@ -86,9 +86,7 @@ export const Evil = component({
     );
     expect(result.hmrImpact?.clientHref).not.toContain('..');
     expect(result.files.map((file) => file.fileName).join('\n')).not.toContain('..');
-    expect(result.files.find((file) => file.kind === 'server')?.source).toContain(
-      '/c/__v/',
-    );
+    expect(result.files.find((file) => file.kind === 'server')?.source).toContain('/c/__v/');
     expect(result.files.find((file) => file.kind === 'server')?.source).not.toContain('../');
   });
 

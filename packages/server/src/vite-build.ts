@@ -267,7 +267,8 @@ function registerCompiledClientModules(
     // SPEC §6.6: production client module URLs are immutable and versioned.
     // SPEC §5.2.1: the default version also carries the render-plan fingerprint
     // so a shape-only render-plan change moves the client href as well as the token.
-    const version = module.version ?? `${module.renderPlanFingerprint}-${sourceVersion(module.source)}`;
+    const version =
+      module.version ?? `${module.renderPlanFingerprint}-${sourceVersion(module.source)}`;
     const href = app.clientModules.put({
       ...registryModule,
       version,

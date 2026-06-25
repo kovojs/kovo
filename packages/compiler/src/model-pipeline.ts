@@ -54,7 +54,11 @@ export function applyModelPatchPlanPass<Model>(
   parse: (fileName: string, source: string) => Model,
   options: Omit<ComponentModelPatchOptions, 'owner'> = {},
 ): ComponentPipelinePatchResult<Model> {
-  const patch = applySourceReplacementPlanWithOffsetMap(previous.source, plan, options.prefix ?? '');
+  const patch = applySourceReplacementPlanWithOffsetMap(
+    previous.source,
+    plan,
+    options.prefix ?? '',
+  );
   return {
     sourceOffsetMap: patch.sourceOffsetMap,
     state: {

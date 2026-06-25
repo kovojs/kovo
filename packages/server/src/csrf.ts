@@ -278,7 +278,11 @@ function resolveCsrfBinding<Request>(
 
   const anonymousSecret = randomBytes(32).toString('base64url');
   return {
-    setCookie: serializeCookie(name, anonymousSecret, buildAnonymousCsrfCookieOptions(request, cookieOptions)),
+    setCookie: serializeCookie(
+      name,
+      anonymousSecret,
+      buildAnonymousCsrfCookieOptions(request, cookieOptions),
+    ),
     value: `anonymous:${anonymousSecret}`,
   };
 }

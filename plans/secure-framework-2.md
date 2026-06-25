@@ -90,7 +90,7 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
     covers forwarded IP/proto use only behind trusted-proxy opt-in.
 
 - [x] Bind idempotency replay records to a canonical request fingerprint and mint fresh enhanced
-  submit tokens per logical submit.
+      submit tokens per logical submit.
   - Evidence: `3537a49f` plus integrated
     `pnpm exec vitest --run packages/browser/src/inline-loader-enhanced-submit.test.ts packages/browser/src/loader-enhanced-mutation-submit.test.ts packages/browser/src/mutation-fetch.test.ts packages/browser/src/mutation-form.test.ts packages/browser/src/mutation-submit.test.ts packages/server/src/replay.test.ts packages/server/src/mutation-endpoint.test.ts`
     covers fresh enhanced-submit idempotency tokens and same-idem/different-body replay conflicts.
@@ -99,7 +99,7 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
   - Evidence: `016cc57f` plus
     `pnpm exec vitest --run packages/browser/src/apply-mutation-response-delta.test.ts packages/browser/src/broadcast-replay.test.ts packages/browser/src/query-refetch.test.ts`
     covers mutation, broadcast, and typed-read token misses; `pnpm --filter @kovojs/browser run
-    check:inline-loader` proves generated inline-loader parity.
+check:inline-loader` proves generated inline-loader parity.
 
 - [x] Sign or attest `Kovo-Live-Targets` component/props descriptors.
   - Evidence: `3537a49f` plus integrated
@@ -197,7 +197,7 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
 - [x] Gate release publish on exact-commit CI success and pinned release tooling.
   - Evidence: `e8565287` plus
     `SKIP_NPM_PUBLISHED_CHECK=1 node scripts/verify-release-input.mjs 0.1.1`, `node --check
-    scripts/verify-release-input.mjs`, and inspected `.github/workflows/release.yml` using pinned
+scripts/verify-release-input.mjs`, and inspected `.github/workflows/release.yml` using pinned
     npm and `vp exec pnpm` commands per `rules/github-workflows.md`.
 
 - [x] Attest packed npm tarball content before publish.

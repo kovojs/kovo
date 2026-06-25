@@ -12,7 +12,9 @@ productId=p1&quantity=99
 
 <<< RESPONSE
 HTTP/1.1 422 Unprocessable Content
+Cache-Control: private, no-store
 Content-Type: text/vnd.kovo.fragment+html; charset=utf-8
 Kovo-Idem: idem_01HY
+Vary: Cookie
 
 <kovo-fragment target="product-form:p1"><form kovo-c="product-form" aria-invalid="true"><output role="alert" data-error-code="OUT_OF_STOCK">Only 5 left.</output><input name="productId" value="p1"><input name="quantity" value="99"></form></kovo-fragment>

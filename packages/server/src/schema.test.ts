@@ -215,7 +215,10 @@ describe('server schemas', () => {
     );
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
-        avatar: s.file().maxBytes(4).store({ keyPrefix: 'avatars', storage: { ...storage, put } }),
+        avatar: s
+          .file()
+          .maxBytes(4)
+          .store({ keyPrefix: 'avatars', storage: { ...storage, put } }),
       }),
       handler(input) {
         return input.avatar.key;

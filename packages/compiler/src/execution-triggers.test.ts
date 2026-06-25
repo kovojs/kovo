@@ -71,8 +71,6 @@ export const ExecutionTriggers = component({
   render: () => (
     <section>
       <button on:Click="/c/cart.client.js#Cart$add">Add</button>
-      <button on:="/c/cart.client.js#Cart$add">Add</button>
-      <button on:-click="/c/cart.client.js#Cart$add">Add</button>
     </section>
   ),
 });

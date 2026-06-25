@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
 import {
+  componentLiveTargetRenderer,
+  createLiveTargetAttestation,
   renderMutationEndpointResponse,
   type MutationWireHeaderSource,
 } from '@kovojs/server/internal/wire';
@@ -12,6 +14,7 @@ import { readTempCommerceGraph } from '../../../../../scripts/commerce-graph.mjs
 import {
   addToCart,
   addToCartOptimistic,
+  ProductList,
   renderAddToCartError,
   renderAddToCartForm,
   renderShopPage,
@@ -21,6 +24,8 @@ import {
   type AddToCartFailure,
   type ShopRequest,
 } from './app.js';
+import { CartBadge } from './components/cart-badge.js';
+import { OrderHistory } from './components/order-history.js';
 import { createShopDb, type ShopDb } from './db.js';
 
 // Tutorial step 07: the whole behavior surface is checkable without a
@@ -46,13 +51,60 @@ function submitAddToCart(
 ) {
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
-    headers,
+    buildToken: 'tutorial-step-07-test-build',
+    headers: withAttestedLiveTargets(headers, request),
+    liveTargetRenderers: successLiveTargetRenderers(),
     rawInput,
     redirectTo: '/',
     renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
     renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
     request,
   });
+}
+
+function successLiveTargetRenderers() {
+  return [
+    componentLiveTargetRenderer({
+      component: CartBadge,
+      componentId: 'components/cart-badge/cart-badge',
+    }),
+    componentLiveTargetRenderer({
+      component: ProductList,
+      componentId: 'components/product-list/product-list',
+    }),
+    componentLiveTargetRenderer({
+      component: OrderHistory,
+      componentId: 'components/order-history/order-history',
+    }),
+  ];
+}
+
+function withAttestedLiveTargets(
+  headers: MutationWireHeaderSource,
+  request: ShopRequest,
+): MutationWireHeaderSource {
+  const value = headers['Kovo-Live-Targets'];
+  if (typeof value !== 'string') return headers;
+
+  return { ...headers, 'Kovo-Live-Targets': attestLiveTargetEntries(value, request) };
+}
+
+function attestLiveTargetEntries(value: string, request: ShopRequest): string {
+  return value
+    .split(';')
+    .map((entry) => {
+      const trimmed = entry.trim();
+      const componentSeparator = trimmed.indexOf('#');
+      const propsSeparator = trimmed.indexOf(':', componentSeparator + 1);
+      if (componentSeparator <= 0 || propsSeparator <= componentSeparator + 1) return trimmed;
+      const target = trimmed.slice(0, componentSeparator);
+      const component = trimmed.slice(componentSeparator + 1, propsSeparator);
+      const propsJson = trimmed.slice(propsSeparator + 1);
+      const props = JSON.parse(propsJson) as Record<string, unknown>;
+      const token = createLiveTargetAttestation({ component, props, target }, { request });
+      return `${target}#${component}@${token}:${propsJson}`;
+    })
+    .join('; ');
 }
 
 function renderAddToCartFailureFragment(

@@ -171,9 +171,7 @@ export function hasUnsafeCssUrl(value: string): boolean {
 /** @internal CSS text backstop for parsed server/browser fragment attributes. */
 export function hasUnsafeCssText(value: string): boolean {
   return (
-    hasUnsafeCssUrl(value) ||
-    /\bexpression\s*\(/i.test(value) ||
-    /-moz-binding\s*:/i.test(value)
+    hasUnsafeCssUrl(value) || /\bexpression\s*\(/i.test(value) || /-moz-binding\s*:/i.test(value)
   );
 }
 

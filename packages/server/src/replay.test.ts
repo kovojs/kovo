@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
-import { renderMutationResponse } from './mutation.js';
+import { renderMutationResponse as renderMutationResponseBase } from './mutation.js';
 import { query } from './query.js';
 import {
   createMemoryMutationReplayStore,
@@ -12,6 +12,22 @@ import {
 } from './replay.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
+
+const replayTestBuildToken = 'replay-test-build';
+
+function withReplayTestBuildToken<T extends { buildToken?: string }>(
+  request: T,
+): T & { buildToken: string } {
+  return { buildToken: replayTestBuildToken, ...request };
+}
+
+function renderMutationResponse(
+  ...[definition, request]: Parameters<typeof renderMutationResponseBase>
+): ReturnType<typeof renderMutationResponseBase> {
+  return renderMutationResponseBase(definition, withReplayTestBuildToken(request)) as ReturnType<
+    typeof renderMutationResponseBase
+  >;
+}
 
 function deferred<Value = void>(): {
   promise: Promise<Value>;
@@ -97,6 +113,7 @@ describe('server mutation response replay', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'replay-test-build',
         'Kovo-Changes': '[{"domain":"cart"}]',
         'Kovo-Idem': 'idem_01',
         Vary: 'Cookie',
@@ -378,6 +395,7 @@ describe('server mutation response replay', () => {
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Build': 'replay-test-build',
           'Kovo-Changes': '[{"domain":"cart"}]',
           'Kovo-Idem': 'idem_pending_query',
           Vary: 'Cookie',
@@ -389,6 +407,7 @@ describe('server mutation response replay', () => {
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Build': 'replay-test-build',
           'Kovo-Changes': '[{"domain":"cart"}]',
           'Kovo-Idem': 'idem_pending_query',
           Vary: 'Cookie',
@@ -451,6 +470,7 @@ describe('server mutation response replay', () => {
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Build': 'replay-test-build',
           'Kovo-Changes': '[{"domain":"cart"}]',
           'Kovo-Idem': 'idem_pending_fragment',
           Vary: 'Cookie',
@@ -462,6 +482,7 @@ describe('server mutation response replay', () => {
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Build': 'replay-test-build',
           'Kovo-Changes': '[{"domain":"cart"}]',
           'Kovo-Idem': 'idem_pending_fragment',
           Vary: 'Cookie',

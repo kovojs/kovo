@@ -116,8 +116,11 @@ describe('@kovojs/test server fixture facts', () => {
       fragmentResponse: {
         body: '<kovo-query name="cart" key="cart:c1">{"cartId":"c1"}</kovo-query>',
         headers: {
+          'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          'Kovo-Build': 'conformance-server-test-build',
           'Kovo-Changes': '[{"domain":"cart"}]',
+          Vary: 'Cookie',
         },
         status: 200,
       },
@@ -156,7 +159,11 @@ describe('@kovojs/test server fixture facts', () => {
       },
       missingRegistryQuery: {
         body: 'Not Found',
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        headers: {
+          'Cache-Control': 'private, no-store',
+          'Content-Type': 'text/plain; charset=utf-8',
+          Vary: 'Cookie',
+        },
         status: 404,
       },
       success: {
@@ -242,7 +249,11 @@ describe('@kovojs/test server fixture facts', () => {
       },
       failure: {
         body: '<kovo-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/styles.css"><form class="cart-form-panel"><output role="alert">Only 0 left.</output></form></kovo-fragment>',
-        headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+        headers: {
+          'Cache-Control': 'private, no-store',
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          Vary: 'Cookie',
+        },
         status: 422,
       },
       pageHints: {
@@ -390,8 +401,11 @@ describe('@kovojs/test server fixture facts', () => {
     expect(fact.fragmentFailure).toEqual({
       body: '<kovo-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/styles.css"><section role="alert">fragment failed</section></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'conformance-server-test-build',
         'Kovo-Changes': '[]',
+        Vary: 'Cookie',
       },
       status: 200,
     });

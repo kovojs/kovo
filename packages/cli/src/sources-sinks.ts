@@ -393,7 +393,16 @@ function isAdversarialScanFile(displayFile: string): boolean {
   return true;
 }
 
-const adversarialScanExtensions = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
+const adversarialScanExtensions = new Set([
+  '.cjs',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.mts',
+  '.ts',
+  '.tsx',
+]);
 
 /**
  * Path fragments excluded from the adversarial pass: files whose job is to *describe* dangerous
@@ -432,7 +441,10 @@ function substringLexeme(token: string): UnregisteredSinkLexeme {
 function regexLexeme(token: string, pattern: RegExp): UnregisteredSinkLexeme {
   return {
     match: (text) => {
-      const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
+      const re = new RegExp(
+        pattern.source,
+        pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`,
+      );
       let count = 0;
       while (re.exec(text) !== null) count += 1;
       return count;
