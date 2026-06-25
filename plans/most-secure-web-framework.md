@@ -164,7 +164,7 @@ packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/sql-safety-sta
       graph subset now enforces declared write capabilities for matching framework-owned tool rows. Remaining
       gap: broader analyzer integration beyond the framework-owned `tool()` boundary.
 
-- [ ] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
+- [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
       secrets can't reach the wire (KV435) but a `secret`/confidential value can be written to a plaintext DB
       column. Add a `confidentialAtRest` column classification; extend the KV438 write-provenance engine so a
@@ -172,6 +172,9 @@ packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/sql-safety-sta
       _Trade-off:_ anchor the gate on the **destination column declaration**, not on `secret()` _source_
       provenance (provenance dies at `.reveal()` — that framing is an unsound over-claim and must be dropped). The
       cryptographic guarantee itself is runtime-DiD.
+      Evidence: `packages/drizzle/src/static/derivation.ts` gates declared `confidentialAtRest` destination
+      columns on the real `@kovojs/server` `encryptAtRest` sink, `packages/server/src/confidential-at-rest.ts`
+      provides the AES-256-GCM runtime sink, and the focused confidential-at-rest/API barrel Vitest suite passed.
 
 - [x] **OPP-21 — Non-secret over-serialization gate.** by-construction (shape/intentionality, **not**
       confidentiality) · lev 5 · M · breaking. KV435 catches secret columns on the wire, but a whole DB row of

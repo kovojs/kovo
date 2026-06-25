@@ -16,6 +16,7 @@ import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
 import * as agentToolApi from '../agent-tool.js';
 import * as writeGovernanceApi from '../write-governance.js';
+import * as confidentialAtRestApi from '../confidential-at-rest.js';
 import * as capabilityUrlApi from '../capability-url.js';
 import * as capabilityRouteApi from '../capability-route.js';
 import * as egressApi from '../egress.js';
@@ -85,6 +86,10 @@ type RootStaticExportResult = import('../index.js').StaticExportResult;
 type RootStaticExportDiagnostic = import('../index.js').StaticExportDiagnostic;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootStaticExportDiagnosticSeverity = import('../index.js').StaticExportDiagnosticSeverity;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootEncryptedAtRest = import('../index.js').EncryptedAtRest;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootEncryptAtRestOptions = import('../index.js').EncryptAtRestOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalKovoAppShellViteDevPluginFactory =
   typeof import('@kovojs/server/internal/app-shell-vite').kovoAppShellViteDevPlugin;
@@ -443,6 +448,9 @@ describe('server app-shell public API barrels', () => {
       adminAssign: writeGovernanceApi.adminAssign,
       drainAdminAssignFacts: writeGovernanceApi.drainAdminAssignFacts,
       serverValue: writeGovernanceApi.serverValue,
+      // SPEC.md §6.6 / plans/most-secure-web-framework.md OPP-04: app authors
+      // satisfy confidential-at-rest write gates with this authenticated-encryption sink.
+      encryptAtRest: confidentialAtRestApi.encryptAtRest,
       kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       toNodeHandler: nodeSourceApi.toNodeHandler,
@@ -468,6 +476,7 @@ describe('server app-shell public API barrels', () => {
       viteDevApi.createKovoAppShellViteDevIntegration,
     );
     expect(publicApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
+    expect(publicApi.encryptAtRest).toBe(confidentialAtRestApi.encryptAtRest);
     expect(packageRootApi.createKovoAppShellViteDevIntegration).toBe(
       viteDevApi.createKovoAppShellViteDevIntegration,
     );
