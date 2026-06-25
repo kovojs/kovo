@@ -233,26 +233,20 @@ data-plane security.
 
 ### Phase 2: harden render-plan and generated-output ABI
 
-- [ ] Make the render-plan fingerprint mandatory across compiler, Vite build, static export, server
+- [x] Make the render-plan fingerprint mandatory across compiler, Vite build, static export, server
       registry, full-page documents, mutation deltas, full responses, and `/_q` responses.
-  - Evidence: server `buildToken()` folds `renderPlanFingerprint` only if supplied; `createKovoAppShellBuild`
-    registers modules without setting it.
-  - Partial slice evidence: `pnpm exec vitest --run packages/server/src/client-modules.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-build.test.ts`
-    now proves compiled app-shell client modules fail without `renderPlanFingerprint`, and a
-    shape-only fingerprint change moves the registry build token, built client href, and full-page
-    document token.
-  - Remaining gap: mutation deltas, full responses, static export replay breadth, and `/_q`
-    responses still need end-to-end render-plan token threading proof.
-- [ ] Add an end-to-end test where query shape or render-plan grammar changes while client module
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/server/src/vite-build.test.ts packages/server/src/mutation-delta.test.ts packages/server/src/app.test.ts packages/server/src/query-endpoint.test.ts --reporter verbose`
+    passes after app query/mutation dispatch always thread `app.clientModules.buildToken()`,
+    successful mutation wire responses fail closed without a token, and Vite build/static export
+    replay prove the compiler render-plan fingerprint reaches registry tokens, document meta,
+    mutation responses, and `/_q` responses.
+- [x] Add an end-to-end test where query shape or render-plan grammar changes while client module
       bytes remain identical, and prove all mandatory tokens/hrefs move.
-  - Evidence: current server tests cover manual registry fingerprints, not compiler-to-server
-    pipeline threading.
-  - Partial slice evidence: `packages/server/src/vite-build.test.ts` covers identical compiled
-    client module bytes with different render-plan fingerprints and proves the build token, client
-    href, and document meta token move through the app-shell build path.
-  - Remaining gap: the test uses synthetic core fingerprints at the server boundary; a
-    compiler-to-server fixture should consume `CompileResult.renderPlanFingerprint`, and mutation
-    plus `/_q` token coverage remains open.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/server/src/vite-build.test.ts packages/server/src/mutation-delta.test.ts packages/server/src/app.test.ts packages/server/src/query-endpoint.test.ts --reporter verbose`
+    passes with `packages/server/src/vite-build.test.ts` compiling two same-client-byte component
+    builds, feeding `CompileResult.renderPlanFingerprint` into the app-shell build, and proving the
+    client href, document token, static-export document token, mutation response token, and `/_q`
+    response token all move.
 - [x] Move client module URL/version encoding and decoding into one shared internal ABI helper used
       by compiler emit, Vite dev serving, and server registry serving.
   - Evidence: `pnpm exec vitest --configLoader runner --run packages/server/src/client-modules.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/output-context-security.test.ts`
@@ -368,8 +362,10 @@ Do not claim this remediation complete until all of the following are true:
 
 - [ ] Every Phase 0 adversarial case has a checked-in regression test and a blocking diagnostic or
       fail-closed compile error.
-- [ ] A shape-only render-plan change moves the compiler href, document token, mutation response
+- [x] A shape-only render-plan change moves the compiler href, document token, mutation response
       token, full response token, and query response token in an end-to-end test.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/server/src/vite-build.test.ts packages/server/src/mutation-delta.test.ts packages/server/src/app.test.ts packages/server/src/query-endpoint.test.ts --reporter verbose`
+    passes with the compiler-to-server render-plan fixture in `packages/server/src/vite-build.test.ts`.
 - [ ] Missing/conflicting query-shape facts cannot silently suppress `KV435` or produce stale
       render-plan tokens in production/check modes.
 - [ ] Route, query, mutation, endpoint, and webhook access posture all appear in one app graph

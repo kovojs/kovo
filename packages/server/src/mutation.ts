@@ -489,12 +489,11 @@ async function renderSuccessfulMutationWireResponse<
     )),
   ];
 
-  // Kovo-Build header: present on every 200 mutation response when a build token
-  // is known, so the client can detect deploy skew (SPEC §5.1, §9.1.1).
-  const buildHeaders: MutationResponseHeaders =
-    wireRequest.buildToken !== undefined && wireRequest.buildToken !== ''
-      ? { 'Kovo-Build': wireRequest.buildToken }
-      : {};
+  // SPEC §5.2.1 rule 2(c): enhanced mutation/full fragment responses are build-scoped
+  // payloads, so a successful response must carry the render-plan token.
+  const buildHeaders: MutationResponseHeaders = {
+    'Kovo-Build': requiredMutationBuildToken(wireRequest),
+  };
 
   return {
     body: [...queryChunks, ...fragmentChunks].join('\n'),
@@ -508,6 +507,16 @@ async function renderSuccessfulMutationWireResponse<
     ),
     status: 200,
   };
+}
+
+function requiredMutationBuildToken<Request>(wireRequest: MutationWireRequest<Request>): string {
+  if (wireRequest.buildToken !== undefined && wireRequest.buildToken !== '') {
+    return wireRequest.buildToken;
+  }
+
+  throw new TypeError(
+    'renderMutationResponse() requires a non-empty buildToken for successful mutation wire responses. SPEC §5.2.1 requires every mutation delta/full response to carry the render-plan token.',
+  );
 }
 
 function mutationRenderErrorResponse<Request>(
