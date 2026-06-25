@@ -264,6 +264,46 @@ describe('server endpoints', () => {
     );
   });
 
+  it('verifies raw endpoint response posture when runtime verification is enabled', async () => {
+    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
+    try {
+      const mismatched = endpoint('/machine/posture-bad', {
+        csrf: false,
+        csrfJustification: 'runtime posture verification test',
+        handler: () => new Response('{"ok":true}', { headers: { 'Content-Type': 'text/plain' } }),
+        method: 'POST',
+        reason: 'runtime posture verification test',
+        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+      });
+      await expect(
+        runEndpoint(
+          mismatched,
+          new Request('https://example.test/machine/posture-bad', { method: 'POST' }),
+        ),
+      ).rejects.toThrow(/response posture mismatch/u);
+
+      const matched = endpoint('/machine/posture-ok', {
+        csrf: false,
+        csrfJustification: 'runtime posture verification test',
+        handler: () =>
+          Response.json({ ok: true }, { headers: { 'Cache-Control': 'private, no-store' } }),
+        method: 'POST',
+        reason: 'runtime posture verification test',
+        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+      });
+      await expect(
+        runEndpoint(
+          matched,
+          new Request('https://example.test/machine/posture-ok', { method: 'POST' }),
+        ),
+      ).resolves.toMatchObject({ status: 200 });
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
+    }
+  });
+
   it('matches exact and prefix endpoint mounts without routing side effects', () => {
     const exact = endpoint('/downloads/orders.bin', {
       handler: () => new Response('orders'),

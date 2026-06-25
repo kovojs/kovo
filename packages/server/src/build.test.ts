@@ -487,12 +487,13 @@ export default async function handler(request) {
       try {
         const routeResponse = await fetch(`${baseUrl}/hello?cart=1`, {
           headers: {
+            // SPEC §9.5: generated Node output must not trust forwarded scheme headers by default.
             'x-forwarded-proto': 'https',
             'x-from-test': 'route-header',
           },
         });
         await expect(routeResponse.text()).resolves.toBe(
-          `route:/hello:https://${new URL(baseUrl).host}:route-header`,
+          `route:/hello:http://${new URL(baseUrl).host}:route-header`,
         );
         expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
 

@@ -9,6 +9,7 @@ import type {
   EndpointMount,
 } from './endpoint.js';
 import type { LayoutDeclaration, RouteDeclaration } from './route.js';
+import type { WebhookDeclaration } from './webhook.js';
 
 /**
  * @internal Build the Phase 2 access ledger from an assembled app.
@@ -80,6 +81,16 @@ function endpointAccessFact(
   const source = webhook ? 'webhook' : 'auth';
   const auth = endpoint.auth;
   const detail = endpointAccessDetail(endpoint, auth);
+  if (endpoint.access?.kind === 'verified-machine-auth' && !hasExecutableMachineAuth(endpoint)) {
+    return {
+      decision: 'missing',
+      detail: `access=verified-machine-auth audit-only-without-executable-verifier ${detail}`,
+      kind,
+      name,
+      source: 'access',
+    };
+  }
+
   const explicit = explicitAccessFact(kind, name, endpoint.access);
   if (explicit) {
     return {
@@ -99,7 +110,7 @@ function endpointAccessFact(
     };
   }
 
-  if (auth?.kind === 'custom' || auth?.kind === 'verifier') {
+  if (hasExecutableMachineAuth(endpoint)) {
     return {
       decision: 'verified',
       detail,
@@ -205,16 +216,22 @@ function routeGuardSource(
 
 function isWebhookEndpoint(
   endpoint: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
-): endpoint is EndpointDeclaration<string, EndpointMethod, EndpointMount> & {
-  name: string;
-  webhook: true;
-} {
+): endpoint is WebhookDeclaration<string, string, any, any, any> {
   return (
     'webhook' in endpoint &&
     endpoint.webhook === true &&
     'name' in endpoint &&
     typeof endpoint.name === 'string'
   );
+}
+
+function hasExecutableMachineAuth(
+  endpoint: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+): boolean {
+  if (isWebhookEndpoint(endpoint)) {
+    return endpoint.webhookDefinition.verify !== 'none';
+  }
+  return endpoint.auth?.kind !== 'none' && endpoint.auth?.verify !== undefined;
 }
 
 function compareAccessFact(left: AccessExplainFact, right: AccessExplainFact): number {

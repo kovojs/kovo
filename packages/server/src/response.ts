@@ -477,22 +477,33 @@ function routeResponseOutcome(
 }
 
 function routeOutcomeHeaders(outcome: RouteResponseOutcome): Record<string, string> {
-  // Security finding M1: file/stream bodies can carry a sniffable/scriptable
-  // content type (e.g. SVG-with-script served `inline`). Default to
-  // `X-Content-Type-Options: nosniff` so the browser honors the declared type
-  // instead of sniffing. Authors may override by setting the header explicitly
-  // (matched case-insensitively below).
-  const authorSetNosniff = outcome.headers
-    ? Object.keys(outcome.headers).some((name) => name.toLowerCase() === 'x-content-type-options')
-    : false;
-
   return {
+    ...safeRouteOutcomeHeaders(outcome.headers),
     'Content-Disposition': outcome.contentDisposition,
     'Content-Type': outcome.contentType,
-    ...(authorSetNosniff ? {} : { 'X-Content-Type-Options': 'nosniff' }),
+    'X-Content-Type-Options': 'nosniff',
     ...(outcome.etag === undefined ? {} : { ETag: outcome.etag }),
-    ...outcome.headers,
   };
+}
+
+const RESERVED_ROUTE_RESPONSE_HEADERS = new Set([
+  'content-disposition',
+  'content-type',
+  'etag',
+  'set-cookie',
+  'x-content-type-options',
+]);
+
+function safeRouteOutcomeHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> {
+  if (headers === undefined) return {};
+  const safeHeaders: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (RESERVED_ROUTE_RESPONSE_HEADERS.has(name.toLowerCase())) continue;
+    safeHeaders[name] = value;
+  }
+  return safeHeaders;
 }
 
 function escapeHeaderValue(value: string): string {

@@ -128,6 +128,11 @@ export interface AppRequestLimitOptions extends AppRequestRateLimitOptions {
   maxBodyBytes?: number | false;
   /** Optional IP key extractor used by the coarse per-IP limiter. */
   clientIp?: (request: Request) => string | undefined;
+  /**
+   * Trust forwarded client IP headers for the default per-IP limiter. Disabled by default;
+   * adapter/operator-owned proxy boundaries must opt in (SPEC §9.5).
+   */
+  trustedProxy?: boolean;
   /** Additional budgets applied to `/_m/<mutation>` requests. */
   mutations?: AppRequestRateLimitOptions;
   /** Additional budgets applied to `/_q/<query>` requests. */
@@ -152,6 +157,7 @@ export interface ResolvedAppRequestLimitOptions extends ResolvedAppRequestRateLi
   maxBodyBytes: number | false;
   mutations: ResolvedAppRequestRateLimitOptions;
   queries: ResolvedAppRequestRateLimitOptions;
+  trustedProxy: boolean;
 }
 
 /** Options for `createApp`: the routes, queries, mutations, endpoints, document, CSRF, and request providers. */

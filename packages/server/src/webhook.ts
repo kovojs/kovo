@@ -347,6 +347,7 @@ export async function runWebhook<
           runHandler,
         )
       : await runHandler(undefined as Tx);
+    assertWebhookReplayPosture(declaration, changes);
 
     const response = storeWebhookReplay(
       declaration.webhookDefinition.replayStore,
@@ -394,6 +395,22 @@ export async function runWebhook<
       response: webhookResponse(500, 'Internal Server Error'),
     };
   }
+}
+
+function assertWebhookReplayPosture(
+  declaration: WebhookDeclaration<string, string, any, any, any>,
+  changes: readonly ChangeRecord[],
+): void {
+  if (changes.length === 0) return;
+  if (
+    declaration.webhookDefinition.idempotency !== undefined &&
+    declaration.webhookDefinition.replayStore !== undefined
+  ) {
+    return;
+  }
+  throw new Error(
+    `Webhook "${declaration.name}" recorded write changes without idempotency and replayStore posture.`,
+  );
 }
 
 type WebhookVerificationFields = WebhookVerifiedDefinition | WebhookNoneDefinition;
@@ -570,14 +587,17 @@ function responseFromWire(response: WebhookWireResponse): Response {
 
 function webhookResponse(status: 400 | 401 | 500, body: string): Response {
   return new Response(body, {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    headers: { 'Cache-Control': 'private, no-store', 'Content-Type': 'text/plain; charset=utf-8' },
     status,
   });
 }
 
 function webhookJsonResponse(status: 422, body: unknown): Response {
   return new Response(JSON.stringify(body), {
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    headers: {
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'application/json; charset=utf-8',
+    },
     status,
   });
 }
@@ -587,6 +607,7 @@ function webhookSuccessHeaders(
   idem: string | undefined,
 ): Record<string, string> {
   return {
+    'Cache-Control': 'private, no-store',
     'Content-Type': 'text/plain; charset=utf-8',
     ...webhookResponseHeaders(idem),
     ...(changes.length === 0 ? {} : { 'Kovo-Changes': webhookChangeHeader(changes) }),

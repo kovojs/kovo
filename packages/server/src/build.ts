@@ -404,7 +404,7 @@ function nodeRequestUrl(nodeRequest) {
   if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) return rawUrl;
 
   const host = nodeRequest.headers.host ?? '127.0.0.1';
-  const proto = firstHeaderValue(nodeRequest.headers['x-forwarded-proto']) ?? 'https';
+  const proto = 'https';
   return new URL(rawUrl, proto + '://' + host).href;
 }
 
@@ -694,14 +694,16 @@ function nodeRequestUrl(nodeRequest, options) {
   const origin =
     typeof options.origin === 'function'
       ? options.origin(nodeRequest)
-      : (options.origin ?? defaultOrigin(nodeRequest));
+      : (options.origin ?? defaultOrigin(nodeRequest, options));
 
   return new URL(rawUrl, origin).href;
 }
 
-function defaultOrigin(nodeRequest) {
+function defaultOrigin(nodeRequest, options) {
   const host = nodeRequest.headers.host ?? '127.0.0.1';
-  const forwardedProto = firstHeaderValue(nodeRequest.headers['x-forwarded-proto']);
+  const forwardedProto = options.trustedProxy
+    ? firstHeaderValue(nodeRequest.headers['x-forwarded-proto'])
+    : undefined;
   const proto =
     forwardedProto ?? (nodeRequest.socket && nodeRequest.socket.encrypted ? 'https' : 'http');
 
