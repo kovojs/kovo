@@ -253,7 +253,9 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
     if (existsSync(target)) {
       const current = readFileSync(target, 'utf8');
       if (current === entry.source) {
-        lines.push(`SKIP ${component} path=${JSON.stringify(target)} reason=already-current`);
+        lines.push(
+          `SKIP ${component} path=${JSON.stringify(target)} reason=already-current package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
+        );
         continue;
       }
 
@@ -264,7 +266,9 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
     }
 
     writeFileSync(target, entry.source, 'utf8');
-    lines.push(`ADD ${component} path=${JSON.stringify(target)} source=tsx`);
+    lines.push(
+      `ADD ${component} path=${JSON.stringify(target)} source=tsx package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
+    );
   }
 
   lines.push(

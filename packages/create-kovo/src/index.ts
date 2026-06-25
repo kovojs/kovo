@@ -39,10 +39,12 @@ interface TemplateFile {
 
 const templateFiles: readonly TemplateFile[] = [
   { path: 'package.json', sqlitePath: 'package.sqlite.json' },
+  'tsconfig.json',
   'kovo.config.ts',
   'vite.config.ts',
   '.github/workflows/ci.yml',
   { path: 'README.md', sqlitePath: 'README.sqlite.md' },
+  'scripts/check-sound-subset.mjs',
   { path: 'src/schema.ts', sqlitePath: 'src/schema.sqlite.ts' },
   { path: 'src/db.ts', sqlitePath: 'src/db.sqlite.ts' },
   { path: 'src/auth.ts', sqlitePath: 'src/auth.sqlite.ts' },
@@ -106,7 +108,7 @@ const gitignoreEntries = ['node_modules', 'dist', '.env', '.env.*', '!.env.examp
 export function createKovoProject(options: CreateKovoOptions): CreateKovoProject {
   const packageName = normalizePackageName(options.name);
   const dialect = options.dialect ?? 'postgres';
-  const values = { name: packageName };
+  const values = templateValues(packageName);
   const csrfSecret = generateCsrfSecret();
   const demoPassword = generateDemoPassword();
 
@@ -204,6 +206,48 @@ function renderTemplate(source: string, values: Record<string, string>): string 
     }
     return value;
   });
+}
+
+function templateValues(name: string): Record<string, string> {
+  return {
+    kovo_better_auth_version: packageVersion('@kovojs/better-auth'),
+    kovo_browser_version: packageVersion('@kovojs/browser'),
+    kovo_cli_version: packageVersion('@kovojs/cli'),
+    kovo_core_version: packageVersion('@kovojs/core'),
+    kovo_drizzle_version: packageVersion('@kovojs/drizzle'),
+    kovo_server_version: packageVersion('@kovojs/server'),
+    kovo_style_version: packageVersion('@kovojs/style'),
+    kovo_ui_version: packageVersion('@kovojs/ui'),
+    name,
+    package_manager: rootPackageManager(),
+  };
+}
+
+function packageVersion(packageName: string): string {
+  if (!packageName.startsWith('@kovojs/')) {
+    throw new Error(`Unsupported create-kovo template package: ${packageName}`);
+  }
+  const pkg = readOwnPackageJson();
+  if (!pkg.version) {
+    throw new Error(`Missing package version for ${packageName}`);
+  }
+  return pkg.version;
+}
+
+function rootPackageManager(): string {
+  const pkg = readOwnPackageJson();
+  const packageManager = pkg.kovo?.starterPackageManager;
+  if (!packageManager) {
+    throw new Error('create-kovo package.json must declare kovo.starterPackageManager');
+  }
+  return packageManager;
+}
+
+function readOwnPackageJson(): { kovo?: { starterPackageManager?: string }; version?: string } {
+  return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+    kovo?: { starterPackageManager?: string };
+    version?: string;
+  };
 }
 
 function normalizePackageName(name: string): string {

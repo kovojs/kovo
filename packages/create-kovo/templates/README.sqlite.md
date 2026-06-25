@@ -43,6 +43,11 @@ compiles the app and serves route documents and `/c/` handler modules (SPEC.md
 §9.5). The compiler-derived dependency graph is auditable with `kovo check` and
 `kovo explain` against the built app — there is no hand-maintained graph file.
 
+`npm run check` also enforces the SPEC.md §6.6 sound TypeScript subset for app
+source: strict TypeScript plus local bans on `any`, non-null assertions, and
+unchecked `as` casts. Keep deliberate escapes outside starter app code until
+they have a framework-owned audit path.
+
 ## Deploying
 
 `kovo build ./src/app.tsx` emits a self-contained server under `dist/server`

@@ -20,7 +20,12 @@ describe('kovo add', () => {
 
     const manifest = JSON.parse(
       readFileSync(new URL('../../ui/package.json', import.meta.url), 'utf8'),
-    ) as { exports: Record<string, string>; kovo: { vendoredSource: boolean }; name: string };
+    ) as {
+      exports: Record<string, string>;
+      kovo: { vendoredSource: boolean; vendoredSourceHashes: Record<string, string> };
+      name: string;
+      version: string;
+    };
     const cliManifest = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
     ) as {
@@ -38,6 +43,9 @@ describe('kovo add', () => {
 
     for (const [name, entry] of Object.entries(vendoredUiComponents)) {
       expect(entry.fileName).toBe(`${name}.tsx`);
+      expect(entry.packageVersion).toBe(manifest.version);
+      expect(entry.sourceHash).toBe(manifest.kovo.vendoredSourceHashes[name]);
+      expect(entry.sourceHash).toMatch(/^sha256-/);
       expect(entry.source).toBe(
         vendoredUiComponentSource(
           readFileSync(new URL(`../../ui/src/${name}.tsx`, import.meta.url), 'utf8'),
@@ -120,8 +128,9 @@ describe('kovo add', () => {
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('kovo-add/v1\n');
       expect(output).toContain(
-        `ADD accordion path=${JSON.stringify(join(outDir, 'accordion.tsx'))} source=tsx`,
+        `ADD accordion path=${JSON.stringify(join(outDir, 'accordion.tsx'))} source=tsx package=@kovojs/ui@`,
       );
+      expect(output).toContain('sourceHash=sha256-');
       expect(output).toContain(
         `ADD alert path=${JSON.stringify(join(outDir, 'alert.tsx'))} source=tsx`,
       );

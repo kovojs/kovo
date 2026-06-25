@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import {
@@ -33,8 +34,14 @@ for (const pkg of releasePackages()) {
     execFileSync('tar', ['-xOf', tarballPath, 'package/package.json'], { encoding: 'utf8' }),
   );
   assertNoWorkspaceProtocols(packedManifest, `${pkg.name} packed manifest`);
+  assertPackedLifecyclePolicy(packedManifest, pkg.name);
+  const files = tarEntries(tarballPath);
   packedPackages.push({
+    dependencies: dependencySnapshot(packedManifest),
+    files,
+    manifest: packedManifest,
     name: pkg.name,
+    sha512: `sha512-${sha512(readFileSync(tarballPath))}`,
     version: pkg.version,
     tarball: path.relative(repoRoot, tarballPath),
   });
@@ -42,3 +49,46 @@ for (const pkg of releasePackages()) {
 
 writeFileSync(manifestPath, `${JSON.stringify({ packages: packedPackages }, null, 2)}\n`);
 console.log(`Packed ${packedPackages.length} public packages into ${tarballDir}`);
+
+function sha512(bytes) {
+  return createHash('sha512').update(bytes).digest('base64');
+}
+
+function tarEntries(tarballPath) {
+  return execFileSync('tar', ['-tf', tarballPath], { encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean)
+    .sort();
+}
+
+function dependencySnapshot(manifest) {
+  const snapshot = {};
+  for (const key of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+    if (manifest[key]) snapshot[key] = manifest[key];
+  }
+  return snapshot;
+}
+
+function assertPackedLifecyclePolicy(manifest, label) {
+  const allowed = { prepack: 'pnpm run build:dist' };
+  const lifecycle = new Set([
+    'preinstall',
+    'install',
+    'postinstall',
+    'prepublish',
+    'prepublishOnly',
+    'prepare',
+    'prepack',
+    'postpack',
+    'publish',
+    'postpublish',
+  ]);
+  const findings = [];
+  for (const [name, command] of Object.entries(manifest.scripts ?? {})) {
+    if (!lifecycle.has(name)) continue;
+    if (allowed[name] !== command) findings.push(`scripts.${name}=${command}`);
+  }
+  if (findings.length > 0) {
+    throw new Error(`${label} packed manifest contains unapproved lifecycle scripts:\n  ${findings.join('\n  ')}`);
+  }
+}

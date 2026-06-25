@@ -50,16 +50,17 @@ jobs:
       - run: vp install
 
       - name: Ensure trusted-publishing npm CLI
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.6.4
 
       - name: Verify release input
         run: vp exec pnpm exec node scripts/verify-release-input.mjs "$VERSION"
         env:
+          GH_TOKEN: ${{ github.token }}
+          REQUIRED_RELEASE_CHECKS: check
           VERSION: ${{ inputs.version }}
 
-      # TODO: Verify the required CI workflow succeeded for this exact commit
-      # before publishing. Keep release-local checks below focused on the package
-      # artifacts that this workflow is about to publish.
+      - name: Supply-chain policy gates
+        run: vp exec pnpm run check:supply-chain
 
       - name: Build publish artifacts
         run: vp exec pnpm run check:publish
