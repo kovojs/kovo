@@ -93,15 +93,11 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
     `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/build.test.ts`
     covers forwarded IP/proto use only behind trusted-proxy opt-in.
 
-- [ ] Bind idempotency replay records to a canonical request fingerprint and mint fresh enhanced
+- [x] Bind idempotency replay records to a canonical request fingerprint and mint fresh enhanced
   submit tokens per logical submit.
-  - Evidence: browser enhanced submit prefers hidden `Kovo-Idem` in
-    `packages/browser/src/mutation-fetch.ts:72` and inline loader code; server replay keys by
-    scope+idem in `packages/server/src/replay.ts:384`.
-  - Probe: wire explorer showed two posts with the same idem and different bodies replayed the
-    first response and invoked the handler once.
-  - Acceptance: same-idem/different-body returns a typed conflict, and enhanced submits update or
-    replace the submitted idem token before each logical submission.
+  - Evidence: `3537a49f` plus integrated
+    `pnpm exec vitest --run packages/browser/src/inline-loader-enhanced-submit.test.ts packages/browser/src/loader-enhanced-mutation-submit.test.ts packages/browser/src/mutation-fetch.test.ts packages/browser/src/mutation-form.test.ts packages/browser/src/mutation-submit.test.ts packages/server/src/replay.test.ts packages/server/src/mutation-endpoint.test.ts`
+    covers fresh enhanced-submit idempotency tokens and same-idem/different-body replay conflicts.
 
 - [x] Treat build-token mismatch or missing response token as a whole-response miss.
   - Evidence: `016cc57f` plus
@@ -109,37 +105,26 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
     covers mutation, broadcast, and typed-read token misses; `pnpm --filter @kovojs/browser run
     check:inline-loader` proves generated inline-loader parity.
 
-- [ ] Sign or attest `Kovo-Live-Targets` component/props descriptors.
-  - Evidence: browser serializes descriptors from DOM attributes in
-    `packages/browser/src/mutation-targets.ts:47`; server parses component/props in
-    `packages/server/src/mutation-wire.ts:439`, renders by component in
-    `packages/server/src/mutation/targets.ts:214`, and derives query inputs from those props at
-    `:378`.
-  - Acceptance: component id and props are server-minted, HMAC-bound to the render-plan token and
-    document/session, or stored in a server-side descriptor ledger; unattested descriptors are
-    dropped before query execution.
+- [x] Sign or attest `Kovo-Live-Targets` component/props descriptors.
+  - Evidence: `3537a49f` plus integrated
+    `pnpm exec vitest --run packages/browser/src/mutation-targets.test.ts packages/server/src/app-document.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation.test.ts`
+    covers JSX `kovo-live-token` stamping, DOM forwarding, server-side HMAC verification, and
+    dropping unattested descriptors before query execution.
 
-- [ ] Intercept enhanced forms only for same-origin `/_m/` POST mutation targets.
-  - Evidence: `packages/browser/src/mutation-form.ts:4` selects any enhanced/data-mutation form,
-    `packages/browser/src/mutation-submit.ts:81` prevents default before eligibility checks, and
-    `packages/browser/src/mutation-fetch.ts:93` fetches the authored action/method.
-  - Acceptance: runtime declines non-POST, cross-origin, or non-`/_m/` enhanced forms, and compiler
-    rejects or normalizes authored mutation form methods.
+- [x] Intercept enhanced forms only for same-origin `/_m/` POST mutation targets.
+  - Evidence: `3537a49f` plus integrated
+    `pnpm exec vitest --run packages/browser/src/mutation-form.test.ts packages/browser/src/mutation-fetch.test.ts packages/browser/src/mutation-submit.test.ts packages/browser/src/inline-loader-enhanced-submit.test.ts`
+    covers declining non-POST, cross-origin, and non-`/_m/` enhanced forms before interception.
 
-- [ ] Stamp every mutation wire response and every `/_q` response with private no-store posture.
-  - Evidence: enhanced mutation headers at `packages/server/src/mutation.ts:1174` lack explicit
-    `Cache-Control`/`Vary`; `packages/server/src/query.ts:465` returns unknown-query 404 without
-    the success-path private no-store headers.
-  - Acceptance: 200/4xx/5xx enhanced mutation, broadcast, and all `/_q` responses carry
-    `Cache-Control: private, no-store` and `Vary: Cookie` unless a stricter no-store posture is
-    already present.
+- [x] Stamp every mutation wire response and every `/_q` response with private no-store posture.
+  - Evidence: `3537a49f` plus integrated
+    `pnpm exec vitest --run packages/server/src/app-mutation-request.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/query-endpoint.test.ts`
+    covers enhanced mutation, broadcast, and typed-read success/error cache posture.
 
-- [ ] Replace broadcast principal fingerprints with server-secret or opaque nonces.
-  - Evidence: `packages/server/src/app-document.ts:167` emits `kovo-session`, `:197` falls back to
-    request/session/user/first cookie, and `:220` hashes with short unsalted FNV-1a; browser
-    filtering trusts equality in `packages/browser/src/broadcast.ts:143`.
-  - Acceptance: cross-tab filtering uses an HMAC or random opaque nonce and does not derive
-    principals from the first cookie fallback when no authenticated identity exists.
+- [x] Replace broadcast principal fingerprints with server-secret or opaque nonces.
+  - Evidence: `3537a49f` plus integrated
+    `pnpm exec vitest --run packages/server/src/app-document.test.ts packages/browser/src/broadcast-replay.test.ts`
+    covers server-secret HMAC session fingerprints and removal of the first-cookie fallback.
 
 - [x] Require webhook idempotency/replay posture for write-reaching webhooks.
   - Evidence: `ec9967f8` plus
@@ -221,12 +206,12 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
     scripts/verify-release-input.mjs`, and inspected `.github/workflows/release.yml` using pinned
     npm and `vp exec pnpm` commands per `rules/github-workflows.md`.
 
-- [ ] Attest packed npm tarball content before publish.
-  - Current evidence: `e8565287` adds sha512/file-list/packed-manifest/lifecycle attestation to
-    pack/publish scripts; `node --check scripts/pack-public-packages.mjs` and
-    `node --check scripts/publish-packed-packages.mjs` passed.
-  - Remaining gap: `pnpm run check:publish` / real tarball packing has not been run in this
-    integration session, so the end-to-end tarball claim is not yet fully verified.
+- [x] Attest packed npm tarball content before publish.
+  - Evidence: `e8565287` plus integration commands `pnpm run check:publish`,
+    `node scripts/pack-public-packages.mjs`, and
+    `node scripts/publish-packed-packages.mjs --dry-run --tag secure-framework-2` built public
+    package dist targets, packed 13 tarballs, and reverified sha512/file-list/manifest
+    attestations before the dry-run publish step.
 
 - [x] Add dependency audit and build-script policy gates.
   - Evidence: `e8565287` plus `pnpm run check:supply-chain` and
@@ -258,9 +243,12 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
 
 ## Latest Verification
 
-- [x] Confirm main worktree production files remain untouched after writing this ledger.
-  - Evidence: `git status --short` shows only `?? plans/secure-framework-2.md`.
-- [x] Run `git diff --check`.
-  - Evidence: `git add -N plans/secure-framework-2.md` followed by
-    `git diff --check -- plans/secure-framework-2.md` produced no output; the intent marker was
-    removed with `git reset -q -- plans/secure-framework-2.md`.
+- [x] Run integrated server/data/browser/wire focused suites after merging delegated slices.
+  - Evidence: latest passing commands include server boundary tests
+    (`packages/server/src/app.test.ts packages/server/src/response.test.ts packages/server/src/access-graph.test.ts packages/server/src/endpoint.test.ts packages/server/src/webhook.test.ts packages/server/src/node.test.ts packages/server/src/build.test.ts`),
+    Drizzle/CLI governance tests, browser inline-loader generation, browser sink tests, compiler
+    output-security tests, and the 18-file mutation/live-target/replay suite.
+- [x] Run supply-chain publish and tarball attestation checks.
+  - Evidence: `pnpm run check:supply-chain`, `pnpm run check:publish`,
+    `node scripts/pack-public-packages.mjs`, and
+    `node scripts/publish-packed-packages.mjs --dry-run --tag secure-framework-2`.
