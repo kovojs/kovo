@@ -213,10 +213,14 @@ export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: H
  *   tabnabbing) while still allowing same-origin OAuth/payment popups to talk back.
  *   Deliberately NOT the stricter `same-origin` (which breaks popup-based flows) and
  *   NOT paired with `Cross-Origin-Embedder-Policy: require-corp` (breaks cross-origin
- *   subresources — explicitly out of scope).
+ *   subresources — explicitly out of scope). Document assembly appends the browser's
+ *   supported `report-to` parameter only when it also owns the matching Reporting API
+ *   endpoint headers.
  * - `Permissions-Policy` — deny-by-default for the high-risk ambient capabilities a
  *   content app virtually never needs. A conservative deny-all baseline; an app that
- *   uses one of these overrides the header on the route response.
+ *   uses one of these overrides the header on the route response. Permissions Policy
+ *   reporting is per-feature (`feature=();report-to=<group>`), so document assembly
+ *   adds only those per-feature hooks when the Reporting API group is present.
  * - `Origin-Agent-Cluster: ?1` — asks the browser to isolate the origin into its own
  *   agent cluster so same-site but cross-origin documents do not share process-global
  *   JS state. OPP-15 labels this runtime defense-in-depth, not a construction proof.

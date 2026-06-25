@@ -7,6 +7,7 @@ import { createApp, createRequestHandler } from './app.js';
 import { appRateLimitKeyCounts } from './app-load-shed.js';
 import { versionedClientModuleHref } from './client-modules.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
+import { kovoSecurityReportSnapshot, resetKovoSecurityReportsForTest } from './reporting.js';
 import { domain } from './domain.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
@@ -44,7 +45,8 @@ function expectReservedSystemResponsePosture(response: Response, buildToken: str
 
 describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
   it('accepts browser CSP reports on the reserved framework endpoint', async () => {
-    const handler = createRequestHandler(createApp());
+    const app = createApp();
+    const handler = createRequestHandler(app);
     const response = await handler(
       new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`, {
         body: JSON.stringify([{ type: 'csp-violation', body: { blockedURL: 'inline' } }]),
@@ -56,6 +58,9 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
     expect(response.status).toBe(204);
     expect(await response.text()).toBe('');
     expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(kovoSecurityReportSnapshot(app).aggregates).toMatchObject([
+      { count: 1, report: { blocked: 'inline', type: 'csp-violation' } },
+    ]);
   });
 
   it('accepts CSP reports even when the app body-size cap is smaller than the report', async () => {
@@ -69,6 +74,148 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
     );
 
     expect(response.status).toBe(204);
+  });
+
+  it('redacts report URLs and aggregates repeated report fingerprints', async () => {
+    const app = createApp();
+    const handler = createRequestHandler(app);
+    const body = [
+      {
+        body: {
+          blockedURL: 'https://cdn.example.test/script.js?token=secret#hash',
+          documentURL: 'https://app.example.test/orders?session=secret',
+          effectiveDirective: 'script-src',
+          sample: 'do not store attacker-controlled source samples',
+        },
+        type: 'csp-violation',
+        url: 'https://app.example.test/fallback?secret=1',
+        user_agent: 'do not store user agents',
+      },
+      {
+        body: {
+          blockedURL: 'https://cdn.example.test/script.js?other=secret',
+          documentURL: 'https://app.example.test/orders?other=secret',
+          effectiveDirective: 'script-src',
+        },
+        type: 'csp-violation',
+      },
+    ];
+
+    const response = await handler(
+      new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`, {
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/reports+json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(kovoSecurityReportSnapshot(app)).toMatchObject({
+      aggregates: [
+        {
+          count: 2,
+          report: {
+            blocked: 'https://cdn.example.test/script.js',
+            document: 'https://app.example.test/orders',
+            type: 'csp-violation',
+            violatedDirective: 'script-src',
+          },
+        },
+      ],
+      dropped: 0,
+    });
+  });
+
+  it('normalizes legacy CSP, COOP, and Permissions Policy reports without storing raw samples', async () => {
+    const app = createApp();
+    const handler = createRequestHandler(app);
+    await handler(
+      new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`, {
+        body: JSON.stringify([
+          {
+            'csp-report': {
+              'blocked-uri': 'data:text/html,secret',
+              'document-uri': 'https://app.example.test/account?secret=1',
+              'violated-directive': 'img-src',
+            },
+          },
+          {
+            body: {
+              disposition: 'enforce',
+              effectivePolicy: 'same-origin-allow-popups',
+              openerURL: 'https://opener.example.test/path?secret=1',
+            },
+            type: 'coop',
+          },
+          {
+            body: {
+              disposition: 'enforce',
+              featureId: 'camera',
+              sourceFile: 'https://app.example.test/app.js?secret=1',
+            },
+            type: 'permissions-policy-violation',
+          },
+        ]),
+        headers: { 'Content-Type': 'application/reports+json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(kovoSecurityReportSnapshot(app).aggregates).toMatchObject([
+      {
+        report: {
+          blocked: 'data:',
+          document: 'https://app.example.test/account',
+          type: 'csp-violation',
+          violatedDirective: 'img-src',
+        },
+      },
+      {
+        report: {
+          disposition: 'enforce',
+          effectivePolicy: 'same-origin-allow-popups',
+          type: 'coop',
+        },
+      },
+      {
+        report: {
+          disposition: 'enforce',
+          feature: 'camera',
+          type: 'permissions-policy-violation',
+        },
+      },
+    ]);
+  });
+
+  it('bounds per-request report items and drops malformed oversized input quietly', async () => {
+    const app = createApp();
+    const handler = createRequestHandler(app);
+    const reports = Array.from({ length: 25 }, (_unused, index) => ({
+      body: { blockedURL: `https://cdn.example.test/${index}.js` },
+      type: 'csp-violation',
+    }));
+
+    const many = await handler(
+      new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`, {
+        body: JSON.stringify(reports),
+        headers: { 'Content-Type': 'application/reports+json' },
+        method: 'POST',
+      }),
+    );
+    const oversized = await handler(
+      new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`, {
+        body: `{"type":"csp-violation","body":{"blockedURL":"${'x'.repeat(70_000)}"}}`,
+        headers: { 'Content-Type': 'application/reports+json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(many.status).toBe(204);
+    expect(oversized.status).toBe(204);
+    expect(kovoSecurityReportSnapshot(app).aggregates).toHaveLength(20);
+    expect(kovoSecurityReportSnapshot(app).dropped).toBeGreaterThanOrEqual(6);
+    resetKovoSecurityReportsForTest(app);
+    expect(kovoSecurityReportSnapshot(app)).toEqual({ aggregates: [], dropped: 0 });
   });
 
   it('rejects non-POST CSP report requests without falling through to app routes', async () => {

@@ -82,9 +82,10 @@ describe('server static export app replay boundary', () => {
             'content-security-policy': staticExportDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             'referrer-policy': 'strict-origin-when-cross-origin',
-            'cross-origin-opener-policy': 'same-origin-allow-popups',
+            'cross-origin-opener-policy': 'same-origin-allow-popups; report-to="kovo-csp"',
             'origin-agent-cluster': '?1',
-            'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+            'permissions-policy':
+              'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
             ...staticExportReportingHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',

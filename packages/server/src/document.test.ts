@@ -306,9 +306,10 @@ describe('server app shell document assembly', () => {
     it('carries X-Frame-Options/COOP/OAC/Permissions-Policy/Referrer-Policy by default', () => {
       const wrapped = renderRouteDocumentResponse(htmlResponse());
       expect(wrapped.headers).toMatchObject({
-        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups; report-to="kovo-csp"',
         'Origin-Agent-Cluster': '?1',
-        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+        'Permissions-Policy':
+          'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
@@ -318,9 +319,10 @@ describe('server app shell document assembly', () => {
     it('also stamps the isolation baseline on error documents', () => {
       const error = renderErrorDocument({ status: 403 });
       expect(error.headers).toMatchObject({
-        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups; report-to="kovo-csp"',
         'Origin-Agent-Cluster': '?1',
-        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+        'Permissions-Policy':
+          'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
         'X-Frame-Options': 'DENY',
       });
     });
@@ -480,6 +482,10 @@ describe('server app shell document assembly', () => {
       expect(policy).toContain("base-uri 'self'");
       expect(policy).toContain("object-src 'none'");
       expect(policy).not.toContain('report-to');
+      expect(wrapped.headers['Cross-Origin-Opener-Policy']).toBe('same-origin-allow-popups');
+      expect(wrapped.headers['Permissions-Policy']).toBe(
+        'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+      );
       expect(wrapped.headers['Report-To']).toBeUndefined();
       expect(wrapped.headers['Reporting-Endpoints']).toBeUndefined();
       expect(wrapped.headers).not.toHaveProperty('Content-Security-Policy-Report-Only');

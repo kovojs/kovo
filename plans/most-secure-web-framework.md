@@ -273,15 +273,16 @@ packages/server/src/file.test.ts packages/server/src/response.test.ts` passed.
       Evidence: `packages/server/src/static-export-sri.ts` attaches `sha384` integrity where static export has
       first-party module/style bytes. `pnpm exec vitest run packages/server/src` passed.
 
-- [ ] **OPP-14 — Framework-owned Reporting pipeline (`report-to`).** audit-only · lev 6 · M · non-breaking.
+- [x] **OPP-14 — Framework-owned Reporting pipeline (`report-to`).** audit-only · lev 6 · M · non-breaking.
       Strict CSP ships with **no** reporting, so a blocked attack/regression emits zero signal — bad for
       AI-operated apps with no human watching. Emit `Reporting-Endpoints` + per-directive `report-to` (CSP/COOP/
       Permissions) to a framework endpoint; aggregate redacted reports; rescue the built-then-dropped KV236 events.
       _Trade-off:_ cheap observability that converts blind floors into auditable ones, but introduces an
       attacker-triggerable report channel that must be rate-limited and redacted.
-      Progress: default enforced CSP emits `report-to kovo-csp`, `Report-To`, and `Reporting-Endpoints`, plus a
-      reserved `POST /_kovo/reports/csp` collector. Remaining gap: COOP/Permissions reporting and report
-      aggregation/redaction/rate-limit semantics are not complete, so this item stays open.
+      Evidence: `packages/server/src/reporting.ts` implements the bounded redacted collector for CSP/COOP/
+      Permissions reports, and document assembly emits CSP `report-to`, COOP `report-to`, Permissions Policy
+      per-feature `report-to`, `Report-To`, and `Reporting-Endpoints`; focused reporting/header/static-export
+      tests and `pnpm run check:vp` passed. Aggregation is in-memory and browser-support dependent by design.
 
 - [x] **OPP-15 — Clear-Site-Data on logout + `Origin-Agent-Cluster: ?1`.** runtime-DiD · lev 4 · M ·
       non-breaking. Ship OAC `?1` now (one-line origin-keyed isolation). Emit `Clear-Site-Data:

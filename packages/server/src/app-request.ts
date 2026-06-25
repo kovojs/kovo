@@ -4,6 +4,7 @@ import { renderDiagnosticDocument } from './document-diagnostics.js';
 import { matchShellDispatch } from './shell.js';
 import { routeResponseToWebResponse } from './response.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
+import { kovoSecurityReportResponse } from './reporting.js';
 import type { KovoApp } from './app-types.js';
 import { appSystemResponse } from './app-system-response.js';
 import {
@@ -45,7 +46,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   if (loadShed) return loadShed;
 
   if (url.pathname === KOVO_CSP_REPORT_ENDPOINT) {
-    return cspReportResponse(request.method);
+    return kovoSecurityReportResponse(app, request);
   }
 
   const limitedRequest = requestWithBodyLimit(request, app.requestLimits.maxBodyBytes);
@@ -70,22 +71,6 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       request,
     );
   }
-}
-
-function cspReportResponse(method: string): Response {
-  if (method.toUpperCase() !== 'POST') {
-    return appSystemResponse(null, {
-      headers: { Allow: 'POST' },
-      status: 405,
-      surface: 'other',
-    });
-  }
-
-  return appSystemResponse(null, {
-    headers: { 'Cache-Control': 'no-store' },
-    status: 204,
-    surface: 'other',
-  });
 }
 
 function loadShedSurface(kind: string): LoadShedSurface {

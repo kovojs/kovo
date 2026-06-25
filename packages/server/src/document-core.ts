@@ -3,6 +3,7 @@ import {
   inlineKovoLoaderInstallerSource,
 } from '@kovojs/browser/internal/inline-loader';
 import {
+  KOVO_CSP_REPORT_GROUP,
   cspHashAttribute,
   cspSha256,
   mergeCspInlineMetadata,
@@ -381,7 +382,10 @@ export function renderRouteDocumentResponse(
       // severance, `Permissions-Policy` ambient-capability deny-all, `Referrer-Policy`).
       // Each is applied only when the route response didn't already set it, so an author
       // opt-out is preserved. See `DOCUMENT_ISOLATION_HEADERS` for the per-header rationale.
-      ...documentIsolationHeaders(response.headers),
+      ...documentIsolationHeaders(
+        response.headers,
+        reportingHeaders === undefined ? undefined : KOVO_CSP_REPORT_GROUP,
+      ),
       // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): the STRICT CSP is
       // auto-attached to every framework-rendered HTML document by default. Kovo is the
       // sole DOM-writer and emits no inline app code, so the hash-locked `'self'` policy
@@ -423,12 +427,37 @@ export function renderRouteDocumentResponse(
  *
  * @internal
  */
-function documentIsolationHeaders(existing: ResponseHeaders): Record<string, string> {
+function documentIsolationHeaders(
+  existing: ResponseHeaders,
+  reportingGroup?: string,
+): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(DOCUMENT_ISOLATION_HEADERS)) {
-    if (findHeaderRecordName(existing, name) === undefined) headers[name] = value;
+    if (findHeaderRecordName(existing, name) !== undefined) continue;
+    if (name === 'Cross-Origin-Opener-Policy' && reportingGroup !== undefined) {
+      headers[name] = `${value}; report-to="${reportingGroup}"`;
+      continue;
+    }
+    if (name === 'Permissions-Policy' && reportingGroup !== undefined) {
+      headers[name] = permissionsPolicyWithReporting(reportingGroup);
+      continue;
+    }
+    headers[name] = value;
   }
   return headers;
+}
+
+function permissionsPolicyWithReporting(reportingGroup: string): string {
+  // Permissions Policy reporting has no single policy-wide Reporting API parameter.
+  // Current browser syntax attaches `report-to` to each feature directive, so keep the
+  // denied feature set explicit instead of inventing an unsupported global hook.
+  return [
+    `camera=();report-to=${reportingGroup}`,
+    `microphone=();report-to=${reportingGroup}`,
+    `geolocation=();report-to=${reportingGroup}`,
+    `payment=();report-to=${reportingGroup}`,
+    `usb=();report-to=${reportingGroup}`,
+  ].join(', ');
 }
 
 function standardDocumentResult(document: DocumentRenderResult): {
@@ -489,7 +518,7 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
       // Referrer-Policy). Error documents have no route response to carry an author
       // opt-out, so the static baseline applies unconditionally. HSTS is intentionally
       // omitted here: error documents render without the request's secure context.
-      ...DOCUMENT_ISOLATION_HEADERS,
+      ...documentIsolationHeaders({}, KOVO_CSP_REPORT_GROUP),
       // SF (secure-framework Tier 3): error documents are framework-rendered HTML with
       // the same inline loader/hashes, so they carry the strict default-on CSP too. No
       // route response means no author allowlist here — the plain strict `'self'` policy
