@@ -38,6 +38,60 @@ function escapeRegExp(value: string): string {
 }
 
 describe('compileComponentModule', () => {
+  it('fails closed on malformed TSX before emitting artifacts', () => {
+    const result = compileComponentModule({
+      fileName: 'components/broken.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+export const Broken = component({
+  render: () => <div><span></div>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV245',
+        fileName: 'components/broken.tsx',
+        severity: 'error',
+      }),
+    ]);
+    expect(result.diagnostics[0]?.message).toContain('has no corresponding closing tag');
+    expect(result.files).toEqual([]);
+    expect(result.loweredSource).toBeNull();
+  });
+
+  it('confines traversal-shaped file names before deriving artifacts and client URLs', () => {
+    const result = compileComponentModule({
+      fileName: '../outside/evil.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+function save() {}
+
+export const Evil = component({
+  render: () => <button onClick={save}>Save</button>,
+});
+`,
+    });
+
+    expect(result.files.map((file) => file.fileName)).toEqual([
+      'outside/evil.server.js',
+      'outside/evil.client.js',
+      'generated/registries.d.ts',
+    ]);
+    expect(result.hmrImpact?.clientHref).toMatch(
+      /^\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/outside\/evil\.client\.js$/,
+    );
+    expect(result.hmrImpact?.clientHref).not.toContain('..');
+    expect(result.files.map((file) => file.fileName).join('\n')).not.toContain('..');
+    expect(result.files.find((file) => file.kind === 'server')?.source).toContain(
+      '/c/__v/',
+    );
+    expect(result.files.find((file) => file.kind === 'server')?.source).not.toContain('../');
+  });
+
   it('emits one server file, one client file, and registry metadata', () => {
     const result = compileFixture({
       fileName: 'components/cart/cart-badge.tsx',

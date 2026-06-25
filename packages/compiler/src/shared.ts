@@ -87,6 +87,21 @@ export function replaceExtension(fileName: string, extension: string): string {
   return fileName.replace(/\.[^.]+$/, extension);
 }
 
+export function normalizeComponentFileName(fileName: string): string {
+  const normalized = fileName.replaceAll('\\', '/').replace(/^[A-Za-z]:\/?/, '');
+  const segments: string[] = [];
+  for (const segment of normalized.split('/')) {
+    if (segment.length === 0 || segment === '.') continue;
+    if (segment === '..') {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+
+  return segments.join('/') || 'component.tsx';
+}
+
 export interface SourceReplacement {
   end: number;
   replacement: string;

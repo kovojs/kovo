@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
+import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
+import { normalizeComponentFileName } from '../shared.js';
 import type { StaticLiteralValue } from './object.js';
 import type {
   ArrowFunctionPartsModel,
@@ -44,7 +46,44 @@ if (!('ScriptTarget' in mutableTs))
  * (SPEC.md §5.2 rule 9).
  */
 export function parseSourceFile(fileName: string, source: string): ts.SourceFile {
-  return ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  return ts.createSourceFile(
+    normalizeComponentFileName(fileName),
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+}
+
+export { normalizeComponentFileName };
+
+export function parseDiagnosticsForSourceFile(
+  sourceFile: ts.SourceFile,
+  source: string,
+): CompilerDiagnostic[] {
+  const parseDiagnostics =
+    (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] })
+      .parseDiagnostics ?? [];
+
+  return parseDiagnostics.map((diagnostic: ts.Diagnostic) => {
+    const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+    const start = diagnostic.start ?? 0;
+    const length = diagnostic.length ?? Math.max(1, source.length - start);
+    return {
+      code: 'KV245',
+      fileName: sourceFile.fileName,
+      help: [
+        'Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.',
+        'Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.',
+        'Fixes: correct the TSX syntax at this location and re-run the compiler.',
+        'SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.',
+      ].join('\n'),
+      length,
+      message: `TypeScript/TSX parse failed. ${message}`,
+      severity: 'error',
+      start: offsetToPosition(source, start),
+    };
+  });
 }
 
 export function parseComponentModule(fileName: string, source: string): ComponentModuleModel {

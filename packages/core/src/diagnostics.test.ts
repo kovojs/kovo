@@ -38,6 +38,7 @@ describe('diagnostic registry', () => {
       'KV242',
       'KV243',
       'KV244',
+      'KV245',
       'KV301',
       'KV302',
       'KV303',
@@ -350,6 +351,15 @@ describe('diagnostic registry', () => {
       Escape: trustedHtml(...) remains the explicit raw-HTML escape hatch, but app JSX children should use <Defer>.",
           "message": "defer() used as a JSX child; use <Defer> instead.",
           "severity": "lint",
+        },
+        "KV245": {
+          "code": "KV245",
+          "help": "Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.
+      Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.
+      Fixes: correct the TSX syntax at this location and re-run the compiler.
+      SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.",
+          "message": "TypeScript/TSX parse failed.",
+          "severity": "error",
         },
         "KV301": {
           "code": "KV301",
