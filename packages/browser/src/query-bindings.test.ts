@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  setRuntimeSinkSecurityEventHandler,
+  type RuntimeSinkSecurityEvent,
+} from '@kovojs/core/internal/sink-policy';
+import {
   applyCompiledQueryUpdatePlan,
   applyQueryBindings,
   applyStateBindings,
@@ -57,31 +61,48 @@ describe('query binding helpers', () => {
       style: 'color: green',
     });
     root.planElements.push(link);
+    const events: RuntimeSinkSecurityEvent[] = [];
+    const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
 
     // SPEC.md §4.8: query refreshes share the same output-context floor as SSR.
-    expect(
-      applyQueryBindings(root, 'cart', {
-        handler: 'alert(document.cookie)',
-        href: 'java\nscript:alert(1)',
-        html: '<img src=x onerror=alert(1)>',
-        srcdoc: '<script>alert(1)</script>',
-        srcset: '/safe.png 1x, javascript:alert(1) 2x',
-        style: 'background:url(javascript:alert(1))',
-      }),
-    ).toEqual([
-      'cart.href',
-      'cart.html',
-      'cart.handler',
-      'cart.srcdoc',
-      'cart.srcset',
-      'cart.style',
-    ]);
+    try {
+      expect(
+        applyQueryBindings(root, 'cart', {
+          handler: 'alert(document.cookie)',
+          href: 'java\nscript:alert(1)',
+          html: '<img src=x onerror=alert(1)>',
+          srcdoc: '<script>alert(1)</script>',
+          srcset: '/safe.png 1x, javascript:alert(1) 2x',
+          style: 'background:url(javascript:alert(1))',
+        }),
+      ).toEqual([
+        'cart.href',
+        'cart.html',
+        'cart.handler',
+        'cart.srcdoc',
+        'cart.srcset',
+        'cart.style',
+      ]);
+    } finally {
+      restore();
+    }
     expect(link.getAttribute('href')).toBe('#');
     expect(link.getAttribute('innerHTML')).toBeNull();
     expect(link.getAttribute('onclick')).toBeNull();
     expect(link.getAttribute('srcdoc')).toBeNull();
     expect(link.getAttribute('srcset')).toBe('/safe.png 1x');
     expect(link.getAttribute('style')).toBeNull();
+    expect(events).toHaveLength(6);
+    expect(events.map((event) => [event.code, event.family, event.action])).toEqual([
+      ['KV236', 'url', 'neutralize'],
+      ['KV236', 'raw-html', 'remove'],
+      ['KV236', 'event-handler', 'remove'],
+      ['KV236', 'srcdoc', 'remove'],
+      ['KV236', 'srcset', 'neutralize'],
+      ['KV236', 'css-text', 'remove'],
+    ]);
+    expect(JSON.stringify(events)).not.toContain('document.cookie');
+    expect(JSON.stringify(events)).not.toContain('alert');
   });
 
   it('applies optional binding path segments and removes empty attribute bindings', () => {

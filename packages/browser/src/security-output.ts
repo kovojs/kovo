@@ -1,5 +1,6 @@
 import {
   decideRuntimeAttributeWrite,
+  drainRuntimeSinkSecurityEvent,
   runtimeSinkFamilyForAttribute,
 } from '@kovojs/core/internal/sink-policy';
 
@@ -155,6 +156,7 @@ export function kovoSafeUrl(value: unknown): string {
   if (isKovoTrustedUrl(value)) return value.value;
   const rendered = formatOutputValue(value);
   const decision = decideRuntimeAttributeWrite('href', rendered);
+  drainRuntimeSinkSecurityEvent(decision.event);
   return decision.action === 'neutralize' ? (decision.value ?? '#') : rendered;
 }
 
@@ -169,6 +171,7 @@ export function kovoBoundAttributeValue(name: string, value: unknown): string | 
 
   const rendered = formatOutputValue(value);
   const decision = decideRuntimeAttributeWrite(name, rendered);
+  drainRuntimeSinkSecurityEvent(decision.event);
   return decision.action === 'remove' ? null : (decision.value ?? rendered);
 }
 

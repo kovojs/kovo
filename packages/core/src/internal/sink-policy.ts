@@ -33,6 +33,9 @@ export interface RuntimeSinkSecurityEvent {
   };
 }
 
+/** @internal Test/dev sink for blocked runtime sink events (SPEC.md §4.8 / KV236). */
+export type RuntimeSinkSecurityEventHandler = (event: RuntimeSinkSecurityEvent) => void;
+
 /** @internal Runtime sink decision shared by server render and browser update paths. */
 export interface RuntimeSinkDecision {
   action: RuntimeSinkAction;
@@ -55,6 +58,35 @@ export const RAW_HTML_SINK_NAMES = [
 
 const srcsetAttributeNames = new Set<string>(SRCSET_ATTRIBUTE_NAMES);
 const rawHtmlSinkNames = new Set<string>(RAW_HTML_SINK_NAMES);
+let runtimeSinkSecurityEventHandler: RuntimeSinkSecurityEventHandler | undefined;
+
+/** @internal Install a test/dev hook for blocked runtime sink events. */
+export function setRuntimeSinkSecurityEventHandler(
+  handler: RuntimeSinkSecurityEventHandler | undefined,
+): () => void {
+  const previous = runtimeSinkSecurityEventHandler;
+  runtimeSinkSecurityEventHandler = handler;
+
+  return () => {
+    if (runtimeSinkSecurityEventHandler === handler) {
+      runtimeSinkSecurityEventHandler = previous;
+    }
+  };
+}
+
+/** @internal Drain one blocked runtime sink event in development/test builds. */
+export function drainRuntimeSinkSecurityEvent(event: RuntimeSinkSecurityEvent | undefined): void {
+  if (!event || !isDevelopmentOrTestRuntime()) return;
+
+  if (runtimeSinkSecurityEventHandler) {
+    runtimeSinkSecurityEventHandler(event);
+    return;
+  }
+
+  if (runtimeMode() === 'development' && typeof console !== 'undefined') {
+    console.warn(event.message, event);
+  }
+}
 
 /** @internal True when an attribute/property name is an event-handler sink. */
 export function isEventHandlerAttributeName(name: string): boolean {
@@ -281,6 +313,15 @@ function runtimeSinkSecurityEvent(
 
 function redactedPreview(value: string): string {
   return `<redacted:${value.length}>`;
+}
+
+function isDevelopmentOrTestRuntime(): boolean {
+  const mode = runtimeMode();
+  return mode === 'development' || mode === 'test';
+}
+
+function runtimeMode(): string | undefined {
+  return typeof process === 'undefined' ? undefined : process.env?.NODE_ENV;
 }
 
 export { SAFE_URL_SCHEMES, URL_ATTRIBUTE_NAMES };

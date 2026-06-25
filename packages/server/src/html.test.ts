@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  setRuntimeSinkSecurityEventHandler,
+  type RuntimeSinkSecurityEvent,
+} from '@kovojs/core/internal/sink-policy';
 import { escapeAttribute, safeRuntimeAttribute, safeUrlAttribute } from './html.js';
 
 // SPEC.md §4.8 + §5.2#10: server and client must encode URL-bearing attributes
@@ -110,6 +114,42 @@ describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
     expect(safeRuntimeAttribute('style', 'background:url(javascript:alert(1))')).toBeNull();
     expect(safeRuntimeAttribute('style', 'min-height: 120px')).toBe('min-height: 120px');
     expect(safeRuntimeAttribute('innerHTML', '<img src=x onerror=alert(1)>')).toBeNull();
+  });
+
+  it('drains one redacted KV236 event per blocked server sink write', () => {
+    const events: RuntimeSinkSecurityEvent[] = [];
+    const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
+    const attackerPayload = 'javascript:alert("secret-token")';
+
+    try {
+      expect(safeUrlAttribute('href', attackerPayload)).toBe('#');
+      expect(safeRuntimeAttribute('srcset', `${attackerPayload} 1x`)).toBeNull();
+      expect(safeRuntimeAttribute('style', `background:url(${attackerPayload})`)).toBeNull();
+      expect(safeRuntimeAttribute('innerHTML', `<img src=x onerror="${attackerPayload}">`)).toBe(
+        null,
+      );
+      expect(safeRuntimeAttribute('onclick', attackerPayload)).toBeNull();
+    } finally {
+      restore();
+    }
+
+    expect(events).toHaveLength(5);
+    expect(events.map((event) => [event.code, event.family, event.action])).toEqual([
+      ['KV236', 'url', 'neutralize'],
+      ['KV236', 'srcset', 'remove'],
+      ['KV236', 'css-text', 'remove'],
+      ['KV236', 'raw-html', 'remove'],
+      ['KV236', 'event-handler', 'remove'],
+    ]);
+    for (const event of events) {
+      expect(event.value).toEqual({
+        length: expect.any(Number),
+        preview: `<redacted:${event.value.length}>`,
+        redacted: true,
+      });
+    }
+    expect(JSON.stringify(events)).not.toContain('secret-token');
+    expect(JSON.stringify(events)).not.toContain('alert');
   });
 
   it('still HTML-escapes safe URL attribute values', () => {

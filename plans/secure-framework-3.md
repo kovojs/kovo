@@ -105,7 +105,7 @@ code, and current supply-chain/build surfaces.
     proves current-token minting, previous-token acceptance, stale previous-key rejection, and
     production boot validation for weak rotated secrets.
 
-- [ ] **Drain runtime sink security events instead of discarding them.**
+- [x] **Drain runtime sink security events instead of discarding them.**
   - Evidence: the shared sink policy creates structured `KV236` events
     (`packages/core/src/internal/sink-policy.ts:250`, `packages/core/src/internal/sink-policy.ts:260`),
     but server/browser call sites consume only `action`/`value` and drop `decision.event`
@@ -115,6 +115,10 @@ code, and current supply-chain/build surfaces.
     testable callback, or `kovo explain` runtime summary input. Keep payloads redacted.
   - Acceptance: tests prove blocked URL/srcset/CSS/raw-HTML/event writes emit exactly one redacted
     event per blocked write in dev/test and do not leak attacker-controlled values.
+  - Verified 2026-06-25: `packages/core/src/internal/sink-policy.ts` provides an internal dev/test
+    runtime sink event drain for redacted `KV236` events, and server/browser sink call sites route
+    blocked decisions through it. `pnpm exec vitest --run packages/server/src/html.test.ts packages/browser/src/security-output.test.ts packages/browser/src/query-bindings.test.ts packages/core/src/sink-policy.test.ts`
+    proves exactly one redacted event for blocked URL, srcset, CSS, raw HTML, and event-handler writes.
 
 ## Tier 1 - Browser Sink Parity
 

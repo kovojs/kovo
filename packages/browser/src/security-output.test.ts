@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  setRuntimeSinkSecurityEventHandler,
+  type RuntimeSinkSecurityEvent,
+} from '@kovojs/core/internal/sink-policy';
+import {
   isBrowserTrustedHtml,
   isKovoTrustedHtml,
   isKovoTrustedUrl,
@@ -116,6 +120,42 @@ describe('runtime output-context helpers', () => {
     // Safe attributes still work normally.
     expect(kovoBoundAttributeValue('data-value', 'hello')).toBe('hello');
     expect(kovoBoundAttributeValue('aria-label', 'Close')).toBe('Close');
+  });
+
+  it('drains one redacted KV236 event per blocked browser output sink write', () => {
+    const events: RuntimeSinkSecurityEvent[] = [];
+    const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
+    const attackerPayload = 'javascript:alert("secret-token")';
+
+    try {
+      expect(kovoBoundAttributeValue('href', attackerPayload)).toBe('#');
+      expect(kovoBoundAttributeValue('srcset', `${attackerPayload} 1x`)).toBeNull();
+      expect(kovoBoundAttributeValue('style', `background:url(${attackerPayload})`)).toBeNull();
+      expect(
+        kovoBoundAttributeValue('innerHTML', `<img src=x onerror="${attackerPayload}">`),
+      ).toBeNull();
+      expect(kovoBoundAttributeValue('onclick', attackerPayload)).toBeNull();
+    } finally {
+      restore();
+    }
+
+    expect(events).toHaveLength(5);
+    expect(events.map((event) => [event.code, event.family, event.action])).toEqual([
+      ['KV236', 'url', 'neutralize'],
+      ['KV236', 'srcset', 'remove'],
+      ['KV236', 'css-text', 'remove'],
+      ['KV236', 'raw-html', 'remove'],
+      ['KV236', 'event-handler', 'remove'],
+    ]);
+    for (const event of events) {
+      expect(event.value).toEqual({
+        length: expect.any(Number),
+        preview: `<redacted:${event.value.length}>`,
+        redacted: true,
+      });
+    }
+    expect(JSON.stringify(events)).not.toContain('secret-token');
+    expect(JSON.stringify(events)).not.toContain('alert');
   });
 
   // F4: ftp must be in the runtime URL-scheme allowlist (SPEC §4.8:347)

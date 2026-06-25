@@ -1,5 +1,8 @@
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
-import { decideRuntimeAttributeWrite } from '@kovojs/core/internal/sink-policy';
+import {
+  decideRuntimeAttributeWrite,
+  drainRuntimeSinkSecurityEvent,
+} from '@kovojs/core/internal/sink-policy';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
 /**
@@ -145,8 +148,9 @@ function renderStringWithCoercedRenderedHtml(
  */
 export function safeUrlAttribute(name: string, value: string): string {
   const decision = decideRuntimeAttributeWrite(name, value);
+  drainRuntimeSinkSecurityEvent(decision.event);
   if (decision.family === 'srcset') return escapeAttribute(decision.value ?? '#');
-  if (isUrlAttributeName(name) && hasUnsafeUrlScheme(value)) {
+  if (decision.action === 'neutralize' && isUrlAttributeName(name)) {
     return '#';
   }
   return escapeAttribute(value);
@@ -159,6 +163,7 @@ export function safeUrlAttribute(name: string, value: string): string {
  */
 export function safeRuntimeAttribute(name: string, value: string): string | null {
   const decision = decideRuntimeAttributeWrite(name, value);
+  drainRuntimeSinkSecurityEvent(decision.event);
   return decision.action === 'remove' ? null : escapeAttribute(decision.value ?? value);
 }
 
