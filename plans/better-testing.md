@@ -207,6 +207,11 @@ Median job durations across those runs:
   - Keep it non-required unless the measured runtime fits the 5-minute required budget.
   - Evidence when complete: scheduled workflow run URL and a documented logical-suite selection, not a
     hand-maintained per-spec shard list.
+  - Progress 2026-06-25: `.github/workflows/race-repeat.yml` adds a non-required scheduled/manual
+    workflow that runs `@race-prone` Chromium integration tests with `--repeat-each=3 --workers=1`.
+    The logical selector currently covers 10 cross-tab, morph, optimistic, and streaming tests; local
+    one-pass verification passed. The remaining checkbox evidence is a completed scheduled workflow run
+    URL.
 
 - [x] **Define assertion tiers for integration specs.**
   - Tier 1: semantic user-visible assertions through `@kovojs/test` page helpers.
@@ -300,6 +305,8 @@ tests/integration/specs/respond-file.spec.ts tests/integration/specs/storage-dow
 - `vp exec vitest --run tests/snapshot-allowlist.meta.test.ts --reporter=dot` and `vp exec playwright
 test --config tests/integration/playwright.config.ts --project=chromium
 tests/integration/specs/fragment-append.spec.ts` passed.
+- `vp exec playwright test --config tests/integration/playwright.config.ts --project=chromium --grep
+@race-prone --list` selected 10 tests in 7 files; the same selector with `--workers=1` passed once.
 
 ## Acceptance Gates
 

@@ -67,7 +67,7 @@ test('streams chat text through Kovo chunks and reconciles with server truth', a
   ]);
 });
 
-test('keeps no-JS and typed failure paths on the ordinary mutation vocabulary', async ({
+test('keeps no-JS and typed failure paths on the ordinary mutation vocabulary @race-prone', async ({
   kovoApp,
   page,
   request,
@@ -99,7 +99,7 @@ test('keeps no-JS and typed failure paths on the ordinary mutation vocabulary', 
   ]);
 });
 
-test('escapes model-streamed HTML/JS in the <kovo-text> wire (no LLM-output XSS)', async ({
+test('escapes model-streamed HTML/JS in the <kovo-text> wire (no LLM-output XSS) @race-prone', async ({
   kovoApp,
   page,
   request,
@@ -139,7 +139,9 @@ test('escapes model-streamed HTML/JS in the <kovo-text> wire (no LLM-output XSS)
   expect(dialogFired).toBe(false);
 });
 
-test('marks a streamed assistant source failed when the response aborts', async ({ page }) => {
+test('marks a streamed assistant source failed when the response aborts @race-prone', async ({
+  page,
+}) => {
   await page.goto('/');
   await page.getByRole('textbox', { name: 'Message' }).fill('abort');
   await page.getByRole('button', { name: 'Send' }).click();

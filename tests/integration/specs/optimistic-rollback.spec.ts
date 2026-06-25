@@ -4,7 +4,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'optimistic-rollback' });
 
-test('rolls back optimistic state and shows the typed error fragment on failure', async ({
+test('rolls back optimistic state and shows the typed error fragment on failure @race-prone', async ({
   page,
   kovoApp,
 }) => {

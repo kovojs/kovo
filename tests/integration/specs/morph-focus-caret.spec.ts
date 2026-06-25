@@ -2,7 +2,10 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'morph-focus-caret' });
 
-test('preserves focus and caret while reconciling server text', async ({ page, kovoApp }) => {
+test('preserves focus and caret while reconciling server text @race-prone', async ({
+  page,
+  kovoApp,
+}) => {
   await page.goto('/');
 
   const input = page.getByLabel('Draft');

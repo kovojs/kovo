@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'morph-scroll' });
 
-test('preserves keyed scroll position while reconciling inserted content', async ({
+test('preserves keyed scroll position while reconciling inserted content @race-prone', async ({
   kovoApp,
   page,
 }) => {

@@ -4,7 +4,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'optimistic-rebase' });
 
-test('rebases still-pending optimistic transforms over arriving server truth', async ({
+test('rebases still-pending optimistic transforms over arriving server truth @race-prone', async ({
   page,
   kovoApp,
 }) => {

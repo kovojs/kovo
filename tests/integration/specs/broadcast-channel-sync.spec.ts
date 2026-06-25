@@ -3,7 +3,10 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'broadcast-channel-sync' });
 
-test('mutation query chunks rebroadcast to another same-user tab', async ({ context, page }) => {
+test('mutation query chunks rebroadcast to another same-user tab @race-prone', async ({
+  context,
+  page,
+}) => {
   const other = await context.newPage();
   const otherMutationRequests: string[] = [];
   other.on('request', (request) => {

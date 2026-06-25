@@ -4,7 +4,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'optimistic-success' });
 
-test('reconciles a successful optimistic mutation across all query consumers', async ({
+test('reconciles a successful optimistic mutation across all query consumers @race-prone', async ({
   page,
   kovoApp,
 }) => {
@@ -75,7 +75,7 @@ test("a sibling island's local state survives an optimistic mutation + morph (mu
   await expect(toggle).toHaveText('true');
 });
 
-test('an optimistic prediction flows through a derived binding and reconciles (derived-optimism, C6)', async ({
+test('an optimistic prediction flows through a derived binding and reconciles (derived-optimism, C6) @race-prone', async ({
   page,
 }) => {
   await page.goto('/');
