@@ -27,12 +27,29 @@ describe('csrf helpers', () => {
     },
   };
 
-  it('renders an escaped hidden field for the signed session token', () => {
-    const token = csrfToken(request, csrf);
+  function fieldValue(html: string): string {
+    const token = /value="([^"]+)"/.exec(html)?.[1];
+    if (!token) throw new Error(`expected hidden field value in ${html}`);
+    return token;
+  }
 
-    expect(csrfField(request, csrf)).toBe(
-      `<input type="hidden" name="csrf&lt;input&gt;" value="${token}">`,
-    );
+  it('renders an escaped hidden field for the signed session token', () => {
+    const html = csrfField(request, csrf);
+    const token = fieldValue(html);
+
+    expect(html).toBe(`<input type="hidden" name="csrf&lt;input&gt;" value="${token}">`);
+    expect(validateCsrfToken({ 'csrf<input>': token }, request, csrf)).toBe(true);
+  });
+
+  it('BREACH-masks CSRF tokens with fresh per-token randomness for the same binding', () => {
+    const first = csrfToken(request, csrf);
+    const second = csrfToken(request, csrf);
+
+    expect(first).toMatch(/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+    expect(second).toMatch(/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+    expect(first).not.toBe(second);
+    expect(validateCsrfToken({ 'csrf<input>': first }, request, csrf)).toBe(true);
+    expect(validateCsrfToken({ 'csrf<input>': second }, request, csrf)).toBe(true);
   });
 
   it('validates only the matching token for the configured field', () => {
@@ -50,7 +67,9 @@ describe('csrf helpers', () => {
     const previousToken = csrfToken(request, { ...csrf, secret: previous });
     const rotated = { ...csrf, secret: { current, previous } };
 
-    expect(csrfToken(request, rotated)).toBe(currentToken);
+    const rotatedToken = csrfToken(request, rotated);
+    expect(rotatedToken).not.toBe(currentToken);
+    expect(validateCsrfToken({ 'csrf<input>': rotatedToken }, request, rotated)).toBe(true);
     expect(validateCsrfToken({ 'csrf<input>': currentToken }, request, rotated)).toBe(true);
     expect(validateCsrfToken({ 'csrf<input>': previousToken }, request, rotated)).toBe(true);
     expect(
@@ -62,6 +81,32 @@ describe('csrf helpers', () => {
         secret: { current, previous: 'older-secret-at-least-32-characters-long' },
       }),
     ).toBe(false);
+  });
+
+  it('rejects malformed masked CSRF tokens fail-closed', () => {
+    const token = csrfToken(request, csrf);
+    const [version, mask, maskedMac] = token.split('.');
+    expect(version).toBe('v1');
+    expect(mask).toBeDefined();
+    expect(maskedMac).toBeDefined();
+
+    const malformedTokens = [
+      '',
+      'not-a-token',
+      token.replace('v1.', 'v0.'),
+      `v1.${mask}`,
+      `v1..${maskedMac}`,
+      `v1.${mask}.`,
+      `v1.${mask}!.${maskedMac}`,
+      `v1.${mask}.${maskedMac!}x`,
+      `v1.${mask!.slice(1)}.${maskedMac}`,
+      `v1.${mask}.${maskedMac!.slice(1)}`,
+      `${token}.extra`,
+    ];
+
+    for (const malformed of malformedTokens) {
+      expect(validateCsrfToken({ 'csrf<input>': malformed }, request, csrf)).toBe(false);
+    }
   });
 
   it('renders and validates anonymous CSRF tokens bound to the framework cookie', () => {
@@ -89,7 +134,7 @@ describe('csrf helpers', () => {
     expect(setCookies[0]).toContain('SameSite=Lax');
 
     const cookiePair = setCookies[0]!.split(';')[0]!;
-    const submitted = /value="([^"]+)"/.exec(html)?.[1];
+    const submitted = fieldValue(html);
     expect(submitted).toBeDefined();
     const postRequest = new Request('https://shop.example.test/_m/auth/sign-in', {
       headers: { Cookie: cookiePair, Origin: 'https://shop.example.test' },
@@ -196,8 +241,12 @@ describe('mutation CSRF enforcement', () => {
       },
     });
     const token = csrfToken(request, csrf);
+    const fieldHtml = csrfField(request, csrf);
+    const fieldToken = /value="([^"]+)"/.exec(fieldHtml)?.[1];
+    if (!fieldToken) throw new Error(`expected CSRF field value in ${fieldHtml}`);
 
-    expect(csrfField(request, csrf)).toBe(`<input type="hidden" name="csrf" value="${token}">`);
+    expect(fieldHtml).toBe(`<input type="hidden" name="csrf" value="${fieldToken}">`);
+    expect(validateCsrfToken({ csrf: fieldToken }, request, csrf)).toBe(true);
     await expect(
       runMutation(addToCart, { csrf: token, productId: 'p1' }, request),
     ).resolves.toMatchObject({

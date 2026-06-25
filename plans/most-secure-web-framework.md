@@ -251,11 +251,14 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` pas
       defer Clear-Site-Data until a framework-owned logout/revoke sink exists to emit it by construction rather
       than as an app-ownable header. The "inexpressible" framing is an over-claim.
 
-- [ ] **OPP-16 — BREACH-mask the CSRF token (per-response XOR).** runtime-DiD · lev 6 · S · breaking.
+- [x] **OPP-16 — BREACH-mask the CSRF token (per-response XOR).** runtime-DiD · lev 6 · S · breaking.
       `csrf.ts` emits a stable token into compressible HTML over TLS → inherits the BREACH oracle. XOR-mask the
       session-bound secret with fresh per-request randomness (Spring 6 / Django default); unmask before the
       constant-time compare. _Trade-off:_ real low-cost hardening of a live oracle in Kovo's default-compressed
       stack — DiD-on-DiD, not a class kill.
+      Evidence: `packages/server/src/csrf.ts` emits `v1.<mask>.<masked-mac>` tokens and unmasks before
+      constant-time verification against current/previous secrets. Focused CSRF, app-document, mutation-request,
+      mutation-wire, and mutation lifecycle Vitest files passed.
 
 - [x] **OPP-30 — Centralize framework system-response posture.** runtime-DiD · lev ~5 · S · non-breaking
       _(main-thread tier)_. Pre-dispatch 429/413/normalization-redirect responses carry only Content-Type/

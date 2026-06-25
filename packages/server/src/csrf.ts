@@ -189,9 +189,12 @@ export function validateCsrfToken<Request>(
   const submitted = formLikeToRecord(rawInput)[options.field ?? 'kovo-csrf'];
   if (typeof submitted !== 'string') return false;
 
+  const submittedMac = unmaskCsrfToken(submitted);
+  if (!submittedMac) return false;
+
   let valid = false;
   for (const secret of csrfVerificationSecrets(options.secret)) {
-    valid = secureEqual(submitted, createCsrfTokenWithSecret(binding.value, secret)) || valid;
+    valid = secureEqual(submittedMac, createCsrfTokenWithSecret(binding.value, secret)) || valid;
   }
   return valid;
 }
@@ -323,12 +326,64 @@ function requestIsHttps(request: unknown): boolean {
   return request instanceof Request && new URL(request.url).protocol === 'https:';
 }
 
+const CSRF_MASKED_TOKEN_VERSION = 'v1';
+const CSRF_MAC_BYTES = 32;
+
 function createCsrfToken(binding: string, secret: CsrfSecret): string {
-  return createCsrfTokenWithSecret(binding, currentCsrfSecret(secret));
+  const mac = Buffer.from(
+    createCsrfTokenWithSecret(binding, currentCsrfSecret(secret)),
+    'base64url',
+  );
+  const mask = randomBytes(CSRF_MAC_BYTES);
+  const maskedMac = xorBuffers(mac, mask);
+  return [
+    CSRF_MASKED_TOKEN_VERSION,
+    mask.toString('base64url'),
+    maskedMac.toString('base64url'),
+  ].join('.');
 }
 
 function createCsrfTokenWithSecret(binding: string, secret: string): string {
   return createHmac('sha256', secret).update(binding).digest('base64url');
+}
+
+function unmaskCsrfToken(token: string): string | undefined {
+  const parts = token.split('.');
+  if (
+    parts.length !== 3 ||
+    parts[0] !== CSRF_MASKED_TOKEN_VERSION ||
+    !isBase64UrlSegment(parts[1]) ||
+    !isBase64UrlSegment(parts[2])
+  ) {
+    return undefined;
+  }
+
+  let mask: Buffer;
+  let maskedMac: Buffer;
+  try {
+    mask = Buffer.from(parts[1], 'base64url');
+    maskedMac = Buffer.from(parts[2], 'base64url');
+  } catch {
+    return undefined;
+  }
+
+  if (mask.byteLength !== CSRF_MAC_BYTES || maskedMac.byteLength !== CSRF_MAC_BYTES) {
+    return undefined;
+  }
+
+  return xorBuffers(maskedMac, mask).toString('base64url');
+}
+
+function isBase64UrlSegment(value: string | undefined): value is string {
+  return value !== undefined && value !== '' && /^[A-Za-z0-9_-]+$/.test(value);
+}
+
+function xorBuffers(left: Buffer, right: Buffer): Buffer {
+  const output = Buffer.allocUnsafe(left.byteLength);
+  for (let index = 0; index < left.byteLength; index += 1) {
+    output[index] = left[index]! ^ right[index]!;
+  }
+  return output;
 }
 
 /** @internal Return the active CSRF/framework signing key for new tokens and non-CSRF attestations. */
