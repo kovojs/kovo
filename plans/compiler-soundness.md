@@ -30,8 +30,8 @@ only counts if it breaks a guarantee at the tier the framework *claims* for it.
 | **F2** (S5-001) | opaque `sql<T>` secret-column leak to client wire | **High** | by-construction | real-hole | **fix #2 LANDED**; fix #1 follow-up |
 | **P1-1** | `sanitizeNext` open-redirect via URL normalization | **Medium** | runtime-DiD | real-hole | **FIXED** |
 | **P3-1** | `csrf:false` mutation rides ambient cookie session | **High** | by-construction | real-hole | follow-up (multi-surface) |
-| P2-1 | primitive `attrs={{…}}` channel skips KV236 | Low | by-construction→DiD | completeness | follow-up (runtime-backed) |
-| S4 | static object-spread `style` skips KV236 | Low | by-construction→DiD | completeness | follow-up (runtime-backed) |
+| P2-1 | primitive `attrs={{…}}` channel skips KV236 | Low | by-construction→DiD | completeness | **FIXED** |
+| S4 | static object-spread `style` skips KV236 | Low | by-construction→DiD | completeness | **FIXED** |
 | S7-1 | render-equivalence gate normalizes `escapeText` away | Info | gate-honesty | completeness | follow-up |
 | P3-3 | `explain --endpoints` omits mutation CSRF posture | Low | audit-only | confirmed | folds into P3-1 |
 | P0 | cache key omits `productionRenderPlanGate` | Low | latent (unwired) | partial, not app-reachable | follow-up (cheap) |
@@ -130,11 +130,20 @@ will carry; any non-strict-single-leading-slash result fails closed to `/`.
   forbid. Fix: typed `csrf: 'checked'|'exempt'` posture on `MutationExplain` (`core/graph.ts`) + KV418
   for mutations + serve a `csrf:false` mutation with no ambient `req.session` (cookies uninterpreted).
   Folds in **P3-3** (surface the posture in `explain --endpoints`).
-- [ ] **P2-1 / S4 — close the compile-time KV236 completeness gap for the primitive `attrs={{…}}` merge
-  channel and static object-spread `style`.** Both currently rely on the sound runtime sink-policy floor
-  (`decideRuntimeAttributeWrite` + `kovoStyleProperty`), so not exploitable, but they break the
-  audit-visible-brand guarantee and leave a CSS-text-injection residual the direct form catches. Add the
-  `style`/url-scheme/raw-HTML branches to `validateStaticSpreadEntries` and the primitive-merge attrs path.
+- [x] **P2-1 / S4 — close the compile-time KV236 completeness gap for the primitive `attrs={{…}}` merge
+  channel and static object-spread `style`.** Fixed in `security/output-context.ts`: spread and attrs
+  channels unified onto `validateStaticObjectEntrySinks` (over `ObjectLiteralEntry`) with a `style`→
+  `validateStyleAttribute` branch and the direct path's exact `isDirectHtmlEventHandlerAttribute`
+  predicate, so direct ≡ spread ≡ attrs-merge for every sink (URL scheme, CSS-url, raw-HTML, on*,
+  srcdoc). `validatePrimitiveAttrsEntries` gates on component-tag + inline `expressionObjectEntries`
+  (matching `primitiveCompositionCandidates`), avoiding plain-element false positives. Union-merge of a
+  primitive static `style`/`class` with an author dynamic object `style` still lowers each piece through
+  the `kovoStyleProperty` floor (verified: `data-bind:style` derive, not raw concat). Evidence:
+  `output-context-security.test.ts` "KV236 direct ≡ spread ≡ attrs-merge channel symmetry (P2-1 / S4)"
+  (javascript: CSS url(), javascript: href, raw-HTML, onclick all fire across all three channels; safe +
+  plain-element guard green). Residual (pre-existing, out of scope): the direct `isDirectHtmlEventHandlerAttribute`
+  predicate is `/^on[a-z]/` (no `i` flag), so a static camelCase `onClick`/uppercase `ONCLICK` handler is
+  unflagged in *all* channels — the symmetry fix mirrors the direct form rather than introducing this gap.
 - [ ] **S7-1 — make the §5.2 #3 render-equivalence gate honest.** It normalizes `escapeText(x) → x`
   before comparing (`render-equivalence.ts:495`), so a real encoder presence/absence asymmetry (the
   lowered pipeline double-escapes) is silently equated and the byte-identical claim is unproven. Remove
