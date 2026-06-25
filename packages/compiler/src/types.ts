@@ -180,6 +180,7 @@ export interface CompileDependencyReads {
 export type RegistryGraphInput = Pick<
   CoreGraph.KovoExplainInput,
   | 'access'
+  | 'agentToolSinks'
   | 'capabilities'
   | 'components'
   | 'endpoints'
@@ -191,6 +192,7 @@ export type RegistryGraphInput = Pick<
   // drizzle-static` (analyzeSqlSafetyFromProject) through `deriveAppGraph` into the real-app-build
   // check graph so `kovo check` fires end-to-end, not only at the `compile drizzle-static` gate.
   | 'sqlSafetyDiagnostics'
+  | 'touchGraph'
   // SPEC §6.6: trust escapes (KV426 `--trust`, audit-only) and app dangerous-sink writes (KV424,
   // error-severity) ride from `compile drizzle-static` through `deriveAppGraph` into the check graph.
   | 'trustEscapes'

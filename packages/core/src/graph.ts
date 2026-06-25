@@ -51,6 +51,7 @@ export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 /** @internal */
 export interface KovoCheckInput {
   access?: readonly AccessExplainFact[];
+  agentToolSinks?: readonly AgentToolReachableSinkFact[];
   capabilities?: readonly CapabilityExplain[];
   cookieDowngrades?: readonly CookieDowngradeExplain[];
   derivedMutations?: readonly DerivedMutationDomainSet[];
@@ -482,6 +483,8 @@ export interface CapabilityExplain {
   authority?: readonly string[];
   /** Agent-tool declared sink/capability names. */
   declaredCapabilities?: readonly string[];
+  /** Statically classified reachable sinks for this framework-owned tool subset. */
+  reachableSinks?: readonly AgentToolReachableSinkFact[];
   /** A human justification recorded at the escape site (the audit's load-bearing field). */
   justification?: string;
   /** Source module for module-scoped escapes such as `publishToClient`. */
@@ -494,6 +497,25 @@ export interface CapabilityExplain {
   target?: string;
   /** The source span of the escape. */
   site: string;
+}
+
+/** @internal */
+export type AgentToolReachableSinkKind = 'egress' | 'mutation' | 'secret-read' | 'write';
+
+/**
+ * @internal A statically visible sink reachable from a framework-owned `tool()` declaration
+ * (SPEC §6.6; OPP-07/08). `grade:'sound'` rows are enforced by `kovo check`: the tool's declared
+ * capabilities must include `capability`. `grade:'audit'` rows stay visible in explain/audit output
+ * but do not claim capability bounding.
+ */
+export interface AgentToolReachableSinkFact {
+  capability: string;
+  evidence?: string;
+  grade: 'audit' | 'sound';
+  kind: AgentToolReachableSinkKind;
+  site: string;
+  target: string;
+  tool: string;
 }
 
 /**
@@ -799,6 +821,7 @@ function compareAccessExplainFact(left: AccessExplainFact, right: AccessExplainF
 
 const arrayFields = [
   'access',
+  'agentToolSinks',
   'capabilities',
   'components',
   'derivedMutations',
@@ -830,6 +853,100 @@ const arrayFields = [
   'verificationCoverage',
   'verificationDiagnostics',
 ] as const;
+
+/** @internal */
+export interface AgentToolReachabilityInput {
+  agentToolSinks?: readonly AgentToolReachableSinkFact[];
+  capabilities?: readonly CapabilityExplain[];
+  mutations?: readonly MutationExplain[];
+  touchGraph?: TouchGraph;
+}
+
+/**
+ * @internal Derive the narrow sound subset of agent-tool reachable sink facts from graph data Kovo
+ * already models. Today this covers framework-owned `tool()` declarations whose `target` matches a
+ * mutation/touch-graph key; write domains require a `${domain}.write` capability. Explicit
+ * `agentToolSinks` rows from future/static analyzers are preserved and may opt into `grade:'sound'`.
+ */
+export function deriveAgentToolReachableSinkFacts(
+  input: AgentToolReachabilityInput,
+): AgentToolReachableSinkFact[] {
+  const tools = new Set(
+    (input.capabilities ?? [])
+      .filter(
+        (capability) => capability.kind === 'agentTool' && isNonEmptyString(capability.target),
+      )
+      .map((capability) => capability.target as string),
+  );
+  if (tools.size === 0) return [...(input.agentToolSinks ?? [])].sort(compareAgentToolSinkFact);
+
+  const facts: AgentToolReachableSinkFact[] = [...(input.agentToolSinks ?? [])];
+
+  for (const mutation of input.mutations ?? []) {
+    if (!tools.has(mutation.key)) continue;
+    for (const domain of mutation.writes ?? []) {
+      facts.push(agentToolWriteSink(mutation.key, domain, `mutation:${mutation.key}`));
+    }
+  }
+
+  for (const [tool, entry] of Object.entries(input.touchGraph ?? {})) {
+    if (!tools.has(tool)) continue;
+    for (const touch of entry.touches) {
+      facts.push(agentToolWriteSink(tool, touch.domain, touch.site));
+    }
+  }
+
+  return dedupeAgentToolSinkFacts(facts).sort(compareAgentToolSinkFact);
+}
+
+function agentToolWriteSink(
+  tool: string,
+  domain: string,
+  site: string,
+): AgentToolReachableSinkFact {
+  return {
+    capability: `${domain}.write`,
+    evidence: 'graph-write-domain',
+    grade: 'sound',
+    kind: 'write',
+    site,
+    target: domain,
+    tool,
+  };
+}
+
+function dedupeAgentToolSinkFacts(
+  facts: readonly AgentToolReachableSinkFact[],
+): AgentToolReachableSinkFact[] {
+  const seen = new Set<string>();
+  const deduped: AgentToolReachableSinkFact[] = [];
+  for (const fact of facts) {
+    const key = [fact.tool, fact.kind, fact.target, fact.capability, fact.site, fact.grade].join(
+      '\0',
+    );
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(fact);
+  }
+  return deduped;
+}
+
+function compareAgentToolSinkFact(
+  left: AgentToolReachableSinkFact,
+  right: AgentToolReachableSinkFact,
+): number {
+  return (
+    left.tool.localeCompare(right.tool) ||
+    left.kind.localeCompare(right.kind) ||
+    left.target.localeCompare(right.target) ||
+    left.capability.localeCompare(right.capability) ||
+    left.site.localeCompare(right.site)
+  );
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
 
 /** @internal */
 export function validateKovoExplainInput(input: unknown): GraphInputValidationError[] {

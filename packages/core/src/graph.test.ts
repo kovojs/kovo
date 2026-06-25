@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateKovoExplainInput } from './graph.js';
+import { deriveAgentToolReachableSinkFacts, validateKovoExplainInput } from './graph.js';
 
 describe('kovo graph input validation', () => {
   it('reports unknown diagnostic codes at the element path', () => {
@@ -75,5 +75,59 @@ describe('kovo graph input validation', () => {
         ],
       }),
     ).toEqual([]);
+  });
+});
+
+describe('agent tool reachable sink facts', () => {
+  it('derives sound write capability requirements for framework-owned tool graph rows', () => {
+    expect(
+      deriveAgentToolReachableSinkFacts({
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['orders.write'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Update orders.',
+            site: 'app/tools/orders.ts:4',
+            target: 'orders.updateStatus',
+          },
+        ],
+        mutations: [{ key: 'orders.updateStatus', writes: ['orders'] }],
+        touchGraph: {
+          'orders.updateStatus': {
+            touches: [
+              {
+                domain: 'auditLog',
+                keys: null,
+                site: 'app/tools/orders.ts:18',
+                via: 'auditLog.insert',
+              },
+            ],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        capability: 'auditLog.write',
+        evidence: 'graph-write-domain',
+        grade: 'sound',
+        kind: 'write',
+        site: 'app/tools/orders.ts:18',
+        target: 'auditLog',
+        tool: 'orders.updateStatus',
+      },
+      {
+        capability: 'orders.write',
+        evidence: 'graph-write-domain',
+        grade: 'sound',
+        kind: 'write',
+        site: 'mutation:orders.updateStatus',
+        target: 'orders',
+        tool: 'orders.updateStatus',
+      },
+    ]);
   });
 });

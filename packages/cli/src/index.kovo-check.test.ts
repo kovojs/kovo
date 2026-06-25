@@ -133,6 +133,77 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails when a framework-owned agent tool omits a sound reachable sink capability', () => {
+    expect(
+      kovoCheck({
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['orders.write'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Update one order.',
+            site: 'app/tools/orders.ts:12',
+            target: 'orders.updateStatus',
+          },
+        ],
+        touchGraph: {
+          'orders.updateStatus': {
+            touches: [
+              {
+                domain: 'auditLog',
+                keys: null,
+                site: 'app/tools/orders.ts:31',
+                via: 'auditLog.insert',
+              },
+            ],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR AGENT_TOOL_CAPABILITY orders.updateStatus sink=write:auditLog required=auditLog.write site=app/tools/orders.ts:31 Declared tool capabilities do not cover statically reachable sink.',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('does not enforce audit-grade agent-tool sink facts as capability-bounding proof', () => {
+    expect(
+      kovoCheck({
+        agentToolSinks: [
+          {
+            capability: 'email.send',
+            grade: 'audit',
+            kind: 'egress',
+            site: 'app/tools/orders.ts:31',
+            target: 'smtp',
+            tool: 'orders.updateStatus',
+          },
+        ],
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['orders.write'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Update one order.',
+            site: 'app/tools/orders.ts:12',
+            target: 'orders.updateStatus',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
   it('fails raw endpoint and webhook graph rows with incomplete audit metadata (KV423)', () => {
     const result = kovoCheck({
       endpoints: [
