@@ -492,8 +492,12 @@ function renderSemanticExpression(model: ComponentModuleModel, container: Source
 }
 
 function normalizeGeneratedSemanticExpression(expression: string): string {
+  // S7-1 (plans/compiler-soundness.md): do NOT strip escapeText(x) → x here.
+  // The gate must compare actual encoded output so that an escapeText presence/absence
+  // asymmetry between authored and lowered sources is caught (fails closed), not silently
+  // equated. The mutation-field helpers are generated-only with no authored equivalent and
+  // are always stripped.
   return expression
-    .replace(/\bescapeText\(([^()]+)\)/g, '$1')
     .replace(/\b__kovoRenderMutationCsrfField\([^()]*\)/g, '')
     .replace(/\b__kovoRenderMutationIdemField\(\)/g, '');
 }
