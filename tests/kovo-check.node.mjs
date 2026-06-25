@@ -1516,7 +1516,10 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
       value: 'u1:p1:details',
     },
   });
-  assert.match(fact.csrf.field, /^<input type="hidden" name="csrf" value="[A-Za-z0-9+/=_-]+">$/);
+  assert.match(
+    fact.csrf.field,
+    /^<input type="hidden" name="csrf" value="(?:v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|[A-Za-z0-9+/=_-]+)">$/,
+  );
   assert.deepEqual(
     {
       guardCallsAfterFailure: fact.csrf.guardCallsAfterFailure,
