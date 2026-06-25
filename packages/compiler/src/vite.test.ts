@@ -517,6 +517,80 @@ export const CartBadge = component({
     }
   });
 
+  it('reuses persistent cache entries across restarts when only facts outside the footprint change', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-persistent-footprint-cache-'));
+    const cartInput = [
+      {
+        coercion: 'number' as const,
+        defaulted: false,
+        name: 'quantity',
+        optional: false,
+        provenance: 'registry' as const,
+        required: true,
+      },
+    ];
+    const compileComponentModule = vi.fn(({ registryFacts }) => ({
+      dependencyFootprint: {
+        reads: { mutationInputKeys: ['cart/add'] },
+        registryFacts: { mutationInputs: { 'cart/add': cartInput } },
+      },
+      files: [
+        {
+          kind: 'server',
+          source: `export const cartInput = ${JSON.stringify(
+            registryFacts?.mutationInputs?.['cart/add'],
+          )};`,
+        },
+      ],
+    }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      registryFacts: {
+        mutationInputs: {
+          'cart/add': cartInput,
+          'product/save': [],
+        },
+      },
+    });
+    plugin.configResolved?.({ root } as never);
+
+    try {
+      expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
+        `export const cartInput = ${JSON.stringify(cartInput)};`,
+      );
+      expect(compileComponentModule).toHaveBeenCalledTimes(1);
+
+      const secondCompile = vi.fn(() => ({
+        dependencyFootprint: {},
+        files: [{ kind: 'server', source: 'export const cacheMiss = true;' }],
+      }));
+      const secondPlugin = createKovoVitePlugin(secondCompile, {
+        registryFacts: {
+          mutationInputs: {
+            'cart/add': cartInput,
+            'product/save': [
+              {
+                coercion: 'string' as const,
+                defaulted: false,
+                name: 'ignored',
+                optional: false,
+                provenance: 'registry' as const,
+                required: true,
+              },
+            ],
+          },
+        },
+      });
+      secondPlugin.configResolved?.({ root } as never);
+
+      expect((await secondPlugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
+        `export const cartInput = ${JSON.stringify(cartInput)};`,
+      );
+      expect(secondCompile).not.toHaveBeenCalled();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('bypasses compiler caches when cache is false', async () => {
     const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
       dependencyFootprint: {},

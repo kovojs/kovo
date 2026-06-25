@@ -57,6 +57,7 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
+import { compilerEmittedSourceProvenanceToken } from './source-provenance.js';
 import type {
   CompileComponentOptions,
   CompileResult,
@@ -614,7 +615,13 @@ function versionStateDeriveReferences(
  */
 export function assertFixpoint(result: CompileResult): void {
   for (const file of result.files) {
-    const recompiled = compileComponentModule({ ...file, sourceProvenance: 'compiler-emitted' });
+    const recompileOptions = {
+      ...file,
+      sourceProvenance: compilerEmittedSourceProvenanceToken(),
+    };
+    const recompiled = compileComponentModule(
+      recompileOptions as unknown as CompileComponentOptions,
+    );
     const sameFile =
       recompiled.files.length === 1 &&
       recompiled.files[0]?.fileName === file.fileName &&
