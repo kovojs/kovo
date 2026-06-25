@@ -171,6 +171,19 @@ describe('server response adapters', () => {
     expect(new TextDecoder().decode(documentResponse.body as Uint8Array)).toBe('page');
   });
 
+  it('preserves blessed redirect Location headers through document wrapping', () => {
+    const documentResponse = routeResponseToDocumentResponse(
+      blessRedirectResponse({
+        body: '',
+        headers: { Location: redirectLocationHeader('/login?next=%2F') },
+        status: 303,
+      }),
+    );
+    const response = serverResponseToWebResponse(documentResponse, { method: 'GET' });
+
+    expect(response.headers.get('location')).toBe('/login?next=%2F');
+  });
+
   // Security finding M1: file/stream responses must default to nosniff so the
   // browser does not sniff a sniffable/scriptable body type.
   it('defaults file responses to X-Content-Type-Options: nosniff', () => {

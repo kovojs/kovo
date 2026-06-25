@@ -3,6 +3,13 @@ import * as ts from 'typescript';
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 
+const CHAR_CARET = 0x5e;
+const CHAR_COMMA = 0x2c;
+const CHAR_HYPHEN = 0x2d;
+const CHAR_LEFT_PAREN = 0x28;
+const CHAR_RIGHT_BRACE = 0x7d;
+const CHAR_RIGHT_BRACKET = 0x5d;
+
 /**
  * SPEC §6.6/§9.5 + secure-framework Phase 6 (Tier 3): the COMPILE-TIME half of the KV434 ReDoS gate.
  *
@@ -138,7 +145,7 @@ function regexLiteralSource(node: ts.RegularExpressionLiteral): string {
 
 function isLinearSafeLiteralPattern(source: string): boolean {
   for (let i = 0; i < source.length; i += 1) {
-    if (source[i] !== '(') continue;
+    if (source.charCodeAt(i) !== CHAR_LEFT_PAREN) continue;
     const close = matchGroupClose(source, i);
     if (close === -1) continue;
     if (quantifierAt(source, close + 1) === null) continue;
@@ -167,11 +174,11 @@ function quantifierAt(source: string, index: number): number | null {
   let i = index + 1;
   if (!isAsciiDigitCode(source.charCodeAt(i))) return null;
   while (isAsciiDigitCode(source.charCodeAt(i))) i += 1;
-  if (source[i] === ',') {
+  if (source.charCodeAt(i) === CHAR_COMMA) {
     i += 1;
     while (isAsciiDigitCode(source.charCodeAt(i))) i += 1;
   }
-  return source[i] === '}' ? i + 1 : null;
+  return source.charCodeAt(i) === CHAR_RIGHT_BRACE ? i + 1 : null;
 }
 
 function isAsciiDigitCode(code: number): boolean {
@@ -315,7 +322,7 @@ function readClassAtom(source: string, start: number): { end: number; set: Token
   const set = new Set<string>();
   let negated = false;
   let i = start + 1;
-  if (source[i] === '^') {
+  if (source.charCodeAt(i) === CHAR_CARET) {
     negated = true;
     i += 1;
   }
@@ -330,9 +337,13 @@ function readClassAtom(source: string, start: number): { end: number; set: Token
       i = escaped.end - 1;
       continue;
     }
-    const rangeEnd = source[i + 2];
-    if (source[i + 1] === '-' && rangeEnd && rangeEnd !== ']') {
-      for (let code = ch.charCodeAt(0); code <= rangeEnd.charCodeAt(0); code += 1) {
+    const rangeEndCode = source.charCodeAt(i + 2);
+    if (
+      source.charCodeAt(i + 1) === CHAR_HYPHEN &&
+      !Number.isNaN(rangeEndCode) &&
+      rangeEndCode !== CHAR_RIGHT_BRACKET
+    ) {
+      for (let code = ch.charCodeAt(0); code <= rangeEndCode; code += 1) {
         set.add(String.fromCharCode(code));
       }
       i += 2;

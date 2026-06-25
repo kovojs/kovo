@@ -475,10 +475,13 @@ export function methodNotAllowedWebResponse(
 export function routeResponseToDocumentResponse(
   response: RoutePageResponse,
 ): DocumentRouteResponseBase {
-  return {
+  const documentResponse = {
     ...response,
     body: response.body instanceof ArrayBuffer ? new Uint8Array(response.body) : response.body,
   };
+  return isBlessedRedirectResponse(response)
+    ? blessRedirectResponse(documentResponse)
+    : documentResponse;
 }
 
 /**

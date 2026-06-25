@@ -128,9 +128,14 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       knobs) and **SINK-03** (rooted file-serve). lev 7–9.
       Progress: `packages/core/src/internal/sink-policy.ts` now provides a shared module-private
       `Blessed<Sink>` witness substrate, SQL safety uses that substrate, and `rootedFiles()` mints a
-      `rooted-file-serve` witness for the first non-SQL sink. Focused sink-policy/SQL/file tests, the diff
-      whitespace gate, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap: other §3
-      candidates and static by-construction analyzer integration are not complete.
+      `rooted-file-serve` witness for the first non-SQL sink. Server `redirect()` now mints an internal
+      non-forgeable `Location` witness and unblessed 3xx `Location` headers fail closed; `pattern(literal)` now
+      rejects nested/overlapping quantified shapes instead of selling the length cap as a CPU bound. Focused
+      sink-policy/SQL/file/redirect/ReDoS tests, the diff whitespace gate, `pnpm run check:vp`, and
+      `pnpm run check:api-surface` passed. Integration follow-up preserved redirect witnesses through document
+      wrapping, kept the ReDoS validator inside the compiler hard-rule gate, and passed `pnpm run check:build`
+      plus `pnpm run check:kovo`. Remaining gap: other §3 candidates and static by-construction analyzer
+      integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
@@ -147,9 +152,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `packages/core/src/graph.ts` and `packages/cli/src/graph-output.ts` now derive/enforce the first sound
       write-domain subset for framework-owned tool rows and keep audit-grade sink rows visible.
       `tool({ reachableSinks })` also emits audit-grade egress/secret-read/mutation/write rows for arbitrary
-      declared tool-body sinks without making them enforced. Focused graph/check/explain/registry/agent-tool
-      tests, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
-      arbitrary tool-body AST reachability plus sound egress/secret-read analyzer rows.
+      declared tool-body sinks without making them enforced. Analyzer-produced top-level `agentToolSinks` rows
+      for egress and secret-read can now remain sound and be enforced, while public/nested rows are forcibly
+      downgraded to audit grade. Focused graph/check/explain/registry/agent-tool tests, `git diff --check`,
+      `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap: arbitrary tool-body AST
+      reachability producers.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -230,8 +237,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       commitment. **Revisit** vs. the `better-auth` delegation.
       Progress: Kovo's Better Auth boundary now requires real session credential cookies for credential flows,
       rejects JWT-shaped session cookies by default unless `sessionCookieMode: 'jwt'` is explicit, refuses
-      incoming session credential reissue, and fails closed when sign-out does not emit a revocation cookie.
-      Focused Better Auth/keyring/capability/env tests, `git diff --check`, `pnpm run check:vp`, and
+      incoming session credential reissue, maps delegated payloads only when the request carried an accepted
+      browser session credential, and fails closed when sign-out does not emit a revocation cookie. Focused Better
+      Auth/keyring/capability/env tests, `git diff --check`, `pnpm run check:vp`, and
       `pnpm run check:api-surface` passed. Remaining gap: Kovo still delegates the opaque session store to Better
       Auth, so the default-session ownership claim is not complete.
 
@@ -413,9 +421,10 @@ scripts/check-pack-security.test.mjs` passed; `pnpm run check:pack-security -- -
       directly-reachable subset first, keep KV414 as the shipped floor. **Research spike before committing.**
       Progress: `packages/drizzle/src/static/summaries.ts` and `packages/drizzle/src/static.ts` now preserve the
       exact private guard-principal symbol for accepted owner-column DATA proofs and reject mismatched or
-      unsummarized helper cases as `scope: unknown`. Focused scope-audit tests, `git diff --check`,
-      `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap: this is not full
-      guard-predicate correctness.
+      unsummarized helper cases as `scope: unknown`. Recursive object-binding provenance now preserves nested
+      private-scope aliases such as `const { guard: { userId } } = ctx` while rejecting mismatched guard fields.
+      Focused scope-audit tests, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface`
+      passed. Remaining gap: this is not full guard-predicate correctness.
 
 ---
 
@@ -469,19 +478,19 @@ degrades to the (b) floor and the laundering site is reported (**KV440**) — ne
 
 ### 3.3 Ranked brand candidates
 
-| ID          | Brand · sink                                                        | Honest tier                                                                                                                 | Lev | Effort  | Recommendation                                                                                                                                                                                           |
-| ----------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **SINK-01** | `SqlText`/`SqlIdentifier`/`SqlKeyword` · managed DB handle (CWE-89) | **by-construction** at the managed sink (string/template SQL); floor for object-shaped & identifier channels                | 9   | S       | **build** — fold ident/keyword into the kernel; **kill the `KOVO_SQL_GUARD` warn/off knob; flip native-object fall-through from default-allow to default-deny**                                          |
-| **SINK-03** | `SafePath` · rooted file serve (CWE-22)                             | **by-construction** for storage-key surface; floor at `root.resolve` (realpath containment); type-only+KV424 at raw `fs.*`  | 7   | M       | build-as-floor — ship `root.resolve` cap-handle + witness; `respond.file` already owns disposition                                                                                                       |
-| **SINK-05** | `RedirectTarget` (client) · `Kovo-Reauth` nav                       | runtime-DiD floor (sanitize-on-navigate)                                                                                    | 8   | S       | build — **drop the brand object**, keep a `sanitizeReauth` call chokepoint (= OPP-17; live hole)                                                                                                         |
-| **SINK-02** | `Command`/`ShellProgram` · `child_process` (CWE-78)                 | runtime-DiD floor at `cmd()` + type-only sig + KV424 at raw sinks                                                           | 6   | M       | build-as-floor — `cmd(program, argv[])` execFile, no shell; **not** by-construction (`node:child_process` is an unpinnable peer import)                                                                  |
-| **SINK-04** | `RedirectTarget` (server) · Location header (CWE-601)               | runtime-DiD floor (`sanitizeNext` re-validate) + type-only route surface                                                    | 5   | S       | build-as-floor — add a runtime witness; `isRedirect()` currently accepts any `{status:303, location:string}` plain object (forgeable)                                                                    |
-| **SINK-06** | `LinearSafePattern` · RegExp-from-input (CWE-1333)                  | **split:** blessed formats = by-construction; `pattern(literal)` "floor" is **FALSE**; `new RegExp(input)` = type-only+lint | 4   | M (RE2) | build-as-floor — **honesty-critical: the 4096-char length cap is NOT a CPU bound** (`/^(a\|a)*$/` burns 33s at 31 chars and passes today). Ship RE2-class linear engine or relabel `pattern()` as unsafe |
-| **SINK-09** | `MongoFilter` · NoSQL operator injection (CWE-943)                  | scalar-coercion half by-construction (declared fields); filter-build half floor + type-only at unowned driver               | 3   | M       | build-as-floor — needs a managed Mongo handle to own the sink (none today)                                                                                                                               |
-| **SINK-11** | (channel, no brand) · log forging (CWE-117)                         | runtime-DiD floor at the framework logger only                                                                              | 3   | S       | build-as-floor — structured logger neutralizes CR/LF/control/ANSI on emit (**KV439**); `console.log` stays unowned                                                                                       |
-| **SINK-10** | `EmailHeader` · SMTP header injection (CWE-93)                      | runtime-DiD floor (CRLF reject) — contingent on a mail primitive                                                            | 3   | M       | **defer** — no owned mail sink today; KV424 registry covers it for now                                                                                                                                   |
-| **SINK-08** | `ParsedShape` · deserialization (CWE-502)                           | wire already by-construction via the JSON-only parser monopoly; brand buys nothing                                          | 3   | S       | **type-only-lint** — add KV424 for unowned app deserializers; drop the brand (folds into OPP-19)                                                                                                         |
-| **SINK-07** | (none) · `eval`/`Function`/`vm` (CWE-95)                            | audit-only — KV424 **hard ban**                                                                                             | 4   | S       | **defer/no-brand** — there is no safe value to bless; "blessed arbitrary code" is a contradiction (CSP/TT refuse it too)                                                                                 |
+| ID          | Brand · sink                                                        | Honest tier                                                                                                                               | Lev | Effort  | Recommendation                                                                                                                                                  |
+| ----------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SINK-01** | `SqlText`/`SqlIdentifier`/`SqlKeyword` · managed DB handle (CWE-89) | **by-construction** at the managed sink (string/template SQL); floor for object-shaped & identifier channels                              | 9   | S       | **build** — fold ident/keyword into the kernel; **kill the `KOVO_SQL_GUARD` warn/off knob; flip native-object fall-through from default-allow to default-deny** |
+| **SINK-03** | `SafePath` · rooted file serve (CWE-22)                             | **by-construction** for storage-key surface; floor at `root.resolve` (realpath containment); type-only+KV424 at raw `fs.*`                | 7   | M       | build-as-floor — ship `root.resolve` cap-handle + witness; `respond.file` already owns disposition                                                              |
+| **SINK-05** | `RedirectTarget` (client) · `Kovo-Reauth` nav                       | runtime-DiD floor (sanitize-on-navigate)                                                                                                  | 8   | S       | build — **drop the brand object**, keep a `sanitizeReauth` call chokepoint (= OPP-17; live hole)                                                                |
+| **SINK-02** | `Command`/`ShellProgram` · `child_process` (CWE-78)                 | runtime-DiD floor at `cmd()` + type-only sig + KV424 at raw sinks                                                                         | 6   | M       | build-as-floor — `cmd(program, argv[])` execFile, no shell; **not** by-construction (`node:child_process` is an unpinnable peer import)                         |
+| **SINK-04** | `RedirectTarget` (server) · Location header (CWE-601)               | runtime-DiD floor (`sanitizeNext` re-validate) + type-only route surface                                                                  | 5   | S       | built-as-floor — `redirect()` mints an internal witness; forged `{status, location}` objects and unblessed 3xx `Location` headers fail closed to `/`            |
+| **SINK-06** | `LinearSafePattern` · RegExp-from-input (CWE-1333)                  | **split:** blessed formats = by-construction; `pattern(literal)` is a conservative structural floor; `new RegExp(input)` = type-only+lint | 4   | M (RE2) | built-as-floor — reject nested/overlapping quantifier shapes and label the length cap as an input-size backstop; still not an RE2-class linear engine           |
+| **SINK-09** | `MongoFilter` · NoSQL operator injection (CWE-943)                  | scalar-coercion half by-construction (declared fields); filter-build half floor + type-only at unowned driver                             | 3   | M       | build-as-floor — needs a managed Mongo handle to own the sink (none today)                                                                                      |
+| **SINK-11** | (channel, no brand) · log forging (CWE-117)                         | runtime-DiD floor at the framework logger only                                                                                            | 3   | S       | build-as-floor — structured logger neutralizes CR/LF/control/ANSI on emit (**KV439**); `console.log` stays unowned                                              |
+| **SINK-10** | `EmailHeader` · SMTP header injection (CWE-93)                      | runtime-DiD floor (CRLF reject) — contingent on a mail primitive                                                                          | 3   | M       | **defer** — no owned mail sink today; KV424 registry covers it for now                                                                                          |
+| **SINK-08** | `ParsedShape` · deserialization (CWE-502)                           | wire already by-construction via the JSON-only parser monopoly; brand buys nothing                                                        | 3   | S       | **type-only-lint** — add KV424 for unowned app deserializers; drop the brand (folds into OPP-19)                                                                |
+| **SINK-07** | (none) · `eval`/`Function`/`vm` (CWE-95)                            | audit-only — KV424 **hard ban**                                                                                                           | 4   | S       | **defer/no-brand** — there is no safe value to bless; "blessed arbitrary code" is a contradiction (CSP/TT refuse it too)                                        |
 
 ### 3.4 New diagnostics (KV439–442)
 
@@ -510,8 +519,9 @@ escaping (KV236), not by TT. Every audited escape records a `kovo explain` prove
 
 ## 4. Relabels, drops, and non-goals (honesty discipline)
 
-- **Drop** the `pattern(literal)` length-cap "ReDoS floor" framing — it does not bound catastrophic
-  backtracking (SINK-06). Either ship a linear engine or relabel `pattern()` as an audited-unsafe escape.
+- **Relabel** the `pattern(literal)` length cap as only an input-size backstop — it does not bound catastrophic
+  backtracking (SINK-06). The shipped structural rejection improves the floor but remains below an RE2-class
+  linear engine.
 - **Drop** the "any `secret()`-provenance value reaching a column" framing for confidential-at-rest — anchor on
   the destination-column declaration instead (OPP-04); source provenance dies at `.reveal()`.
 - **Relabel** OPP-05's "rotation by construction / revoked-key inexpressible," OPP-13's SRI, OPP-15's
