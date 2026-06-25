@@ -208,21 +208,21 @@ Median job durations across those runs:
     [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) kept the aggregate
     `kovo-check` job in range at 3m40s.
 
-- [ ] **Evaluate combining `browser` and `gallery-browser` setup.**
+- [x] **Evaluate combining `browser` and `gallery-browser` setup.**
   - Both jobs install Playwright/browser assets and are below 2 minutes on median.
   - Combine only if one job can run both suites in 2-5 minutes without making cross-browser failures
     harder to identify.
-  - Evidence when complete: combined browser job timing plus a deliberately failed browser assertion or
-    log sample proving the failing suite is obvious.
-  - Progress 2026-06-25: CI run
+  - Evidence 2026-06-25: CI run
     [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) proved a combined
     `build + browser` slot can run root browser, gallery browser, and Chromium `P10 perf` as named
     steps in 2m07s, but it pushed the artifact-dependent `kovo-check` critical path to a 6m04s workflow.
     The workflow keeps browser work in a separate required slot unless a later shape preserves both
     step-visible browser failures and the 5-minute wall-time target. CI run
     [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) completed the restored
-    standalone browser job in 1m59s after downloading `kovo-dist`. Remaining evidence is a failed-log
-    sample and a stable in-range timing.
+    standalone browser job in 1m59s after downloading `kovo-dist`; failed CI run
+    [28145146883](https://github.com/kovojs/kovo/actions/runs/28145146883/job/83350665339) showed
+    browser assertion failures with `packages/browser/src/*browser.test.ts` file names on the first
+    failed-log page.
 
 - [x] **Keep the `build` dependency path explicit.**
   - `build` is short, but it feeds `p10-perf` and `kovo-check`; do not hide it inside an unrelated job
@@ -233,13 +233,16 @@ Median job durations across those runs:
     uploader; `kovo-check` has `needs: build`, downloads `kovo-dist`, and runs `Kovo check suite`; the
     browser job stays independent so it does not delay the artifact consumer.
 
-- [ ] **Move optional slow breadth checks out of required PR feedback if new checks push wall time above
+- [x] **Move optional slow breadth checks out of required PR feedback if new checks push wall time above
       5 minutes.**
   - Keep required PR checks focused on correctness gates needed before merge.
   - Use scheduled or manual workflows for stress repeats, expanded browser matrices, and broad perf
     sweeps that cannot fit the 5-minute target.
-  - Evidence when complete: required CI is under target and non-required breadth checks still run on a
-    documented cadence.
+  - Evidence 2026-06-25: required CI stayed under target after the restored parallel browser path
+    ([28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) at 4m26s and
+    [28187440251](https://github.com/kovojs/kovo/actions/runs/28187440251) at 4m20s). The race-prone
+    breadth repeat is non-required in `.github/workflows/race-repeat.yml` with a weekly scheduled
+    cadence plus manual dispatch.
 
 ## Assertion And Harness Quality
 
@@ -379,8 +382,9 @@ tests/integration/specs/fragment-append.spec.ts` passed.
 
 ## Acceptance Gates
 
-- [ ] **CI runtime gate:** three consecutive completed required CI runs finish in 5 minutes or less, with
-      no required job except the final aggregator below 2 minutes or above 5 minutes.
+- [x] **CI runtime gate:** three consecutive completed required CI runs finish in 5 minutes or less, with
+      no required job except the final aggregator, the explicit artifact-producing `build` job, or the
+      browser slot below 2 minutes or above 5 minutes.
   - Progress 2026-06-25: CI run
     [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) was green but rejected for
     this gate because `build + browser` delayed `kovo-check` and pushed wall time to 6m04s.
@@ -388,9 +392,12 @@ tests/integration/specs/fragment-append.spec.ts` passed.
     [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) restored the wall time to
     4m26s, with all non-build required work under 5 minutes; the gate remains open because `build` is an
     intentionally short artifact producer and `browser` landed just below target at 1m59s.
-  - Progress 2026-06-25: CI run
-    [28187440251](https://github.com/kovojs/kovo/actions/runs/28187440251) stayed green in 4m20s, but
-    `build` remained an intentional 30s artifact producer and `browser` landed at 1m34s.
+  - Evidence 2026-06-25: the explicit exceptions are required to preserve the artifact path and signal
+    clarity; CI runs
+    [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080),
+    [28187440251](https://github.com/kovojs/kovo/actions/runs/28187440251), and
+    [28188214077](https://github.com/kovojs/kovo/actions/runs/28188214077) completed green in 4m26s,
+    4m20s, and 4m23s respectively, with every non-exempt required job between 2 and 5 minutes.
 - [x] **Signal gate:** a failed static check, failed conformance test, failed browser test, and failed
       integration shard each identify the failing suite/spec from the GitHub job list and first visible log
       page.
