@@ -258,6 +258,33 @@ export const CartList = component({
     ]);
   });
 
+  it('reports KV224 for static ids inside array map JSX repeats', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-list.tsx',
+      source: `
+export const CartList = component({
+  render: ({ rows }) => (
+    <ul>
+      {rows.map(row => <li key={row.id} id="row">{row.name}</li>)}
+    </ul>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV224',
+        fileName: 'cart-list.tsx',
+        message:
+          'Static id is duplicated in component scope or appears inside a repeatable stamp. repeatable id="row"',
+        severity: 'error',
+        start: { column: 41, line: 6 },
+        length: 8,
+      },
+    ]);
+  });
+
   it('allows static ids on non-repeated data-bind-list containers', () => {
     const result = compileComponentModule({
       fileName: 'cart-list.tsx',
