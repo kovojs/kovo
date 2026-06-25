@@ -814,7 +814,7 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       CAPABILITIES
-      CAPABILITY kind=agentTool site=app/tools/orders.ts:12 name=orders.updateStatus owner=security purpose="Update one order after a human-approved agent action." authority=principal:user:123 capabilities=orders.write ambient=rejected ambientJustification=- review=-
+      CAPABILITY kind=agentTool site=app/tools/orders.ts:12 name=orders.updateStatus owner=security purpose="Update one order after a human-approved agent action." authority=principal:user:123 capabilities=orders.write sinks=- ambient=rejected ambientJustification=- review=-
       CAPABILITY kind=egressAllowInternal site=app/server.ts:14 module=- target=10.0.0.5:9090 justification="internal metrics sidecar on the pod network"
       CAPABILITY kind=publishToClient site=app/checkout.tsx:9 module=./checkout-config target=stripeClient justification="Stripe SDK is a client-safe published handle"
       CAPABILITY kind=serverValue site=app/admin.ts:3 module=- target=export.email justification="admin export reveals masked emails"
@@ -822,6 +822,42 @@ describe('kovo explain', () => {
       SUMMARY total=5
       "
     `);
+  });
+
+  it('prints statically reachable agent-tool sink coverage for the sound subset', () => {
+    const result = kovoExplain(
+      {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['orders.write', 'email.send'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Update one order and notify the buyer.',
+            site: 'app/tools/orders.ts:12',
+            target: 'orders.updateStatus',
+          },
+        ],
+        agentToolSinks: [
+          {
+            capability: 'email.send',
+            grade: 'audit',
+            kind: 'egress',
+            site: 'app/tools/orders.ts:31',
+            target: 'smtp',
+            tool: 'orders.updateStatus',
+          },
+        ],
+        mutations: [{ key: 'orders.updateStatus', writes: ['orders'] }],
+      },
+      { capabilities: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain(
+      'sinks=audit:egress:smtp->email.send@app/tools/orders.ts:31,sound:write:orders->orders.write@mutation:orders.updateStatus',
+    );
   });
 
   it('prints the cookie downgrade audit table (--cookies)', () => {

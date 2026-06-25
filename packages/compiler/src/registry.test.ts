@@ -908,6 +908,60 @@ export const ProductGrid = component({
     expect(derived.graph.access?.filter((fact) => fact.decision === 'missing')).toHaveLength(3);
   });
 
+  it('threads framework-owned agent-tool reachable sink facts into the app graph', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['orders.write'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Update one order.',
+            site: 'app/tools/orders.ts:12',
+            target: 'orders.updateStatus',
+          },
+        ],
+        mutations: [{ key: 'orders.updateStatus', writes: ['orders'] }],
+        touchGraph: {
+          'orders.updateStatus': {
+            touches: [
+              {
+                domain: 'auditLog',
+                keys: null,
+                site: 'app/tools/orders.ts:31',
+                via: 'auditLog.insert',
+              },
+            ],
+            unresolved: [],
+          },
+        },
+      },
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'auditLog.write',
+        evidence: 'graph-write-domain',
+        grade: 'sound',
+        kind: 'write',
+        site: 'app/tools/orders.ts:31',
+        target: 'auditLog',
+        tool: 'orders.updateStatus',
+      },
+      {
+        capability: 'orders.write',
+        evidence: 'graph-write-domain',
+        grade: 'sound',
+        kind: 'write',
+        site: 'mutation:orders.updateStatus',
+        target: 'orders',
+        tool: 'orders.updateStatus',
+      },
+    ]);
+  });
+
   it('derives page access facts from compiled JSX route pages', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',

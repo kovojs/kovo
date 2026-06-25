@@ -1,5 +1,8 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-import { deriveAccessExplainFacts } from '@kovojs/core/internal/graph';
+import {
+  deriveAccessExplainFacts,
+  deriveAgentToolReachableSinkFacts,
+} from '@kovojs/core/internal/graph';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
@@ -73,9 +76,18 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(pagesForAccess === undefined ? {} : { pages: pagesForAccess }),
     ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
   });
+  const agentToolSinks = deriveAgentToolReachableSinkFacts({
+    ...(options.graph?.agentToolSinks === undefined
+      ? {}
+      : { agentToolSinks: options.graph.agentToolSinks }),
+    ...(capabilities.length === 0 ? {} : { capabilities }),
+    ...(options.graph?.mutations === undefined ? {} : { mutations: options.graph.mutations }),
+    ...(options.graph?.touchGraph === undefined ? {} : { touchGraph: options.graph.touchGraph }),
+  });
   const graph: RegistryGraphInput = {
     ...options.graph,
     ...(access.length > 0 ? { access } : {}),
+    ...(agentToolSinks.length > 0 ? { agentToolSinks } : {}),
     ...(capabilities.length > 0 ? { capabilities } : {}),
     components,
     ...(mergedPages === undefined ? {} : { pages: mergedPages }),

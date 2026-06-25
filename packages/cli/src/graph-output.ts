@@ -5,7 +5,10 @@ import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/in
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type { DerivationProof } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
+import {
+  deriveAgentToolReachableSinkFacts,
+  validateKovoExplainInput,
+} from '@kovojs/core/internal/graph';
 import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 
 import { AUDIT_USAGE, CHECK_USAGE, EXPLAIN_USAGE_LINE } from './commands-manifest.js';
@@ -817,6 +820,14 @@ export function kovoCheck(
     // Drizzle write (without query.elevated) is the blocking KV433 confused-deputy error.
     for (const finding of sortedQueryWriteReachability(graph.queryWriteReachability ?? [])) {
       pushFinding(queryWriteReachabilityKv433Line(finding), true);
+    }
+
+    // SPEC §6.6 / OPP-07: for the narrow sound subset of framework-owned `tool()` declarations
+    // with statically classified reachable sinks, declared capabilities must cover every sink's
+    // required capability. Audit-grade rows stay visible in `explain --capabilities` but do not
+    // claim capability bounding.
+    for (const finding of agentToolCapabilityCoverageFailures(graph)) {
+      pushFinding(agentToolCapabilityCoverageLine(finding), true);
     }
 
     // SPEC §10.3/§11.1 / secure-framework Phase 6: a single-row self-referential write to a
@@ -1802,7 +1813,21 @@ function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
 function collectCapabilityFacts(
   graph: CoreGraph.KovoExplainInput,
 ): readonly CoreGraph.CapabilityExplain[] {
-  const collected: CoreGraph.CapabilityExplain[] = [...(graph.capabilities ?? [])];
+  const reachableSinks = deriveAgentToolReachableSinkFacts(graph);
+  const sinksByTool = new Map<string, CoreGraph.AgentToolReachableSinkFact[]>();
+  for (const sink of reachableSinks) {
+    const sinks = sinksByTool.get(sink.tool) ?? [];
+    sinks.push(sink);
+    sinksByTool.set(sink.tool, sinks);
+  }
+
+  const collected: CoreGraph.CapabilityExplain[] = (graph.capabilities ?? []).map((capability) => {
+    if (capability.kind !== 'agentTool' || capability.target === undefined) return capability;
+    const sinks = sinksByTool.get(capability.target);
+    return sinks === undefined || sinks.length === 0
+      ? capability
+      : { ...capability, reachableSinks: sinks };
+  });
 
   for (const reveal of graph.revealed ?? []) {
     if (reveal.grade !== 'audit') continue; // proof-grade server projections are not an escape.
@@ -1849,9 +1874,75 @@ function agentToolCapabilityLine(capability: CoreGraph.CapabilityExplain): strin
     `purpose=${stableValue(capability.purpose)}`,
     `authority=${list(capability.authority)}`,
     `capabilities=${list(capability.declaredCapabilities)}`,
+    `sinks=${agentToolSinkList(capability.reachableSinks)}`,
     `ambient=${capability.ambientBrowserCredentials ?? '-'}`,
     `ambientJustification=${stableValue(capability.ambientJustification)}`,
     `review=${stableValue(capability.justification)}`,
+  ].join(' ');
+}
+
+function agentToolSinkList(
+  sinks: readonly CoreGraph.AgentToolReachableSinkFact[] | undefined,
+): string {
+  if (sinks === undefined || sinks.length === 0) return '-';
+  return sinks
+    .map((sink) => `${sink.grade}:${sink.kind}:${sink.target}->${sink.capability}@${sink.site}`)
+    .sort()
+    .join(',');
+}
+
+interface AgentToolCapabilityCoverageFailure {
+  capability: string;
+  kind: CoreGraph.AgentToolReachableSinkKind;
+  site: string;
+  target: string;
+  tool: string;
+}
+
+function agentToolCapabilityCoverageFailures(
+  graph: CoreGraph.KovoCheckInput,
+): readonly AgentToolCapabilityCoverageFailure[] {
+  const tools = new Map(
+    (graph.capabilities ?? [])
+      .filter((capability) => capability.kind === 'agentTool' && !empty(capability.target))
+      .map((capability) => [
+        capability.target as string,
+        new Set(capability.declaredCapabilities ?? []),
+      ]),
+  );
+  if (tools.size === 0) return [];
+
+  return deriveAgentToolReachableSinkFacts(graph)
+    .filter((sink) => sink.grade === 'sound')
+    .filter((sink) => {
+      const declared = tools.get(sink.tool);
+      return declared !== undefined && !declared.has(sink.capability);
+    })
+    .map((sink) => ({
+      capability: sink.capability,
+      kind: sink.kind,
+      site: sink.site,
+      target: sink.target,
+      tool: sink.tool,
+    }))
+    .sort(
+      (left, right) =>
+        left.tool.localeCompare(right.tool) ||
+        left.kind.localeCompare(right.kind) ||
+        left.target.localeCompare(right.target) ||
+        left.capability.localeCompare(right.capability) ||
+        left.site.localeCompare(right.site),
+    );
+}
+
+function agentToolCapabilityCoverageLine(finding: AgentToolCapabilityCoverageFailure): string {
+  return [
+    'ERROR AGENT_TOOL_CAPABILITY',
+    finding.tool,
+    `sink=${finding.kind}:${finding.target}`,
+    `required=${finding.capability}`,
+    `site=${finding.site}`,
+    'Declared tool capabilities do not cover statically reachable sink.',
   ].join(' ');
 }
 
