@@ -1,8 +1,22 @@
 #!/usr/bin/env node
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import {
+  bundledKovoDocsMirrorFiles,
+  bundledKovoRulesSource,
+  renderKovoRulesBlock,
+} from '@kovojs/core/internal/agent-docs';
 
 export interface CreateKovoOptions {
   dialect?: CreateKovoDialect;
@@ -14,6 +28,7 @@ export type CreateKovoDialect = 'postgres' | 'sqlite';
 export interface GeneratedFile {
   path: string;
   source: string;
+  symlinkTarget?: string;
 }
 
 export interface CreateKovoProject {
@@ -109,11 +124,26 @@ export function createKovoProject(options: CreateKovoOptions): CreateKovoProject
   const packageName = normalizePackageName(options.name);
   const dialect = options.dialect ?? 'postgres';
   const values = templateValues(packageName);
+  const docsVersion = packageVersion('@kovojs/core');
   const csrfSecret = generateCsrfSecret();
   const demoPassword = generateDemoPassword();
+  const kovoRulesBlock = renderKovoRulesBlock({
+    rulesSource: bundledKovoRulesSource(),
+    version: docsVersion,
+  });
 
   return {
     files: [
+      { path: 'AGENTS.md', source: renderAgentsFile(kovoRulesBlock) },
+      {
+        path: 'CLAUDE.md',
+        source: 'See AGENTS.md for agent instructions.\n',
+        symlinkTarget: 'AGENTS.md',
+      },
+      ...bundledKovoDocsMirrorFiles({ version: docsVersion }).map((file) => ({
+        path: `.kovo/docs/${file.path}`,
+        source: file.source,
+      })),
       ...templateFiles.map((file) => ({
         path: file.path,
         source: renderTemplate(readTemplate(templatePathForDialect(file, dialect)), values),
@@ -155,6 +185,15 @@ export function writeKovoProject(
     }
 
     mkdirSync(dirname(destination), { recursive: true });
+    if (file.symlinkTarget) {
+      try {
+        symlinkSync(file.symlinkTarget, destination);
+        continue;
+      } catch {
+        writeFileSync(destination, file.source, 'utf8');
+        continue;
+      }
+    }
     writeFileSync(destination, file.source, 'utf8');
   }
 
@@ -163,6 +202,17 @@ export function writeKovoProject(
     name: project.name,
     root,
   };
+}
+
+function renderAgentsFile(kovoRulesBlock: string): string {
+  return [
+    '# Agent Instructions',
+    '',
+    'Add project-specific agent instructions here. Keep Kovo framework docs inside the generated block below.',
+    '',
+    kovoRulesBlock.trimEnd(),
+    '',
+  ].join('\n');
 }
 
 export function main(args: readonly string[] = process.argv.slice(2)): number {

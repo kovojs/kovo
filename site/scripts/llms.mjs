@@ -40,6 +40,7 @@ export function buildLlmsIndex(sections, { origin, specMirror = '/spec.md' } = {
     ...TAGLINE,
     '',
     'Every documentation page is available as raw markdown at the URLs below.',
+    `The condensed app-local agent rules source is at ${origin}/kovo-rules.md`,
     `The full corpus for ingestion is at ${origin}/llms-full.txt`,
     `The normative specification is at ${origin}${specMirror}`,
     '',

@@ -163,9 +163,10 @@ describe('kovo check', () => {
     const coverage = securityCheckDiagnosticMatrix.map((row) => {
       const accepted = kovoCheck(row.accepted);
       const rejected = kovoCheck(row.rejected);
-      expect(accepted.output, `${row.code} accepted fixture should not emit ${row.code}`).not.toContain(
-        row.code,
-      );
+      expect(
+        accepted.output,
+        `${row.code} accepted fixture should not emit ${row.code}`,
+      ).not.toContain(row.code);
       expect(rejected.output, `${row.code} rejected fixture should emit ${row.code}`).toContain(
         row.code,
       );
@@ -647,7 +648,9 @@ describe('kovo check', () => {
   it('keeps same-domain different-key owns() accesses flagged as KV414 (SPEC §10.3)', () => {
     const result = kovoCheck({
       ownerDomains: [{ domain: 'order', owner: 'userId' }],
-      queries: [{ domains: ['order'], guards: ['authed', 'owns:order:arg:id'], query: 'orderById' }],
+      queries: [
+        { domains: ['order'], guards: ['authed', 'owns:order:arg:id'], query: 'orderById' },
+      ],
       scopeAudits: [
         {
           domain: 'order',
@@ -1830,6 +1833,18 @@ describe('kovo check', () => {
         ['export function validateKovoExplainInput() { return []; }', ''].join('\n'),
         'utf8',
       );
+      writeFileSync(
+        join(parent, 'node_modules/@kovojs/core/internal/agent-docs.js'),
+        [
+          'export const defaultKovoRulesSource = "./.kovo/docs/kovo-rules.md";',
+          'export const kovoDocsMirrorRemotes = [];',
+          'export function bundledKovoDocsMirrorFiles() { return []; }',
+          'export function renderKovoRulesBlock() { return ""; }',
+          'export function replaceKovoRulesBlock(source) { return source; }',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
       writeFileSync(join(parent, 'package.json'), '{"type":"module"}\n', 'utf8');
       symlinkSync(new URL('./bin.ts', import.meta.url), entryPath);
       symlinkSync(new URL('./index.ts', import.meta.url), join(spacedDir, 'index.js'));
@@ -1844,7 +1859,9 @@ describe('kovo check', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      expect(output).toBe('kovo: add, audit, build, check, compile, explain, export, mcp\n');
+      expect(output).toBe(
+        'kovo: add, audit, build, check, compile, explain, export, mcp, update-docs\n',
+      );
     } finally {
       rmSync(parent, { force: true, recursive: true });
     }

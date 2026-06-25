@@ -24,12 +24,14 @@
     "build:dist": "vp pack src/index.ts --dts",
     "prepack": "pnpm run build:dist"
   },
+  "dependencies": {
+    "@kovojs/core": "workspace:*"
+  },
   "devDependencies": {
     "@kovojs/better-auth": "workspace:*",
     "@kovojs/browser": "workspace:*",
     "@kovojs/cli": "workspace:*",
     "@kovojs/compiler": "workspace:*",
-    "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
