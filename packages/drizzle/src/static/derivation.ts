@@ -67,6 +67,7 @@ import {
   staticAccessExpression,
   staticAccessName,
   staticExpressionRootIdentifier,
+  symbolForIdentifierReference,
   touchBodyCallExpressions,
   unwrappedFunctionExpression,
   unwrappedStaticExpressionNode,
@@ -876,6 +877,10 @@ export function extractMassAssignmentFromProject(
           inputRoots: callbackInputRootNodes(callback.fn),
           serverSummaryKeys,
         });
+        const passwordSinkSymbolKeys = passwordSinkAliasKeysForNodes(
+          [callback.body],
+          privilegedHelpers,
+        );
         const name = callback.key ?? '<anonymous>';
         for (const call of touchBodyCallExpressions(callback.body)) {
           facts.push(
@@ -887,6 +892,7 @@ export function extractMassAssignmentFromProject(
               resolveTable,
               sessionContext,
               symbolContext,
+              passwordSinkSymbolKeys,
               privilegedHelpers,
             }),
           );
@@ -904,28 +910,34 @@ interface GovernedTableInfo {
   domain: string;
   /** The governed column set, or `'*'` when `kovo({ governed: true })` governs all columns. */
   governed: ReadonlySet<string> | '*';
+  /** Password-storage columns must be written only through the blessed argon2id sink. */
+  passwordColumns: ReadonlySet<string>;
 }
 
 function governedTableInfo(table: ExtractedTable): GovernedTableInfo | undefined {
   const annotation = table.annotation;
   if (!('domain' in annotation)) return undefined;
+  const passwordColumns = new Set(Object.keys(table.columns).filter(isPasswordColumnName));
   const governedAnnotation = (annotation as { governed?: true | readonly string[] }).governed;
-  if (governedAnnotation === true) return { domain: annotation.domain, governed: '*' };
+  if (governedAnnotation === true) {
+    return { domain: annotation.domain, governed: '*', passwordColumns };
+  }
 
   const governed = new Set<string>();
-  // AUTO-governed: the instance/primary key and the principal owner column.
+  // AUTO-governed: the instance/primary key, the principal owner column, and password storage.
   const key =
     'key' in annotation && typeof annotation.key === 'string' ? annotation.key : undefined;
   const owner =
     'owner' in annotation && typeof annotation.owner === 'string' ? annotation.owner : undefined;
   if (key) governed.add(key);
   if (owner) governed.add(owner);
+  for (const column of passwordColumns) governed.add(column);
   if (Array.isArray(governedAnnotation)) {
     for (const column of governedAnnotation) {
       if (typeof column === 'string') governed.add(column);
     }
   }
-  return governed.size > 0 ? { domain: annotation.domain, governed } : undefined;
+  return governed.size > 0 ? { domain: annotation.domain, governed, passwordColumns } : undefined;
 }
 
 interface MassAssignmentCallContext {
@@ -936,12 +948,15 @@ interface MassAssignmentCallContext {
   resolveTable: (node: Node) => string | undefined;
   sessionContext: SessionProvenanceContext;
   symbolContext: SymbolProvenanceContext;
+  passwordSinkSymbolKeys: ReadonlySet<string>;
   privilegedHelpers: PrivilegedWriteHelpers;
 }
 
 interface PrivilegedWriteHelpers {
   adminAssign: ReadonlySet<string>;
+  hashPassword: ReadonlySet<string>;
   namespaces: ReadonlySet<string>;
+  passwordNamespaces: ReadonlySet<string>;
   serverValue: ReadonlySet<string>;
 }
 
@@ -1037,7 +1052,9 @@ function massAssignmentFactsForObject(
       : property.getInitializer();
     if (!valueNode) continue;
 
-    const verdict = governedValueVerdict(valueNode, context);
+    const verdict = passwordColumn(info, column)
+      ? passwordValueVerdict(valueNode, context)
+      : governedValueVerdict(valueNode, context);
     if (verdict.ok) continue;
     facts.push({
       column,
@@ -1068,13 +1085,13 @@ function spreadMassAssignmentFacts(
   via: 'set' | 'spread' | 'values',
 ): MassAssignmentFact[] {
   const verdict = governedValueVerdict(expression, context);
-  if (verdict.ok) return [];
+  if (verdict.ok && info.passwordColumns.size === 0) return [];
   return [
     {
       column: governedColumnsLabel(info, table),
       domain: info.domain,
       name: context.name,
-      provenance: verdict.provenance,
+      provenance: info.passwordColumns.size > 0 && verdict.ok ? 'unknown' : verdict.provenance,
       site,
       via,
       ...(verdict.detail ? { detail: verdict.detail } : {}),
@@ -1148,6 +1165,37 @@ function governedValueVerdict(
   return { ok: false, provenance: 'unknown', detail: expression.getText() };
 }
 
+/**
+ * Password columns are a KV438 specialization for SPEC §6.6/OPP-10: stored password
+ * values are writable only through Kovo's first-party argon2id sink. Ordinary
+ * server-derived/literal/admin escapes are not sufficient for password persistence.
+ */
+function passwordValueVerdict(
+  node: Node,
+  context: MassAssignmentCallContext,
+): GovernedValueVerdict {
+  const expression = unwrappedAwaitedStaticExpressionNode(node);
+  if (Node.isCallExpression(expression) && isBlessedPasswordHashCall(expression, context)) {
+    return { ok: true, provenance: 'unknown' };
+  }
+  if (Node.isIdentifier(expression)) {
+    const symbolKey = symbolKeyForNode(expression);
+    if (symbolKey && context.passwordSinkSymbolKeys.has(symbolKey)) {
+      return { ok: true, provenance: 'unknown' };
+    }
+  }
+  const provenance = symbolProvenanceForExpression(expression, context.symbolContext);
+  if (provenance.kind === 'input') {
+    return {
+      ok: false,
+      provenance: 'input',
+      detail:
+        provenance.path && provenance.path.length > 0 ? provenance.path : expression.getText(),
+    };
+  }
+  return { ok: false, provenance: 'unknown', detail: expression.getText() };
+}
+
 function isPrivilegedHelperCall(
   callee: Node,
   helper: 'adminAssign' | 'serverValue',
@@ -1163,25 +1211,94 @@ function isPrivilegedHelperCall(
   );
 }
 
+function isBlessedPasswordHashCall(
+  expression: CallExpression,
+  context: MassAssignmentCallContext,
+): boolean {
+  return isBlessedPasswordHashCallWithHelpers(expression, context.privilegedHelpers);
+}
+
+function passwordSinkAliasKeysForNodes(
+  bodies: readonly Node[],
+  helpers: PrivilegedWriteHelpers,
+): ReadonlySet<string> {
+  const aliases = new Set<string>();
+  const isPasswordSinkExpression = (node: Node): boolean => {
+    const expression = unwrappedAwaitedStaticExpressionNode(node);
+    if (
+      Node.isCallExpression(expression) &&
+      isBlessedPasswordHashCallWithHelpers(expression, helpers)
+    ) {
+      return true;
+    }
+    if (!Node.isIdentifier(expression)) return false;
+    const symbolKey = symbolKeyForNode(expression);
+    return symbolKey !== undefined && aliases.has(symbolKey);
+  };
+
+  for (const body of bodies) {
+    for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+      const initializer = declaration.getInitializer();
+      if (!initializer || !isPasswordSinkExpression(initializer)) continue;
+      const binding = declaration.getNameNode();
+      if (!Node.isIdentifier(binding)) continue;
+      const symbolKey = symbolKeyForNode(binding);
+      if (symbolKey) aliases.add(symbolKey);
+    }
+    for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      if (assignment.getOperatorToken().getText() !== '=') continue;
+      if (!isPasswordSinkExpression(assignment.getRight())) continue;
+      const left = assignment.getLeft();
+      if (!Node.isIdentifier(left)) continue;
+      const symbolKey = symbolKeyForNode(left);
+      if (symbolKey) aliases.add(symbolKey);
+    }
+  }
+  return aliases;
+}
+
+function isBlessedPasswordHashCallWithHelpers(
+  expression: CallExpression,
+  helpers: PrivilegedWriteHelpers,
+): boolean {
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  if (Node.isIdentifier(callee)) {
+    return helpers.hashPassword.has(callee.getText());
+  }
+  if (!Node.isPropertyAccessExpression(callee)) return false;
+  const receiver = callee.getExpression();
+  return (
+    Node.isIdentifier(receiver) &&
+    helpers.passwordNamespaces.has(receiver.getText()) &&
+    callee.getName() === 'hashPassword'
+  );
+}
+
 function privilegedWriteHelperNames(sourceFile: SourceFile): PrivilegedWriteHelpers {
   const adminAssign = new Set<string>();
+  const hashPassword = new Set<string>();
   const serverValue = new Set<string>();
   const namespaces = new Set<string>();
+  const passwordNamespaces = new Set<string>();
   for (const declaration of sourceFile.getImportDeclarations()) {
     const specifier = declaration.getModuleSpecifierValue();
     if (specifier !== '@kovojs/server' && specifier !== '@kovojs/server/write-governance') {
       continue;
     }
     const namespace = declaration.getNamespaceImport();
-    if (namespace) namespaces.add(namespace.getText());
+    if (namespace) {
+      namespaces.add(namespace.getText());
+      if (specifier === '@kovojs/server') passwordNamespaces.add(namespace.getText());
+    }
     for (const named of declaration.getNamedImports()) {
       const imported = named.getName();
       const local = named.getAliasNode()?.getText() ?? imported;
       if (imported === 'adminAssign') adminAssign.add(local);
+      if (specifier === '@kovojs/server' && imported === 'hashPassword') hashPassword.add(local);
       if (imported === 'serverValue') serverValue.add(local);
     }
   }
-  return { adminAssign, namespaces, serverValue };
+  return { adminAssign, hashPassword, namespaces, passwordNamespaces, serverValue };
 }
 
 function symbolicLiteralValue(node: Node): JsonValue | undefined {
@@ -1190,6 +1307,27 @@ function symbolicLiteralValue(node: Node): JsonValue | undefined {
 
 function governs(info: GovernedTableInfo, column: string): boolean {
   return info.governed === '*' || info.governed.has(column);
+}
+
+function passwordColumn(info: GovernedTableInfo, column: string): boolean {
+  return info.passwordColumns.has(column);
+}
+
+function isPasswordColumnName(column: string): boolean {
+  return /^(?:password|passwordHash|passwordDigest)$/u.test(column);
+}
+
+function unwrappedAwaitedStaticExpressionNode(node: Node): Node {
+  const expression = unwrappedStaticExpressionNode(node);
+  return Node.isAwaitExpression(expression)
+    ? unwrappedStaticExpressionNode(expression.getExpression())
+    : expression;
+}
+
+function symbolKeyForNode(node: Node): string | undefined {
+  return Node.isIdentifier(node)
+    ? resolvedSymbolKey(symbolForIdentifierReference(node) ?? node.getSymbol())
+    : resolvedSymbolKey(node.getSymbol());
 }
 
 function governedColumnsLabel(info: GovernedTableInfo, table: string): string {

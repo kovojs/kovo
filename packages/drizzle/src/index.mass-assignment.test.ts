@@ -38,6 +38,25 @@ function facts(domainSource: string) {
   });
 }
 
+function passwordFacts(domainSource: string) {
+  return extractMassAssignmentFromProject({
+    files: [
+      dbTypes,
+      {
+        fileName: 'schema.ts',
+        source: [
+          'export const users = pgTable("users", {',
+          '  id: text("id").primaryKey(),',
+          '  email: text("email").notNull(),',
+          '  passwordHash: text("password_hash").notNull(),',
+          '}, kovo({ domain: "user" }));',
+        ].join('\n'),
+      },
+      { fileName: 'user.domain.ts', source: domainSource },
+    ],
+  });
+}
+
 const HEADER = [
   'import { eq } from "drizzle-orm";',
   'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
@@ -257,6 +276,121 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
       ],
     });
     expect(result).toEqual([]);
+  });
+
+  it('auto-governs password columns and accepts only the blessed hashPassword sink', () => {
+    const result = passwordFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { hashPassword } from "@kovojs/server";',
+        'import { users } from "./schema";',
+        'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string; password: string }) => {',
+        '  await db.insert(users).values({ id: input.id, email: input.email, passwordHash: await hashPassword(input.password) });',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('accepts password digest variables assigned from the blessed hashPassword sink', () => {
+    const result = passwordFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { hashPassword } from "@kovojs/server";',
+        'import { users } from "./schema";',
+        'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string; password: string }) => {',
+        '  const passwordHash = await hashPassword(input.password);',
+        '  await db.insert(users).values({ id: input.id, email: input.email, passwordHash });',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('rejects request plaintext written directly to an auto-governed password column', () => {
+    const result = passwordFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { users } from "./schema";',
+        'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string; password: string }) => {',
+        '  await db.insert(users).values({ id: input.id, email: input.email, passwordHash: input.password });',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toEqual([
+      {
+        column: 'passwordHash',
+        detail: 'password',
+        domain: 'user',
+        name: 'createUser',
+        provenance: 'input',
+        site: 'user.domain.ts:4',
+        via: 'values',
+      },
+    ]);
+  });
+
+  it('rejects literals and fake hashPassword helpers for password columns', () => {
+    const literal = passwordFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { users } from "./schema";',
+        'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string }) => {',
+        '  await db.insert(users).values({ id: input.id, email: input.email, passwordHash: "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$ZGlnZXN0" });',
+        '};',
+      ].join('\n'),
+    );
+    expect(literal).toMatchObject([
+      { column: 'passwordHash', domain: 'user', provenance: 'unknown', via: 'values' },
+    ]);
+
+    const fake = passwordFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { users } from "./schema";',
+        'function hashPassword(value: string) { return value; }',
+        'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string; password: string }) => {',
+        '  await db.insert(users).values({ id: input.id, email: input.email, passwordHash: hashPassword(input.password) });',
+        '};',
+      ].join('\n'),
+    );
+    expect(fake).toMatchObject([
+      { column: 'passwordHash', domain: 'user', provenance: 'unknown', via: 'values' },
+    ]);
+  });
+
+  it('accepts namespace imports for the blessed password sink', () => {
+    const result = passwordFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import * as kovoServer from "@kovojs/server";',
+        'import { users } from "./schema";',
+        'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string; password: string }) => {',
+        '  await db.insert(users).values({ id: input.id, email: input.email, passwordHash: await kovoServer.hashPassword(input.password) });',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('fails closed for full-row password writes even from server-summary helpers', () => {
+    const result = passwordFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+        'import { users } from "./schema";',
+        'function buildUser(input: { id: string; email: string; password: string }) {',
+        '  return { id: input.id, email: input.email, passwordHash: input.password };',
+        '}',
+        'kovoAnalyzerSummary(buildUser, { returns: { kind: "server" } });',
+        'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string; password: string }) => {',
+        '  await db.insert(users).values(buildUser(input));',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      { column: 'passwordHash', domain: 'user', provenance: 'unknown', via: 'values' },
+    ]);
   });
 });
 

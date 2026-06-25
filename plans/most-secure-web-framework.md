@@ -192,16 +192,17 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       verification and `packages/server/src/env.ts` validates keyring signing material; the OPP-06 focused test
       command plus `pnpm run check:vp` and `pnpm run check:api-surface` passed.
 
-- [ ] **OPP-10 — First-party password primitive (argon2id-only sink).** by-construction (narrow:
+- [x] **OPP-10 — First-party password primitive (argon2id-only sink).** by-construction (narrow:
       plaintext-at-rest on the app-Drizzle write surface, KV438 extension) + runtime-DiD (params, auto-rehash,
       alg-pinned verify) · lev 5 · L · breaking. Kovo ships no hasher. Expose a `Password` type whose only
       persistence path is the blessed argon2id hasher (no fast-hash mode reachable, Laravel-style); a
       request-derived value written to a password column without passing the hasher is a build error.
       _Trade-off:_ a strong unconditional default + a narrow real plaintext-at-rest gate around a mostly
       runtime-DiD floor; by-construction reach is blunted where `better-auth` owns the credential sink.
-      Progress: `packages/server/src/password.ts` adds the public argon2id-only `hashPassword`/`verifyPassword`
-      sink with parameter floors and alg-pinned digest parsing. Remaining gap: the KV438 password-column
-      persistence gate is not implemented, so this item stays open.
+      Evidence: `packages/server/src/password.ts` provides the argon2id-only `hashPassword`/`verifyPassword`
+      sink, and `packages/drizzle/src/static/derivation.ts` requires auto-governed password columns to flow
+      through the real `@kovojs/server` `hashPassword` sink; the focused Drizzle mass-assignment test,
+      `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **OPP-11 — Opaque, instantly-revocable Session as the DEFAULT (JWT opt-in).** runtime-DiD
       (rotation/revocation) + by-construction-for-the-JWT-class (only if Kovo owns the session sink) · lev 5 ·
