@@ -74,7 +74,7 @@ code, and current supply-chain/build surfaces.
     paths; `pnpm --filter @kovojs/browser run check:inline-loader` proves the generated artifact is fresh
     and remains within the SPEC §4.4 gzip budget.
 
-- [ ] **Make the CSRF Origin floor strict and default-on for unsafe real requests.**
+- [x] **Make the CSRF Origin floor strict and default-on for unsafe real requests.**
   - Evidence: the CSRF floor deliberately allows `Sec-Fetch-Site: same-site` or `none` when `Origin`
     is absent (`packages/server/src/csrf.ts:156`, `packages/server/src/csrf.ts:164`,
     `packages/server/src/csrf.ts:180`). Tests codify that compatibility behavior in
@@ -86,6 +86,10 @@ code, and current supply-chain/build surfaces.
   - Acceptance: mutation and endpoint CSRF tests reject missing, empty, `null`, same-site/no-Origin,
     and `none`/no-Origin unsafe requests even with a valid token; same-origin and trusted-origin
     unsafe requests still require and validate the synchronizer token.
+  - Verified 2026-06-25: `packages/server/src/csrf.ts` now rejects unsafe real `Request` values with
+    missing, empty, or `null` `Origin` and no longer treats `Sec-Fetch-Site` as an allow signal.
+    `pnpm exec vitest run packages/server/src/csrf.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts`
+    proves the strict Origin floor for CSRF helper coverage plus mutation/endpoint request paths.
 
 - [ ] **Support CSRF secret rotation without dropping valid in-flight forms.**
   - Evidence: `CsrfOptions` accepts one `secret` string (`packages/server/src/csrf.ts:20`), and token

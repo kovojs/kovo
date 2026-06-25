@@ -133,13 +133,10 @@ function isUnsafeVerb(method: string | undefined): boolean {
  * ship an Origin/`Sec-Fetch-Site` floor in addition to a token.
  *
  * Decision (runtime defense-in-depth, sound at this sink):
- * - Reject when `Sec-Fetch-Site: cross-site` (the browser asserts the request crossed a site boundary
- *   to a non-trusted target). `same-origin`/`same-site`/`none` are allowed by this header.
- * - When an `Origin` header is present, reject unless it equals the request's own origin OR is in the
- *   `trustedOrigins` allowlist.
- * - COMPAT FALLBACK: when BOTH `Sec-Fetch-Site` and `Origin` are absent (old clients, non-browser
- *   callers, server-to-server), do NOT reject on this floor — fall through to the token check so we do
- *   not break those clients.
+ * - Unsafe real `Request` objects must carry a usable `Origin` header.
+ * - Reject unless `Origin` equals the request's own origin OR is in the `trustedOrigins` allowlist.
+ * - `Sec-Fetch-Site` is never an allow signal. Browsers can send `same-site`/`none` without a usable
+ *   `Origin`, and SPEC §6.6/§9.1 requires the Origin floor to stay default-on for real unsafe paths.
  *
  * Only a real `Request` carrying an unsafe verb is gated; plain-object request shapes (used by the
  * direct `runMutation` API) have no method/headers, so they fall through to the token check.
@@ -153,32 +150,19 @@ export function verifyCsrfRequestOriginFloor<Request>(
   if (!(request instanceof globalThis.Request)) return true;
   if (!isUnsafeVerb(request.method)) return true;
 
-  const secFetchSite = request.headers.get('sec-fetch-site');
   const origin = request.headers.get('origin');
 
-  // COMPAT FALLBACK: neither header present → defer to the token check.
-  if (secFetchSite === null && (origin === null || origin === '' || origin === 'null')) {
-    return true;
+  if (origin === null || origin === '' || origin === 'null') return false;
+
+  let requestOrigin: string | undefined;
+  try {
+    requestOrigin = new URL(request.url).origin;
+  } catch {
+    requestOrigin = undefined;
   }
-
-  // Sec-Fetch-Site: only `cross-site` is a hard reject. `same-origin`/`same-site`/`none` are allowed.
-  if (secFetchSite === 'cross-site') return false;
-
-  // Origin allowlist check (when the browser sent a usable Origin).
-  if (origin !== null && origin !== '' && origin !== 'null') {
-    let requestOrigin: string | undefined;
-    try {
-      requestOrigin = new URL(request.url).origin;
-    } catch {
-      requestOrigin = undefined;
-    }
-    if (origin === requestOrigin) return true;
-    if (options.trustedOrigins?.includes(origin)) return true;
-    return false;
-  }
-
-  // Sec-Fetch-Site present and not cross-site, with no Origin to contradict it → allow.
-  return true;
+  if (origin === requestOrigin) return true;
+  if (options.trustedOrigins?.includes(origin)) return true;
+  return false;
 }
 
 export function validateCsrfToken<Request>(

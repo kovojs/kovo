@@ -138,6 +138,7 @@ describe('server app matched dispatch boundary', () => {
         email: 'ada@example.com',
         'kovo-csrf': csrfToken({} as Request, csrf),
       }),
+      headers: { Origin: 'https://shop.example.test' },
       method: 'POST',
     });
 

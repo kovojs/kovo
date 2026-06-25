@@ -71,7 +71,7 @@ describe('csrf helpers', () => {
     const submitted = /value="([^"]+)"/.exec(html)?.[1];
     expect(submitted).toBeDefined();
     const postRequest = new Request('https://shop.example.test/_m/auth/sign-in', {
-      headers: { Cookie: cookiePair },
+      headers: { Cookie: cookiePair, Origin: 'https://shop.example.test' },
       method: 'POST',
     });
 
@@ -139,7 +139,7 @@ describe('csrf helpers', () => {
     // The bare (unprefixed) cookie still round-trips through validation in dev.
     const cookiePair = cookie.split(';')[0]!;
     const postRequest = new Request('http://localhost:3000/_m/auth/sign-in', {
-      headers: { Cookie: cookiePair },
+      headers: { Cookie: cookiePair, Origin: 'http://localhost:3000' },
       method: 'POST',
     });
     // Re-mint the token bound to the same cookie value to validate the round-trip.
@@ -364,8 +364,7 @@ describe('mutation CSRF enforcement', () => {
 });
 
 // SF Tier 1 (SPEC §6.6/§9.1): the header-based CSRF floor — runs BEFORE the synchronizer-token
-// check on unsafe-verb requests, fail-closed against cross-site, with a compat fallback for clients
-// that send neither header. Catches Kovo up to SvelteKit/Remix/Rails.
+// check on unsafe real Request paths, requiring a usable same-origin or trusted Origin.
 describe('CSRF Origin / Sec-Fetch-Site floor', () => {
   const csrf = { trustedOrigins: [] as readonly string[] };
 
@@ -373,18 +372,24 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
     return new Request('https://shop.example.test/_m/cart/add', { headers, method: 'POST' });
   }
 
-  it('rejects an unsafe-verb cross-site request', () => {
+  it('rejects an unsafe-verb request without Origin even when Sec-Fetch-Site is cross-site', () => {
     expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'cross-site' }), csrf)).toBe(
       false,
     );
   });
 
-  it('allows same-origin / same-site / none Sec-Fetch-Site', () => {
+  it('rejects missing, empty, and null Origin on unsafe-verb requests', () => {
+    expect(verifyCsrfRequestOriginFloor(post({}), csrf)).toBe(false);
+    expect(verifyCsrfRequestOriginFloor(post({ origin: '' }), csrf)).toBe(false);
+    expect(verifyCsrfRequestOriginFloor(post({ origin: 'null' }), csrf)).toBe(false);
+  });
+
+  it('does not allow same-origin / same-site / none Sec-Fetch-Site without Origin', () => {
     expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'same-origin' }), csrf)).toBe(
-      true,
+      false,
     );
-    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'same-site' }), csrf)).toBe(true);
-    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'none' }), csrf)).toBe(true);
+    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'same-site' }), csrf)).toBe(false);
+    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'none' }), csrf)).toBe(false);
   });
 
   it('rejects a cross-origin Origin not in trustedOrigins', () => {
@@ -407,8 +412,15 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
     ).toBe(true);
   });
 
-  it('COMPAT: falls through (allows the floor) when BOTH headers are absent', () => {
-    expect(verifyCsrfRequestOriginFloor(post({}), csrf)).toBe(true);
+  it('honors the trustedOrigins allowlist even when Fetch Metadata reports cross-site', () => {
+    expect(
+      verifyCsrfRequestOriginFloor(
+        post({ origin: 'https://app.example.test', 'sec-fetch-site': 'cross-site' }),
+        {
+          trustedOrigins: ['https://app.example.test'],
+        },
+      ),
+    ).toBe(true);
   });
 
   it('does not gate safe verbs', () => {
@@ -423,9 +435,9 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
     expect(verifyCsrfRequestOriginFloor({ session: { id: 's1' } }, csrf)).toBe(true);
   });
 
-  // Integration through validateCsrfToken: the floor rejects a cross-site POST even with a token
-  // that would otherwise pass, and same-origin requests still need a valid token (no regression).
-  it('validateCsrfToken rejects a cross-site unsafe-verb request before the token check', () => {
+  // Integration through validateCsrfToken: the floor rejects no-Origin POSTs even with a token
+  // that would otherwise pass, and allowed Origin requests still need a valid token.
+  it('validateCsrfToken rejects no-Origin unsafe-verb requests before the token check', () => {
     const anonymousCsrf = {
       field: 'csrf',
       secret: 'anon',
@@ -442,17 +454,43 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
     const cookiePair = setCookies[0]!.split(';')[0]!;
     const token = /value="([^"]+)"/.exec(html)![1]!;
 
-    const crossSite = new Request('https://shop.example.test/_m/auth/sign-in', {
-      headers: { Cookie: cookiePair, 'sec-fetch-site': 'cross-site' },
+    const noOrigin = new Request('https://shop.example.test/_m/auth/sign-in', {
+      headers: { Cookie: cookiePair, 'sec-fetch-site': 'none' },
       method: 'POST',
     });
-    // Token would otherwise validate; the header floor rejects first.
-    expect(validateCsrfToken({ csrf: token }, crossSite, anonymousCsrf)).toBe(false);
+    // Token would otherwise validate; the Origin floor rejects first.
+    expect(validateCsrfToken({ csrf: token }, noOrigin, anonymousCsrf)).toBe(false);
 
     const sameOrigin = new Request('https://shop.example.test/_m/auth/sign-in', {
-      headers: { Cookie: cookiePair, 'sec-fetch-site': 'same-origin' },
+      headers: {
+        Cookie: cookiePair,
+        Origin: 'https://shop.example.test',
+        'sec-fetch-site': 'same-origin',
+      },
       method: 'POST',
     });
     expect(validateCsrfToken({ csrf: token }, sameOrigin, anonymousCsrf)).toBe(true);
+    expect(validateCsrfToken({ csrf: `${token}x` }, sameOrigin, anonymousCsrf)).toBe(false);
+
+    const trustedOrigin = new Request('https://shop.example.test/_m/auth/sign-in', {
+      headers: {
+        Cookie: cookiePair,
+        Origin: 'https://app.example.test',
+        'sec-fetch-site': 'cross-site',
+      },
+      method: 'POST',
+    });
+    expect(
+      validateCsrfToken({ csrf: token }, trustedOrigin, {
+        ...anonymousCsrf,
+        trustedOrigins: ['https://app.example.test'],
+      }),
+    ).toBe(true);
+    expect(
+      validateCsrfToken({ csrf: `${token}x` }, trustedOrigin, {
+        ...anonymousCsrf,
+        trustedOrigins: ['https://app.example.test'],
+      }),
+    ).toBe(false);
   });
 });
