@@ -184,6 +184,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       request-derived value written to a password column without passing the hasher is a build error.
       _Trade-off:_ a strong unconditional default + a narrow real plaintext-at-rest gate around a mostly
       runtime-DiD floor; by-construction reach is blunted where `better-auth` owns the credential sink.
+      Progress: `packages/server/src/password.ts` adds the public argon2id-only `hashPassword`/`verifyPassword`
+      sink with parameter floors and alg-pinned digest parsing. Remaining gap: the KV438 password-column
+      persistence gate is not implemented, so this item stays open.
 
 - [ ] **OPP-11 — Opaque, instantly-revocable Session as the DEFAULT (JWT opt-in).** runtime-DiD
       (rotation/revocation) + by-construction-for-the-JWT-class (only if Kovo owns the session sink) · lev 5 ·

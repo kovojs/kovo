@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { publicPackages, repoRoot } from './public-packages.mjs';
 
-const approvedBuiltDependencies = Object.freeze(['better-sqlite3']);
+const approvedBuiltDependencies = Object.freeze(['@node-rs/argon2', 'better-sqlite3']);
 const allowedLifecycleScripts = Object.freeze({
   prepack: /^pnpm run build:dist$/,
 });

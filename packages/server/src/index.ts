@@ -68,6 +68,17 @@ export type {
 // never a pre-resolved raw fs path.
 export { rootedFiles } from './file.js';
 export type { RootedFiles, RootedFileServeOptions } from './file.js';
+// SPEC §6.6 / plans/most-secure-web-framework.md OPP-10: first-party password primitive.
+// This is intentionally narrow: a public argon2id-only hash/verify sink with explicit parameter
+// defaults/floors. It does not expose raw bcrypt/scrypt/SHA/Argon2 algorithm knobs and is labeled
+// runtime-DiD at the sink, not a proof of all authentication strength.
+export {
+  PASSWORD_ARGON2ID_DEFAULTS,
+  hashPassword,
+  isArgon2idPasswordDigest,
+  verifyPassword,
+} from './password.js';
+export type { PasswordDigest, PasswordHashOptions, PasswordVerifyResult } from './password.js';
 export type {
   AccessDecision,
   GuardAccessStep,

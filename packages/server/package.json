@@ -98,6 +98,7 @@
     "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/style": "workspace:*",
+    "@node-rs/argon2": "^2.0.2",
     "undici": "^7.28.0"
   },
   "devDependencies": {

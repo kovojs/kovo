@@ -23,9 +23,10 @@ describe('supply-chain gates', () => {
 
   it('enforces the approved build-script and lifecycle policy', () => {
     expect(() =>
-      verifyBuildScriptPolicy({ pnpm: { onlyBuiltDependencies: ['better-sqlite3'] } }, [
-        { name: '@kovojs/core', scripts: { 'build:dist': 'vp pack src/index.ts --dts' } },
-      ]),
+      verifyBuildScriptPolicy(
+        { pnpm: { onlyBuiltDependencies: ['@node-rs/argon2', 'better-sqlite3'] } },
+        [{ name: '@kovojs/core', scripts: { 'build:dist': 'vp pack src/index.ts --dts' } }],
+      ),
     ).not.toThrow();
 
     expect(() =>
@@ -35,9 +36,10 @@ describe('supply-chain gates', () => {
     ).toThrow('pnpm.onlyBuiltDependencies');
 
     expect(() =>
-      verifyBuildScriptPolicy({ pnpm: { onlyBuiltDependencies: ['better-sqlite3'] } }, [
-        { name: '@kovojs/core', scripts: { postinstall: 'node install.js' } },
-      ]),
+      verifyBuildScriptPolicy(
+        { pnpm: { onlyBuiltDependencies: ['@node-rs/argon2', 'better-sqlite3'] } },
+        [{ name: '@kovojs/core', scripts: { postinstall: 'node install.js' } }],
+      ),
     ).toThrow('Unapproved lifecycle scripts');
   });
 });

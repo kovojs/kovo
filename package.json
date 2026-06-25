@@ -57,6 +57,7 @@
   "packageManager": "pnpm@10.12.1",
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@node-rs/argon2",
       "better-sqlite3"
     ]
   }
