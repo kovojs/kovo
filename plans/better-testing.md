@@ -52,7 +52,7 @@ Median job durations across those runs:
     or retire another slot first.
   - Evidence when complete: the workflow graph has no more than 16 required jobs runnable before the
     final aggregator.
-  - Evidence 2026-06-25: local workflow assertion counted 12 required slots before `check`;
+  - Evidence 2026-06-25: local workflow assertion counted 13 required slots before `check`;
     `.github/workflows/ci.yml` parses with Ruby Psych.
 
 - [x] **Prohibit hand-maintained shard file lists.**
@@ -121,7 +121,7 @@ Median job durations across those runs:
     `28150112422`, `28145146883`, and `28136545956`, including jobs outside the 2-5 minute target;
     focused Vitest coverage proves duration bucketing and summary formatting.
 
-- [ ] **Shard `integration` into five CI jobs first.**
+- [x] **Shard `integration` into five CI jobs first.**
   - Replace the single `integration` job with a five-job matrix.
   - Start at five shards because recent `integration` runs are p50 12m11s and max 17m21s; five-way
     sharding should fit the 5-minute target while staying inside the 16-job total budget.
@@ -131,8 +131,11 @@ Median job durations across those runs:
     current final `check` aggregator.
   - First target: every integration shard lands between 2 and 5 minutes on three consecutive completed
     CI runs.
-  - Evidence when complete: three completed GitHub CI runs showing all integration shards green and no
-    integration shard above 5 minutes.
+  - Evidence 2026-06-25: CI runs
+    [28158242925](https://github.com/kovojs/kovo/actions/runs/28158242925),
+    [28185788267](https://github.com/kovojs/kovo/actions/runs/28185788267), and
+    [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) completed all five
+    integration shards green with shard durations between 2m53s and 3m49s.
 
 - [ ] **Balance integration shards with measured per-spec durations if native Playwright sharding is uneven.**
   - Add a lightweight reporter that writes per-spec durations as a CI artifact.
@@ -142,14 +145,18 @@ Median job durations across those runs:
     maintenance cost.
   - Evidence when complete: timing artifact plus a before/after generated-shard or logical-suite table.
 
-- [ ] **Rebalance the root `vitest --shard=1/4` matrix.**
+- [x] **Rebalance the root `vitest --shard=1/4` matrix.**
   - `test (3, 4)` is the long shard and `test (4, 4)` is often below 2 minutes.
   - Try generated ephemeral manifests first once duration history exists; otherwise try three native
     shards or keep four native shards, then pick the smallest shard count that keeps each root test job
     in the 2-5 minute band.
   - Do not use manually maintained root-test file lists.
-  - Evidence when complete: three completed CI runs with root test shards in range and no loss of test
-    coverage.
+  - Evidence 2026-06-25: CI runs
+    [28158242925](https://github.com/kovojs/kovo/actions/runs/28158242925),
+    [28185788267](https://github.com/kovojs/kovo/actions/runs/28185788267), and
+    [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) completed all three
+    generated root Vitest shards green between 2m23s and 3m08s; final `check` covered the root test
+    matrix in each run.
 
 - [ ] **Consolidate very short static/safety gates into balanced jobs.**
   - Candidate grouping: `format` + `api-surface` + `sql-safety` + `compiler-perf`.
@@ -168,19 +175,23 @@ Median job durations across those runs:
     `drizzle-pin`, `better-auth-pin`, `auth-spike`, `webhook-spike`, and `app-shell-spike`; local
     `vp run conformance` passed. CI run
     [28185788267](https://github.com/kovojs/kovo/actions/runs/28185788267) completed the consolidated
-    job in 2m36s. Remaining evidence is two more completed GitHub CI timings for the consolidated job.
+    job in 2m36s and
+    [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) completed it in 2m23s.
+    Remaining evidence is one more completed GitHub CI timing for the consolidated job.
 
-- [ ] **Consolidate tiny `kovo-check` shards.**
+- [x] **Consolidate tiny `kovo-check` shards.**
   - Keep `server-browser` standalone while it is near 3 minutes.
   - Combine `compiler-runtime` and `project`, or run the default all-suite command if it stays below 5
     minutes after artifact download.
   - Evidence when complete: `kovo-check` jobs are in range and still use the `build` artifact rather
     than rebuilding dist.
-  - Progress 2026-06-25: `.github/workflows/ci.yml` now runs one `kovo-check` job that downloads
+  - Evidence 2026-06-25: `.github/workflows/ci.yml` now runs one `kovo-check` job that downloads
     `kovo-dist` and executes the default `vp exec node scripts/kovo-check.mjs` aggregate; local
     `vp run build` followed by `vp run kovo-check` passed. CI run
     [28185788267](https://github.com/kovojs/kovo/actions/runs/28185788267) completed `kovo-check` in
-    3m45s after downloading `kovo-dist`.
+    3m45s after downloading `kovo-dist`, and
+    [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) completed it in 3m44s after
+    the same artifact download step.
 
 - [ ] **Evaluate combining `browser` and `gallery-browser` setup.**
   - Both jobs install Playwright/browser assets and are below 2 minutes on median.
@@ -188,10 +199,13 @@ Median job durations across those runs:
     harder to identify.
   - Evidence when complete: combined browser job timing plus a deliberately failed browser assertion or
     log sample proving the failing suite is obvious.
-  - Progress 2026-06-25: `.github/workflows/ci.yml` keeps root browser, gallery browser, and Chromium
-    `P10 perf` as named steps in the artifact-producing `build + browser` job so the combined required
-    slot should land in range while keeping browser failures step-visible. Remaining evidence is
-    completed GitHub CI timing and a failed-log sample.
+  - Progress 2026-06-25: CI run
+    [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) proved a combined
+    `build + browser` slot can run root browser, gallery browser, and Chromium `P10 perf` as named
+    steps in 2m07s, but it pushed the artifact-dependent `kovo-check` critical path to a 6m04s workflow.
+    The workflow keeps browser work in a separate required slot unless a later shape preserves both
+    step-visible browser failures and the 5-minute wall-time target. Remaining evidence is a failed-log
+    sample.
 
 - [x] **Keep the `build` dependency path explicit.**
   - `build` is short, but it feeds `p10-perf` and `kovo-check`; do not hide it inside an unrelated job
@@ -199,8 +213,8 @@ Median job durations across those runs:
   - Evidence when complete: CI graph still has one authoritative `kovo-dist` producer and downstream jobs
     download that artifact.
   - Evidence 2026-06-25: local workflow assertion verified `build` is the sole `kovo-dist` artifact
-    uploader; the `build + browser` job runs the artifact-consuming `P10 perf` step after upload, and
-    `kovo-check` has `needs: build`, downloads `kovo-dist`, and runs `Kovo check suite`.
+    uploader; `kovo-check` has `needs: build`, downloads `kovo-dist`, and runs `Kovo check suite`; the
+    browser job stays independent so it does not delay the artifact consumer.
 
 - [ ] **Move optional slow breadth checks out of required PR feedback if new checks push wall time above
       5 minutes.**
@@ -324,9 +338,9 @@ tests/integration/specs/respond-file.spec.ts tests/integration/specs/storage-dow
 - `ruby -e 'require "psych"; Psych.load_file(".github/workflows/ci.yml")'`,
   `node -e 'JSON.parse(require("fs").readFileSync("package.json","utf8"))'`, and `git diff --check`
   passed.
-- Local workflow assertion verified 12 required slots before `check`, the `kovo-dist` build artifact
+- Local workflow assertion verified 13 required slots before `check`, the `kovo-dist` build artifact
   path, and final `check` aggregator dependencies.
-- Build/browser consolidation checks passed: `vp run build`, `vp run browser`,
+- Build and browser job checks passed: `vp run build`, `vp run browser`,
   `KOVO_GALLERY_BROWSER_HEADED=1 vp exec pnpm --filter @kovojs/example-gallery run test:browser`, and
   `vp run p10-perf`.
 - Consolidated topology checks passed: `vp run build`, `vp run conformance`, `vp run kovo-check`,
@@ -344,6 +358,9 @@ tests/integration/specs/fragment-append.spec.ts` passed.
 
 - [ ] **CI runtime gate:** three consecutive completed required CI runs finish in 5 minutes or less, with
       no required job except the final aggregator below 2 minutes or above 5 minutes.
+  - Progress 2026-06-25: CI run
+    [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) was green but rejected for
+    this gate because `build + browser` delayed `kovo-check` and pushed wall time to 6m04s.
 - [ ] **Signal gate:** a failed static check, failed conformance test, failed browser test, and failed
       integration shard each identify the failing suite/spec from the GitHub job list and first visible log
       page.
@@ -356,5 +373,5 @@ tests/integration/specs/fragment-append.spec.ts` passed.
 - [x] **No coverage regression gate:** the final `check` job still depends on every required shard and
       fails on any failure, cancellation, or skipped required job.
   - Evidence 2026-06-25: local workflow assertion verified `check.needs` covers `static-safety`, `test`,
-    `integration`, `build`, `conformance`, and `kovo-check`, and the shell guard fails on `failure`,
-    `cancelled`, or `skipped` results.
+    `integration`, `build`, `browser`, `conformance`, and `kovo-check`, and the shell guard fails on
+    `failure`, `cancelled`, or `skipped` results.
