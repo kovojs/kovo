@@ -155,13 +155,21 @@ function sa(e: Element, name: string, value: string): void {
     return;
   }
   if (/^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/.test(n)) {
-    const match = /^([a-z][a-z0-9+.-]*):/.exec(value.replace(/[\x00-\x20]/g, '').toLowerCase());
+    const match = /^([a-z][a-z0-9+.-]*):/.exec(stripAsciiControls(value).toLowerCase());
     if (match && !/^(https?|mailto|tel|ftp)$/.test(match[1] ?? '')) {
       e.setAttribute(name, '#');
       return;
     }
   }
   e.setAttribute(name, value);
+}
+
+function stripAsciiControls(value: string): string {
+  let result = '';
+  for (const char of value) {
+    if (char > ' ') result += char;
+  }
+  return result;
 }
 
 function u(c: Element, n: Element): void {

@@ -23,8 +23,8 @@ const lifecycleScriptNames = new Set([
 ]);
 
 export function verifyBuildScriptPolicy(rootPackageJson, packageManifests) {
-  const actual = [...(rootPackageJson.pnpm?.onlyBuiltDependencies ?? [])].sort();
-  const expected = [...approvedBuiltDependencies].sort();
+  const actual = [...(rootPackageJson.pnpm?.onlyBuiltDependencies ?? [])].sort(compareStrings);
+  const expected = [...approvedBuiltDependencies].sort(compareStrings);
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(
       `pnpm.onlyBuiltDependencies must be exactly ${JSON.stringify(expected)}; got ${JSON.stringify(actual)}`,
@@ -42,6 +42,10 @@ export function verifyBuildScriptPolicy(rootPackageJson, packageManifests) {
   if (findings.length > 0) {
     throw new Error(`Unapproved lifecycle scripts:\n  ${findings.join('\n  ')}`);
   }
+}
+
+function compareStrings(left, right) {
+  return left.localeCompare(right);
 }
 
 export function parseAuditFindings(auditJson, minimumSeverity = 'moderate') {
