@@ -278,11 +278,15 @@ scripts/kovo-check.mjs` passed.
       Evidence: `secure-framework-3.md` verifies `packages/server/src/app-system-response.ts` centralizes
       reserved system response posture; `pnpm test packages/server/src/app.test.ts` covered 413/429 paths.
 
-- [ ] **OPP-22 — Build-time egress deny floor (harden-runner analog).** runtime-DiD (CI scaffolding) +
+- [x] **OPP-22 — Build-time egress deny floor (harden-runner analog).** runtime-DiD (CI scaffolding) +
       audit-only (release-age cooldown) · lev 4 · M · non-breaking. Secure-default CI: script-blocking install +
       egress allowlist for the build/install step (the Shai-Hulud worm vector). _Trade-off:_ genuinely useful
       supply-chain secure-defaults, but operator/CI-ownable hardening — do not dress as the runtime "egress floor"
       it isn't; slice overlaps shipped tarball gates.
+      Evidence: `scripts/egress-floor.mjs` runs build/publish commands with a deny-by-default
+      `NODE_OPTIONS=--require` hook over Node net/tls/http/https, and CI runs `check:build` through that wrapper.
+      `pnpm exec vitest --run scripts/egress-floor.test.mjs scripts/supply-chain-gates.test.mjs`, `pnpm run
+check:build`, and `pnpm run check:publish` passed.
 
 - [x] **OPP-23 — Dependency-confusion + tarball-content static gates.** audit-only · lev 5 · M ·
       non-breaking. The one statically-decidable supply-chain slice Kovo can own: an `.npmrc` org-scope pin + a
