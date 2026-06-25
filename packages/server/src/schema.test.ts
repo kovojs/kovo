@@ -291,12 +291,13 @@ describe('server schemas', () => {
 
   it('rejects a catastrophic-backtracking pattern literal and accepts a safe one (KV434)', () => {
     expect(() => s.string().pattern('(a+)+$')).toThrow(/KV434/u);
+    expect(() => s.string().pattern('^(a|a)*$')).toThrow(/KV434/u);
     const safe = s.string().pattern('^[a-z0-9]+$');
     expect(safe.parse('abc123')).toBe('abc123');
     expect(() => safe.parse('Bad!')).toThrow('Expected string matching pattern');
   });
 
-  it('caps pattern() input length under the runtime step-budget (KV434)', () => {
+  it('caps pattern() input length as a runtime backstop (KV434)', () => {
     const schema = s.string().pattern('^a+$');
     expect(() => schema.parse('a'.repeat(5000))).toThrow(/match budget/u);
   });

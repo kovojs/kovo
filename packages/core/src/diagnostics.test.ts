@@ -718,10 +718,10 @@ describe('diagnostic registry', () => {
         },
         "KV434": {
           "code": "KV434",
-          "help": "Would lower to: a wire string validator backed by a blessed linear matcher (email/url/uuid/slug) or a compile-visible literal pattern with no exponential structure, executed under a runtime step-budget.
+          "help": "Would lower to: a wire string validator backed by a blessed linear matcher (email/url/uuid/slug) or a compile-visible literal pattern with known exponential structures rejected; runtime also applies an input-size cap, not a CPU bound.
       Blocked reason: a non-linear-safe or non-literal pattern in a wire string validator is a ReDoS vector — catastrophic backtracking turns a short input into unbounded CPU.
       Fixes: use a blessed format, give pattern() a compile-visible literal with no nested/overlapping quantifiers, or take the ReDoS risk explicitly with unsafeRegex(re, justification), surfaced in kovo explain --capabilities.
-      SPEC §6.6/§9.5 and secure-framework Phase 6: blessed formats are by-construction; pattern() is by-construction-ish (static reject + runtime step-budget); a full linear engine is deferred.",
+      SPEC §6.6/§9.5 and secure-framework Phase 6: blessed formats are by-construction; pattern() is by-construction-ish (literal structural reject + runtime input-size cap); a full linear engine is deferred.",
           "message": "Non-linear-safe pattern literal in a wire string validator.",
           "severity": "error",
         },

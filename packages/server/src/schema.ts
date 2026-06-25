@@ -274,7 +274,7 @@ export interface StoredFileSchemaOptions {
  *
  * KV434: blessed formats are backtracking-free BY-CONSTRUCTION; `.pattern(literal)` is
  * by-construction-ISH (static nested/overlapping-quantifier reject + a runtime input-length
- * step-budget); a non-literal/unanalyzable pattern is rejected. `unsafeRegex(re, justification)` is
+ * input-size cap); a non-literal/unanalyzable pattern is rejected. `unsafeRegex(re, justification)` is
  * the audited escape surfaced in `kovo explain --capabilities`.
  */
 export interface StringSchema extends Schema<string> {
@@ -286,7 +286,7 @@ export interface StringSchema extends Schema<string> {
   slug(): StringSchema;
   /**
    * Require the value to match a COMPILE-VISIBLE literal pattern. The pattern is statically rejected
-   * for catastrophic-backtracking structure and executes under a runtime step-budget (KV434). Pass a
+   * for catastrophic-backtracking structure and has a runtime input-size cap (KV434). Pass a
    * string source or a literal `RegExp`; for a dynamic/unsafe pattern use `.matches(unsafeRegex(...))`.
    */
   pattern(source: RegExp | string): StringSchema;
@@ -415,9 +415,8 @@ class StringSchemaImpl implements StringSchema {
         }
         continue;
       }
-      // KV434 runtime step-budget backstop (SPEC §6.6): cap input length so a pattern that slipped
-      // the static analysis (or an audited `unsafeRegex`) cannot burn unbounded CPU. JS RegExp has no
-      // native step limit; length is the proxy. Over-budget input is a non-match (fail-closed).
+      // KV434 runtime input-size backstop (SPEC §6.6): JS RegExp has no native step limit, so this is
+      // not a CPU bound. Over-budget input is a non-match (fail-closed).
       if (input.length > PATTERN_MAX_INPUT_LENGTH) {
         throw validationError(
           `Expected string matching pattern (input exceeds the ${PATTERN_MAX_INPUT_LENGTH}-char match budget)`,
