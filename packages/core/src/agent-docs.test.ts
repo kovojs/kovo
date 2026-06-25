@@ -18,18 +18,17 @@ describe('agent docs rules block', () => {
     expect(block).toContain('`kovo check`');
     expect(block).toContain('`kovo explain <target>`');
     expect(block).toContain('`kovo update-docs`');
-    expect(block).toContain('Read the local docs below');
-    expect(block).toContain('- Spec: `./.kovo/docs/spec.md`');
-    expect(block).toContain('### Getting Started');
-    expect(block).toContain('- Why Kovo?: `./.kovo/docs/docs/why-kovo.md`');
-    expect(block).toContain('### Tutorial');
-    expect(block).toContain('- 8. Wrap-up & deploy: `./.kovo/docs/tutorial/08-wrap-up.md`');
-    expect(block).toContain('### Guides');
-    expect(block).toContain('- Live queries: `./.kovo/docs/guides/live-queries.md`');
-    expect(block).toContain('### API Reference');
-    expect(block).toContain('- @kovojs/cli: `./.kovo/docs/api/cli.md`');
-    expect(block).toContain('### Reference');
-    expect(block).toContain('- Diagnostics: `./.kovo/docs/reference/diagnostics.md`');
+    expect(block).toContain('Docs root: `./.kovo/docs/`.');
+    expect(block).toContain(
+      'Path rule: `why-kovo` in `docs/` means `./.kovo/docs/docs/why-kovo.md`',
+    );
+    expect(block).toContain('- Getting Started (`docs/`): why-kovo, quickstart');
+    expect(block).toContain('- Tutorial (`tutorial/`): 01-first-page');
+    expect(block).toContain('- Guides (`guides/`): routing, layouts, queries, live-queries');
+    expect(block).toContain('- API Reference (`api/`): core, icons, server');
+    expect(block).toContain('- Reference (`reference/`): diagnostics');
+    expect(block).not.toContain('## Read First');
+    expect(block).not.toContain('./.kovo/docs/spec.md');
     expect(block).not.toContain('./.kovo/docs/llms.txt');
     expect(block).not.toContain('./.kovo/docs/llms-full.txt');
     expect(block).toContain(kovoRulesEndMarker);

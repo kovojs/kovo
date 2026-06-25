@@ -97,10 +97,10 @@ describe('create-kovo starter (metadata)', () => {
       expect(agents).toContain('<!-- BEGIN:kovo-rules -->');
       expect(agents).toContain('<!-- kovo-rules-version: 0.1.1 -->');
       expect(agents).toContain('`kovo check`');
-      expect(agents).toContain('Read the local docs below');
-      expect(agents).toContain('- Spec: `./.kovo/docs/spec.md`');
-      expect(agents).toContain('### Guides');
-      expect(agents).toContain('- Live queries: `./.kovo/docs/guides/live-queries.md`');
+      expect(agents).toContain('Docs root: `./.kovo/docs/`.');
+      expect(agents).toContain('- Guides (`guides/`): routing, layouts, queries, live-queries');
+      expect(agents).not.toContain('## Read First');
+      expect(agents).not.toContain('./.kovo/docs/spec.md');
       expect(agents).not.toContain('./.kovo/docs/llms.txt');
       expect(agents).not.toContain('./.kovo/docs/llms-full.txt');
       expect(agents).toContain('<!-- END:kovo-rules -->');

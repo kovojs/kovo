@@ -13,88 +13,123 @@ export interface KovoDocsMirrorRemote {
 }
 
 interface KovoRulesTocSection {
+  directory: string;
   title: string;
   entries: readonly KovoRulesTocEntry[];
 }
 
 interface KovoRulesTocEntry {
-  title: string;
   path: string;
+  slug: string;
+  title: string;
 }
 
 export const kovoRulesTocSections: readonly KovoRulesTocSection[] = [
   {
+    directory: 'docs/',
     title: 'Getting Started',
     entries: [
-      { title: 'Why Kovo?', path: 'docs/why-kovo.md' },
-      { title: 'Quickstart', path: 'docs/quickstart.md' },
-      { title: 'Thinking in Kovo', path: 'docs/mental-model.md' },
-      { title: 'Installation', path: 'docs/installation.md' },
-      { title: 'Project structure', path: 'docs/project-structure.md' },
-      { title: 'Stability & Versioning', path: 'docs/stability.md' },
+      { title: 'Why Kovo?', path: 'docs/why-kovo.md', slug: 'why-kovo' },
+      { title: 'Quickstart', path: 'docs/quickstart.md', slug: 'quickstart' },
+      { title: 'Thinking in Kovo', path: 'docs/mental-model.md', slug: 'mental-model' },
+      { title: 'Installation', path: 'docs/installation.md', slug: 'installation' },
+      { title: 'Project structure', path: 'docs/project-structure.md', slug: 'project-structure' },
+      { title: 'Stability & Versioning', path: 'docs/stability.md', slug: 'stability' },
     ],
   },
   {
+    directory: 'tutorial/',
     title: 'Tutorial',
     entries: [
-      { title: '1. Scaffold & the first page', path: 'tutorial/01-first-page.md' },
-      { title: '2. Components & islands', path: 'tutorial/02-islands.md' },
-      { title: '3. Queries & data binding', path: 'tutorial/03-queries.md' },
-      { title: '4. Mutations & forms', path: 'tutorial/04-mutations.md' },
-      { title: '5. Invalidation & optimistic updates', path: 'tutorial/05-optimistic.md' },
-      { title: '6. Streaming & defer', path: 'tutorial/06-streaming.md' },
-      { title: '7. Testing & verification', path: 'tutorial/07-verification.md' },
-      { title: '8. Wrap-up & deploy', path: 'tutorial/08-wrap-up.md' },
+      {
+        title: '1. Scaffold & the first page',
+        path: 'tutorial/01-first-page.md',
+        slug: '01-first-page',
+      },
+      { title: '2. Components & islands', path: 'tutorial/02-islands.md', slug: '02-islands' },
+      { title: '3. Queries & data binding', path: 'tutorial/03-queries.md', slug: '03-queries' },
+      { title: '4. Mutations & forms', path: 'tutorial/04-mutations.md', slug: '04-mutations' },
+      {
+        title: '5. Invalidation & optimistic updates',
+        path: 'tutorial/05-optimistic.md',
+        slug: '05-optimistic',
+      },
+      { title: '6. Streaming & defer', path: 'tutorial/06-streaming.md', slug: '06-streaming' },
+      {
+        title: '7. Testing & verification',
+        path: 'tutorial/07-verification.md',
+        slug: '07-verification',
+      },
+      { title: '8. Wrap-up & deploy', path: 'tutorial/08-wrap-up.md', slug: '08-wrap-up' },
     ],
   },
   {
+    directory: 'guides/',
     title: 'Guides',
     entries: [
-      { title: 'Routing & navigation', path: 'guides/routing.md' },
-      { title: 'Layouts', path: 'guides/layouts.md' },
-      { title: 'Queries & invalidation', path: 'guides/queries.md' },
-      { title: 'Live queries', path: 'guides/live-queries.md' },
-      { title: 'Domains, writes & data access', path: 'guides/data-layer.md' },
-      { title: 'Mutations & forms', path: 'guides/mutations.md' },
-      { title: 'Security & authorization', path: 'guides/security.md' },
-      { title: 'Better Auth integration', path: 'guides/auth-better-auth.md' },
-      { title: 'Optimistic updates', path: 'guides/optimistic.md' },
-      { title: 'Interactive islands & client state', path: 'guides/islands.md' },
-      { title: 'Styling with StyleX', path: 'guides/styling.md' },
-      { title: 'Request shell', path: 'guides/request-shell.md' },
-      { title: 'Endpoints & webhooks', path: 'guides/endpoints-webhooks.md' },
-      { title: 'Deployment', path: 'guides/deployment.md' },
-      { title: 'Static export', path: 'guides/static-export.md' },
-      { title: 'Testing with @kovojs/test', path: 'guides/testing.md' },
-      { title: 'Dataflow devtool', path: 'guides/dataflow-devtool.md' },
-      { title: 'The kovo & vp CLIs', path: 'guides/cli.md' },
-      { title: 'Reading kovo check & kovo explain', path: 'guides/kovo-explain.md' },
-      { title: 'Streaming & defer', path: 'guides/streaming.md' },
-      { title: 'Compiler internals', path: 'guides/compiler-internals.md' },
-      { title: 'Accessibility', path: 'guides/accessibility.md' },
-      { title: 'Components & copy-in UI', path: 'guides/components.md' },
+      { title: 'Routing & navigation', path: 'guides/routing.md', slug: 'routing' },
+      { title: 'Layouts', path: 'guides/layouts.md', slug: 'layouts' },
+      { title: 'Queries & invalidation', path: 'guides/queries.md', slug: 'queries' },
+      { title: 'Live queries', path: 'guides/live-queries.md', slug: 'live-queries' },
+      { title: 'Domains, writes & data access', path: 'guides/data-layer.md', slug: 'data-layer' },
+      { title: 'Mutations & forms', path: 'guides/mutations.md', slug: 'mutations' },
+      { title: 'Security & authorization', path: 'guides/security.md', slug: 'security' },
+      {
+        title: 'Better Auth integration',
+        path: 'guides/auth-better-auth.md',
+        slug: 'auth-better-auth',
+      },
+      { title: 'Optimistic updates', path: 'guides/optimistic.md', slug: 'optimistic' },
+      { title: 'Interactive islands & client state', path: 'guides/islands.md', slug: 'islands' },
+      { title: 'Styling with StyleX', path: 'guides/styling.md', slug: 'styling' },
+      { title: 'Request shell', path: 'guides/request-shell.md', slug: 'request-shell' },
+      {
+        title: 'Endpoints & webhooks',
+        path: 'guides/endpoints-webhooks.md',
+        slug: 'endpoints-webhooks',
+      },
+      { title: 'Deployment', path: 'guides/deployment.md', slug: 'deployment' },
+      { title: 'Static export', path: 'guides/static-export.md', slug: 'static-export' },
+      { title: 'Testing with @kovojs/test', path: 'guides/testing.md', slug: 'testing' },
+      { title: 'Dataflow devtool', path: 'guides/dataflow-devtool.md', slug: 'dataflow-devtool' },
+      { title: 'The kovo & vp CLIs', path: 'guides/cli.md', slug: 'cli' },
+      {
+        title: 'Reading kovo check & kovo explain',
+        path: 'guides/kovo-explain.md',
+        slug: 'kovo-explain',
+      },
+      { title: 'Streaming & defer', path: 'guides/streaming.md', slug: 'streaming' },
+      {
+        title: 'Compiler internals',
+        path: 'guides/compiler-internals.md',
+        slug: 'compiler-internals',
+      },
+      { title: 'Accessibility', path: 'guides/accessibility.md', slug: 'accessibility' },
+      { title: 'Components & copy-in UI', path: 'guides/components.md', slug: 'components' },
     ],
   },
   {
+    directory: 'api/',
     title: 'API Reference',
     entries: [
-      { title: '@kovojs/core', path: 'api/core.md' },
-      { title: '@kovojs/icons', path: 'api/icons.md' },
-      { title: '@kovojs/server', path: 'api/server.md' },
-      { title: '@kovojs/browser', path: 'api/browser.md' },
-      { title: '@kovojs/test', path: 'api/test.md' },
-      { title: '@kovojs/drizzle', path: 'api/drizzle.md' },
-      { title: '@kovojs/headless-ui', path: 'api/headless-ui.md' },
-      { title: '@kovojs/style', path: 'api/style.md' },
-      { title: '@kovojs/better-auth', path: 'api/better-auth.md' },
-      { title: '@kovojs/ui', path: 'api/ui.md' },
-      { title: '@kovojs/cli', path: 'api/cli.md' },
-      { title: 'create-kovo', path: 'api/create-kovo.md' },
+      { title: '@kovojs/core', path: 'api/core.md', slug: 'core' },
+      { title: '@kovojs/icons', path: 'api/icons.md', slug: 'icons' },
+      { title: '@kovojs/server', path: 'api/server.md', slug: 'server' },
+      { title: '@kovojs/browser', path: 'api/browser.md', slug: 'browser' },
+      { title: '@kovojs/test', path: 'api/test.md', slug: 'test' },
+      { title: '@kovojs/drizzle', path: 'api/drizzle.md', slug: 'drizzle' },
+      { title: '@kovojs/headless-ui', path: 'api/headless-ui.md', slug: 'headless-ui' },
+      { title: '@kovojs/style', path: 'api/style.md', slug: 'style' },
+      { title: '@kovojs/better-auth', path: 'api/better-auth.md', slug: 'better-auth' },
+      { title: '@kovojs/ui', path: 'api/ui.md', slug: 'ui' },
+      { title: '@kovojs/cli', path: 'api/cli.md', slug: 'cli' },
+      { title: 'create-kovo', path: 'api/create-kovo.md', slug: 'create-kovo' },
     ],
   },
   {
+    directory: 'reference/',
     title: 'Reference',
-    entries: [{ title: 'Diagnostics', path: 'reference/diagnostics.md' }],
+    entries: [{ title: 'Diagnostics', path: 'reference/diagnostics.md', slug: 'diagnostics' }],
   },
 ];
 
@@ -122,19 +157,17 @@ export function bundledKovoRulesSource(): string {
     '- `kovo explain <target>`: inspect routes, mutations, queries, guards, layouts, and graph edges.',
     '- `kovo update-docs`: refresh this block and the local docs mirror at `./.kovo/docs/`.',
     '',
-    '## Read First',
-    '',
-    'Read the local docs below before changing Kovo framework code or app structure.',
-    '',
     '## Table Of Contents',
     '',
-    '- Spec: `./.kovo/docs/spec.md`',
-    ...kovoRulesTocSections.flatMap((section) => [
-      '',
-      `### ${section.title}`,
-      '',
-      ...section.entries.map((entry) => `- ${entry.title}: \`./.kovo/docs/${entry.path}\``),
-    ]),
+    'Docs root: `./.kovo/docs/`.',
+    'Path rule: `why-kovo` in `docs/` means `./.kovo/docs/docs/why-kovo.md`; `core` in `api/` means `./.kovo/docs/api/core.md`.',
+    '',
+    ...kovoRulesTocSections.map(
+      (section) =>
+        `- ${section.title} (\`${section.directory}\`): ${section.entries
+          .map((entry) => entry.slug)
+          .join(', ')}`,
+    ),
     '',
   ].join('\n');
 }
