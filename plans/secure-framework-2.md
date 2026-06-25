@@ -195,62 +195,53 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
   - Acceptance: Node/Vercel/Cloudflare/static outputs have conformance tests for client modules,
     assets, HTML, and error responses with expected `nosniff`, CORP/CORS, cache, and cookie variance.
 
-- [ ] Emit the SPEC §6.6 sound-subset policy in generated starters.
-  - Evidence: starter templates lack their own `tsconfig`/lint policy, while current tests only
-    inspect strict flags; starter code contains `as unknown as` casts.
-  - Acceptance: generated apps include strict TypeScript and lint gates banning `any`,
-    non-null assertions, and unchecked casts, or document any explicit starter-only escape.
+- [x] Emit the SPEC §6.6 sound-subset policy in generated starters.
+  - Evidence: `e8565287` plus
+    `pnpm exec vitest --run packages/create-kovo/src/index.test.ts` covers starter `tsconfig`,
+    sound-subset script, and generated starter `node scripts/check-sound-subset.mjs`.
 
-- [ ] Fix starter anonymous CSRF so unauthenticated users use the framework-owned anonymous cookie.
-  - Evidence: starter `sessionId` returns a constant anonymous id before auth, bypassing the
-    anonymous-cookie binding path in `packages/server/src/csrf.ts:260`.
-  - Acceptance: starter pre-auth CSRF tokens fail without the matching framework-owned anonymous
-    cookie, and post-auth behavior remains session-bound.
+- [x] Fix starter anonymous CSRF so unauthenticated users use the framework-owned anonymous cookie.
+  - Evidence: `e8565287` plus
+    `pnpm exec vitest --run packages/create-kovo/src/index.test.ts` covers pre-auth anonymous CSRF
+    cookie binding in generated starters.
 
-- [ ] Replace starter `workspace:*` dependencies and add install reproducibility pins.
-  - Evidence: `packages/create-kovo/templates/package.json` and `package.sqlite.json` render
-    monorepo-only `workspace:*` specs and do not include a starter `packageManager` pin.
-  - Acceptance: published starters resolve public package versions, include a package-manager pin,
-    and have a smoke test outside the monorepo.
+- [x] Replace starter `workspace:*` dependencies and add install reproducibility pins.
+  - Evidence: `e8565287` plus
+    `pnpm exec vitest --run packages/create-kovo/src/index.test.ts` covers package-version
+    substitution and starter `packageManager` rendering.
 
-- [ ] Escape devtool HTML attribute sinks.
-  - Evidence: `packages/devtool/src/render.mjs` has an escape helper but raw `href`, hidden input,
-    and `on:visible` attribute interpolations fed partly by env/base/app values.
-  - Probe: supply explorer produced attribute breakout strings through devtool inputs.
-  - Acceptance: all devtool HTML text and attributes route through context-specific escapers, with a
-    hostile-input regression test.
+- [x] Escape devtool HTML attribute sinks.
+  - Evidence: `e8565287` plus
+    `pnpm exec vitest --run packages/devtool/src/render.test.mjs` covers hostile attribute input in
+    the devtool renderer.
 
-- [ ] Gate release publish on exact-commit CI success and pinned release tooling.
-  - Evidence: `.github/workflows/release.yml` contains a TODO around status checks and installs a
-    mutable `npm@latest`; `scripts/verify-release-input.mjs` validates ref/version but not required
-    checks for `github.sha`.
-  - Acceptance: release refuses to publish unless required checks passed for the exact commit, and
-    release tooling versions are pinned or recorded in provenance metadata.
+- [x] Gate release publish on exact-commit CI success and pinned release tooling.
+  - Evidence: `e8565287` plus
+    `SKIP_NPM_PUBLISHED_CHECK=1 node scripts/verify-release-input.mjs 0.1.1`, `node --check
+    scripts/verify-release-input.mjs`, and inspected `.github/workflows/release.yml` using pinned
+    npm and `vp exec pnpm` commands per `rules/github-workflows.md`.
 
 - [ ] Attest packed npm tarball content before publish.
-  - Evidence: `scripts/build-publish.mjs`, `scripts/pack-public-packages.mjs`, and
-    `scripts/publish-packed-packages.mjs` track package/version/tarball path but not sha512,
-    file-list, manifest snapshot, or lifecycle-script policy.
-  - Acceptance: publish manifest records tarball integrity, `tar -tf` file list, packed
-    `package.json`, dependency versions, and rejects lifecycle scripts unless allowlisted.
+  - Current evidence: `e8565287` adds sha512/file-list/packed-manifest/lifecycle attestation to
+    pack/publish scripts; `node --check scripts/pack-public-packages.mjs` and
+    `node --check scripts/publish-packed-packages.mjs` passed.
+  - Remaining gap: `pnpm run check:publish` / real tarball packing has not been run in this
+    integration session, so the end-to-end tarball claim is not yet fully verified.
 
-- [ ] Add dependency audit and build-script policy gates.
-  - Evidence: supply probe `pnpm audit --prod --json` found a current low `esbuild@0.27.3`
-    advisory; root build-script approval currently allows only `better-sqlite3`.
-  - Acceptance: CI/release runs an explicit severity-based dependency audit and verifies the
-    approved-build-script list.
+- [x] Add dependency audit and build-script policy gates.
+  - Evidence: `e8565287` plus `pnpm run check:supply-chain` and
+    `pnpm exec vitest --run scripts/supply-chain-gates.test.mjs` cover severity-gated
+    `pnpm audit --prod` and approved build-script policy.
 
-- [ ] Add source-hash attestation for `kovo add` vendored UI source.
-  - Evidence: `packages/cli/src/add-catalog.ts` validates shape and IR markers, but copied TSX from
-    installed `@kovojs/ui` is not checked against a Kovo-maintained component source hash manifest.
-  - Acceptance: UI release emits per-component source hashes and `kovo add` reports/verifies the
-    package version plus source hash before copying executable TSX.
+- [x] Add source-hash attestation for `kovo add` vendored UI source.
+  - Evidence: `e8565287` plus
+    `pnpm exec vitest --run packages/cli/src/index.kovo-add.test.ts` covers UI source-hash
+    verification before copying vendored TSX.
 
-- [ ] Add a pre-implementation security checklist for future SSE/EventSource/live channels.
-  - Evidence: wire explorer found no production SSE/EventSource path today; future live channels
-    would cross the same principal/cache/build-token boundary as broadcast and mutation streams.
-  - Acceptance: any future live transport requires subscribe-time and per-push guards, no-store and
-    same-origin CORS posture, build token on every event, and principal-bound channel identifiers.
+- [x] Add a pre-implementation security checklist for future SSE/EventSource/live channels.
+  - Evidence: `e8565287` adds `rules/live-transport-security.md`; inspected rule covers
+    subscribe-time/per-push guards, no-store/same-origin posture, build tokens, and
+    principal-bound channel identifiers.
 
 ## Parallel Probe Evidence
 
