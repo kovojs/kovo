@@ -468,15 +468,28 @@ export interface CapabilityExplain {
   /** The capability family the escape belongs to. */
   kind:
     | 'acceptUnverified'
+    | 'agentTool'
     | 'egressAllowInternal'
     | 'publishToClient'
     | 'serverValue'
     | 'trustedReveal'
     | 'unsafeCookie';
+  /** Agent-tool ambient browser/session credential posture. */
+  ambientBrowserCredentials?: 'allowed' | 'rejected';
+  /** Agent-tool ambient-credential justification when browser/session credentials are allowed. */
+  ambientJustification?: string;
+  /** Agent-tool principal/capability authorities accepted by the tool runtime. */
+  authority?: readonly string[];
+  /** Agent-tool declared sink/capability names. */
+  declaredCapabilities?: readonly string[];
   /** A human justification recorded at the escape site (the audit's load-bearing field). */
   justification?: string;
   /** Source module for module-scoped escapes such as `publishToClient`. */
   moduleSpecifier?: string;
+  /** Agent-tool audit owner responsible for reviewing the blast radius. */
+  owner?: string;
+  /** Agent-tool human purpose exposed to reviewers. */
+  purpose?: string;
   /** The escape target/value descriptor (e.g. host:port, query path, cookie name). */
   target?: string;
   /** The source span of the escape. */

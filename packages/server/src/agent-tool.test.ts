@@ -142,10 +142,43 @@ describe('agent tool capability primitive', () => {
       {
         ambientBrowserCredentials: 'rejected',
         authority: ['principal:user:123'],
-        capabilities: ['orders.write'],
+        declaredCapabilities: ['orders.write'],
+        kind: 'agentTool',
         name: 'orders.updateStatus',
         owner: 'security',
         purpose: 'Update a single order status after a human-approved agent action.',
+        site: 'agent-tool:orders.updateStatus',
+        target: 'orders.updateStatus',
+      },
+    ]);
+  });
+
+  it('uses explicit audit sites and ambient justifications in explain-ready facts', () => {
+    const profile = tool({
+      ambientCredentials: {
+        allow: true,
+        justification: 'legacy browser-authenticated assistant action under review',
+      },
+      audit: { owner: 'security', review: 'SEC-123', site: 'app/tools/profile.ts:12' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: () => undefined,
+      name: 'profile.summary',
+      purpose: 'Read the current user profile summary for an agent response.',
+    });
+
+    expect(agentToolAuditFacts([profile])).toEqual([
+      {
+        ambientBrowserCredentials: 'allowed',
+        ambientJustification: 'legacy browser-authenticated assistant action under review',
+        authority: ['principal:user:123'],
+        declaredCapabilities: ['profile.read'],
+        kind: 'agentTool',
+        name: 'profile.summary',
+        owner: 'security',
+        purpose: 'Read the current user profile summary for an agent response.',
+        site: 'app/tools/profile.ts:12',
+        target: 'profile.summary',
       },
     ]);
   });

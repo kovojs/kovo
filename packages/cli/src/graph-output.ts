@@ -641,6 +641,7 @@ export function kovoAudit(
   const manualInvalidates = (input.mutations ?? []).filter(
     (mutation) => (mutation.manualInvalidates?.length ?? 0) > 0,
   );
+  const agentToolCoverage = agentToolCoverageFindings(input.capabilities ?? []);
   const lines = [auditOutputVersion];
 
   if (unguarded.length > 0) {
@@ -659,15 +660,23 @@ export function kovoAudit(
     }
   }
 
+  if (agentToolCoverage.length > 0) {
+    lines.push('AGENT-TOOLS');
+
+    for (const finding of agentToolCoverage) {
+      lines.push(agentToolCoverageLine(finding));
+    }
+  }
+
   if (lines.length === 1) {
     lines.push('OK');
   } else {
     lines.push(
-      `SUMMARY unguarded=${unguarded.length} manual-invalidates=${manualInvalidates.length}`,
+      `SUMMARY unguarded=${unguarded.length} manual-invalidates=${manualInvalidates.length} agent-tool-coverage=${agentToolCoverage.length}`,
     );
   }
 
-  const findingCount = unguarded.length + manualInvalidates.length;
+  const findingCount = unguarded.length + manualInvalidates.length + agentToolCoverage.length;
   return {
     exitCode: options.failOnFindings && findingCount > 0 ? 1 : 0,
     output: `${lines.join('\n')}\n`,
@@ -1818,6 +1827,8 @@ function compareCapability(a: CoreGraph.CapabilityExplain, b: CoreGraph.Capabili
 }
 
 function capabilityLine(capability: CoreGraph.CapabilityExplain): string {
+  if (capability.kind === 'agentTool') return agentToolCapabilityLine(capability);
+
   return [
     'CAPABILITY',
     `kind=${capability.kind}`,
@@ -1826,6 +1837,62 @@ function capabilityLine(capability: CoreGraph.CapabilityExplain): string {
     `target=${capability.target ?? '-'}`,
     `justification=${stableValue(capability.justification)}`,
   ].join(' ');
+}
+
+function agentToolCapabilityLine(capability: CoreGraph.CapabilityExplain): string {
+  return [
+    'CAPABILITY',
+    'kind=agentTool',
+    `site=${capability.site}`,
+    `name=${capability.target ?? '-'}`,
+    `owner=${capability.owner ?? '-'}`,
+    `purpose=${stableValue(capability.purpose)}`,
+    `authority=${list(capability.authority)}`,
+    `capabilities=${list(capability.declaredCapabilities)}`,
+    `ambient=${capability.ambientBrowserCredentials ?? '-'}`,
+    `ambientJustification=${stableValue(capability.ambientJustification)}`,
+    `review=${stableValue(capability.justification)}`,
+  ].join(' ');
+}
+
+interface AgentToolCoverageFinding {
+  missing: readonly string[];
+  site: string;
+  tool: string;
+}
+
+function agentToolCoverageFindings(
+  capabilities: readonly CoreGraph.CapabilityExplain[],
+): readonly AgentToolCoverageFinding[] {
+  return capabilities
+    .filter((capability) => capability.kind === 'agentTool')
+    .map((capability) => {
+      const missing = [
+        empty(capability.target) ? 'name' : undefined,
+        empty(capability.owner) ? 'owner' : undefined,
+        empty(capability.purpose) ? 'purpose' : undefined,
+        (capability.authority?.length ?? 0) === 0 ? 'authority' : undefined,
+        (capability.declaredCapabilities?.length ?? 0) === 0 ? 'capabilities' : undefined,
+        capability.ambientBrowserCredentials === undefined ? 'ambient' : undefined,
+        capability.ambientBrowserCredentials === 'allowed' && empty(capability.ambientJustification)
+          ? 'ambientJustification'
+          : undefined,
+      ].filter((value): value is string => value !== undefined);
+
+      return { missing, site: capability.site, tool: capability.target ?? '-' };
+    })
+    .filter((finding) => finding.missing.length > 0)
+    .sort(
+      (left, right) => left.site.localeCompare(right.site) || left.tool.localeCompare(right.tool),
+    );
+}
+
+function agentToolCoverageLine(finding: AgentToolCoverageFinding): string {
+  return `AGENT_TOOL ${finding.tool} site=${finding.site} missing=${finding.missing.join(',')}`;
+}
+
+function empty(value: string | undefined): boolean {
+  return value === undefined || value.trim() === '';
 }
 
 function compareCookieDowngrade(

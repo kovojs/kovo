@@ -35,6 +35,8 @@ export interface AgentToolAuditMetadata {
   owner: string;
   /** Optional review note, ticket, or runbook reference. */
   review?: string;
+  /** Optional source span for explain/audit output; defaults to `agent-tool:<name>`. */
+  site?: string;
 }
 
 /** Ambient browser/session credential posture for an agent tool. */
@@ -90,15 +92,18 @@ export interface AgentToolDeclaration<
   ambientCredentials: AgentToolAmbientCredentials;
 }
 
-/** Audit fact suitable for future `kovo explain --capabilities` rendering. */
+/** Audit fact suitable for `kovo explain --capabilities` rendering. */
 export interface AgentToolAuditFact {
   readonly ambientBrowserCredentials: 'allowed' | 'rejected';
   readonly ambientJustification?: string;
   readonly authority: readonly string[];
-  readonly capabilities: readonly string[];
+  readonly declaredCapabilities: readonly string[];
+  readonly kind: 'agentTool';
   readonly name: string;
   readonly owner: string;
   readonly purpose: string;
+  readonly site: string;
+  readonly target: string;
 }
 
 /** Error thrown when an agent tool declaration or invocation violates the fail-closed boundary. */
@@ -119,6 +124,8 @@ export function tool<const Input, Output, Context = unknown>(
   assertNonEmpty(definition.name, 'tool.name');
   assertNonEmpty(definition.purpose, 'tool.purpose');
   assertNonEmpty(definition.audit?.owner, 'tool.audit.owner');
+  if (definition.audit?.site !== undefined)
+    assertNonEmpty(definition.audit.site, 'tool.audit.site');
   assertAuthority(definition.authority);
   assertCapabilities(definition.capabilities);
   assertAmbientCredentials(definition.ambientCredentials);
@@ -165,10 +172,13 @@ export function agentToolAuditFacts(
       ambientBrowserCredentials: ambient.allow === true ? 'allowed' : 'rejected',
       ...(ambient.allow === true ? { ambientJustification: ambient.justification } : {}),
       authority: declaration.authority.map(describeAuthority),
-      capabilities: declaration.capabilities.map((capability) => capability.name),
+      declaredCapabilities: declaration.capabilities.map((capability) => capability.name),
+      kind: 'agentTool',
       name: declaration.name,
       owner: declaration.audit.owner,
       purpose: declaration.purpose,
+      site: declaration.audit.site ?? `agent-tool:${declaration.name}`,
+      target: declaration.name,
     };
   });
 }

@@ -137,9 +137,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       **not** eliminate Excessive Agency (a prompt-injected arg into a _granted_ money-move tool is still a call);
       needs a net-new primitive + governed-sink annotations. Pair with OPP-25's honest blast-radius framing.
       Progress: `packages/server/src/agent-tool.ts` adds the public `tool()`/`runAgentTool()` runtime substrate
-      with required purpose, authority, capabilities, audit owner, and ambient-credential posture; focused tests,
-      `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap: reachable-sink classification
-      and `kovo explain`/compiler audit integration.
+      with required purpose, authority, capabilities, audit owner, and ambient-credential posture;
+      `packages/cli/src/graph-output.ts` surfaces declared agent-tool coverage in `kovo explain`/`kovo audit`.
+      Focused server/CLI tests, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
+      static reachable-sink classification and capability coverage enforcement against analyzer output.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -148,7 +149,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       _Trade-off:_ reusing KV418's _symbol-identity_ pattern is sound, but generalized to arbitrary "ambient
       credentials" it degrades to author-assertion/audit-only. **Defer** behind OPP-07.
       Progress: `runAgentTool()` rejects `Cookie`/`Authorization`/session-bearing requests by default and requires
-      explicit justification for ambient credential opt-in. Remaining gap: audit/explain wiring for the posture.
+      explicit justification for ambient credential opt-in; `kovo explain --capabilities` renders ambient posture
+      and `kovo audit --fail-on-findings` flags missing justification for ambient-credential opt-in. Remaining
+      gap: broader analyzer integration beyond the framework-owned `tool()` boundary.
 
 - [ ] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves

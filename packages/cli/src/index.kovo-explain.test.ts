@@ -758,6 +758,16 @@ describe('kovo explain', () => {
       {
         capabilities: [
           {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['orders.write'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Update one order after a human-approved agent action.',
+            site: 'app/tools/orders.ts:12',
+            target: 'orders.updateStatus',
+          },
+          {
             justification: 'Stripe SDK is a client-safe published handle',
             kind: 'publishToClient',
             moduleSpecifier: './checkout-config',
@@ -804,11 +814,12 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       CAPABILITIES
+      CAPABILITY kind=agentTool site=app/tools/orders.ts:12 name=orders.updateStatus owner=security purpose="Update one order after a human-approved agent action." authority=principal:user:123 capabilities=orders.write ambient=rejected ambientJustification=- review=-
       CAPABILITY kind=egressAllowInternal site=app/server.ts:14 module=- target=10.0.0.5:9090 justification="internal metrics sidecar on the pod network"
       CAPABILITY kind=publishToClient site=app/checkout.tsx:9 module=./checkout-config target=stripeClient justification="Stripe SDK is a client-safe published handle"
       CAPABILITY kind=serverValue site=app/admin.ts:3 module=- target=export.email justification="admin export reveals masked emails"
       CAPABILITY kind=trustedReveal site=app/support.ts:7 module=- target=supportUser.email justification="masked email for support tooling"
-      SUMMARY total=4
+      SUMMARY total=5
       "
     `);
   });
