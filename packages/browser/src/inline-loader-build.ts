@@ -242,9 +242,12 @@ function installInlineKovoLoader(im) {
       if (r(n)) el.removeAttribute?.(name);
       else {
         let r = fb(val);
-        if (n === 'srcset') {
+        if (n === 'style' && c(r)) {
+          el.removeAttribute?.(name);
+        } else if (n === 'srcset' || n === 'imagesrcset') {
           const a = s(r);
-          el.setAttribute?.(name, a || '#');
+          if (a) el.setAttribute?.(name, a);
+          else el.removeAttribute?.(name);
         } else {
           if (ia(name) && uu(r)) r = '#';
           el.setAttribute?.(name, r);

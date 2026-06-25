@@ -73,7 +73,7 @@ describe('server static export app replay boundary', () => {
           body: expect.stringContaining('<button on:click="/c/__v/cart-static/cart.client.js'),
           headers: {
             'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-r+dYbT4MW7b2daKYtHumwNfjFE4Vx7KzXxym5gJRNjI='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
+              "default-src 'self'; script-src 'self' 'sha256-zOxaGi2tH4BAw0NScAj/WNUTb87gArEmBY868nVHP9g='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
             'content-type': 'text/html; charset=utf-8',
             'referrer-policy': 'strict-origin-when-cross-origin',
             'cross-origin-opener-policy': 'same-origin-allow-popups',
