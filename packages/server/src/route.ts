@@ -1,5 +1,6 @@
 import type { JsonValue, Redirect } from '@kovojs/core';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
+import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 import { reportServerError } from './diagnostics.js';
 import {
@@ -24,6 +25,8 @@ import type { MutationFail } from './mutation.js';
 import { runQuery, type QueryDefinition, type RegisteredQueryDefinition } from './query.js';
 import {
   htmlServerErrorResponse,
+  blessRedirectResponse,
+  redirectLocationHeader,
   retryAfterHeaders,
   routeOutcomeResponse,
   type NotFound,
@@ -1059,11 +1062,11 @@ export async function renderRoutePageResponse<
   // SPEC §6.4: page redirect() → 303 + sanitized Location header.
   if ('redirect' in result) {
     return attachLifecycleRequest(
-      {
+      blessRedirectResponse({
         body: '',
-        headers: { Location: sanitizeNext(result.redirect.location) },
+        headers: { Location: redirectLocationHeader(sanitizeNext(result.redirect.location)) },
         status: 303,
-      },
+      }),
       lifecycleRequest,
     );
   }
@@ -1210,6 +1213,7 @@ function isRedirect(value: unknown): value is Redirect {
   return (
     typeof value === 'object' &&
     value !== null &&
+    isBlessedSink('core:route-redirect', value) &&
     'status' in value &&
     value.status === 303 &&
     'location' in value &&

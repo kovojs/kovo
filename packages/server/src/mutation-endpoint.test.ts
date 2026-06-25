@@ -75,6 +75,18 @@ describe('server mutation endpoint routing', () => {
     await expect(
       renderMutationEndpointResponse(signIn, {
         headers: {},
+        rawInput: { next: '/account?tab=orders#paid' },
+        redirectTo: (result) => result.value.next,
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      headers: { Location: '/account?tab=orders#paid' },
+      status: 303,
+    });
+
+    await expect(
+      renderMutationEndpointResponse(signIn, {
+        headers: {},
         rawInput: { next: 'https://evil.example/phish' },
         redirectTo: (result) => result.value.next,
         request: {},
@@ -88,6 +100,18 @@ describe('server mutation endpoint routing', () => {
       renderMutationEndpointResponse(signIn, {
         headers: {},
         rawInput: { next: '//evil.example/phish' },
+        redirectTo: (result) => result.value.next,
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      headers: { Location: '/' },
+      status: 303,
+    });
+
+    await expect(
+      renderMutationEndpointResponse(signIn, {
+        headers: {},
+        rawInput: { next: '/account\nSet-Cookie:owned=true' },
         redirectTo: (result) => result.value.next,
         request: {},
       }),

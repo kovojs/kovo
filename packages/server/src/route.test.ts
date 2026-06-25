@@ -145,11 +145,8 @@ describe('route primitives', () => {
   // I1 (ROUTING-NAV-1 / SPEC §6.4): page returning redirect() must produce 303 + Location,
   // not a 200 "[object Object]" (the pre-fix behaviour).
   it('returns 303 + Location when a route page returns redirect() (I1 ROUTING-NAV-1)', async () => {
-    // Build the Redirect value directly (redirect() requires a registered route key,
-    // so we construct the { location, status: 303 } shape to match the Redirect interface).
-    const redirectValue: ReturnType<typeof redirect> = { location: '/new-home', status: 303 };
     const homeRoute = route('/home', {
-      page: () => redirectValue,
+      page: () => redirect('/new-home' as never, {} as never),
     });
 
     await expect(renderRoutePageResponse(homeRoute, {}, {})).resolves.toEqual({
@@ -157,6 +154,17 @@ describe('route primitives', () => {
       headers: { Location: '/new-home' },
       status: 303,
     });
+  });
+
+  it('does not treat forged plain redirect-shaped route page objects as redirects', async () => {
+    const forgedRoute = route('/forged', {
+      page: () => ({ location: '/admin', status: 303 }) as any,
+    });
+
+    const response = await renderRoutePageResponse(forgedRoute, {}, {});
+
+    expect(response.status).toBe(200);
+    expect(response.headers.Location).toBeUndefined();
   });
 
   it('escapes default route string returns as text', async () => {

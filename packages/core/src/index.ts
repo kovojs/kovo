@@ -1,5 +1,6 @@
 import type { ComponentMutationDefinitions, ComponentMutationForms, Form } from './forms-types.js';
 import type { JsonValue } from './json.js';
+import { blessSink } from './internal/sink-policy.js';
 
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type { JsonValue } from './json.js';
@@ -411,6 +412,8 @@ export interface Redirect {
   status: 303;
 }
 
+const ROUTE_REDIRECT_SINK = 'core:route-redirect';
+
 /**
  * Build a 303 redirect to a registered route. Return it from a route page or
  * mutation handler to send the browser to a typed destination (SPEC §6.4).
@@ -428,10 +431,10 @@ export function redirect<const Path extends RegistryKey<RouteRegistry>>(
   path: Path,
   options: RouteHrefOptions<RouteFor<Path>>,
 ): Redirect {
-  return {
+  return blessSink(ROUTE_REDIRECT_SINK, {
     location: href(path, options),
     status: 303,
-  };
+  });
 }
 
 function buildHref(

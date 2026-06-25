@@ -2,7 +2,11 @@ import type { Redirect as CoreRedirect } from '@kovojs/core';
 import { managedDb, type ManagedDbMode } from './managed-db.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import { matchRoute, type RouteLike } from './match.js';
-import type { ServerResponseBase } from './response.js';
+import {
+  blessRedirectResponse,
+  redirectLocationHeader,
+  type ServerResponseBase,
+} from './response.js';
 import type { Schema } from './schema.js';
 
 /**
@@ -465,11 +469,11 @@ export async function renderHttpGuardFailureResponse<Request>(
       ? options.onUnauthenticated(context)
       : defaultOnUnauthenticated(context, options.loginPath, options.routes));
 
-    return {
+    return blessRedirectResponse({
       body: '',
-      headers: { Location: redirectResult.location },
+      headers: { Location: redirectLocationHeader(redirectResult.location) },
       status: redirectResult.status,
-    };
+    });
   }
 
   return {

@@ -1,5 +1,10 @@
 import type { DeferredStreamChunk } from './deferred-stream.js';
 import type { StorageCapability } from '@kovojs/core';
+import {
+  blessSink,
+  drainRuntimeSinkSecurityEvent,
+  isBlessedSink,
+} from '@kovojs/core/internal/sink-policy';
 
 import { InlineUnverifiedUploadError, sniffUploadBytes } from './upload-sniff.js';
 
@@ -14,6 +19,8 @@ export type MutationResponseHeaderValue = ResponseHeaderValue;
 
 /** A mutation-response header bag (alias of `ResponseHeaders`). */
 export type MutationResponseHeaders = ResponseHeaders;
+
+const SERVER_REDIRECT_LOCATION_SINK = 'server:redirect-location';
 
 /** The common shape of every server response: `body`, `headers`, and `status`. */
 export interface ServerResponseBase<
@@ -397,9 +404,59 @@ export function serverResponseToWebResponse(
 ): Response {
   const body = request.method === 'HEAD' || response.status === 304 ? null : response.body;
   return new Response(webResponseBodyToBodyInit(body), {
-    headers: webResponseHeaders(response.headers),
+    headers: webResponseHeaders(
+      response.headers,
+      response.status,
+      isBlessedRedirectResponse(response),
+    ),
     status: response.status,
   });
+}
+
+/**
+ * @internal Sanitize a framework-owned Location target for redirects (SPEC §6.6).
+ */
+export function redirectLocationHeader(target: string): string {
+  return sanitizeRedirectLocation(target);
+}
+
+/** @internal Mark a framework-owned 3xx response whose Location header was sanitized. */
+export function blessRedirectResponse<
+  Response extends ServerResponseBase<unknown, ResponseHeaders>,
+>(response: Response): Response {
+  const locationName = findHeaderName(response.headers, 'Location');
+  if (locationName !== undefined) {
+    const location = response.headers[locationName];
+    response.headers[locationName] = sanitizeRedirectLocation(
+      typeof location === 'string' ? location : (location?.[0] ?? '/'),
+    );
+  }
+  return blessSink(SERVER_REDIRECT_LOCATION_SINK, response);
+}
+
+/** @internal Unwrap a redirect Location sink value or fail closed to `/` with a KV236 event. */
+export function redirectLocationHeaderValue(value: ResponseHeaderValue, blessed: boolean): string {
+  if (blessed) return Array.isArray(value) ? (value[0] ?? '/') : value;
+  const text = Array.isArray(value) ? value.join(', ') : String(value);
+  drainRuntimeSinkSecurityEvent({
+    action: 'neutralize',
+    code: 'KV236',
+    family: 'header',
+    message: 'Blocked unblessed redirect Location header at the server response boundary',
+    reason: '3xx Location headers must be minted by the framework redirect-location sink',
+    sink: 'Location',
+    value: {
+      length: text.length,
+      preview: text.slice(0, 80),
+      redacted: true,
+    },
+  });
+  return '/';
+}
+
+/** @internal Check whether a 3xx response object owns a sanitized Location header. */
+export function isBlessedRedirectResponse(value: unknown): boolean {
+  return isBlessedSink(SERVER_REDIRECT_LOCATION_SINK, value);
 }
 
 export function methodNotAllowedWebResponse(
@@ -543,9 +600,18 @@ function webResponseBodyToBodyInit(body: WebResponseBody): BodyInit | null {
   return copy.buffer;
 }
 
-function webResponseHeaders(headers: ResponseHeaders): Headers {
+function webResponseHeaders(
+  headers: ResponseHeaders,
+  status: number,
+  blessedRedirect: boolean,
+): Headers {
   const webHeaders = new Headers();
   for (const [name, value] of Object.entries(headers)) {
+    if (isRedirectStatus(status) && name.toLowerCase() === 'location') {
+      webHeaders.set(name, redirectLocationHeaderValue(value, blessedRedirect));
+      continue;
+    }
+
     if (Array.isArray(value)) {
       for (const entry of value) webHeaders.append(name, entry);
     } else {
@@ -554,6 +620,25 @@ function webResponseHeaders(headers: ResponseHeaders): Headers {
   }
 
   return webHeaders;
+}
+
+function isRedirectStatus(status: number): boolean {
+  return status >= 300 && status < 400;
+}
+
+function sanitizeRedirectLocation(target: string): string {
+  if (hasHeaderControlCharacter(target)) return '/';
+  if (!target.startsWith('/') || target.startsWith('//') || target.startsWith('/\\')) return '/';
+  if (target.includes('\\')) return '/';
+  return target;
+}
+
+function hasHeaderControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
 }
 
 function findHeaderName(headers: HeaderSource, name: string): string | undefined {

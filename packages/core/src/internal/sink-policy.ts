@@ -21,6 +21,7 @@ export type RuntimeSinkFamily =
   | 'attribute'
   | 'css-text'
   | 'event-handler'
+  | 'header'
   | 'raw-html'
   | 'srcdoc'
   | 'srcset'

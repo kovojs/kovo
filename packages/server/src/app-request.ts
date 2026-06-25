@@ -2,7 +2,7 @@ import { blockingAppDiagnostics } from './app-diagnostics.js';
 import { reportServerError } from './diagnostics.js';
 import { renderDiagnosticDocument } from './document-diagnostics.js';
 import { matchShellDispatch } from './shell.js';
-import { routeResponseToWebResponse } from './response.js';
+import { redirectLocationHeader, routeResponseToWebResponse } from './response.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { kovoSecurityReportResponse } from './reporting.js';
 import type { KovoApp } from './app-types.js';
@@ -36,7 +36,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     url.pathname = match.normalization.redirect.pathname;
     return appSystemResponse(null, {
       buildToken,
-      headers: { Location: `${url.pathname}${url.search}${url.hash}` },
+      headers: { Location: redirectLocationHeader(`${url.pathname}${url.search}${url.hash}`) },
       status: match.normalization.redirect.status,
       surface,
     });
