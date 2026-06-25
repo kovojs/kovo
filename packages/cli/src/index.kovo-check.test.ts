@@ -2259,4 +2259,37 @@ describe('kovo check', () => {
       output: 'kovo-check/v1\nOK\n',
     });
   });
+
+  it('does not enforce audit-grade sinks nested on agent-tool capability rows', () => {
+    expect(
+      kovoCheck({
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['orders.write'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Update one order.',
+            reachableSinks: [
+              {
+                capability: 'secrets.read',
+                evidence: 'declared-tool-body',
+                grade: 'audit',
+                kind: 'secret-read',
+                site: 'app/tools/orders.ts:31',
+                target: 'env.SENDGRID_TOKEN',
+                tool: 'orders.updateStatus',
+              },
+            ],
+            site: 'app/tools/orders.ts:12',
+            target: 'orders.updateStatus',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
 });

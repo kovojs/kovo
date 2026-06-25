@@ -130,4 +130,62 @@ describe('agent tool reachable sink facts', () => {
       },
     ]);
   });
+
+  it('preserves declared egress and secret-read body sinks as audit-grade rows', () => {
+    expect(
+      deriveAgentToolReachableSinkFacts({
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['email.send', 'secrets.read'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            reachableSinks: [
+              {
+                capability: 'email.send',
+                evidence: 'declared-tool-body',
+                grade: 'audit',
+                kind: 'egress',
+                site: 'app/tools/orders.ts:31',
+                target: 'smtp',
+                tool: 'stale.name.is.ignored',
+              },
+              {
+                capability: 'secrets.read',
+                evidence: 'declared-tool-body',
+                grade: 'audit',
+                kind: 'secret-read',
+                site: 'app/tools/orders.ts:32',
+                target: 'env.SENDGRID_TOKEN',
+                tool: 'stale.name.is.ignored',
+              },
+            ],
+            site: 'app/tools/orders.ts:4',
+            target: 'orders.notify',
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        capability: 'email.send',
+        evidence: 'declared-tool-body',
+        grade: 'audit',
+        kind: 'egress',
+        site: 'app/tools/orders.ts:31',
+        target: 'smtp',
+        tool: 'orders.notify',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'declared-tool-body',
+        grade: 'audit',
+        kind: 'secret-read',
+        site: 'app/tools/orders.ts:32',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notify',
+      },
+    ]);
+  });
 });

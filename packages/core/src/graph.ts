@@ -867,20 +867,28 @@ export interface AgentToolReachabilityInput {
  * already models. Today this covers framework-owned `tool()` declarations whose `target` matches a
  * mutation/touch-graph key; write domains require a `${domain}.write` capability. Explicit
  * `agentToolSinks` rows from future/static analyzers are preserved and may opt into `grade:'sound'`.
+ * Nested `capabilities[].reachableSinks` rows emitted by the public `tool()` runtime API are
+ * preserved as audit-grade tool-body facts; they improve blast-radius review without claiming
+ * by-construction reachability.
  */
 export function deriveAgentToolReachableSinkFacts(
   input: AgentToolReachabilityInput,
 ): AgentToolReachableSinkFact[] {
-  const tools = new Set(
-    (input.capabilities ?? [])
-      .filter(
-        (capability) => capability.kind === 'agentTool' && isNonEmptyString(capability.target),
-      )
-      .map((capability) => capability.target as string),
+  const toolCapabilities = (input.capabilities ?? []).filter(
+    (capability) => capability.kind === 'agentTool' && isNonEmptyString(capability.target),
   );
-  if (tools.size === 0) return [...(input.agentToolSinks ?? [])].sort(compareAgentToolSinkFact);
+  const tools = new Set(toolCapabilities.map((capability) => capability.target as string));
+  const facts: AgentToolReachableSinkFact[] = [
+    ...(input.agentToolSinks ?? []),
+    ...toolCapabilities.flatMap((capability) =>
+      (capability.reachableSinks ?? []).map((sink) => ({
+        ...sink,
+        tool: capability.target as string,
+      })),
+    ),
+  ];
 
-  const facts: AgentToolReachableSinkFact[] = [...(input.agentToolSinks ?? [])];
+  if (tools.size === 0) return dedupeAgentToolSinkFacts(facts).sort(compareAgentToolSinkFact);
 
   for (const mutation of input.mutations ?? []) {
     if (!tools.has(mutation.key)) continue;
