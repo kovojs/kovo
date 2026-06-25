@@ -69,6 +69,12 @@ import type {
   MutationSuccess,
   RunMutationOptions,
 } from './mutation/definition.js';
+import {
+  isStaleVersionError,
+  staleVersionConflict,
+  StaleVersionError,
+  type StaleVersionConflict,
+} from './mutation/stale-version.js';
 export {
   errorBoundary,
   mutation,
@@ -93,6 +99,11 @@ export type {
   RunMutationOptions,
   WriteDefinition,
 } from './mutation/definition.js';
+// KV429 (SPEC §10.3/§11.1): stale-version conflict signal for optimistic-concurrency mutations.
+// `StaleVersionError` is thrown by a handler when 0 rows are updated by the CAS predicate;
+// `StaleVersionConflict` is the typed 409 outcome returned by `runMutation`.
+export { StaleVersionError } from './mutation/stale-version.js';
+export type { StaleVersionConflict } from './mutation/stale-version.js';
 export { coalesceMutationStreamChunks, stream } from './mutation/streaming.js';
 export { renderLiveTargetChunks } from './mutation/targets.js';
 export type {
@@ -211,6 +222,11 @@ export async function runMutation<
       : await runHandler(guardedRequest);
   } catch (error) {
     if (error instanceof MutationRollback) return error.failure;
+    // KV429 (SPEC §10.3/§11.1): a StaleVersionError thrown from the handler (or its
+    // transaction wrapper) signals that the CAS predicate matched 0 rows — the row was
+    // concurrently modified since the version was read. Return a typed 409 outcome
+    // distinct from the IDEMPOTENCY_CONFLICT 409 produced by the replay path.
+    if (isStaleVersionError(error)) return staleVersionConflict();
     throw error;
   }
 
@@ -375,10 +391,13 @@ export async function renderMutationResponse<
   }
 
   if (!result.ok) {
-    if (result.error.code === 'VALIDATION' || result.status === 429) {
-      // Pure schema validation failures and transient 429 rate-limits are not
-      // replayable (SPEC §9.1.1:904, A5): abandon the reservation so a corrected
-      // retry or post-window retry runs the handler fresh.
+    if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
+      // Pure schema validation failures, transient 429 rate-limits, and KV429 stale-version
+      // 409 conflicts are not replayable (SPEC §9.1.1:904, A5 / SPEC §10.3/§11.1 KV429):
+      // abandon the reservation so a corrected retry or a post-refetch retry runs fresh.
+      // The stale-version 409 (STALE_VERSION) is a live-data conflict — the client must
+      // refetch the fresh version and retry; replaying a stale conflict response would
+      // permanently block future retries for the same idem token.
       reservation?.abort?.();
       return {
         body: await renderFailureFragment(result, wireRequest),

@@ -216,13 +216,13 @@ export interface NoJsMutationRequest<
 
 /**
  * @internal Mutation-wire protocol type (SPEC.md §9.1). The no-JS POST-redirect-GET wire
- * response (303 on success; 422/429/500 errors re-rendered into the full page). Exported
- * only for in-repo consumers and compiler-emitted code, not app authors.
+ * response (303 on success; 409 KV429 stale-version / 422/429/500 errors re-rendered into
+ * the full page). Exported only for in-repo consumers and compiler-emitted code, not app authors.
  */
 export interface NoJsMutationResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
-  303 | 403 | 422 | 429 | 500
+  303 | 403 | 409 | 422 | 429 | 500
 > {}
 
 /**

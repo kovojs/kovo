@@ -155,6 +155,10 @@ export {
   RedosPatternError,
   s,
   SchemaValidationError,
+  // KV429 (SPEC §10.3/§11.1): thrown by a mutation handler when a CAS predicate matches
+  // 0 rows; the lifecycle converts this into a typed HTTP 409 (STALE_VERSION) response
+  // distinct from the IDEMPOTENCY_CONFLICT 409 produced by the replay path.
+  StaleVersionError,
   stream,
   tag,
   unsafeRegex,
@@ -200,6 +204,8 @@ export type {
   Reader,
   Schema,
   Secret,
+  // KV429 (SPEC §10.3/§11.1): the typed 409 stale-version conflict outcome.
+  StaleVersionConflict,
   StoredFileSchema,
   StoredFileSchemaOptions,
   StoredFileUpload,
