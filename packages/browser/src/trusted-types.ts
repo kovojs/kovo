@@ -39,7 +39,22 @@ interface KovoTrustedTypePolicy {
  */
 const KOVO_POLICY_NAME = 'kovo';
 
-let cachedPolicy: KovoTrustedTypePolicy | null | undefined;
+/**
+ * SF (secure-framework Tier 3): the shared global slot that holds Kovo's single `kovo`
+ * Trusted Types policy. The always-on inline loader (`response-fragment-apply.ts`'s
+ * inlined `trustedHtml` shim) and this module-side helper BOTH read/write this slot so
+ * they reuse the SAME policy: `trusted-types kovo` admits no duplicates, so whichever
+ * runs `createPolicy('kovo', …)` first wins and the other reuses the cached handle
+ * instead of throwing on a second create. `undefined` = not yet attempted; `null` = TT
+ * unavailable or create failed (transparent passthrough).
+ *
+ * @internal
+ */
+const KOVO_TT_GLOBAL_KEY = '__kovo_tt';
+
+interface KovoTrustedTypeGlobal {
+  __kovo_tt?: KovoTrustedTypePolicy | null;
+}
 
 function trustedTypesFactory(): TrustedTypePolicyFactoryLike | undefined {
   const tt = (globalThis as { trustedTypes?: TrustedTypePolicyFactoryLike }).trustedTypes;
@@ -57,16 +72,21 @@ function trustedTypesFactory(): TrustedTypePolicyFactoryLike | undefined {
  * @internal
  */
 function kovoTrustedTypePolicy(): KovoTrustedTypePolicy | null {
-  if (cachedPolicy !== undefined) return cachedPolicy;
+  const store = globalThis as KovoTrustedTypeGlobal;
+  // Reuse the shared policy if either the inline loader's `trustedHtml` shim or a prior
+  // call here already resolved it (created or proven unavailable). `undefined` = unattempted.
+  const shared = store[KOVO_TT_GLOBAL_KEY];
+  if (shared !== undefined) return shared;
 
   const factory = trustedTypesFactory();
   if (factory === undefined) {
-    cachedPolicy = null;
-    return cachedPolicy;
+    store[KOVO_TT_GLOBAL_KEY] = null;
+    return null;
   }
 
+  let policy: KovoTrustedTypePolicy | null;
   try {
-    cachedPolicy = factory.createPolicy(KOVO_POLICY_NAME, {
+    policy = factory.createPolicy(KOVO_POLICY_NAME, {
       // Kovo's raw HTML is framework-assembled (the server emits no inline app code and
       // is the sole HTML source); the policy is the identity transform — its value is the
       // unforgeable `TrustedHTML` brand it mints, which is what the strict CSP requires at
@@ -76,9 +96,12 @@ function kovoTrustedTypePolicy(): KovoTrustedTypePolicy | null {
     });
   } catch {
     // A duplicate-policy or factory error must never break hydration: fall back to raw.
-    cachedPolicy = null;
+    // Note the inline `trustedHtml` shim only registers a `createHTML` rule, so a policy it
+    // created lacks `createScriptURL`; `kovoCreateScriptURL` tolerates that (raw passthrough).
+    policy = null;
   }
-  return cachedPolicy;
+  store[KOVO_TT_GLOBAL_KEY] = policy;
+  return policy;
 }
 
 /**
@@ -111,7 +134,11 @@ export function kovoCreateHTML(html: string): string {
  */
 export function kovoCreateScriptURL(url: string): string {
   const policy = kovoTrustedTypePolicy();
-  if (policy === null) return url;
+  // The shared `kovo` policy may have been minted by the inline loader's `trustedHtml`
+  // shim, which only registers a `createHTML` rule (the always-on loader writes no script
+  // URLs). When `createScriptURL` is therefore absent, fall back to the raw URL rather than
+  // throwing — behavior-preserving, and a strict CSP would block a bare `script.src` anyway.
+  if (policy === null || typeof policy.createScriptURL !== 'function') return url;
   return policy.createScriptURL(url) as unknown as string;
 }
 
@@ -121,5 +148,5 @@ export function kovoCreateScriptURL(url: string): string {
  * @internal
  */
 export function __resetKovoTrustedTypePolicyForTest(): void {
-  cachedPolicy = undefined;
+  delete (globalThis as KovoTrustedTypeGlobal)[KOVO_TT_GLOBAL_KEY];
 }

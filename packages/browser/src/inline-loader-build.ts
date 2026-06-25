@@ -55,7 +55,17 @@ const inlineHelperSpecs = {
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
-export const inlineKovoLoaderGzipByteBudget = 8960;
+// SPEC.md §4.4 always-loaded inline loader gzip ceiling. Raised 8960 → 9088 on
+// 2026-06-24 to route the last always-on DOM-write sinks (the extracted `p`/`d`
+// `insertAdjacentHTML`/`innerHTML` helpers in response-fragment-apply.ts) through the
+// framework `kovo` Trusted Types policy via the inlined `trustedHtml` shim. This is the
+// same XSS-sink-policy justification SPEC.md §4.4 cites for the prior 8KB → 8960 raise
+// (keeping reactive attribute writes behind the framework sink policy); routing these
+// sinks is what lets Trusted Types ship DEFAULT-ON without bricking Kovo's own hydration
+// on Chromium. The TT API tokens (`trustedTypes`/`createPolicy`/`createHTML`) are
+// irreducible, so the shim costs ~60 gzip bytes; future increases require comparable
+// evidence.
+export const inlineKovoLoaderGzipByteBudget = 9088;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
@@ -1168,7 +1178,7 @@ export function buildInlineKovoLoaderModuleSource(
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
     '',
-    '// SPEC.md §4.4 keeps the always-loaded loader under an 8.75KB gzip budget; this',
+    '// SPEC.md §4.4 keeps the always-loaded loader under an 8.875KB gzip budget; this',
     '// literal is the pre-minified bootstrap shipped in document shells.',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
@@ -1530,6 +1540,10 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['readStreamTextElementChunk', 'rte'],
     ['applyInlineMutationResponseChunks', 'ai'],
     ['isFragmentResourceHint', 'irh'],
+    // SF (secure-framework Tier 3): the inline Trusted Types createHTML shim
+    // (response-fragment-apply.ts) and its policy handle, compacted to reclaim gzip
+    // headroom under the SPEC.md §4.4 budget.
+    ['trustedHtml', 'th'],
     ['firstMorphElement', 'fme'],
     ['findFragmentTarget', 'ff'],
     ['readElementChunks', 're'],
