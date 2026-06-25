@@ -143,12 +143,22 @@ export async function renderMarkdown(
         return codeWindow({ copyHref, highlighted, language, title });
       },
       heading({ tokens, depth, raw }) {
-        const inline = this.parser.parseInline(tokens);
-        const rawText = raw.replace(/^#+\s*/, '').trim();
-        let id = anchorStyle === 'spec' ? specHeadingId(rawText) : slugify(rawText);
+        const rawTextWithAnchor = raw.replace(/^#+\s*/, '').trim();
+        const explicitAnchor = /\s*\{#([A-Za-z0-9_-]+)\}\s*$/.exec(rawTextWithAnchor);
+        const rawText =
+          explicitAnchor === null
+            ? rawTextWithAnchor
+            : rawTextWithAnchor.slice(0, explicitAnchor.index).trim();
+        const inline = this.parser.parseInline(tokens).replace(/\s*\{#[A-Za-z0-9_-]+\}\s*$/, '');
+        let id =
+          explicitAnchor?.[1] ??
+          (anchorStyle === 'spec' ? specHeadingId(rawText) : slugify(rawText));
         const count = seen.get(id) ?? 0;
         seen.set(id, count + 1);
-        if (count > 0) id = `${id}-${count}`;
+        if (count > 0) {
+          if (explicitAnchor) throw new Error(`Duplicate explicit heading id "${id}"`);
+          id = `${id}-${count}`;
+        }
         headings.push({ depth, id, text: rawText });
         const anchor =
           depth > 1

@@ -237,7 +237,8 @@ function parseJsDoc(doc) {
 
   const flushExample = () => {
     if (mode !== 'example') return;
-    examples.push(buffer.join('\n').replace(/\n+$/, ''));
+    const example = normalizeExample(buffer.join('\n'));
+    if (example !== '') examples.push(example);
     buffer = [];
   };
 
@@ -281,6 +282,12 @@ function parseJsDoc(doc) {
     returns: returns === undefined || returns === '' ? undefined : returns,
     summary: summaryLines.join('\n').trim(),
   };
+}
+
+function normalizeExample(example) {
+  const trimmed = example.trim();
+  const fenced = /^```[A-Za-z0-9_-]*\s*\n([\s\S]*?)\n```$/.exec(trimmed);
+  return (fenced?.[1] ?? trimmed).replace(/\n+$/, '');
 }
 
 function escapeTableCell(text) {
@@ -507,7 +514,7 @@ function renderEntry(entry, slug, targets, depth = 4) {
   const body = parsed && parsed.summary !== '' ? parsed.summary : entry.doc;
 
   const lines = [
-    `${'#'.repeat(depth)} \`${entry.name}\``,
+    `${'#'.repeat(depth)} \`${entry.name}\` {#${entry.anchor}}`,
     '',
     entry.doc === '' ? UNDOCUMENTED : body,
     '',

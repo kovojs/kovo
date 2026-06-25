@@ -82,11 +82,13 @@ describe('api-ref generator', () => {
   let outDir;
   let result;
   let corePage;
+  let drizzlePage;
 
   beforeAll(async () => {
     outDir = await mkdtemp(path.join(tmpdir(), 'kovo-api-ref-'));
     result = await generateApiReference({ outDir });
     corePage = await readFile(path.join(outDir, 'core.md'), 'utf8');
+    drizzlePage = await readFile(path.join(outDir, 'drizzle.md'), 'utf8');
   }, 60_000);
 
   afterAll(async () => {
@@ -232,6 +234,11 @@ describe('api-ref generator', () => {
     expect(section).toMatch(/\| \*\(returns\)\* \| <code><a href="#component-\d+">Component<\/a>/);
     // Generics are HTML-escaped so `<` / `>` cannot be parsed as tags.
     expect(section).toContain('&lt;Definition&gt;');
+  });
+
+  it('normalizes fenced @example blocks so later symbol headings stay headings', () => {
+    expect(drizzlePage).toContain('#### `staticSql` {#staticsql}');
+    expect(drizzlePage).not.toContain('```ts\n```ts');
   });
 
   it('emits a per-package sidebar manifest grouped by subpath, with anchors and source links', async () => {
