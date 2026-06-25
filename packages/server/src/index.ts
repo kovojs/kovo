@@ -40,6 +40,29 @@ export type {
   SignCapabilityOptions,
   SignedCapability,
 } from './capability-url.js';
+// SPEC §6.6 / §9.1 / plans/secure-framework.md Phase 5 follow-up: the framework-owned storage
+// download ROUTE that hosts the capability verify sink, plus `ctx.signUrl` (also reachable on the
+// route page context). `createStorageDownloadEndpoint` builds a prefix-mounted GET/HEAD endpoint
+// whose handler verifies a per-object token (constant-time, fail-closed) BEFORE any storage read,
+// so a stored object is un-dereferenceable without a token minted for that exact object. The minted
+// URL is a BEARER credential (leakage mitigated by short expiry / narrow scope / optional one-time,
+// NOT proven). `drainCapabilityMintFacts` feeds `kovo explain --capabilities` (SF-WIRE in
+// capability-route.ts).
+export {
+  CAPABILITY_TOKEN_PARAM,
+  DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
+  createSignUrl,
+  createStorageDownloadEndpoint,
+  deriveDownloadKey,
+  drainCapabilityMintFacts,
+} from './capability-route.js';
+export type {
+  CapabilityMintFact,
+  SignUrlContext,
+  SignUrlOptions,
+  SignedUrl,
+  StorageDownloadEndpointOptions,
+} from './capability-route.js';
 export type {
   AccessDecision,
   GuardAccessStep,

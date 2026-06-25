@@ -9,6 +9,7 @@ import {
   renderRouteDocumentResponse,
 } from './document-core.js';
 import { normalizeForwardedSetCookie } from './cookies.js';
+import { createSignUrl } from './capability-route.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
 import { isRenderedHtml, renderHtmlValue, unwrapCoercedRenderedHtml } from './html.js';
@@ -46,9 +47,15 @@ export async function renderAppRouteDocumentResponse({
   url,
 }: AppRouteDocumentOptions): Promise<RoutePageResponse> {
   const search = searchParamsToRecord(url.searchParams);
+  // SPEC §6.6 / §9.1: thread `ctx.signUrl` onto the page context when a framework signing secret is
+  // configured (the CSRF/anonymous-CSRF HMAC secret). A page can then mint a short-lived, scope-bound
+  // capability URL for a stored object pointing at the framework download route's verify sink.
+  const signUrlContext =
+    app.csrf?.secret === undefined ? undefined : createSignUrl({ secret: app.csrf.secret });
   const routeInput: RouteRequestInput = {
     params,
     search,
+    ...(signUrlContext === undefined ? {} : { signUrl: signUrlContext.signUrl }),
   };
   // part-3 I2 (SPEC §6.5, §9.1.1:854): a rolling/refresh session provider (e.g. Better Auth
   // `updateAge`/`cookieCache`) emits fresh `Set-Cookie` headers on each authenticated GET via the
