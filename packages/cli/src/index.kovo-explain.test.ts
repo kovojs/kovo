@@ -831,10 +831,21 @@ describe('kovo explain', () => {
           {
             ambientBrowserCredentials: 'rejected',
             authority: ['principal:user:123'],
-            declaredCapabilities: ['orders.write', 'email.send'],
+            declaredCapabilities: ['orders.write', 'email.send', 'secrets.read'],
             kind: 'agentTool',
             owner: 'security',
             purpose: 'Update one order and notify the buyer.',
+            reachableSinks: [
+              {
+                capability: 'secrets.read',
+                evidence: 'declared-tool-body',
+                grade: 'audit',
+                kind: 'secret-read',
+                site: 'app/tools/orders.ts:29',
+                target: 'env.SENDGRID_TOKEN',
+                tool: 'orders.updateStatus',
+              },
+            ],
             site: 'app/tools/orders.ts:12',
             target: 'orders.updateStatus',
           },
@@ -856,7 +867,7 @@ describe('kovo explain', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain(
-      'sinks=audit:egress:smtp->email.send@app/tools/orders.ts:31,sound:write:orders->orders.write@mutation:orders.updateStatus',
+      'sinks=audit:egress:smtp->email.send@app/tools/orders.ts:31,audit:secret-read:env.SENDGRID_TOKEN->secrets.read@app/tools/orders.ts:29,sound:write:orders->orders.write@mutation:orders.updateStatus',
     );
   });
 
