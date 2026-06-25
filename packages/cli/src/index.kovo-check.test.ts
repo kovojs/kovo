@@ -8,6 +8,77 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { kovoCheck, main } from './index.js';
 
+type KovoCheckInput = Parameters<typeof kovoCheck>[0];
+
+interface CheckDiagnosticMatrixRow {
+  accepted: KovoCheckInput;
+  code: 'KV423' | 'KV424' | 'KV438';
+  rejected: KovoCheckInput;
+  spec: string;
+}
+
+const securityCheckDiagnosticMatrix: readonly CheckDiagnosticMatrixRow[] = [
+  {
+    code: 'KV423',
+    spec: 'SPEC.md §9.1/§11.3',
+    accepted: {
+      endpoints: [
+        {
+          appOwnedSafety: true,
+          auth: 'custom:cron-token',
+          body: 'json',
+          cache: 'no-store',
+          csrf: 'checked',
+          method: 'POST',
+          name: 'sync',
+          path: '/api/sync',
+          reason: 'admin-triggered inventory sync',
+        },
+      ],
+    },
+    rejected: {
+      endpoints: [{ method: 'POST', path: '/api/raw', reason: 'raw sync' }],
+    },
+  },
+  {
+    code: 'KV424',
+    spec: 'SPEC.md §4.8/§5.2/§9.1/§11.3',
+    accepted: {
+      unregisteredSinks: [],
+    },
+    rejected: {
+      unregisteredSinks: [
+        {
+          safePath: 'trustedHtml(...) with provenance or a component text binding',
+          sink: 'innerHTML',
+          site: 'app/promo.tsx:12',
+          source: 'cms.body',
+        },
+      ],
+    },
+  },
+  {
+    code: 'KV438',
+    spec: 'SPEC.md §6.6/§10.3/§11.1/§11.3',
+    accepted: {
+      massAssignmentFacts: [],
+    },
+    rejected: {
+      massAssignmentFacts: [
+        {
+          column: 'role',
+          detail: 'role',
+          domain: 'account',
+          name: 'updateAccount',
+          provenance: 'input',
+          site: 'account.domain.ts:7:13',
+          via: 'set',
+        },
+      ],
+    },
+  },
+];
+
 describe('kovo check', () => {
   it('publishes as @kovojs/cli while preserving the kovo bin command', () => {
     const packageJson = JSON.parse(
@@ -86,6 +157,50 @@ describe('kovo check', () => {
     expect(result.output).toContain(
       'ERROR KV423 WEBHOOK stripe Raw endpoint declaration is missing required audit metadata. missing=csrfJustification,method=POST,verifyJustification',
     );
+  });
+
+  it('proves security-heavy check-owned diagnostics have accepted and rejected coverage', () => {
+    const coverage = securityCheckDiagnosticMatrix.map((row) => {
+      const accepted = kovoCheck(row.accepted);
+      const rejected = kovoCheck(row.rejected);
+      expect(accepted.output, `${row.code} accepted fixture should not emit ${row.code}`).not.toContain(
+        row.code,
+      );
+      expect(rejected.output, `${row.code} rejected fixture should emit ${row.code}`).toContain(
+        row.code,
+      );
+      expect(rejected.exitCode, `${row.code} rejected fixture should fail kovo check`).toBe(1);
+
+      return {
+        acceptedExitCode: accepted.exitCode,
+        code: row.code,
+        rejectedExitCode: rejected.exitCode,
+        spec: row.spec,
+      };
+    });
+
+    expect(coverage).toMatchInlineSnapshot(`
+      [
+        {
+          "acceptedExitCode": 0,
+          "code": "KV423",
+          "rejectedExitCode": 1,
+          "spec": "SPEC.md §9.1/§11.3",
+        },
+        {
+          "acceptedExitCode": 0,
+          "code": "KV424",
+          "rejectedExitCode": 1,
+          "spec": "SPEC.md §4.8/§5.2/§9.1/§11.3",
+        },
+        {
+          "acceptedExitCode": 0,
+          "code": "KV438",
+          "rejectedExitCode": 1,
+          "spec": "SPEC.md §6.6/§10.3/§11.1/§11.3",
+        },
+      ]
+    `);
   });
 
   // SPEC §10.2/§6.6: end-to-end default-deny wiring. deriveAppGraph (compiler) classifies
@@ -1465,6 +1580,46 @@ describe('kovo check', () => {
     expect(output).toBe(
       'kovo-check/v1\nWARN KV311 component=CartBadge query=cart.discount position="conditional <dot>" Query/state-dependent DOM position has no update status.\n',
     );
+  });
+
+  it('formats KV438 mass-assignment diagnostics through the real kovo check CLI command', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-kv438-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          massAssignmentFacts: [
+            {
+              column: 'role',
+              detail: 'request body role flowed through destructuring',
+              domain: 'account',
+              name: 'updateAccount',
+              provenance: 'input',
+              site: 'src/account.domain.ts:7:13',
+              via: 'set',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['check', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toMatchInlineSnapshot(`
+      "kovo-check/v1
+      ERROR KV438 WRITE updateAccount domain=account column=role via=set provenance=input site=src/account.domain.ts:7:13 Request input reaches a governed column (mass assignment). value=request body role flowed through destructuring
+      "
+    `);
   });
 
   it('rejects unsupported kovo check families with a stable diagnostic', () => {

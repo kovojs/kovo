@@ -407,7 +407,14 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/cli/src/index.kovo-check.test.ts',
-        testName: 'reports a governed-column mass-assignment as KV438 (SPEC §11.1)',
+        testName:
+          'proves security-heavy check-owned diagnostics have accepted and rejected coverage',
+        codes: ['KV438'],
+      },
+      {
+        file: 'packages/cli/src/index.kovo-check.test.ts',
+        testName:
+          'formats KV438 mass-assignment diagnostics through the real kovo check CLI command',
         codes: ['KV438'],
       },
     ],
@@ -543,8 +550,14 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/cli/src/index.kovo-check.test.ts',
-        testName: 'reports semantic lints for local state, events, and direct db access',
+        testName: 'reports semantic findings for local state, events, and direct db access',
         codes: ['KV301', 'KV320', 'KV330'],
+      },
+      {
+        file: 'packages/cli/src/index.kovo-check.test.ts',
+        testName:
+          'proves security-heavy check-owned diagnostics have accepted and rejected coverage',
+        codes: ['KV423', 'KV424', 'KV438'],
       },
     ],
     referenceApp: [
