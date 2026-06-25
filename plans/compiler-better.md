@@ -313,10 +313,21 @@ diagnostic in compiler/check gates that claim data-plane security.
 
 - [ ] Extend the diagnostic coverage matrix to security-heavy `KV4xx` compiler/check diagnostics,
       especially `KV421`, `KV423`, `KV424`-`KV438`.
-  - Evidence: the matrix row type is restricted to `KV2xx` and `KV3xx`.
+  - 2026-06-25 slice evidence: `pnpm exec vitest --run packages/compiler/src/diagnostic-coverage-matrix.test.ts --configLoader runner`
+    passes after expanding the compiler-owned matrix to `KV420`, `KV421`, `KV435`, `KV437`, and
+    `KV245`, with explicit out-of-scope reasons for security-heavy `KV422`-`KV434`, `KV436`, and
+    `KV438` that are CLI/check/runtime/static-analysis owned rather than component-compiler rows.
+  - Remaining gap: `KV423`, `KV424`, and `KV438` still need their owning check/CLI/runtime
+    verification paths raised to the same matrix-like discipline, without pretending they are
+    component-compiler diagnostics.
 - [ ] Add build-blocking tests that prove `error` diagnostics prevent Vite/build output and prevent
       serving emitted modules, while lint/notice diagnostics stay non-blocking where intended.
   - Evidence: many current tests assert diagnostic presence but not artifact refusal.
+  - 2026-06-25 slice evidence: `pnpm exec vitest --run packages/compiler/src/vite.test.ts --configLoader runner`
+    passes after `KV235`, `KV236`, and `KV437` error diagnostics block Vite transform output,
+    error transforms do not register dev middleware client modules, direct `.client.js` loads
+    re-use the error gate, and warn/lint/notice diagnostics still pass. Full Vite production build
+    output is not separately proven by this slice, so the checkbox remains open.
 - [ ] Convert high-risk substring tests into generated-artifact execution tests for server HTML,
       client module behavior, mutation delta behavior, and `/_q` response behavior.
   - Evidence: existing security tests often inspect emitted source text instead of executing the
@@ -327,10 +338,14 @@ diagnostic in compiler/check gates that claim data-plane security.
 - [ ] Add real Vite/CLI diagnostic formatting snapshots for `KV236`, `KV235`, `KV437`, and `KV438`,
       including line/column stability across lowering and reparsing.
   - Evidence: diagnostic coordinate frames are centralized but selected manually by validators.
-- [ ] Expand `spec-coverage-map` to explicitly cover `SPEC.md` sections 5.2.1, 5.2.2, 6.6, 10, and
+  - 2026-06-25 slice evidence: `pnpm exec vitest --run packages/compiler/src/vite.test.ts --configLoader runner`
+    passes with real compiler-backed Vite formatting snapshots for `KV235`, `KV236`, and `KV437`.
+    `KV438` remains CLI/check-owned and is not yet covered by a real CLI formatting snapshot here.
+- [x] Expand `spec-coverage-map` to explicitly cover `SPEC.md` sections 5.2.1, 5.2.2, 6.6, 10, and
       11 for compiler-owned security guarantees.
-  - Evidence: the current compiler coverage map is useful but does not make all high-stakes clauses
-    first-class coverage targets.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/spec-coverage-map.test.ts --configLoader runner`
+    passes after adding first-class entries for `SPEC.md §5.2.1`, `§5.2.2`, `§6.6`, and `§10`;
+    the existing `§11.3/§11.4` entry now cites the expanded compiler-owned diagnostic matrix.
 
 ## Acceptance Bar
 

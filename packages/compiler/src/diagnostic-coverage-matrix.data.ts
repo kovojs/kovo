@@ -1,5 +1,6 @@
 import type { DiagnosticCode } from '@kovojs/core/internal/diagnostics';
 
+import { deriveRegistryFactsFromGraph } from './app-graph.js';
 import { compileComponentModule, deriveAppGraph } from './index.js';
 import { queryShapeFactDiagnostics } from './internal.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
@@ -7,14 +8,14 @@ import type { CompilerDiagnostic } from './diagnostics.js';
 type DiagnosticRunner = () => readonly CompilerDiagnostic[];
 
 interface DiagnosticMatrixRow {
-  code: Extract<DiagnosticCode, `KV${2 | 3}${number}${number}`>;
+  code: DiagnosticCode;
   negative: DiagnosticRunner;
   positive: DiagnosticRunner;
   spec: string;
 }
 
 interface OutOfScopeDiagnosticRow {
-  code: Extract<DiagnosticCode, `KV${2 | 3}${number}${number}`>;
+  code: DiagnosticCode;
   reason: string;
 }
 
@@ -568,6 +569,28 @@ export const DeferJsxBad = component({
       }).diagnostics,
   },
   {
+    code: 'KV245',
+    spec: 'SPEC.md §5.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'parse-ok.tsx',
+        source: `
+export const ParseOk = component({
+  render: () => <section><span>Ready</span></section>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'parse-bad.tsx',
+        source: `
+export const ParseBad = component({
+  render: () => <section><span>Broken</section>,
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV236',
     spec: 'SPEC.md §1/§5.2',
     positive: () =>
@@ -1063,6 +1086,152 @@ export const addToCart = mutation('cart/add', {
 `,
       }).diagnostics,
   },
+  {
+    code: 'KV420',
+    spec: 'SPEC.md §4.5/§4.9/§9.1',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'stateful-fragment-ok.tsx',
+        source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+
+export const CartPanel = component({
+  render: () => (
+    <section>
+      <Stepper />
+    </section>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'stateful-fragment-bad.tsx',
+        source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <section>
+      <p>{cart.total}</p>
+      <Stepper />
+    </section>
+  ),
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV421',
+    spec: 'SPEC.md §6.1/§9.5',
+    positive: () =>
+      deriveRegistryFactsFromGraph({
+        mutations: [
+          { key: 'cart/add', writes: ['cart'] },
+          { key: 'cart/remove', writes: ['order'] },
+        ],
+        queries: [
+          { domains: ['cart'], query: 'cart' },
+          { domains: ['order'], query: 'orderHistory' },
+        ],
+      }).diagnostics ?? [],
+    negative: () =>
+      deriveRegistryFactsFromGraph({
+        mutations: [
+          { key: 'cart/add', writes: ['cart'] },
+          { key: 'cart/add', writes: ['order'] },
+        ],
+        queries: [
+          { domains: ['cart'], query: 'cart' },
+          { domains: ['order'], query: 'orderHistory' },
+        ],
+      }).diagnostics ?? [],
+  },
+  {
+    code: 'KV435',
+    spec: 'SPEC.md §6.2/§6.6/§10.2',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'query-wire-ok.tsx',
+        queryShapes: {
+          user: {
+            id: 'string',
+            name: 'string',
+          },
+        },
+        source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span data-bind="user.id">u1</span>
+    </user-card>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'query-wire-bad.tsx',
+        queryShapes: {
+          user: {
+            id: 'string',
+            passwordHash: {
+              kind: 'secret',
+              shape: 'string',
+            },
+          },
+        },
+        source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span data-bind="user.id">u1</span>
+    </user-card>
+  ),
+});
+`,
+      }).diagnostics,
+  },
+  {
+    code: 'KV437',
+    spec: 'SPEC.md §6.2/§6.6',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'client-capture-ok.tsx',
+        source: `
+import { track } from './analytics';
+
+export const Badge = component({
+  render: () => (
+    <button onClick={() => track('click')}>Track</button>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'client-capture-bad.tsx',
+        source: `
+import { sendPayment } from './payments';
+import { STRIPE_SECRET_KEY } from './secrets';
+
+export const PayButton = component({
+  render: () => (
+    <button onClick={() => sendPayment(STRIPE_SECRET_KEY)}>Pay</button>
+  ),
+});
+`,
+      }).diagnostics,
+  },
 ] as const satisfies readonly DiagnosticMatrixRow[];
 
 export const outOfScopeCompilerDiagnostics = [
@@ -1075,5 +1244,75 @@ export const outOfScopeCompilerDiagnostics = [
     code: 'KV314',
     reason:
       'Compiler-owned, but emitted by the kovo check coverage graph path (`packages/cli/src/index.kovo-check.test.ts`) rather than compileComponentModule/deriveAppGraph/query-shape validation.',
+  },
+  {
+    code: 'KV422',
+    reason:
+      'Security-heavy, but produced by the Drizzle/static SQL analyzer and carried through compile/check graph diagnostics rather than by component compilation or app graph derivation.',
+  },
+  {
+    code: 'KV423',
+    reason:
+      'Security-heavy, but raw endpoint metadata ownership currently lives in server/check graph producers; no compiler-owned row is claimed until endpoint extraction is compiler-derived.',
+  },
+  {
+    code: 'KV424',
+    reason:
+      'Security-heavy, but produced by source/sink and kovo check graph diagnostics for app-authored dangerous sinks rather than component compilation.',
+  },
+  {
+    code: 'KV425',
+    reason:
+      'Security-heavy, but source/sink drift detection is a repository audit/check path, not compiler component or registry graph output.',
+  },
+  {
+    code: 'KV426',
+    reason:
+      'Security-heavy, but trust-escape provenance is surfaced by kovo explain/check graph paths; component compilation only preserves facts when supplied.',
+  },
+  {
+    code: 'KV428',
+    reason:
+      'Security-heavy, but upload content-disposition/type enforcement is runtime/server-owned and not emitted by the compiler diagnostic path.',
+  },
+  {
+    code: 'KV429',
+    reason:
+      'Security-heavy, but lost-update write provenance is enforced by kovo check graph diagnostics, not component compilation.',
+  },
+  {
+    code: 'KV430',
+    reason:
+      'Security-heavy, but schema breadth/depth budget linting is schema/check ownership and not emitted by component compilation.',
+  },
+  {
+    code: 'KV431',
+    reason:
+      'Security-heavy, but client-module manifest completeness is deployment/check ownership rather than compiler-owned component diagnostics.',
+  },
+  {
+    code: 'KV432',
+    reason:
+      'Security-heavy, but cookie-attribute floors are server/runtime sink ownership rather than compiler-owned component diagnostics.',
+  },
+  {
+    code: 'KV433',
+    reason:
+      'Security-heavy, but write-reaching query loaders are enforced by kovo check graph diagnostics, not component compilation.',
+  },
+  {
+    code: 'KV434',
+    reason:
+      'Security-heavy, but regex/schema analyzer ownership is outside the compiler component/registry diagnostic matrix.',
+  },
+  {
+    code: 'KV436',
+    reason:
+      'Security-heavy, but the compiler derives access facts while kovo check consumes undecided facts as KV436 diagnostics.',
+  },
+  {
+    code: 'KV438',
+    reason:
+      'Security-heavy, but governed-column mass-assignment is enforced by kovo check graph diagnostics rather than compiler-owned component or registry diagnostics.',
   },
 ] as const satisfies readonly OutOfScopeDiagnosticRow[];
