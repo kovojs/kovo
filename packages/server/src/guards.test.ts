@@ -33,6 +33,17 @@ describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
     expect(sanitizeNext('account')).toBe('/');
   });
 
+  it('P1-1 (plans/compiler-soundness.md): strips paths that NORMALIZE to protocol-relative "//host"', () => {
+    // WHATWG URL-with-base normalization collapses `/..//evil.com` to pathname `//evil.com`; the
+    // raw-input `//` prefix check never saw the synthesized leading slash. sanitizeNextOrigin must
+    // re-apply the scheme-relative guard to the normalized output, or a `Location: //evil.com`
+    // header is an arbitrary cross-origin open redirect (SPEC §6.5).
+    expect(sanitizeNext('/..//evil.com')).toBe('/');
+    expect(sanitizeNext('/a/../..//evil.com')).toBe('/');
+    expect(sanitizeNext('/%2e%2e//evil.com')).toBe('/');
+    expect(sanitizeNext('/..//evil.com', [{ path: '/account' }] as never)).toBe('/');
+  });
+
   // ROUTING-NAV-4 (medium, contested) — SPEC §6.5:724: `next` must also be validated
   // against the route table when available; an in-app path with no matching route is
   // stripped to the safe default `/`.

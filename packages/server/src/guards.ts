@@ -641,7 +641,15 @@ function sanitizeNextOrigin(next: string): string | undefined {
     const base = 'https://kovo.local';
     const resolved = new URL(next, base);
     if (resolved.origin !== base) return undefined;
-    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+    const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
+    // SPEC §6.5 (P1-1, plans/compiler-soundness.md): re-apply the scheme-relative guard to the
+    // NORMALIZED path. WHATWG URL-with-base normalization can collapse e.g. `/..//evil.com` (or its
+    // percent-encoded `/%2e%2e//evil.com`) to pathname `//evil.com` while the origin stays the base,
+    // so the raw-input prefix check at the call site never saw the synthesized leading `//`. A
+    // base-less `Location: //evil.com` header is protocol-relative and resolves cross-origin, so fail
+    // closed unless the final string the header will carry is a strict single-leading-slash path.
+    if (!path.startsWith('/') || path.startsWith('//') || path.startsWith('/\\')) return undefined;
+    return path;
   } catch {
     return undefined;
   }
