@@ -1,4 +1,5 @@
 // SPEC §9.4 + §10.2: /_q reads coerce search args and emit canonical instance keys.
+import { headerValues } from '@kovojs/test/headers';
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'query-args-search' });
@@ -18,8 +19,8 @@ test('typed read endpoint coerces search args and returns the canonical instance
   // SPEC §9.4 (bugs-1 F35): /_q reads are per-user, session-dependent data behind a
   // per-read guard, so they carry a private, uncacheable, cookie-keyed posture — a shared
   // cache must never replay one user's query JSON to another.
-  expect(response.headers()['cache-control']).toBe('private, no-store');
-  expect(response.headers()['vary']).toContain('Cookie');
+  expect(headerValues(response.headers(), 'cache-control')).toEqual(['private, no-store']);
+  expect(headerValues(response.headers(), 'vary').join(', ')).toContain('Cookie');
 
   const coercedDefault = await page.request.get('/_q/product?id=p1');
   expect(coercedDefault.status()).toBe(200);

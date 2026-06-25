@@ -1,5 +1,6 @@
 // plans/open-design-areas.md storage capability floor: guarded download routes authorize app-owned rows while storage
 // capabilities reject keys that would escape their configured namespace.
+import { headerValues } from '@kovojs/test/headers';
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'storage-download-route' });
@@ -14,9 +15,12 @@ test('storage download route authorizes rows before serving object bytes', async
     headers: { cookie: 'storage_user=u1' },
   });
   expect(authorized.status()).toBe(200);
-  expect(authorized.headers()['content-type']).toBe('text/plain; charset=utf-8');
-  expect(authorized.headers()['content-disposition']).toBe('attachment; filename="order-1.txt"');
-  expect(authorized.headers().etag).toBe('"receipt-u1-v1"');
+  const authorizedHeaders = authorized.headers();
+  expect(headerValues(authorizedHeaders, 'content-type')).toEqual(['text/plain; charset=utf-8']);
+  expect(headerValues(authorizedHeaders, 'content-disposition')).toEqual([
+    'attachment; filename="order-1.txt"',
+  ]);
+  expect(headerValues(authorizedHeaders, 'etag')).toEqual(['"receipt-u1-v1"']);
   expect(await authorized.text()).toBe('paid by u1\n');
 
   const crossOwner = await request.get('/files/download?key=receipts%2Fu2%2Forder-2.txt', {

@@ -1,5 +1,6 @@
 // SPEC.md §6.4: respond.file() keeps route guards, attachment headers, and
 // If-None-Match handling while bypassing HTML rendering.
+import { headerValues } from '@kovojs/test/headers';
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'respond-file' });
@@ -14,10 +15,13 @@ test('guarded file response returns attachment headers and supports ETag 304', a
     headers: { cookie: 'respond_file_session=1' },
   });
   expect(authorized.status()).toBe(200);
-  expect(authorized.headers()['content-type']).toBe('application/pdf');
-  expect(authorized.headers()['content-disposition']).toBe('attachment; filename="orders.pdf"');
-  expect(authorized.headers().etag).toBe('"orders-pdf-v1"');
-  expect(authorized.headers()['x-content-type-options']).toBe('nosniff');
+  const authorizedHeaders = authorized.headers();
+  expect(headerValues(authorizedHeaders, 'content-type')).toEqual(['application/pdf']);
+  expect(headerValues(authorizedHeaders, 'content-disposition')).toEqual([
+    'attachment; filename="orders.pdf"',
+  ]);
+  expect(headerValues(authorizedHeaders, 'etag')).toEqual(['"orders-pdf-v1"']);
+  expect(headerValues(authorizedHeaders, 'x-content-type-options')).toEqual(['nosniff']);
   expect(await authorized.text()).toBe('%PDF-1.7\n');
 
   const notModified = await request.get('/downloads/orders.pdf', {

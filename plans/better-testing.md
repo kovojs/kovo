@@ -229,12 +229,15 @@ Median job durations across those runs:
   - Evidence when complete: failing meta-test for an unclassified spec and passing inventory for the
     current suite.
 
-- [ ] **Centralize repeated wire/header assertions.**
+- [x] **Centralize repeated wire/header assertions.**
   - Move repeated checks for `Set-Cookie`, CSRF, cache headers, `Kovo-*` protocol headers, and fragment
     content types into helper assertions under `packages/test/src`.
   - Keep helpers behavior-oriented; avoid helpers that merely snapshot implementation details.
   - Evidence when complete: at least five specs use the helpers and the helper tests cover failure
     messages.
+  - Evidence 2026-06-25: `mutation-response-headers`, `mutation-prg-no-js`, `query-args-search`,
+    `respond-file`, and `storage-download-route` specs use `@kovojs/test/headers`; helper tests passed,
+    and the five converted specs passed under Chromium.
 
 - [ ] **Keep semantic snapshots narrow and audited.**
   - Continue using semantic snapshots only where DOM shape is the behavior.
@@ -269,6 +272,11 @@ packages/test/src/assertions.test.ts packages/test/src/headers.test.ts --reporte
 - `vp exec vitest --run tests/integration-import-boundary.meta.test.ts --reporter=dot` passed.
 - `vp exec vitest --run packages/test/src/assertions.test.ts packages/test/src/headers.test.ts
 --reporter=dot` passed (12 tests).
+- `vp exec playwright test --config tests/integration/playwright.config.ts --project=chromium
+tests/integration/specs/mutation-response-headers.spec.ts
+tests/integration/specs/mutation-prg-no-js.spec.ts tests/integration/specs/query-args-search.spec.ts
+tests/integration/specs/respond-file.spec.ts tests/integration/specs/storage-download-route.spec.ts`
+  passed (8 tests).
 - CI-mode shard generation with `RUNNER_TEMP="$(mktemp -d)"` wrote the selected manifest under
   `$RUNNER_TEMP/kovo-shards`.
 - `node scripts/ci-timing-report.mjs --limit 3` successfully summarized the latest three completed CI
