@@ -430,7 +430,7 @@ describe('inline loader enhanced submit source', () => {
       const listeners = new Map<string, (event: unknown) => void>();
       const formData = { kind: 'stream-form-data' };
       const streamTargetAttrs = new Map<string, string>([
-        ['data-stream-renderer', '/client.ts#renderMarkdownStream'],
+        ['data-stream-renderer', '/c/client.ts#renderMarkdownStream'],
       ]);
       const streamTarget = {
         textContent: '',
@@ -523,7 +523,7 @@ describe('inline loader enhanced submit source', () => {
         expect(streamTarget.textContent).toBe('| Final');
         expect(streamTargetAttrs.get('data-stream-state')).toBe('error');
         expect(streamTargetAttrs.get('data-rendered-markdown')).toBe('table');
-        expect(importModule).toHaveBeenCalledWith('/client.ts');
+        expect(importModule).toHaveBeenCalledWith('/c/client.ts');
       } finally {
         Object.assign(globalRecord, {
           FormData: originals.FormData,
@@ -565,7 +565,7 @@ describe('inline loader enhanced submit source', () => {
       const listeners = new Map<string, (event: unknown) => void>();
       const formData = { kind: 'coalesced-stream-form-data' };
       const streamTargetAttrs = new Map<string, string>([
-        ['data-stream-renderer', '/client.ts#renderMarkdownStream'],
+        ['data-stream-renderer', '/c/client.ts#renderMarkdownStream'],
       ]);
       const streamTarget = {
         textContent: '',
@@ -608,7 +608,7 @@ describe('inline loader enhanced submit source', () => {
           controller.enqueue(
             encoder.encode(
               [
-                '<kovo-fragment target="messages" mode="append"><article><p data-stream-text="assistant:a1" data-stream-renderer="/client.ts#renderMarkdownStream"></p></article></kovo-fragment>',
+                '<kovo-fragment target="messages" mode="append"><article><p data-stream-text="assistant:a1" data-stream-renderer="/c/client.ts#renderMarkdownStream"></p></article></kovo-fragment>',
                 '<kovo-text target="assistant:a1">| table</kovo-text>',
                 '<kovo-text target="assistant:a1" mode="checkpoint">| table\n```ts\nok\n```</kovo-text>',
                 '<kovo-done reason="error"></kovo-done>',
@@ -673,7 +673,7 @@ describe('inline loader enhanced submit source', () => {
         expect(streamTarget.textContent).toBe('| table\n```ts\nok\n```');
         expect(streamTargetAttrs.get('data-stream-state')).toBe('error');
         expect(streamTargetAttrs.get('data-rendered-markdown')).toBe('table code');
-        expect(importModule).toHaveBeenCalledWith('/client.ts');
+        expect(importModule).toHaveBeenCalledWith('/c/client.ts');
       } finally {
         Object.assign(globalRecord, {
           CustomEvent: originals.CustomEvent,
