@@ -137,13 +137,20 @@ Median job durations across those runs:
     [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) completed all five
     integration shards green with shard durations between 2m53s and 3m49s.
 
-- [ ] **Balance integration shards with measured per-spec durations if native Playwright sharding is uneven.**
+- [x] **Balance integration shards with measured per-spec durations if native Playwright sharding is uneven.**
   - Add a lightweight reporter that writes per-spec durations as a CI artifact.
   - If any integration shard stays above 5 minutes or below 2 minutes after five-way sharding, adjust
     the generated shard count, native shard count, or logical-suite grouping.
   - Do not introduce checked-in per-spec shard manifests; manual shard ownership is not worth the
     maintenance cost.
-  - Evidence when complete: timing artifact plus a before/after generated-shard or logical-suite table.
+  - Evidence 2026-06-25: native Playwright five-way sharding stayed even enough, so no generated
+    Playwright manifest was added. CI runs
+    [28158242925](https://github.com/kovojs/kovo/actions/runs/28158242925),
+    [28185788267](https://github.com/kovojs/kovo/actions/runs/28185788267),
+    [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243), and
+    [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) kept all integration shards
+    green and in range; the workflow still uploads `kovo-integration-timing-history-*` artifacts for
+    future rebalancing if the native split drifts.
 
 - [x] **Rebalance the root `vitest --shard=1/4` matrix.**
   - `test (3, 4)` is the long shard and `test (4, 4)` is often below 2 minutes.
@@ -158,17 +165,18 @@ Median job durations across those runs:
     generated root Vitest shards green between 2m23s and 3m08s; final `check` covered the root test
     matrix in each run.
 
-- [ ] **Consolidate very short static/safety gates into balanced jobs.**
+- [x] **Consolidate very short static/safety gates into balanced jobs.**
   - Candidate grouping: `format` + `api-surface` + `sql-safety` + `compiler-perf`.
   - Preserve failure clarity by naming steps clearly and leaving command output intact.
   - Do not combine this with browser or integration gates; those have different setup and failure modes.
   - Evidence when complete: consolidated job duration is 2-5 minutes and individual step failures remain
     readable in a failed GitHub run.
-  - Progress 2026-06-25: CI run
+  - Evidence 2026-06-25: CI run
     [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) completed `static-safety` in
     2m45s with named steps for format/type/import checks, API surface, SQL safety, compiler perf,
-    publish readiness, and `git diff --check`. Remaining evidence is a failed-log sample proving step
-    failures stay readable.
+    publish readiness, and `git diff --check`. Failed CI run
+    [28153506600](https://github.com/kovojs/kovo/actions/runs/28153506600/job/83376455802) identified
+    `static-safety` / `Format, type, and import checks` and the stale inline loader file plus fix command.
 
 - [x] **Consolidate small conformance shards without burying `drizzle-pin`.**
   - Keep `drizzle-pin` standalone unless timings show it can absorb one tiny suite and stay below 5
@@ -254,6 +262,9 @@ Median job durations across those runs:
     The logical selector currently covers 10 cross-tab, morph, optimistic, and streaming tests; local
     one-pass verification passed. The remaining checkbox evidence is a completed scheduled workflow run
     URL.
+  - Gap 2026-06-25: `gh workflow run 301949424 --ref main` failed with `HTTP 403: Resource not
+    accessible by integration`, so this session cannot manually dispatch the workflow with the current
+    token.
 
 - [x] **Define assertion tiers for integration specs.**
   - Tier 1: semantic user-visible assertions through `@kovojs/test` page helpers.
@@ -377,9 +388,21 @@ tests/integration/specs/fragment-append.spec.ts` passed.
     [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) restored the wall time to
     4m26s, with all non-build required work under 5 minutes; the gate remains open because `build` is an
     intentionally short artifact producer and `browser` landed just below target at 1m59s.
-- [ ] **Signal gate:** a failed static check, failed conformance test, failed browser test, and failed
+  - Progress 2026-06-25: CI run
+    [28187440251](https://github.com/kovojs/kovo/actions/runs/28187440251) stayed green in 4m20s, but
+    `build` remained an intentional 30s artifact producer and `browser` landed at 1m34s.
+- [x] **Signal gate:** a failed static check, failed conformance test, failed browser test, and failed
       integration shard each identify the failing suite/spec from the GitHub job list and first visible log
       page.
+  - Evidence 2026-06-25: failed CI jobs identified `static-safety` stale inline loader
+    ([28153506600](https://github.com/kovojs/kovo/actions/runs/28153506600/job/83376455802)),
+    browser assertions in `packages/browser/src/*browser.test.ts`
+    ([28145146883](https://github.com/kovojs/kovo/actions/runs/28145146883/job/83350665339)),
+    `conformance (drizzle-pin)` specs
+    ([28133702807](https://github.com/kovojs/kovo/actions/runs/28133702807/job/83315685136)), and
+    `integration (1, 5)` Playwright specs
+    ([28154936381](https://github.com/kovojs/kovo/actions/runs/28154936381/job/83381096014)) from the
+    job list and first failed-log page.
 - [x] **Maintainability gate:** new integration tests have inventory metadata, use public app APIs by
       default, and use shared assertion helpers for common wire/header contracts.
   - Evidence 2026-06-25: `tests/integration-inventory.meta.test.ts` requires inventory metadata for
