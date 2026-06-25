@@ -246,10 +246,12 @@ diagnostic in compiler/check gates that claim data-plane security.
       emit client, emit server, emit registry/CSS, and verify.
   - Evidence: the current entry point spans most compiler responsibilities and relies on shared
     local state across phases.
-- [ ] Replace lowering-pass `!` assertions with typed pass dependencies, declared outputs, and a
+- [x] Replace lowering-pass `!` assertions with typed pass dependencies, declared outputs, and a
       startup/self-test that verifies pass graph ordering and required products.
-  - Evidence: `LOWERING_PASSES` is explicit, but `runLoweringPipeline` reads optional context fields
-    through non-null assertions.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/lowering-pipeline.test.ts` and
+    `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts` pass after
+    `LOWERING_PASSES` declared required/provided products and `runLoweringPipeline` removed its
+    non-null assertions.
 - [ ] Introduce a phase-owned source replacement accumulator that records writer, phase, original
       span, generated span, and conflict diagnostics.
   - Evidence: `applySourceReplacements` throws generic span errors with no writer or phase context.
@@ -311,4 +313,3 @@ Do not claim this remediation complete until all of the following are true:
       earlier phase has not declared.
 - [ ] Full repo gates relevant to compiler/security pass, including the focused compiler suite,
       Vite/build tests, `kovo check` tests, and generated-artifact integration tests.
-
