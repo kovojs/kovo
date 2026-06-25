@@ -201,11 +201,14 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `alg` — making `alg:none` and RS256→HS256 confusion inexpressible. _Trade-off:_ correct and tier-1 at the
       sink, but defends a format Kovo may not ship — adopt only **inside** OPP-11, not standalone.
 
-- [ ] **OPP-09 — Account-enumeration-safe credential verification.** runtime-DiD (constant-**work** timing
+- [x] **OPP-09 — Account-enumeration-safe credential verification.** runtime-DiD (constant-**work** timing
       floor) · lev 5 · M · non-breaking. Provide `verifyCredential()` that always runs a full argon2id compare
       (dummy hash against a fixed decoy on user-miss) so response time/shape don't branch on existence.
       _Trade-off:_ a genuinely novel framework-owned timing floor, but it neither eliminates the class by
       construction nor covers app-authored existence-branched responses elsewhere (that check is audit-only).
+      Evidence: `packages/server/src/password.ts` exposes `verifyCredential()` and routes missing, malformed,
+      or legacy stored digests through a fixed argon2id decoy before returning generic failure; focused password/
+      API tests, `pnpm run check:vp`, and `pnpm run check:api-surface` passed.
 
 ### Band 3 — Floor hardening & free browser headers
 

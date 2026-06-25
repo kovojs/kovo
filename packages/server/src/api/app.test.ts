@@ -417,6 +417,7 @@ describe('server app-shell public API barrels', () => {
       PASSWORD_ARGON2ID_DEFAULTS: passwordApi.PASSWORD_ARGON2ID_DEFAULTS,
       hashPassword: passwordApi.hashPassword,
       isArgon2idPasswordDigest: passwordApi.isArgon2idPasswordDigest,
+      verifyCredential: passwordApi.verifyCredential,
       verifyPassword: passwordApi.verifyPassword,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
       // create-kovo starter template's vite.config.ts.

@@ -45,6 +45,17 @@ export interface PasswordVerifyResult {
   needsRehash: boolean;
 }
 
+/** Result of verifying an account credential without exposing whether the account existed. */
+export interface CredentialVerifyResult {
+  /** True only when a stored account digest exists, is accepted by Kovo, and the secret matches. */
+  ok: boolean;
+  /**
+   * True when the credential verifies but uses weaker parameters than this call's configured floor.
+   * Apps can use this to re-hash after successful login; Kovo does not mutate storage here.
+   */
+  needsRehash: boolean;
+}
+
 /**
  * Default and minimum password hashing parameters. Kovo exposes no bcrypt, scrypt, SHA, or raw
  * Argon2 algorithm knob; the sink always emits argon2id/v=19 PHC strings.
@@ -67,6 +78,8 @@ const ARGON2ID_ALGORITHM = 2;
 const ARGON2_VERSION_13 = 1;
 const PHC_ARGON2ID_PREFIX = '$argon2id$';
 const PHC_BASE64 = /^[A-Za-z0-9+/]+$/;
+const CREDENTIAL_VERIFY_DECOY_DIGEST =
+  '$argon2id$v=19$m=19456,t=2,p=1$wUyZMkz0f9Q8lxUmpoYhWQ$lJqAy+vFypMXMsFlJiUhrBBU1Spa3MLjUIbzYeLk6ZA';
 
 /**
  * Hash a plaintext password with Kovo's first-party argon2id-only sink.
@@ -101,8 +114,48 @@ export async function verifyPassword(
   const parsed = parseArgon2idPasswordDigest(digest);
   if (parsed === undefined) return { ok: false, needsRehash: false };
 
+  return verifyParsedPasswordDigest(password, digest, parsed, params, options.signal ?? null);
+}
+
+/**
+ * Verify a login credential while doing argon2id work even when the account is absent.
+ *
+ * SPEC §6.6: this is a runtime defense-in-depth floor at the credential verification sink. Missing,
+ * malformed, or legacy stored digests verify against a fixed framework-owned argon2id decoy digest
+ * and return the same generic failed shape, so this helper boundary does not expose user existence.
+ */
+export async function verifyCredential(
+  secret: string | Uint8Array,
+  storedDigest: string | null | undefined,
+  options: PasswordHashOptions = {},
+): Promise<CredentialVerifyResult> {
+  const params = resolvePasswordHashOptions(options);
+  const parsed =
+    storedDigest === null || storedDigest === undefined
+      ? undefined
+      : parseArgon2idPasswordDigest(storedDigest);
+  const digest = parsed === undefined ? CREDENTIAL_VERIFY_DECOY_DIGEST : storedDigest!;
+  const result = await verifyParsedPasswordDigest(
+    secret,
+    digest,
+    parsed ?? parseArgon2idPasswordDigest(CREDENTIAL_VERIFY_DECOY_DIGEST)!,
+    params,
+    options.signal ?? null,
+  );
+
+  if (parsed === undefined) return { ok: false, needsRehash: false };
+  return result;
+}
+
+async function verifyParsedPasswordDigest(
+  password: string | Uint8Array,
+  digest: string,
+  parsed: ParsedArgon2idDigest,
+  params: Argon2Options,
+  signal: AbortSignal | null,
+): Promise<PasswordVerifyResult> {
   try {
-    const ok = await argon2Verify(digest, password, params, options.signal ?? null);
+    const ok = await argon2Verify(digest, password, params, signal);
     return { ok, needsRehash: ok && digestNeedsRehash(parsed, params) };
   } catch {
     return { ok: false, needsRehash: false };

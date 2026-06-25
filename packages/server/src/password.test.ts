@@ -1,13 +1,32 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const argon2Mock = vi.hoisted(() => ({
+  verify: vi.fn(),
+}));
+
+vi.mock('@node-rs/argon2', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@node-rs/argon2')>();
+  argon2Mock.verify.mockImplementation(actual.verify);
+
+  return {
+    ...actual,
+    verify: argon2Mock.verify,
+  };
+});
 
 import {
   PASSWORD_ARGON2ID_DEFAULTS,
   hashPassword,
   isArgon2idPasswordDigest,
+  verifyCredential,
   verifyPassword,
 } from './password.js';
 
 describe('password primitive: argon2id-only sink', () => {
+  beforeEach(() => {
+    argon2Mock.verify.mockClear();
+  });
+
   it('hashes passwords as argon2id/v=19 PHC digests with Kovo defaults', async () => {
     const digest = await hashPassword('correct horse battery staple');
 
@@ -97,6 +116,62 @@ describe('password primitive: argon2id-only sink', () => {
     await expect(verifyPassword('password', digest, { memoryCost: 20 * 1024 })).resolves.toEqual({
       ok: true,
       needsRehash: true,
+    });
+  });
+
+  it('verifies existing account credentials without exposing a separate existence bit', async () => {
+    const digest = await hashPassword('correct horse battery staple');
+
+    await expect(verifyCredential('correct horse battery staple', digest)).resolves.toEqual({
+      ok: true,
+      needsRehash: false,
+    });
+    await expect(verifyCredential('wrong horse battery staple', digest)).resolves.toEqual({
+      ok: false,
+      needsRehash: false,
+    });
+  });
+
+  it('verifies missing account credentials against the framework decoy digest', async () => {
+    await expect(verifyCredential('candidate password', undefined)).resolves.toEqual({
+      ok: false,
+      needsRehash: false,
+    });
+
+    expect(argon2Mock.verify).toHaveBeenCalledTimes(1);
+    expect(argon2Mock.verify.mock.calls[0]![0]).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/);
+  });
+
+  it('keeps malformed stored credential behavior generic while still doing decoy work', async () => {
+    await expect(verifyCredential('candidate password', undefined)).resolves.toEqual({
+      ok: false,
+      needsRehash: false,
+    });
+    const missingDigest = argon2Mock.verify.mock.calls[0]![0];
+
+    argon2Mock.verify.mockClear();
+
+    await expect(verifyCredential('candidate password', 'not-a-phc-digest')).resolves.toEqual({
+      ok: false,
+      needsRehash: false,
+    });
+
+    expect(argon2Mock.verify).toHaveBeenCalledTimes(1);
+    expect(argon2Mock.verify.mock.calls[0]![0]).toBe(missingDigest);
+  });
+
+  it('reports stale but valid account digests only after successful credential verification', async () => {
+    const digest = await hashPassword('password', { memoryCost: 19 * 1024 });
+
+    await expect(verifyCredential('password', digest, { memoryCost: 20 * 1024 })).resolves.toEqual({
+      ok: true,
+      needsRehash: true,
+    });
+    await expect(
+      verifyCredential('wrong password', digest, { memoryCost: 20 * 1024 }),
+    ).resolves.toEqual({
+      ok: false,
+      needsRehash: false,
     });
   });
 });
