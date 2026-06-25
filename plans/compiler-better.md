@@ -338,13 +338,16 @@ data-plane security.
     error transforms do not register dev middleware client modules, direct `.client.js` loads
     re-use the error gate, and warn/lint/notice diagnostics still pass. Full Vite production build
     output is not separately proven by this slice, so the checkbox remains open.
-- [ ] Convert high-risk substring tests into generated-artifact execution tests for server HTML,
+- [x] Convert high-risk substring tests into generated-artifact execution tests for server HTML,
       client module behavior, mutation delta behavior, and `/_q` response behavior.
-  - Evidence: existing security tests often inspect emitted source text instead of executing the
-    generated artifact boundary.
-- [ ] Add TSX-authored integration coverage for XSS and output-context cases, not only hand-authored
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/server-emit-security.test.ts packages/compiler/src/output-context-payloads.test.ts packages/server/src/mutation-delta.test.ts packages/server/src/query-endpoint.test.ts`
+    passes with generated server `renderSource()` render-equivalence, executed client update-plan
+    behavior, decoded mutation delta wire behavior, and decoded `/_q` response behavior.
+- [x] Add TSX-authored integration coverage for XSS and output-context cases, not only hand-authored
       lowered IR or runtime fixtures.
-  - Evidence: some integration coverage proves runtime escaping but not TSX compiler emission.
+  - Evidence: `pnpm --filter @kovojs/integration-tests exec playwright test specs/xss-escaping.spec.ts`
+    passes after the fixture adds an authored `xss-card.tsx` component rendered through the
+    integration compiler alongside the existing runtime XSS card.
 - [x] Add real Vite/CLI diagnostic formatting snapshots for `KV236`, `KV235`, `KV437`, and `KV438`,
       including line/column stability across lowering and reparsing.
   - Evidence: diagnostic coordinate frames are centralized but selected manually by validators.
