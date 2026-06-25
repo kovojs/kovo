@@ -3,6 +3,7 @@ import { dirname, relative, resolve } from 'node:path';
 import * as ts from 'typescript';
 
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import type { AccessDecisionFact } from '@kovojs/core/internal/graph';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import type {
@@ -38,6 +39,8 @@ interface RoutePageHandler {
 }
 
 interface RouteLayoutModel {
+  access?: AccessDecisionFact;
+  guard?: string;
   localName: string;
   parent?: string;
   parentLength?: number;
@@ -180,10 +183,14 @@ function routePageFromCall(
     regions,
   );
   const css = routePageCssFact(components, componentImports);
+  const access = routeAccessFact(definitionArg, routeLayouts, layouts, sourceFile);
+  const guards = routeGuardFacts(definitionArg, routeLayouts, layouts, sourceFile);
   const fact = {
+    ...(access === undefined ? {} : { access }),
     ...(css === undefined ? {} : { css }),
     components,
     fileName,
+    ...(guards.length === 0 ? {} : { guards }),
     ...(routeLayouts.length > 0 ? { layouts: routeLayouts } : {}),
     navigationSegments,
     ...(regions.length > 0 ? { regions } : {}),
@@ -366,7 +373,11 @@ function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, Route
       const [definition] = node.initializer.arguments;
       if (definition && ts.isObjectLiteralExpression(definition)) {
         const parent = layoutParentName(definition);
+        const access = accessDecisionFact(definition, sourceFile);
+        const guard = namedInitializer(definition, 'guard', sourceFile)?.name;
         layouts.set(node.name.text, {
+          ...(access === undefined ? {} : { access }),
+          ...(guard === undefined ? {} : { guard }),
           localName: node.name.text,
           ...(parent === null
             ? {}
@@ -382,6 +393,109 @@ function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, Route
 
   visit(sourceFile);
   return layouts;
+}
+
+function routeAccessFact(
+  routeDefinition: ts.ObjectLiteralExpression,
+  routeLayouts: readonly RoutePageLayoutFact[],
+  layouts: ReadonlyMap<string, RouteLayoutModel>,
+  sourceFile: ts.SourceFile,
+): AccessDecisionFact | undefined {
+  const routeAccess = accessDecisionFact(routeDefinition, sourceFile);
+  if (routeAccess) return routeAccess;
+
+  for (let index = routeLayouts.length - 1; index >= 0; index -= 1) {
+    const layout = routeLayouts[index];
+    if (!layout) continue;
+    const access = layouts.get(layout.localName)?.access;
+    if (access) return access;
+  }
+
+  return undefined;
+}
+
+function routeGuardFacts(
+  routeDefinition: ts.ObjectLiteralExpression,
+  routeLayouts: readonly RoutePageLayoutFact[],
+  layouts: ReadonlyMap<string, RouteLayoutModel>,
+  sourceFile: ts.SourceFile,
+): string[] {
+  const guards = [
+    namedInitializer(routeDefinition, 'guard', sourceFile)?.name,
+    ...routeLayouts.map((layout) => layouts.get(layout.localName)?.guard),
+  ].filter((guard): guard is string => guard !== undefined);
+
+  return uniqueSorted(guards);
+}
+
+function accessDecisionFact(
+  object: ts.ObjectLiteralExpression,
+  sourceFile: ts.SourceFile,
+): AccessDecisionFact | undefined {
+  const access = objectPropertyInitializer(object, 'access');
+  if (!access) return undefined;
+
+  if (ts.isIdentifier(access) && access.text === 'verifiedAccess') {
+    return { kind: 'verified-machine-auth' };
+  }
+
+  if (
+    ts.isCallExpression(access) &&
+    ts.isIdentifier(access.expression) &&
+    access.expression.text === 'publicAccess'
+  ) {
+    const [reason] = access.arguments;
+    if (reason && ts.isStringLiteralLike(reason)) return { kind: 'public', reason: reason.text };
+  }
+
+  if (!ts.isObjectLiteralExpression(access)) return undefined;
+
+  const kind = staticStringProperty(access, 'kind', sourceFile);
+  if (kind === 'verified-machine-auth') return { kind: 'verified-machine-auth' };
+  if (kind === 'public') {
+    const reason = staticStringProperty(access, 'reason', sourceFile);
+    if (reason !== undefined) return { kind: 'public', reason };
+  }
+  if (kind === 'guard-chain') {
+    return { guards: accessGuardNames(access, sourceFile).map((name) => ({ name })), kind };
+  }
+
+  return undefined;
+}
+
+function accessGuardNames(
+  access: ts.ObjectLiteralExpression,
+  sourceFile: ts.SourceFile,
+): string[] {
+  const guards = objectPropertyInitializer(access, 'guards');
+  if (!guards || !ts.isArrayLiteralExpression(guards)) return [];
+
+  return guards.elements.flatMap((element) => {
+    if (!ts.isObjectLiteralExpression(element)) return [];
+    const name = staticStringProperty(element, 'name', sourceFile);
+    return name === undefined ? [] : [name];
+  });
+}
+
+function staticStringProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+  sourceFile: ts.SourceFile,
+): string | undefined {
+  const value = objectPropertyInitializer(object, name);
+  if (!value) return undefined;
+  if (ts.isStringLiteralLike(value)) return value.text;
+  if (ts.isIdentifier(value)) return value.getText(sourceFile);
+  return undefined;
+}
+
+function namedInitializer(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+  sourceFile: ts.SourceFile,
+): { name: string } | undefined {
+  const value = objectPropertyInitializer(object, name);
+  return value && ts.isIdentifier(value) ? { name: value.getText(sourceFile) } : undefined;
 }
 
 function routeLayoutFacts(

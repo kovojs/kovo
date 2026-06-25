@@ -62,6 +62,32 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails raw endpoint and webhook graph rows with incomplete audit metadata (KV423)', () => {
+    const result = kovoCheck({
+      endpoints: [
+        { method: 'POST', path: '/api/raw', reason: 'raw sync' },
+        {
+          auth: 'none',
+          body: 'text',
+          cache: 'no-store',
+          csrf: 'exempt',
+          method: 'GET',
+          name: 'stripe',
+          path: '/webhooks/stripe',
+          surface: 'webhook',
+        },
+      ],
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain(
+      'ERROR KV423 ENDPOINT /api/raw Raw endpoint declaration is missing required audit metadata. missing=response.body,response.cache,appOwnedSafety',
+    );
+    expect(result.output).toContain(
+      'ERROR KV423 WEBHOOK stripe Raw endpoint declaration is missing required audit metadata. missing=csrfJustification,method=POST,verifyJustification',
+    );
+  });
+
   // SPEC §10.2/§6.6: end-to-end default-deny wiring. deriveAppGraph (compiler) classifies
   // every surface into graph.access; an undecided query/mutation/page/endpoint fails KV436,
   // while a guarded/public/verified surface passes. The proof is the static graph fact.
@@ -1232,19 +1258,27 @@ describe('kovo check', () => {
         endpoints: [
           {
             auth: 'none',
+            appOwnedSafety: true,
+            body: 'text',
+            cache: 'no-store',
             csrf: 'exempt',
             csrfJustification: 'oauth callback',
             method: 'POST',
             name: 'auth/callback',
             path: '/auth/callback',
+            reason: 'oauth callback',
           },
           {
             auth: 'verifier:stripe-signature',
+            appOwnedSafety: true,
+            body: 'text',
+            cache: 'no-store',
             csrf: 'exempt',
             csrfJustification: 'signed stripe webhook',
             method: 'POST',
             name: 'stripe/webhook',
             path: '/webhooks/stripe',
+            reason: 'signed stripe webhook',
           },
         ],
       }),
@@ -1255,15 +1289,27 @@ describe('kovo check', () => {
     });
   });
 
-  it('warns when endpoint CSRF exemptions are missing the named justification', () => {
+  it('fails when endpoint CSRF exemptions are missing the named justification', () => {
     expect(
       kovoCheck({
-        endpoints: [{ csrf: 'exempt', method: 'POST', name: 'stripe/webhook', path: '/stripe' }],
+        endpoints: [
+          {
+            appOwnedSafety: true,
+            body: 'text',
+            cache: 'no-store',
+            csrf: 'exempt',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/stripe',
+            reason: 'stripe webhook',
+          },
+        ],
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output: [
         'kovo-check/v1',
+        'ERROR KV423 ENDPOINT stripe/webhook Raw endpoint declaration is missing required audit metadata. missing=csrfJustification',
         'WARN UNGUARDED stripe/webhook endpoint is reachable without an auth declaration.',
         'WARN ENDPOINT stripe/webhook csrf exemption requires a named justification.',
         '',

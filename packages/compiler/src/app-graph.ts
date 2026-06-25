@@ -461,6 +461,8 @@ function derivedPageFactsFromRoutePages(
     });
 
     return {
+      ...(page.access === undefined ? {} : { access: page.access }),
+      ...(page.guards === undefined || page.guards.length === 0 ? {} : { guards: page.guards }),
       ...(page.layouts && page.layouts.length > 0
         ? {
             layouts: page.layouts.map((layout) => ({
@@ -507,6 +509,12 @@ function mergeGraphPage(
 ): CoreGraph.PageExplain {
   return {
     ...authoredPage,
+    ...(authoredPage.access === undefined && derivedPage.access !== undefined
+      ? { access: derivedPage.access }
+      : {}),
+    ...(authoredPage.guards === undefined && derivedPage.guards !== undefined
+      ? { guards: derivedPage.guards }
+      : {}),
     ...(derivedPage.layouts === undefined ? {} : { layouts: derivedPage.layouts }),
     ...(derivedPage.navigationSegments === undefined
       ? {}

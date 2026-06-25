@@ -196,14 +196,16 @@ diagnostic in compiler/check gates that claim data-plane security.
 
 ### Phase 1: make security graph facts mandatory at compiler boundaries
 
-- [ ] Thread route guard/access posture through `compileRouteModule`, `RoutePageFact`, route IR,
+- [x] Thread route guard/access posture through `compileRouteModule`, `RoutePageFact`, route IR,
       and app graph derivation.
-  - Evidence: `RoutePageFact` has no guard/access fields and `derivedPageFactsFromRoutePages` only
-    emits route/query/layout/navigation facts.
-- [ ] Define the compiler/server ownership line for raw `endpoint()` and `webhook()` metadata, then
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts packages/server/src/access-graph.test.ts packages/cli/src/index.kovo-check.test.ts`
+    passes with guarded/public/verified/missing JSX route pages threaded through route facts, emitted
+    route IR metadata, app graph pages, and KV436 access facts.
+- [x] Define the compiler/server ownership line for raw `endpoint()` and `webhook()` metadata, then
       make missing or ambiguous metadata visible to `kovo check` as a blocking app graph diagnostic.
-  - Evidence: endpoint constructors carry required metadata types, but the compiler audit did not
-    find an equivalent compiler-owned graph extraction/gate for `KV423`.
+  - Evidence: `packages/server/src/endpoint.ts` and `packages/server/src/webhook.ts` keep constructor
+    metadata enforcement server-owned, while `pnpm exec vitest --configLoader runner --run packages/cli/src/index.kovo-check.test.ts`
+    proves incomplete endpoint/webhook graph rows fail `kovo check` with blocking KV423.
 - [x] Make missing query-shape facts a fail-closed condition for components that declare queries in
       production/security-check modes.
   - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`

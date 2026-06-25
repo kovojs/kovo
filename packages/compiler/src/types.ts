@@ -247,9 +247,11 @@ export interface CompileRouteModuleResult {
 
 /** Compiler-derived facts for one JSX-authored `route().page`. */
 export interface RoutePageFact {
+  access?: CoreGraph.AccessDecisionFact;
   css?: RoutePageCssFact;
   components: readonly RoutePageComponentFact[];
   fileName: string;
+  guards?: readonly string[];
   layouts?: readonly RoutePageLayoutFact[];
   navigationSegments?: readonly RouteNavigationSegmentFact[];
   regions?: readonly RouteRegionFact[];

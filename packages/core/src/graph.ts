@@ -302,6 +302,7 @@ export interface PageExplain {
 /** @internal */
 export interface EndpointExplain {
   access?: AccessDecisionFact;
+  appOwnedSafety?: boolean;
   auth?: string;
   body?: string;
   bodySize?: string;
@@ -314,9 +315,11 @@ export interface EndpointExplain {
   headers?: readonly string[];
   method?: string;
   mount?: 'exact' | 'prefix';
+  mountJustification?: string;
   name?: string;
   path: string;
   rateLimit?: string;
+  reason?: string;
   surface?: 'dynamic-export' | 'endpoint' | 'route-file' | 'route-stream' | 'webhook';
   writes?: readonly string[];
 }
