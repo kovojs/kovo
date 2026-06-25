@@ -146,16 +146,22 @@ export function createMemoryOpaqueSessionStore<SessionValue>(
   const records = new Map<string, OpaqueSessionRecord<SessionValue>>();
   const revoked = new Set<string>();
 
-  const evict = (): void => {
+  const evict = (options: { pruneExpired?: boolean } = {}): void => {
+    const pruneExpired = options.pruneExpired ?? true;
     const current = now();
     for (const [id, record] of records) {
-      if (record.expiresAt <= current || revoked.has(id)) records.delete(id);
+      if (revoked.has(id) || (pruneExpired && record.expiresAt <= current)) records.delete(id);
     }
     while (records.size > maxEntries) {
       const oldest = records.keys().next().value as string | undefined;
       if (oldest === undefined) break;
       records.delete(oldest);
       revoked.add(oldest);
+    }
+    while (revoked.size > maxEntries) {
+      const oldest = revoked.keys().next().value;
+      if (oldest === undefined) break;
+      revoked.delete(oldest);
     }
   };
 
@@ -180,7 +186,7 @@ export function createMemoryOpaqueSessionStore<SessionValue>(
   return {
     create,
     validate(id: string): OpaqueSessionValidation<SessionValue> {
-      evict();
+      evict({ pruneExpired: false });
       if (!isOpaqueSessionId(id)) return { ok: false, reason: 'malformed' };
       if (revoked.has(id)) return { ok: false, reason: 'revoked' };
       const record = records.get(id);
@@ -188,6 +194,7 @@ export function createMemoryOpaqueSessionStore<SessionValue>(
       if (record.expiresAt <= now()) {
         records.delete(id);
         revoked.add(id);
+        evict();
         return { ok: false, reason: 'expired' };
       }
       return { ok: true, session: record };
@@ -200,11 +207,13 @@ export function createMemoryOpaqueSessionStore<SessionValue>(
       const next = create(value, establishOptions);
       records.delete(priorId);
       revoked.add(priorId);
+      evict();
       return next;
     },
     revoke(id: string): void {
       records.delete(id);
       revoked.add(id);
+      evict();
     },
     size(): number {
       evict();

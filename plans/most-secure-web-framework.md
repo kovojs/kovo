@@ -238,10 +238,12 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       Progress: Kovo's Better Auth boundary now requires real session credential cookies for credential flows,
       rejects JWT-shaped session cookies by default unless `sessionCookieMode: 'jwt'` is explicit, refuses
       incoming session credential reissue, maps delegated payloads only when the request carried an accepted
-      browser session credential, and fails closed when sign-out does not emit a revocation cookie. Focused Better
-      Auth/keyring/capability/env tests, `git diff --check`, `pnpm run check:vp`, and
-      `pnpm run check:api-surface` passed. Remaining gap: Kovo still delegates the opaque session store to Better
-      Auth, so the default-session ownership claim is not complete.
+      browser session credential, and fails closed when sign-out does not emit a revocation cookie.
+      `packages/server/src/opaque-session.ts` now exposes a Kovo-owned opaque session store/manager with
+      non-JWT ids, rotation, expiry, immediate revocation, and a `sessionProvider` adapter. Focused Better
+      Auth/keyring/capability/env tests plus `pnpm exec vitest run packages/server/src/opaque-session.test.ts
+      --run`, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
+      the owned opaque primitive is not yet the framework-wide default session lifecycle.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
