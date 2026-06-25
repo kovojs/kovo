@@ -21,78 +21,57 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
 
 ## Tier 0 - By-Construction Gaps
 
-- [ ] Make SQL allowlists static by construction, not request-controlled.
-  - Evidence: `packages/drizzle/src/static.ts:661` and `:724` only prove that an allow array exists;
-    `packages/core/src/internal/sql-safety.ts:96` and `:106` then accept runtime values with
-    `allow.includes(value)`.
-  - Probe: data explorer showed `sql.allow(input.dir, [input.dir])` and
-    `sql.identifier(input.table, { allow: [input.table] })` emitted zero KV422 diagnostics.
-  - Acceptance: `kovo check` rejects allow entries derived from request/input values unless they
-    resolve to schema facts, literal tuples, or a branded server-owned allowlist.
+- [x] Make SQL allowlists static by construction, not request-controlled.
+  - Evidence: `20c0b4a4` plus
+    `pnpm exec vitest --run packages/drizzle/src/sql-safety-static.test.ts` rejects
+    request-derived `sql.allow(...)` / `sql.identifier(..., { allow })` entries.
 
-- [ ] Inspect every `sql.join(...)` part instead of treating the wrapper as inherently safe.
-  - Evidence: `packages/drizzle/src/static.ts:664` returns safe for `sql.join(...)`.
-  - Probe: data explorer showed `sql.join([input.clause])` emitted zero KV422 diagnostics.
-  - Acceptance: static analysis recursively checks joined values for request-derived text, raw SQL,
-    identifiers, and allowed fragments.
+- [x] Inspect every `sql.join(...)` part instead of treating the wrapper as inherently safe.
+  - Evidence: `20c0b4a4` plus
+    `pnpm exec vitest --run packages/drizzle/src/sql-safety-static.test.ts` covers
+    request-derived `sql.join(...)` parts.
 
 - [ ] Scope `owns()` guard suppression to the exact domain/key it proves.
-  - Evidence: `packages/cli/src/graph-output.ts:2104` and `:2119` suppress owner-domain findings by
-    surface name instead of matching the guarded domain/key against each read/write fact.
-  - Probe: a query reading `account` and `invoice` passed KV414 with only `owns:account`.
-  - Acceptance: KV414 remains open for every owner domain not covered by a matching guard,
-    including mixed-domain query and mutation surfaces.
+  - Current evidence: `20c0b4a4` plus
+    `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts` now keeps KV414 open for
+    mixed-domain surfaces not covered by a matching `owns()` domain.
+  - Remaining gap: key-exact matching is still open because the graph fact shape does not yet carry
+    the exact guarded owner key.
 
-- [ ] Replace name-based privileged helper recognition with source-identity provenance.
-  - Evidence: `packages/drizzle/src/static/derivation.ts:1091` and
-    `packages/drizzle/src/static/symbol-provenance.ts:183`/`:323` allow helper names to launder
-    provenance.
-  - Probe: local fake `adminAssign()` and shadowed summarized helpers suppressed KV438.
-  - Acceptance: KV438 escapes require import/source identity from the framework-owned helper or a
-    compiler-attested summary, not just a callee name.
+- [x] Replace name-based privileged helper recognition with source-identity provenance.
+  - Evidence: `20c0b4a4` plus
+    `pnpm exec vitest --run packages/drizzle/src/index.mass-assignment.test.ts` covers fake
+    `adminAssign()` and shadowed summary-helper bypasses.
 
-- [ ] Expand `adminAssign` audit records beyond `{ reason }`.
-  - Evidence: `packages/server/src/write-governance.ts:55` records only the reason string.
-  - Acceptance: audit records include callsite or producer, table/domain, column set, source
-    provenance, actor/session when available, and an explain-graph edge.
+- [x] Expand `adminAssign` audit records beyond `{ reason }`.
+  - Evidence: `20c0b4a4` plus
+    `pnpm exec vitest --run packages/server/src/write-governance.test.ts` covers expanded
+    governance audit metadata.
 
-- [ ] Require version bump/update proof when KV429 is discharged by a version predicate.
-  - Evidence: `packages/drizzle/src/static/derivation.ts:1296` treats equality on a declared version
-    column as sufficient.
-  - Probe: a version-guarded update that never increments the version emitted zero KV429 facts.
-  - Acceptance: static proof requires both compare-and-set predicate and mutation of the same
-    version column, or keeps KV429 open for runtime CAS handling in the original plan.
+- [x] Require version bump/update proof when KV429 is discharged by a version predicate.
+  - Evidence: `20c0b4a4` plus
+    `pnpm exec vitest --run packages/drizzle/src/index.toctou-readonly.test.ts` covers
+    version-predicate updates that fail to mutate the same version column.
 
-- [ ] Fail closed on dynamic or spread `reads:` entries for opaque queries.
-  - Evidence: `packages/drizzle/src/static/schema.ts:860` records static entries and drops dynamic
-    spread entries.
-  - Probe: `reads: [products, ...extraReads]` hid an `audit_logs` raw query read without a
-    diagnostic.
-  - Acceptance: non-static opaque-query `reads` entries produce KV410/KV406 until the full read set
-    is statically known.
+- [x] Fail closed on dynamic or spread `reads:` entries for opaque queries.
+  - Evidence: `20c0b4a4` plus
+    `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts` covers spread/dynamic
+    opaque-query `reads:` entries.
 
-- [ ] Detect direct module-scope DB writes inside query loaders for KV433.
-  - Evidence: `packages/drizzle/src/static/derivation.ts:1384` and
-    `packages/drizzle/src/static/project-receivers.ts:230` discover loader/body-local receivers but
-    miss module-scope `db.delete(...)` closed over by the loader.
-  - Probe: a query loader closing over module-scope `db.delete` emitted zero KV433 facts.
-  - Acceptance: direct module-scope Drizzle receivers used inside query loaders are treated as
-    write receivers, independent of the old plan's imported-domain/interprocedural work.
+- [x] Detect direct module-scope DB writes inside query loaders for KV433.
+  - Evidence: `20c0b4a4` plus
+    `pnpm exec vitest --run packages/drizzle/src/index.toctou-readonly.test.ts` covers
+    module-scope Drizzle receivers used inside query loaders.
 
-- [ ] Require executable endpoint auth verifiers for any endpoint marked `verified`.
-  - Evidence: `packages/server/src/endpoint.ts:33` allows auth declarations with only a name, while
-    `packages/server/src/endpoint.ts:188` skips runtime verification when `verify` is absent.
-  - Acceptance: access graph output does not classify name-only endpoint auth as verified unless it
-    is explicitly marked audit-only and excluded from KV436 closure.
+- [x] Require executable endpoint auth verifiers for any endpoint marked `verified`.
+  - Evidence: `ec9967f8` plus
+    `pnpm exec vitest --run packages/server/src/access-graph.test.ts packages/server/src/endpoint.test.ts`
+    covers name-only endpoint auth as audit metadata and executable verifier enforcement.
 
-- [ ] Replace raw route file/stream response header maps with typed, reserved-header-aware sinks.
-  - Evidence: `packages/server/src/response.ts:462`, `:479`, `:489`, and `:494` let
-    `respond.file`/`respond.stream` caller headers override `Content-Disposition`, `Content-Type`,
-    `X-Content-Type-Options`, and emit raw `Set-Cookie`.
-  - Probe: server explorer produced an attachment SVG response overridden to `inline`, `sniff`, and
-    a raw cookie.
-  - Acceptance: file/stream APIs reserve framework safety headers, route cookies through typed
-    cookie builders, and require audited escape hatches for dangerous overrides.
+- [x] Replace raw route file/stream response header maps with typed, reserved-header-aware sinks.
+  - Evidence: `ec9967f8` plus
+    `pnpm exec vitest --run packages/server/src/response.test.ts` covers reserved framework response
+    headers and raw `Set-Cookie` filtering for route file/stream outcomes.
 
 - [ ] Gate same-file serializable module constants before emitting them into client modules.
   - Evidence: `packages/compiler/src/lower/handlers.ts:226`/`:314` and
@@ -104,23 +83,15 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
 
 ## Tier 1 - Runtime and Wire Defenses
 
-- [ ] Enforce request body byte caps while reading streams, not only through `Content-Length`.
-  - Evidence: `packages/server/src/app-load-shed.ts:135` checks only `Content-Length`; later
-    consumers call `request.json()`, `request.formData()`, or `arrayBuffer()` in mutation,
-    endpoint-verifier, and webhook paths.
-  - Probe: server explorer showed a POST larger than `maxBodyBytes` reached the endpoint when
-    `Content-Length` was absent.
-  - Acceptance: adapter/request-shell installs a counted body reader shared by mutation, endpoint,
-    webhook, and raw verification paths, and returns 413 before parsing when the stream exceeds
-    the configured cap.
+- [x] Enforce request body byte caps while reading streams, not only through `Content-Length`.
+  - Evidence: `ec9967f8` plus
+    `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/webhook.test.ts`
+    covers counted request-body reads and 413 handling beyond `Content-Length`.
 
-- [ ] Add a trusted-proxy boundary for forwarded client IP and scheme headers.
-  - Evidence: `packages/server/src/app-load-shed.ts:165` falls back to `requestClientIp`, which reads
-    forwarded headers by default; Node build URL construction also trusts `Host`/`X-Forwarded-Proto`
-    in `packages/server/src/build.ts:690`.
-  - Probe: server explorer bypassed a `max:1` per-IP limit by changing `X-Forwarded-For`.
-  - Acceptance: forwarded headers are ignored unless an adapter supplies a trusted peer chain or
-    app config names trusted proxies/hop count.
+- [x] Add a trusted-proxy boundary for forwarded client IP and scheme headers.
+  - Evidence: `ec9967f8` plus
+    `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/build.test.ts`
+    covers forwarded IP/proto use only behind trusted-proxy opt-in.
 
 - [ ] Bind idempotency replay records to a canonical request fingerprint and mint fresh enhanced
   submit tokens per logical submit.
@@ -132,14 +103,11 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
   - Acceptance: same-idem/different-body returns a typed conflict, and enhanced submits update or
     replace the submitted idem token before each logical submission.
 
-- [ ] Treat build-token mismatch or missing response token as a whole-response miss.
-  - Evidence: `SPEC.md` §14 says token mismatch must not apply deltas, reads, or fragment merges;
-    `packages/browser/src/apply-mutation-response.ts:51`/`:104` still applies full chunks on skew,
-    and `:99` accepts missing response tokens when the page has a token.
-  - Probe: wire/compiler explorers confirmed current tests accept full chunk application or
-    no-token delta application.
-  - Acceptance: mutation, broadcast, `/_q`, and streaming inline paths reject or refetch on missing
-    or mismatched build tokens before applying any fragment, query, or text chunk.
+- [x] Treat build-token mismatch or missing response token as a whole-response miss.
+  - Evidence: `016cc57f` plus
+    `pnpm exec vitest --run packages/browser/src/apply-mutation-response-delta.test.ts packages/browser/src/broadcast-replay.test.ts packages/browser/src/query-refetch.test.ts`
+    covers mutation, broadcast, and typed-read token misses; `pnpm --filter @kovojs/browser run
+    check:inline-loader` proves generated inline-loader parity.
 
 - [ ] Sign or attest `Kovo-Live-Targets` component/props descriptors.
   - Evidence: browser serializes descriptors from DOM attributes in
@@ -173,56 +141,44 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
   - Acceptance: cross-tab filtering uses an HMAC or random opaque nonce and does not derive
     principals from the first cookie fallback when no authenticated identity exists.
 
-- [ ] Require webhook idempotency/replay posture for write-reaching webhooks.
-  - Evidence: `packages/server/src/webhook.ts:110` makes idempotency optional, while the JSDoc
-    claims the handler is idempotent by construction and replay code only runs when the declaration
-    provides `idempotency`.
-  - Acceptance: write-reaching webhook declarations require an idempotency key and replay store, or
-    an explicit audited `replay: "none"`/pure-handler posture.
+- [x] Require webhook idempotency/replay posture for write-reaching webhooks.
+  - Evidence: `ec9967f8` plus
+    `pnpm exec vitest --run packages/server/src/webhook.test.ts` covers fail-closed replay posture
+    for write-reaching webhooks.
 
-- [ ] Add runtime/dev verification for raw endpoint response posture declarations.
-  - Evidence: `packages/server/src/endpoint.ts:10` declares response posture, but
-    `packages/server/src/endpoint.ts:170` returns the handler response directly.
-  - Acceptance: declared cache/body/app-owned safety posture is checked against actual headers and
-    status in dev/check/runtime conformance, with typed builders for common safe responses.
+- [x] Add runtime/dev verification for raw endpoint response posture declarations.
+  - Evidence: `ec9967f8` plus
+    `pnpm exec vitest --run packages/server/src/endpoint.test.ts` covers dev/opt-in runtime posture
+    verification for raw endpoint responses.
 
-- [ ] Disable default compression for private, no-store, cookie-bearing, or credentialed responses.
-  - Evidence: Node compression in `packages/server/src/node.ts:138`/`:176` skips `no-transform` and
-    existing encodings but not private/no-store, `Vary: Cookie`, or `Set-Cookie`.
-  - Acceptance: compression is opt-in for sensitive responses or skipped automatically when cookie
-    or private-cache posture is present.
+- [x] Disable default compression for private, no-store, cookie-bearing, or credentialed responses.
+  - Evidence: `ec9967f8` plus
+    `pnpm exec vitest --run packages/server/src/node.test.ts` covers compression skips for private,
+    no-store, cookie-bearing, and `Vary: Cookie` responses.
 
 ## Tier 2 - Browser Sink Parity
 
-- [ ] Route inline-loader bound URL attributes through the shared safe-URL parser.
-  - Evidence: `packages/browser/src/inline-loader-build.ts:181`/`:204` use a narrow
-    `/^(javascript|data):/i` check, while modular binding uses `hasUnsafeUrlScheme` from
-    `packages/core/src/internal/security-url.ts:29`.
-  - Probe: compiler explorer found coverage only for literal `javascript:`, not control-character
-    variants such as `java\tscript:`.
-  - Acceptance: modular runtime and inline loader share one URL-scheme sanitizer and identical
-    tests for controls, casing, and disallowed schemes.
+- [x] Route inline-loader bound URL attributes through the shared safe-URL parser.
+  - Evidence: `016cc57f` plus
+    `pnpm exec vitest --run packages/browser/src/inline-loader-security.test.ts packages/browser/src/security-output.test.ts`
+    and `pnpm --filter @kovojs/browser run check:inline-loader`.
 
 - [ ] Enforce a runtime allowlist for handler and derive dynamic import URLs.
-  - Evidence: `packages/browser/src/handlers.ts:145`, `packages/browser/src/query-bindings.ts:466`,
-    and inline loader code import split `module#export` refs without same-origin/build-token or
-    manifest membership checks.
-  - Probe: inline delegated test can reach `import("data:text/javascript,...")` before failing on
-    missing export.
-  - Acceptance: dynamic imports are limited to same-origin Kovo client-module URLs for the active
-    build token and compiler-emitted manifest; others fail closed before import.
+  - Current evidence: `016cc57f` plus
+    `pnpm exec vitest --run packages/browser/src/handlers.test.ts packages/browser/src/inline-loader-delegated.test.ts`
+    rejects cross-origin/data URLs and build-token-mismatched versioned `/c/__v/...` URLs.
+  - Remaining gap: compiler-emitted manifest membership is not yet available, so unversioned
+    same-origin `/c/` module URLs are guarded by path/origin but not manifest membership.
 
-- [ ] Reuse safe attribute sinks for fragment/morph attribute copying.
-  - Evidence: `packages/browser/src/response-fragment-apply.ts:77`/`:140` and
-    `packages/browser/src/morph.ts:319`/`:327` copy raw attributes with `setAttribute`.
-  - Acceptance: fragment/morph application strips `on*`, `srcdoc`, and unsafe URL schemes using
-    the same rules as `data-bind`, as a runtime kill switch for bad raw/trusted output.
+- [x] Reuse safe attribute sinks for fragment/morph attribute copying.
+  - Evidence: `016cc57f` plus
+    `pnpm exec vitest --run packages/browser/src/response-fragment-apply.browser.test.ts`
+    covers safe attribute handling during fragment/morph application.
 
-- [ ] Remove compiler/browser URL parser drift.
-  - Evidence: compiler CSS URL parsing in `packages/compiler/src/security/output-context.ts:424`
-    duplicates the shared helper in `packages/core/src/internal/security-url.ts:18`.
-  - Acceptance: compiler, browser, inline loader, and diagnostics import or generate from one
-    shared URL-safety definition.
+- [x] Remove compiler/browser URL parser drift.
+  - Evidence: `016cc57f` plus
+    `pnpm --filter @kovojs/compiler exec vitest run src/output-context.test.ts src/server-emit-security.test.ts`
+    covers compiler reuse of the shared URL-safety definition.
 
 ## Tier 3 - Adapter, Starter, Devtool, and Supply Chain
 
