@@ -1827,6 +1827,7 @@ function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
   const key = columnNamePropertyFromObject(annotationObject, 'key');
   const owner = columnNamePropertyFromObject(annotationObject, 'owner');
   const secret = secretPropertyFromObject(annotationObject);
+  const confidentialAtRest = confidentialAtRestPropertyFromObject(annotationObject);
   const governed = governedPropertyFromObject(annotationObject);
   const atomic = concurrencyColumnsFromObject(annotationObject, 'atomic');
   const version = concurrencyColumnsFromObject(annotationObject, 'version');
@@ -1834,6 +1835,7 @@ function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
   return {
     domain,
     ...(atomic === undefined ? {} : { atomic }),
+    ...(confidentialAtRest === undefined ? {} : { confidentialAtRest }),
     ...(fans.length > 0 ? { fans } : {}),
     ...(governed === undefined ? {} : { governed }),
     ...(key ? { key } : {}),
@@ -1988,6 +1990,25 @@ function secretPropertyFromObject(object: Node): true | string[] | undefined {
   for (const property of object.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
     if (propertyNameText(property.getNameNode()) !== 'secret') continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) return undefined;
+    if (initializer.getKind() === SyntaxKind.TrueKeyword) return true;
+    if (Node.isArrayLiteralExpression(initializer)) {
+      const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
+      return columns.length > 0 ? columns : undefined;
+    }
+    const column = columnRefName(initializer);
+    return column === undefined ? undefined : [column];
+  }
+  return undefined;
+}
+
+function confidentialAtRestPropertyFromObject(object: Node): true | string[] | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== 'confidentialAtRest') continue;
 
     const initializer = property.getInitializer();
     if (!initializer) return undefined;

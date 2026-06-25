@@ -13,6 +13,7 @@ export type {
   KovoAnalyzerFunctionSummary,
   KovoAnalyzerPrivateScopeKind,
   KovoColumnRef,
+  KovoConfidentialAtRestColumnAnnotation,
   KovoConcurrencyColumnAnnotation,
   KovoDomainTableAnnotation,
   KovoFanAnnotation,
