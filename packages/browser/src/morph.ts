@@ -2,6 +2,7 @@ import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handler-c
 import type { IslandSignalScope } from './handler-context.js';
 import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
 import { applyResponseFragments } from './response-fragment-apply.js';
+import { kovoSetSafeAttribute } from './security-output.js';
 import { kovoCreateHTML } from './trusted-types.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
 
@@ -326,7 +327,7 @@ function syncDomAttributes(current: Element, next: Element): void {
 
   for (const attribute of next.attributes) {
     if (attribute.name === 'kovo-state' && currentState !== null) continue;
-    current.setAttribute(attribute.name, attribute.value);
+    kovoSetSafeAttribute(current, attribute.name, attribute.value);
   }
 }
 

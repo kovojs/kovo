@@ -540,7 +540,7 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
-    'throws from the inline loader when a handler export is missing through %s',
+    'rejects non-Kovo handler import URLs before import through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: all inline source artifacts must reject unresolved handler exports.
       const globalRecord = globalThis as unknown as Record<string, unknown>;
@@ -587,7 +587,7 @@ describe('inline loader delegated handlers', () => {
             target: element,
             type: 'click',
           }),
-        ).rejects.toThrow(`Handler export not found: ${handlerUrl}`);
+        ).rejects.toThrow('Disallowed Kovo dynamic import URL: data:text/javascript');
       } finally {
         Object.assign(globalRecord, {
           addEventListener: originals.addEventListener,

@@ -137,7 +137,7 @@ function m(c: Element, n: Element): Element {
     const a = c.attributes[i];
     if (a && !n.hasAttribute(a.name)) c.removeAttribute(a.name);
   }
-  for (const a of n.attributes) c.setAttribute(a.name, a.value);
+  for (const a of n.attributes) sa(c, a.name, a.value);
 
   // SPEC.md §9.1: a focused keyed input/textarea keeps its browser-owned
   // selection state because keyed morph reuses the live element and skips
@@ -146,6 +146,22 @@ function m(c: Element, n: Element): Element {
 
   u(c, n);
   return c;
+}
+
+function sa(e: Element, name: string, value: string): void {
+  const n = name.toLowerCase();
+  if (n.startsWith('on') || n === 'srcdoc') {
+    e.removeAttribute(name);
+    return;
+  }
+  if (/^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/.test(n)) {
+    const match = /^([a-z][a-z0-9+.-]*):/.exec(value.replace(/[\x00-\x20]/g, '').toLowerCase());
+    if (match && !/^(https?|mailto|tel|ftp)$/.test(match[1] ?? '')) {
+      e.setAttribute(name, '#');
+      return;
+    }
+  }
+  e.setAttribute(name, value);
 }
 
 function u(c: Element, n: Element): void {

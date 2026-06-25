@@ -281,6 +281,29 @@ describe('query refetch', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
   });
 
+  it('escalates to a reload (no apply) when a stamped /_q refetch omits Kovo-Build', async () => {
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+    const onBuildSkew = vi.fn();
+    const fetch = vi.fn(async () => ({
+      headers: { get: () => null },
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":99}</kovo-query>',
+    }));
+
+    const applied = await refetchQueries({
+      expectedBuildToken: 'build-A',
+      fetch,
+      onBuildSkew,
+      queries: ['cart'],
+      queryStore: store,
+    });
+
+    expect(onBuildSkew).toHaveBeenCalledTimes(1);
+    expect(applied).toEqual([]);
+    expect(store.get('cart')).toEqual({ count: 1 });
+  });
+
   it('applies normally when the /_q refetch token matches the document token (D2)', async () => {
     const store = createQueryStore();
     store.set('cart', { count: 1 });

@@ -124,8 +124,7 @@ export async function refetchQueries(
       const responseBuildToken = response.headers?.get('Kovo-Build') ?? undefined;
       if (
         options.expectedBuildToken !== undefined &&
-        responseBuildToken !== undefined &&
-        responseBuildToken !== options.expectedBuildToken
+        (responseBuildToken === undefined || responseBuildToken !== options.expectedBuildToken)
       ) {
         options.onBuildSkew?.();
         return [];
