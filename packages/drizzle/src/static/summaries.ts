@@ -430,6 +430,76 @@ import {
 }
 
 /**
+ * Narrow Authorization-gates-DATA proof for owner-table reads (OPP-28): the owner
+ * column itself must be compared against the matching session/principal private
+ * symbol, e.g. `{ owner:userId }` with `eq(orders.userId, req.session.userId)`.
+ * This is deliberately stricter than `querySessionAnchoredDomains`, which accepts a
+ * session predicate on any column of the table.
+ */
+/** @internal */ export function queryOwnerSessionAnchoredDomains(
+  comparisons: QueryInstanceKeyComparisons,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): readonly string[] {
+  const domains = new Set<string>();
+  for (const comparison of comparisons.instanceKey) {
+    const domain = ownerSessionAnchoredDomainFromEqOperands(
+      comparison.left,
+      comparison.right,
+      tables,
+    );
+    if (domain) domains.add(domain);
+  }
+  return [...domains].sort();
+}
+
+function ownerSessionAnchoredDomainFromEqOperands(
+  left: QueryInstanceKeyOperand,
+  right: QueryInstanceKeyOperand,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string | null {
+  const candidates = [
+    { privateKey: right.privateKey, tableKey: left.tableKey },
+    { privateKey: left.privateKey, tableKey: right.tableKey },
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate.privateKey || !candidate.tableKey) continue;
+    const domain = resolvedQueryOwnerTableDomainForPrincipal(
+      candidate.tableKey,
+      candidate.privateKey,
+      tables,
+    );
+    if (domain) return domain;
+  }
+
+  return null;
+}
+
+function resolvedQueryOwnerTableDomainForPrincipal(
+  key: { key: string; tableIdentifier: string },
+  privateKey: string,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string | null {
+  for (const table of tables.get(key.tableIdentifier) ?? []) {
+    if (
+      !isDomainExtractedTableAnnotation(table.annotation) ||
+      typeof table.annotation.owner !== 'string'
+    ) {
+      continue;
+    }
+    if (key.key !== table.annotation.owner) continue;
+    if (!privateScopeMatchesOwner(privateKey, table.annotation.owner)) continue;
+    return table.annotation.domain;
+  }
+
+  return null;
+}
+
+function privateScopeMatchesOwner(privateKey: string, owner: string): boolean {
+  return privateKey === `session:${owner}` || privateKey === `guard:${owner}`;
+}
+
+/**
  * SPEC §10.3 / KV414 (A3): the owner-annotated domains a query's `where` predicates
  * select through a client-visible `input.*` arg compared against ANY column of that
  * domain's table — not only the declared `key` column. This is the canonical IDOR

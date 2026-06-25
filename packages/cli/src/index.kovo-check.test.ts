@@ -613,6 +613,31 @@ describe('kovo check', () => {
     );
   });
 
+  it('reports narrow DATA authorization findings with the producer detail', () => {
+    expect(
+      kovoCheck({
+        ownerDomains: [{ domain: 'order', owner: 'userId' }],
+        scopeAudits: [
+          {
+            detail:
+              'narrow Authorization-gates-DATA subset: owner=userId; session predicate does not compare the owner column to the matching session/principal symbol',
+            domain: 'order',
+            kind: 'query',
+            name: 'orderBySessionId',
+            scope: 'unknown',
+            site: 'order.queries.ts:12',
+          },
+        ],
+      }).output,
+    ).toBe(
+      [
+        'kovo-check/v1',
+        'ERROR KV414 QUERY orderBySessionId domain=order scope=unknown site=order.queries.ts:12 Owner-table access is not scoped to the session principal (IDOR). narrow Authorization-gates-DATA subset: owner=userId; session predicate does not compare the owner column to the matching session/principal symbol',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('discharges an owner-domain arg access guarded by owns() (SPEC §10.3)', () => {
     const base = {
       ownerDomains: [{ domain: 'order', owner: 'userId' }],

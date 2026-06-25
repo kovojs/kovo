@@ -232,6 +232,12 @@ export {
     domain: string;
     key: string;
   };
+  /**
+   * Narrow OPP-28 Authorization-gates-DATA subset: owner-annotated domains whose
+   * owner column is compared against the matching session/principal private symbol.
+   * This is stricter than `sessionAnchoredReads`, which may anchor any table column.
+   */
+  ownerScopedSessionReads?: readonly string[];
   query: string;
   reads: readonly string[];
   /** Domains this query anchors to `req.session.*` (session-scoped, SPEC §11.1). */
@@ -244,6 +250,11 @@ export {
 /** @internal */ export interface OwnerScopeKey {
   domain: string;
   key: string;
+}
+
+interface OwnerDomainScope {
+  domain: string;
+  owner?: string;
 }
 
 /** @internal */ export function revealFactsFromQueryFacts(
@@ -343,9 +354,10 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
  */
 /** @internal */ export function scopeAuditsFromQueryFacts(
   facts: readonly QueryFact[],
-  ownerDomains: Iterable<string>,
+  ownerDomains: Iterable<string | OwnerDomainScope>,
 ): ScopeAuditFact[] {
-  const owners = new Set(ownerDomains);
+  const ownerScopes = ownerDomainScopes(ownerDomains);
+  const owners = new Set(ownerScopes.map((owner) => owner.domain));
   const audits: ScopeAuditFact[] = [];
 
   for (const fact of facts) {
@@ -380,22 +392,69 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
         continue;
       }
 
-      const sessionScoped = (fact.sessionAnchoredReads ?? []).includes(domain);
-      if (sessionScoped) {
+      const ownerSessionScoped = (fact.ownerScopedSessionReads ?? []).includes(domain);
+      if (ownerSessionScoped) {
         audits.push({ domain, kind: 'query', name: fact.query, scope: 'session', site: fact.site });
         continue;
       }
 
+      const sessionScoped = (fact.sessionAnchoredReads ?? []).includes(domain);
+      const ownerScope = ownerScopes.find((owner) => owner.domain === domain);
+      if (sessionScoped && !ownerScope?.owner) {
+        audits.push({ domain, kind: 'query', name: fact.query, scope: 'session', site: fact.site });
+        continue;
+      }
+
+      const detail = ownerAuthorizationDataDetail(ownerScope, sessionScoped);
       // Join-keyed bypass: an owner read that is neither directly arg-keyed nor
       // session/`owns()`-scoped, but is reachable from a client `input.*` predicate
       // (on this or a joined non-owner table). Fail-closed to `args`/KV414.
       if (fact.hasClientArgPredicate) {
-        audits.push({ domain, kind: 'query', name: fact.query, scope: 'args', site: fact.site });
+        audits.push({
+          detail,
+          domain,
+          kind: 'query',
+          name: fact.query,
+          scope: 'args',
+          site: fact.site,
+        });
+        continue;
+      }
+
+      if (ownerScope?.owner) {
+        audits.push({
+          detail,
+          domain,
+          kind: 'query',
+          name: fact.query,
+          scope: 'unknown',
+          site: fact.site,
+        });
       }
     }
   }
 
   return audits;
+}
+
+function ownerDomainScopes(ownerDomains: Iterable<string | OwnerDomainScope>): OwnerDomainScope[] {
+  return [...ownerDomains].map((owner) => {
+    if (typeof owner === 'string') return { domain: owner };
+    return owner.owner === undefined
+      ? { domain: owner.domain }
+      : { domain: owner.domain, owner: owner.owner };
+  });
+}
+
+function ownerAuthorizationDataDetail(
+  owner: OwnerDomainScope | undefined,
+  sessionScoped: boolean,
+): string {
+  const ownerColumn = owner?.owner ? `owner=${owner.owner}` : 'owner=<unknown>';
+  const reason = sessionScoped
+    ? 'session predicate does not compare the owner column to the matching session/principal symbol'
+    : 'no owner-column session/principal predicate was proven';
+  return `narrow Authorization-gates-DATA subset: ${ownerColumn}; ${reason}`;
 }
 
 /**
@@ -1064,12 +1123,14 @@ function extractTouchGraphFromPreparedFiles(
   scopeAudits: ScopeAuditFact[];
 } {
   const ownerDomains = ownerDomainsFromProject(options);
-  const ownerDomainNames = ownerDomains.map((owner) => owner.domain);
   // SPEC §10.3 / KV414: "a query OR write" reaching an owner table. Reads and writes
   // are both audited (A1 added the write half, which the framework never produced).
   const scopeAudits = [
-    ...scopeAuditsFromQueryFacts(extractQueryFactsFromProject(options), ownerDomainNames),
-    ...scopeAuditsFromWriteFacts(extractWriteScopeFactsFromProject(options), ownerDomainNames),
+    ...scopeAuditsFromQueryFacts(extractQueryFactsFromProject(options), ownerDomains),
+    ...scopeAuditsFromWriteFacts(
+      extractWriteScopeFactsFromProject(options),
+      ownerDomains.map((owner) => owner.domain),
+    ),
   ];
   return { ownerDomains, scopeAudits };
 }
@@ -1255,6 +1316,10 @@ function extractQueryFactsFromPreparedFiles(
         query.instanceKeyComparisons,
         fileTables,
       );
+      const ownerScopedSessionReads = queryOwnerSessionAnchoredDomains(
+        query.instanceKeyComparisons,
+        fileTables,
+      );
       const instanceKey = queryInstanceKey(query.instanceKeyComparisons, fileTables);
       // A3 (SPEC §10.3): the supplemental owner-column arg signal. Omit any domain the
       // declared-key `instanceKey` already captures as `arg:*` — that domain is already
@@ -1290,6 +1355,7 @@ function extractQueryFactsFromPreparedFiles(
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...(hasClientArgPredicate ? { hasClientArgPredicate } : {}),
         ...instanceKey,
+        ...(ownerScopedSessionReads.length > 0 ? { ownerScopedSessionReads } : {}),
         query: query.query,
         reads: allReads,
         ...(sessionAnchoredReads.length > 0 ? { sessionAnchoredReads } : {}),
@@ -2512,6 +2578,7 @@ import {
   queryInstanceKeyComparisons,
   queryInstanceKeyOperand,
   queryJoinTableExpressions,
+  queryOwnerSessionAnchoredDomains,
   queryPrivateScopeKeyOperand,
   queryReadDomains,
   queryReceiverMode,
@@ -2594,6 +2661,7 @@ export {
   queryInstanceKeyComparisons,
   queryInstanceKeyOperand,
   queryJoinTableExpressions,
+  queryOwnerSessionAnchoredDomains,
   queryPrivateScopeKeyOperand,
   queryReadDomains,
   queryReceiverMode,
