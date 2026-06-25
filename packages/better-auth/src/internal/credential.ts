@@ -331,6 +331,18 @@ export function hasBetterAuthJwtSessionCookie(headers: Headers | undefined): boo
   return false;
 }
 
+/** @internal True when the request carries a browser session credential accepted by the mode. */
+export function hasBetterAuthAcceptedSessionCookie(
+  headers: Headers | undefined,
+  mode: 'jwt' | 'opaque' = 'opaque',
+): boolean {
+  for (const value of readIncomingSessionCredentials(headers).values()) {
+    if (mode === 'jwt' || !isJwtShapedSessionValue(value)) return true;
+  }
+
+  return false;
+}
+
 /** @internal True when a Better Auth response clears at least one browser session credential. */
 export function hasBetterAuthSessionRevocationSetCookie(headers: Headers): boolean {
   return getBetterAuthSetCookie(headers).some(isBetterAuthSessionRevocationSetCookie);

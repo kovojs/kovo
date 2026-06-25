@@ -8,6 +8,7 @@ import {
   type BetterAuthLike,
   type BetterAuthRequestLike,
 } from './internal.js';
+import { hasBetterAuthAcceptedSessionCookie } from './internal/credential.js';
 
 /**
  * The `{ session, user }` pair Better Auth returns for an authenticated request. The
@@ -90,11 +91,16 @@ export function betterAuthSession<
     const jwtDenied =
       (options.sessionCookieMode ?? 'opaque') === 'opaque' &&
       hasBetterAuthJwtSessionCookie(request.headers);
+    const acceptedBrowserCredential = hasBetterAuthAcceptedSessionCookie(
+      request.headers,
+      options.sessionCookieMode ?? 'opaque',
+    );
     // OPP-11 / SPEC.md §6.5: Kovo does not own Better Auth's session store, but it does
     // own this provider boundary. If Better Auth emits a session-clearing cookie while
     // returning a stale payload, treat the browser credential as instantly revoked for
     // this request instead of projecting that payload into `req.session`.
-    const value = payload && !revoked && !jwtDenied ? map(payload) : null;
+    const value =
+      payload && acceptedBrowserCredential && !revoked && !jwtDenied ? map(payload) : null;
 
     // Forward refresh/cookie-cache Set-Cookie headers only when the instance actually
     // produced them; otherwise resolve to the plain mapped value so the contract is fully
