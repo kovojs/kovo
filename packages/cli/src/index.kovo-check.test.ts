@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { deriveAppGraph } from '@kovojs/compiler/graph';
+
 import { kovoCheck, main } from './index.js';
 
 type KovoCheckInput = Parameters<typeof kovoCheck>[0];
@@ -248,6 +250,140 @@ describe('kovo check', () => {
         'ERROR AGENT_TOOL_CAPABILITY orders.notify sink=secret-read:env.SENDGRID_TOKEN required=secrets.read site=app/tools/orders.ts:32 Declared tool capabilities do not cover statically reachable sink.',
         '',
       ].join('\n'),
+    });
+  });
+
+  it('enforces direct AST-produced agent-tool sink rows and passes when declared', () => {
+    const agentToolModules = [
+      {
+        fileName: 'src/tools/orders.ts',
+        source: [
+          "import { tool } from '@kovojs/server';",
+          'export const notify = tool({',
+          "  name: 'orders.notify',",
+          "  purpose: 'Notify the buyer.',",
+          "  audit: { owner: 'security' },",
+          "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+          "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+          '  async handler() {',
+          '    const token = process.env.SENDGRID_TOKEN;',
+          "    await fetch('https://api.sendgrid.com/v3/mail/send', {",
+          '      headers: { authorization: token },',
+          '    });',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    const capability = {
+      ambientBrowserCredentials: 'rejected' as const,
+      authority: ['principal:user:123'],
+      kind: 'agentTool' as const,
+      owner: 'security',
+      purpose: 'Notify the buyer.',
+      site: 'src/tools/orders.ts:2',
+      target: 'orders.notify',
+    };
+    const missingSecret = deriveAppGraph({
+      agentToolModules,
+      graph: {
+        capabilities: [
+          {
+            ...capability,
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+          },
+        ],
+      },
+    }).graph;
+    const declared = deriveAppGraph({
+      agentToolModules,
+      graph: {
+        capabilities: [
+          {
+            ...capability,
+            declaredCapabilities: ['egress:api.sendgrid.com', 'secrets.read'],
+          },
+        ],
+      },
+    }).graph;
+
+    expect(kovoCheck(missingSecret)).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR AGENT_TOOL_CAPABILITY orders.notify sink=secret-read:env.SENDGRID_TOKEN required=secrets.read site=src/tools/orders.ts:9:19 Declared tool capabilities do not cover statically reachable sink.',
+        '',
+      ].join('\n'),
+    });
+    expect(kovoCheck(declared)).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
+  it('keeps nested/manual agent-tool sink rows audit-grade rather than enforced', () => {
+    const graph = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'export const notify = tool({',
+            "  name: 'orders.notify',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            "  capabilities: [{ name: 'orders.write', reason: 'update order' }],",
+            '  reachableSinks: [{',
+            "    capability: 'email.send', evidence: 'author-declared', kind: 'egress', target: 'smtp', grade: 'sound',",
+            '  }],',
+            '  handler() {',
+            "    setTimeout(() => fetch('https://api.sendgrid.com/v3/mail/send'), 0);",
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+      graph: {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['orders.write'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            reachableSinks: [
+              {
+                capability: 'email.send',
+                grade: 'sound',
+                kind: 'egress',
+                site: 'src/tools/orders.ts:8',
+                target: 'smtp',
+                tool: 'orders.notify',
+              },
+            ],
+            site: 'src/tools/orders.ts:2',
+            target: 'orders.notify',
+          },
+        ],
+      },
+    }).graph;
+
+    expect(graph.agentToolSinks).toEqual([
+      {
+        capability: 'email.send',
+        grade: 'audit',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:8',
+        target: 'smtp',
+        tool: 'orders.notify',
+      },
+    ]);
+    expect(kovoCheck(graph)).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
     });
   });
 
