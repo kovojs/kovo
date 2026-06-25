@@ -156,12 +156,12 @@ persistent cache reads and writes under the initial broad key. Across process re
 footprint is not used to read by the narrowed key. This is mostly a maintainability/performance
 issue, but stale or confusing cache behavior increases risk in a security compiler.
 
-### Medium: `KV330` is still lint despite being part of data-plane soundness
+### Medium: `KV330` was lint despite being part of data-plane soundness
 
-`KV330` flags direct DB access in mutation handlers as lint, while `SPEC.md` sections 10 and 11
-make domain write provenance central to invalidation and verifier soundness. Either the lint
-severity needs a rigorous residual-risk justification, or direct DB access must become a blocking
-diagnostic in compiler/check gates that claim data-plane security.
+`KV330` flagged direct DB access in mutation handlers as lint, while `SPEC.md` sections 10 and 11
+make domain write provenance central to invalidation and verifier soundness. The remediation chose
+the blocking path: direct DB access is now an error diagnostic in compiler/check gates that claim
+data-plane security.
 
 ## Remediation Roadmap
 
@@ -277,10 +277,12 @@ diagnostic in compiler/check gates that claim data-plane security.
 
 ### Phase 3: make phase contracts typed and reviewable
 
-- [ ] Split `compileComponentModule` into typed immutable phase results: parse, lower, validate,
+- [x] Split `compileComponentModule` into typed immutable phase results: parse, lower, validate,
       emit client, emit server, emit registry/CSS, and verify.
-  - Evidence: the current entry point spans most compiler responsibilities and relies on shared
-    local state across phases.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/compile-component.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/shared.test.ts`
+    and `pnpm --filter @kovojs/compiler run build:dist` pass after `compileComponentModule`
+    was split into typed parse, lower, validate, client emit, registry/CSS emit, server emit,
+    verify, and assembly phase result objects.
 - [x] Replace lowering-pass `!` assertions with typed pass dependencies, declared outputs, and a
       startup/self-test that verifies pass graph ordering and required products.
   - Evidence: `pnpm exec vitest --run packages/compiler/src/lowering-pipeline.test.ts` and
