@@ -217,6 +217,8 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
 
   afterEach(() => {
     uninstall?.();
+    // Keep this net.connect-layer suite on fresh dials; pooled reuse is covered by egress-undici.test.ts.
+    server.closeIdleConnections();
   });
 
   it('self-probe reports not-installed before install, installed after', () => {
@@ -300,7 +302,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     expect(err.name).not.toBe(EGRESS_BLOCKED_ERROR_NAME);
   });
 
-  it('pooled-socket reuse stays gated: a second denied fetch to the same origin still throws', async () => {
+  it('DENIES repeated global fetch dials to the same origin when not in allowInternal', async () => {
     uninstall = installNetConnectFloor(emptyPolicy());
     await expect(fetch(`http://127.0.0.1:${port}/a`)).rejects.toThrow();
     await expect(fetch(`http://127.0.0.1:${port}/b`)).rejects.toThrow();
