@@ -3,6 +3,7 @@ import type {
   MutationDefinition,
   MutationResult,
   QueryDefinition,
+  QueryLoadContext,
   Schema,
 } from '@kovojs/server';
 import { runMutation } from '@kovojs/server/internal/execution';
@@ -122,7 +123,10 @@ export async function executeHarnessQuery<Db>(
   };
   // SPEC.md §11.4: harness query execution uses the same wrapped DB seam
   // as mutation execution, so read verification observes loader data access.
-  const loadContext = { db, request };
+  // SPEC §9.4 (MARQUEE): the harness threads its own db as `context.db` to mirror the framework's
+  // managed-handle seam. The fixture db is not the read-only proxy here (the harness owns the
+  // verifier seam), so it is passed through the public `QueryLoadContext` shape.
+  const loadContext = { db, request } as QueryLoadContext<typeof request, Db>;
   const load = () => query.load?.(input, loadContext);
   const result = verifier
     ? await verifier.capture(load).then((captured) => {
