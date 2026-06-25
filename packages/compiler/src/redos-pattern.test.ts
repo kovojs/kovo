@@ -5,8 +5,8 @@ import { compileComponentModule } from './index.js';
 // SPEC §6.6/§9.5 + secure-framework Phase 6 (Tier 3): KV434 is the compile-time half of the ReDoS
 // gate. A `s.string().pattern(<non-literal>)` is unanalyzable, so the build flags the call site and
 // nudges to a blessed format or the audited `unsafeRegex(...)` escape. The runtime half (blessed
-// linear matchers + literal nested/overlapping-quantifier reject + step-budget) ships separately in
-// `@kovojs/server` (packages/server/src/redos.ts). Honesty: `pattern(literal)` is
+// linear matchers + literal nested/overlapping-quantifier reject + input-size cap) ships separately
+// in `@kovojs/server` (packages/server/src/redos.ts). Honesty: `pattern(literal)` is
 // by-construction-ISH, NOT fully by-construction.
 
 function codes(source: string): string[] {
@@ -60,6 +60,21 @@ const schema = s.string().pattern(\`^\${seg}$\`);`,
         `const re = /x/;
 const schema = s.string().min(3).pattern(re);`,
       );
+      expect(codes(source)).toContain('KV434');
+    });
+
+    it('fires KV434 for a nested-quantifier literal', () => {
+      const source = component(`const schema = s.string().pattern(/(a+)+$/);`);
+      expect(codes(source)).toContain('KV434');
+    });
+
+    it('fires KV434 for quantified overlapping alternatives, including the documented case', () => {
+      const source = component(`const schema = s.string().pattern('^(a|a)*$');`);
+      expect(codes(source)).toContain('KV434');
+    });
+
+    it('fires KV434 for adjacent overlapping quantified atoms', () => {
+      const source = component(`const schema = s.string().pattern('[a-z]+[a-z]*');`);
       expect(codes(source)).toContain('KV434');
     });
   });

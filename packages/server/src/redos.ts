@@ -7,14 +7,14 @@
  *  - Blessed BY-CONSTRUCTION matchers (`email`/`url`/`uuid`/`slug`) — hand-written, backtracking-free
  *    matchers (no `RegExp` with exponential structure). Cover the common needs.
  *  - `s.string().pattern(literal)` — by-construction-ISH: a compile-visible literal whose structure
- *    is STATICALLY rejected if it has nested/overlapping quantifiers (the catastrophic-backtracking
- *    class), and whose EXECUTION runs under a runtime step-budget/timeout backstop. A non-literal
- *    (dynamic) pattern is unanalyzable → KV434.
+ *    is STATICALLY rejected if it has nested quantifiers or quantified overlapping alternatives
+ *    (the common catastrophic-backtracking class). Runtime also has an input-size cap, but that cap
+ *    is NOT a CPU bound. A non-literal (dynamic) pattern is unanalyzable → KV434.
  *  - `unsafeRegex(re, justification)` — the audited escape, surfaced in `kovo explain --capabilities`.
  *
  * Honesty (SPEC §6.6): the blessed formats ARE by-construction; `pattern()` is by-construction-ISH
- * (static reject + step-budget) — NOT labelled by-construction; the full RE2/DFA linear engine is
- * deferred.
+ * (static reject + input-size cap) — NOT labelled by-construction; the full RE2/DFA linear engine
+ * is deferred.
  */
 
 /** A blessed, backtracking-free format matcher and its name (for error messages / capability facts). */
@@ -184,9 +184,10 @@ export class RedosPatternError extends Error {
 
 /**
  * Conservatively reject regex source whose structure admits catastrophic backtracking: a quantified
- * group/class that itself contains a quantifier (nested quantifiers, `(a+)+`, `(a*)*`, `(a+)*`), or
- * adjacent overlapping quantifiers (`a+a+`, `\d+\d+` on the same class). This is intentionally
- * conservative (some safe patterns are rejected) — the sound subset, not a full analyzer.
+ * group whose body contains a quantifier (`(a+)+`, `(a*)*`, `(a+)*`), a quantified group with
+ * overlapping alternatives (`(a|a)*`, `(a|aa)+`, `([a-z]|a)+`), or adjacent overlapping quantified
+ * atoms (`a+a+`, `\d+\d+`, `[a-z]+[a-z]*`). This is intentionally conservative — the sound subset,
+ * not a full analyzer or a replacement for an RE2-class engine.
  *
  * @param source - The regex source string (the literal body of `pattern(...)`).
  */
@@ -197,20 +198,25 @@ export function assertLinearSafePattern(source: string): void {
     if (source[i] !== '(') continue;
     const close = matchGroupClose(source, i);
     if (close === -1) continue;
-    const after = source[close + 1];
-    if (after === '+' || after === '*' || after === '{') {
-      const body = source.slice(i + 1, close);
+    if (quantifierAt(source, close + 1) !== null) {
+      const body = stripGroupPrefix(source.slice(i + 1, close));
       if (containsQuantifier(body)) {
         throw new RedosPatternError(
           `pattern(): nested quantifier in "${source}" — a quantified group whose body is also ` +
             'quantified is a catastrophic-backtracking risk. Use a blessed format or unsafeRegex(...).',
         );
       }
+      if (hasOverlappingAlternatives(body)) {
+        throw new RedosPatternError(
+          `pattern(): overlapping alternatives in "${source}" — a quantified group has branches ` +
+            'that can start with the same input. Use a blessed format or unsafeRegex(...).',
+        );
+      }
     }
   }
 
   // 2) Overlapping adjacent quantifiers on the same atom class: `a+a+`, `\d+\d+`, `.*.*`.
-  if (/(\\?.)([+*]|\{\d+,?\d*\})\1[+*]/.test(source) || /\.\*\.\*/.test(source)) {
+  if (hasAdjacentOverlappingQuantifiers(source)) {
     throw new RedosPatternError(
       `pattern(): overlapping adjacent quantifiers in "${source}" — repeated quantified atoms that ` +
         'can match the same input are a backtracking risk. Use a blessed format or unsafeRegex(...).',
@@ -228,6 +234,193 @@ function containsQuantifier(source: string): boolean {
     }
     if (ch === '+' || ch === '*' || ch === '{') return true;
   }
+  return false;
+}
+
+/** Return the end index of a quantifier at `index`, or `null` when none starts there. */
+function quantifierAt(source: string, index: number): number | null {
+  const ch = source[index];
+  if (ch === '+' || ch === '*' || ch === '?') return index + 1;
+  if (ch !== '{') return null;
+  let i = index + 1;
+  if (!isAsciiDigitCode(source.charCodeAt(i))) return null;
+  while (isAsciiDigitCode(source.charCodeAt(i))) i += 1;
+  if (source[i] === ',') {
+    i += 1;
+    while (isAsciiDigitCode(source.charCodeAt(i))) i += 1;
+  }
+  return source[i] === '}' ? i + 1 : null;
+}
+
+function isAsciiDigitCode(code: number): boolean {
+  return code >= 0x30 && code <= 0x39;
+}
+
+/** Drop non-capturing/lookaround group prefixes before analyzing the group's first token. */
+function stripGroupPrefix(body: string): string {
+  if (!body.startsWith('?')) return body;
+  if (body.startsWith('?:') || body.startsWith('?=') || body.startsWith('?!')) return body.slice(2);
+  if (body.startsWith('?<=') || body.startsWith('?<!')) return body.slice(3);
+  return body;
+}
+
+function hasOverlappingAlternatives(body: string): boolean {
+  const alternatives = splitTopLevelAlternatives(body);
+  if (alternatives.length < 2) return false;
+  const firstSets = alternatives.map((alternative) => firstTokenSet(alternative));
+  for (let i = 0; i < firstSets.length; i += 1) {
+    for (let j = i + 1; j < firstSets.length; j += 1) {
+      const left = firstSets[i];
+      const right = firstSets[j];
+      if (left && right && setsOverlap(left, right)) return true;
+    }
+  }
+  return false;
+}
+
+function splitTopLevelAlternatives(source: string): string[] {
+  const alternatives: string[] = [];
+  let depth = 0;
+  let classDepth = 0;
+  let start = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (ch === '\\') {
+      i += 1;
+      continue;
+    }
+    if (classDepth > 0) {
+      if (ch === ']') classDepth -= 1;
+      continue;
+    }
+    if (ch === '[') {
+      classDepth += 1;
+      continue;
+    }
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth -= 1;
+    else if (ch === '|' && depth === 0) {
+      alternatives.push(source.slice(start, i));
+      start = i + 1;
+    }
+  }
+  alternatives.push(source.slice(start));
+  return alternatives;
+}
+
+type TokenSet = ReadonlySet<string> | 'unknown';
+
+function firstTokenSet(source: string): TokenSet {
+  const atom = readAtom(source, 0);
+  return atom?.set ?? 'unknown';
+}
+
+function hasAdjacentOverlappingQuantifiers(source: string): boolean {
+  let previousQuantified: TokenSet | null = null;
+  for (let i = 0; i < source.length; ) {
+    const atom = readAtom(source, i);
+    if (!atom) {
+      previousQuantified = null;
+      i += 1;
+      continue;
+    }
+    const quantifierEnd = quantifierAt(source, atom.end);
+    if (quantifierEnd === null) {
+      previousQuantified = null;
+      i = atom.end;
+      continue;
+    }
+    if (previousQuantified && setsOverlap(previousQuantified, atom.set)) return true;
+    previousQuantified = atom.set;
+    i = quantifierEnd;
+  }
+  return false;
+}
+
+function readAtom(source: string, start: number): { end: number; set: TokenSet } | null {
+  const ch = source[start];
+  if (!ch || ch === '^' || ch === '$' || ch === '|') return null;
+  if (ch === '\\') return readEscapedAtom(source, start);
+  if (ch === '[') return readClassAtom(source, start);
+  if (ch === '(') {
+    const close = matchGroupClose(source, start);
+    if (close === -1) return { end: start + 1, set: 'unknown' };
+    return { end: close + 1, set: firstTokenSet(stripGroupPrefix(source.slice(start + 1, close))) };
+  }
+  if (ch === '.') return { end: start + 1, set: 'unknown' };
+  return { end: start + 1, set: new Set([ch]) };
+}
+
+function readEscapedAtom(source: string, start: number): { end: number; set: TokenSet } {
+  const escaped = source[start + 1];
+  if (!escaped) return { end: start + 1, set: 'unknown' };
+  if (escaped === 'd') return { end: start + 2, set: asciiRange('0', '9') };
+  if (escaped === 'w')
+    return {
+      end: start + 2,
+      set: unionSets(
+        asciiRange('0', '9'),
+        asciiRange('A', 'Z'),
+        asciiRange('a', 'z'),
+        new Set(['_']),
+      ),
+    };
+  if (escaped === 's') return { end: start + 2, set: new Set([' ', '\t', '\n', '\r', '\f', '\v']) };
+  if (escaped === 'D' || escaped === 'W' || escaped === 'S' || escaped === 'p' || escaped === 'P') {
+    return { end: start + 2, set: 'unknown' };
+  }
+  return { end: start + 2, set: new Set([escaped]) };
+}
+
+function readClassAtom(source: string, start: number): { end: number; set: TokenSet } {
+  const set = new Set<string>();
+  let negated = false;
+  let i = start + 1;
+  if (source[i] === '^') {
+    negated = true;
+    i += 1;
+  }
+  for (; i < source.length; i += 1) {
+    const ch = source[i];
+    if (!ch) return { end: source.length, set: 'unknown' };
+    if (ch === ']') return { end: i + 1, set: negated ? 'unknown' : set };
+    if (ch === '\\') {
+      const escaped = readEscapedAtom(source, i);
+      if (escaped.set === 'unknown') return { end: i + 2, set: 'unknown' };
+      for (const value of escaped.set) set.add(value);
+      i = escaped.end - 1;
+      continue;
+    }
+    const rangeEnd = source[i + 2];
+    if (source[i + 1] === '-' && rangeEnd && rangeEnd !== ']') {
+      for (let code = ch.charCodeAt(0); code <= rangeEnd.charCodeAt(0); code += 1) {
+        set.add(String.fromCharCode(code));
+      }
+      i += 2;
+      continue;
+    }
+    set.add(ch);
+  }
+  return { end: source.length, set: 'unknown' };
+}
+
+function asciiRange(first: string, last: string): Set<string> {
+  const set = new Set<string>();
+  for (let code = first.charCodeAt(0); code <= last.charCodeAt(0); code += 1) {
+    set.add(String.fromCharCode(code));
+  }
+  return set;
+}
+
+function unionSets(...sets: ReadonlySet<string>[]): Set<string> {
+  const union = new Set<string>();
+  for (const set of sets) for (const value of set) union.add(value);
+  return union;
+}
+
+function setsOverlap(a: TokenSet, b: TokenSet): boolean {
+  if (a === 'unknown' || b === 'unknown') return true;
+  for (const value of a) if (b.has(value)) return true;
   return false;
 }
 
@@ -250,10 +443,9 @@ function matchGroupClose(source: string, open: number): number {
 }
 
 /**
- * The runtime step-budget backstop (SPEC §6.6 — fail-closed floor, not a proof). A static-passing
- * `pattern()` literal whose match exceeds a coarse step budget (proportional to input length) is
- * treated as a non-match and recorded, so a pattern that slips the static analysis cannot still burn
- * unbounded CPU. JS `RegExp` has no native step limit; this caps input length as a proxy.
+ * Runtime input-size backstop (SPEC §6.6 — fail-closed floor, not a proof). A static-passing
+ * `pattern()` literal whose input exceeds this cap is treated as a non-match. JS `RegExp` has no
+ * native step limit; this is explicitly NOT a CPU bound.
  */
 export const PATTERN_MAX_INPUT_LENGTH = 4096;
 

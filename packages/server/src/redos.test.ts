@@ -51,14 +51,22 @@ describe('static ReDoS pattern analysis (KV434)', () => {
     expect(() => assertLinearSafePattern('([a-z]+)*$')).toThrow(RedosPatternError);
   });
 
+  it('rejects quantified overlapping alternatives, including the documented pathological case', () => {
+    expect(() => assertLinearSafePattern('^(a|a)*$')).toThrow(RedosPatternError);
+    expect(() => assertLinearSafePattern('^(a|aa)+$')).toThrow(/overlapping alternatives/u);
+    expect(() => assertLinearSafePattern('^([a-z]|a)+$')).toThrow(RedosPatternError);
+  });
+
   it('rejects overlapping adjacent quantifiers', () => {
     expect(() => assertLinearSafePattern('\\d+\\d+')).toThrow(RedosPatternError);
     expect(() => assertLinearSafePattern('a*a*')).toThrow(RedosPatternError);
+    expect(() => assertLinearSafePattern('[a-z]+[a-z]*')).toThrow(RedosPatternError);
   });
 
   it('accepts a linear-safe literal', () => {
     expect(() => assertLinearSafePattern('^[a-z0-9]+$')).not.toThrow();
     expect(() => assertLinearSafePattern('\\d{4}-\\d{2}-\\d{2}')).not.toThrow();
+    expect(() => assertLinearSafePattern('^(cat|dog|bird)$')).not.toThrow();
     expect(() => assertLinearSafePattern('hello')).not.toThrow();
   });
 });
