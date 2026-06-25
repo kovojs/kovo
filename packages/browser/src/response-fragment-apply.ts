@@ -1,19 +1,58 @@
 import type { FragmentChunk } from './wire-response-scanner.js';
 
-// SF-WIRE (secure-framework Tier 3, Trusted Types — DEFERRED): the `p` and `d` helpers
-// below (their `template.innerHTML = ...` raw-HTML write sinks) are EXTRACTED VERBATIM into the
-// always-on inline loader by `inline-loader-build.ts`
+// SF-WIRE (secure-framework Tier 3, Trusted Types — WIRED): the `p` and `d` helpers
+// below (their `insertAdjacentHTML('beforeend', …)` and `t.innerHTML = h` raw-HTML write
+// sinks) are EXTRACTED VERBATIM into the always-on inline loader by `inline-loader-build.ts`
 // (the `responseApply` spec; a byte-parity test pins the generated `inline-loader.ts`), and
 // that extractor forbids referencing any top-level binding. So unlike the module-side sinks
-// in `morph.ts`/`query-bindings.ts` — which DO route through `kovoCreateHTML` (trusted-types.ts)
-// and are verified non-breaking by the browser suite — these two sinks CANNOT call
-// `kovoCreateHTML`. Routing them needs the `kovo` Trusted Types policy embedded INSIDE the
-// extracted closures (and minified under the 8.75KB §4.4 budget) via `inline-loader-build.ts`.
-// That Trusted Types routing is separate from these sink backstops and is the load-bearing reason
-// the strict CSP's `require-trusted-types-for 'script'` directive (server `csp.ts` `trustedTypes`)
-// stays OPT-IN and is NEVER default-on: enabling it before this always-on loader is routed would BRICK
-// Kovo's own hydration on Chromium. CSP (Task 1) is the cross-browser floor and IS default-on;
-// Trusted Types is Chromium-only DiD and ships opt-in until this loader path is wired.
+// in `morph.ts`/`query-bindings.ts` — which route through `kovoCreateHTML` (trusted-types.ts)
+// — these two sinks cannot call `kovoCreateHTML`. Instead they call the self-contained
+// `trustedHtml` shim BELOW, which is itself a top-level function declaration, so the inline
+// extractor pulls it into the closure as a dependency (no top-level import). The shim mints a
+// `TrustedHTML` via the framework `kovo` Trusted Types policy when Chromium exposes
+// `globalThis.trustedTypes`, caching the policy on a shared global (`__kovo_tt`) so the inline
+// loader and the module-side `kovoCreateHTML` reuse the SAME policy — `trusted-types kovo`
+// admits no duplicates, so a second `createPolicy('kovo')` would throw. On every other engine
+// (and Chromium without the CSP directive) `trustedTypes` is absent and the shim returns the
+// raw string verbatim (transparent passthrough — behavior-preserving). Routing these last
+// always-on sinks is what lets the strict CSP's `require-trusted-types-for 'script'` directive
+// (server `csp.ts`) ship DEFAULT-ON without bricking Kovo's own hydration on Chromium. CSP is
+// the cross-browser floor; Trusted Types is Chromium-only runtime defense-in-depth (SPEC §6.6)
+// — it kills DOM-XSS sinks OUTSIDE the framework but is silently ignored by every non-Chromium
+// engine, so it is a hardening floor, NOT a by-construction proof.
+
+/**
+ * SF (secure-framework Tier 3): the self-contained Trusted Types `createHTML` shim embedded
+ * into the always-on inline loader's extracted closure. References no top-level binding (the
+ * inline extractor forbids that), so the policy detection/creation/caching is inlined here.
+ * Returns a `TrustedHTML` (typed as `string` so the sinks compile unchanged) where Trusted
+ * Types is enforced, and the raw string everywhere TT is absent. The shared `__kovo_tt` global
+ * keeps the single `kovo` policy in lockstep with the module-side `kovoCreateHTML`.
+ *
+ * @internal
+ */
+function trustedHtml(h: string): string {
+  const w = globalThis as {
+    trustedTypes?: {
+      createPolicy(name: string, rules: { createHTML(input: string): string }): {
+        createHTML(input: string): string;
+      };
+    };
+    __kovo_tt?: { createHTML(input: string): string } | null;
+  };
+  const t = w.trustedTypes;
+  if (!t) return h;
+  let p = w.__kovo_tt;
+  if (p === undefined) {
+    try {
+      p = t.createPolicy('kovo', { createHTML: (s: string) => s });
+    } catch {
+      p = null;
+    }
+    w.__kovo_tt = p;
+  }
+  return p ? (p.createHTML(h) as unknown as string) : h;
+}
 
 export interface ResponseFragmentApplyOptions<Target> {
   appendFragment(target: Target, html: string): void;
@@ -73,8 +112,12 @@ export function p(
     if (!e) continue;
 
     if (x.mode === 'append') {
+      // Concurrent hardening (template + g() attribute sanitization) PLUS Trusted Types routing:
+      // the raw-HTML write goes through the inlined `trustedHtml` shim so it mints a TrustedHTML
+      // under the strict CSP's `require-trusted-types-for 'script'`, and g() still neutralizes
+      // dangerous attributes/URLs on the appended children (SPEC §4.4/§9.1/§6.6).
       const t = document.createElement('template');
-      t.innerHTML = x.html;
+      t.innerHTML = trustedHtml(x.html);
       for (const n of [...t.content.children]) g(n);
       e.append(...t.content.childNodes);
     } else {
@@ -88,7 +131,7 @@ export function p(
 
 function d(e: HtmlResponseFragmentApplyTarget, h: string): void {
   const t = document.createElement('template');
-  t.innerHTML = h;
+  t.innerHTML = trustedHtml(h);
   const n = firstMorphElement(t.content);
   const s = e.contains(document.activeElement) ? document.activeElement : null;
   const q: HTMLElement[] = [];

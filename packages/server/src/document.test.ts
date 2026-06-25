@@ -395,8 +395,11 @@ describe('server app shell document assembly', () => {
       expect(policy).toContain("object-src 'none'");
       expect(policy).toContain("form-action 'self'");
       expect(policy).toContain("frame-ancestors 'none'");
-      // No third-party origin and no Trusted Types directive without explicit opt-in.
-      expect(policy).not.toContain('require-trusted-types-for');
+      // SF (secure-framework Tier 3): Trusted Types is now DEFAULT-ON — every framework
+      // DOM-write sink (module-side AND the always-on inline loader) routes through the
+      // `kovo` policy, so the strict directive ships by default without an opt-in.
+      expect(policy).toContain("require-trusted-types-for 'script'");
+      expect(policy).toContain('trusted-types kovo');
     });
 
     it('extends script/style/frame/connect/img directives via the third-party allowlist', () => {
@@ -436,18 +439,27 @@ describe('server app shell document assembly', () => {
       expect(policy).toContain("frame-ancestors 'none'");
     });
 
-    it('appends Trusted Types directives only when opted in', () => {
-      const off = renderRouteDocumentResponse(htmlResponse()).headers[
+    it('emits Trusted Types directives by default and honors an explicit opt-out', () => {
+      // Default-on: directives present with no config and with explicit `true`.
+      const on = renderRouteDocumentResponse(htmlResponse()).headers[
         'Content-Security-Policy'
       ] as string;
-      expect(off).not.toContain('require-trusted-types-for');
-      expect(off).not.toContain('trusted-types');
-
-      const on = renderRouteDocumentResponse(htmlResponse(), {
-        csp: { trustedTypes: true },
-      }).headers['Content-Security-Policy'] as string;
       expect(on).toContain("require-trusted-types-for 'script'");
       expect(on).toContain('trusted-types kovo');
+
+      const onExplicit = renderRouteDocumentResponse(htmlResponse(), {
+        csp: { trustedTypes: true },
+      }).headers['Content-Security-Policy'] as string;
+      expect(onExplicit).toContain("require-trusted-types-for 'script'");
+      expect(onExplicit).toContain('trusted-types kovo');
+
+      // `trustedTypes: false` is the app-facing opt-out (e.g. a third-party widget that
+      // needs its own un-named TT policy or writes raw HTML through an unrouted sink).
+      const off = renderRouteDocumentResponse(htmlResponse(), {
+        csp: { trustedTypes: false },
+      }).headers['Content-Security-Policy'] as string;
+      expect(off).not.toContain('require-trusted-types-for');
+      expect(off).not.toContain('trusted-types');
     });
 
     it('preserves an author-set Content-Security-Policy instead of overriding it', () => {

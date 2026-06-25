@@ -635,7 +635,7 @@ export const CartButton = component({
         {
           headers: {
             'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-GKlDqFJ9RfBR6s7TKREcSLRzz+wMXZ3Cp5bDI0qkcWI='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+              "default-src 'self'; script-src 'self' 'sha256-sBYZNY1JldQa9wLG6LdVADajKzZ2gntR3Nm+piRCh78='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/shop.css>; rel=preload; as=style, </assets/shop.js>; rel=modulepreload',
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -1011,7 +1011,7 @@ export const CartButton = component({
         {
           headers: {
             'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-GKlDqFJ9RfBR6s7TKREcSLRzz+wMXZ3Cp5bDI0qkcWI='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+              "default-src 'self'; script-src 'self' 'sha256-sBYZNY1JldQa9wLG6LdVADajKzZ2gntR3Nm+piRCh78='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/catalog.css>; rel=preload; as=style, </assets/catalog.js>; rel=modulepreload',
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -1137,7 +1137,7 @@ export const CartButton = component({
           {
             headers: {
               'content-security-policy':
-                "default-src 'self'; script-src 'self' 'sha256-GKlDqFJ9RfBR6s7TKREcSLRzz+wMXZ3Cp5bDI0qkcWI='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+                "default-src 'self'; script-src 'self' 'sha256-sBYZNY1JldQa9wLG6LdVADajKzZ2gntR3Nm+piRCh78='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
               'referrer-policy': 'strict-origin-when-cross-origin',
@@ -1181,7 +1181,7 @@ export const CartButton = component({
           {
             headers: {
               'content-security-policy':
-                "default-src 'self'; script-src 'self' 'sha256-GKlDqFJ9RfBR6s7TKREcSLRzz+wMXZ3Cp5bDI0qkcWI='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+                "default-src 'self'; script-src 'self' 'sha256-sBYZNY1JldQa9wLG6LdVADajKzZ2gntR3Nm+piRCh78='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
               'referrer-policy': 'strict-origin-when-cross-origin',

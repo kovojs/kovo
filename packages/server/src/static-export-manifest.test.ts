@@ -69,7 +69,7 @@ describe('server static export', () => {
       {
         headers: {
           'content-security-policy':
-            "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self' 'sha256-sBYZNY1JldQa9wLG6LdVADajKzZ2gntR3Nm+piRCh78='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
           'content-type': 'text/html; charset=utf-8',
           link: `<${cartHref}>; rel=modulepreload`,
           'referrer-policy': 'strict-origin-when-cross-origin',
@@ -246,7 +246,7 @@ describe('server static export', () => {
         {
           headers: {
             'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+              "default-src 'self'; script-src 'self' 'sha256-sBYZNY1JldQa9wLG6LdVADajKzZ2gntR3Nm+piRCh78='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
             'content-type': 'text/html; charset=utf-8',
             link: `<${cartHref}>; rel=modulepreload`,
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -262,7 +262,7 @@ describe('server static export', () => {
         {
           headers: {
             'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+              "default-src 'self'; script-src 'self' 'sha256-sBYZNY1JldQa9wLG6LdVADajKzZ2gntR3Nm+piRCh78='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -299,7 +299,7 @@ describe('server static export', () => {
         {
           headers: {
             'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+              "default-src 'self'; script-src 'self' 'sha256-sBYZNY1JldQa9wLG6LdVADajKzZ2gntR3Nm+piRCh78='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
             'content-type': 'text/html; charset=utf-8',
             link: `<${cartHref}>; rel=modulepreload`,
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -314,7 +314,7 @@ describe('server static export', () => {
         {
           headers: {
             'content-security-policy':
-              "default-src 'self'; script-src 'self' 'sha256-+7hrPjfTQGsEQtOWJHxrsotf9W5B7eyGrIidTnpXSJ8='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+              "default-src 'self'; script-src 'self' 'sha256-sBYZNY1JldQa9wLG6LdVADajKzZ2gntR3Nm+piRCh78='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types kovo",
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
             'referrer-policy': 'strict-origin-when-cross-origin',

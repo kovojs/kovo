@@ -55,7 +55,13 @@ const inlineHelperSpecs = {
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
-export const inlineKovoLoaderGzipByteBudget = 9472;
+// SPEC.md §4.4 always-loaded inline loader gzip ceiling. Combines two 2026-06-24 changes:
+// (1) the concurrent loader-hardening raise to 9472, and (2) the Trusted Types `trustedHtml`
+// shim that routes the always-on `p`/`d` raw-HTML write sinks (response-fragment-apply.ts)
+// through the framework `kovo` policy — what lets Trusted Types ship DEFAULT-ON without bricking
+// Kovo's own hydration on Chromium. The TT API tokens (`trustedTypes`/`createPolicy`/`createHTML`)
+// are irreducible over the hardened loader; future increases require comparable XSS-sink evidence.
+export const inlineKovoLoaderGzipByteBudget = 9600;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
@@ -1210,7 +1216,7 @@ export function buildInlineKovoLoaderModuleSource(
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
     '',
-    '// SPEC.md §4.4 keeps the always-loaded loader under an 8.75KB gzip budget; this',
+    '// SPEC.md §4.4 keeps the always-loaded loader under an 8.875KB gzip budget; this',
     '// literal is the pre-minified bootstrap shipped in document shells.',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
@@ -1572,6 +1578,10 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['readStreamTextElementChunk', 'rte'],
     ['applyInlineMutationResponseChunks', 'ai'],
     ['isFragmentResourceHint', 'irh'],
+    // SF (secure-framework Tier 3): the inline Trusted Types createHTML shim
+    // (response-fragment-apply.ts) and its policy handle, compacted to reclaim gzip
+    // headroom under the SPEC.md §4.4 budget.
+    ['trustedHtml', 'th'],
     ['firstMorphElement', 'fme'],
     ['findFragmentTarget', 'ff'],
     ['readElementChunks', 're'],

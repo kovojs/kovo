@@ -52,9 +52,10 @@ export interface ContentSecurityPolicyOptions {
    * policy ({@link KOVO_TRUSTED_TYPES_POLICY}). On Chromium this turns every
    * non-framework `innerHTML`/`script.src`/`eval` DOM-write sink into a throw —
    * runtime defense-in-depth against a slipped-through DOM-XSS (SPEC §6.6), NOT a
-   * by-construction proof. Off by every other CSP path; gated by the document call
-   * site because it only holds once Kovo's own internal sinks route through the
-   * policy's `createHTML`/`createScriptURL` (see `packages/browser`).
+   * by-construction proof. {@link renderDefaultDocumentCsp} now defaults this ON because
+   * every Kovo internal sink (module-side AND the always-on inline loader) routes through
+   * the policy's `createHTML`; this low-level builder still treats `true` as the explicit
+   * opt-in for callers assembling a CSP by hand.
    */
   trustedTypes?: boolean;
 }
@@ -98,6 +99,12 @@ export interface CspAllowlist {
  */
 export interface DocumentCspConfig {
   allowlist?: CspAllowlist;
+  /**
+   * SF (secure-framework Tier 3): the Chromium-only Trusted Types floor, now DEFAULT-ON.
+   * Omitted/`true` emits `require-trusted-types-for 'script'` + `trusted-types kovo`; set
+   * `false` to opt OUT (e.g. an app embedding a third-party widget that needs its own
+   * un-named TT policy, or that writes raw HTML through a sink Kovo does not route).
+   */
   trustedTypes?: boolean;
 }
 
@@ -137,7 +144,18 @@ export function renderDefaultDocumentCsp(
       ? { connectSrc: ["'self'", ...allow.connectSrc] }
       : {}),
     ...(allow.frameSrc && allow.frameSrc.length > 0 ? { frameSrc: allow.frameSrc } : {}),
-    ...(config.trustedTypes ? { trustedTypes: true } : {}),
+    // SF (secure-framework Tier 3): Trusted Types is now DEFAULT-ON. Every framework-
+    // assembled DOM-write sink — the module-side `morph.ts`/`query-bindings.ts` writes AND
+    // the always-on inline loader's `insertAdjacentHTML`/`innerHTML` fragment-apply sinks
+    // (the inlined `trustedHtml` shim, response-fragment-apply.ts) — routes through the
+    // framework `kovo` Trusted Types policy, so the strict `require-trusted-types-for
+    // 'script'` directive no longer bricks Kovo's own hydration on Chromium. It is a
+    // Chromium-only runtime defense-in-depth floor (SPEC §6.6) that turns DOM-XSS sinks
+    // OUTSIDE the framework into throws; every non-Chromium engine silently ignores it, so
+    // the cross-browser CSP floor above carries the real guarantee. An app can opt OUT with
+    // `document: { csp: { trustedTypes: false } }` (e.g. a third-party library that needs
+    // its own un-named TT policy or an unrouted raw-HTML sink).
+    ...(config.trustedTypes === false ? {} : { trustedTypes: true }),
   });
 }
 
@@ -217,13 +235,16 @@ export function renderContentSecurityPolicy(
     // and clickjacking vectors respectively; emit with secure defaults.
     directive('form-action', options.formAction ?? ["'self'"]),
     directive('frame-ancestors', options.frameAncestors ?? ["'none'"]),
-    // SF (secure-framework Tier 3): the Chromium-only Trusted Types floor. Opt-in
-    // (`trustedTypes: true`) because it BRICKS Kovo's own hydration on Chromium until
-    // every internal `innerHTML`/`script.src` sink routes through the framework policy
-    // (`packages/browser`). `require-trusted-types-for 'script'` makes injection sinks
-    // throw; `trusted-types kovo` admits ONLY Kovo's sole policy (no `'allow-duplicates'`)
-    // so an attacker cannot mint a bypassing policy. Other browsers ignore both
-    // directives, leaving the cross-browser CSP floor above intact.
+    // SF (secure-framework Tier 3): the Chromium-only Trusted Types floor, now DEFAULT-ON
+    // (`renderDefaultDocumentCsp` passes `trustedTypes: true` unless the app opts out).
+    // Safe to default-on because EVERY framework DOM-write sink — module-side
+    // `morph.ts`/`query-bindings.ts` AND the always-on inline loader's
+    // `insertAdjacentHTML`/`innerHTML` fragment-apply sinks — routes through the framework
+    // `kovo` policy, so Kovo's own hydration survives enforcement on Chromium.
+    // `require-trusted-types-for 'script'` makes injection sinks throw; `trusted-types kovo`
+    // admits ONLY Kovo's sole policy (no `'allow-duplicates'`) so an attacker cannot mint a
+    // bypassing policy. Other browsers ignore both directives, leaving the cross-browser CSP
+    // floor above intact (TT is runtime DiD, not a by-construction proof — SPEC §6.6).
     ...(options.trustedTypes
       ? ["require-trusted-types-for 'script'", `trusted-types ${KOVO_TRUSTED_TYPES_POLICY}`]
       : []),
