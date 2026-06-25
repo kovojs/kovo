@@ -164,20 +164,25 @@ Median job durations across those runs:
   - Do not combine this with browser or integration gates; those have different setup and failure modes.
   - Evidence when complete: consolidated job duration is 2-5 minutes and individual step failures remain
     readable in a failed GitHub run.
+  - Progress 2026-06-25: CI run
+    [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) completed `static-safety` in
+    2m45s with named steps for format/type/import checks, API surface, SQL safety, compiler perf,
+    publish readiness, and `git diff --check`. Remaining evidence is a failed-log sample proving step
+    failures stay readable.
 
-- [ ] **Consolidate small conformance shards without burying `drizzle-pin`.**
+- [x] **Consolidate small conformance shards without burying `drizzle-pin`.**
   - Keep `drizzle-pin` standalone unless timings show it can absorb one tiny suite and stay below 5
     minutes.
   - Group `better-auth-pin`, `auth-spike`, `webhook-spike`, and `app-shell-spike` into one or two
     balanced conformance jobs instead of four sub-minute jobs.
   - Evidence when complete: conformance jobs land in the 2-5 minute band on three completed CI runs.
-  - Progress 2026-06-25: `.github/workflows/ci.yml` now runs one `conformance` job with named steps for
+  - Evidence 2026-06-25: `.github/workflows/ci.yml` now runs one `conformance` job with named steps for
     `drizzle-pin`, `better-auth-pin`, `auth-spike`, `webhook-spike`, and `app-shell-spike`; local
-    `vp run conformance` passed. CI run
+    `vp run conformance` passed. CI runs
     [28185788267](https://github.com/kovojs/kovo/actions/runs/28185788267) completed the consolidated
-    job in 2m36s and
-    [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) completed it in 2m23s.
-    Remaining evidence is one more completed GitHub CI timing for the consolidated job.
+    job in 2m36s,
+    [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) completed it in 2m23s, and
+    [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) completed it in 2m25s.
 
 - [x] **Consolidate tiny `kovo-check` shards.**
   - Keep `server-browser` standalone while it is near 3 minutes.
@@ -191,7 +196,9 @@ Median job durations across those runs:
     [28185788267](https://github.com/kovojs/kovo/actions/runs/28185788267) completed `kovo-check` in
     3m45s after downloading `kovo-dist`, and
     [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) completed it in 3m44s after
-    the same artifact download step.
+    the same artifact download step. CI run
+    [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) kept the aggregate
+    `kovo-check` job in range at 3m40s.
 
 - [ ] **Evaluate combining `browser` and `gallery-browser` setup.**
   - Both jobs install Playwright/browser assets and are below 2 minutes on median.
@@ -204,8 +211,10 @@ Median job durations across those runs:
     `build + browser` slot can run root browser, gallery browser, and Chromium `P10 perf` as named
     steps in 2m07s, but it pushed the artifact-dependent `kovo-check` critical path to a 6m04s workflow.
     The workflow keeps browser work in a separate required slot unless a later shape preserves both
-    step-visible browser failures and the 5-minute wall-time target. Remaining evidence is a failed-log
-    sample.
+    step-visible browser failures and the 5-minute wall-time target. CI run
+    [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) completed the restored
+    standalone browser job in 1m59s after downloading `kovo-dist`. Remaining evidence is a failed-log
+    sample and a stable in-range timing.
 
 - [x] **Keep the `build` dependency path explicit.**
   - `build` is short, but it feeds `p10-perf` and `kovo-check`; do not hide it inside an unrelated job
@@ -353,6 +362,9 @@ test --config tests/integration/playwright.config.ts --project=chromium
 tests/integration/specs/fragment-append.spec.ts` passed.
 - `vp exec playwright test --config tests/integration/playwright.config.ts --project=chromium --grep
 @race-prone --list` selected 10 tests in 7 files; the same selector with `--workers=1` passed once.
+- GitHub CI run [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) completed green
+  in 4m26s; GitHub Pages run
+  [28187093052](https://github.com/kovojs/kovo/actions/runs/28187093052) completed green in 3m55s.
 
 ## Acceptance Gates
 
@@ -361,6 +373,10 @@ tests/integration/specs/fragment-append.spec.ts` passed.
   - Progress 2026-06-25: CI run
     [28186422243](https://github.com/kovojs/kovo/actions/runs/28186422243) was green but rejected for
     this gate because `build + browser` delayed `kovo-check` and pushed wall time to 6m04s.
+  - Progress 2026-06-25: CI run
+    [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) restored the wall time to
+    4m26s, with all non-build required work under 5 minutes; the gate remains open because `build` is an
+    intentionally short artifact producer and `browser` landed just below target at 1m59s.
 - [ ] **Signal gate:** a failed static check, failed conformance test, failed browser test, and failed
       integration shard each identify the failing suite/spec from the GitHub job list and first visible log
       page.
