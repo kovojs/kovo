@@ -209,6 +209,8 @@ export {
    * on `{ key: id, owner: userId }` is still flagged `args`/IDOR.
    */
   argScopedReads?: readonly string[];
+  /** Exact client-visible keys for `argScopedReads`, used to scope `owns()` suppression. */
+  argScopedReadKeys?: readonly OwnerScopeKey[];
   diagnostics?: readonly TouchGraphDiagnostic[];
   /**
    * The query's `where()`/join predicate selects rows by a client-visible `input.*`
@@ -231,6 +233,12 @@ export {
   sessionAnchoredReads?: readonly string[];
   shape: QueryShape;
   site: string;
+}
+
+/** @internal */
+/** @internal */ export interface OwnerScopeKey {
+  domain: string;
+  key: string;
 }
 
 /** @internal */ export function revealFactsFromQueryFacts(
@@ -342,11 +350,27 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
       // client-visible `input.*` arg keying the declared key column (A1/legacy),
       // OR any owner-table column (A3, `argScopedReads`), flags KV414 even when the
       // same predicate is also session-anchored.
-      const argKeyed =
-        (fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:')) ||
-        (fact.argScopedReads ?? []).includes(domain);
-      if (argKeyed) {
-        audits.push({ domain, kind: 'query', name: fact.query, scope: 'args', site: fact.site });
+      const argKeys = new Set<string>();
+      if (fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:')) {
+        argKeys.add(fact.instanceKey.key);
+      }
+      for (const scoped of fact.argScopedReadKeys ?? []) {
+        if (scoped.domain === domain) argKeys.add(scoped.key);
+      }
+      if (argKeys.size === 0 && (fact.argScopedReads ?? []).includes(domain)) {
+        argKeys.add('');
+      }
+      if (argKeys.size > 0) {
+        for (const key of argKeys) {
+          audits.push({
+            domain,
+            ...(key ? { key } : {}),
+            kind: 'query',
+            name: fact.query,
+            scope: 'args',
+            site: fact.site,
+          });
+        }
         continue;
       }
 
@@ -378,6 +402,8 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
 /** @internal */ export interface WriteScopeFact {
   /** Owner-table domains keyed by a client-visible `input.*` arg (any column) → `args`/IDOR. */
   argScopedWrites: readonly string[];
+  /** Exact client-visible keys for `argScopedWrites`, used to scope `owns()` suppression. */
+  argScopedWriteKeys?: readonly OwnerScopeKey[];
   /** The mutation/handler name that owns this write (for `owns()` discharge in `kovo check`). */
   name: string;
   /** Owner-table domains this write touches (the audited surface). */
@@ -409,8 +435,23 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
       if (!owners.has(domain)) continue;
 
       // Fail-closed: an arg-keyed owner write is IDOR even if also session-anchored.
-      if (fact.argScopedWrites.includes(domain)) {
-        audits.push({ domain, kind: 'write', name: fact.name, scope: 'args', site: fact.site });
+      const argKeys = new Set(
+        (fact.argScopedWriteKeys ?? [])
+          .filter((scoped) => scoped.domain === domain)
+          .map((scoped) => scoped.key),
+      );
+      if (argKeys.size === 0 && fact.argScopedWrites.includes(domain)) argKeys.add('');
+      if (argKeys.size > 0) {
+        for (const key of argKeys) {
+          audits.push({
+            domain,
+            ...(key ? { key } : {}),
+            kind: 'write',
+            name: fact.name,
+            scope: 'args',
+            site: fact.site,
+          });
+        }
         continue;
       }
 
@@ -1076,10 +1117,12 @@ function writeScopeFactsForFunction(
     if (domains.size === 0) continue;
 
     const argScopedWrites = queryArgScopedDomains(call.instanceKeyComparisons, tables);
+    const argScopedWriteKeys = queryArgScopedDomainKeys(call.instanceKeyComparisons, tables);
     const sessionAnchoredWrites = querySessionAnchoredDomains(call.instanceKeyComparisons, tables);
 
     facts.push({
       argScopedWrites,
+      ...(argScopedWriteKeys.length > 0 ? { argScopedWriteKeys } : {}),
       name: fn.name,
       reads: [...domains].sort(),
       sessionAnchoredWrites,
@@ -1218,6 +1261,16 @@ function extractQueryFactsFromPreparedFiles(
             instanceKey.instanceKey.key.startsWith('arg:')
           ),
       );
+      const argScopedReadKeys = queryArgScopedDomainKeys(
+        query.instanceKeyComparisons,
+        fileTables,
+      ).filter(
+        (scoped) =>
+          !(
+            instanceKey?.instanceKey?.domain === scoped.domain &&
+            instanceKey.instanceKey.key === scoped.key
+          ),
+      );
       // SPEC §10.3 / KV414 join-keyed bypass: does the predicate key any table column
       // (owner or not) by a client `input.*` arg? An owner table joined into the read
       // set but keyed only through a non-owner table's arg is still client-pivotable;
@@ -1226,6 +1279,7 @@ function extractQueryFactsFromPreparedFiles(
       const hasClientArgPredicate = queryHasClientArgPredicate(query.instanceKeyComparisons);
       facts.push({
         ...(argScopedReads.length > 0 ? { argScopedReads } : {}),
+        ...(argScopedReadKeys.length > 0 ? { argScopedReadKeys } : {}),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...(hasClientArgPredicate ? { hasClientArgPredicate } : {}),
         ...instanceKey,
@@ -2409,6 +2463,7 @@ import {
   materializedViewRefreshFactsForFunction,
   mergeSummary,
   pushUnique,
+  queryArgScopedDomainKeys,
   queryArgScopedDomains,
   queryBodyCallExpressions,
   queryCallChainReceiver,
@@ -2490,6 +2545,7 @@ export {
   materializedViewRefreshFactsForFunction,
   mergeSummary,
   pushUnique,
+  queryArgScopedDomainKeys,
   queryArgScopedDomains,
   queryBodyCallExpressions,
   queryCallChainReceiver,
