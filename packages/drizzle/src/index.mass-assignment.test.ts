@@ -57,6 +57,25 @@ function passwordFacts(domainSource: string) {
   });
 }
 
+function confidentialFacts(domainSource: string, annotation = 'confidentialAtRest: ["ssn"]') {
+  return extractMassAssignmentFromProject({
+    files: [
+      dbTypes,
+      {
+        fileName: 'schema.ts',
+        source: [
+          'export const profiles = pgTable("profiles", {',
+          '  id: text("id").primaryKey(),',
+          '  ssn: text("ssn").notNull(),',
+          '  nickname: text("nickname").notNull(),',
+          `}, kovo({ domain: "profile", key: "id", ${annotation} }));`,
+        ].join('\n'),
+      },
+      { fileName: 'profile.domain.ts', source: domainSource },
+    ],
+  });
+}
+
 const HEADER = [
   'import { eq } from "drizzle-orm";',
   'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
@@ -391,6 +410,149 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     expect(result).toMatchObject([
       { column: 'passwordHash', domain: 'user', provenance: 'unknown', via: 'values' },
     ]);
+  });
+
+  it('rejects plaintext request input reaching a confidential-at-rest destination column', () => {
+    const result = confidentialFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { profiles } from "./schema";',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string; nickname: string }) => {',
+        '  await db.update(profiles).set({ ssn: input.ssn, nickname: input.nickname }).where(eq(profiles.id, input.id));',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toEqual([
+      {
+        column: 'ssn',
+        detail: 'ssn',
+        domain: 'profile',
+        name: 'updateProfile',
+        provenance: 'input',
+        site: 'profile.domain.ts:4',
+        via: 'set',
+      },
+    ]);
+  });
+
+  it('accepts the blessed authenticated-encryption sink for confidential-at-rest columns', () => {
+    const result = confidentialFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { encryptAtRest } from "@kovojs/server";',
+        'import { profiles } from "./schema";',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }, key: Uint8Array) => {',
+        '  await db.update(profiles).set({ ssn: encryptAtRest(input.ssn, key, { aad: "profiles.ssn" }) }).where(eq(profiles.id, input.id));',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('accepts encrypted-at-rest variables and namespace imports from @kovojs/server', () => {
+    const result = confidentialFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import * as server from "@kovojs/server";',
+        'import { profiles } from "./schema";',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }, key: Uint8Array) => {',
+        '  const encrypted = server.encryptAtRest(input.ssn, key, { aad: "profiles.ssn" });',
+        '  await db.update(profiles).set({ ssn: encrypted }).where(eq(profiles.id, input.id));',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('rejects literals, server summaries, and fake encryptAtRest helpers for confidential-at-rest columns', () => {
+    const literal = confidentialFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { profiles } from "./schema";',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string }) => {',
+        '  await db.update(profiles).set({ ssn: "123-45-6789" }).where(eq(profiles.id, input.id));',
+        '};',
+      ].join('\n'),
+    );
+    expect(literal).toMatchObject([
+      { column: 'ssn', domain: 'profile', provenance: 'unknown', via: 'set' },
+    ]);
+
+    const serverSummary = confidentialFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+        'import { profiles } from "./schema";',
+        'function resolveSsn(input: { ssn: string }) { return input.ssn; }',
+        'kovoAnalyzerSummary(resolveSsn, { returns: { kind: "server" } });',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }) => {',
+        '  await db.update(profiles).set({ ssn: resolveSsn(input) }).where(eq(profiles.id, input.id));',
+        '};',
+      ].join('\n'),
+    );
+    expect(serverSummary).toMatchObject([
+      { column: 'ssn', domain: 'profile', provenance: 'unknown', via: 'set' },
+    ]);
+
+    const fake = confidentialFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { profiles } from "./schema";',
+        'function encryptAtRest(value: string) { return value; }',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }) => {',
+        '  await db.update(profiles).set({ ssn: encryptAtRest(input.ssn) }).where(eq(profiles.id, input.id));',
+        '};',
+      ].join('\n'),
+    );
+    expect(fake).toMatchObject([
+      { column: 'ssn', domain: 'profile', provenance: 'unknown', via: 'set' },
+    ]);
+  });
+
+  it('fails closed for full-row writes to confidential-at-rest tables', () => {
+    const result = confidentialFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+        'import { profiles } from "./schema";',
+        'function buildProfile(input: { id: string; ssn: string; nickname: string }) {',
+        '  return { id: input.id, ssn: input.ssn, nickname: input.nickname };',
+        '}',
+        'kovoAnalyzerSummary(buildProfile, { returns: { kind: "server" } });',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string; nickname: string }) => {',
+        '  await db.insert(profiles).values(buildProfile(input));',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      { column: 'id+ssn', domain: 'profile', provenance: 'unknown', via: 'values' },
+    ]);
+  });
+
+  it('accepts selector and true confidential-at-rest annotations as destination gates', () => {
+    const selector = confidentialFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { profiles } from "./schema";',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }) => {',
+        '  await db.update(profiles).set({ ssn: input.ssn }).where(eq(profiles.id, input.id));',
+        '};',
+      ].join('\n'),
+      'confidentialAtRest: [(t) => t.ssn]',
+    );
+    expect(selector).toMatchObject([{ column: 'ssn', domain: 'profile' }]);
+
+    const all = confidentialFacts(
+      [
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { profiles } from "./schema";',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; nickname: string }) => {',
+        '  await db.update(profiles).set({ nickname: input.nickname }).where(eq(profiles.id, input.id));',
+        '};',
+      ].join('\n'),
+      'confidentialAtRest: true',
+    );
+    expect(all).toMatchObject([{ column: 'nickname', domain: 'profile' }]);
   });
 });
 

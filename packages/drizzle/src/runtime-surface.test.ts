@@ -84,6 +84,10 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(runtime.kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }).secret).toEqual([
       'passwordHash',
     ]);
+    expect(
+      runtime.kovo({ confidentialAtRest: ['ssn'], domain: 'profile', key: 'id' })
+        .confidentialAtRest,
+    ).toEqual(['ssn']);
     expect('extractTouchGraphFromSource' in runtime).toBe(false);
     expect(compatibilityBarrel.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect('extractTouchGraphFromSource' in compatibilityBarrel).toBe(false);

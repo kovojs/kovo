@@ -25,6 +25,8 @@ export type {
 } from './agent-tool.js';
 export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';
 export type { AdminAssignFact, AdminAssignOptions } from './write-governance.js';
+export { encryptAtRest } from './confidential-at-rest.js';
+export type { EncryptedAtRest, EncryptAtRestOptions } from './confidential-at-rest.js';
 // SPEC §6.6 / plans/secure-framework.md Phase 5: outbound-egress private-network deny floor
 // (runtime defense-in-depth, NOT a by-construction proof). `EgressBlockedError` is the typed
 // 502-class error a blocked outbound connection throws; `installEgressFloor`/`selfProbe` let a

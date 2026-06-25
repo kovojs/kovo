@@ -881,6 +881,10 @@ export function extractMassAssignmentFromProject(
           [callback.body],
           privilegedHelpers,
         );
+        const encryptedAtRestSymbolKeys = encryptedAtRestAliasKeysForNodes(
+          [callback.body],
+          privilegedHelpers,
+        );
         const name = callback.key ?? '<anonymous>';
         for (const call of touchBodyCallExpressions(callback.body)) {
           facts.push(
@@ -893,6 +897,7 @@ export function extractMassAssignmentFromProject(
               sessionContext,
               symbolContext,
               passwordSinkSymbolKeys,
+              encryptedAtRestSymbolKeys,
               privilegedHelpers,
             }),
           );
@@ -910,6 +915,8 @@ interface GovernedTableInfo {
   domain: string;
   /** The governed column set, or `'*'` when `kovo({ governed: true })` governs all columns. */
   governed: ReadonlySet<string> | '*';
+  /** OPP-04 columns that must flow through the authenticated-encryption sink before write. */
+  confidentialAtRestColumns: ReadonlySet<string> | '*';
   /** Password-storage columns must be written only through the blessed argon2id sink. */
   passwordColumns: ReadonlySet<string>;
 }
@@ -919,12 +926,31 @@ function governedTableInfo(table: ExtractedTable): GovernedTableInfo | undefined
   if (!('domain' in annotation)) return undefined;
   const passwordColumns = new Set(Object.keys(table.columns).filter(isPasswordColumnName));
   const governedAnnotation = (annotation as { governed?: true | readonly string[] }).governed;
+  const confidentialAtRestAnnotation = (
+    annotation as { confidentialAtRest?: true | readonly string[] }
+  ).confidentialAtRest;
+  const confidentialAtRestColumns =
+    confidentialAtRestAnnotation === true
+      ? '*'
+      : new Set(
+          Array.isArray(confidentialAtRestAnnotation)
+            ? confidentialAtRestAnnotation.filter(
+                (column): column is string => typeof column === 'string',
+              )
+            : [],
+        );
   if (governedAnnotation === true) {
-    return { domain: annotation.domain, governed: '*', passwordColumns };
+    return {
+      confidentialAtRestColumns,
+      domain: annotation.domain,
+      governed: '*',
+      passwordColumns,
+    };
   }
 
   const governed = new Set<string>();
-  // AUTO-governed: the instance/primary key, the principal owner column, and password storage.
+  // AUTO-governed: the instance/primary key, the principal owner column, password storage,
+  // and columns declared confidential-at-rest.
   const key =
     'key' in annotation && typeof annotation.key === 'string' ? annotation.key : undefined;
   const owner =
@@ -932,12 +958,19 @@ function governedTableInfo(table: ExtractedTable): GovernedTableInfo | undefined
   if (key) governed.add(key);
   if (owner) governed.add(owner);
   for (const column of passwordColumns) governed.add(column);
+  if (confidentialAtRestColumns === '*') {
+    for (const column of Object.keys(table.columns)) governed.add(column);
+  } else {
+    for (const column of confidentialAtRestColumns) governed.add(column);
+  }
   if (Array.isArray(governedAnnotation)) {
     for (const column of governedAnnotation) {
       if (typeof column === 'string') governed.add(column);
     }
   }
-  return governed.size > 0 ? { domain: annotation.domain, governed, passwordColumns } : undefined;
+  return governed.size > 0
+    ? { confidentialAtRestColumns, domain: annotation.domain, governed, passwordColumns }
+    : undefined;
 }
 
 interface MassAssignmentCallContext {
@@ -949,11 +982,14 @@ interface MassAssignmentCallContext {
   sessionContext: SessionProvenanceContext;
   symbolContext: SymbolProvenanceContext;
   passwordSinkSymbolKeys: ReadonlySet<string>;
+  encryptedAtRestSymbolKeys: ReadonlySet<string>;
   privilegedHelpers: PrivilegedWriteHelpers;
 }
 
 interface PrivilegedWriteHelpers {
   adminAssign: ReadonlySet<string>;
+  encryptAtRest: ReadonlySet<string>;
+  encryptionNamespaces: ReadonlySet<string>;
   hashPassword: ReadonlySet<string>;
   namespaces: ReadonlySet<string>;
   passwordNamespaces: ReadonlySet<string>;
@@ -1052,9 +1088,11 @@ function massAssignmentFactsForObject(
       : property.getInitializer();
     if (!valueNode) continue;
 
-    const verdict = passwordColumn(info, column)
-      ? passwordValueVerdict(valueNode, context)
-      : governedValueVerdict(valueNode, context);
+    const verdict = confidentialAtRestColumn(info, column)
+      ? confidentialAtRestValueVerdict(valueNode, context)
+      : passwordColumn(info, column)
+        ? passwordValueVerdict(valueNode, context)
+        : governedValueVerdict(valueNode, context);
     if (verdict.ok) continue;
     facts.push({
       column,
@@ -1085,13 +1123,18 @@ function spreadMassAssignmentFacts(
   via: 'set' | 'spread' | 'values',
 ): MassAssignmentFact[] {
   const verdict = governedValueVerdict(expression, context);
-  if (verdict.ok && info.passwordColumns.size === 0) return [];
+  const hasConfidentialAtRest =
+    info.confidentialAtRestColumns === '*' || info.confidentialAtRestColumns.size > 0;
+  if (verdict.ok && info.passwordColumns.size === 0 && !hasConfidentialAtRest) return [];
   return [
     {
       column: governedColumnsLabel(info, table),
       domain: info.domain,
       name: context.name,
-      provenance: info.passwordColumns.size > 0 && verdict.ok ? 'unknown' : verdict.provenance,
+      provenance:
+        (info.passwordColumns.size > 0 || hasConfidentialAtRest) && verdict.ok
+          ? 'unknown'
+          : verdict.provenance,
       site,
       via,
       ...(verdict.detail ? { detail: verdict.detail } : {}),
@@ -1196,6 +1239,44 @@ function passwordValueVerdict(
   return { ok: false, provenance: 'unknown', detail: expression.getText() };
 }
 
+/**
+ * OPP-04 confidential-at-rest writes are anchored on the destination column
+ * declaration. A value for such a column must flow through the blessed
+ * authenticated-encryption sink or the explicit audited privileged-write escape;
+ * plaintext request, literal, server-derived, and opaque values fail closed.
+ */
+function confidentialAtRestValueVerdict(
+  node: Node,
+  context: MassAssignmentCallContext,
+): GovernedValueVerdict {
+  const expression = unwrappedAwaitedStaticExpressionNode(node);
+  if (Node.isCallExpression(expression)) {
+    const callee = unwrappedStaticExpressionNode(expression.getExpression());
+    if (isPrivilegedHelperCall(callee, 'adminAssign', context.privilegedHelpers)) {
+      return { ok: true, provenance: 'input' };
+    }
+    if (isBlessedEncryptAtRestCall(expression, context)) {
+      return { ok: true, provenance: 'unknown' };
+    }
+  }
+  if (Node.isIdentifier(expression)) {
+    const symbolKey = symbolKeyForNode(expression);
+    if (symbolKey && context.encryptedAtRestSymbolKeys.has(symbolKey)) {
+      return { ok: true, provenance: 'unknown' };
+    }
+  }
+  const provenance = symbolProvenanceForExpression(expression, context.symbolContext);
+  if (provenance.kind === 'input') {
+    return {
+      ok: false,
+      provenance: 'input',
+      detail:
+        provenance.path && provenance.path.length > 0 ? provenance.path : expression.getText(),
+    };
+  }
+  return { ok: false, provenance: 'unknown', detail: expression.getText() };
+}
+
 function isPrivilegedHelperCall(
   callee: Node,
   helper: 'adminAssign' | 'serverValue',
@@ -1211,11 +1292,74 @@ function isPrivilegedHelperCall(
   );
 }
 
+function isBlessedEncryptAtRestCall(
+  expression: CallExpression,
+  context: MassAssignmentCallContext,
+): boolean {
+  return isBlessedEncryptAtRestCallWithHelpers(expression, context.privilegedHelpers);
+}
+
 function isBlessedPasswordHashCall(
   expression: CallExpression,
   context: MassAssignmentCallContext,
 ): boolean {
   return isBlessedPasswordHashCallWithHelpers(expression, context.privilegedHelpers);
+}
+
+function encryptedAtRestAliasKeysForNodes(
+  bodies: readonly Node[],
+  helpers: PrivilegedWriteHelpers,
+): ReadonlySet<string> {
+  const aliases = new Set<string>();
+  const isEncryptedExpression = (node: Node): boolean => {
+    const expression = unwrappedAwaitedStaticExpressionNode(node);
+    if (
+      Node.isCallExpression(expression) &&
+      isBlessedEncryptAtRestCallWithHelpers(expression, helpers)
+    ) {
+      return true;
+    }
+    if (!Node.isIdentifier(expression)) return false;
+    const symbolKey = symbolKeyForNode(expression);
+    return symbolKey !== undefined && aliases.has(symbolKey);
+  };
+
+  for (const body of bodies) {
+    for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+      const initializer = declaration.getInitializer();
+      if (!initializer || !isEncryptedExpression(initializer)) continue;
+      const binding = declaration.getNameNode();
+      if (!Node.isIdentifier(binding)) continue;
+      const symbolKey = symbolKeyForNode(binding);
+      if (symbolKey) aliases.add(symbolKey);
+    }
+    for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      if (assignment.getOperatorToken().getText() !== '=') continue;
+      if (!isEncryptedExpression(assignment.getRight())) continue;
+      const left = assignment.getLeft();
+      if (!Node.isIdentifier(left)) continue;
+      const symbolKey = symbolKeyForNode(left);
+      if (symbolKey) aliases.add(symbolKey);
+    }
+  }
+  return aliases;
+}
+
+function isBlessedEncryptAtRestCallWithHelpers(
+  expression: CallExpression,
+  helpers: PrivilegedWriteHelpers,
+): boolean {
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  if (Node.isIdentifier(callee)) {
+    return helpers.encryptAtRest.has(callee.getText());
+  }
+  if (!Node.isPropertyAccessExpression(callee)) return false;
+  const receiver = callee.getExpression();
+  return (
+    Node.isIdentifier(receiver) &&
+    helpers.encryptionNamespaces.has(receiver.getText()) &&
+    callee.getName() === 'encryptAtRest'
+  );
 }
 
 function passwordSinkAliasKeysForNodes(
@@ -1276,6 +1420,8 @@ function isBlessedPasswordHashCallWithHelpers(
 
 function privilegedWriteHelperNames(sourceFile: SourceFile): PrivilegedWriteHelpers {
   const adminAssign = new Set<string>();
+  const encryptAtRest = new Set<string>();
+  const encryptionNamespaces = new Set<string>();
   const hashPassword = new Set<string>();
   const serverValue = new Set<string>();
   const namespaces = new Set<string>();
@@ -1288,17 +1434,29 @@ function privilegedWriteHelperNames(sourceFile: SourceFile): PrivilegedWriteHelp
     const namespace = declaration.getNamespaceImport();
     if (namespace) {
       namespaces.add(namespace.getText());
-      if (specifier === '@kovojs/server') passwordNamespaces.add(namespace.getText());
+      if (specifier === '@kovojs/server') {
+        encryptionNamespaces.add(namespace.getText());
+        passwordNamespaces.add(namespace.getText());
+      }
     }
     for (const named of declaration.getNamedImports()) {
       const imported = named.getName();
       const local = named.getAliasNode()?.getText() ?? imported;
       if (imported === 'adminAssign') adminAssign.add(local);
+      if (specifier === '@kovojs/server' && imported === 'encryptAtRest') encryptAtRest.add(local);
       if (specifier === '@kovojs/server' && imported === 'hashPassword') hashPassword.add(local);
       if (imported === 'serverValue') serverValue.add(local);
     }
   }
-  return { adminAssign, hashPassword, namespaces, passwordNamespaces, serverValue };
+  return {
+    adminAssign,
+    encryptAtRest,
+    encryptionNamespaces,
+    hashPassword,
+    namespaces,
+    passwordNamespaces,
+    serverValue,
+  };
 }
 
 function symbolicLiteralValue(node: Node): JsonValue | undefined {
@@ -1311,6 +1469,10 @@ function governs(info: GovernedTableInfo, column: string): boolean {
 
 function passwordColumn(info: GovernedTableInfo, column: string): boolean {
   return info.passwordColumns.has(column);
+}
+
+function confidentialAtRestColumn(info: GovernedTableInfo, column: string): boolean {
+  return info.confidentialAtRestColumns === '*' || info.confidentialAtRestColumns.has(column);
 }
 
 function isPasswordColumnName(column: string): boolean {

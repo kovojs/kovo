@@ -48,6 +48,12 @@ export type KovoColumnRef = string | ((table: Record<string, unknown>) => unknow
 /** Column-level confidentiality annotation consumed by the Phase 1 secret wire gate. */
 export type KovoSecretColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
 
+/** Column-level at-rest confidentiality annotation consumed by the OPP-04 write gate. */
+export type KovoConfidentialAtRestColumnAnnotation =
+  | true
+  | KovoColumnRef
+  | readonly KovoColumnRef[];
+
 /**
  * A fan-out invalidation edge for a table's `fans`: when a write touches this table,
  * also invalidate the named `domain` reached `via` the given relation, optionally scoped
@@ -89,6 +95,7 @@ export type KovoConcurrencyColumnAnnotation = KovoColumnRef | readonly KovoColum
 export type KovoTableAnnotation =
   | {
       atomic?: KovoConcurrencyColumnAnnotation;
+      confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation;
       domain: string;
       fans?: readonly KovoFanAnnotation[];
       governed?: KovoGovernedColumnAnnotation;
@@ -111,6 +118,7 @@ export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation
 /** The domain-bearing form of a table annotation: its `domain`, optional `key` column, and optional principal `owner` column (SPEC §10.1). */
 export interface KovoDomainTableAnnotation {
   atomic?: KovoConcurrencyColumnAnnotation;
+  confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation;
   domain: string;
   fans?: readonly KovoFanAnnotation[];
   governed?: KovoGovernedColumnAnnotation;
@@ -136,9 +144,10 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
  * facts from queries and writes — the Drizzle-blessed path to
  * schema-as-domain-registry (SPEC §10.1).
  *
- * @param annotation - A `{ domain, key?, owner?, secret? }` binding (`owner`
- *   names the principal-owning column for the §10.3 IDOR audit and `secret`
- *   names confidential columns for the Phase 1 wire gate), `{ exempt: true }`,
+ * @param annotation - A `{ domain, key?, owner?, secret?, confidentialAtRest? }`
+ *   binding (`owner` names the principal-owning column for the §10.3 IDOR audit and
+ *   `secret` names confidential columns for the Phase 1 wire gate; `confidentialAtRest`
+ *   names columns that require the authenticated-encryption write sink), `{ exempt: true }`,
  *   or `{ view: { of, refresh? } }` binding.
  * @returns A Drizzle extra-config callback carrying the Kovo annotation.
  * @example
