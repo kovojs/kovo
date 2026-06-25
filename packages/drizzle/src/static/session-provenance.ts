@@ -1,7 +1,9 @@
 import {
   Node,
   SyntaxKind,
+  type BindingElement,
   type CallExpression,
+  type ObjectBindingPattern,
   type ObjectLiteralExpression,
   type SourceFile,
   type VariableDeclaration,
@@ -165,38 +167,115 @@ function addSessionAliasesForVariableDeclaration(
   if (!Node.isObjectBindingPattern(nameNode)) return;
   const base =
     privateScopeForExpression(initializer, context) ?? directPrivateScopeForExpression(initializer);
-  if (!base) return;
+  addPrivateScopeAliasesForObjectBindingPattern(nameNode, base, aliases);
+}
 
-  for (const element of nameNode.getElements()) {
-    const binding = element.getNameNode();
-    if (!Node.isIdentifier(binding)) continue;
-    const propertyName = element.getPropertyNameNode();
-    const segment = propertyName ? propertyNameText(propertyName) : binding.getText();
-    if (!segment) continue;
-    const key = resolvedSymbolKey(symbolForIdentifierReference(binding) ?? binding.getSymbol());
-    const provenance = {
-      kind: base.kind,
-      path: joinPrivateScopePath(base.path, segment),
-      requiresGuard: base.requiresGuard,
-    };
+function addPrivateScopeAliasesForObjectBindingPattern(
+  pattern: ObjectBindingPattern,
+  base: PrivateScopeProvenance | undefined,
+  aliases: Map<string, SessionAlias>,
+): void {
+  for (const binding of privateScopeBindingsFromObjectBindingPattern(pattern, base)) {
+    const key = resolvedSymbolKey(
+      symbolForIdentifierReference(binding.identifier) ?? binding.identifier.getSymbol(),
+    );
     if (key) {
       aliases.set(key, {
-        declaration: element,
-        kind: provenance.kind,
-        name: binding.getText(),
-        path: provenance.path,
-        requiresGuard: provenance.requiresGuard ?? true,
+        declaration: binding.declaration,
+        kind: binding.provenance.kind,
+        name: binding.identifier.getText(),
+        path: binding.provenance.path,
+        requiresGuard: binding.provenance.requiresGuard ?? true,
       });
     } else {
-      aliases.set(`name:${binding.getText()}`, {
-        declaration: element,
-        kind: provenance.kind,
-        name: binding.getText(),
-        path: provenance.path,
-        requiresGuard: provenance.requiresGuard ?? true,
+      aliases.set(`name:${binding.identifier.getText()}`, {
+        declaration: binding.declaration,
+        kind: binding.provenance.kind,
+        name: binding.identifier.getText(),
+        path: binding.provenance.path,
+        requiresGuard: binding.provenance.requiresGuard ?? true,
       });
     }
   }
+}
+
+interface PrivateScopeBinding {
+  declaration: BindingElement;
+  identifier: Node & { getText(): string };
+  provenance: PrivateScopeProvenance;
+}
+
+function privateScopeBindingsFromObjectBindingPattern(
+  pattern: ObjectBindingPattern,
+  base: PrivateScopeProvenance | undefined,
+): PrivateScopeBinding[] {
+  const bindings: PrivateScopeBinding[] = [];
+  collectPrivateScopeBindingsFromObjectBindingPattern(pattern, base, [], [], bindings);
+  return bindings;
+}
+
+function collectPrivateScopeBindingsFromObjectBindingPattern(
+  pattern: ObjectBindingPattern,
+  base: PrivateScopeProvenance | undefined,
+  segments: readonly string[],
+  segmentElements: readonly BindingElement[],
+  bindings: PrivateScopeBinding[],
+): void {
+  for (const element of pattern.getElements()) {
+    const binding = element.getNameNode();
+    const propertyName = element.getPropertyNameNode();
+    const segment = propertyName ? propertyNameText(propertyName) : binding.getText();
+    if (!segment) continue;
+
+    const nextSegments = [...segments, segment];
+    const nextSegmentElements = [...segmentElements, element];
+    if (Node.isObjectBindingPattern(binding)) {
+      collectPrivateScopeBindingsFromObjectBindingPattern(
+        binding,
+        base,
+        nextSegments,
+        nextSegmentElements,
+        bindings,
+      );
+      continue;
+    }
+    if (!Node.isIdentifier(binding)) continue;
+
+    const provenance = objectBindingPrivateScopeProvenance(base, nextSegments, nextSegmentElements);
+    if (!provenance) continue;
+    bindings.push({ declaration: element, identifier: binding, provenance });
+  }
+}
+
+function objectBindingPrivateScopeProvenance(
+  base: PrivateScopeProvenance | undefined,
+  segments: readonly string[],
+  segmentElements: readonly BindingElement[],
+): PrivateScopeProvenance | undefined {
+  if (base) {
+    const provenance: PrivateScopeProvenance = {
+      kind: base.kind,
+      path: joinPrivateScopePath(base.path, segments.join('.')),
+    };
+    if (base.requiresGuard !== undefined) provenance.requiresGuard = base.requiresGuard;
+    return provenance;
+  }
+
+  const privateIndex = segments.findIndex(isPrivateScopeKind);
+  if (privateIndex < 0) return undefined;
+  return {
+    kind: segments[privateIndex] as PrivateScopeKind,
+    path: segments.slice(privateIndex + 1).join('.'),
+    requiresGuard: bindingElementValueRequiresGuard(segmentElements[privateIndex]),
+  };
+}
+
+function bindingElementValueRequiresGuard(element: BindingElement | undefined): boolean {
+  if (!element) return true;
+  const type = element.getType();
+  const nullable = (type as { isNullable?: () => boolean }).isNullable?.();
+  if (nullable) return true;
+  return /\bnull\b|\bundefined\b/.test(type.getText());
 }
 
 /** @internal */ export function privateScopeForExpression(
