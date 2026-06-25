@@ -715,7 +715,10 @@ async function loadComponentQueries(
       throw new Error(`Route JSX component ${component.name ?? name} requires request context.`);
     }
 
-    const result = await runQuery(resolved.query, resolved.input, request);
+    const maxListItems = currentJsxFrameworkContext()?.maxListItems;
+    const result = await runQuery(resolved.query, resolved.input, request, {
+      ...(maxListItems === undefined ? {} : { maxListItems }),
+    });
     if (!result.ok) {
       throw new Error(`Route JSX component query failed: ${resolved.query.key}`);
     }

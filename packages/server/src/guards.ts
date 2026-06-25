@@ -171,6 +171,8 @@ export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> 
 /** @internal */
 export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbValue = unknown> {
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
+  /** @internal Query/list result item ceiling enforced by the query runtime sink (SPEC §9.5). */
+  maxListItems?: number;
   /**
    * The managed-handle mode the framework applies to the resolved `request.db` (SPEC §9.4/§10.3).
    * `'read'` installs the KV433 read-only proxy (a `query()` loader's handle); `'write'` (the

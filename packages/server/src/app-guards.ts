@@ -61,6 +61,8 @@ function isAppRequestLimits(value: unknown): value is KovoApp['requestLimits'] {
     isResolvedRateLimit(value.global) &&
     isResolvedRateLimit(value.perIp) &&
     (typeof value.maxBodyBytes === 'number' || value.maxBodyBytes === false) &&
+    typeof value.maxQueryListItems === 'number' &&
+    Number.isSafeInteger(value.maxQueryListItems) &&
     isOptionalFunction(value.clientIp) &&
     isResolvedRateLimitScope(value.mutations) &&
     isResolvedRateLimitScope(value.queries)

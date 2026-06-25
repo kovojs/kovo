@@ -87,6 +87,7 @@ export async function renderAppRouteDocumentResponse({
       ...(jsxContext?.mutationFailure === undefined
         ? {}
         : { mutationFailure: jsxContext.mutationFailure }),
+      maxListItems: app.requestLimits.maxQueryListItems,
       onCsrfSetCookie: (rawSetCookie) => refreshSetCookies.push(rawSetCookie),
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.onError === undefined ? {} : { onError: app.onError }),

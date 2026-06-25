@@ -124,10 +124,17 @@ export interface AppRequestRateLimitOptions {
  */
 export interface AppRequestLimitOptions extends AppRequestRateLimitOptions {
   /**
-   * Maximum accepted request body size, checked from Content-Length before the body
-   * is read. `false` disables the coarse body-size gate.
+   * Maximum accepted request body size. The shell rejects an oversized `Content-Length`
+   * before dispatch and wraps body readers so chunked/missing-length bodies fail with 413
+   * before parse. `false` disables the coarse body-size gate.
    */
   maxBodyBytes?: number | false;
+  /**
+   * Maximum array length a framework-owned query/list result may ship to the client wire.
+   * Defaults to the API4 resource-consumption floor; set a larger integer for an audited
+   * large-read surface (SPEC §9.5).
+   */
+  maxQueryListItems?: number;
   /** Optional IP key extractor used by the coarse per-IP limiter. */
   clientIp?: (request: Request) => string | undefined;
   /**
@@ -158,6 +165,7 @@ export interface ResolvedAppRequestRateLimitOptions {
 export interface ResolvedAppRequestLimitOptions extends ResolvedAppRequestRateLimitOptions {
   clientIp?: (request: Request) => string | undefined;
   maxBodyBytes: number | false;
+  maxQueryListItems: number;
   mutations: ResolvedAppRequestRateLimitOptions;
   queries: ResolvedAppRequestRateLimitOptions;
   trustedProxy: boolean;

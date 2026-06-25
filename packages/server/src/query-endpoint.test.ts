@@ -125,6 +125,59 @@ describe('query endpoints', () => {
     });
   });
 
+  it('caps unbounded query list results and surfaces a wire warning', async () => {
+    const catalogQuery = query('catalogList', {
+      load: () => ({
+        rows: Array.from({ length: 4 }, (_, id) => ({ id, tags: ['visible', 'capped'] })),
+      }),
+      reads: [domain('catalog')],
+    });
+
+    await expect(runQuery(catalogQuery, {}, {}, { maxListItems: 2 })).resolves.toEqual({
+      input: {},
+      ok: true,
+      value: {
+        rows: [
+          { id: 0, tags: ['visible', 'capped'] },
+          { id: 1, tags: ['visible', 'capped'] },
+        ],
+      },
+      warnings: [{ code: 'QUERY_LIST_LIMIT', limit: 2, path: '$.rows' }],
+    });
+    await expect(
+      renderQueryEndpointResponse(catalogQuery, { maxListItems: 2, request: {} }),
+    ).resolves.toEqual({
+      body: '<kovo-query name="catalogList">{"rows":[{"id":0,"tags":["visible","capped"]},{"id":1,"tags":["visible","capped"]}]}</kovo-query>',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        'Kovo-Warn': 'QUERY_LIST_LIMIT $.rows;limit=2',
+        Vary: 'Cookie',
+      },
+      status: 200,
+    });
+  });
+
+  it('preserves explicit query list limits below the default ceiling', async () => {
+    const catalogQuery = query('catalogLimited', {
+      args: s.object({ limit: s.number().int().default(3) }),
+      load: (input: { limit: number }) => ({
+        rows: Array.from({ length: input.limit }, (_, id) => ({ id })),
+      }),
+      reads: [domain('catalog')],
+    });
+
+    await expect(renderQueryEndpointResponse(catalogQuery, { request: {} })).resolves.toEqual({
+      body: '<kovo-query name="catalogLimited">{"rows":[{"id":0},{"id":1},{"id":2}]}</kovo-query>',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
+      status: 200,
+    });
+  });
+
   it('stamps unknown query 404s with private cache and build headers', async () => {
     await expect(
       renderQueryRegistryEndpointResponse({ queries: [] }, 'missing', {

@@ -56,6 +56,7 @@ export async function dispatchMatchedAppRequest({
       currentUrl: appRequestUrl(url),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       buildToken,
+      maxListItems: app.requestLimits.maxQueryListItems,
       request,
       search: url.searchParams,
       ...(app.db === undefined ? {} : { db: app.db }),

@@ -16,6 +16,7 @@ export interface JsxMutationFailureContext {
 export interface JsxFrameworkContext {
   csrf?: CsrfValidationOptions<any>;
   deferredRegions?: DeferredRegionCollector;
+  maxListItems?: number;
   mutationFailure?: JsxMutationFailureContext;
   onCsrfSetCookie?: (rawSetCookie: string) => void;
   request: unknown;

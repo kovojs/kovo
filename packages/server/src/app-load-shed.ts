@@ -35,6 +35,7 @@ interface RateLimitDecision {
 const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_MAX_RATE_KEYS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
+const DEFAULT_MAX_QUERY_LIST_ITEMS = 100;
 const DEFAULT_GLOBAL_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   max: 20_000,
   maxKeys: DEFAULT_MAX_RATE_KEYS,
@@ -75,6 +76,7 @@ export function normalizeAppRequestLimits(
     return {
       global: false,
       maxBodyBytes: false,
+      maxQueryListItems: DEFAULT_MAX_QUERY_LIST_ITEMS,
       mutations: { global: false, perIp: false },
       perIp: false,
       queries: { global: false, perIp: false },
@@ -90,6 +92,10 @@ export function normalizeAppRequestLimits(
     global: baseGlobal,
     maxBodyBytes:
       options?.maxBodyBytes === undefined ? DEFAULT_MAX_BODY_BYTES : normalizeBodyLimit(options),
+    maxQueryListItems:
+      options?.maxQueryListItems === undefined
+        ? DEFAULT_MAX_QUERY_LIST_ITEMS
+        : normalizeQueryListLimit(options.maxQueryListItems),
     mutations: {
       global: normalizeRate(options?.mutations?.global, DEFAULT_MUTATION_GLOBAL_RATE),
       perIp: normalizeRate(options?.mutations?.perIp, DEFAULT_MUTATION_PER_IP_RATE),
@@ -135,6 +141,15 @@ function normalizeBodyLimit(options: AppRequestLimitOptions): number | false {
     );
   }
   return maxBodyBytes;
+}
+
+function normalizeQueryListLimit(maxQueryListItems: number): number {
+  if (!Number.isSafeInteger(maxQueryListItems) || maxQueryListItems < 1) {
+    throw new TypeError(
+      'createApp({ requestLimits.maxQueryListItems }) must be a positive integer.',
+    );
+  }
+  return maxQueryListItems;
 }
 
 function normalizeRate(

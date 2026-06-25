@@ -429,6 +429,7 @@ export function notFound(): NotFound {
 export interface RouteJsxContextOptions<Request> {
   csrf?: CsrfValidationOptions<Request>;
   deferredRegions?: DeferredRegionCollector;
+  maxListItems?: number;
   mutationFailure?: {
     failure: MutationFail;
     input?: unknown;
@@ -527,6 +528,7 @@ async function runRoutePageInternal<
           lifecycleRequest,
           metadata,
           regions,
+          options.maxListItems,
         );
       },
     );
@@ -609,6 +611,7 @@ async function renderLayoutChain<Request>(
   request: Request,
   metadata: CompiledRoutePageMetadata | undefined,
   regions: Readonly<Record<string, unknown>> = {},
+  maxListItems?: number,
 ): Promise<unknown> {
   const layoutSegments = routeLayoutSegments(metadata);
   let value = pageValue;
@@ -617,7 +620,7 @@ async function renderLayoutChain<Request>(
     if (!layoutDeclaration) continue;
     if (!layoutDeclaration.render) continue;
     try {
-      const queries = await loadLayoutQueries(layoutDeclaration, request);
+      const queries = await loadLayoutQueries(layoutDeclaration, request, maxListItems);
       value = await layoutDeclaration.render(queries, undefined, {
         children: value,
         regions,
@@ -662,6 +665,7 @@ async function renderRouteRegions<
 async function loadLayoutQueries<Request>(
   layoutDeclaration: LayoutDeclaration<any, any, any>,
   request: Request,
+  maxListItems?: number,
 ): Promise<LayoutQueryResults<LayoutQueryMap<any>>> {
   const values: Record<string, unknown> = {};
 
@@ -670,6 +674,7 @@ async function loadLayoutQueries<Request>(
       queryDefinition as QueryDefinition<string, unknown, unknown, Request>,
       undefined,
       request,
+      { ...(maxListItems === undefined ? {} : { maxListItems }) },
     );
     if (!result.ok) {
       throw new Error(`Layout query '${name}' failed with ${result.error.code}.`);
@@ -1106,6 +1111,7 @@ function routeJsxContextOptions<Request>(
     ...(deferredRegions === undefined && options.deferredRegions === undefined
       ? {}
       : { deferredRegions: deferredRegions ?? options.deferredRegions }),
+    ...(options.maxListItems === undefined ? {} : { maxListItems: options.maxListItems }),
     ...(options.mutationFailure === undefined ? {} : { mutationFailure: options.mutationFailure }),
     ...(options.onCsrfSetCookie === undefined ? {} : { onCsrfSetCookie: options.onCsrfSetCookie }),
   };

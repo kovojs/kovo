@@ -29,6 +29,8 @@ interface QueryDeltaListMeta {
   path: string;
 }
 
+const DEFAULT_QUERY_LIST_ITEMS = 100;
+
 /**
  * The context a query's `load` receives: the current request value plus the framework-owned
  * read-only managed db handle (SPEC §9.4 KV433 Stage 1 / §10.3). The framework threads `db` as a
@@ -54,6 +56,8 @@ export interface QueryEndpointRequest<
    * refetch into a stale tab is detectable by the client.
    */
   buildToken?: string;
+  /** @internal SPEC §9.5 API4 resource-consumption floor for query/list result sinks. */
+  maxListItems?: number;
   request: Request;
   search?: QuerySearchInput;
 }
@@ -461,10 +465,16 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
     ...(threadedDb === undefined ? {} : { db: threadedDb }),
   } as QueryLoadContext<Request>;
   const value = definition.load ? await definition.load(input, loadContext) : (null as Value);
-  const outputResult = parseQueryOutput(definition, value);
+  const capped = capQueryListResults(value, options.maxListItems ?? DEFAULT_QUERY_LIST_ITEMS);
+  const outputResult = parseQueryOutput(definition, capped.value as Value);
   if (!outputResult.ok) return outputResult.failure;
 
-  return { input, ok: true, value: outputResult.value };
+  return {
+    input,
+    ok: true,
+    value: outputResult.value,
+    ...(capped.warnings.length === 0 ? {} : { warnings: capped.warnings }),
+  };
 }
 
 /** @internal */
@@ -477,6 +487,13 @@ export interface QueryEndpointSuccess<Value, Input = unknown> {
   input: Input;
   ok: true;
   value: Value;
+  warnings?: readonly QueryRuntimeWarning[];
+}
+
+interface QueryRuntimeWarning {
+  code: 'QUERY_LIST_LIMIT';
+  limit: number;
+  path: string;
 }
 
 /** @internal */
@@ -509,7 +526,11 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   let lifecycleRequest: Request = endpointRequest.request;
   try {
     lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, endpointRequest);
-    result = await runQuery(definition, rawInput, lifecycleRequest);
+    result = await runQuery(definition, rawInput, lifecycleRequest, {
+      ...(endpointRequest.maxListItems === undefined
+        ? {}
+        : { maxListItems: endpointRequest.maxListItems }),
+    });
   } catch (error) {
     reportServerError(endpointRequest.onError, error, {
       operation: 'query-endpoint',
@@ -588,6 +609,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
       // SPEC §5.2.1 rule 2(d): stamp the build token so a background refetch into a stale
       // tab can detect deploy skew and avoid merging new-build data into a stale document.
       ...queryBuildHeaders(endpointRequest),
+      ...queryWarningHeaders(result.warnings),
     },
     status: 200,
   };
@@ -722,6 +744,42 @@ function parseQueryOutput<const Key extends string, Value, Input, Request>(
   }
 }
 
+function capQueryListResults(
+  value: unknown,
+  limit: number,
+): { value: unknown; warnings: QueryRuntimeWarning[] } {
+  const warnings: QueryRuntimeWarning[] = [];
+  const seen = new WeakMap<object, unknown>();
+
+  const cap = (current: unknown, path: string): unknown => {
+    if (Array.isArray(current)) {
+      const source = current.length > limit ? current.slice(0, limit) : current;
+      if (current.length > limit) warnings.push({ code: 'QUERY_LIST_LIMIT', limit, path });
+      return source.map((item, index) => cap(item, `${path}[${index}]`));
+    }
+
+    if (!isPlainRecord(current)) return current;
+    const existing = seen.get(current);
+    if (existing !== undefined) return existing;
+    const next: Record<string, unknown> = {};
+    seen.set(current, next);
+    for (const [key, nested] of Object.entries(current)) {
+      next[key] = cap(nested, path === '$' ? `$.${key}` : `${path}.${key}`);
+    }
+    return next;
+  };
+
+  // SPEC §9.5: the framework-owned query sink applies the API4 default result-count
+  // ceiling after `load` and before any query value reaches SSR or the client wire.
+  return { value: cap(value, '$'), warnings };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
 function validationFailurePayload(error: SchemaValidationErrorLike): ValidationFailurePayload {
   return { issues: error.issues };
 }
@@ -806,6 +864,17 @@ function queryBuildHeaders<Request>(
   endpointRequest: QueryEndpointRequest<Request>,
 ): Record<string, string> {
   return endpointRequest.buildToken ? { 'Kovo-Build': endpointRequest.buildToken } : {};
+}
+
+function queryWarningHeaders(
+  warnings: readonly QueryRuntimeWarning[] | undefined,
+): Record<string, string> {
+  if (warnings === undefined || warnings.length === 0) return {};
+  const listLimits = warnings
+    .filter((warning) => warning.code === 'QUERY_LIST_LIMIT')
+    .map((warning) => `${warning.path};limit=${warning.limit}`)
+    .join(',');
+  return listLimits ? { 'Kovo-Warn': `QUERY_LIST_LIMIT ${listLimits}` } : {};
 }
 
 function withQueryBuildHeaders<Request>(

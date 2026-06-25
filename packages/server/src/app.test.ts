@@ -116,6 +116,7 @@ describe('server createApp request shell', () => {
     expect(app.diagnostics).toEqual([]);
     expect(app.sessionProvider).toBe(sessionProvider);
     expect(app.requestLimits.maxBodyBytes).toBeGreaterThan(0);
+    expect(app.requestLimits.maxQueryListItems).toBe(100);
     expect(app.requestLimits.perIp).toMatchObject({ max: expect.any(Number), windowMs: 60_000 });
     expect(app.requestLimits.perIp).toMatchObject({ maxKeys: expect.any(Number) });
     expect(app.requestLimits.mutations.perIp).toMatchObject({
@@ -575,6 +576,36 @@ describe('server createApp request shell', () => {
     expect(endpointHandler).not.toHaveBeenCalled();
   });
 
+  it('enforces the default request body cap before endpoint dispatch', async () => {
+    const endpointHandler = vi.fn(() => new Response('ok'));
+    const handler = createRequestHandler(
+      createApp({
+        endpoints: [
+          endpoint('/default-upload-cap', {
+            csrf: false,
+            csrfJustification: 'test machine endpoint',
+            handler: endpointHandler,
+            method: 'POST',
+            reason: 'default request body cap',
+            response: rawTextResponse,
+          }),
+        ],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://example.test/default-upload-cap', {
+        body: '',
+        headers: { 'Content-Length': String(1_048_577) },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe('Payload Too Large');
+    expect(endpointHandler).not.toHaveBeenCalled();
+  });
+
   // SPEC §9.1.1/§9.4: framework-owned pre-dispatch system responses for
   // reserved mutation/query endpoints carry the same private cache posture and
   // build-token skew signal as dispatched mutation/query responses.
@@ -828,6 +859,34 @@ describe('server createApp request shell', () => {
     expect(limited.headers.get('x-content-type-options')).toBe('nosniff');
     await expect(limited.text()).resolves.toBe('Too Many Requests');
     expect(queryLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('opts up the query list result ceiling for explicit large reads', async () => {
+    const catalogQuery = query('catalog-large-read', {
+      load: () => ({ rows: Array.from({ length: 4 }, (_, id) => ({ id })) }),
+      reads: [],
+    });
+    const handler = createRequestHandler(
+      createApp({
+        queries: [catalogQuery],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: false,
+          maxQueryListItems: 4,
+          mutations: { global: false, perIp: false },
+          perIp: false,
+          queries: { global: false, perIp: false },
+        },
+      }),
+    );
+
+    const response = await handler(new Request('https://example.test/_q/catalog-large-read'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('kovo-warn')).toBeNull();
+    await expect(response.text()).resolves.toContain(
+      '"rows":[{"id":0},{"id":1},{"id":2},{"id":3}]',
+    );
   });
 
   it('stamps reserved normalization redirects without changing route redirect caching', async () => {

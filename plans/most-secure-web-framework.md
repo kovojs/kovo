@@ -212,11 +212,15 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
 
 ### Band 3 — Floor hardening & free browser headers
 
-- [ ] **OPP-29 — API4 fail-closed defaults: pagination ceiling + body-size cap.** runtime-DiD · lev ~6 · M ·
+- [x] **OPP-29 — API4 fail-closed defaults: pagination ceiling + body-size cap.** runtime-DiD · lev ~6 · M ·
       breaking _(main-thread tier; verdict agent hit the limit)_. Default request-body size cap + default
       result-count ceiling on list loaders at the runtime sink; an unbounded `.list()` with no `.max/.limit`
       gets a conservative cap + a build warning. _Trade-off:_ a real secure-default that closes the forgotten-
       pagination DoS; must pick caps that don't surprise legitimate large reads (opt-up is explicit).
+      Evidence: `createApp()` keeps the default request body cap and adds `requestLimits.maxQueryListItems`
+      as the query/list result ceiling before SSR or client wire output; focused app/query endpoint tests,
+      `pnpm run check:vp`, and `pnpm run check:api-surface` passed. This is a runtime sink cap, not SQL-level
+      pagination inference.
 
 - [x] **OPP-26 — Single-source the inline fragment sanitizer.** runtime-DiD · lev 6 · M · non-breaking.
       `response-fragment-apply.ts` carries local mini-sanitizers while the decision table lives in
