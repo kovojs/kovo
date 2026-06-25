@@ -61,6 +61,49 @@ describe('enhanced mutation submit', () => {
     expect(text).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['/login?next=%2Fcart', '/login?next=%2Fcart'],
+    ['https://evil.example/login', '/'],
+    ['//evil.example/login', '/'],
+    ['/\\evil.example/login', '/'],
+    ['/%0a/login', '/'],
+  ])('sanitizes 401 Kovo-Reauth %s before navigation', async (reauth, expected) => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const assign = vi.fn();
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { assign },
+    });
+    const fetch = vi.fn(async () => ({
+      headers: {
+        get(name: string) {
+          return name.toLowerCase() === 'kovo-reauth' ? reauth : null;
+        },
+      },
+      status: 401,
+      text: vi.fn(async () => '<kovo-fragment target="cart">wrong</kovo-fragment>'),
+    }));
+
+    try {
+      await submitEnhancedMutation({
+        fetch,
+        form: { action: '/_m/cart/add', method: 'post' },
+        formData: new FormData(),
+        root,
+        store,
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+
+    expect(assign).toHaveBeenCalledWith(expected);
+  });
+
   it('submits enhanced mutation forms with live targets and applies the fragment response', async () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();

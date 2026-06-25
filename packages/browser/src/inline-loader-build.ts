@@ -434,7 +434,7 @@ function installInlineKovoLoader(im) {
   const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
   const kb = (root = doc) =>
     root.querySelector('meta[name="kovo-build"]')?.getAttribute('content') || '';
-  const bh = (res) => res.headers?.get('Kovo-Build') ?? res.headers?.get('kovo-build') ?? '';
+  const bh = (res) => res.headers?.get('Kovo-Build') ?? '';
   const ns = (root) => [...root.querySelectorAll('[kovo-nav-segment]')];
   const nk = (el) =>
     [
@@ -866,9 +866,17 @@ function installInlineKovoLoader(im) {
       method: (form.method || 'post').toUpperCase(),
     })
       .then((response) => {
-        const reauth = response.headers?.get('Kovo-Reauth') ?? response.headers?.get('kovo-reauth');
-        if (response.status === 401 && reauth) {
-          location.assign?.(reauth);
+        const reauth = response.headers?.get('Kovo-Reauth');
+        if (response.status == 401 && reauth) {
+          try {
+            if (reauth[0] !== '/' || reauth[1] === '/' || /[\\\x00-\x20\x7f]/.test(decodeURIComponent(reauth))) {
+              throw 0;
+            }
+          } catch {
+            ng('/');
+            return;
+          }
+          ng(reauth);
           return;
         }
         return streaming && response.body

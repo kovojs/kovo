@@ -55,7 +55,7 @@ code, and current supply-chain/build surfaces.
     drives 2,048 trusted-proxy IP keys across two windows while asserting the internal per-IP map
     stays bounded and active buckets still return `429` plus `Retry-After: 60`.
 
-- [ ] **Sanitize browser `Kovo-Reauth` directives before navigation.**
+- [x] **Sanitize browser `Kovo-Reauth` directives before navigation.**
   - Evidence: modular mutation fetch follows any 401 `Kovo-Reauth` header with `location.assign`
     (`packages/browser/src/mutation-fetch.ts:100`, `packages/browser/src/mutation-fetch.ts:127`), and
     the generated inline path does the same at `packages/browser/src/inline-loader-build.ts:867`.
@@ -66,6 +66,13 @@ code, and current supply-chain/build surfaces.
     protocol-relative, backslash-prefixed, or malformed.
   - Acceptance: browser and inline-loader tests cover malicious absolute, protocol-relative, backslash,
     encoded-control, and safe path-only `Kovo-Reauth` values.
+  - Verified 2026-06-25: `packages/browser/src/reauth-directive.ts` sanitizes modular enhanced
+    mutation reauth directives, and `packages/browser/src/inline-loader-build.ts` applies equivalent
+    fail-closed inline-loader validation before navigation. `pnpm test packages/browser/src/mutation-submit.test.ts packages/browser/src/inline-loader-enhanced-submit.test.ts`
+    covers safe path-only, external absolute, protocol-relative, backslash, and encoded-control values
+    across modular, readable inline, freshly minified inline, generated inline, and extracted inline
+    paths; `pnpm --filter @kovojs/browser run check:inline-loader` proves the generated artifact is fresh
+    and remains within the SPEC §4.4 gzip budget.
 
 - [ ] **Make the CSRF Origin floor strict and default-on for unsafe real requests.**
   - Evidence: the CSRF floor deliberately allows `Sec-Fetch-Site: same-site` or `none` when `Origin`

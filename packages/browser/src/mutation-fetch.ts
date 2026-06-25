@@ -4,6 +4,7 @@ import { readLiveTargetSnapshot } from './mutation-targets.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { MutationChangeRecord } from './optimism.js';
 import { definedProps } from './defined-props.js';
+import { sanitizeReauthDirective } from './reauth-directive.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedFormLike {
@@ -128,7 +129,7 @@ function followReauthDirective(location: string): void {
   // SPEC §6.5: the server's 401 Kovo-Reauth directive is the enhanced
   // mutation equivalent of the no-JS 303 login redirect.
   const globalLocation = (globalThis as { location?: Location }).location;
-  globalLocation?.assign(location);
+  globalLocation?.assign(sanitizeReauthDirective(location));
 }
 
 function refreshFormDataIdem(formData: unknown): string | undefined {

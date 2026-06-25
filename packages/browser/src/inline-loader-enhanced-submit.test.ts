@@ -6,6 +6,106 @@ import { inlineSourceInstallCases, InlineParityRoot } from './inline-loader-test
 
 describe('inline loader enhanced submit source', () => {
   it.each(inlineSourceInstallCases)(
+    'sanitizes inline 401 Kovo-Reauth before navigation through %s',
+    async (_name, installSource) => {
+      // SPEC §6.5: the inline enhanced-submit path treats Kovo-Reauth as an
+      // untrusted browser navigation sink even when framework servers sanitize it.
+      const cases = [
+        ['/login?next=%2Fcart', '/login?next=%2Fcart'],
+        ['https://evil.example/login', '/'],
+        ['//evil.example/login', '/'],
+        ['/\\evil.example/login', '/'],
+        ['/%0a/login', '/'],
+      ] as const;
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+      };
+
+      for (const [reauth, expected] of cases) {
+        const listeners = new Map<string, (event: unknown) => void>();
+        const assign = vi.fn();
+        const preventDefault = vi.fn();
+        const form = {
+          action: '/_m/cart/add',
+          getAttribute(name: string) {
+            return name === 'data-enhance' ? '' : null;
+          },
+          method: 'post',
+        };
+
+        try {
+          globalRecord.FormData = function FormData() {
+            return {};
+          };
+          globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+            listeners.set(type, listener);
+          };
+          globalRecord.document = {
+            querySelectorAll() {
+              return [];
+            },
+          };
+          globalRecord.fetch = vi.fn(async () => ({
+            headers: {
+              get(name: string) {
+                return name.toLowerCase() === 'kovo-reauth' ? reauth : null;
+              },
+            },
+            status: 401,
+            text: vi.fn(async () => '<kovo-fragment target="cart">wrong</kovo-fragment>'),
+          }));
+          globalRecord.location = {
+            assign,
+            href: 'https://kovo.test/cart',
+            origin: 'https://kovo.test',
+          };
+
+          installSource(
+            vi.fn(async () => ({})),
+            globalRecord,
+          );
+          listeners.get('submit')?.({
+            preventDefault,
+            target: {
+              closest(selector: string) {
+                return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                  ? form
+                  : null;
+              },
+            },
+            type: 'submit',
+          });
+          await Promise.resolve();
+          await Promise.resolve();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          expect(preventDefault).toHaveBeenCalledTimes(1);
+          expect(assign).toHaveBeenCalledWith(expected);
+        } finally {
+          Object.assign(globalRecord, {
+            FormData: originals.FormData,
+            addEventListener: originals.addEventListener,
+            document: originals.document,
+            fetch: originals.fetch,
+            location: originals.location,
+          });
+          if (originals.importModule === undefined) {
+            delete globalRecord.__kovoInlineImport;
+          } else {
+            globalRecord.__kovoInlineImport = originals.importModule;
+          }
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'stamps inline enhanced forms when fetch fails without native submit through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: inline enhanced-form failure handling must not fall back to native submit.
