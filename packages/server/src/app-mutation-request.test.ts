@@ -55,6 +55,36 @@ describe('server app mutation request boundary', () => {
     expect(seen).toEqual(['policy:true', 'handler:p1']);
   });
 
+  it('decodes JSON mutation bodies through schemas without prototype-pollution side effects', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        seen.push(input);
+        return input;
+      },
+    });
+    const app = createApp({
+      mutationResponses: {
+        'cart/add': { redirectTo: '/cart' },
+      },
+      mutations: [addToCart],
+    });
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: '{"__proto__":{"polluted":true},"constructor":{"polluted":true},"productId":"p1","prototype":{"polluted":true}}',
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/cart');
+    expect(seen).toEqual([{ productId: 'p1' }]);
+    expect(({} as { polluted?: boolean }).polluted).toBe(undefined);
+  });
+
   it('uses mutation-level defaultRedirectTo without an app-authored response switch', async () => {
     const addToCart = mutation('cart/add', {
       csrf: false,

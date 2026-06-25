@@ -160,6 +160,7 @@ export const s = {
   object<const Shape extends Record<string, Schema<unknown>>>(
     shape: Shape,
   ): Schema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> {
+    assertSafeObjectShape(shape);
     const schema: AsyncSchema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {
       parse(input: unknown): { [Key in keyof Shape]: InferSchema<Shape[Key]> } {
         const record = formLikeToRecord(input);
@@ -167,7 +168,9 @@ export const s = {
 
         for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
           try {
-            output[key] = schema.parse(record[String(key)]) as InferSchema<Shape[keyof Shape]>;
+            output[key] = schema.parse(readOwnInputField(record, String(key))) as InferSchema<
+              Shape[keyof Shape]
+            >;
           } catch (error) {
             throw validationErrorFrom(error, [String(key)]);
           }
@@ -183,7 +186,7 @@ export const s = {
           try {
             output[key] = (await parseSchemaAsync(
               schema,
-              record[String(key)],
+              readOwnInputField(record, String(key)),
               true,
             )) as InferSchema<Shape[keyof Shape]>;
           } catch (error) {
@@ -531,6 +534,25 @@ function createFileOptions(
 function arrayValues(input: unknown): unknown[] {
   if (input === undefined || input === null) return [];
   return Array.isArray(input) ? input : [input];
+}
+
+const PROTOTYPE_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function assertSafeObjectShape(shape: Record<string, Schema<unknown>>): void {
+  for (const key of Object.keys(shape)) {
+    if (PROTOTYPE_POLLUTION_KEYS.has(key)) {
+      throw new Error(
+        `s.object(): "${key}" is reserved by the prototype-pollution input floor (SPEC §6.6).`,
+      );
+    }
+  }
+}
+
+function readOwnInputField(record: Record<string, unknown>, key: string): unknown {
+  // OPP-19 (SPEC §6.6 runtime-DiD): schema decode is shape-bound and must not let inherited
+  // properties satisfy declared fields. JSON/form payloads can carry prototype-pollution names, but
+  // object schemas project only own, declared fields into the validated value.
+  return Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
 function parseFileLike(input: unknown, options: FileSchemaOptions): FileLike {

@@ -232,12 +232,15 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
 packages/browser/src/security-output.test.ts packages/browser/src/trusted-types.test.ts
 packages/browser/src/index-exports.test.ts packages/server/src/safe-rich-html.test.ts` passed.
 
-- [ ] **OPP-19 — Deserialization / prototype-pollution floor.** runtime-DiD (decode/null-proto) +
+- [x] **OPP-19 — Deserialization / prototype-pollution floor.** runtime-DiD (decode/null-proto) +
       by-construction (static sink ban, statically-visible subset) · lev 6 · M · non-breaking. Route all body
       decode through `s.*` decoders building null-prototype objects, no reviver; static-ban `__proto__`/reflective
       attacker-key deref where visible. Object lesson: the Next RSC Flight pre-auth RCE (CVE-2025-55182).
       _Trade-off:_ real and worth building, but a labeled floor + a KV422-shaped (bounded) static ban — **not**
       the blanket by-construction elimination first proposed.
+      Evidence: `packages/server/src/schema.ts` rejects reserved object-shape keys and reads only own input
+      fields during schema projection; mutation JSON decode is covered in `app-mutation-request.test.ts`.
+      Focused schema and mutation request tests passed.
 
 - [x] **OPP-20 / SINK-03 — General path-traversal-safe file-serving primitive.** see SINK-03. lev
       6–7 · L.

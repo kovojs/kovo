@@ -411,6 +411,31 @@ describe('server schemas', () => {
     expect(record.constructor).toBe('first');
     expect(record['toString']).toBe('only');
   });
+
+  it('does not let inherited properties satisfy object schema fields', () => {
+    const schema = s.object({ productId: s.string() });
+    const inherited = Object.create({ productId: 'from-prototype' }) as Record<string, unknown>;
+
+    expect(() => schema.parse(inherited)).toThrow('Expected string');
+
+    inherited.productId = 'own-field';
+    expect(schema.parse(inherited)).toEqual({ productId: 'own-field' });
+  });
+
+  it('rejects object schema fields that would mutate or confuse prototypes', () => {
+    const protoShape = Object.create(null) as Record<string, Schema<unknown>>;
+    Object.defineProperty(protoShape, '__proto__', {
+      configurable: true,
+      enumerable: true,
+      value: s.string(),
+    });
+    const constructorShape = { constructor: s.string() } satisfies Record<string, Schema<unknown>>;
+    const prototypeShape = { prototype: s.string() } satisfies Record<string, Schema<unknown>>;
+
+    expect(() => s.object(protoShape)).toThrow('s.object(): "__proto__" is reserved');
+    expect(() => s.object(constructorShape)).toThrow('s.object(): "constructor" is reserved');
+    expect(() => s.object(prototypeShape)).toThrow('s.object(): "prototype" is reserved');
+  });
 });
 
 function formDataFile(bits: string[], name: string, type: string): Blob {
