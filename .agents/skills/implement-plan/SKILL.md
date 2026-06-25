@@ -46,7 +46,7 @@ Before editing, read enough source material to understand the plan's authority a
 Treat `SPEC.md` as normative. If the plan conflicts with `SPEC.md`, follow `SPEC.md` and
 update the plan or stop for user direction if the conflict changes the requested scope.
 
-## Prepare The Worktree
+## Prepare The Integration Worktree
 
 Protect unrelated local changes in the current checkout.
 
@@ -60,7 +60,7 @@ Protect unrelated local changes in the current checkout.
    git rev-parse origin/main
    ```
 
-2. Create a unique sibling worktree from the latest mainline source:
+2. Create a unique sibling integration worktree from the latest mainline source:
 
    ```bash
    slug="$(basename <plan-path> .md | tr -cs '[:alnum:]' '-' | tr '[:upper:]' '[:lower:]' | sed 's/^-//;s/-$//')"
@@ -69,7 +69,9 @@ Protect unrelated local changes in the current checkout.
    git worktree add "../kovo-${slug}-${stamp}" -b "$branch" origin/main
    ```
 
-3. Do all implementation, plan updates, tests, and commits inside the new worktree.
+3. Keep this worktree as the main-agent integration lane. The main agent reviews and integrates
+   worker commits here, resolves conflicts here, updates active-plan evidence here, runs broader
+   verification here, pushes batches from here, and monitors CI from here.
 4. Do not modify, stage, or revert unrelated files in the original checkout.
 
 If `origin/main` is unavailable, use the local `main` branch after confirming its exact SHA. If
@@ -89,20 +91,27 @@ Default to an integration-led strategy when the plan has multiple independent op
 - Spawn 3-5 workers at once when there are enough disjoint open items. Give each worker a coherent
   production slice, explicit file/module ownership, and instructions to create its own sibling
   worktree and branch from the current integration `HEAD`.
+- For security or hardening plans, good concurrent worker slices are independent areas such as
+  runtime sink event drain, inline sanitizer parity or parity gates, endpoint posture starter/CI
+  gates, static export symlink/race handling, pack security gates, and egress hardening. Treat this
+  as a pattern for slice sizing, not as a fixed checklist.
 - Assign large closure-oriented slices, not tiny research tasks. Each worker should own production
   changes, focused tests, `git diff --check`, `check:vp`, and a scoped commit in its branch.
 - Tell workers they are not alone in the codebase, must not edit active plan ledgers, must not
   push, and must not revert or overwrite other workers' changes.
 - Keep worker write sets disjoint. If two plan items would touch the same files or generated
   artifacts, serialize them or keep one in the main agent worktree.
+- When assigning workers, name the intended ownership boundary directly: files, packages,
+  generated artifacts, and tests they may edit. The boundary should be broad enough for a complete
+  production slice and narrow enough to avoid merge conflicts with other workers.
 - Use `gpt-5.5` with medium reasoning for high-risk compiler/runtime/server/security slices. Use
   `gpt-5.4` with medium reasoning for straightforward fixtures, docs, or narrow tests.
 - Worker prompts should include the expected handoff: worktree path, branch name, commit SHA or
   range, files changed, verification commands and results, remaining risks, and any conflicts they
   intentionally avoided.
 - While workers run, the main agent should review completed commits, run integration checks, fix
-  CI/auth/push issues, or prepare the next non-overlapping integration step. Do not duplicate
-  active worker implementation.
+  GitHub auth, push, or CI issues, or prepare the next non-overlapping integration step. Do not
+  duplicate active worker implementation.
 - Integrate worker branches one at a time with review. Cherry-pick or merge into the integration
   worktree, resolve conflicts, run the focused verification for that slice, update plan evidence
   only after verification, and commit the integrated result.
@@ -113,10 +122,19 @@ Default to an integration-led strategy when the plan has multiple independent op
   explicitly abandoned.
 
 Temporarily skip nonessential broad gates inside worker slices unless their change requires them.
-Run broader verification from the main integration worktree after a batch of integrated slices or
-before marking the plan complete. Fix GitHub auth, credential helpers, push failures, and delayed
-CI feedback as a separate integration concern; do not make workers wait on remote push access when
-they can continue producing local verified slices.
+The default worker gate is focused tests plus:
+
+```bash
+git diff --check
+pnpm run check:vp
+```
+
+Run `pnpm run check:api-surface` only when public types, exports, package manifests, or public
+subpaths changed. Run broader verification from the main integration worktree after a batch of 2-3
+integrated slices, after shared runtime/compiler/package behavior changes, and before marking the
+plan complete. Fix GitHub auth, credential helpers, push failures, and delayed CI feedback as a
+separate integration concern; do not make workers wait on remote push access when they can continue
+producing local verified slices.
 
 ## Implement The Plan
 
@@ -136,16 +154,17 @@ Work from the active plan's unchecked task list.
 - Leave a checkbox open when evidence is indirect, missing, weaker than the claim, or only
   partially proves the item.
 
-Make checkpoint commits for coherent progress after running the narrowest useful verification
-for that slice. Worker commits are handoff artifacts; the main agent still owns the integrated
-commit, final plan evidence, push, and CI follow-through.
+Workers make scoped commits for their own slices after focused verification. The main agent makes
+checkpoint commits for coherent integrated batches after reviewing worker commits, resolving
+conflicts, updating evidence, and running the narrowest useful post-integration verification.
 
 ## Verify Before Integration
 
-Run targeted checks first, then broaden if the change touches shared behavior, package
-boundaries, compiler/runtime contracts, workflows, public API, or user-facing docs. In worker
-slices, prefer focused tests plus `git diff --check` and `check:vp`; run `check:api-surface` only
-when public types or exports change. Useful gates:
+Run targeted checks first, then broaden after integrating 2-3 worker slices or whenever the change
+touches shared behavior, package boundaries, compiler/runtime contracts, workflows, public API, or
+user-facing docs. In worker slices, prefer focused tests plus `git diff --check` and `check:vp`;
+run `check:api-surface` only when public types, exports, package manifests, or public subpaths
+change. Useful gates:
 
 ```bash
 git diff --check
@@ -165,18 +184,39 @@ the exact reason in the plan or handoff and do not mark claims fully verified.
 
 ## Merge Back To Main
 
-Integrate continuously in the plan integration worktree as worker commits finish. Merge back to
-the repository's `main` branch, or push directly to `main` when that is the established flow for
-the task, after each coherent verified batch.
+Integrate continuously in the plan integration worktree as worker commits finish. Merge or
+cherry-pick worker branches into the integration branch one at a time, review the resulting diff,
+and run focused post-integration checks before taking the next branch. Merge back to the
+repository's `main` branch, or push directly to `main` when that is the established flow for the
+task, after each coherent verified batch.
 
-1. In the plan integration worktree, ensure a clean committed branch:
+1. In each worker worktree, require a clean committed branch and a handoff before integration:
+
+   ```bash
+   git status --short
+   git log --oneline <worker-base>..HEAD
+   ```
+
+2. In the plan integration worktree, merge or cherry-pick the worker branch and preserve the compact
+   current active-plan ledger:
+
+   ```bash
+   git merge --no-ff <worker-branch>
+   ```
+
+   Use cherry-pick when only part of a worker branch is accepted. Do not accept stale plan versions
+   from worker branches; workers should not edit active plans, and any accidental plan edits should
+   be manually reviewed before inclusion.
+
+3. In the plan integration worktree, ensure a clean committed branch before pushing or merging to
+   `main`:
 
    ```bash
    git status --short
    git log --oneline origin/main..HEAD
    ```
 
-2. In the main checkout, protect local state:
+4. In the main checkout, protect local state:
 
    ```bash
    git status --short --branch
@@ -185,7 +225,7 @@ the task, after each coherent verified batch.
    If main has unrelated local changes, use a separate clean integration worktree or ask before
    proceeding. Do not overwrite user work.
 
-3. Update main and merge the implementation branch when using a separate local main checkout:
+5. Update main and merge the implementation branch when using a separate local main checkout:
 
    ```bash
    git checkout main
@@ -194,13 +234,13 @@ the task, after each coherent verified batch.
    git merge --no-ff <branch>
    ```
 
-4. Resolve conflicts by preserving the compact current plan ledger and porting only new,
+6. Resolve conflicts by preserving the compact current plan ledger and porting only new,
    verified implementation evidence from the branch.
-5. Run the relevant post-merge verification in `main`.
-6. Commit conflict resolutions if the merge required them. Push verified batches when the user
+7. Run the relevant post-merge verification in `main`.
+8. Commit conflict resolutions if the merge required them. Push verified batches when the user
    requested push/CI follow-through or the repository workflow for the task requires it.
-7. Remove the temporary worktree only after integration succeeds or the branch is explicitly
-   abandoned:
+9. Remove temporary worker and integration worktrees only after their commits are integrated or
+   explicitly abandoned:
 
    ```bash
    git worktree remove <worktree-path>
