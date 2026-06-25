@@ -253,9 +253,11 @@ diagnostic in compiler/check gates that claim data-plane security.
       and test why dev is intentionally weaker.
   - Evidence: Vite dev middleware sets only `Content-Type`; production registry responses set
     immutable cache control, CORP, and content type.
-- [ ] Replace bootstrap 32-bit FNV aliases with collision-checked deterministic aliases or a
+- [x] Replace bootstrap 32-bit FNV aliases with collision-checked deterministic aliases or a
       stronger digest.
-  - Evidence: `emit/bootstrap.ts` calls the FNV suffix "collision-resistant-enough."
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/emit/bootstrap.test.ts packages/compiler/src/emit/bootstrap-runtime-contract.test.ts`
+    and `pnpm exec vitest --configLoader runner --run packages/compiler/src/query-coverage.test.ts -t "emits an app bootstrap"`
+    pass after bootstrap aliases switched to SHA-256-derived suffixes plus a uniqueness assertion.
 - [ ] Centralize unsafe URL scheme policy in the core security URL helper and import it from
       compiler output-context validation.
   - Evidence: compiler output-context logic has local URL-scheme checks while core already owns URL
