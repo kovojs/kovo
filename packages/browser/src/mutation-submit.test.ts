@@ -76,15 +76,17 @@ describe('enhanced mutation submit', () => {
       {
         component: 'components/cart/cart-badge/cart-badge',
         deps: 'cart',
+        token: 'tok_cart',
         id: 'cart-badge',
       },
       {
         component: 'components/recommendations/recommendations',
         deps: 'product:p1',
         props: '{"productId":"p1"}',
+        token: 'tok_recommendations',
         target: 'recommendations',
       },
-      { deps: 'cart', id: 'cart-badge' },
+      { deps: 'cart', id: 'cart-badge', token: 'tok_cart' },
     ];
     root.targets.set('cart-badge', new FakeMorphTarget());
     root.targets.set('recommendations', new FakeMorphTarget());
@@ -149,7 +151,7 @@ describe('enhanced mutation submit', () => {
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_01HX',
         'Kovo-Live-Targets':
-          'cart-badge#components/cart/cart-badge/cart-badge:{}; recommendations#components/recommendations/recommendations:{"productId":"p1"}',
+          'cart-badge#components/cart/cart-badge/cart-badge@tok_cart:{}; recommendations#components/recommendations/recommendations@tok_recommendations:{"productId":"p1"}',
         'Kovo-Targets': 'cart-badge=cart; recommendations=product:p1',
       },
       keepalive: true,
@@ -188,7 +190,7 @@ describe('enhanced mutation submit', () => {
     const channel = new FakeBroadcastChannel();
     const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
-    root.deps = [{ deps: 'cart', id: 'cart-badge' }];
+    root.deps = [{ deps: 'cart', id: 'cart-badge', token: 'tok_cart' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
     const fetch = vi.fn(async () => ({
       headers: {
@@ -233,7 +235,7 @@ describe('enhanced mutation submit', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const onError = vi.fn();
-    root.deps = [{ deps: 'cart', id: 'cart-badge' }];
+    root.deps = [{ deps: 'cart', id: 'cart-badge', token: 'tok_cart' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
     const fetch = vi.fn(async () => ({
       headers: {

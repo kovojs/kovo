@@ -95,6 +95,41 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it('rejects request-controlled SQL allowlists and joined request-derived SQL parts', () => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function report(input: { sort: string, dir: string, clause: string }, db: any) {
+        await db.execute(sql.identifier(input.sort, { allow: [input.sort] }));
+        await db.execute(sql.allow(input.dir, [input.dir]));
+        await db.execute(sql.join([sql.raw("where active = true"), input.clause], sql.raw(" ")));
+      }
+    `);
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(
+      expect.arrayContaining(['KV422', 'KV422', 'KV422']),
+    );
+    expect(diagnostics.map(({ message }) => message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('sql.identifier(...) receives request-derived text'),
+        expect.stringContaining('execute() receives request-derived SQL text'),
+      ]),
+    );
+  });
+
+  it('allows sql.join only when every part is statically safe', () => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function report(input: { sort: string, dir: string }, db: any) {
+        await db.execute(sql.join([
+          sql.identifier(input.sort, { allow: ["name", "created_at"] }),
+          sql.allow(input.dir, ["asc", "desc"])
+        ], sql.raw(" ")));
+      }
+    `);
+
+    expect(diagnostics).toEqual([]);
+  });
+
   it('keeps trustedSql auditable by flagging dynamic executable raw chunks', () => {
     expect(
       diagnosticsFor(`

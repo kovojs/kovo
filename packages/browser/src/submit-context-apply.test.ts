@@ -32,7 +32,7 @@ describe('submit context apply', () => {
     const observed: string[] = [];
     root.bindings.push(count);
     root.planElements.push(summary);
-    root.deps = [{ id: 'cart-badge' }];
+    root.deps = [{ id: 'cart-badge', token: 'tok_cart' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => {
       const body = options.body as FormData;
@@ -80,7 +80,7 @@ describe('submit context apply', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_ctx',
-        'Kovo-Live-Targets': 'cart-badge#cart-badge:{}',
+        'Kovo-Live-Targets': 'cart-badge#cart-badge@tok_cart:{}',
         'Kovo-Targets': 'cart-badge',
       },
       keepalive: true,

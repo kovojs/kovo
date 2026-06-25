@@ -260,6 +260,21 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     expect(extract(resA.body as string)).not.toBe(extract(resB.body as string));
   });
 
+  it('does not derive broadcast fingerprints from cookies without a resolved session', async () => {
+    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const app = createApp({ routes: [homeRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/', { headers: { cookie: 'session=ambient' } }),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.body).not.toContain('kovo-session');
+  });
+
   it('anonymous request (no cookies) produces no kovo-session meta (K3)', async () => {
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
     const app = createApp({ routes: [homeRoute] });

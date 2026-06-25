@@ -55,6 +55,7 @@ describe('enhanced mutation fetch', () => {
         'kovo-deps': 'recommendations',
         'kovo-fragment-target': 'recommendations:p1',
         'kovo-live-component': 'components/recommendations/recommendations',
+        'kovo-live-token': 'tok_rec',
         'kovo-props': '{"productId":"p1"}',
       }),
       new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product:p1' }),
@@ -91,7 +92,7 @@ describe('enhanced mutation fetch', () => {
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_fetch',
         'Kovo-Live-Targets':
-          'cart-badge#cart-badge:{}; recommendations:p1#components/recommendations/recommendations:{"productId":"p1"}',
+          'recommendations:p1#components/recommendations/recommendations@tok_rec:{"productId":"p1"}',
         'Kovo-Targets': 'cart-badge=cart product:p1; recommendations:p1=recommendations',
       },
       keepalive: true,
@@ -109,7 +110,7 @@ describe('enhanced mutation fetch', () => {
     expect(root.queries).toBe(1);
   });
 
-  it('uses the hidden Kovo-Idem form field when no explicit idem is supplied', async () => {
+  it('replaces the hidden Kovo-Idem form field with a fresh enhanced-submit token', async () => {
     const formData = new FormData();
     formData.set('Kovo-Idem', 'idem_hidden_field');
     const root = new FakeTargetRoot([]);
@@ -130,10 +131,11 @@ describe('enhanced mutation fetch', () => {
       '/_m/comment/post',
       expect.objectContaining({
         body: formData,
-        headers: expect.objectContaining({ 'Kovo-Idem': 'idem_hidden_field' }),
+        headers: expect.objectContaining({ 'Kovo-Idem': expect.stringMatching(/^[0-9a-f-]{36}$/) }),
       }),
     );
-    expect(fetched.idem).toBe('idem_hidden_field');
+    expect(fetched.idem).not.toBe('idem_hidden_field');
+    expect(formData.get('Kovo-Idem')).toBe(fetched.idem);
   });
 
   it('keeps selector-hostile identities but skips delimiter-unsafe live target headers', async () => {
@@ -141,6 +143,7 @@ describe('enhanced mutation fetch', () => {
       new FakeTargetElement('target"bad\\id', {
         'kovo-deps': 'cart product:p1',
         'kovo-live-component': 'components/cart/cart-panel',
+        'kovo-live-token': 'tok_cart',
       }),
       new FakeTargetElement(undefined, {
         'kovo-deps': 'cart',
@@ -185,7 +188,7 @@ describe('enhanced mutation fetch', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'idem_header_safe',
-        'Kovo-Live-Targets': 'target"bad\\id#components/cart/cart-panel:{}',
+        'Kovo-Live-Targets': 'target"bad\\id#components/cart/cart-panel@tok_cart:{}',
         'Kovo-Targets':
           'target"bad\\id=cart product:p1; safe-target=cart; safe-target-with-bad-component=cart',
       },

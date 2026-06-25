@@ -251,6 +251,31 @@ describe('server webhook primitive', () => {
     expect(assertNoneVerifierRequiresJustification).toBeTypeOf('function');
   });
 
+  it('fails closed when a write-reaching webhook lacks idempotency replay posture', async () => {
+    const invoice = domain('invoice-missing-replay');
+    const unsafeWebhook = webhook('missing-replay', {
+      handler(input, context) {
+        context.recordChange(invoice, { keys: [input.id] });
+        return { ok: true };
+      },
+      input: s.object({ id: s.string() }),
+      path: '/webhooks/missing-replay',
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+
+    const result = await runWebhook(
+      unsafeWebhook,
+      new Request('https://example.test/webhooks/missing-replay', {
+        body: JSON.stringify({ id: 'evt_1' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(result.replayed).toBe(false);
+  });
+
   // A4 (SPEC §9.1:850): an unexpected handler exception must abort the reservation so
   // a provider retry re-runs the handler, not re-serve a cached 500.
   it('A4: does not commit a 500 to replay on unexpected exception; retry reruns the handler', async () => {

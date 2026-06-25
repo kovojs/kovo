@@ -10,6 +10,16 @@ import { renderMutationEndpointResponse } from './mutation.js';
 import { query } from './query.js';
 import { s, type Schema } from './schema.js';
 import { cartBadgeFragmentHtml, testMutation as mutation } from './test-fixtures.js';
+import { createLiveTargetAttestation } from './mutation-wire.js';
+
+function attestedLiveTargetHeader(
+  target: string,
+  component: string,
+  props: Record<string, unknown> = {},
+): string {
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+}
 
 describe('server mutation endpoint routing', () => {
   it('routes mutation endpoints without Kovo-Fragment through the no-JS POST redirect', async () => {
@@ -91,7 +101,7 @@ describe('server mutation endpoint routing', () => {
       renderMutationEndpointResponse(addToCart, {
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart-badge#components/cart/badge:{}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'components/cart/badge')}`,
           'Kovo-Targets': 'cart-badge=cart',
         },
         liveTargetRenderers: [
@@ -111,7 +121,9 @@ describe('server mutation endpoint routing', () => {
         `<kovo-fragment target="cart-badge">${cartBadgeFragmentHtml}</kovo-fragment>`,
       ].join('\n'),
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -204,8 +216,10 @@ describe('server mutation endpoint routing', () => {
     expect(response).toEqual({
       body: '',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[{"domain":"generated-direct-product","keys":["p1"]}]',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -273,7 +287,9 @@ describe('server mutation endpoint routing', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="cart-form"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
       },
       status: 422,
     });
@@ -308,7 +324,7 @@ describe('server mutation endpoint routing', () => {
         headers: {
           'Kovo-Form-Target': 'add-to-cart:p1',
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'add-to-cart:p1#components/add-to-cart-form:{"productId":"p1"}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('add-to-cart:p1', 'components/add-to-cart-form', { productId: 'p1' })}`,
         },
         liveTargetRenderers: [
           {
@@ -327,7 +343,9 @@ describe('server mutation endpoint routing', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="add-to-cart:p1"><form data-product="p1" data-mutation="cart/add"><output role="alert" data-error-code="OUT_OF_STOCK">2</output></form></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
       },
       status: 422,
     });
@@ -352,7 +370,9 @@ describe('server mutation endpoint routing', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="reservation-form"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
       },
       status: 422,
     });

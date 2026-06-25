@@ -142,6 +142,23 @@ export function kovoBoundAttributeValue(name: string, value: unknown): string | 
   return formatOutputValue(value);
 }
 
+/** Sets one dynamic DOM attribute through Kovo's safe attribute sink rules. */
+export function kovoSetSafeAttribute(
+  element: {
+    removeAttribute?(name: string): void;
+    setAttribute?(name: string, value: string): void;
+  },
+  name: string,
+  value: unknown,
+): void {
+  const rendered = kovoBoundAttributeValue(name, value);
+  if (rendered === null) {
+    element.removeAttribute?.(name);
+    return;
+  }
+  element.setAttribute?.(name, rendered);
+}
+
 /**
  * Sanitizes one compiler-generated CSS property declaration.
  */

@@ -1696,6 +1696,37 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('fails closed on dynamic opaque-query reads entries', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<unknown[]>;']),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          export const products = pgTable("products", { id: text("id").primaryKey() }, kovo({ domain: "product", key: "id" }));
+          const extraReads = [products];
+
+          export const productQuery = query("product/raw", {
+            output: s.object({ id: s.string() }),
+            reads: [products, ...extraReads],
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.execute(sql\`select id from products\`);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toMatchObject([
+      {
+        code: 'KV410',
+        message: expect.stringContaining('dynamic or spread reads fail closed'),
+        severity: 'error',
+      },
+    ]);
+  });
+
   it('keeps computed query receiver calls visible as KV406 query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

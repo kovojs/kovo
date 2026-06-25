@@ -94,7 +94,7 @@ describe('browser inline loader bootstrap', () => {
   it('loads the runtime immediately and replays early authored handler clicks', async () => {
     installRafQueue();
     const target = document.createElement('button');
-    target.setAttribute('on:click', '/client.ts#mark');
+    target.setAttribute('on:click', '/c/client.ts#mark');
     let runtimeInstalled = false;
     let replayedClicks = 0;
     target.addEventListener('click', () => {

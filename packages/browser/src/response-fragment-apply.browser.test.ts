@@ -46,4 +46,25 @@ describe('browser response fragment apply', () => {
       '<section kovo-fragment-target="cart-badge"><p>new</p></section>',
     );
   });
+
+  it('sanitizes copied fragment attributes during keyed morphs', () => {
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'promo');
+    target.setAttribute('kovo-key', 'promo');
+    target.innerHTML = '<a kovo-key="link" href="/safe">old</a>';
+    document.body.append(target);
+
+    new DomMorphTarget(target).replaceWithHtml(
+      [
+        '<section kovo-fragment-target="promo" kovo-key="promo" onclick="bad()">',
+        '<a kovo-key="link" href="java\tscript:alert(1)" srcdoc="<script>bad()</script>">new</a>',
+        '</section>',
+      ].join(''),
+    );
+
+    const link = target.querySelector('a');
+    expect(target.getAttribute('onclick')).toBeNull();
+    expect(link?.getAttribute('href')).toBe('#');
+    expect(link?.getAttribute('srcdoc')).toBeNull();
+  });
 });

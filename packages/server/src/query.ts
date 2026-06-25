@@ -470,14 +470,14 @@ export async function renderQueryRegistryEndpointResponse<Request>(
   const definition = registry.queries.find((queryDefinition) => queryDefinition.key === queryKey);
 
   if (!definition) {
-    return {
+    return withQueryCacheHeaders({
       body: 'Not Found',
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         ...queryBuildHeaders(endpointRequest),
       },
       status: 404,
-    };
+    });
   }
 
   return renderQueryEndpointResponse(definition, endpointRequest);

@@ -335,12 +335,14 @@ describe('server mutation lifecycle', () => {
     ).resolves.toEqual({
       body: '',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[]',
         'Set-Cookie': [
           'kovo_session=s1; Path=/; HttpOnly; SameSite=Lax',
           'kovo_csrf=c1; Path=/; HttpOnly; Secure; SameSite=Strict',
         ],
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -397,7 +399,11 @@ describe('server mutation lifecycle', () => {
       }),
     ).resolves.toEqual({
       body: '<kovo-fragment target="error"><output role="alert" data-error-code="INVALID_CREDENTIALS">{}</output></kovo-fragment>',
-      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 422,
     });
   });

@@ -38,7 +38,58 @@ if (process.env.SKIP_NPM_PUBLISHED_CHECK !== '1') {
   }
 }
 
+if (process.env.GITHUB_ACTIONS === 'true' && process.env.SKIP_RELEASE_CHECKS !== '1') {
+  verifyExactCommitChecks();
+}
+
 console.log(`Release input ${version} is valid for ${packages.length} public packages.`);
+
+function verifyExactCommitChecks() {
+  const repo = requiredEnv('GITHUB_REPOSITORY');
+  const sha = requiredEnv('GITHUB_SHA');
+  const requiredChecks = (process.env.REQUIRED_RELEASE_CHECKS ?? 'check')
+    .split(',')
+    .map((check) => check.trim())
+    .filter(Boolean);
+  if (requiredChecks.length === 0) {
+    throw new Error('REQUIRED_RELEASE_CHECKS must name at least one exact-commit CI check');
+  }
+
+  const checkRuns = JSON.parse(
+    execFileSync(
+      'gh',
+      ['api', `/repos/${repo}/commits/${sha}/check-runs`, '-q', '.check_runs'],
+      { encoding: 'utf8' },
+    ),
+  );
+  const statuses = JSON.parse(
+    execFileSync('gh', ['api', `/repos/${repo}/commits/${sha}/status`, '-q', '.statuses'], {
+      encoding: 'utf8',
+    }),
+  );
+
+  const passed = new Set();
+  for (const run of checkRuns) {
+    if (run?.status === 'completed' && run?.conclusion === 'success') passed.add(run.name);
+  }
+  for (const status of statuses) {
+    if (status?.state === 'success') passed.add(status.context);
+  }
+
+  const missing = requiredChecks.filter((check) => !passed.has(check));
+  if (missing.length > 0) {
+    throw new Error(
+      `Release commit ${sha} is missing successful required check(s): ${missing.join(', ')}`,
+    );
+  }
+  console.log(`Release commit ${sha} has required successful checks: ${requiredChecks.join(', ')}`);
+}
+
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required for release check verification`);
+  return value;
+}
 
 function publishedVersion(name, requestedVersion) {
   try {

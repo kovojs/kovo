@@ -165,9 +165,9 @@ describe('server response adapters', () => {
   // brand (the framework re-encode/rasterize attestation); without it the runtime refuses.
   it('requires verifiedSafe for an inline un-bufferable stream (KV428)', () => {
     const body = new ReadableStream<Uint8Array>();
-    expect(() =>
-      respond.stream(body, { contentType: 'image/png', disposition: 'inline' }),
-    ).toThrow(/KV428/u);
+    expect(() => respond.stream(body, { contentType: 'image/png', disposition: 'inline' })).toThrow(
+      /KV428/u,
+    );
 
     const ok = respond.stream(body, {
       contentType: 'image/png',
@@ -177,17 +177,31 @@ describe('server response adapters', () => {
     expect(ok.contentDisposition).toBe('inline');
   });
 
-  it('does not clobber an author-supplied X-Content-Type-Options header', () => {
+  it('does not let file header maps override reserved safety headers', () => {
     const response = routeOutcomeResponse(
       respond.file('payload', {
         contentType: 'text/plain',
-        headers: { 'x-content-type-options': 'custom' },
+        etag: '"safe"',
+        filename: 'safe.txt',
+        headers: {
+          'Content-Disposition': 'inline',
+          'Content-Type': 'image/svg+xml',
+          ETag: '"evil"',
+          'Set-Cookie': 'session=evil',
+          'X-Audit': 'kept',
+          'x-content-type-options': 'custom',
+        },
       }),
       { method: 'GET' },
     );
 
-    expect(response.headers['x-content-type-options']).toBe('custom');
-    expect(response.headers['X-Content-Type-Options']).toBeUndefined();
+    expect(response.headers['Content-Disposition']).toBe('attachment; filename="safe.txt"');
+    expect(response.headers['Content-Type']).toBe('text/plain');
+    expect(response.headers.ETag).toBe('"safe"');
+    expect(response.headers['Set-Cookie']).toBeUndefined();
+    expect(response.headers['X-Audit']).toBe('kept');
+    expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
+    expect(response.headers['x-content-type-options']).toBeUndefined();
   });
 
   // KV428: respond.storedFile takes a bare string key (no compile-visible verification), so it is

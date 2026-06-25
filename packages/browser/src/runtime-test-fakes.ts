@@ -151,6 +151,7 @@ export class FakeMorphRoot {
     id?: string;
     props?: string;
     target?: string;
+    token?: string;
   }[] = [];
   planElements: FakeQueryPlanElement[] = [];
   targets = new Map<string, FakeMorphTarget>();
@@ -185,6 +186,7 @@ export class FakeMorphRoot {
         if (name === 'kovo-fragment-target') return dep.target ?? null;
         if (name === 'kovo-live-component') return dep.component ?? null;
         if (name === 'kovo-props') return dep.props ?? null;
+        if (name === 'kovo-live-token') return dep.token ?? null;
         if (name === 'kovo-deps') return dep.deps ?? null;
         if (name === 'kovo-c') return dep.component ?? null;
         return null;

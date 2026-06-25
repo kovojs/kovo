@@ -209,6 +209,8 @@ export {
    * on `{ key: id, owner: userId }` is still flagged `args`/IDOR.
    */
   argScopedReads?: readonly string[];
+  /** Exact client-visible keys for `argScopedReads`, used to scope `owns()` suppression. */
+  argScopedReadKeys?: readonly OwnerScopeKey[];
   diagnostics?: readonly TouchGraphDiagnostic[];
   /**
    * The query's `where()`/join predicate selects rows by a client-visible `input.*`
@@ -231,6 +233,12 @@ export {
   sessionAnchoredReads?: readonly string[];
   shape: QueryShape;
   site: string;
+}
+
+/** @internal */
+/** @internal */ export interface OwnerScopeKey {
+  domain: string;
+  key: string;
 }
 
 /** @internal */ export function revealFactsFromQueryFacts(
@@ -342,11 +350,27 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
       // client-visible `input.*` arg keying the declared key column (A1/legacy),
       // OR any owner-table column (A3, `argScopedReads`), flags KV414 even when the
       // same predicate is also session-anchored.
-      const argKeyed =
-        (fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:')) ||
-        (fact.argScopedReads ?? []).includes(domain);
-      if (argKeyed) {
-        audits.push({ domain, kind: 'query', name: fact.query, scope: 'args', site: fact.site });
+      const argKeys = new Set<string>();
+      if (fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:')) {
+        argKeys.add(fact.instanceKey.key);
+      }
+      for (const scoped of fact.argScopedReadKeys ?? []) {
+        if (scoped.domain === domain) argKeys.add(scoped.key);
+      }
+      if (argKeys.size === 0 && (fact.argScopedReads ?? []).includes(domain)) {
+        argKeys.add('');
+      }
+      if (argKeys.size > 0) {
+        for (const key of argKeys) {
+          audits.push({
+            domain,
+            ...(key ? { key } : {}),
+            kind: 'query',
+            name: fact.query,
+            scope: 'args',
+            site: fact.site,
+          });
+        }
         continue;
       }
 
@@ -378,6 +402,8 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
 /** @internal */ export interface WriteScopeFact {
   /** Owner-table domains keyed by a client-visible `input.*` arg (any column) → `args`/IDOR. */
   argScopedWrites: readonly string[];
+  /** Exact client-visible keys for `argScopedWrites`, used to scope `owns()` suppression. */
+  argScopedWriteKeys?: readonly OwnerScopeKey[];
   /** The mutation/handler name that owns this write (for `owns()` discharge in `kovo check`). */
   name: string;
   /** Owner-table domains this write touches (the audited surface). */
@@ -409,8 +435,23 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
       if (!owners.has(domain)) continue;
 
       // Fail-closed: an arg-keyed owner write is IDOR even if also session-anchored.
-      if (fact.argScopedWrites.includes(domain)) {
-        audits.push({ domain, kind: 'write', name: fact.name, scope: 'args', site: fact.site });
+      const argKeys = new Set(
+        (fact.argScopedWriteKeys ?? [])
+          .filter((scoped) => scoped.domain === domain)
+          .map((scoped) => scoped.key),
+      );
+      if (argKeys.size === 0 && fact.argScopedWrites.includes(domain)) argKeys.add('');
+      if (argKeys.size > 0) {
+        for (const key of argKeys) {
+          audits.push({
+            domain,
+            ...(key ? { key } : {}),
+            kind: 'write',
+            name: fact.name,
+            scope: 'args',
+            site: fact.site,
+          });
+        }
         continue;
       }
 
@@ -588,7 +629,7 @@ function sqlRawHelperDiagnostic(
   }
 
   if (!Node.isIdentifier(receiver) || receiver.getText() !== 'sql') return null;
-  if (method === 'identifier' && sqlIdentifierHasAllow(second)) return null;
+  if (method === 'identifier' && sqlAllowlistSafety(second, scopes) === 'literal') return null;
 
   const safety = sqlTextSafety(first, scopes);
   if (safety === 'literal') return null;
@@ -659,13 +700,21 @@ function sqlTextSafety(
       if (Node.isIdentifier(receiver) && receiver.getText() === 'sql') {
         const method = callExpression.getName();
         if (method === 'identifier') {
-          return sqlIdentifierHasAllow(expression.getArguments()[1]) ? 'safe' : 'unknown';
+          return sqlAllowlistSafety(expression.getArguments()[1], scopes) === 'literal'
+            ? 'safe'
+            : joinSqlTextSafety(sqlTextSafety(expression.getArguments()[0], scopes), 'unknown');
         }
         if (method === 'allow') {
-          return Node.isArrayLiteralExpression(expression.getArguments()[1]) ? 'safe' : 'unknown';
+          return sqlAllowlistSafety(expression.getArguments()[1], scopes) === 'literal'
+            ? 'safe'
+            : joinSqlTextSafety(sqlTextSafety(expression.getArguments()[0], scopes), 'unknown');
         }
-        if (method === 'join') return 'safe';
-        if (method === 'raw') return 'unknown';
+        if (method === 'join') return sqlJoinSafety(expression, scopes);
+        if (method === 'raw') {
+          return sqlTextSafety(expression.getArguments()[0], scopes) === 'literal'
+            ? 'literal'
+            : 'unknown';
+        }
       }
     }
     if (objectCarrierSafety(expression) === 'safe') return 'safe';
@@ -721,12 +770,79 @@ function objectHasLiteralProperty(
   );
 }
 
-function sqlIdentifierHasAllow(expression: Node | undefined): boolean {
-  if (!expression || !Node.isObjectLiteralExpression(expression)) return false;
-  const allow = expression.getProperty('allow');
-  if (!Node.isPropertyAssignment(allow)) return false;
-  const initializer = allow.getInitializer();
-  return !!initializer && Node.isArrayLiteralExpression(initializer);
+function sqlAllowlistSafety(
+  expression: Node | undefined,
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety {
+  if (!expression) return 'unknown';
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isObjectLiteralExpression(node)) {
+    const allow = node.getProperty('allow');
+    if (!Node.isPropertyAssignment(allow)) return 'unknown';
+    return sqlAllowlistSafety(allow.getInitializer(), scopes);
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    return node.getElements().every((item) => sqlAllowlistLiteral(item))
+      ? 'literal'
+      : combineSqlTextSafetyForNodes(node.getElements(), scopes);
+  }
+  if (Node.isIdentifier(node)) return bindingSafety(node, scopes) ?? 'unknown';
+  return requestSourceExpression(node) ? 'tainted' : 'unknown';
+}
+
+function sqlAllowlistLiteral(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  return (
+    Node.isStringLiteral(expression) ||
+    Node.isNoSubstitutionTemplateLiteral(expression) ||
+    Node.isNumericLiteral(expression) ||
+    expression.getKind() === SyntaxKind.TrueKeyword ||
+    expression.getKind() === SyntaxKind.FalseKeyword
+  );
+}
+
+function sqlJoinSafety(
+  expression: CallExpression,
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety {
+  const [parts, separator] = expression.getArguments();
+  const partSafety = sqlJoinPartsSafety(parts, scopes);
+  const separatorSafety = separator ? sqlTextSafety(separator, scopes) : 'literal';
+  if (partSafety === 'literal' && separatorSafety === 'literal') return 'literal';
+  if (
+    (partSafety === 'literal' || partSafety === 'safe') &&
+    (separatorSafety === 'literal' || separatorSafety === 'safe')
+  ) {
+    return 'safe';
+  }
+  return joinSqlTextSafety(partSafety, separatorSafety);
+}
+
+function sqlJoinPartsSafety(
+  expression: Node | undefined,
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety {
+  if (!expression) return 'unknown';
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isArrayLiteralExpression(node)) {
+    return combineSqlTextSafetyForNodes(node.getElements(), scopes);
+  }
+  if (Node.isIdentifier(node)) return bindingSafety(node, scopes) ?? 'unknown';
+  return requestSourceExpression(node) ? 'tainted' : 'unknown';
+}
+
+function combineSqlTextSafetyForNodes(
+  nodes: readonly Node[],
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety {
+  let sawSafe = false;
+  for (const node of nodes) {
+    const safety = sqlTextSafety(node, scopes);
+    if (safety === 'tainted') return 'tainted';
+    if (safety === 'unknown') return 'unknown';
+    if (safety === 'safe') sawSafe = true;
+  }
+  return sawSafe ? 'safe' : 'literal';
 }
 
 function joinSqlTextSafety(left: SqlTextSafety, right: SqlTextSafety): SqlTextSafety {
@@ -1001,10 +1117,12 @@ function writeScopeFactsForFunction(
     if (domains.size === 0) continue;
 
     const argScopedWrites = queryArgScopedDomains(call.instanceKeyComparisons, tables);
+    const argScopedWriteKeys = queryArgScopedDomainKeys(call.instanceKeyComparisons, tables);
     const sessionAnchoredWrites = querySessionAnchoredDomains(call.instanceKeyComparisons, tables);
 
     facts.push({
       argScopedWrites,
+      ...(argScopedWriteKeys.length > 0 ? { argScopedWriteKeys } : {}),
       name: fn.name,
       reads: [...domains].sort(),
       sessionAnchoredWrites,
@@ -1143,6 +1261,16 @@ function extractQueryFactsFromPreparedFiles(
             instanceKey.instanceKey.key.startsWith('arg:')
           ),
       );
+      const argScopedReadKeys = queryArgScopedDomainKeys(
+        query.instanceKeyComparisons,
+        fileTables,
+      ).filter(
+        (scoped) =>
+          !(
+            instanceKey?.instanceKey?.domain === scoped.domain &&
+            instanceKey.instanceKey.key === scoped.key
+          ),
+      );
       // SPEC §10.3 / KV414 join-keyed bypass: does the predicate key any table column
       // (owner or not) by a client `input.*` arg? An owner table joined into the read
       // set but keyed only through a non-owner table's arg is still client-pivotable;
@@ -1151,6 +1279,7 @@ function extractQueryFactsFromPreparedFiles(
       const hasClientArgPredicate = queryHasClientArgPredicate(query.instanceKeyComparisons);
       facts.push({
         ...(argScopedReads.length > 0 ? { argScopedReads } : {}),
+        ...(argScopedReadKeys.length > 0 ? { argScopedReadKeys } : {}),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...(hasClientArgPredicate ? { hasClientArgPredicate } : {}),
         ...instanceKey,
@@ -1547,6 +1676,7 @@ function extractQueryDefinitionsFromSourceFile(
     };
     const diagnostics = [
       ...(bodyResolution.unresolved ? [unresolvedQueryLoadCallbackDiagnostic()] : []),
+      ...dynamicDeclaredReadsDiagnostics(bodyObject),
       ...unresolvedQueryCallbackDiagnostics(bodyObject, receiverMode),
       ...relationalQueryDiagnostics(bodyObject, receiverReferences),
       ...(declaredOpaqueRead
@@ -1606,6 +1736,32 @@ function extractQueryDefinitionsFromSourceFile(
   }
 
   return definitions;
+}
+
+function dynamicDeclaredReadsDiagnostics(body: ObjectLiteralExpression): TouchGraphDiagnostic[] {
+  const readsProperty = body.getProperty('reads');
+  if (!Node.isPropertyAssignment(readsProperty)) return [];
+  const initializer = readsProperty.getInitializer();
+  const reads = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  if (!reads) return [];
+  if (!Node.isArrayLiteralExpression(reads)) {
+    return [dynamicDeclaredReadsDiagnostic()];
+  }
+  for (const element of reads.getElements()) {
+    const expression = unwrappedStaticExpressionNode(element);
+    if (Node.isIdentifier(expression) || Node.isPropertyAccessExpression(expression)) continue;
+    return [dynamicDeclaredReadsDiagnostic()];
+  }
+  return [];
+}
+
+function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
+  return {
+    code: 'KV410',
+    message: `${diagnosticDefinitions.KV410.message} Opaque query reads must be a fully static table list; dynamic or spread reads fail closed.`,
+    severity: diagnosticDefinitions.KV410.severity,
+    site: '',
+  };
 }
 
 /** @internal */ export function tableAnnotation(
@@ -2307,6 +2463,7 @@ import {
   materializedViewRefreshFactsForFunction,
   mergeSummary,
   pushUnique,
+  queryArgScopedDomainKeys,
   queryArgScopedDomains,
   queryBodyCallExpressions,
   queryCallChainReceiver,
@@ -2388,6 +2545,7 @@ export {
   materializedViewRefreshFactsForFunction,
   mergeSummary,
   pushUnique,
+  queryArgScopedDomainKeys,
   queryArgScopedDomains,
   queryBodyCallExpressions,
   queryCallChainReceiver,

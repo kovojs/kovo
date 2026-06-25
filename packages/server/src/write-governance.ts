@@ -16,7 +16,26 @@
 
 /** A recorded `adminAssign` audit fact for `kovo explain --writes` (SPEC §6.6, audit-grade). */
 export interface AdminAssignFact {
+  actor?: string;
+  callsite?: string;
+  columns?: readonly string[];
+  producer?: string;
   reason: string;
+  session?: string;
+  sourceProvenance?: string;
+  table?: string;
+}
+
+/** Additional audit context for the `adminAssign` privileged-write escape. */
+export interface AdminAssignOptions {
+  actor?: string;
+  callsite?: string;
+  columns?: readonly string[];
+  producer?: string;
+  reason: string;
+  session?: string;
+  sourceProvenance?: string;
+  table?: string;
 }
 
 const adminAssignFacts: AdminAssignFact[] = [];
@@ -52,11 +71,15 @@ export function serverValue<T>(value: T, reason: string): T {
  * @example
  * await db.update(users).set({ role: adminAssign(input.role, 'admin role grant') })...;
  */
-export function adminAssign<T>(value: T, reason: string): T {
-  if (typeof reason !== 'string' || reason.trim() === '') {
+export function adminAssign<T>(value: T, reason: string | AdminAssignOptions): T {
+  const fact = typeof reason === 'string' ? { reason } : reason;
+  if (typeof fact.reason !== 'string' || fact.reason.trim() === '') {
     throw new Error('adminAssign requires a non-empty reason (KV438).');
   }
-  adminAssignFacts.push({ reason });
+  adminAssignFacts.push({
+    ...fact,
+    ...(fact.columns ? { columns: [...fact.columns] } : {}),
+  });
   return value;
 }
 

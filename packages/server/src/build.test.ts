@@ -1,5 +1,10 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { createServer as createHttpServer, type Server } from 'node:http';
+import {
+  createServer as createHttpServer,
+  request as nodeHttpRequest,
+  type IncomingHttpHeaders,
+  type Server,
+} from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -452,6 +457,12 @@ describe('server build-time deployment API', () => {
         serverHandlerSource: `
 export default async function handler(request) {
   const url = new URL(request.url);
+  if (url.pathname === '/cookies') {
+    const headers = new Headers({ 'content-type': 'text/plain; charset=utf-8' });
+    headers.append('set-cookie', 'session=s1; Path=/; HttpOnly');
+    headers.append('set-cookie', 'csrf=c1; Path=/; SameSite=Strict');
+    return new Response('cookies', { headers });
+  }
   return new Response(
     'route:' + url.pathname + ':' + url.origin + ':' + request.headers.get('x-from-test'),
     {
@@ -477,6 +488,12 @@ export default async function handler(request) {
 
       await expect(readFile(join(nodeOutDir, 'Dockerfile'))).rejects.toThrow();
       expect(logs).toEqual([`Emitted Kovo node preset output to ${nodeOutDir}`]);
+      const nodeServer = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
+      expect(nodeServer).toContain('function nodeRequestToWebRequest');
+      expect(nodeServer).toContain('function responseHeadersToNodeHeaders');
+      expect(nodeServer).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(nodeServer).toContain('nodeResponse.destroy()');
+      expect(nodeServer).toContain('signal: controller.signal');
 
       const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
         createKovoNodeServer(): Server;
@@ -487,20 +504,34 @@ export default async function handler(request) {
       try {
         const routeResponse = await fetch(`${baseUrl}/hello?cart=1`, {
           headers: {
+            // SPEC §9.5: generated Node output must not trust forwarded scheme headers by default.
             'x-forwarded-proto': 'https',
             'x-from-test': 'route-header',
           },
         });
         await expect(routeResponse.text()).resolves.toBe(
-          `route:/hello:https://${new URL(baseUrl).host}:route-header`,
+          `route:/hello:http://${new URL(baseUrl).host}:route-header`,
         );
         expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+
+        const cookieResponse = await nodeGet(baseUrl, '/cookies');
+        expect(cookieResponse.headers['set-cookie']).toEqual([
+          'session=s1; Path=/; HttpOnly',
+          'csrf=c1; Path=/; SameSite=Strict',
+        ]);
 
         const clientModuleResponse = await fetch(`${baseUrl}/c/__v/cart-v1/cart.client.js`);
         await expect(clientModuleResponse.text()).resolves.toBe('export const cart = true;');
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
         );
+        expect(clientModuleResponse.headers.get('cross-origin-resource-policy')).toBe(
+          'same-origin',
+        );
+        expect(clientModuleResponse.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(clientModuleResponse.headers.get('access-control-allow-origin')).toBeNull();
+        expect(clientModuleResponse.headers.get('vary')).toBeNull();
+        expect(clientModuleResponse.headers.get('set-cookie')).toBeNull();
         expect(clientModuleResponse.headers.get('content-type')).toBe(
           'text/javascript; charset=utf-8',
         );
@@ -510,7 +541,20 @@ export default async function handler(request) {
         expect(assetResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
         );
+        expect(assetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+        expect(assetResponse.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(assetResponse.headers.get('access-control-allow-origin')).toBeNull();
+        expect(assetResponse.headers.get('vary')).toBeNull();
+        expect(assetResponse.headers.get('set-cookie')).toBeNull();
         expect(assetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
+
+        const missingClientModule = await fetch(`${baseUrl}/c/__v/cart-v1/missing.client.js`);
+        expect(missingClientModule.status).toBe(404);
+        expect(missingClientModule.headers.get('cache-control')).toBe('no-store');
+        expect(missingClientModule.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+        expect(missingClientModule.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(missingClientModule.headers.get('vary')).toBeNull();
+        expect(missingClientModule.headers.get('set-cookie')).toBeNull();
       } finally {
         await close(server);
       }
@@ -603,6 +647,12 @@ export default async function handler(request) {
         serverHandlerSource: `
 export default async function handler(request) {
   const url = new URL(request.url);
+  if (url.pathname === '/cookies') {
+    const headers = new Headers({ 'content-type': 'text/plain; charset=utf-8' });
+    headers.append('set-cookie', 'session=s1; Path=/; HttpOnly');
+    headers.append('set-cookie', 'csrf=c1; Path=/; SameSite=Strict');
+    return new Response('cookies', { headers });
+  }
   return new Response('vercel:' + url.pathname + ':' + request.headers.get('x-from-test'), {
     headers: { 'content-type': 'text/plain; charset=utf-8' },
   });
@@ -633,6 +683,15 @@ export default async function handler(request) {
       await expect(
         readFile(join(vercelOutDir, 'functions/kovo.func/handler.mjs'), 'utf8'),
       ).resolves.toContain('vercel:');
+      const vercelFunction = await readFile(
+        join(vercelOutDir, 'functions/kovo.func/index.cjs'),
+        'utf8',
+      );
+      expect(vercelFunction).toContain('function nodeRequestToWebRequest');
+      expect(vercelFunction).toContain('function responseHeadersToNodeHeaders');
+      expect(vercelFunction).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(vercelFunction).toContain('nodeResponse.destroy()');
+      expect(vercelFunction).toContain('signal: controller.signal');
       await expect(
         readJson(join(vercelOutDir, 'functions/kovo.func/.vc-config.json')),
       ).resolves.toEqual({
@@ -647,8 +706,17 @@ export default async function handler(request) {
         routes: [
           {
             continue: true,
-            headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
             src: '/(?:assets|c)/(.*)',
+          },
+          {
+            continue: true,
+            headers: { 'x-content-type-options': 'nosniff' },
+            src: '/(.*)',
           },
           { handle: 'filesystem' },
           { dest: '/kovo', src: '/(.*)' },
@@ -684,6 +752,12 @@ export default async function handler(request) {
         });
         await expect(response.text()).resolves.toBe('vercel:/hello:function-header');
         expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+
+        const cookieResponse = await nodeGet(baseUrl, '/cookies');
+        expect(cookieResponse.headers['set-cookie']).toEqual([
+          'session=s1; Path=/; HttpOnly',
+          'csrf=c1; Path=/; SameSite=Strict',
+        ]);
       } finally {
         await close(server);
       }
@@ -751,7 +825,26 @@ export default async function handler(request) {
       await expect(
         readFile(join(vercelOutDir, 'functions/kovo.func/index.cjs'), 'utf8'),
       ).rejects.toThrow();
-      await expect(readJson(join(vercelOutDir, 'config.json'))).resolves.toEqual({ version: 3 });
+      await expect(readJson(join(vercelOutDir, 'config.json'))).resolves.toEqual({
+        routes: [
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/(?:assets|c)/(.*)',
+          },
+          {
+            continue: true,
+            headers: { 'x-content-type-options': 'nosniff' },
+            src: '/(.*)',
+          },
+          { handle: 'filesystem' },
+        ],
+        version: 3,
+      });
       await assertVercelBuildOutput(vercelOutDir, {
         function: false,
         staticFiles: ['index.html'],
@@ -865,6 +958,10 @@ export default async function handler(request) {
         const staticResponse = await fetch(`${baseUrl}/static`);
         await expect(staticResponse.text()).resolves.toContain('Static Route');
         expect(staticResponse.headers.get('content-type')).toBe('text/html; charset=utf-8');
+        expect(staticResponse.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(staticResponse.headers.get('cache-control')).toBeNull();
+        expect(staticResponse.headers.get('vary')).toBeNull();
+        expect(staticResponse.headers.get('set-cookie')).toBeNull();
 
         const dynamicResponse = await fetch(`${baseUrl}/dynamic`);
         await expect(dynamicResponse.text()).resolves.toBe('dynamic:/dynamic');
@@ -892,8 +989,17 @@ export default async function handler(request) {
         routes: [
           {
             continue: true,
-            headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
             src: '/(?:assets|c)/(.*)',
+          },
+          {
+            continue: true,
+            headers: { 'x-content-type-options': 'nosniff' },
+            src: '/(.*)',
           },
           { handle: 'filesystem' },
           { dest: '/kovo', src: '/(.*)' },
@@ -953,6 +1059,9 @@ export default async function handler(request) {
       );
       await expect(staticWorkerResponse.text()).resolves.toContain('Static Route');
       expect(staticWorkerResponse.headers.get('cache-control')).toBeNull();
+      expect(staticWorkerResponse.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(staticWorkerResponse.headers.get('vary')).toBeNull();
+      expect(staticWorkerResponse.headers.get('set-cookie')).toBeNull();
 
       const dynamicWorkerResponse = await workerModule.default.fetch(
         new Request('https://worker.test/dynamic'),
@@ -1063,6 +1172,30 @@ export default async function handler(request) {
       expect(assetResponse.headers.get('cache-control')).toBe(
         'public, max-age=31536000, immutable',
       );
+      expect(assetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+      expect(assetResponse.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(assetResponse.headers.get('access-control-allow-origin')).toBeNull();
+      expect(assetResponse.headers.get('vary')).toBeNull();
+      expect(assetResponse.headers.get('set-cookie')).toBeNull();
+
+      const assetErrorResponse = await workerModule.default.fetch(
+        new Request('https://worker.test/c/__v/cart-v1/missing.client.js'),
+        {
+          ASSETS: {
+            fetch: async () =>
+              new Response('Asset Error', {
+                headers: { 'content-type': 'text/plain; charset=utf-8' },
+                status: 500,
+              }),
+          },
+        },
+      );
+      expect(assetErrorResponse.status).toBe(500);
+      expect(assetErrorResponse.headers.get('cache-control')).toBe('no-store');
+      expect(assetErrorResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+      expect(assetErrorResponse.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(assetErrorResponse.headers.get('vary')).toBeNull();
+      expect(assetErrorResponse.headers.get('set-cookie')).toBeNull();
 
       const routeResponse = await workerModule.default.fetch(
         new Request('https://worker.test/hello'),
@@ -1219,6 +1352,38 @@ async function listen(server: Server): Promise<string> {
   }
 
   return `http://127.0.0.1:${address.port}`;
+}
+
+async function nodeGet(
+  baseUrl: string,
+  pathname: string,
+): Promise<{ body: string; headers: IncomingHttpHeaders; statusCode: number }> {
+  const url = new URL(pathname, baseUrl);
+  return await new Promise((resolve, reject) => {
+    const request = nodeHttpRequest(
+      {
+        hostname: url.hostname,
+        path: `${url.pathname}${url.search}`,
+        port: url.port,
+      },
+      (response) => {
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk: string) => {
+          body += chunk;
+        });
+        response.on('end', () => {
+          resolve({
+            body,
+            headers: response.headers,
+            statusCode: response.statusCode ?? 0,
+          });
+        });
+      },
+    );
+    request.on('error', reject);
+    request.end();
+  });
 }
 
 async function close(server: Server): Promise<void> {

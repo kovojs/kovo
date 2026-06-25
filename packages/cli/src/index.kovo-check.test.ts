@@ -90,7 +90,9 @@ describe('kovo check', () => {
 
     const decided = deriveAppGraph({
       graph: {
-        endpoints: [{ access: { kind: 'verified-machine-auth' }, method: 'POST', path: '/api/raw' }],
+        endpoints: [
+          { access: { kind: 'verified-machine-auth' }, method: 'POST', path: '/api/raw' },
+        ],
         mutations: [{ guards: ['authed'], key: 'cart/clear', writes: ['cart'] }],
         pages: [{ access: { kind: 'public', reason: 'public landing page' }, route: '/secret' }],
         queries: [{ domains: ['draft'], guards: ['authed'], query: 'drafts' }],
@@ -145,7 +147,7 @@ describe('kovo check', () => {
           fileName: 'products.ts',
           source: [
             'export async function load(input: { id: string }, db: any) {',
-            "  await db.execute(\"select * from products where id = '\" + input.id + \"'\");",
+            '  await db.execute("select * from products where id = \'" + input.id + "\'");',
             '}',
           ].join('\n'),
         },
@@ -158,9 +160,9 @@ describe('kovo check', () => {
     const merged = deriveAppGraph({
       graph: { sqlSafetyDiagnostics },
     } as Parameters<typeof deriveAppGraph>[0]);
-    expect(
-      (merged.graph as { sqlSafetyDiagnostics?: unknown }).sqlSafetyDiagnostics,
-    ).toEqual(sqlSafetyDiagnostics);
+    expect((merged.graph as { sqlSafetyDiagnostics?: unknown }).sqlSafetyDiagnostics).toEqual(
+      sqlSafetyDiagnostics,
+    );
 
     // Serialize/parse to mimic the graph.json on-disk round-trip that `kovo check` consumes.
     const checkInput = JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoCheck>[0];
@@ -440,6 +442,7 @@ describe('kovo check', () => {
       scopeAudits: [
         {
           domain: 'order',
+          key: 'arg:id',
           kind: 'query',
           name: 'orderById',
           scope: 'args',
@@ -453,14 +456,72 @@ describe('kovo check', () => {
         ...base,
         queries: [{ domains: ['order'], guards: ['authed'], query: 'orderById' }],
       }).output,
-    ).toContain('ERROR KV414 QUERY orderById domain=order');
-    // An owns() guard in the chain discharges it (SPEC §10.3).
+    ).toContain('ERROR KV414 QUERY orderById domain=order key=arg:id');
+    // An owns() guard in the chain discharges that exact domain+key (SPEC §10.3).
     expect(
       kovoCheck({
         ...base,
-        queries: [{ domains: ['order'], guards: ['authed', 'owns'], query: 'orderById' }],
+        queries: [
+          { domains: ['order'], guards: ['authed', 'owns:order:arg:id'], query: 'orderById' },
+        ],
       }).output,
     ).not.toContain('KV414');
+  });
+
+  it('keeps same-domain different-key owns() accesses flagged as KV414 (SPEC §10.3)', () => {
+    const result = kovoCheck({
+      ownerDomains: [{ domain: 'order', owner: 'userId' }],
+      queries: [{ domains: ['order'], guards: ['authed', 'owns:order:arg:id'], query: 'orderById' }],
+      scopeAudits: [
+        {
+          domain: 'order',
+          key: 'arg:alternateId',
+          kind: 'query',
+          name: 'orderById',
+          scope: 'args',
+          site: 'order.queries.ts:12',
+        },
+      ],
+    }).output;
+
+    expect(result).toContain('ERROR KV414 QUERY orderById domain=order key=arg:alternateId');
+  });
+
+  it('scopes owns() suppression to the guarded owner domain (SPEC §10.3)', () => {
+    const result = kovoCheck({
+      ownerDomains: [
+        { domain: 'account', owner: 'userId' },
+        { domain: 'invoice', owner: 'userId' },
+      ],
+      queries: [
+        {
+          domains: ['account', 'invoice'],
+          guards: ['authed', 'owns:account:arg:accountId'],
+          query: 'mixed',
+        },
+      ],
+      scopeAudits: [
+        {
+          domain: 'account',
+          key: 'arg:accountId',
+          kind: 'query',
+          name: 'mixed',
+          scope: 'args',
+          site: 'mixed.queries.ts:10',
+        },
+        {
+          domain: 'invoice',
+          key: 'arg:invoiceId',
+          kind: 'query',
+          name: 'mixed',
+          scope: 'args',
+          site: 'mixed.queries.ts:11',
+        },
+      ],
+    }).output;
+
+    expect(result).not.toContain('domain=account');
+    expect(result).toContain('ERROR KV414 QUERY mixed domain=invoice key=arg:invoiceId');
   });
 
   it('reports a governed-column mass-assignment as KV438 (SPEC §11.1)', () => {
@@ -486,7 +547,9 @@ describe('kovo check', () => {
 
   it('reports a lost-update read-then-write as KV429 (SPEC §10.3)', () => {
     const result = kovoCheck({
-      toctouFacts: [{ column: 'stock', name: 'buy', site: 'inventory.domain.ts:5', table: 'products' }],
+      toctouFacts: [
+        { column: 'stock', name: 'buy', site: 'inventory.domain.ts:5', table: 'products' },
+      ],
     });
     expect(result.output).toContain(
       'ERROR KV429 WRITE buy table=products column=stock site=inventory.domain.ts:5',

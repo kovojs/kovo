@@ -44,9 +44,9 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
     expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
   });
 
-  it('routes delta chunks to onDeltaMiss on build-token mismatch, applies full chunks normally', () => {
-    // SPEC §9.1.1: when responseBuildToken !== expectedBuildToken, all delta
-    // chunks become misses; full chunks still apply.
+  it('treats build-token mismatch as a whole-response miss before any chunk applies', () => {
+    // SPEC §5.2.1/§14: a mismatched response token rejects the whole response:
+    // no query, fragment, or text chunk is applied from the foreign build.
     const store = createQueryStore();
     store.set('cart', { count: 1 });
     const onDeltaMiss = vi.fn();
@@ -67,10 +67,32 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
       },
     );
 
-    // Delta was a miss (token mismatch); full inventory chunk applied.
-    expect(result.queries).toEqual(['inventory']);
+    expect(result.queries).toEqual([]);
     expect(store.get('cart')).toEqual({ count: 1 }); // unchanged
-    expect(store.get('inventory')).toEqual({ available: false });
+    expect(store.get('inventory')).toBeUndefined();
+    expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+    expect(onDeltaMiss).toHaveBeenCalledWith('inventory', undefined);
+  });
+
+  it('treats a missing response token as a whole-response miss when the page is stamped', () => {
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+    const onDeltaMiss = vi.fn();
+
+    const result = applyMutationResponseChunksToRuntime(
+      {
+        fragments: [],
+        queries: [{ name: 'cart', value: { count: 2 } }],
+      },
+      {
+        expectedBuildToken: 'build-1',
+        onDeltaMiss,
+        store,
+      },
+    );
+
+    expect(result.queries).toEqual([]);
+    expect(store.get('cart')).toEqual({ count: 1 });
     expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
   });
 
@@ -115,7 +137,7 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
     expect(store.get('cart')).toEqual({ count: 4 });
   });
 
-  it('drops delta chunks silently on build-token mismatch when no onDeltaMiss is provided', () => {
+  it('drops every chunk on build-token mismatch when no onDeltaMiss is provided', () => {
     const store = createQueryStore();
     store.set('cart', { count: 1 });
 
@@ -134,8 +156,8 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
       },
     );
 
-    // Delta chunk dropped silently; full chunk applied.
-    expect(result.queries).toEqual(['inventory']);
+    expect(result.queries).toEqual([]);
     expect(store.get('cart')).toEqual({ count: 1 }); // unchanged
+    expect(store.get('inventory')).toBeUndefined();
   });
 });

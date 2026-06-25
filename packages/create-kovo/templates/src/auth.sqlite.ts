@@ -15,7 +15,7 @@ import { authSchema } from './schema.js';
 // `node`, the dev/test servers). In production, real env vars are already set, so
 // a missing .env is fine.
 try {
-  (process as { loadEnvFile?: (path?: string) => void }).loadEnvFile?.();
+  process.loadEnvFile?.();
 } catch {
   // No .env file present — rely on the ambient environment.
 }
@@ -55,10 +55,10 @@ export const appCsrf = {
   field: 'csrf',
   secret: requireAuthSecret(),
   sessionId(request: AppRequest) {
-    // Once signed in, bind the token to the session. Before sign-in there is no
-    // session, so bind anonymous (login) forms to a stable id — the token is still
-    // an HMAC under the private secret, so it is unforgeable cross-site (SPEC §6.6).
-    return request.session?.id ?? request.authCsrfId ?? 'kovo-starter-anon';
+    // Once signed in, bind the token to the session. Before sign-in, return no
+    // app-owned binding so Kovo uses its framework-owned signed anonymous cookie
+    // for login forms (SPEC.md §6.6).
+    return request.session?.id ?? request.authCsrfId ?? undefined;
   },
 } satisfies CsrfValidationOptions<AppRequest>;
 

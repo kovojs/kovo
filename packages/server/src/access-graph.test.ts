@@ -64,6 +64,22 @@ describe('app access graph extraction', () => {
       reason: 'signed API sync',
       response: rawJsonResponse,
     });
+    const verifiedApi = endpoint('/api/verified-sync', {
+      access: verifiedAccess,
+      auth: {
+        kind: 'verifier',
+        name: 'sync-hmac',
+        verify: hmacSignature({
+          header: 'X-Signature',
+          scheme: 'sync-hmac',
+          secret: 'test_secret',
+        }),
+      },
+      handler: () => Response.json({ ok: true }),
+      method: 'POST',
+      reason: 'signed API sync with executable verifier',
+      response: rawJsonResponse,
+    });
     const signedWebhook = webhook('stripe', {
       access: verifiedAccess,
       handler: () => ({}),
@@ -77,7 +93,7 @@ describe('app access graph extraction', () => {
     });
 
     const app = createApp({
-      endpoints: [health, api, signedWebhook],
+      endpoints: [health, api, verifiedApi, signedWebhook],
       mutations: [guardedMutation, missingMutation],
       queries: [guardedQuery, publicQuery, missingQuery],
       routes: [guardedRoute, explicitGuardRoute, missingRoute],
@@ -85,11 +101,19 @@ describe('app access graph extraction', () => {
 
     expect(accessFactsFromApp(app)).toEqual([
       {
-        decision: 'verified',
+        decision: 'missing',
         detail:
-          'access=verified-machine-auth method=POST path=/api/sync mount=exact auth=custom:api-key',
+          'access=verified-machine-auth audit-only-without-executable-verifier method=POST path=/api/sync mount=exact auth=custom:api-key',
         kind: 'endpoint',
         name: '/api/sync',
+        source: 'access',
+      },
+      {
+        decision: 'verified',
+        detail:
+          'access=verified-machine-auth method=POST path=/api/verified-sync mount=exact auth=verifier:sync-hmac',
+        kind: 'endpoint',
+        name: '/api/verified-sync',
         source: 'access',
       },
       {

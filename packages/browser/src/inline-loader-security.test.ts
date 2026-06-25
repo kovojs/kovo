@@ -51,7 +51,7 @@ describe('inline loader output security', () => {
         'data-bind:src': 'state.url',
         'data-bind:xlink:href': 'state.url',
         'kovo-state': '{"url":"/safe"}',
-        'on:click': '/client.js#setUnsafeUrl',
+        'on:click': '/c/client.js#setUnsafeUrl',
       });
 
       await dispatchInlineDelegatedClick(
@@ -78,7 +78,7 @@ describe('inline loader output security', () => {
         'data-bind:onclick': 'state.handler',
         'data-bind:srcdoc': 'state.srcdoc',
         'kovo-state': '{"handler":"alert(1)","srcdoc":"<script>alert(1)</script>"}',
-        'on:click': '/client.js#noop',
+        'on:click': '/c/client.js#noop',
       });
 
       await dispatchInlineDelegatedClick(

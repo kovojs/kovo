@@ -88,7 +88,7 @@ const app = createApp({
   document: { lang: 'en' },
   mutations: [addContact, appSignIn, appSignOut],
   queries: [contactsQuery],
-  sessionProvider: (request) => appSessionProvider(request as unknown as AppRequest),
+  sessionProvider: appSessionProvider,
   routes: [
     route('/', {
       // The contact book is the signed-in user's data, so this route's KV436 access

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -5,13 +6,16 @@ import { fileURLToPath } from 'node:url';
 
 export interface VendoredUiComponent {
   fileName: `${string}.tsx`;
+  packageVersion: string;
   source: string;
+  sourceHash: string;
 }
 
 interface UiPackageManifest {
   exports?: Record<string, string>;
-  kovo?: { vendoredSource?: boolean };
+  kovo?: { vendoredSource?: boolean; vendoredSourceHashes?: Record<string, string> };
   name?: string;
+  version?: string;
 }
 
 const catalogModuleDir = dirname(realpathSync(fileURLToPath(import.meta.url)));
@@ -26,7 +30,9 @@ export const vendoredUiComponents = Object.freeze(
       name,
       {
         fileName: `${name}.tsx`,
-        source: readVendoredSource(sourcePath),
+        packageVersion: uiPackageManifest.version ?? '0.0.0',
+        source: readVendoredSource(name, sourcePath),
+        sourceHash: verifyVendoredSourceHash(name, sourcePath),
       },
     ]),
   ),
@@ -101,7 +107,8 @@ function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [strin
     .sort(([left], [right]) => left.localeCompare(right));
 }
 
-function readVendoredSource(sourcePath: string): string {
+function readVendoredSource(name: string, sourcePath: string): string {
+  verifyVendoredSourceHash(name, sourcePath);
   const source = vendoredUiComponentSource(readFileSync(sourcePath, 'utf8'));
   if (source.includes('@kovojs/ui')) {
     throw new Error(`vendored @kovojs/ui source must not import @kovojs/ui: ${sourcePath}`);
@@ -120,6 +127,24 @@ function readVendoredSource(sourcePath: string): string {
     throw new Error(`vendored @kovojs/ui source must be TSX, not lowered IR: ${sourcePath}`);
   }
   return source.endsWith('\n') ? source : `${source}\n`;
+}
+
+function verifyVendoredSourceHash(name: string, sourcePath: string): string {
+  const source = readFileSync(sourcePath, 'utf8');
+  const hash = sourceHash(source);
+  const expected = uiPackageManifest.kovo?.vendoredSourceHashes?.[name];
+  if (expected !== hash) {
+    throw new Error(
+      `@kovojs/ui vendored source hash mismatch for ${name}: expected ${expected ?? '(missing)'}, got ${hash}`,
+    );
+  }
+  return hash;
+}
+
+function sourceHash(source: string): string {
+  return `sha256-${createHash('sha256')
+    .update(source.endsWith('\n') ? source : `${source}\n`)
+    .digest('base64url')}`;
 }
 
 export function vendoredUiComponentSource(source: string): string {
@@ -357,12 +382,18 @@ function isUiPackageManifest(value: unknown): value is UiPackageManifest {
   const kovoValue = value.kovo;
   return (
     typeof value.name === 'string' &&
+    (value.version === undefined || typeof value.version === 'string') &&
     (exportsValue === undefined ||
       (isRecord(exportsValue) &&
         Object.values(exportsValue).every((entry) => typeof entry === 'string'))) &&
     (kovoValue === undefined ||
       (isRecord(kovoValue) &&
-        (kovoValue.vendoredSource === undefined || typeof kovoValue.vendoredSource === 'boolean')))
+        (kovoValue.vendoredSource === undefined || typeof kovoValue.vendoredSource === 'boolean') &&
+        (kovoValue.vendoredSourceHashes === undefined ||
+          (isRecord(kovoValue.vendoredSourceHashes) &&
+            Object.values(kovoValue.vendoredSourceHashes).every(
+              (entry) => typeof entry === 'string',
+            )))))
   );
 }
 

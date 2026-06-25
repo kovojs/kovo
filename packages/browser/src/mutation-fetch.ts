@@ -71,7 +71,7 @@ export interface FetchedEnhancedMutation {
 
 export async function fetchEnhancedMutation(
   options: FetchEnhancedMutationOptions,
-  idem = options.idem ?? readFormDataIdem(options.formData) ?? createMutationIdem(),
+  idem = options.idem ?? refreshFormDataIdem(options.formData) ?? createMutationIdem(),
 ): Promise<FetchedEnhancedMutation> {
   const targetSnapshot = readLiveTargetSnapshot(options.root);
   const submittedFormTarget = readSubmittedFormTarget(options.form);
@@ -131,16 +131,17 @@ function followReauthDirective(location: string): void {
   globalLocation?.assign(location);
 }
 
-function readFormDataIdem(formData: unknown): string | undefined {
+function refreshFormDataIdem(formData: unknown): string | undefined {
   if (
     formData === null ||
     typeof formData !== 'object' ||
-    typeof (formData as { get?: unknown }).get !== 'function'
+    typeof (formData as { set?: unknown }).set !== 'function'
   ) {
     return undefined;
   }
-  const value = (formData as { get(name: string): unknown }).get('Kovo-Idem');
-  return typeof value === 'string' && value !== '' ? value : undefined;
+  const value = createMutationIdem();
+  (formData as { set(name: string, value: string): void }).set('Kovo-Idem', value);
+  return value;
 }
 
 function readSubmittedFormTarget(form: EnhancedFormLike): string | undefined {

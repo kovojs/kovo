@@ -1709,10 +1709,7 @@ function collectCapabilityFacts(
   return collected.sort(compareCapability);
 }
 
-function compareCapability(
-  a: CoreGraph.CapabilityExplain,
-  b: CoreGraph.CapabilityExplain,
-): number {
+function compareCapability(a: CoreGraph.CapabilityExplain, b: CoreGraph.CapabilityExplain): number {
   return (
     a.kind.localeCompare(b.kind) ||
     a.site.localeCompare(b.site) ||
@@ -2103,7 +2100,7 @@ function renderOnceInvalidationConflictLine(conflict: RenderOnceInvalidationConf
 
 function unscopedAccesses(input: CoreGraph.KovoCheckInput): CoreGraph.ScopeAuditFact[] {
   const ownerDomains = new Set((input.ownerDomains ?? []).map((owner) => owner.domain));
-  const ownsGuarded = ownsGuardedNames(input);
+  const ownsGuarded = ownsGuardedKeysByName(input);
 
   return (
     (input.scopeAudits ?? [])
@@ -2111,25 +2108,78 @@ function unscopedAccesses(input: CoreGraph.KovoCheckInput): CoreGraph.ScopeAudit
       // SPEC §10.3: an owner-table access discharges KV414 when its key predicate is
       // session-traceable (scope 'session') OR an `owns()` ownership guard covers it.
       .filter((fact) => fact.scope !== 'session')
-      .filter((fact) => !ownsGuarded.has(fact.name))
+      .filter((fact) => !ownsGuardCoversFact(ownsGuarded.get(fact.name), fact))
       .sort(compareScopeAudit)
   );
 }
 
-/** Query/mutation names whose guard chain includes an `owns()` ownership guard (SPEC §10.3). */
-function ownsGuardedNames(input: CoreGraph.KovoCheckInput): Set<string> {
-  const names = new Set<string>();
+/** Query/mutation domain+key pairs whose guard chain includes an exact `owns()` ownership guard (SPEC §10.3). */
+function ownsGuardedKeysByName(
+  input: CoreGraph.KovoCheckInput,
+): Map<string, Map<string, Set<string>>> {
+  const keysByName = new Map<string, Map<string, Set<string>>>();
+  const add = (name: string, guard: OwnsGuardFact): void => {
+    let domains = keysByName.get(name);
+    if (!domains) {
+      domains = new Map();
+      keysByName.set(name, domains);
+    }
+    let keys = domains.get(guard.domain);
+    if (!keys) {
+      keys = new Set();
+      domains.set(guard.domain, keys);
+    }
+    keys.add(guard.key ?? '');
+  };
   for (const query of input.queries ?? []) {
-    if ((query.guards ?? []).some(isOwnsGuard)) names.add(query.query);
+    for (const guard of query.guards ?? []) {
+      const parsed = ownsGuardFact(guard);
+      if (parsed) add(query.query, parsed);
+    }
   }
   for (const mutation of input.mutations ?? []) {
-    if ((mutation.guards ?? []).some(isOwnsGuard)) names.add(mutation.key);
+    for (const guard of mutation.guards ?? []) {
+      const parsed = ownsGuardFact(guard);
+      if (parsed) add(mutation.key, parsed);
+    }
   }
-  return names;
+  return keysByName;
+}
+
+interface OwnsGuardFact {
+  domain: string;
+  key?: string;
+}
+
+function ownsGuardCoversFact(
+  domains: Map<string, Set<string>> | undefined,
+  fact: CoreGraph.ScopeAuditFact,
+): boolean {
+  const keys = domains?.get(fact.domain);
+  if (!keys) return false;
+  return keys.has(fact.key ?? '');
+}
+
+function ownsGuardFact(guard: string): OwnsGuardFact | undefined {
+  if (guard.startsWith('owns:')) {
+    const parts = guard.slice('owns:'.length).split(':');
+    const domain = parts[0]?.trim();
+    if (!domain) return undefined;
+    const key = parts.slice(1).join(':').trim();
+    return key ? { domain, key } : { domain };
+  }
+  if (guard.startsWith('owns(') && guard.endsWith(')')) {
+    const [domainPart, keyPart] = guard.slice('owns('.length, -1).split(',');
+    const domain = domainPart?.trim();
+    if (!domain) return undefined;
+    const key = keyPart?.trim();
+    return key ? { domain, key } : { domain };
+  }
+  return undefined;
 }
 
 function isOwnsGuard(guard: string): boolean {
-  return guard === 'owns' || guard.startsWith('owns(') || guard.startsWith('owns:');
+  return guard === 'owns' || ownsGuardFact(guard) !== undefined;
 }
 
 function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {
@@ -2138,6 +2188,7 @@ function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {
     fact.kind.toUpperCase(),
     fact.name,
     `domain=${fact.domain}`,
+    fact.key ? `key=${fact.key}` : '',
     `scope=${fact.scope}`,
     `site=${fact.site}`,
     fact.justification ? `justification=${fact.justification}` : '',
@@ -2154,6 +2205,7 @@ function unscopedKv414Line(fact: CoreGraph.ScopeAuditFact): string {
     fact.kind.toUpperCase(),
     fact.name,
     `domain=${fact.domain}`,
+    fact.key ? `key=${fact.key}` : '',
     `scope=${fact.scope}`,
     `site=${fact.site}`,
     diagnosticDefinitions.KV414.message,
@@ -2248,6 +2300,7 @@ function compareScopeAudit(
     left.kind.localeCompare(right.kind) ||
     left.name.localeCompare(right.name) ||
     left.domain.localeCompare(right.domain) ||
+    (left.key ?? '').localeCompare(right.key ?? '') ||
     left.site.localeCompare(right.site) ||
     left.scope.localeCompare(right.scope)
   );

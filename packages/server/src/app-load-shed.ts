@@ -9,6 +9,14 @@ import type {
 
 export type LoadShedSurface = 'mutation' | 'query' | 'other';
 
+/** @internal */
+export class RequestBodyLimitExceededError extends Error {
+  constructor(readonly maxBodyBytes: number) {
+    super(`Request body exceeded ${maxBodyBytes} bytes.`);
+    this.name = 'RequestBodyLimitExceededError';
+  }
+}
+
 interface RateBucket {
   count: number;
   windowStart: number;
@@ -62,6 +70,7 @@ export function normalizeAppRequestLimits(
       mutations: { global: false, perIp: false },
       perIp: false,
       queries: { global: false, perIp: false },
+      trustedProxy: false,
     };
   }
 
@@ -82,6 +91,7 @@ export function normalizeAppRequestLimits(
       global: normalizeRate(options?.queries?.global, DEFAULT_QUERY_GLOBAL_RATE),
       perIp: normalizeRate(options?.queries?.perIp, DEFAULT_QUERY_PER_IP_RATE),
     },
+    trustedProxy: options?.trustedProxy === true,
   };
 }
 
@@ -162,7 +172,11 @@ function rateLimitFailure(
 ): RateLimitDecision | undefined {
   const state = appRateState(app);
   const limits = app.requestLimits;
-  const ip = (limits.clientIp?.(request) ?? requestClientIp(request) ?? 'unknown').trim();
+  const ip = (
+    limits.clientIp?.(request) ??
+    requestClientIp(request, { trustedProxy: limits.trustedProxy }) ??
+    'unknown'
+  ).trim();
   const scoped = surfaceRateLimits(limits, surface);
   const checks: Array<{
     id: string;
@@ -223,7 +237,97 @@ function appRateState(app: KovoApp): AppRateState {
   return next;
 }
 
-function requestClientIp(request: Request): string | undefined {
+/** @internal */
+export function requestWithBodyLimit(request: Request, maxBodyBytes: number | false): Request {
+  if (maxBodyBytes === false || request.body === null) return request;
+  return new Proxy(request, {
+    get(target, property) {
+      if (property === 'arrayBuffer') {
+        return async () => readLimitedArrayBuffer(target, maxBodyBytes);
+      }
+      if (property === 'text') {
+        return async () =>
+          new TextDecoder().decode(await readLimitedArrayBuffer(target, maxBodyBytes));
+      }
+      if (property === 'json') {
+        return async () =>
+          JSON.parse(new TextDecoder().decode(await readLimitedArrayBuffer(target, maxBodyBytes)));
+      }
+      if (property === 'formData') {
+        return async () => {
+          const body = await readLimitedArrayBuffer(target, maxBodyBytes);
+          return new Request(target.url, {
+            body,
+            headers: target.headers,
+            method: target.method,
+          }).formData();
+        };
+      }
+      if (property === 'clone') {
+        return () => requestWithBodyLimit(target.clone(), maxBodyBytes);
+      }
+      if (property === 'body') {
+        return countedBody(target.body, maxBodyBytes);
+      }
+
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as Request;
+}
+
+async function readLimitedArrayBuffer(
+  request: Request,
+  maxBodyBytes: number,
+): Promise<ArrayBuffer> {
+  if (request.body === null) return new ArrayBuffer(0);
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value === undefined) continue;
+    total += value.byteLength;
+    if (total > maxBodyBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new RequestBodyLimitExceededError(maxBodyBytes);
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes.buffer;
+}
+
+function countedBody(
+  body: ReadableStream<Uint8Array> | null,
+  maxBodyBytes: number,
+): ReadableStream<Uint8Array> | null {
+  if (body === null) return null;
+  let total = 0;
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        total += chunk.byteLength;
+        if (total > maxBodyBytes) {
+          controller.error(new RequestBodyLimitExceededError(maxBodyBytes));
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+}
+
+function requestClientIp(request: Request, options: { trustedProxy: boolean }): string | undefined {
+  if (!options.trustedProxy) return undefined;
   const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
   if (forwardedFor) return forwardedFor;
 

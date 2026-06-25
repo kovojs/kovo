@@ -17,6 +17,16 @@ import { layout, route } from './route.js';
 import { s } from './schema.js';
 import { stylesheet } from './hints.js';
 import { renderedHtml } from './html.js';
+import { createLiveTargetAttestation } from './mutation-wire.js';
+
+function attestedLiveTargetHeader(
+  target: string,
+  component: string,
+  props: Record<string, unknown> = {},
+): string {
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+}
 
 const rawTextResponse = {
   appOwnedSafety: true,
@@ -510,6 +520,51 @@ describe('server createApp request shell', () => {
     expect(endpointHandler).not.toHaveBeenCalled();
   });
 
+  it('rejects oversized streamed bodies without trusting Content-Length alone', async () => {
+    const endpointHandler = vi.fn(async (request: Request) => new Response(await request.text()));
+    const handler = createRequestHandler(
+      createApp({
+        endpoints: [
+          endpoint('/stream-upload', {
+            csrf: false,
+            csrfJustification: 'test machine endpoint',
+            handler: endpointHandler,
+            method: 'POST',
+            reason: 'streamed upload body cap',
+            response: rawTextResponse,
+          }),
+        ],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: 4,
+          mutations: { global: false, perIp: false },
+          perIp: false,
+          queries: { global: false, perIp: false },
+        },
+      }),
+    );
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('12'));
+        controller.enqueue(new TextEncoder().encode('345'));
+        controller.close();
+      },
+    });
+
+    const response = await handler(
+      new Request('https://example.test/stream-upload', {
+        body,
+        method: 'POST',
+        // Node/fetch requires duplex when a ReadableStream body is supplied.
+        duplex: 'half',
+      } as RequestInit),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe('Payload Too Large');
+    expect(endpointHandler).toHaveBeenCalledTimes(1);
+  });
+
   // SPEC §9.5 / §10.3: coarse per-IP mutation limiting runs before replay, parse,
   // and guards, so the second request cannot execute the mutation handler.
   it('rate-limits mutation requests before parsing or running the handler', async () => {
@@ -546,6 +601,43 @@ describe('server createApp request shell', () => {
     expect(limited.headers.get('retry-after')).toBe('60');
     await expect(limited.text()).resolves.toBe('Too Many Requests');
     expect(mutationHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores spoofed forwarded IP headers unless trustedProxy is enabled', async () => {
+    const makeHandler = (trustedProxy = false) =>
+      createRequestHandler(
+        createApp({
+          mutations: [
+            mutation(`cart/proxy-${trustedProxy ? 'trusted' : 'untrusted'}`, {
+              csrf: false,
+              handler: () => ({ ok: true }),
+              input: s.object({}),
+            }),
+          ],
+          requestLimits: {
+            global: false,
+            maxBodyBytes: false,
+            mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+            perIp: false,
+            queries: { global: false, perIp: false },
+            trustedProxy,
+          },
+        }),
+      );
+    const request = (key: string, forwardedFor: string) =>
+      new Request(`https://example.test/_m/${key}`, {
+        body: new URLSearchParams(),
+        headers: { 'X-Forwarded-For': forwardedFor },
+        method: 'POST',
+      });
+
+    const untrusted = makeHandler(false);
+    expect((await untrusted(request('cart/proxy-untrusted', '203.0.113.1'))).status).toBe(303);
+    expect((await untrusted(request('cart/proxy-untrusted', '203.0.113.2'))).status).toBe(429);
+
+    const trusted = makeHandler(true);
+    expect((await trusted(request('cart/proxy-trusted', '203.0.113.1'))).status).toBe(303);
+    expect((await trusted(request('cart/proxy-trusted', '203.0.113.2'))).status).toBe(303);
   });
 
   // SPEC §9.5 / §9.4: typed reads also pass through the shell's anonymous-flood
@@ -747,7 +839,7 @@ describe('server createApp request shell', () => {
         body: form,
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart#components/cart/badge:{}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge')}`,
           'Kovo-Targets': 'cart=cart',
         },
         method: 'POST',
@@ -906,7 +998,7 @@ describe('server createApp request shell', () => {
         body: enhancedForm,
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart#components/cart/badge:{}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge')}`,
           'Kovo-Targets': 'cart=cart',
         },
         method: 'POST',
@@ -975,7 +1067,7 @@ describe('server createApp request shell', () => {
         body: form,
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{"cartId":"c1"}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-panel', 'components/cart/panel', { cartId: 'c1' })}`,
           'Kovo-Targets': 'cart-panel=cart',
         },
         method: 'POST',

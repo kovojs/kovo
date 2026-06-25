@@ -210,7 +210,7 @@ describe('mutation broadcast replay', () => {
       expect(store.get('cart')).toEqual({ count: 99 });
     });
 
-    it('still applies a cross-build FULL chunk (only deltas are gated)', () => {
+    it('treats a cross-build full chunk as a whole-response miss', () => {
       const store = createQueryStore();
       const channel = new FakeBroadcastChannel();
       const onDeltaMiss = vi.fn();
@@ -218,8 +218,6 @@ describe('mutation broadcast replay', () => {
 
       installMutationBroadcast({ buildToken: 'N', channel, onDeltaMiss, store });
 
-      // A full (non-delta) chunk from a different build still overwrites — SPEC
-      // §9.1.1 only converts deltas to misses on mismatch.
       channel.onmessage?.({
         data: {
           body: '<kovo-query name="cart">{"count":7}</kovo-query>',
@@ -229,8 +227,28 @@ describe('mutation broadcast replay', () => {
         },
       });
 
-      expect(onDeltaMiss).not.toHaveBeenCalled();
-      expect(store.get('cart')).toEqual({ count: 7 });
+      expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+      expect(store.get('cart')).toEqual({ count: 1 });
+    });
+
+    it('treats a missing broadcast token as a whole-response miss when the receiver is stamped', () => {
+      const store = createQueryStore();
+      const channel = new FakeBroadcastChannel();
+      const onDeltaMiss = vi.fn();
+      store.set('cart', { count: 1 });
+
+      installMutationBroadcast({ buildToken: 'N', channel, onDeltaMiss, store });
+
+      channel.onmessage?.({
+        data: {
+          body: '<kovo-query name="cart">{"count":7}</kovo-query>',
+          changes: [],
+          type: 'kovo:mutation-response',
+        },
+      });
+
+      expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+      expect(store.get('cart')).toEqual({ count: 1 });
     });
   });
 

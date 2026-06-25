@@ -55,7 +55,7 @@ const inlineHelperSpecs = {
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
-export const inlineKovoLoaderGzipByteBudget = 8960;
+export const inlineKovoLoaderGzipByteBudget = 9472;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
@@ -172,6 +172,35 @@ function installInlineKovoLoader(im) {
     }, val);
   const fb = (val) =>
     val == null ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+  const uus = (value) => {
+    const match = /^([a-z][a-z0-9+.-]*):/.exec(
+      String(value).replace(/[\x00-\x20]/g, '').toLowerCase(),
+    );
+    return !!match && !/^(https?|mailto|tel|ftp)$/.test(match[1] || '');
+  };
+  const ia = (name) =>
+    /^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/i.test(name);
+  const ki = (url) => {
+    try {
+      const l = globalThis.location || { href: 'http://localhost/', origin: 'http://localhost' };
+      const p = new URL(url, l.href);
+      const b = doc.querySelector?.('meta[name="kovo-build"]')?.getAttribute('content') || '';
+      return (
+        p.origin === l.origin &&
+        /^\/c\//.test(p.pathname) &&
+        (!b ||
+          p.pathname.startsWith('/c/__v/' + encodeURIComponent(b) + '/') ||
+          !p.pathname.startsWith('/c/__v/'))
+      );
+    } catch {
+      return false;
+    }
+  };
+  const oi = im;
+  im = (url) => {
+    if (!ki(url)) throw Error('Disallowed Kovo dynamic import URL: ' + url);
+    return oi(url);
+  };
   const sh = (el, host) =>
     el === host || !el.closest || el.closest('[kovo-state]') === host;
   const ba = (el) =>
@@ -202,7 +231,7 @@ function installInlineKovoLoader(im) {
       if ((name[0] === 'o' && name[1] === 'n') || name === 'srcdoc') el.removeAttribute?.(name);
       else {
         let rendered = fb(val);
-        if (/^(javascript|data):/i.test(rendered)) rendered = '#';
+        if (ia(name) && uus(rendered)) rendered = '#';
         el.setAttribute?.(name, rendered);
       }
     }
@@ -364,10 +393,11 @@ function installInlineKovoLoader(im) {
     for (const el of doc.querySelectorAll('[kovo-deps]')) {
       const target = targetIdentity(el);
       const component = liveTargetIdentity(el);
-      if (!hsaf(target) || !hsc(component)) continue;
+      const token = el.getAttribute('kovo-live-token');
+      if (!hsaf(target) || !hsc(component) || !hsaf(token)) continue;
       if (!target || seen.has(target)) continue;
       seen.add(target);
-      targets.push(target + '#' + component + ':' + JSON.stringify(liveProps(el)));
+      targets.push(target + '#' + component + '@' + token + ':' + JSON.stringify(liveProps(el)));
     }
     return targets;
   };
@@ -671,7 +701,7 @@ function installInlineKovoLoader(im) {
     })
       .then((res) => {
         if (res.status >= 400) return;
-        if (kb() && bh(res) && bh(res) !== kb()) {
+        if (kb() && (!bh(res) || bh(res) !== kb())) {
           location.reload?.();
           return;
         }
@@ -699,7 +729,7 @@ function installInlineKovoLoader(im) {
   };
   const ab = (body, build) => {
     const chunks = readInlineMutationResponseBodyChunks(body);
-    const skew = build && kb() && build !== kb();
+    const skew = kb() && (!build || build !== kb());
     if (skew) {
       for (const q of chunks.queries) qr(q);
       return;

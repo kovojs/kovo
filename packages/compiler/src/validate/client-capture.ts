@@ -42,6 +42,7 @@ const CORE_MODULE = '@kovojs/core';
 const PUBLISH_TO_CLIENT_REASON_PROPERTY = 'reason';
 
 interface ImportBinding {
+  source: 'import';
   /** Local name the handler closure can reference. */
   localName: string;
   /** Named / default / namespace — covers all laundering forms the threat model lists. */
@@ -51,8 +52,16 @@ interface ImportBinding {
   moduleSpecifier: string;
 }
 
+interface ModuleConstantBinding {
+  source: 'module-constant';
+  /** Local name the handler closure can reference. */
+  localName: string;
+}
+
+type CaptureBinding = ImportBinding | ModuleConstantBinding;
+
 interface CaptureUse {
-  binding: ImportBinding;
+  binding: CaptureBinding;
   /** True when the import is the callee of a call expression (client-safe code). */
   callee: boolean;
   /** True when this value-position use is the first arg of a recognized publishToClient(...) call. */
@@ -82,6 +91,8 @@ export interface ClientCaptureAnalysis {
   publishFacts: readonly PublishToClientFact[];
   /** Import local names whose every value-position use is callee-only or published → safe to emit. */
   emitAllowed: ReadonlySet<string>;
+  /** Same-file module constants whose every value-position use is publishToClient-wrapped. */
+  emitAllowedModuleConstants: ReadonlySet<string>;
 }
 
 /**
@@ -106,6 +117,7 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
         kind: 'default',
         localName: clause.name.text,
         moduleSpecifier,
+        source: 'import',
       });
     }
 
@@ -116,6 +128,7 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
         kind: 'namespace',
         localName: named.name.text,
         moduleSpecifier,
+        source: 'import',
       });
     } else if (named && ts.isNamedImports(named)) {
       for (const element of named.elements) {
@@ -124,12 +137,20 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
           kind: 'named',
           localName: element.name.text,
           moduleSpecifier,
+          source: 'import',
         });
       }
     }
   }
 
   return bindings;
+}
+
+function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBinding[] {
+  return model.moduleScopeBindings.map((binding) => ({
+    localName: binding.name,
+    source: 'module-constant',
+  }));
 }
 
 /** True when `publishToClient` is imported from @kovojs/core under that exact local name. */
@@ -181,7 +202,7 @@ function isDomEventName(name: string): boolean {
  */
 function classifyCaptures(
   body: ts.Node,
-  bindingByName: ReadonlyMap<string, ImportBinding>,
+  bindingByName: ReadonlyMap<string, CaptureBinding>,
   publishBound: boolean,
   fileName: string,
   uses: CaptureUse[],
@@ -203,7 +224,8 @@ function classifyCaptures(
           publishFacts.push({
             fileName,
             localName: binding.localName,
-            moduleSpecifier: binding.moduleSpecifier,
+            moduleSpecifier:
+              binding.source === 'import' ? binding.moduleSpecifier : `${fileName}#module-scope`,
             reason: publishToClientReason(parent as ts.CallExpression),
             start: node.getStart(),
           });
@@ -285,7 +307,10 @@ export function analyzeClientCaptures(model: ComponentModuleModel): ClientCaptur
   const sourceFile = model.sourceFile;
   const fileName = sourceFile.fileName;
   const bindings = importBindings(sourceFile);
-  const bindingByName = new Map(bindings.map((binding) => [binding.localName, binding]));
+  const constants = moduleConstantBindings(model);
+  const bindingByName = new Map(
+    [...bindings, ...constants].map((binding) => [binding.localName, binding]),
+  );
   const publishBound = publishToClientIsBound(bindings);
 
   const allUses: CaptureUse[] = [];
@@ -295,15 +320,38 @@ export function analyzeClientCaptures(model: ComponentModuleModel): ClientCaptur
   }
 
   // An import is UNSAFE at a use iff that use is value-position (not callee) and not published.
-  const unsafeUses = allUses.filter((use) => !use.callee && !use.published);
+  // Same-file serializable module constants are stricter: they are evaluated into `*.client.js`, so
+  // every captured use must be explicitly publishToClient-wrapped. A bare callee-position use is
+  // not a meaningful client-code channel for a literal constant and remains blocked.
+  const unsafeUses = allUses.filter((use) =>
+    use.binding.source === 'module-constant' ? !use.published : !use.callee && !use.published,
+  );
 
   // Emit is allowed for a binding iff it has NO un-wrapped value-position use anywhere — callee-only
   // captures and publishToClient-wrapped captures keep their import line; everything else is withheld.
-  const blocked = new Set(unsafeUses.map((use) => use.binding.localName));
-  const referenced = new Set(allUses.map((use) => use.binding.localName));
-  const emitAllowed = new Set([...referenced].filter((name) => !blocked.has(name)));
+  const blockedImports = new Set(
+    unsafeUses.filter((use) => use.binding.source === 'import').map((use) => use.binding.localName),
+  );
+  const referencedImports = new Set(
+    allUses.filter((use) => use.binding.source === 'import').map((use) => use.binding.localName),
+  );
+  const emitAllowed = new Set([...referencedImports].filter((name) => !blockedImports.has(name)));
 
-  return { emitAllowed, publishFacts, unsafeUses };
+  const blockedConstants = new Set(
+    unsafeUses
+      .filter((use) => use.binding.source === 'module-constant')
+      .map((use) => use.binding.localName),
+  );
+  const referencedConstants = new Set(
+    allUses
+      .filter((use) => use.binding.source === 'module-constant')
+      .map((use) => use.binding.localName),
+  );
+  const emitAllowedModuleConstants = new Set(
+    [...referencedConstants].filter((name) => !blockedConstants.has(name)),
+  );
+
+  return { emitAllowed, emitAllowedModuleConstants, publishFacts, unsafeUses };
 }
 
 /**
@@ -313,6 +361,15 @@ export function analyzeClientCaptures(model: ComponentModuleModel): ClientCaptur
  */
 export function emitAllowedImportLocalNames(model: ComponentModuleModel): ReadonlySet<string> {
   return analyzeClientCaptures(model).emitAllowed;
+}
+
+/**
+ * The set of same-file module constants lower/handlers.ts is permitted to inline into
+ * `*.client.js`. A literal constant is emitted only when its captured use is explicitly
+ * publishToClient-wrapped, matching the KV437 teaching diagnostic.
+ */
+export function emitAllowedModuleConstantNames(model: ComponentModuleModel): ReadonlySet<string> {
+  return analyzeClientCaptures(model).emitAllowedModuleConstants;
 }
 
 /**
@@ -329,7 +386,9 @@ export function validateClientHandlerSecretCapture(
     diagnostics.at(
       'KV437',
       { length: use.length, start: use.start },
-      `import="${use.binding.localName}" from="${use.binding.moduleSpecifier}" form=${use.binding.kind}`,
+      use.binding.source === 'import'
+        ? `import="${use.binding.localName}" from="${use.binding.moduleSpecifier}" form=${use.binding.kind}`
+        : `moduleConstant="${use.binding.localName}" scope=same-file`,
     ),
   );
 }
