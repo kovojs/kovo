@@ -1,4 +1,4 @@
-import { guards, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
+import { guards, publicAccess, query, type QueryLoadContext, type Reader } from '@kovojs/server';
 import { eq, gt, sum } from 'drizzle-orm';
 import { domain } from '@kovojs/server';
 
@@ -31,7 +31,6 @@ export interface OrderHistoryResult {
 }
 
 export interface CommerceQueryRequest {
-  db: CommerceDb;
   // SECURITY (SECURITY_FINDINGS.md M9): order-history reads are per-user, so the
   // query request must be able to carry the authenticated session whose user id
   // scopes the rows. Cart/product reads remain global (no session needed).
@@ -42,8 +41,13 @@ export const cart = domain('cart');
 export const order = domain('order');
 export const product = domain('product');
 
-type CommerceQueryLoadContext = QueryLoadContext<CommerceQueryRequest> & {
-  db?: CommerceDb;
+// SPEC §9.4/§10.3 (MARQUEE): a query loader destructures the framework-owned read-only handle
+// `{ db }` (typed `Reader<CommerceDb>` — the write verbs are removed at the type level and throw
+// `KovoReadonlyHandleError` at runtime). The loader no longer brings its own db; the framework
+// threads the SQL-safe, read-only managed handle as `context.db`. A write in a loader is a `tsc`
+// error AND a runtime throw AND a KV433 static-gate error. `session` rides the same context for
+// the per-user order-history scope.
+type CommerceQueryLoadContext = QueryLoadContext<CommerceQueryRequest, CommerceDb> & {
   session?: CommerceQueryRequest['session'];
 };
 
@@ -117,15 +121,19 @@ export const orderHistoryQuery = query('orderHistory', {
   delta: [{ domain: 'order', key: 'id', path: 'items' }],
 });
 
+// The example/test entrypoints below pass a raw `CommerceDb`. The framework threads a read-only
+// `Reader<CommerceDb>` as `context.db` in production (a loader cannot write); a full `CommerceDb`
+// is structurally a `Reader<CommerceDb>` (it has every read verb), so these direct-load helpers
+// stay type-compatible while the loader body only ever reads.
 export async function loadCartQuery(db: CommerceDb): Promise<CartQueryResult> {
-  return cartQuery.load(undefined, { db, request: { db } });
+  return cartQuery.load(undefined, { db, request: {} });
 }
 
 export async function loadProductGrid(
   db: CommerceDb,
   input: ProductGridInput = {},
 ): Promise<ProductGridResult> {
-  return productGridQuery.load(input, { db, request: { db } });
+  return productGridQuery.load(input, { db, request: {} });
 }
 
 // SECURITY (SECURITY_FINDINGS.md M9): the order-history loader now requires the
@@ -136,14 +144,17 @@ export async function loadOrderHistory(
   userId: string,
 ): Promise<OrderHistoryResult> {
   const session = { id: userId, user: { id: userId } };
-  return orderHistoryQuery.load(undefined, { db, request: { db, session }, session });
+  return orderHistoryQuery.load(undefined, { db, request: { session }, session });
 }
 
-function requireCommerceQueryDb(context?: CommerceQueryLoadContext): CommerceDb {
-  const db = context?.db ?? context?.request?.db;
+// SPEC §9.4 (MARQUEE): the framework provides `context.db` as the read-only managed handle. A loader
+// destructures it directly; this guard surfaces a clear error when a loader is invoked without the
+// framework-threaded handle (e.g. a direct `query.load()` call missing its db).
+function requireCommerceQueryDb(context?: CommerceQueryLoadContext): Reader<CommerceDb> {
+  const db = context?.db;
 
   if (!db) {
-    throw new Error('commerce query loaders require context.db or request.db');
+    throw new Error('commerce query loaders require the framework-provided context.db');
   }
 
   return db;

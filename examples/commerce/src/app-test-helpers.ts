@@ -91,9 +91,11 @@ export async function seedCommerceState(
 }
 
 export function queryContext(db = createCommerceDb()) {
+  // SPEC §9.4 (MARQUEE): the loader reads the framework-threaded `context.db`. The request no longer
+  // carries the db (the framework owns the handle); it carries only the session for per-user scope.
   return {
     db,
-    request: { db, session: { id: 's-query', user: { id: 'u-query' } } },
+    request: { session: { id: 's-query', user: { id: 'u-query' } } },
   };
 }
 

@@ -85,7 +85,9 @@ describe('commerce example queries', () => {
     const db = createCommerceDb();
     const context = queryContext(db);
 
-    await addToCart.handler({ productId: 'p1', quantity: 2 }, context.request, {
+    // The mutation handler receives the read-write request (carries `db`); the query loaders below
+    // read through the framework-threaded read-only `context.db` (SPEC §9.4 MARQUEE).
+    await addToCart.handler({ productId: 'p1', quantity: 2 }, { db, ...context.request }, {
       fail(code, payload) {
         return { error: { code, payload }, ok: false, status: 422 };
       },
@@ -121,7 +123,7 @@ describe('commerce example queries', () => {
     });
 
     await expect(productGridQuery.load({ limit: 1 })).rejects.toThrow(
-      'commerce query loaders require context.db or request.db',
+      'commerce query loaders require the framework-provided context.db',
     );
   });
 
@@ -165,7 +167,7 @@ describe('commerce example queries', () => {
           {},
           {
             db,
-            request: { db, session: { id: 's-custom', user: { id: 'u-custom-query' } } },
+            request: { session: { id: 's-custom', user: { id: 'u-custom-query' } } },
             session: { id: 's-custom', user: { id: 'u-custom-query' } },
           },
         ),
