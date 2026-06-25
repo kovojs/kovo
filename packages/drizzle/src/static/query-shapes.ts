@@ -1834,7 +1834,25 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
       ? nullableShape(columnShape)
       : columnShape;
   }
+  const tableRow = tableRowQueryShape(expression, columnShapes);
+  if (tableRow) return nullableTables.has(tableRow.table) ? nullableShape(tableRow) : tableRow;
   return null;
+}
+
+function tableRowQueryShape(
+  expression: ts.Expression,
+  columnShapes: Readonly<Record<string, QueryShape>>,
+): Extract<QueryShapeWrapper, { kind: 'table-row' }> | null {
+  const table = staticTsExpressionPath(expression);
+  if (!table) return null;
+
+  const prefix = `${table}.`;
+  const shape = Object.fromEntries(
+    Object.entries(columnShapes)
+      .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes('.'))
+      .map(([path, columnShape]) => [path.slice(prefix.length), columnShape]),
+  );
+  return Object.keys(shape).length > 0 ? { kind: 'table-row', shape, table } : null;
 }
 
 function trustedRevealQueryShape(
@@ -1958,6 +1976,7 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
     (shape.kind === 'nullable' ||
       shape.kind === 'optional' ||
       shape.kind === 'secret' ||
+      shape.kind === 'table-row' ||
       shape.kind === 'volatile-time' ||
       (shape.kind === 'revealed' && 'reveal' in shape))
   );

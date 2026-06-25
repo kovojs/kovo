@@ -468,6 +468,70 @@ export const UserCard = component({
     );
   });
 
+  it('reports KV439 when DB table-row provenance reaches a component query wire shape', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      queryShapes: {
+        user: {
+          row: {
+            kind: 'table-row',
+            shape: {
+              id: 'string',
+              name: 'string',
+            },
+            table: 'users',
+          },
+        },
+      },
+      source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span data-bind="user.row.name">Ada</span>
+    </user-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV439',
+          fileName: 'user-card.tsx',
+          message:
+            'DB table row reaches the client query wire without an explicit projection. query="user" path="user.row"',
+          severity: 'error',
+        }),
+      ]),
+    );
+  });
+
+  it('does not report KV439 for explicit projected object query shapes', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      queryShapes: {
+        user: {
+          id: 'string',
+          name: 'string',
+        },
+      },
+      source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span data-bind="user.name">Ada</span>
+    </user-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV439')).toEqual([]);
+  });
+
   it('reports KV435 in production when a component-declared query has no query-shape fact', () => {
     const result = compileComponentModule({
       fileName: 'user-card.tsx',

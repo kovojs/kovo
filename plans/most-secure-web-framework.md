@@ -162,12 +162,16 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       provenance (provenance dies at `.reveal()` — that framing is an unsound over-claim and must be dropped). The
       cryptographic guarantee itself is runtime-DiD.
 
-- [ ] **OPP-21 — Non-secret over-serialization gate.** by-construction (shape/intentionality, **not**
+- [x] **OPP-21 — Non-secret over-serialization gate.** by-construction (shape/intentionality, **not**
       confidentiality) · lev 5 · M · breaking. KV435 catches secret columns on the wire, but a whole DB row of
       non-secret PII crosses freely (the universal Prisma/Drizzle full-row leak). Extend `confidentiality.ts` so
       any value with DB/table provenance crossing the wire boundary needs an explicit projection allowlist.
       _Trade-off:_ proves **intentionality**, not confidentiality (PII-ness isn't a declared provenance fact) —
       ship it as a warning-grade over-serialization floor, not a confidentiality proof.
+      Evidence: `packages/drizzle/src/static/query-shapes.ts` marks whole-row Drizzle query projections as
+      `table-row`, and `packages/compiler/src/validate/confidentiality.ts` emits KV439 when that shape reaches
+      the query wire; focused compiler/Drizzle/core tests, `git diff --check`, `pnpm run check:vp`, and
+      `pnpm run check:api-surface` passed.
 
 - [x] **OPP-06 — Mandatory purpose/audience binding on capability & CSRF tokens.** by-construction (at the
       verify sink, cross-context-confusion property) · lev 6 · M · breaking. Mirror ASP.NET purpose strings /

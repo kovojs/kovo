@@ -763,6 +763,11 @@ export type QueryShapeWrapper =
       shape: QueryShape;
     }
   | {
+      kind: 'table-row';
+      shape: QueryShape;
+      table: string;
+    }
+  | {
       kind: 'revealed';
       reveal: QueryShapeReveal;
       shape: QueryShape;
@@ -881,6 +886,8 @@ function wrapperQueryShapeTypeExpr(shape: QueryShapeWrapper): TypeExpr {
         kind: 'import-generic',
         name: 'Secret',
       };
+    case 'table-row':
+      return inner;
     case 'volatile-time':
       return inner;
   }
@@ -904,6 +911,7 @@ function typeExprFromRevealedQueryShape(shape: QueryShape): TypeExpr {
         ]);
       case 'revealed':
       case 'secret':
+      case 'table-row':
       case 'volatile-time':
         return typeExprFromRevealedQueryShape(shape.shape);
     }
@@ -1050,6 +1058,7 @@ export function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapp
     (record.kind === 'nullable' ||
       record.kind === 'optional' ||
       record.kind === 'secret' ||
+      record.kind === 'table-row' ||
       record.kind === 'volatile-time' ||
       (record.kind === 'revealed' && 'reveal' in shape))
   );

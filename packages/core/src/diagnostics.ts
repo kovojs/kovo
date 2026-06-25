@@ -80,7 +80,8 @@ export type DiagnosticCode =
   | 'KV435'
   | 'KV436'
   | 'KV437'
-  | 'KV438';
+  | 'KV438'
+  | 'KV439';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -1003,5 +1004,16 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Request input reaches a governed column (mass assignment).',
+  },
+  KV439: {
+    code: 'KV439',
+    help: [
+      'Would lower to: a query result whose client wire shape carries a whole DB/table row value instead of an explicit projected object.',
+      'Blocked reason: table-row provenance crossing the query wire hides the intended response contract and can serialize columns the author did not deliberately allow, even when those columns are not secret-classified.',
+      'Fixes: project the exact response fields, for example db.select({ id: users.id, name: users.name }), or map rows to an explicit object shape before returning.',
+      'SPEC §6.2, §9.4, and §11.3 make query results JsonValue-bounded client wire values; DB/table row provenance must cross that boundary through an intentional projection allowlist.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'DB table row reaches the client query wire without an explicit projection.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

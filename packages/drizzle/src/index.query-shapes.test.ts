@@ -625,6 +625,104 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     }
   });
 
+  it('reports KV439 for whole-row table values projected onto the query wire', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
+          export const users = pgTable("users", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+            email: text("email").notNull(),
+          }, kovo({ domain: "user", key: "id" }));
+
+          export const userQuery = query("user", {
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.select({ row: users }).from(users);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'KV439',
+            message:
+              'DB table row reaches the client query wire without an explicit projection. Query projection user.row carries table-row provenance; select explicit fields instead.',
+            severity: 'error',
+            site: 'user.queries.ts:8',
+          },
+        ],
+        query: 'user',
+        reads: ['user'],
+        shape: {
+          row: {
+            kind: 'table-row',
+            shape: {
+              email: 'string',
+              id: 'string',
+              name: 'string',
+            },
+            table: 'users',
+          },
+        },
+        site: 'user.queries.ts:8',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV439',
+        message:
+          'DB table row reaches the client query wire without an explicit projection. Query projection user.row carries table-row provenance; select explicit fields instead.',
+        severity: 'error',
+        site: 'user.queries.ts:8',
+      },
+    ]);
+  });
+
+  it('allows explicit projected shapes from DB columns without KV439', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
+          export const users = pgTable("users", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+            email: text("email").notNull(),
+          }, kovo({ domain: "user", key: "id" }));
+
+          export const userQuery = query("user", {
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.select({ id: users.id, name: users.name }).from(users);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'user',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'user.queries.ts:8',
+      },
+    ]);
+    expect(
+      diagnosticsForQueryFacts(facts).filter((diagnostic) => diagnostic.code === 'KV439'),
+    ).toEqual([]);
+  });
+
   it('marks unknown column builder projections as KV406 instead of guessing string shape', () => {
     const files = [
       {

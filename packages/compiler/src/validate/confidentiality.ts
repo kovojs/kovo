@@ -37,6 +37,15 @@ export function validateSecretQueryWire(
         ),
       ),
     ),
+    ...queryNames.flatMap((query) =>
+      tableRowQueryShapePaths(queryShapes[query]).map((path) =>
+        diagnostics.at(
+          'KV439',
+          undefined,
+          `query="${query}" path="${pathForDiagnostic(query, path)}"`,
+        ),
+      ),
+    ),
   ];
 }
 
@@ -69,6 +78,25 @@ function secretQueryShapePaths(
 
   return Object.entries(shape).flatMap(([key, child]) =>
     secretQueryShapePaths(child, [...path, key]),
+  );
+}
+
+function tableRowQueryShapePaths(
+  shape: QueryShape | undefined,
+  path: readonly string[] = [],
+): string[] {
+  if (shape === undefined) return [];
+
+  if (isQueryShapeWrapper(shape)) {
+    if (shape.kind === 'table-row') return [path.join('.')];
+    return tableRowQueryShapePaths(shape.shape, path);
+  }
+
+  if (isArrayQueryShape(shape)) return tableRowQueryShapePaths(shape[0] ?? 'object', path);
+  if (!isQueryShapeObject(shape)) return [];
+
+  return Object.entries(shape).flatMap(([key, child]) =>
+    tableRowQueryShapePaths(child, [...path, key]),
   );
 }
 

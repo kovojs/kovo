@@ -195,6 +195,11 @@ export {
       shape: QueryShape;
     }
   | {
+      kind: 'table-row';
+      shape: QueryShape;
+      table: string;
+    }
+  | {
       kind: 'revealed';
       reveal: QueryShapeReveal;
       shape: QueryShape;
@@ -297,6 +302,7 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
     (shape.kind === 'nullable' ||
       shape.kind === 'optional' ||
       shape.kind === 'secret' ||
+      shape.kind === 'table-row' ||
       shape.kind === 'volatile-time' ||
       (shape.kind === 'revealed' && 'reveal' in shape))
   );
@@ -1236,6 +1242,7 @@ function extractQueryFactsFromPreparedFiles(
             site,
           ),
         )
+        .concat(tableRowProjectionDiagnostics(query.query, query.shape, site))
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
         .concat(unmodeledRelationReadDiagnostics(query.tableExpressions, fileTables, site))
@@ -1325,6 +1332,38 @@ function secretProjectionBackstopDiagnostics(
     severity: definition.severity,
     site,
   }));
+}
+
+function tableRowProjectionDiagnostics(
+  query: string,
+  shape: QueryShape,
+  site: string,
+): TouchGraphDiagnostic[] {
+  const definition = diagnosticDefinitions.KV439;
+  return tableRowQueryShapePaths(shape).map((path) => ({
+    code: 'KV439',
+    message: `${definition.message} Query projection ${pathForQueryDiagnostic(query, path)} carries table-row provenance; select explicit fields instead.`,
+    severity: definition.severity,
+    site,
+  }));
+}
+
+function tableRowQueryShapePaths(shape: QueryShape, path: readonly string[] = []): string[] {
+  if (typeof shape !== 'object' || shape === null) return [];
+  if (Array.isArray(shape)) return shape.flatMap((item) => tableRowQueryShapePaths(item, path));
+
+  if (isQueryShapeWrapper(shape)) {
+    if (shape.kind === 'table-row') return [path.join('.') || '$'];
+    return tableRowQueryShapePaths(shape.shape, path);
+  }
+
+  return Object.entries(shape).flatMap(([key, child]) =>
+    tableRowQueryShapePaths(child, [...path, key]),
+  );
+}
+
+function pathForQueryDiagnostic(query: string, path: string): string {
+  return path === '$' ? query : `${query}.${path}`;
 }
 
 function revealedQueryShapePaths(
