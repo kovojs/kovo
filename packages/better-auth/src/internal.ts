@@ -56,6 +56,7 @@ import {
   isBetterAuthCredentialMutationTouchGraphOptions,
   redirectPath,
   resolveBetterAuthCredentialSuccess,
+  setSessionRevocationClearSiteData,
   unauthenticatedGuardFailure,
   unauthorizedGuardFailure,
   type ActiveOrganizationRequest,
@@ -103,6 +104,7 @@ export {
   isBetterAuthCredentialFailureResponse,
   redirectPath,
   resolveBetterAuthCredentialSuccess,
+  setSessionRevocationClearSiteData,
   unauthenticatedGuardFailure,
   unauthorizedGuardFailure,
 } from './internal/credential.js';

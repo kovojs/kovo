@@ -277,14 +277,15 @@ packages/server/src/file.test.ts packages/server/src/response.test.ts` passed.
       reserved `POST /_kovo/reports/csp` collector. Remaining gap: COOP/Permissions reporting and report
       aggregation/redaction/rate-limit semantics are not complete, so this item stays open.
 
-- [ ] **OPP-15 — Clear-Site-Data on logout + `Origin-Agent-Cluster: ?1`.** runtime-DiD · lev 4 · M ·
+- [x] **OPP-15 — Clear-Site-Data on logout + `Origin-Agent-Cluster: ?1`.** runtime-DiD · lev 4 · M ·
       non-breaking. Ship OAC `?1` now (one-line origin-keyed isolation). Emit `Clear-Site-Data:
 "cookies","storage","executionContexts"` on session-revocation. _Trade-off:_ OAC is a clean DiD floor now;
-      defer Clear-Site-Data until a framework-owned logout/revoke sink exists to emit it by construction rather
-      than as an app-ownable header. The "inexpressible" framing is an over-claim.
-      Progress: `packages/server/src/response.ts` adds `Origin-Agent-Cluster: ?1` to framework-owned document
-      responses and static export manifests; focused document/static-export tests and `pnpm run check:vp` passed.
-      Remaining gap: no framework-owned logout/session-revoke sink exists yet for `Clear-Site-Data`.
+      the Better Auth sign-out mutation is the framework-owned revoke sink; generic app-owned logout headers stay
+      out of scope. The "inexpressible" framing is an over-claim.
+      Evidence: `packages/server/src/response.ts` adds `Origin-Agent-Cluster: ?1` to framework-owned documents;
+      `betterAuthSignOutMutation` emits `Clear-Site-Data: "cookies", "storage", "executionContexts"` on the
+      session-revocation response. Focused document/static-export, Better Auth, pinned conformance tests, and
+      `pnpm run check:vp` passed.
 
 - [x] **OPP-16 — BREACH-mask the CSRF token (per-response XOR).** runtime-DiD · lev 6 · S · breaking.
       `csrf.ts` emits a stable token into compressible HTML over TLS → inherits the BREACH oracle. XOR-mask the

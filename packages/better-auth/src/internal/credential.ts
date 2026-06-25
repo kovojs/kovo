@@ -47,6 +47,17 @@ export function forwardBetterAuthSetCookie(
   }
 }
 
+type SessionRevocationHeaderContext = {
+  setSessionRevocationClearSiteData?: () => void;
+};
+
+/** @internal Emit browser-side storage clearing for framework-owned session revocation. */
+// OPP-15 runtime-DiD: Kovo owns the Better Auth sign-out mutation response, so its successful
+// revoke path carries Clear-Site-Data alongside the session-clearing cookies.
+export function setSessionRevocationClearSiteData(context: unknown): void {
+  (context as SessionRevocationHeaderContext).setSessionRevocationClearSiteData?.();
+}
+
 /** @internal Parse a standard `Set-Cookie` header string into a typed cookie-builder call. */
 function parseSetCookieHeader(
   raw: string,

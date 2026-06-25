@@ -155,6 +155,7 @@ describe('Better Auth pinned conformance', () => {
     expect(signOutResult).toMatchObject({
       ok: true,
       responseHeaders: {
+        'Clear-Site-Data': '"cookies", "storage", "executionContexts"',
         'Set-Cookie': [
           expect.stringContaining('better-auth.session_token=;'),
           expect.stringContaining('better-auth.session_data=;'),
@@ -412,6 +413,7 @@ describe('Better Auth pinned conformance', () => {
     ).resolves.toMatchObject({
       ok: true,
       responseHeaders: {
+        'Clear-Site-Data': '"cookies", "storage", "executionContexts"',
         'Set-Cookie': [
           expect.stringMatching(
             /^better-auth\.session_token=; (?=.*Path=\/)(?=.*Max-Age=0)(?=.*HttpOnly).*$/,

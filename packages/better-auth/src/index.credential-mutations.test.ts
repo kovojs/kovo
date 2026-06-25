@@ -153,6 +153,7 @@ describe('credential mutation helpers', () => {
       // B3: Better Auth Set-Cookie headers are now re-emitted through the typed cookie builder, which
       // canonicalizes attribute order (Max-Age before Path). Functionally identical clearing cookies.
       responseHeaders: {
+        'Clear-Site-Data': '"cookies", "storage", "executionContexts"',
         'Set-Cookie': [
           'kovo_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax',
           'kovo_session_data=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax',

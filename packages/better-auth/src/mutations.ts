@@ -12,6 +12,7 @@ import {
   isBetterAuthCredentialFailureError,
   redirectPath,
   resolveBetterAuthCredentialSuccess,
+  setSessionRevocationClearSiteData,
 } from './internal.js';
 import type {
   BetterAuthCredentialMutationOptions,
@@ -182,6 +183,7 @@ export function betterAuthSignOutMutation<
       });
 
       forwardBetterAuthSetCookie(response.headers, context);
+      setSessionRevocationClearSiteData(context);
 
       return {
         redirectTo: options.defaultRedirectTo ?? '/login',

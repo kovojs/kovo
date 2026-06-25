@@ -180,7 +180,7 @@ export async function runMutation<
     appendResponseHeader(responseHeaders, 'Set-Cookie', cookie);
   }
 
-  const context: MutationContext<Errors> = {
+  const context = {
     fail<const Code extends Extract<keyof Errors, string>>(
       code: Code,
       payload: JsonSerializable<InferSchema<Errors[Code]>>,
@@ -197,6 +197,15 @@ export async function runMutation<
       return record;
     },
     setCookie,
+    setSessionRevocationClearSiteData() {
+      appendResponseHeader(
+        responseHeaders,
+        'Clear-Site-Data',
+        '"cookies", "storage", "executionContexts"',
+      );
+    },
+  } satisfies MutationContext<Errors> & {
+    setSessionRevocationClearSiteData: () => void;
   };
   const runHandler = async (handlerRequest: GuardedRequest): Promise<Value> => {
     const handlerValue = await definition.handler(input, handlerRequest, context);
