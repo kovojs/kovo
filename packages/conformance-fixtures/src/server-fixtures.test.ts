@@ -189,7 +189,9 @@ describe('@kovojs/test server fixture facts', () => {
       },
     });
     expect(fact.csrf).toEqual({
-      field: expect.stringMatching(/^<input type="hidden" name="csrf" value="[A-Za-z0-9+/=_-]+">$/),
+      field: expect.stringMatching(
+        /^<input type="hidden" name="csrf" value="v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+">$/,
+      ),
       guardCallsAfterFailure: 1,
       guardCallsAfterSuccess: 1,
       missingToken: {

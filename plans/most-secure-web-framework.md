@@ -95,7 +95,8 @@ This is where Kovo's secure-default bias (technical-preview: prefer security-imp
       Evidence: `packages/server/src/cookies.ts` defaults classless app-data cookies to `SameSite=Lax` and
       applies the credential floor to session/auth-shaped names. `pnpm exec vitest
 packages/server/src/cookies.test.ts packages/server/src/mutation.test.ts packages/server/src/response.test.ts
-packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` passed.
+packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and `pnpm --filter
+@kovojs/conformance-better-auth-pin test -- index.session-credentials.test.ts` passed.
 
 - [x] **OPP-18 — Bound the rate-limiter key cardinality.** runtime-DiD · lev 6 · S · non-breaking.
       `app-load-shed.ts` uses unbounded `Map<string,RateBucket>` keyed per-request (global + perIp); an
@@ -260,7 +261,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` pas
       stack — DiD-on-DiD, not a class kill.
       Evidence: `packages/server/src/csrf.ts` emits `v1.<mask>.<masked-mac>` tokens and unmasks before
       constant-time verification against current/previous secrets; `packages/server/src/replay.ts` canonicalizes
-      replay fingerprints across fresh masks. `pnpm exec vitest run packages/server/src` passed.
+      replay fingerprints across fresh masks; `packages/conformance-fixtures/src/verification-fixtures.ts`
+      submits the rendered masked field token. `pnpm exec vitest run packages/server/src` and `vp exec node
+scripts/kovo-check.mjs` passed.
 
 - [x] **OPP-30 — Centralize framework system-response posture.** runtime-DiD · lev ~5 · S · non-breaking
       _(main-thread tier)_. Pre-dispatch 429/413/normalization-redirect responses carry only Content-Type/

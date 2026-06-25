@@ -379,7 +379,9 @@ describe('Better Auth pinned conformance', () => {
     ).resolves.toMatchObject({
       ok: true,
       responseHeaders: {
-        'Set-Cookie': ['better-auth.session_token=verified-sign-up; Path=/; HttpOnly'],
+        'Set-Cookie': [
+          'better-auth.session_token=verified-sign-up; Path=/; HttpOnly; SameSite=Lax',
+        ],
       },
       value: {
         status: 'signed-up',
@@ -397,7 +399,9 @@ describe('Better Auth pinned conformance', () => {
     ).resolves.toMatchObject({
       ok: true,
       responseHeaders: {
-        'Set-Cookie': ['better-auth.session_token=verified-sign-in; Path=/; HttpOnly'],
+        'Set-Cookie': [
+          'better-auth.session_token=verified-sign-in; Path=/; HttpOnly; SameSite=Lax',
+        ],
       },
       value: {
         status: 'signed-in',
@@ -492,7 +496,9 @@ describe('Better Auth pinned conformance', () => {
     ).resolves.toMatchObject({
       ok: true,
       responseHeaders: {
-        'Set-Cookie': ['better-auth.session_token=verified-plugin-sign-in; Path=/; HttpOnly'],
+        'Set-Cookie': [
+          'better-auth.session_token=verified-plugin-sign-in; Path=/; HttpOnly; SameSite=Lax',
+        ],
       },
       value: {
         status: 'signed-in',

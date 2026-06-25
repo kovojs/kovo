@@ -124,9 +124,12 @@ export async function verificationLayerBehaviorFact(
     },
   });
   const csrfHarness = createKovoTestHarness({ db: {}, request: csrfRequest });
-  const token = csrfToken(csrfRequest, csrf);
   const field = csrfField(csrfRequest, csrf);
-  const validResult = await csrfHarness.exec(csrfMutation, { csrf: token, productId: 'p1' });
+  const fieldToken = extractCsrfFieldValue(field, csrf.field);
+  const validResult = await csrfHarness.exec(csrfMutation, {
+    csrf: fieldToken ?? csrfToken(csrfRequest, csrf),
+    productId: 'p1',
+  });
   const invalidResult = await csrfHarness.exec(csrfMutation, { csrf: 'wrong', productId: 'p2' });
 
   const writeMutation = mutation('cart/add', {
@@ -469,7 +472,7 @@ export async function verificationLayerBehaviorFact(
     csrf: {
       invalidResult,
       mutationExecutions: csrfMutationExecutions,
-      tokenMatchesField: field === `<input type="hidden" name="csrf" value="${token}">`,
+      tokenMatchesField: fieldToken !== undefined && field.includes(`name="${csrf.field}"`),
       validResult,
     },
     diagnosticMessages,
@@ -591,6 +594,18 @@ export function verificationLayerKovoCheckDiagnosticsFact(
 function doesNotThrow(callback: () => unknown): boolean {
   callback();
   return true;
+}
+
+function extractCsrfFieldValue(field: string, name: string): string | undefined {
+  const namePattern = escapeRegExp(name);
+  const match = new RegExp(
+    `<input\\s+type="hidden"\\s+name="${namePattern}"\\s+value="([^"]+)">`,
+  ).exec(field);
+  return match?.[1];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 }
 
 function errorMessage(error: unknown): string {

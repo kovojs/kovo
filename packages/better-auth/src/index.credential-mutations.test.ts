@@ -227,9 +227,10 @@ describe('credential mutation helpers', () => {
       ok: true,
       responseHeaders: {
         // round-trips through the typed builder (canonical attribute order), keeping
-        // `; Partitioned` and `SameSite=None`.
+        // `; Partitioned` and `SameSite=None` while applying the browser-enforced
+        // `__Host-` prefix once the credential floor makes the attributes eligible.
         'Set-Cookie': [
-          'better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=None; Partitioned',
+          '__Host-better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=None; Partitioned',
         ],
       },
       value: { redirectTo: '/home', status: 'signed-in' },

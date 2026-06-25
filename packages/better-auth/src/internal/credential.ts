@@ -93,6 +93,13 @@ function parseSetCookieHeader(
         const sameSite = attrValue.toLowerCase();
         if (sameSite === 'lax' || sameSite === 'none' || sameSite === 'strict') {
           options.sameSite = sameSite;
+          if (sameSite === 'none') {
+            options.unsafe = {
+              downgrade: { sameSite: 'none' },
+              justification:
+                'Better Auth emitted SameSite=None for a third-party or partitioned credential cookie.',
+            };
+          }
         }
         break;
       }
