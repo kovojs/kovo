@@ -1061,6 +1061,42 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('does not produce enforced agent-tool sink rows from type-only or nested tool identifiers', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/type-only.ts',
+          source: [
+            "import type { tool } from '@kovojs/server';",
+            'declare const localTool: typeof tool;',
+            'export const notify = localTool({',
+            "  name: 'orders.typeOnly',",
+            '  handler() {',
+            "    return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/nested-shadow.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'export function register(tool: typeof import("@kovojs/server").tool) {',
+            '  return tool({',
+            "    name: 'orders.shadowed',",
+            '    handler() {',
+            "      return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '    },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
   it('derives page access facts from compiled JSX route pages', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',

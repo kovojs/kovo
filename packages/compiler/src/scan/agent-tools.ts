@@ -27,6 +27,8 @@ export function agentToolSinksFromSource(
 
   const facts: CoreGraph.AgentToolReachableSinkFact[] = [];
   const visit = (node: ts.Node): void => {
+    if (node !== sourceFile && ts.isFunctionLike(node)) return;
+
     if (!ts.isCallExpression(node) || !isIdentifierNamed(node.expression, toolLocalNames)) {
       ts.forEachChild(node, visit);
       return;
@@ -56,10 +58,12 @@ function frameworkToolImportNames(sourceFile: ts.SourceFile): Set<string> {
     if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     if (statement.moduleSpecifier.text !== '@kovojs/server') continue;
 
+    if (statement.importClause?.isTypeOnly) continue;
     const bindings = statement.importClause?.namedBindings;
     if (!bindings || !ts.isNamedImports(bindings)) continue;
 
     for (const element of bindings.elements) {
+      if (element.isTypeOnly) continue;
       if ((element.propertyName?.text ?? element.name.text) === 'tool') {
         names.add(element.name.text);
       }

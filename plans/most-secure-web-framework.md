@@ -153,10 +153,13 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       write-domain subset for framework-owned tool rows and keep audit-grade sink rows visible.
       `tool({ reachableSinks })` also emits audit-grade egress/secret-read/mutation/write rows for arbitrary
       declared tool-body sinks without making them enforced. Analyzer-produced top-level `agentToolSinks` rows
-      for egress and secret-read can now remain sound and be enforced, while public/nested rows are forcibly
-      downgraded to audit grade. Focused graph/check/explain/registry/agent-tool tests, `git diff --check`,
-      `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap: arbitrary tool-body AST
-      reachability producers.
+      for egress and secret-read can now remain sound and be enforced; `packages/compiler/src/scan/agent-tools.ts`
+      derives direct framework-owned `tool()` handler `fetch("https://host/...")` and `process.env.NAME` sinks
+      from parsed AST while ignoring type-only imports, nested declarations, and public/manual rows as audit-grade.
+      Focused graph/check/explain/registry/agent-tool tests plus `pnpm exec vitest run
+packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts --run`,
+      `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
+      interprocedural, callback, nonliteral, and broader egress/secret analyzer reachability.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -168,8 +171,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       explicit justification for ambient credential opt-in; `kovo explain --capabilities` renders ambient posture
       and `kovo audit --fail-on-findings` flags missing justification for ambient-credential opt-in. The OPP-07
       graph subset now enforces declared write capabilities for matching framework-owned tool rows and renders
-      declared audit-grade reachable sinks. Remaining gap: broader analyzer integration beyond the
-      framework-owned `tool()` boundary.
+      declared audit-grade reachable sinks; direct AST-produced `process.env` reads and literal `fetch()` egress
+      from framework-owned tool handlers are enforced when declared capabilities do not cover them. Remaining gap:
+      broader analyzer integration beyond the framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
@@ -242,7 +246,7 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `packages/server/src/opaque-session.ts` now exposes a Kovo-owned opaque session store/manager with
       non-JWT ids, rotation, expiry, immediate revocation, and a `sessionProvider` adapter. Focused Better
       Auth/keyring/capability/env tests plus `pnpm exec vitest run packages/server/src/opaque-session.test.ts
-      --run`, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
+--run`, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
       the owned opaque primitive is not yet the framework-wide default session lifecycle.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
