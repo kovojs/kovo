@@ -4,7 +4,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
+import { computeRenderPlanFingerprint } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import { staticExportManifest } from './static-export-result.js';
@@ -48,6 +49,9 @@ const runtimeClientModuleManifestItem = expect.objectContaining({
   path: expect.stringMatching(runtimeClientModulePath),
   status: 200,
 });
+const testRenderPlanFingerprint = computeRenderPlanFingerprint({
+  test: 'field:id',
+});
 
 describe('server app shell Vite build seam', () => {
   it('wires route-entry hints, compiled modules, output files, and static export assets', async () => {
@@ -73,6 +77,7 @@ describe('server app shell Vite build seam', () => {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cartClient = true;',
             version: 'cartclient',
           },
@@ -166,6 +171,75 @@ describe('server app shell Vite build seam', () => {
     }
   });
 
+  it('threads render-plan fingerprints into compiled module hrefs and document build tokens', async () => {
+    const routePath = '/cart';
+    const cartRoute = route(routePath, {
+      modulepreloads: ['/c/cart.client.js?v=manual'],
+      page() {
+        return renderedHtml('<main>Cart</main>');
+      },
+    });
+    const source = 'export const cartClient = true;';
+    const shapeA = computeRenderPlanFingerprint({ cart: 'field:id,count' });
+    const shapeB = computeRenderPlanFingerprint({ cart: 'field:id,total' });
+
+    const buildForShape = (renderPlanFingerprint: string) =>
+      createKovoAppShellViteBuild({
+        app: createApp({ routes: [cartRoute] }),
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            renderPlanFingerprint,
+            source,
+          },
+        ],
+      });
+
+    const buildA = buildForShape(shapeA);
+    const buildB = buildForShape(shapeB);
+    const [moduleA] = buildA.clientModules;
+    const [moduleB] = buildB.clientModules;
+    if (!moduleA || !moduleB) throw new Error('expected compiled modules');
+
+    expect(moduleA.source).toBe(moduleB.source);
+    expect(moduleA.version).toContain(shapeA);
+    expect(moduleB.version).toContain(shapeB);
+    expect(moduleA.href).not.toBe(moduleB.href);
+
+    const responseA = await createRequestHandler(buildA.app)(
+      new Request(`https://example.test${routePath}`),
+    );
+    const responseB = await createRequestHandler(buildB.app)(
+      new Request(`https://example.test${routePath}`),
+    );
+    const tokenA = (await responseA.text()).match(
+      /<meta name="kovo-build" content="([^"]*)"/,
+    )?.[1];
+    const tokenB = (await responseB.text()).match(
+      /<meta name="kovo-build" content="([^"]*)"/,
+    )?.[1];
+
+    expect(tokenA).toBeTruthy();
+    expect(tokenB).toBeTruthy();
+    expect(tokenA).not.toBe(tokenB);
+    expect(buildA.app.clientModules.buildToken()).toBe(tokenA);
+    expect(buildB.app.clientModules.buildToken()).toBe(tokenB);
+  });
+
+  it('rejects compiled client modules without a render-plan fingerprint', () => {
+    expect(() =>
+      createKovoAppShellViteBuild({
+        app: createApp({ routes: [] }),
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            source: 'export const cartClient = true;',
+          },
+        ],
+      }),
+    ).toThrow(/missing renderPlanFingerprint.*SPEC §5\.2\.1/);
+  });
+
   it('requires an app when Vite build output is asked to run static export', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-static-export-dist-'));
 
@@ -218,6 +292,7 @@ describe('server app shell Vite build seam', () => {
         clientModules: [
           {
             path: '/c/admin.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const admin = true;',
             version: 'admin-v1',
           },
@@ -275,6 +350,7 @@ describe('server app shell Vite build seam', () => {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cart = true;',
             version: 'cart-v1',
           },
@@ -385,6 +461,7 @@ describe('server app shell Vite build seam', () => {
         clientModules: [
           {
             path: '/c/shop.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const shopClient = true;',
             version: 'shopclient',
           },
@@ -855,6 +932,7 @@ describe('server app shell Vite build seam', () => {
       const clientModules = [
         {
           path: '/c/docs.client.js',
+          renderPlanFingerprint: testRenderPlanFingerprint,
           source: 'export const docsClient = true;',
           version: 'docs-v1',
         },

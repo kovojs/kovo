@@ -338,6 +338,7 @@ export interface CompileResult {
   outputContextFacts: readonly GeneratedOutputWriteFact[];
   platformSubstitutions: readonly PlatformSubstitution[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  renderPlanFingerprint?: string | null;
   renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
   updateCoverage: readonly QueryUpdateCoverageFact[];
   viewTransitions: readonly ViewTransitionStamp[];
@@ -523,6 +524,7 @@ export function createEmptyCompileResult(): CompileResult {
     outputContextFacts: [],
     platformSubstitutions: [],
     queryUpdatePlans: [],
+    renderPlanFingerprint: null,
     renderEquivalenceChecks: [],
     updateCoverage: [],
     viewTransitions: [],

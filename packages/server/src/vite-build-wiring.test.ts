@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
+import { computeRenderPlanFingerprint } from './client-modules.js';
 import { route } from './route.js';
 import {
   createKovoAppShellViteBuild,
@@ -15,6 +16,13 @@ import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
 import { kovoAppShellVitePlugin } from './internal/app-shell-vite.js';
 import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
 import { renderedHtml } from './html.js';
+
+const testRenderPlanFingerprint = computeRenderPlanFingerprint({
+  test: 'field:id',
+});
+const testFingerprintVersionPattern = new RegExp(
+  `^/?c/__v/${testRenderPlanFingerprint}-[a-f0-9]{12}/cart\\.client\\.js$`,
+);
 
 describe('server app shell Vite plugin', () => {
   it('wires build manifest hints and compiled client modules through the app shell', async () => {
@@ -30,6 +38,7 @@ describe('server app shell Vite plugin', () => {
       clientModules: [
         {
           path: '/c/cart.client.js',
+          renderPlanFingerprint: testRenderPlanFingerprint,
           source: 'export const cart = 1;',
         },
       ],
@@ -51,9 +60,9 @@ describe('server app shell Vite plugin', () => {
     const module = build.clientModules[0];
     if (!module) throw new Error('expected a compiled client module');
     expect(module).toMatchObject({
-      file: expect.stringMatching(/^c\/__v\/[a-f0-9]{12}\/cart\.client\.js$/),
-      href: expect.stringMatching(/^\/c\/__v\/[a-f0-9]{12}\/cart\.client\.js$/),
-      path: expect.stringMatching(/^\/c\/__v\/[a-f0-9]{12}\/cart\.client\.js$/),
+      file: expect.stringMatching(testFingerprintVersionPattern),
+      href: expect.stringMatching(testFingerprintVersionPattern),
+      path: expect.stringMatching(testFingerprintVersionPattern),
       source: 'export const cart = 1;',
     });
     expect(build.assets).toEqual([
@@ -289,6 +298,7 @@ describe('server app shell Vite plugin', () => {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cart = true;',
             version: 'cart-v1',
           },
@@ -330,6 +340,7 @@ describe('server app shell Vite plugin', () => {
         clientModules: [
           {
             path: '/c/cart.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const cart = true;',
             version: 'cart-v1',
           },
