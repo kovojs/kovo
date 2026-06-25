@@ -8,6 +8,7 @@ import {
   writeStaticExportOutput,
 } from './static-export-output.js';
 import { replayStaticExportApp } from './static-export-replay.js';
+import { applyStaticExportSubresourceIntegrity } from './static-export-sri.js';
 import {
   assertStaticExportCompileDiagnostics,
   StaticExportError,
@@ -39,8 +40,14 @@ export async function exportStaticApp(
     ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
     ...(options.origin === undefined ? {} : { origin: options.origin }),
   });
-  const outputPlan = createStaticExportOutputPlan({
+  const artifacts = await applyStaticExportSubresourceIntegrity({
     artifacts: replay.artifacts,
+    assets,
+    clientModules: replay.clientModules,
+    origin: options.origin ?? 'https://kovo.local',
+  });
+  const outputPlan = createStaticExportOutputPlan({
+    artifacts,
     assets,
     clientModules: replay.clientModules,
     outDir: options.outDir ?? STATIC_EXPORT_DRY_RUN_ROOT,
@@ -51,7 +58,7 @@ export async function exportStaticApp(
   }
 
   return {
-    artifacts: replay.artifacts,
+    artifacts,
     assets,
     clientModules: replay.clientModules,
     diagnostics: replay.diagnostics,

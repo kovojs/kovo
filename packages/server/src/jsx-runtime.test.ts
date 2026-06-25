@@ -4,7 +4,7 @@ import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
-import { csrfToken } from './csrf.js';
+import { validateCsrfToken } from './csrf.js';
 import { renderHtmlValue } from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { Fragment, jsx, jsxDEV, jsxs } from './jsx-runtime.js';
@@ -12,6 +12,12 @@ import { mutationFormAttributes } from './mutation.js';
 
 const html = (value: unknown): string => renderHtmlValue(value);
 const asyncHtml = async (value: unknown): Promise<string> => renderHtmlValue(await value);
+
+function hiddenInputValue(rendered: string, name: string): string {
+  const match = new RegExp(`name="${name}" value="([^"]+)"`).exec(rendered);
+  if (!match?.[1]) throw new Error(`expected hidden input ${name} in ${rendered}`);
+  return match[1];
+}
 
 describe('server jsx runtime', () => {
   it('renders intrinsic elements to light-DOM HTML strings', () => {
@@ -100,8 +106,8 @@ describe('server jsx runtime', () => {
 
     // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field
     // alongside the CSRF field. The idem value is a fresh UUID each render.
-    expect(rendered).toContain(
-      `<input type="hidden" name="csrf" value="${csrfToken(request, csrf)}">`,
+    expect(validateCsrfToken({ csrf: hiddenInputValue(rendered, 'csrf') }, request, csrf)).toBe(
+      true,
     );
     expect(rendered).toMatch(/name="Kovo-Idem" value="[^"]+"/);
     expect(rendered).toContain('action="/_m/cart/add"');
@@ -145,7 +151,9 @@ describe('server jsx runtime', () => {
     );
 
     expect(rendered).toContain('action="/_m/cart/add"');
-    expect(rendered).toContain(`name="csrf" value="${csrfToken(request, csrf)}"`);
+    expect(validateCsrfToken({ csrf: hiddenInputValue(rendered, 'csrf') }, request, csrf)).toBe(
+      true,
+    );
     expect(rendered.match(/name="csrf"/g)).toHaveLength(1);
   });
 

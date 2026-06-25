@@ -232,11 +232,13 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` pas
 
 - [ ] **OPP-20 / SINK-03 — General path-traversal-safe file-serving primitive.** see SINK-03. lev 6–7 · L.
 
-- [ ] **OPP-13 — SRI integrity on emitted module/style tags.** runtime-DiD (browser-enforced; cross-origin
+- [x] **OPP-13 — SRI integrity on emitted module/style tags.** runtime-DiD (browser-enforced; cross-origin
       subresources only) · lev 2 · M · non-breaking. Kovo already content-hashes immutable modules and inline
       scripts, so the digests are in hand — attach `integrity=sha384-…` to emitted first-party tags. _Trade-off:_
       a narrow real floor for app-allowlisted cross-origin subresources; **inapplicable** to the same-origin
       `import()`/modulepreload execution path it primarily targets — do not sell it as by-construction.
+      Evidence: `packages/server/src/static-export-sri.ts` attaches `sha384` integrity where static export has
+      first-party module/style bytes. `pnpm exec vitest run packages/server/src` passed.
 
 - [ ] **OPP-14 — Framework-owned Reporting pipeline (`report-to`).** audit-only · lev 6 · M · non-breaking.
       Strict CSP ships with **no** reporting, so a blocked attack/regression emits zero signal — bad for
@@ -257,8 +259,8 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` pas
       constant-time compare. _Trade-off:_ real low-cost hardening of a live oracle in Kovo's default-compressed
       stack — DiD-on-DiD, not a class kill.
       Evidence: `packages/server/src/csrf.ts` emits `v1.<mask>.<masked-mac>` tokens and unmasks before
-      constant-time verification against current/previous secrets. Focused CSRF, app-document, mutation-request,
-      mutation-wire, and mutation lifecycle Vitest files passed.
+      constant-time verification against current/previous secrets; `packages/server/src/replay.ts` canonicalizes
+      replay fingerprints across fresh masks. `pnpm exec vitest run packages/server/src` passed.
 
 - [x] **OPP-30 — Centralize framework system-response posture.** runtime-DiD · lev ~5 · S · non-breaking
       _(main-thread tier)_. Pre-dispatch 429/413/normalization-redirect responses carry only Content-Type/

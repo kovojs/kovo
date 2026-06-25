@@ -150,11 +150,11 @@ describe('server app shell Vite build seam', () => {
 
       const exported = output.staticExport;
       if (!exported) throw new Error('expected app-shell build output static export');
-      expect(exported.artifacts[0]?.body).toContain(
-        '<link rel="stylesheet" href="/assets/cart.css">',
+      expect(exported.artifacts[0]?.body).toMatch(
+        /<link rel="stylesheet" href="\/assets\/cart\.css" integrity="sha384-[^"]+">/,
       );
-      expect(exported.artifacts[0]?.body).toContain(
-        '<link rel="modulepreload" href="/assets/cart.js">',
+      expect(exported.artifacts[0]?.body).toMatch(
+        /<link rel="modulepreload" href="\/assets\/cart\.js" integrity="sha384-[^"]+">/,
       );
       await expect(readFile(join(outDir, 'cart/index.html'), 'utf8')).resolves.toContain(
         '<main class="cart">Cart</main>',
@@ -722,8 +722,8 @@ export const CartButton = component({
         '/assets/cart.css',
         '/assets/cart.js',
       ]);
-      await expect(readFile(join(outDir, 'cart', 'index.html'), 'utf8')).resolves.toContain(
-        '<link rel="stylesheet" href="/assets/cart.css">',
+      await expect(readFile(join(outDir, 'cart', 'index.html'), 'utf8')).resolves.toMatch(
+        /<link rel="stylesheet" href="\/assets\/cart\.css" integrity="sha384-[^"]+">/,
       );
       await expect(readFile(join(outDir, 'assets/cart.js'), 'utf8')).resolves.toBe(
         'export const cart = "dist";',
@@ -842,8 +842,8 @@ export const CartButton = component({
       await expect(readFile(join(outDir, 'products/p1/index.html'), 'utf8')).resolves.toContain(
         '<main class="product">Product p1</main>',
       );
-      await expect(readFile(join(outDir, 'products/p2/index.html'), 'utf8')).resolves.toContain(
-        '<link rel="stylesheet" href="/assets/product.css">',
+      await expect(readFile(join(outDir, 'products/p2/index.html'), 'utf8')).resolves.toMatch(
+        /<link rel="stylesheet" href="\/assets\/product\.css" integrity="sha384-[^"]+">/,
       );
       await expect(readFile(join(outDir, 'assets/product.css'), 'utf8')).resolves.toBe(
         '.product{color:green}',
@@ -1189,8 +1189,8 @@ export const CartButton = component({
         ],
       });
       expect(dryRunManifest.files).toEqual(staticExportManifest(written).files);
-      await expect(readFile(join(outDir, 'docs/intro/index.html'), 'utf8')).resolves.toContain(
-        '<link rel="stylesheet" href="/assets/docs.css">',
+      await expect(readFile(join(outDir, 'docs/intro/index.html'), 'utf8')).resolves.toMatch(
+        /<link rel="stylesheet" href="\/assets\/docs\.css" integrity="sha384-[^"]+">/,
       );
       await expect(readFile(join(outDir, 'c/docs.client.js'), 'utf8')).resolves.toBe(
         'export const docsClient = true;',

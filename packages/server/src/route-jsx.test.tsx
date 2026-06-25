@@ -2,7 +2,7 @@
 import { component, ErrorBoundary, FieldError, form, FormError } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
-import { csrfToken } from './csrf.js';
+import { validateCsrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
@@ -265,12 +265,14 @@ describe('route JSX pages', () => {
 
     // The per-submit Kovo-Idem hidden field (SPEC §10.3) carries a fresh random token; normalize it
     // for the golden comparison while still asserting the field is emitted alongside the CSRF field.
-    const normalizedBody = result.body.replace(
-      /name="Kovo-Idem" value="[^"]*"/,
-      'name="Kovo-Idem" value="<idem>"',
-    );
+    const csrfMatch = /name="kovo-csrf" value="([^"]*)"/.exec(result.body);
+    if (!csrfMatch?.[1]) throw new Error(`expected rendered CSRF token in ${result.body}`);
+    expect(validateCsrfToken({ 'kovo-csrf': csrfMatch[1] }, request, csrf)).toBe(true);
+    const normalizedBody = result.body
+      .replace(/name="kovo-csrf" value="[^"]*"/, 'name="kovo-csrf" value="<csrf>"')
+      .replace(/name="Kovo-Idem" value="[^"]*"/, 'name="Kovo-Idem" value="<idem>"');
     expect(normalizedBody).toBe(
-      `<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="productId" value="p1"><input name="quantity" value="1"><output role="alert" data-error-code="OUT_OF_STOCK">Only 3 left.</output><input type="hidden" name="kovo-csrf" value="${csrfToken(request, csrf)}"><input type="hidden" name="Kovo-Idem" value="<idem>"></form>`,
+      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="productId" value="p1"><input name="quantity" value="1"><output role="alert" data-error-code="OUT_OF_STOCK">Only 3 left.</output><input type="hidden" name="kovo-csrf" value="<csrf>"><input type="hidden" name="Kovo-Idem" value="<idem>"></form>',
     );
     expect(result.status).toBe(200);
   });

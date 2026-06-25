@@ -1,4 +1,5 @@
 import { cloneResponseHeaders, type ResponseHeaders, type ServerResponseBase } from './response.js';
+import { formLikeToRecord } from './schema.js';
 
 export type MutationReplayResponse = ServerResponseBase<
   string,
@@ -73,6 +74,7 @@ export interface MutationReplayStoreOptions {
 type CsrfReplayScope<Request> =
   | false
   | {
+      field?: string;
       sessionId(request: Request): string | undefined;
     };
 
@@ -255,7 +257,7 @@ export function mutationReplayContext<Request, Response extends MutationReplayRe
   const sessionScope = mutationReplayScope(csrf, wireRequest.request);
   return {
     ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
-    ...replayFingerprint(wireRequest),
+    ...replayFingerprint(csrf, wireRequest),
     ...(wireRequest.replayStore === undefined ? {} : { replayStore: wireRequest.replayStore }),
     // Security finding M4: fold the mutation key into the replay scope so
     // idempotency is per-(session, mutation, idem). Without this, one mutation's
@@ -265,14 +267,33 @@ export function mutationReplayContext<Request, Response extends MutationReplayRe
   };
 }
 
-function replayFingerprint(wireRequest: { rawInput?: unknown; requestFingerprint?: string }): {
-  fingerprint?: string;
-} {
+function replayFingerprint<Request>(
+  csrf: CsrfReplayScope<Request>,
+  wireRequest: { rawInput?: unknown; request: Request; requestFingerprint?: string },
+): { fingerprint?: string } {
   if (wireRequest.requestFingerprint !== undefined)
     return { fingerprint: wireRequest.requestFingerprint };
   return wireRequest.rawInput === undefined
     ? {}
-    : { fingerprint: canonicalJson(wireRequest.rawInput) };
+    : { fingerprint: canonicalJson(canonicalReplayInput(csrf, wireRequest)) };
+}
+
+function canonicalReplayInput<Request>(
+  csrf: CsrfReplayScope<Request>,
+  wireRequest: { rawInput?: unknown; request: Request },
+): unknown {
+  if (csrf === false || wireRequest.rawInput === undefined) return wireRequest.rawInput;
+  const csrfSessionId = csrf.sessionId(wireRequest.request);
+  if (!csrfSessionId) return wireRequest.rawInput;
+
+  const field = csrf.field ?? 'kovo-csrf';
+  const record = formLikeToRecord(wireRequest.rawInput);
+  if (!(field in record)) return wireRequest.rawInput;
+
+  return {
+    ...record,
+    [field]: `csrf-session:${csrfSessionId}`,
+  };
 }
 
 function composeMutationReplayScope(

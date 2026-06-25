@@ -81,7 +81,7 @@ function collectStaticExportClientModuleHrefsFromHtml(
   }
 }
 
-function collectStaticExportOpeningTags(html: string): StaticExportOpeningTag[] {
+export function collectStaticExportOpeningTags(html: string): StaticExportOpeningTag[] {
   const tags: StaticExportOpeningTag[] = [];
   let offset = 0;
 
@@ -112,6 +112,7 @@ interface StaticExportOpeningTag {
   attributes: string;
   end: number;
   name: string;
+  start: number;
 }
 
 function readStaticExportOpeningTag(
@@ -142,6 +143,7 @@ function readStaticExportOpeningTag(
         attributes: html.slice(attributesStart, offset),
         end: offset + 1,
         name,
+        start,
       };
     }
 
@@ -216,7 +218,9 @@ function isStaticExportTagNameBoundary(char: string | undefined): boolean {
   return char === undefined || char === '>' || char === '/' || isStaticExportHtmlSpace(char);
 }
 
-function readStaticExportHtmlAttributeRefs(attributes: string): StaticExportHtmlAttributeRef[] {
+export function readStaticExportHtmlAttributeRefs(
+  attributes: string,
+): StaticExportHtmlAttributeRef[] {
   const refs: StaticExportHtmlAttributeRef[] = [];
   let offset = 0;
 
@@ -322,7 +326,7 @@ function collectStaticExportClientModuleHrefTokens(
   }
 }
 
-function staticExportAttributeMap(
+export function staticExportAttributeMap(
   refs: readonly StaticExportHtmlAttributeRef[],
 ): Map<string, string> {
   const attrs = new Map<string, string>();
@@ -336,7 +340,7 @@ function isStaticExportModuleScript(attrs: ReadonlyMap<string, string>): boolean
   return attrs.get('type')?.trim().toLowerCase() === 'module';
 }
 
-function staticExportRelTokens(value: string | undefined): string[] {
+export function staticExportRelTokens(value: string | undefined): string[] {
   return (value ?? '').toLowerCase().split(/\s+/).filter(Boolean);
 }
 

@@ -138,8 +138,8 @@ describe('server app shell Vite plugin build boundary', () => {
       await expect(readFile(join(outDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
         'export const cartClient = true;',
       );
-      await expect(readFile(join(exportDir, 'cart/index.html'), 'utf8')).resolves.toContain(
-        '<link rel="stylesheet" href="/assets/cart.css">',
+      await expect(readFile(join(exportDir, 'cart/index.html'), 'utf8')).resolves.toMatch(
+        /<link rel="stylesheet" href="\/assets\/cart\.css" integrity="sha384-[^"]+">/,
       );
       await expect(readFile(join(exportDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
         'export const cartClient = true;',

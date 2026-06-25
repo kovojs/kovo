@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -7,10 +8,14 @@ import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
+import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { stylesheet } from './hints.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 import { renderedHtml } from './html.js';
+
+const sriSha384 = (source: string | Buffer): string =>
+  `sha384-${createHash('sha384').update(source).digest('base64')}`;
 
 describe('server static export', () => {
   it('rejects non-file static asset source URLs before synthetic route replay', async () => {
@@ -102,6 +107,82 @@ describe('server static export', () => {
       await expect(readFile(path.join(outDir, 'assets/icons/icon.bin'))).resolves.toEqual(
         iconBytes,
       );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
+  it('adds sha384 integrity to exported first-party module and stylesheet tags with known bytes', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-assets-'));
+    try {
+      const appCss = 'body { color: black; }\n';
+      const asyncCss = '.cart { color: teal; }\n';
+      const moduleSource = 'export const cart = "sri";';
+      const appCssSource = path.join(sourceDir, 'app.css');
+      const asyncCssSource = path.join(sourceDir, 'async.css');
+      await writeFile(appCssSource, appCss, 'utf8');
+      await writeFile(asyncCssSource, asyncCss, 'utf8');
+
+      const registry = createMemoryVersionedClientModuleRegistry();
+      const cartHref = registry.put({
+        path: '/c/cart.client.js',
+        source: moduleSource,
+        version: 'cart-sri',
+      });
+      const app = createApp({
+        routes: [
+          route('/', {
+            bootstrapScript: cartHref,
+            modulepreloads: [cartHref],
+            page: () => trustedHtml('<main>Home</main>'),
+            stylesheets: [
+              '/assets/app.css',
+              stylesheet('./async.css', { deferFull: true, href: '/assets/async.css' }),
+            ],
+          }),
+        ],
+      });
+      app.clientModules = registry;
+
+      const result = await exportStaticApp(app, {
+        assets: [
+          {
+            contentType: 'text/css; charset=utf-8',
+            path: '/assets/app.css',
+            source: appCssSource,
+          },
+          {
+            contentType: 'text/css; charset=utf-8',
+            path: '/assets/async.css',
+            source: asyncCssSource,
+          },
+        ],
+        outDir,
+      });
+
+      const html = result.artifacts[0]?.body ?? '';
+      const appIntegrity = sriSha384(appCss);
+      const asyncIntegrity = sriSha384(asyncCss);
+      const moduleIntegrity = sriSha384(moduleSource);
+
+      expect(html).toContain(
+        `<link rel="stylesheet" href="/assets/app.css" integrity="${appIntegrity}">`,
+      );
+      expect(html).toContain(
+        `<link rel="preload" as="style" href="/assets/async.css" data-kovo-deferred-style integrity="${asyncIntegrity}">`,
+      );
+      expect(html).toContain(
+        `<noscript><link rel="stylesheet" href="/assets/async.css" integrity="${asyncIntegrity}"></noscript>`,
+      );
+      expect(html).toContain(
+        `<link rel="modulepreload" href="${cartHref}" integrity="${moduleIntegrity}">`,
+      );
+      expect(html).toContain(
+        `<script type="module" src="${cartHref}" integrity="${moduleIntegrity}"></script>`,
+      );
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toBe(html);
     } finally {
       await rm(outDir, { force: true, recursive: true });
       await rm(sourceDir, { force: true, recursive: true });
