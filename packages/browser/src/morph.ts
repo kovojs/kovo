@@ -39,6 +39,7 @@ export class DomMorphTarget implements MorphTarget {
     // Trusted Types policy so this sink survives a strict `require-trusted-types-for`
     // CSP on Chromium (transparent passthrough elsewhere — see trusted-types.ts).
     template.innerHTML = kovoCreateHTML(html.trim());
+    sanitizeDomFragment(template.content);
     this.element.append(...Array.from(template.content.childNodes));
   }
 
@@ -165,6 +166,8 @@ export function morphStructuralTree(
 
 /** @internal Reconcile a DOM element in place against its next shape, preserving focus/state (SPEC §9.1). */
 export function morphDomElement(current: Element, next: Element): Element {
+  sanitizeDomElementTree(next);
+
   if (!canReuseDomElement(current, next)) {
     current.replaceWith(next);
     return next;
@@ -180,6 +183,23 @@ export function morphDomElement(current: Element, next: Element): Element {
 
   morphDomChildren(current, next);
   return current;
+}
+
+/** @internal Sanitize a parsed DOM tree before adopting new response HTML (SPEC §4.8). */
+export function sanitizeDomElementTree(element: Element): Element {
+  for (const current of [element, ...element.querySelectorAll('*')]) {
+    for (const attribute of Array.from(current.attributes)) {
+      kovoSetSafeAttribute(current, attribute.name, attribute.value);
+    }
+  }
+
+  return element;
+}
+
+function sanitizeDomFragment(fragment: DocumentFragment): void {
+  for (const element of Array.from(fragment.children)) {
+    sanitizeDomElementTree(element);
+  }
 }
 
 function replaceFragment(target: MorphTarget, html: string): void {
@@ -410,7 +430,7 @@ function morphDomChildren(current: Element, next: Element): void {
       const existing = key ? currentByKey.get(key) : undefined;
       desiredNode = existing
         ? morphDomElement(existing, nextChild)
-        : (nextChild.cloneNode(true) as ChildNode);
+        : sanitizeDomElementTree(nextChild.cloneNode(true) as Element);
     }
 
     desiredNodes.push(desiredNode);

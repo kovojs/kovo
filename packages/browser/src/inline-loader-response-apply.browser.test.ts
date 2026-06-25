@@ -9,17 +9,22 @@ afterEach(() => {
 
 describe('browser inline loader response apply', () => {
   it('morphs enhanced mutation fragments through the installed inline loader', async () => {
+    const style = document.createElement('style');
+    style.textContent = [
+      '.scroll-panel { height: 20px; overflow: auto }',
+      '.scroll-panel-fill { height: 80px }',
+    ].join('\n');
     const root = document.createElement('main');
     root.innerHTML = [
       '<form enhance action="/cart" method="post">',
       '<section kovo-c="cart-form">',
       '<label kovo-key="label">Quantity</label>',
-      '<div kovo-key="panel" style="height: 20px; overflow: auto"><p style="height: 80px">Panel</p></div>',
+      '<div kovo-key="panel" class="scroll-panel"><p class="scroll-panel-fill">Panel</p></div>',
       '<textarea kovo-key="quantity" name="quantity">12345</textarea>',
       '</section>',
       '</form>',
     ].join('');
-    document.body.append(root);
+    document.body.append(style, root);
 
     const form = root.querySelector('form');
     const textarea = root.querySelector('textarea');
@@ -39,7 +44,7 @@ describe('browser inline loader response apply', () => {
           '<kovo-fragment target="cart-form">',
           '<section kovo-c="cart-form">',
           '<textarea kovo-key="quantity" name="quantity">67890</textarea>',
-          '<div kovo-key="panel" style="height: 20px; overflow: auto"><p style="height: 80px">Updated panel</p></div>',
+          '<div kovo-key="panel" class="scroll-panel"><p class="scroll-panel-fill">Updated panel</p></div>',
           '<label kovo-key="label">Updated quantity</label>',
           '</section>',
           '</kovo-fragment>',
@@ -143,6 +148,52 @@ describe('browser inline loader response apply', () => {
         )?.textContent,
       ).toBe('fresh fragment target');
     });
+  });
+
+  it('sanitizes unsafe fragment replacement and append attributes through the installed loader', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section kovo-fragment-target="promo">old promo</section>',
+      '<ul kovo-fragment-target="feed"><li kovo-key="old">old</li></ul>',
+    ].join('');
+    document.body.append(root);
+
+    installInlineKovoLoader(async () => ({}));
+    (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+      [
+        '<kovo-fragment target="promo">',
+        '<article kovo-fragment-target="promo"',
+        ' onclick="alert(1)" innerHTML="<img src=x onerror=alert(1))" style="background:url(javascript:alert(1))">',
+        '<a href="java\tscript:alert(1)"',
+        ' srcdoc="<script>bad()</script>"',
+        ' srcset="/safe.png 1x, javascript:alert(1) 2x">promo</a>',
+        '</article>',
+        '</kovo-fragment>',
+        '<kovo-fragment target="feed" mode="append">',
+        '<li kovo-key="new"><a href="javascript:alert(1)" onclick="bad()" innerHTML="<img src=x onerror=alert(1))"',
+        ' srcdoc="<script>bad()</script>"',
+        ' srcset="/safe.png 1x, javascript:alert(1) 2x"',
+        ' style="background:url(javascript:alert(1))">new</a></li>',
+        '</kovo-fragment>',
+      ].join(''),
+    );
+
+    const promo = root.querySelector('article[kovo-fragment-target="promo"]');
+    const promoLink = promo?.querySelector('a');
+    const feedLink = root.querySelector('[kovo-key="new"] a');
+
+    expect(promo?.getAttribute('onclick')).toBeNull();
+    expect(promo?.getAttribute('innerHTML')).toBeNull();
+    expect(promo?.getAttribute('style')).toBeNull();
+    expect(promoLink?.getAttribute('href')).toBe('#');
+    expect(promoLink?.getAttribute('srcdoc')).toBeNull();
+    expect(promoLink?.getAttribute('srcset')).toBe('/safe.png 1x');
+    expect(feedLink?.getAttribute('href')).toBe('#');
+    expect(feedLink?.getAttribute('innerHTML')).toBeNull();
+    expect(feedLink?.getAttribute('onclick')).toBeNull();
+    expect(feedLink?.getAttribute('srcdoc')).toBeNull();
+    expect(feedLink?.getAttribute('srcset')).toBe('/safe.png 1x');
+    expect(feedLink?.getAttribute('style')).toBeNull();
   });
 
   it('aborts removed same-component keyed island signals by identity', async () => {

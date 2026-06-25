@@ -116,7 +116,10 @@ describe('browser mutation response DOM apply', () => {
     const appendResult = applyMutationResponseBodyToRuntime({
       body: [
         '<kovo-fragment target="product-grid" mode="append">',
-        '<article kovo-key="p3">Third</article>',
+        '<article kovo-key="p3"><a href="java\tscript:alert(1)" onclick="bad()" innerHTML="<img src=x onerror=alert(1))"',
+        ' srcdoc="<script>bad()</script>"',
+        ' srcset="/safe.png 1x, javascript:alert(1) 2x"',
+        ' style="background:url(javascript:alert(1))">Third</a></article>',
         '<article kovo-key="p4">Fourth</article>',
         '</kovo-fragment>',
       ].join(''),
@@ -136,6 +139,13 @@ describe('browser mutation response DOM apply', () => {
       'p3',
       'p4',
     ]);
+    const appendedLink = root.querySelector('[kovo-key="p3"] a');
+    expect(appendedLink?.getAttribute('href')).toBe('#');
+    expect(appendedLink?.getAttribute('innerHTML')).toBeNull();
+    expect(appendedLink?.getAttribute('onclick')).toBeNull();
+    expect(appendedLink?.getAttribute('srcdoc')).toBeNull();
+    expect(appendedLink?.getAttribute('srcset')).toBe('/safe.png 1x');
+    expect(appendedLink?.getAttribute('style')).toBeNull();
 
     applyMutationResponseBodyToRuntime({
       body: [
@@ -299,8 +309,15 @@ describe('browser mutation response DOM apply', () => {
 
   it('reports browser query apply failures and still applies later fragments', () => {
     const root = document.createElement('main');
-    root.innerHTML =
-      '<section kovo-c="cart-badge">stale</section><span data-bind="cart.count">0</span>';
+    root.innerHTML = [
+      '<section kovo-c="cart-badge">stale</section>',
+      '<span data-bind="cart.count">0</span>',
+      '<a data-bind:href="cart.href" data-bind:onclick="cart.handler"',
+      ' data-bind:srcdoc="cart.srcdoc" data-bind:srcset="cart.srcset"',
+      ' data-bind:innerHTML="cart.html" data-bind:style="cart.style"',
+      ' href="/old" onclick="old()" srcdoc="<p>old</p>" srcset="/old.png 1x"',
+      ' innerHTML="<p>old</p>" style="color: green">old</a>',
+    ].join('');
     document.body.append(root);
     const store = createQueryStore();
     const onError = vi.fn();
@@ -312,7 +329,7 @@ describe('browser mutation response DOM apply', () => {
       },
       body: [
         '<kovo-query name="cart">{"count":1}</kovo-query>',
-        '<kovo-query name="cart">{"count":2}</kovo-query>',
+        '<kovo-query name="cart">{"count":2,"handler":"alert(1)","href":"java\\nscript:alert(1)","html":"<img src=x onerror=alert(1)>","srcdoc":"<script>alert(1)</script>","srcset":"/safe.png 1x, javascript:alert(1) 2x","style":"background:url(javascript:alert(1))"}</kovo-query>',
         '<kovo-fragment target="cart-badge"><section kovo-c="cart-badge">fresh</section></kovo-fragment>',
       ].join(''),
       onError,
@@ -327,8 +344,15 @@ describe('browser mutation response DOM apply', () => {
     expect(onError).toHaveBeenCalledWith(hookError);
     expect(applied.queries).toEqual(['cart']);
     expect(applied.appliedFragments).toEqual(['cart-badge']);
-    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('cart')).toMatchObject({ count: 2 });
     expect(root.querySelector('[data-bind="cart.count"]')?.textContent).toBe('2');
+    const link = root.querySelector('a');
+    expect(link?.getAttribute('href')).toBe('#');
+    expect(link?.getAttribute('innerHTML')).toBeNull();
+    expect(link?.getAttribute('onclick')).toBeNull();
+    expect(link?.getAttribute('srcdoc')).toBeNull();
+    expect(link?.getAttribute('srcset')).toBe('/safe.png 1x');
+    expect(link?.getAttribute('style')).toBeNull();
     expect(root.querySelector('[kovo-c="cart-badge"]')?.textContent).toBe('fresh');
   });
 });

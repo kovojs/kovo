@@ -67,4 +67,81 @@ describe('browser response fragment apply', () => {
     expect(link?.getAttribute('href')).toBe('#');
     expect(link?.getAttribute('srcdoc')).toBeNull();
   });
+
+  it('sanitizes whole-node replacement fragment trees before adoption', () => {
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'promo');
+    target.innerHTML = '<p>old</p>';
+    document.body.append(target);
+
+    const applied = applyHtmlResponseFragments(
+      [
+        {
+          html: [
+            '<article kovo-fragment-target="promo"',
+            ' onclick="alert(1)" innerHTML="<img src=x onerror=alert(1))" style="background:url(javascript:alert(1))">',
+            '<a href="java\tscript:alert(1)"',
+            ' srcdoc="<script>bad()</script>"',
+            ' srcset="/safe.png 1x, javascript:alert(1) 2x">new</a>',
+            '<span style="min-height: 120px">safe style</span>',
+            '</article>',
+          ].join(''),
+          target: 'promo',
+        },
+      ],
+      (name) => document.querySelector(`[kovo-fragment-target="${name}"]`),
+    );
+
+    const article = document.querySelector('article[kovo-fragment-target="promo"]');
+    const link = article?.querySelector('a');
+    const span = article?.querySelector('span');
+
+    expect(applied).toEqual(['promo']);
+    expect(article?.getAttribute('onclick')).toBeNull();
+    expect(article?.getAttribute('innerHTML')).toBeNull();
+    expect(article?.getAttribute('style')).toBeNull();
+    expect(link?.getAttribute('href')).toBe('#');
+    expect(link?.getAttribute('srcdoc')).toBeNull();
+    expect(link?.getAttribute('srcset')).toBe('/safe.png 1x');
+    expect(span?.getAttribute('style')).toBeNull();
+  });
+
+  it('sanitizes appended fragment nodes before adoption', () => {
+    const target = document.createElement('ul');
+    target.setAttribute('kovo-fragment-target', 'feed');
+    target.innerHTML = '<li kovo-key="existing">old</li>';
+    document.body.append(target);
+
+    const applied = applyHtmlResponseFragments(
+      [
+        {
+          html: [
+            '<li kovo-key="new">',
+            '<a href="javascript:alert(1)" onclick="alert(1)" innerHTML="<img src=x onerror=alert(1))"',
+            ' srcdoc="<script>bad()</script>"',
+            ' srcset="/safe.png 1x, javascript:alert(1) 2x"',
+            ' style="background:url(javascript:alert(1))">new</a>',
+            '</li>',
+          ].join(''),
+          mode: 'append',
+          target: 'feed',
+        },
+      ],
+      (name) => document.querySelector(`[kovo-fragment-target="${name}"]`),
+    );
+
+    const link = target.querySelector('[kovo-key="new"] a');
+
+    expect(applied).toEqual(['feed']);
+    expect([...target.children].map((child) => child.getAttribute('kovo-key'))).toEqual([
+      'existing',
+      'new',
+    ]);
+    expect(link?.getAttribute('href')).toBe('#');
+    expect(link?.getAttribute('innerHTML')).toBeNull();
+    expect(link?.getAttribute('onclick')).toBeNull();
+    expect(link?.getAttribute('srcdoc')).toBeNull();
+    expect(link?.getAttribute('srcset')).toBe('/safe.png 1x');
+    expect(link?.getAttribute('style')).toBeNull();
+  });
 });

@@ -195,6 +195,30 @@ describe('server jsx runtime', () => {
     );
   });
 
+  it('filters unsafe srcset candidates at server render time', () => {
+    expect(
+      html(
+        jsx('img', {
+          srcset: '/img/small.png 1x, javascript:alert(1) 2x, https://cdn.test/large.png 3x',
+        }),
+      ),
+    ).toBe('<img srcset="/img/small.png 1x, https://cdn.test/large.png 3x">');
+    expect(html(jsx('img', { srcset: 'javascript:alert(1) 1x' }))).toBe('<img>');
+  });
+
+  it('omits runtime string event handlers, srcdoc, and raw style text in server JSX', () => {
+    expect(
+      html(
+        jsx('iframe', {
+          onload: 'alert(1)',
+          srcdoc: '<script>alert(1)</script>',
+          style: 'background:url(javascript:alert(1))',
+          title: 'safe',
+        }),
+      ),
+    ).toBe('<iframe title="safe"></iframe>');
+  });
+
   it('renders style objects through property-level sanitizers', () => {
     expect(
       html(

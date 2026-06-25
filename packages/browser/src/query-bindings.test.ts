@@ -40,6 +40,50 @@ describe('query binding helpers', () => {
     expect(label.getAttribute('aria-label')).toBe('Cart ready');
   });
 
+  it('fails closed for unsafe query-bound URL, srcset, event, srcdoc, raw HTML, and CSS sinks', () => {
+    const root = new FakeMorphRoot();
+    const link = new FakeQueryPlanElement({
+      'data-bind:href': 'cart.href',
+      'data-bind:innerHTML': 'cart.html',
+      'data-bind:onclick': 'cart.handler',
+      'data-bind:srcdoc': 'cart.srcdoc',
+      'data-bind:srcset': 'cart.srcset',
+      'data-bind:style': 'cart.style',
+      href: '/old',
+      innerHTML: '<p>old</p>',
+      onclick: 'old()',
+      srcdoc: '<p>old</p>',
+      srcset: '/old.png 1x',
+      style: 'color: green',
+    });
+    root.planElements.push(link);
+
+    // SPEC.md §4.8: query refreshes share the same output-context floor as SSR.
+    expect(
+      applyQueryBindings(root, 'cart', {
+        handler: 'alert(document.cookie)',
+        href: 'java\nscript:alert(1)',
+        html: '<img src=x onerror=alert(1)>',
+        srcdoc: '<script>alert(1)</script>',
+        srcset: '/safe.png 1x, javascript:alert(1) 2x',
+        style: 'background:url(javascript:alert(1))',
+      }),
+    ).toEqual([
+      'cart.href',
+      'cart.html',
+      'cart.handler',
+      'cart.srcdoc',
+      'cart.srcset',
+      'cart.style',
+    ]);
+    expect(link.getAttribute('href')).toBe('#');
+    expect(link.getAttribute('innerHTML')).toBeNull();
+    expect(link.getAttribute('onclick')).toBeNull();
+    expect(link.getAttribute('srcdoc')).toBeNull();
+    expect(link.getAttribute('srcset')).toBe('/safe.png 1x');
+    expect(link.getAttribute('style')).toBeNull();
+  });
+
   it('applies optional binding path segments and removes empty attribute bindings', () => {
     const root = new FakeMorphRoot();
     const name = new FakeQueryBindingElement('deal.contact?.name', { textContent: 'Ada' });

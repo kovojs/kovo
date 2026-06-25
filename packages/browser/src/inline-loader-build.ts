@@ -172,14 +172,20 @@ function installInlineKovoLoader(im) {
     }, val);
   const fb = (val) =>
     val == null ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
-  const uus = (value) => {
-    const match = /^([a-z][a-z0-9+.-]*):/.exec(
-      String(value).replace(/[\x00-\x20]/g, '').toLowerCase(),
-    );
-    return !!match && !/^(https?|mailto|tel|ftp)$/.test(match[1] || '');
+  const uu = (v) => {
+    const s = String(v).replace(/[\x00-\x20]/g, '').toLowerCase();
+    return /^[a-z][^:]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
   };
   const ia = (name) =>
     /^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/i.test(name);
+  const s = (v) => {
+    const r = [];
+    for (const c of String(v).split(',')) {
+      const x = c.trim();
+      if (x && !uu(x.split(/\s/)[0])) r.push(x);
+    }
+    return r.length ? r.join(', ') : null;
+  };
   const ki = (url) => {
     try {
       const l = globalThis.location || { href: 'http://localhost/', origin: 'http://localhost' };
@@ -228,11 +234,17 @@ function installInlineKovoLoader(im) {
     }
     if (val == null) el.removeAttribute?.(name);
     else {
-      if ((name[0] === 'o' && name[1] === 'n') || name === 'srcdoc') el.removeAttribute?.(name);
+      const n = name.toLowerCase();
+      if (r(n)) el.removeAttribute?.(name);
       else {
-        let rendered = fb(val);
-        if (ia(name) && uus(rendered)) rendered = '#';
-        el.setAttribute?.(name, rendered);
+        let r = fb(val);
+        if (n === 'srcset') {
+          const a = s(r);
+          el.setAttribute?.(name, a || '#');
+        } else {
+          if (ia(name) && uu(r)) r = '#';
+          el.setAttribute?.(name, r);
+        }
       }
     }
     if (name === 'value' && el.value !== undefined) {

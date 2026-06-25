@@ -49,8 +49,10 @@ describe('inline loader output security', () => {
         'data-bind:ping': 'state.url',
         'data-bind:poster': 'state.url',
         'data-bind:src': 'state.url',
+        'data-bind:srcset': 'state.srcset',
+        'data-bind:style': 'state.style',
         'data-bind:xlink:href': 'state.url',
-        'kovo-state': '{"url":"/safe"}',
+        'kovo-state': '{"url":"/safe","srcset":"/safe.png 1x","style":"color:red"}',
         'on:click': '/c/client.js#setUnsafeUrl',
       });
 
@@ -59,6 +61,9 @@ describe('inline loader output security', () => {
         async () => ({
           setUnsafeUrl(_event: unknown, context: { state: { url: string } }) {
             context.state.url = 'javascript:alert(1)';
+            (context.state as { srcset: string }).srcset =
+              '/safe.png 1x, javascript:alert(1) 2x';
+            (context.state as { style: string }).style = 'background:url(javascript:alert(1))';
           },
         }),
         installSource,
@@ -70,14 +75,19 @@ describe('inline loader output security', () => {
       expect(element.getAttribute('ping')).toBe('#');
       expect(element.getAttribute('poster')).toBe('#');
       expect(element.getAttribute('src')).toBe('#');
+      expect(element.getAttribute('srcset')).toBe('/safe.png 1x');
+      expect(element.getAttribute('style')).toBeNull();
       expect(element.getAttribute('xlink:href')).toBe('#');
     });
 
-    it(`${label}: suppresses unsafe on* and srcdoc data-bind attribute writes`, async () => {
+    it(`${label}: suppresses unsafe on*, srcdoc, and raw HTML data-bind attribute writes`, async () => {
       const element = new BoundTriggerElement({
+        'data-bind:innerHTML': 'state.html',
         'data-bind:onclick': 'state.handler',
         'data-bind:srcdoc': 'state.srcdoc',
-        'kovo-state': '{"handler":"alert(1)","srcdoc":"<script>alert(1)</script>"}',
+        innerHTML: '<p>old</p>',
+        'kovo-state':
+          '{"handler":"alert(1)","html":"<img src=x onerror=alert(1)>","srcdoc":"<script>alert(1)</script>"}',
         'on:click': '/c/client.js#noop',
       });
 
@@ -89,6 +99,7 @@ describe('inline loader output security', () => {
         installSource,
       );
 
+      expect(element.getAttribute('innerHTML')).toBeNull();
       expect(element.getAttribute('onclick')).toBeNull();
       expect(element.getAttribute('srcdoc')).toBeNull();
     });

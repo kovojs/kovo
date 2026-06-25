@@ -1,4 +1,5 @@
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
+import { decideRuntimeAttributeWrite } from '@kovojs/core/internal/sink-policy';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
 /**
@@ -143,10 +144,22 @@ function renderStringWithCoercedRenderedHtml(
  * Exported only for compiler-emitted code and in-repo callers, not app authors.
  */
 export function safeUrlAttribute(name: string, value: string): string {
+  const decision = decideRuntimeAttributeWrite(name, value);
+  if (decision.family === 'srcset') return escapeAttribute(decision.value ?? '#');
   if (isUrlAttributeName(name) && hasUnsafeUrlScheme(value)) {
     return '#';
   }
   return escapeAttribute(value);
+}
+
+/**
+ * @internal Sanitize and escape any runtime-emitted server attribute value. Unlike
+ * safeUrlAttribute, this covers non-URL executable sinks (`on*`, `srcdoc`, raw HTML/property names,
+ * and raw CSS text) and returns null to omit the write.
+ */
+export function safeRuntimeAttribute(name: string, value: string): string | null {
+  const decision = decideRuntimeAttributeWrite(name, value);
+  return decision.action === 'remove' ? null : escapeAttribute(decision.value ?? value);
 }
 
 /**

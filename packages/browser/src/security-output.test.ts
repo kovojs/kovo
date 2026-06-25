@@ -29,6 +29,11 @@ describe('runtime output-context helpers', () => {
       __kovoTrustedUrl: true,
       value: 'javascript:alert(1)',
     });
+    expect(trustedUrl('data:image/png;base64,AAAA', 'reviewed CDN image')).toEqual({
+      __kovoTrustedUrl: true,
+      reason: 'reviewed CDN image',
+      value: 'data:image/png;base64,AAAA',
+    });
     expect(isKovoTrustedUrl(trustedUrl('data:text/html,x'))).toBe(true);
     expect(isKovoTrustedUrl('data:text/html,x')).toBe(false);
 
@@ -58,6 +63,18 @@ describe('runtime output-context helpers', () => {
     expect(kovoStyleProperty('background-image', 'url(javascript:alert(1))')).toBe('');
   });
 
+  it('filters srcset candidates and suppresses unsafe CSS text attribute writes', () => {
+    expect(
+      kovoBoundAttributeValue(
+        'srcset',
+        '/img/small.png 1x, javascript:alert(1) 2x, https://cdn.test/large.png 3x',
+      ),
+    ).toBe('/img/small.png 1x, https://cdn.test/large.png 3x');
+    expect(kovoBoundAttributeValue('srcset', 'javascript:alert(1) 1x')).toBeNull();
+    expect(kovoBoundAttributeValue('style', 'background:url(javascript:alert(1))')).toBeNull();
+    expect(kovoBoundAttributeValue('style', 'min-height: 120px')).toBe('min-height: 120px');
+  });
+
   it('unwraps only Kovo TrustedHtml and browser TrustedHTML-compatible values', () => {
     const browserTrustedHtml = {
       [Symbol.toStringTag]: 'TrustedHTML',
@@ -66,6 +83,17 @@ describe('runtime output-context helpers', () => {
 
     expect(trustedHtml('<b>safe</b>')).toEqual({
       __kovoTrustedHtml: true,
+      value: '<b>safe</b>',
+    });
+    expect(
+      trustedHtml('<b>safe</b>', {
+        reason: 'cms sanitizer owns rich text',
+        source: 'cms.promo.body',
+      }),
+    ).toEqual({
+      __kovoTrustedHtml: true,
+      reason: 'cms sanitizer owns rich text',
+      source: 'cms.promo.body',
       value: '<b>safe</b>',
     });
     expect(isKovoTrustedHtml(trustedHtml('<b>safe</b>'))).toBe(true);

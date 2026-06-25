@@ -4,7 +4,6 @@ import {
   applyHtmlResponseFragments,
   applyResponseFragment,
   applyResponseFragments,
-  type HtmlResponseFragmentApplyTarget,
 } from './response-fragment-apply.js';
 
 interface TestFragmentTarget {
@@ -74,31 +73,6 @@ describe('response fragment apply primitive', () => {
 
     expect(applied).toEqual(['replace-target', 'append-target']);
     expect(targets.get('replace-target')?.html).toBe('<p>new</p>');
-    expect(targets.get('append-target')?.html).toBe('<li>old</li><li>new</li>');
-  });
-
-  it('shares the HTML append adapter used by the generated inline loader', () => {
-    const targets = new Map([
-      [
-        'append-target',
-        {
-          html: '<li>old</li>',
-          insertAdjacentHTML(_position: 'beforeend', html: string) {
-            this.html += html;
-          },
-        },
-      ],
-    ]);
-
-    const applied = applyHtmlResponseFragments(
-      [
-        { html: '<li>new</li>', mode: 'append', target: 'append-target' },
-        { html: '<aside>ignored</aside>', target: 'missing-target' },
-      ],
-      (target) => (targets.get(target) as unknown as HtmlResponseFragmentApplyTarget) ?? null,
-    );
-
-    expect(applied).toEqual(['append-target']);
     expect(targets.get('append-target')?.html).toBe('<li>old</li><li>new</li>');
   });
 
