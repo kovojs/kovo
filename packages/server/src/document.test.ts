@@ -303,10 +303,11 @@ describe('server app shell document assembly', () => {
       status: 200 as const,
     });
 
-    it('carries X-Frame-Options/COOP/Permissions-Policy/Referrer-Policy by default', () => {
+    it('carries X-Frame-Options/COOP/OAC/Permissions-Policy/Referrer-Policy by default', () => {
       const wrapped = renderRouteDocumentResponse(htmlResponse());
       expect(wrapped.headers).toMatchObject({
         'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        'Origin-Agent-Cluster': '?1',
         'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'X-Content-Type-Options': 'nosniff',
@@ -318,6 +319,7 @@ describe('server app shell document assembly', () => {
       const error = renderErrorDocument({ status: 403 });
       expect(error.headers).toMatchObject({
         'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        'Origin-Agent-Cluster': '?1',
         'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
         'X-Frame-Options': 'DENY',
       });

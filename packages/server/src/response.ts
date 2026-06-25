@@ -217,6 +217,9 @@ export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: H
  * - `Permissions-Policy` — deny-by-default for the high-risk ambient capabilities a
  *   content app virtually never needs. A conservative deny-all baseline; an app that
  *   uses one of these overrides the header on the route response.
+ * - `Origin-Agent-Cluster: ?1` — asks the browser to isolate the origin into its own
+ *   agent cluster so same-site but cross-origin documents do not share process-global
+ *   JS state. OPP-15 labels this runtime defense-in-depth, not a construction proof.
  * - `Referrer-Policy: strict-origin-when-cross-origin` — limits cross-origin referrer
  *   leakage (also present on the non-document/error paths; included here so this helper
  *   is the single source of the document baseline).
@@ -231,6 +234,7 @@ export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: H
  */
 export const DOCUMENT_ISOLATION_HEADERS: Readonly<Record<string, string>> = {
   'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+  'Origin-Agent-Cluster': '?1',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'DENY',
