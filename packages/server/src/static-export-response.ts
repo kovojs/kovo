@@ -1,5 +1,5 @@
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
-import { sortedHeaders } from './static-export-headers.js';
+import { staticExportHeaders } from './static-export-headers.js';
 import { type StaticExportResponseSnapshot } from './static-export-types.js';
 
 export interface StaticExportRouteDocumentResponseOptions {
@@ -29,9 +29,13 @@ export async function readStaticExportReplayedResponse(
 
   return {
     body: await response.text(),
-    headers: sortedHeaders(response.headers),
+    headers: staticExportHeaders(response.headers, { path: staticExportResponsePath(options) }),
     status: response.status,
   };
+}
+
+function staticExportResponsePath(options: StaticExportReplayedResponseReadOptions): string {
+  return options.kind === 'route-document' ? options.routePath : options.path;
 }
 
 function staticExportReplayResponseDiagnostic(

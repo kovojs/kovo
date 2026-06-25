@@ -22,6 +22,27 @@ describe('server static export replay response boundary', () => {
     });
   });
 
+  it('rejects static route document response headers that cannot be exported', async () => {
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: new Response('<main>Docs</main>', {
+          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Set-Cookie': 'sid=1; Path=/' },
+        }),
+        routePath: '/docs',
+      }),
+    ).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        {
+          code: 'KV229',
+          message: expect.stringContaining('static export artifacts cannot carry Set-Cookie'),
+          routePath: '/docs',
+        },
+      ],
+    });
+  });
+
   it('raises KV229 for non-HTML route document responses', async () => {
     await expect(
       readStaticExportReplayedResponse({

@@ -21,7 +21,7 @@ import {
   type StaticExportOutputTarget,
 } from './static-export-output-targets.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
-import { sortedHeaders } from './static-export-headers.js';
+import { createStaticExportHeaderSink } from './static-export-headers.js';
 import {
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
@@ -219,7 +219,7 @@ export function staticExportAssetArtifacts(
   assets: readonly StaticExportAssetInput[],
 ): StaticExportAssetArtifact[] {
   return assets.map((asset) => ({
-    headers: sortedHeaders(staticExportAssetHeaders(asset)),
+    headers: staticExportAssetHeaders(asset),
     path: asset.path,
     source: staticExportSourcePath(asset),
     status: 200,
@@ -427,10 +427,21 @@ async function commitStaticExportStagedOutput(
   }
 }
 
-function staticExportAssetHeaders(asset: StaticExportAssetInput): Headers {
-  const headers = new Headers(asset.headers);
+function staticExportAssetHeaders(asset: StaticExportAssetInput): Record<string, string> {
+  const headers = createStaticExportHeaderSink({ path: asset.path });
+  if (asset.headers !== undefined) {
+    if (asset.headers instanceof Headers) {
+      for (const [name, value] of asset.headers.entries()) headers.append(name, value);
+    } else if (Array.isArray(asset.headers)) {
+      for (const [name, value] of asset.headers) headers.append(String(name), String(value));
+    } else {
+      for (const [name, value] of Object.entries(asset.headers)) {
+        headers.append(name, String(value));
+      }
+    }
+  }
   if (asset.contentType !== undefined) headers.set('content-type', asset.contentType);
-  return headers;
+  return headers.toJSON();
 }
 
 function staticExportSourcePath(asset: StaticExportAssetInput): string {

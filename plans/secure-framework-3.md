@@ -249,7 +249,7 @@ packages/server/src/egress-undici.test.ts` proves worker/child omission diagnost
 scripts/check-pack-security.test.mjs` proves negative cases; `pnpm run check:pack-security`
     proves the regenerated integrated snapshot is stable.
 
-- [ ] **Normalize static-export asset/header policy through a shared header sink.**
+- [x] **Normalize static-export asset/header policy through a shared header sink.**
   - Evidence: static asset headers are converted with `new Headers(asset.headers)` and sorted in
     `packages/server/src/static-export-output.ts:398`, while general header/cookie control-character
     validation lives elsewhere, for example `packages/server/src/cookies.ts:432`.
@@ -258,9 +258,16 @@ scripts/check-pack-security.test.mjs` proves negative cases; `pnpm run check:pac
     and optionally flag static-export `Set-Cookie` or protocol headers.
   - Acceptance: static export and route/endpoint tests share the same header corpus for CRLF, invalid
     names, duplicate security headers, `Set-Cookie`, and framework-reserved `Kovo-*` headers.
+  - Verified 2026-06-25: `packages/server/src/static-export-headers.ts` provides the shared static
+    export header sink for configured assets and replayed route/client-module response metadata,
+    normalizing names, merging duplicates, and rejecting invalid tokens, control characters,
+    `Set-Cookie`, and reserved `Kovo-*` headers. `pnpm test
+packages/server/src/static-export-headers.test.ts packages/server/src/static-export-output.test.ts
+packages/server/src/static-export-response.test.ts packages/server/src/static-export-assets.test.ts`
+    proves the normalization and rejection corpus.
 
 ## Latest Verification
 
-- `rg -n "^- \[[ x]\]" plans/secure-framework-3.md` reports 14 task-list items, with 2 still open.
+- `rg -n "^- \[[ x]\]" plans/secure-framework-3.md` reports 14 task-list items, with 1 still open.
 - `git diff --check --cached && git diff --check` and `pnpm run check:vp` pass for the latest
-  integrated inline-sanitizer parity slice.
+  integrated static-export header sink slice.
