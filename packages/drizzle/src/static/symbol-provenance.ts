@@ -24,7 +24,7 @@ export interface SymbolProvenanceContext {
   inputSymbolKeys: ReadonlySet<string>;
   serverSymbolKeys: ReadonlySet<string>;
   /**
-   * Symbol keys (and `name:`-fallback keys) of same-package helpers declared
+   * Symbol keys of same-package helpers declared
    * `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })`. A call to such a
    * helper resolves to `server` provenance — the audited interprocedural escape
    * for the write-provenance gate (SPEC §11.1). This is the ONLY way a
@@ -38,7 +38,7 @@ export interface SymbolProvenanceContext {
 export interface SymbolProvenanceContextOptions {
   inputRoots?: readonly Node[];
   serverRoots?: readonly Node[];
-  /** Symbol keys + `name:` fallbacks of `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })` helpers. */
+  /** Symbol keys of `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })` helpers. */
   serverSummaryKeys?: Iterable<string>;
 }
 
@@ -184,10 +184,7 @@ export function symbolProvenanceForExpression(
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
     if (Node.isIdentifier(callee)) {
       const calleeKey = symbolKeyForNode(callee);
-      if (
-        (calleeKey && context.serverSummaryKeys.has(calleeKey)) ||
-        context.serverSummaryKeys.has(`name:${callee.getText()}`)
-      ) {
+      if (calleeKey && context.serverSummaryKeys.has(calleeKey)) {
         return serverProvenance;
       }
     }
@@ -301,7 +298,7 @@ function joinExistingAlias(
 }
 
 /**
- * Symbol keys (plus `name:` fallbacks) of same-package helpers declared
+ * Symbol keys of same-package helpers declared
  * `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })`. Mirrors the session-
  * provenance analyzer-summary scan, but collects only the `server` kind for the
  * write-provenance gate (SPEC §11.1). Confidentiality consumers (KV435/IDOR) do not
@@ -311,10 +308,10 @@ function joinExistingAlias(
  */
 export function serverSummaryKeysForSourceFile(sourceFile: SourceFile): Set<string> {
   const keys = new Set<string>();
+  const summaries = analyzerSummaryImports(sourceFile);
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const callee = unwrappedStaticExpressionNode(call.getExpression());
-    const calleeName = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
-    if (calleeName !== 'kovoAnalyzerSummary') continue;
+    if (!isAnalyzerSummaryCall(callee, summaries)) continue;
 
     const [helper, summary] = call.getArguments();
     if (!helper || !summary) continue;
@@ -326,12 +323,40 @@ export function serverSummaryKeysForSourceFile(sourceFile: SourceFile): Set<stri
       : helperExpression.getSymbol();
     const key = resolvedSymbolKey(symbol);
     if (key) keys.add(key);
-    const helperName = Node.isIdentifier(helperExpression)
-      ? helperExpression.getText()
-      : staticAccessName(helperExpression);
-    if (helperName) keys.add(`name:${helperName}`);
   }
   return keys;
+}
+
+interface AnalyzerSummaryImports {
+  names: ReadonlySet<string>;
+  namespaces: ReadonlySet<string>;
+}
+
+function analyzerSummaryImports(sourceFile: SourceFile): AnalyzerSummaryImports {
+  const names = new Set<string>();
+  const namespaces = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== '@kovojs/drizzle') continue;
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) namespaces.add(namespace.getText());
+    for (const named of declaration.getNamedImports()) {
+      if (named.getName() === 'kovoAnalyzerSummary') {
+        names.add(named.getAliasNode()?.getText() ?? 'kovoAnalyzerSummary');
+      }
+    }
+  }
+  return { names, namespaces };
+}
+
+function isAnalyzerSummaryCall(callee: Node, imports: AnalyzerSummaryImports): boolean {
+  if (Node.isIdentifier(callee)) return imports.names.has(callee.getText());
+  if (!Node.isPropertyAccessExpression(callee)) return false;
+  const receiver = callee.getExpression();
+  return (
+    Node.isIdentifier(receiver) &&
+    imports.namespaces.has(receiver.getText()) &&
+    callee.getName() === 'kovoAnalyzerSummary'
+  );
 }
 
 function analyzerSummaryReturnKind(node: Node): string | undefined {

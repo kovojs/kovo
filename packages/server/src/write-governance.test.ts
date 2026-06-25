@@ -32,4 +32,31 @@ describe('adminAssign', () => {
   it('requires a non-empty reason', () => {
     expect(() => adminAssign('x', '')).toThrow(/reason/);
   });
+
+  it('records structured audit context when provided', () => {
+    drainAdminAssignFacts();
+    adminAssign('admin', {
+      actor: 'user:1',
+      callsite: 'account.domain.ts:12',
+      columns: ['role'],
+      producer: 'account.updateRole',
+      reason: 'role grant by admin',
+      session: 'session:1',
+      sourceProvenance: 'input.role',
+      table: 'accounts',
+    });
+
+    expect(drainAdminAssignFacts()).toEqual([
+      {
+        actor: 'user:1',
+        callsite: 'account.domain.ts:12',
+        columns: ['role'],
+        producer: 'account.updateRole',
+        reason: 'role grant by admin',
+        session: 'session:1',
+        sourceProvenance: 'input.role',
+        table: 'accounts',
+      },
+    ]);
+  });
 });

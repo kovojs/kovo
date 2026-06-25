@@ -47,13 +47,20 @@ const HEADER = [
   '',
 ].join('\n');
 
-function handler(body: string, signature = 'db: PgAsyncDatabase<any, any>, input: { id: string; ownerId: string; role: string; balance: number; name: string }, request: { session: { userId: string } }'): string {
+function handler(
+  body: string,
+  signature = 'db: PgAsyncDatabase<any, any>, input: { id: string; ownerId: string; role: string; balance: number; name: string }, request: { session: { userId: string } }',
+): string {
   return `${HEADER}export const updateAccount = async (${signature}) => {\n${body}\n};\n`;
 }
 
 describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
   it('rejects request input reaching a governed column (role)', () => {
-    const result = facts(handler('  await db.update(accounts).set({ role: input.role }).where(eq(accounts.id, input.id));'));
+    const result = facts(
+      handler(
+        '  await db.update(accounts).set({ role: input.role }).where(eq(accounts.id, input.id));',
+      ),
+    );
     expect(result).toEqual([
       {
         column: 'role',
@@ -68,7 +75,11 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
   });
 
   it('rejects input reaching the auto-governed owner column on insert', () => {
-    const result = facts(handler('  await db.insert(accounts).values({ id: input.id, ownerId: input.ownerId, role: "user", balance: 0, name: input.name });'));
+    const result = facts(
+      handler(
+        '  await db.insert(accounts).values({ id: input.id, ownerId: input.ownerId, role: "user", balance: 0, name: input.name });',
+      ),
+    );
     expect(result.map((fact) => fact.column).sort()).toEqual(['id', 'ownerId']);
     // `name` (non-governed) and `role`/`balance` (literals) are NOT flagged.
     expect(result.every((fact) => fact.provenance === 'input')).toBe(true);
@@ -88,18 +99,38 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
   });
 
   it('passes a literal governed value', () => {
-    expect(facts(handler('  await db.update(accounts).set({ role: "admin" }).where(eq(accounts.id, input.id));'))).toEqual([]);
+    expect(
+      facts(
+        handler(
+          '  await db.update(accounts).set({ role: "admin" }).where(eq(accounts.id, input.id));',
+        ),
+      ),
+    ).toEqual([]);
   });
 
   it('passes a session-derived (server) governed value', () => {
     expect(
-      facts(handler('  await db.update(accounts).set({ ownerId: request.session.userId }).where(eq(accounts.id, input.id));')),
+      facts(
+        handler(
+          '  await db.update(accounts).set({ ownerId: request.session.userId }).where(eq(accounts.id, input.id));',
+        ),
+      ),
     ).toEqual([]);
   });
 
   it('passes serverValue(non-input) but rejects serverValue(input.x)', () => {
-    expect(facts(handler('  await db.update(accounts).set({ role: serverValue("admin", "seed") }).where(eq(accounts.id, input.id));'))).toEqual([]);
-    const rejected = facts(handler('  await db.update(accounts).set({ role: serverValue(input.role, "seed") }).where(eq(accounts.id, input.id));'));
+    expect(
+      facts(
+        handler(
+          '  await db.update(accounts).set({ role: serverValue("admin", "seed") }).where(eq(accounts.id, input.id));',
+        ),
+      ),
+    ).toEqual([]);
+    const rejected = facts(
+      handler(
+        '  await db.update(accounts).set({ role: serverValue(input.role, "seed") }).where(eq(accounts.id, input.id));',
+      ),
+    );
     expect(rejected).toEqual([
       {
         column: 'role',
@@ -114,7 +145,30 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
   });
 
   it('passes adminAssign(input.x) as the audited privileged write', () => {
-    expect(facts(handler('  await db.update(accounts).set({ role: adminAssign(input.role, "promotion") }).where(eq(accounts.id, input.id));'))).toEqual([]);
+    expect(
+      facts(
+        handler(
+          '  await db.update(accounts).set({ role: adminAssign(input.role, "promotion") }).where(eq(accounts.id, input.id));',
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects a local fake adminAssign helper with the privileged name', () => {
+    const result = facts(
+      [
+        'import { eq } from "drizzle-orm";',
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { accounts } from "./schema";',
+        'function adminAssign<T>(value: T, reason: string): T { return value; }',
+        'export const updateAccount = async (db: PgAsyncDatabase<any, any>, input: { id: string; role: string }) => {',
+        '  await db.update(accounts).set({ role: adminAssign(input.role, "promotion") }).where(eq(accounts.id, input.id));',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      { column: 'role', domain: 'account', provenance: 'unknown', via: 'set' },
+    ]);
   });
 
   it('passes a kovoAnalyzerSummary("server") helper-computed governed value', () => {
@@ -130,6 +184,25 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
       ].join('\n'),
     );
     expect(result).toEqual([]);
+  });
+
+  it('rejects a local fake kovoAnalyzerSummary declaration', () => {
+    const result = facts(
+      [
+        'import { eq } from "drizzle-orm";',
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { accounts } from "./schema";',
+        'function kovoAnalyzerSummary(..._args: unknown[]) {}',
+        'function resolveOwner(input: { ownerId: string }) { return input.ownerId; }',
+        'kovoAnalyzerSummary(resolveOwner, { returns: { kind: "server" } });',
+        'export const updateAccount = async (db: PgAsyncDatabase<any, any>, input: { id: string; ownerId: string }) => {',
+        '  await db.update(accounts).set({ ownerId: resolveOwner(input) }).where(eq(accounts.id, input.id));',
+        '};',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      { column: 'ownerId', domain: 'account', provenance: 'unknown', via: 'set' },
+    ]);
   });
 
   it('fails closed: an unsummarized helper-computed governed value is unknown-rejected', () => {
@@ -156,7 +229,9 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
   });
 
   it('rejects a { ...input } spread inside the payload object', () => {
-    const result = facts(handler('  await db.insert(accounts).values({ ...input, role: "user" });'));
+    const result = facts(
+      handler('  await db.insert(accounts).values({ ...input, role: "user" });'),
+    );
     expect(result.some((fact) => fact.via === 'spread' && fact.provenance === 'input')).toBe(true);
   });
 
@@ -166,7 +241,8 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         dbTypes,
         {
           fileName: 'schema.ts',
-          source: 'export const logs = pgTable("logs", { msg: text("msg") }, kovo({ domain: "log" }));',
+          source:
+            'export const logs = pgTable("logs", { msg: text("msg") }, kovo({ domain: "log" }));',
         },
         {
           fileName: 'log.domain.ts',
@@ -199,6 +275,7 @@ describe('symbol-provenance server-summary branch (KV435/IDOR conformance)', () 
   it('resolves a server-summary helper to server but leaves a plain helper unknown', () => {
     const file = source(
       [
+        'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
         'function resolveOwner(input: { ownerId: string }) { return input.ownerId; }',
         'function plain(input: { ownerId: string }) { return input.ownerId; }',
         'kovoAnalyzerSummary(resolveOwner, { returns: { kind: "server" } });',
@@ -210,10 +287,7 @@ describe('symbol-provenance server-summary branch (KV435/IDOR conformance)', () 
       ].join('\n'),
     );
     const body = file.getFunctionOrThrow('handler').getBodyOrThrow();
-    const inputRoot = file
-      .getFunctionOrThrow('handler')
-      .getParameters()[0]!
-      .getNameNode();
+    const inputRoot = file.getFunctionOrThrow('handler').getParameters()[0]!.getNameNode();
     const context = symbolProvenanceContextForNodes([body], {
       inputRoots: [inputRoot],
       serverSummaryKeys: serverSummaryKeysForSourceFile(file),
@@ -223,13 +297,17 @@ describe('symbol-provenance server-summary branch (KV435/IDOR conformance)', () 
         .getDescendantsOfKind(SyntaxKind.ShorthandPropertyAssignment)
         .find((node) => node.getName() === name)!
         .getNameNode();
-    expect(symbolProvenanceForExpression(shorthand('a'), context)).toEqual({ kind: 'server', path: '' });
+    expect(symbolProvenanceForExpression(shorthand('a'), context)).toEqual({
+      kind: 'server',
+      path: '',
+    });
     expect(symbolProvenanceForExpression(shorthand('b'), context)).toEqual({ kind: 'unknown' });
   });
 
   it('without serverSummaryKeys (the KV435/IDOR consumer config) a call stays unknown', () => {
     const file = source(
       [
+        'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
         'function resolveOwner(input: { ownerId: string }) { return input.ownerId; }',
         'kovoAnalyzerSummary(resolveOwner, { returns: { kind: "server" } });',
         'export function handler(input: { ownerId: string }) {',
@@ -239,10 +317,7 @@ describe('symbol-provenance server-summary branch (KV435/IDOR conformance)', () 
       ].join('\n'),
     );
     const body = file.getFunctionOrThrow('handler').getBodyOrThrow();
-    const inputRoot = file
-      .getFunctionOrThrow('handler')
-      .getParameters()[0]!
-      .getNameNode();
+    const inputRoot = file.getFunctionOrThrow('handler').getParameters()[0]!.getNameNode();
     // Confidentiality consumers do NOT pass serverSummaryKeys → the branch is inert.
     const context = symbolProvenanceContextForNodes([body], { inputRoots: [inputRoot] });
     const node = file
