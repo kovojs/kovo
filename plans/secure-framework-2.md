@@ -251,4 +251,6 @@ replace, the remaining follow-ups in `plans/secure-framework.md`.
     `node scripts/pack-public-packages.mjs`, and
     `node scripts/publish-packed-packages.mjs --dry-run --tag secure-framework-2`.
 - [x] Run package boundary and source hygiene gates.
-  - Evidence: `pnpm run check:api-surface`, `pnpm run check:imports`, and `git diff --check`.
+  - Evidence: `vp check --no-fmt`, `pnpm run check:api-surface`, `pnpm run check:imports`, and
+    `git diff --check`; `vp check --no-fmt` reported two non-fatal lint/type warnings and no
+    errors.
