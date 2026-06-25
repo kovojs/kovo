@@ -63,6 +63,11 @@ export type {
   SignedUrl,
   StorageDownloadEndpointOptions,
 } from './capability-route.js';
+// SPEC §6.6 / §9.1: rooted filesystem serving is the framework-owned file/path sink for
+// route-served local bytes. App code passes request-derived relative paths to this capability,
+// never a pre-resolved raw fs path.
+export { rootedFiles } from './file.js';
+export type { RootedFiles, RootedFileServeOptions } from './file.js';
 export type {
   AccessDecision,
   GuardAccessStep,

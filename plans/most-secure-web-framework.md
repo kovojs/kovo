@@ -231,7 +231,12 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       _Trade-off:_ real and worth building, but a labeled floor + a KV422-shaped (bounded) static ban — **not**
       the blanket by-construction elimination first proposed.
 
-- [ ] **OPP-20 / SINK-03 — General path-traversal-safe file-serving primitive.** see SINK-03. lev 6–7 · L.
+- [x] **OPP-20 / SINK-03 — General path-traversal-safe file-serving primitive.** see SINK-03. lev
+      6–7 · L.
+      Evidence: `packages/server/src/file.ts` exposes `rootedFiles(root).serve(relativePath, …)`,
+      realpath-checks containment before serving through `respond.stream`, and treats traversal, absolute/NUL
+      paths, directory targets, missing files, and symlink escape as not-found. `pnpm exec vitest --run
+packages/server/src/file.test.ts packages/server/src/response.test.ts` passed.
 
 - [x] **OPP-13 — SRI integrity on emitted module/style tags.** runtime-DiD (browser-enforced; cross-origin
       subresources only) · lev 2 · M · non-breaking. Kovo already content-hashes immutable modules and inline
