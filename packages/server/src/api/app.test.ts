@@ -25,6 +25,7 @@ import * as egressCredentialsApi from '../egress-credentials.js';
 import * as envApi from '../env.js';
 import * as fileApi from '../file.js';
 import * as keyringApi from '../keyring.js';
+import * as opaqueSessionApi from '../opaque-session.js';
 import * as passwordApi from '../password.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
@@ -434,6 +435,10 @@ describe('server app-shell public API barrels', () => {
       isArgon2idPasswordDigest: passwordApi.isArgon2idPasswordDigest,
       verifyCredential: passwordApi.verifyCredential,
       verifyPassword: passwordApi.verifyPassword,
+      // SPEC §6.5 / plans/most-secure-web-framework.md OPP-11: Kovo-owned opaque session
+      // primitive for store-backed validation, rotation, expiry, and immediate revocation.
+      createMemoryOpaqueSessionStore: opaqueSessionApi.createMemoryOpaqueSessionStore,
+      createOpaqueSessionManager: opaqueSessionApi.createOpaqueSessionManager,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
       // create-kovo starter template's vite.config.ts.
       createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,
