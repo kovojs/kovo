@@ -346,7 +346,13 @@ describe('compiler SPEC coverage map', () => {
               "codes": [
                 "KV438",
               ],
-              "testName": "reports a governed-column mass-assignment as KV438 (SPEC §11.1)",
+              "testName": "proves security-heavy check-owned diagnostics have accepted and rejected coverage",
+            },
+            {
+              "codes": [
+                "KV438",
+              ],
+              "testName": "formats KV438 mass-assignment diagnostics through the real kovo check CLI command",
             },
           ],
           "referenceApp": [
@@ -445,7 +451,15 @@ describe('compiler SPEC coverage map', () => {
                 "KV320",
                 "KV330",
               ],
-              "testName": "reports semantic lints for local state, events, and direct db access",
+              "testName": "reports semantic findings for local state, events, and direct db access",
+            },
+            {
+              "codes": [
+                "KV423",
+                "KV424",
+                "KV438",
+              ],
+              "testName": "proves security-heavy check-owned diagnostics have accepted and rejected coverage",
             },
           ],
           "referenceApp": [

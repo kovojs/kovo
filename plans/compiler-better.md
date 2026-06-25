@@ -315,14 +315,15 @@ diagnostic in compiler/check gates that claim data-plane security.
 
 ### Phase 4: raise verification to the same level as the threat model
 
-- [ ] Extend the diagnostic coverage matrix to security-heavy `KV4xx` compiler/check diagnostics,
+- [x] Extend the diagnostic coverage matrix to security-heavy `KV4xx` compiler/check diagnostics,
       especially `KV421`, `KV423`, `KV424`-`KV438`.
   - 2026-06-25 slice evidence: `pnpm exec vitest --run packages/compiler/src/diagnostic-coverage-matrix.test.ts --configLoader runner`
     passes after expanding the compiler-owned matrix to `KV420`, `KV421`, `KV435`, `KV437`, and
     `KV245`, with explicit out-of-scope reasons for security-heavy `KV422`-`KV434`, `KV436`, and
     `KV438` that are CLI/check/runtime/static-analysis owned rather than component-compiler rows.
-  - Remaining gap: `KV423`, `KV424`, and `KV438` still need their owning check/CLI/runtime
-    verification paths raised to the same matrix-like discipline, without pretending they are
+  - 2026-06-25 slice evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/compiler/src/spec-coverage-map.test.ts --configLoader runner`
+    passes after adding accepted/rejected check-owned matrix rows for `KV423`, `KV424`, and
+    `KV438`, and citing those paths from the spec coverage map without reclassifying them as
     component-compiler diagnostics.
 - [ ] Add build-blocking tests that prove `error` diagnostics prevent Vite/build output and prevent
       serving emitted modules, while lint/notice diagnostics stay non-blocking where intended.
@@ -339,12 +340,14 @@ diagnostic in compiler/check gates that claim data-plane security.
 - [ ] Add TSX-authored integration coverage for XSS and output-context cases, not only hand-authored
       lowered IR or runtime fixtures.
   - Evidence: some integration coverage proves runtime escaping but not TSX compiler emission.
-- [ ] Add real Vite/CLI diagnostic formatting snapshots for `KV236`, `KV235`, `KV437`, and `KV438`,
+- [x] Add real Vite/CLI diagnostic formatting snapshots for `KV236`, `KV235`, `KV437`, and `KV438`,
       including line/column stability across lowering and reparsing.
   - Evidence: diagnostic coordinate frames are centralized but selected manually by validators.
   - 2026-06-25 slice evidence: `pnpm exec vitest --run packages/compiler/src/vite.test.ts --configLoader runner`
     passes with real compiler-backed Vite formatting snapshots for `KV235`, `KV236`, and `KV437`.
-    `KV438` remains CLI/check-owned and is not yet covered by a real CLI formatting snapshot here.
+  - 2026-06-25 slice evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/compiler/src/spec-coverage-map.test.ts --configLoader runner`
+    passes with a file-backed `kovo check` CLI snapshot for `KV438` preserving
+    `src/account.domain.ts:7:13` site formatting and the mass-assignment diagnostic text.
 - [x] Expand `spec-coverage-map` to explicitly cover `SPEC.md` sections 5.2.1, 5.2.2, 6.6, 10, and
       11 for compiler-owned security guarantees.
   - Evidence: `pnpm exec vitest --run packages/compiler/src/spec-coverage-map.test.ts --configLoader runner`
