@@ -1,9 +1,10 @@
 import { diagnosticDefinitions } from './diagnostics.js';
+import { blessSink, isBlessedSink } from './sink-policy.js';
 
 // SPEC §6.6/§744: brands are defense-in-depth, not the enforcement mechanism, so they MUST NOT be
-// forgeable from outside this module. The SQL sink brands live in this module-private witness map;
-// only the `stamp*` helpers exported here can apply them. (The static AST analyzer of §11.1/§11.2
-// remains the by-construction proof; this runtime guard is the fail-closed floor of §10.2.)
+// forgeable from outside the shared sink-policy witness substrate; only the `stamp*` helpers
+// exported here can apply them. (The static AST analyzer of §11.1/§11.2 remains the
+// by-construction proof; this runtime guard is the fail-closed floor of §10.2.)
 type SqlBlessedSink =
   | 'parameterized-sql'
   | 'static-sql'
@@ -11,7 +12,6 @@ type SqlBlessedSink =
   | 'sql-identifier'
   | 'sql-keyword';
 
-const sqlBlessedWitnesses = new Map<SqlBlessedSink, WeakSet<object>>();
 const rawSqlChunkBrand = Symbol('kovo.sql.raw-chunk');
 const sqlSafetyMetadataBrand = Symbol('kovo.sql.metadata');
 
@@ -267,16 +267,11 @@ function stampSqlSafetyMetadata(value: object, metadata: SqlSafetyMetadata): voi
 }
 
 function blessSql(sink: SqlBlessedSink, value: object): void {
-  let witnesses = sqlBlessedWitnesses.get(sink);
-  if (!witnesses) {
-    witnesses = new WeakSet<object>();
-    sqlBlessedWitnesses.set(sink, witnesses);
-  }
-  witnesses.add(value);
+  blessSink(sink, value);
 }
 
 function isSqlBlessed(sink: SqlBlessedSink, value: object): boolean {
-  return sqlBlessedWitnesses.get(sink)?.has(value) === true;
+  return isBlessedSink(sink, value);
 }
 
 function stamp(value: object, key: symbol, propertyValue: unknown): void {

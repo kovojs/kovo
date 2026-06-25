@@ -1,13 +1,39 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  blessSink,
   decideRuntimeAttributeWrite,
   hasUnsafeCssText,
   hasUnsafeCssUrl,
+  isBlessedSink,
   sanitizeRuntimeSrcset,
   SRCSET_ATTRIBUTE_NAMES,
   runtimeSinkFamilyForAttribute,
 } from './internal/sink-policy.js';
+
+describe('shared Blessed<Sink> witness substrate (SPEC §6.6)', () => {
+  it('recognizes only values minted through the module-private witness registry', () => {
+    const capability = {};
+    const blessed = blessSink('test-sink', capability);
+
+    expect(blessed).toBe(capability);
+    expect(isBlessedSink('test-sink', capability)).toBe(true);
+    expect(isBlessedSink('other-sink', capability)).toBe(false);
+    expect(Object.getOwnPropertySymbols(capability)).toEqual([]);
+  });
+
+  it('rejects forged or copied brand-like properties', () => {
+    const blessed = blessSink('copy-source', { marker: 'source' });
+    const copied = { ...blessed };
+    const forged: Record<string, unknown> = {
+      __kovoBlessedSink: 'copy-source',
+    };
+
+    expect(isBlessedSink('copy-source', copied)).toBe(false);
+    expect(isBlessedSink('copy-source', forged)).toBe(false);
+    expect(isBlessedSink('copy-source', null)).toBe(false);
+  });
+});
 
 describe('shared runtime sink policy', () => {
   it('classifies unsafe runtime sink families', () => {

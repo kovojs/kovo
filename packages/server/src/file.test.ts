@@ -4,7 +4,7 @@ import { basename, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { rootedFiles } from './file.js';
+import { isRootedFileServeCapability, rootedFiles } from './file.js';
 import { routeOutcomeResponse } from './response.js';
 
 describe('server rooted file primitive', () => {
@@ -14,6 +14,7 @@ describe('server rooted file primitive', () => {
       await mkdir(join(root, 'docs'));
       await writeFile(join(root, 'docs', 'readme.txt'), 'hello from root\n', 'utf8');
       const files = await rootedFiles(root);
+      expect(isRootedFileServeCapability(files)).toBe(true);
 
       const outcome = await files.serve('docs/readme.txt', {
         contentType: 'text/plain; charset=utf-8',
@@ -95,6 +96,26 @@ describe('server rooted file primitive', () => {
     } finally {
       await rm(root, { force: true, recursive: true });
       await rm(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('does not accept forged or copied rooted file-serve capabilities as blessed witnesses', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-rooted-files-'));
+    try {
+      const files = await rootedFiles(root);
+      const forged = {
+        root: files.root,
+        serve: files.serve,
+        __kovoBlessedSink: 'rooted-file-serve',
+      };
+
+      expect(isRootedFileServeCapability(files)).toBe(true);
+      expect(Object.isFrozen(files)).toBe(true);
+      expect(Reflect.set(files, 'serve', async () => undefined)).toBe(false);
+      expect(isRootedFileServeCapability({ ...files })).toBe(false);
+      expect(isRootedFileServeCapability(forged)).toBe(false);
+    } finally {
+      await rm(root, { force: true, recursive: true });
     }
   });
 });

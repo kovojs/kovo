@@ -5,6 +5,17 @@ import {
   URL_ATTRIBUTE_NAMES,
 } from './security-url.js';
 
+/**
+ * @internal Type-only carrier for a value blessed for one framework-owned sink.
+ *
+ * SPEC §6.6: brands are defense-in-depth, not the proof. The enforcement witness is the
+ * module-private WeakSet registry below; this optional property exists only to keep internal
+ * TypeScript signatures readable.
+ */
+export type Blessed<Sink extends string> = {
+  readonly __kovoBlessedSink?: Sink;
+};
+
 /** @internal Runtime sink family used by server render and browser update backstops. */
 export type RuntimeSinkFamily =
   | 'attribute'
@@ -58,7 +69,34 @@ export const RAW_HTML_SINK_NAMES = [
 
 const srcsetAttributeNames = new Set<string>(SRCSET_ATTRIBUTE_NAMES);
 const rawHtmlSinkNames = new Set<string>(RAW_HTML_SINK_NAMES);
+const blessedSinkWitnesses = new Map<string, WeakSet<object>>();
 let runtimeSinkSecurityEventHandler: RuntimeSinkSecurityEventHandler | undefined;
+
+/** @internal Mint a non-forgeable runtime witness for a framework-owned sink capability. */
+export function blessSink<Sink extends string, T extends object>(
+  sink: Sink,
+  value: T,
+): T & Blessed<Sink> {
+  let witnesses = blessedSinkWitnesses.get(sink);
+  if (!witnesses) {
+    witnesses = new WeakSet<object>();
+    blessedSinkWitnesses.set(sink, witnesses);
+  }
+  witnesses.add(value);
+  return value as T & Blessed<Sink>;
+}
+
+/** @internal Check the module-private witness for a framework-owned sink capability. */
+export function isBlessedSink<Sink extends string>(
+  sink: Sink,
+  value: unknown,
+): value is Blessed<Sink> & object {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    blessedSinkWitnesses.get(sink)?.has(value) === true
+  );
+}
 
 /** @internal Install a test/dev hook for blocked runtime sink events. */
 export function setRuntimeSinkSecurityEventHandler(
