@@ -6,6 +6,7 @@ import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import { normalizeComponentFileName, replaceExtension } from './shared.js';
+import type { CompilerEmittedSourceProvenance } from './source-provenance.js';
 
 /**
  * Input to {@link compileComponentModule}: the source file name and contents plus optional
@@ -22,7 +23,13 @@ export interface CompileComponentOptions {
   queryShapes?: Record<string, QueryShape>;
   registryFacts?: RegistryFacts;
   source: string;
-  sourceProvenance?: 'app' | 'compiler-emitted';
+  sourceProvenance?: 'app';
+}
+
+/** @internal Compiler-owned options used when re-reading emitted artifacts for SPEC.md §5.2. */
+export interface InternalCompileComponentOptions
+  extends Omit<CompileComponentOptions, 'sourceProvenance'> {
+  sourceProvenance?: 'app' | CompilerEmittedSourceProvenance;
 }
 
 /**

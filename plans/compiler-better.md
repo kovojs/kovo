@@ -302,14 +302,16 @@ diagnostic in compiler/check gates that claim data-plane security.
     `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts` pass after
     `createJsxIrTree` switched parent assignment to a stack-based pass with a deep-tree regression
     test.
-- [ ] Either make persistent compile-cache reads footprint-aware across process restarts or remove
+- [x] Either make persistent compile-cache reads footprint-aware across process restarts or remove
       the misleading persisted footprint field.
-  - Evidence: Vite writes persistent entries under the broad key even when the result has a learned
-    dependency footprint.
-- [ ] Tighten `sourceProvenance` so only trusted compiler-generated artifacts can suppress
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/compile-component.test.ts`
+    passes after Vite writes persistent entries under the learned narrowed footprint key and
+    replays stored footprints to reuse entries across restart when unrelated facts change.
+- [x] Tighten `sourceProvenance` so only trusted compiler-generated artifacts can suppress
       app-authoring-surface diagnostics.
-  - Evidence: `validateAuthoringSurface` skips checks whenever callers pass
-    `sourceProvenance: 'compiler-emitted'`.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/compile-component.test.ts packages/cli/src/index.compile-mcp.test.ts`
+    passes after public/MCP callers can no longer use `sourceProvenance: 'compiler-emitted'` to
+    suppress KV235, while compiler-owned fixpoint recompiles use an internal provenance marker.
 
 ### Phase 4: raise verification to the same level as the threat model
 

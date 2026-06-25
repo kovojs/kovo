@@ -19,7 +19,7 @@ import {
 } from './css.js';
 import {
   persistentCompileCacheDir,
-  readPersistentCompileCacheEntry,
+  readPersistentCompileCacheEntryForInput,
   writePersistentCompileCacheEntry,
 } from './persistent-compile-cache.js';
 import type {
@@ -437,9 +437,8 @@ async function compileCachedViteComponentModule(
     );
   }
   const cacheInput = compileComponentCacheKeyInput(compileOptions);
-  const cacheKey = compileCacheKey(cacheInput);
   const cacheDir = persistentCompileCacheDir(root);
-  return readPersistentCompileCacheEntry<ViteCompileResult>(cacheDir, cacheKey).then(
+  return readPersistentCompileCacheEntryForInput<ViteCompileResult>(cacheDir, cacheInput).then(
     async (persistent) => {
       if (persistent) return persistent;
       const result = await cache.getOrCreate(cacheInput, () =>
@@ -453,6 +452,9 @@ async function compileCachedViteComponentModule(
         ),
       );
       if (result.dependencyFootprint) {
+        const cacheKey = compileCacheKey(
+          compileComponentCacheKeyInput(compileOptions, result.dependencyFootprint),
+        );
         await writePersistentCompileCacheEntry(cacheDir, {
           cacheKey,
           footprint: result.dependencyFootprint,

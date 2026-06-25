@@ -3,7 +3,8 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { compilerIrHeader, cssIrHeader } from '../ir.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
-import type { CompileComponentOptions } from '../types.js';
+import { isCompilerEmittedSourceProvenance } from '../source-provenance.js';
+import type { InternalCompileComponentOptions } from '../types.js';
 
 interface StringRender {
   firstHtmlTagName?: string;
@@ -13,10 +14,10 @@ interface StringRender {
 }
 
 export function validateAuthoringSurface(
-  options: CompileComponentOptions,
+  options: InternalCompileComponentOptions,
   model: ComponentModuleModel | null = null,
 ): CompilerDiagnostic[] {
-  if ((options.sourceProvenance ?? 'app') !== 'app') return [];
+  if (isCompilerEmittedSourceProvenance(options.sourceProvenance)) return [];
 
   if (isCompilerIrArtifact(options.source)) {
     return [compilerIrDiagnostic(options)];
@@ -115,7 +116,7 @@ function appLocalGeneratedImportDiagnostic({
   };
 }
 
-function compilerIrDiagnostic(options: CompileComponentOptions): CompilerDiagnostic {
+function compilerIrDiagnostic(options: InternalCompileComponentOptions): CompilerDiagnostic {
   return kv235Diagnostic({
     fileName: options.fileName,
     source: options.source,

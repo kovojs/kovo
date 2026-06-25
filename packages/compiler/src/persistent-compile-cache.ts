@@ -4,6 +4,11 @@ import { dirname, join } from 'node:path';
 
 import { canonicalJson } from './canonical-json.js';
 import { compilerBuildId } from './cache-identity.js';
+import {
+  compileCacheKey,
+  narrowCompileCacheKeyInput,
+  type CompileCacheKeyInput,
+} from './compile-cache.js';
 import type { CompileDependencyFootprint } from './types.js';
 
 const persistentCompileCacheFormat = 'kovo-compile-cache/v1';
@@ -84,6 +89,41 @@ export async function readPersistentCompileCacheEntry<Result>(
   const entry = manifest.entries[cacheKey];
   if (!entry || entry.compilerBuildId !== compilerBuildId()) return null;
 
+  return readPersistentCompileCacheEntryResult(cacheDir, entry);
+}
+
+/**
+ * @internal Read by exact key first, then replay stored dependency footprints against current
+ * inputs so unrelated fact changes do not defeat cache reuse across process restarts.
+ */
+export async function readPersistentCompileCacheEntryForInput<Result>(
+  cacheDir: string,
+  input: CompileCacheKeyInput,
+): Promise<Result | null> {
+  const manifest = await readPersistentCompileCacheManifest(cacheDir);
+  const exactKey = compileCacheKey(input);
+  const exactEntry = manifest.entries[exactKey];
+  if (exactEntry?.compilerBuildId === compilerBuildId()) {
+    const exactResult = await readPersistentCompileCacheEntryResult<Result>(cacheDir, exactEntry);
+    if (exactResult !== null) return exactResult;
+  }
+
+  for (const entry of Object.values(manifest.entries)) {
+    if (entry.cacheKey === exactKey) continue;
+    if (entry.compilerBuildId !== compilerBuildId()) continue;
+    const narrowedKey = compileCacheKey(narrowCompileCacheKeyInput(input, entry.footprint));
+    if (narrowedKey !== entry.cacheKey) continue;
+    const result = await readPersistentCompileCacheEntryResult<Result>(cacheDir, entry);
+    if (result !== null) return result;
+  }
+
+  return null;
+}
+
+async function readPersistentCompileCacheEntryResult<Result>(
+  cacheDir: string,
+  entry: PersistentCompileCacheEntry,
+): Promise<Result | null> {
   try {
     const resultRef = entry.artifactRefs.result;
     const digest = persistentCompileCacheBlobDigest(resultRef);

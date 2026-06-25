@@ -1226,7 +1226,7 @@ export const CartBadge = component({
     ]);
   });
 
-  it('exempts compiler-emitted modules from non-public generated ABI import diagnostics', () => {
+  it('does not let app callers spoof compiler-emitted provenance for generated ABI imports', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.client.js',
       source: [
@@ -1235,12 +1235,30 @@ export const CartBadge = component({
         '',
       ].join('\n'),
       sourceProvenance: 'compiler-emitted',
-    });
+    } as never);
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV235',
+        help: expect.stringContaining(
+          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/browser/generated`.',
+        ),
+      },
+    ]);
   });
 
   it('keeps compiler-emitted IR accepted through explicit fixpoint provenance', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: cartBadgeSource,
+    });
+    const emitted = result.files.find((file) => file.kind === 'server');
+
+    expect(emitted).toBeDefined();
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('does not let app callers spoof compiler-emitted provenance for lowered IR', () => {
     const emitted = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: cartBadgeSource,
@@ -1251,10 +1269,9 @@ export const CartBadge = component({
       fileName: emitted?.fileName ?? 'cart-badge.server.js',
       source: emitted?.source ?? '',
       sourceProvenance: 'compiler-emitted',
-    });
+    } as never);
 
-    expect(recompiled.diagnostics).toEqual([]);
-    expect(recompiled.files).toEqual([emitted]);
+    expect(recompiled.diagnostics).toMatchObject([{ code: 'KV235' }]);
   });
 });
 
