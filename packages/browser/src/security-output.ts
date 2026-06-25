@@ -1,4 +1,21 @@
-import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
+import {
+  decideRuntimeAttributeWrite,
+  runtimeSinkFamilyForAttribute,
+} from '@kovojs/core/internal/sink-policy';
+
+/**
+ * Optional provenance attached to explicit trust escape hatches.
+ */
+export interface TrustedOutputMetadata {
+  readonly reason?: string;
+  readonly source?: string;
+}
+
+/**
+ * Metadata accepted by `trustedHtml(...)` and `trustedUrl(...)`: a shorthand reason string or a
+ * structured provenance object.
+ */
+export type TrustedOutputMetadataInput = string | TrustedOutputMetadata;
 
 /**
  * Browser Trusted Types `TrustedHTML` values accepted by Kovo raw HTML sinks.
@@ -27,14 +44,23 @@ export type KovoOutputContext =
  */
 export interface TrustedHtml {
   readonly __kovoTrustedHtml: true;
+  readonly reason?: string;
+  readonly source?: string;
   readonly value: string | BrowserTrustedHTML;
 }
 
 /**
  * Marks intentional raw HTML for Kovo sinks that require an explicit escape hatch.
  */
-export function trustedHtml(value: string | BrowserTrustedHTML): TrustedHtml {
-  const trusted = { __kovoTrustedHtml: true, value } as TrustedHtml;
+export function trustedHtml(
+  value: string | BrowserTrustedHTML,
+  metadata?: TrustedOutputMetadataInput,
+): TrustedHtml {
+  const trusted = {
+    __kovoTrustedHtml: true,
+    ...trustedOutputMetadata(metadata),
+    value,
+  } as TrustedHtml;
   const stringify = () => trustedHtmlValueContent(value);
   Object.defineProperties(trusted, {
     [Symbol.toPrimitive]: { value: stringify },
@@ -62,6 +88,8 @@ export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
  */
 export interface TrustedUrl {
   readonly __kovoTrustedUrl: true;
+  readonly reason?: string;
+  readonly source?: string;
   readonly value: string;
 }
 
@@ -72,8 +100,8 @@ export interface TrustedUrl {
  * {@link trustedHtml}: you take responsibility for the URL's safety, and the
  * brand is visible in source and `kovo explain`.
  */
-export function trustedUrl(value: string): TrustedUrl {
-  return { __kovoTrustedUrl: true, value };
+export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput): TrustedUrl {
+  return { __kovoTrustedUrl: true, ...trustedOutputMetadata(metadata), value };
 }
 
 /**
@@ -126,7 +154,8 @@ export function kovoEscapeHtml(value: unknown): string {
 export function kovoSafeUrl(value: unknown): string {
   if (isKovoTrustedUrl(value)) return value.value;
   const rendered = formatOutputValue(value);
-  return hasUnsafeUrlScheme(rendered) ? '#' : rendered;
+  const decision = decideRuntimeAttributeWrite('href', rendered);
+  return decision.action === 'neutralize' ? (decision.value ?? '#') : rendered;
 }
 
 /**
@@ -134,12 +163,13 @@ export function kovoSafeUrl(value: unknown): string {
  * Returns null when the attribute write must be suppressed entirely (on*, srcdoc).
  */
 export function kovoBoundAttributeValue(name: string, value: unknown): string | null {
-  // KV236: refuse event-handler and srcdoc sinks at runtime regardless of value.
-  if (/^on/i.test(name) || name.toLowerCase() === 'srcdoc') return null;
   // URL attributes route the RAW value through kovoSafeUrl so a `trustedUrl`
   // brand survives (formatting it first would stringify the wrapper object).
-  if (isUrlAttributeName(name)) return kovoSafeUrl(value);
-  return formatOutputValue(value);
+  if (runtimeSinkFamilyForAttribute(name) === 'url') return kovoSafeUrl(value);
+
+  const rendered = formatOutputValue(value);
+  const decision = decideRuntimeAttributeWrite(name, rendered);
+  return decision.action === 'remove' ? null : (decision.value ?? rendered);
 }
 
 /** Sets one dynamic DOM attribute through Kovo's safe attribute sink rules. */
@@ -202,6 +232,15 @@ function formatOutputValue(value: unknown): string {
 
 function trustedHtmlValueContent(value: string | BrowserTrustedHTML): string {
   return typeof value === 'string' ? value : value.toString();
+}
+
+function trustedOutputMetadata(metadata: TrustedOutputMetadataInput | undefined): TrustedOutputMetadata {
+  if (metadata === undefined) return {};
+  if (typeof metadata === 'string') return { reason: metadata };
+  return {
+    ...(metadata.reason === undefined ? {} : { reason: metadata.reason }),
+    ...(metadata.source === undefined ? {} : { source: metadata.source }),
+  };
 }
 
 function sanitizeCssIdentifier(value: string): string {

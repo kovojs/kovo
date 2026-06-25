@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { escapeAttribute, safeUrlAttribute } from './html.js';
+import { escapeAttribute, safeRuntimeAttribute, safeUrlAttribute } from './html.js';
 
 // SPEC.md §4.8 + §5.2#10: server and client must encode URL-bearing attributes
 // identically. `safeUrlAttribute` mirrors the client's `kovoBoundAttributeValue`
@@ -90,6 +90,25 @@ describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
     expect(safeUrlAttribute('title', 'javascript:alert(1)')).toBe(
       escapeAttribute('javascript:alert(1)'),
     );
+  });
+
+  it('sanitizes srcset candidate lists without treating them as one URL', () => {
+    expect(
+      safeUrlAttribute(
+        'srcset',
+        '/img/small.png 1x, javascript:alert(1) 2x, https://cdn.test/large.png 3x',
+      ),
+    ).toBe('/img/small.png 1x, https://cdn.test/large.png 3x');
+    expect(safeRuntimeAttribute('srcset', 'javascript:alert(1) 1x')).toBeNull();
+  });
+
+  it('omits non-URL executable runtime attribute sinks', () => {
+    expect(safeRuntimeAttribute('onclick', 'alert(1)')).toBeNull();
+    expect(safeRuntimeAttribute('ONERROR', 'alert(1)')).toBeNull();
+    expect(safeRuntimeAttribute('srcdoc', '<script>alert(1)</script>')).toBeNull();
+    expect(safeRuntimeAttribute('style', 'background:url(javascript:alert(1))')).toBeNull();
+    expect(safeRuntimeAttribute('style', 'min-height: 120px')).toBe('min-height: 120px');
+    expect(safeRuntimeAttribute('innerHTML', '<img src=x onerror=alert(1)>')).toBeNull();
   });
 
   it('still HTML-escapes safe URL attribute values', () => {

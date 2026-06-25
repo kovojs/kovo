@@ -1,17 +1,17 @@
 import type { FragmentChunk } from './wire-response-scanner.js';
 
 // SF-WIRE (secure-framework Tier 3, Trusted Types — DEFERRED): the `p` and `d` helpers
-// below (their `insertAdjacentHTML('beforeend', …)` and `t.innerHTML = h` raw-HTML write
-// sinks) are EXTRACTED VERBATIM into the always-on inline loader by `inline-loader-build.ts`
+// below (their `template.innerHTML = ...` raw-HTML write sinks) are EXTRACTED VERBATIM into the
+// always-on inline loader by `inline-loader-build.ts`
 // (the `responseApply` spec; a byte-parity test pins the generated `inline-loader.ts`), and
 // that extractor forbids referencing any top-level binding. So unlike the module-side sinks
 // in `morph.ts`/`query-bindings.ts` — which DO route through `kovoCreateHTML` (trusted-types.ts)
 // and are verified non-breaking by the browser suite — these two sinks CANNOT call
 // `kovoCreateHTML`. Routing them needs the `kovo` Trusted Types policy embedded INSIDE the
-// extracted closures (and minified under the 8.75KB §4.4 budget) via `inline-loader-build.ts`,
-// which is outside this slice's edited files. This is the load-bearing reason the strict CSP's
-// `require-trusted-types-for 'script'` directive (server `csp.ts` `trustedTypes`) stays OPT-IN
-// and is NEVER default-on: enabling it before this always-on loader is routed would BRICK
+// extracted closures (and minified under the 8.75KB §4.4 budget) via `inline-loader-build.ts`.
+// That Trusted Types routing is separate from these sink backstops and is the load-bearing reason
+// the strict CSP's `require-trusted-types-for 'script'` directive (server `csp.ts` `trustedTypes`)
+// stays OPT-IN and is NEVER default-on: enabling it before this always-on loader is routed would BRICK
 // Kovo's own hydration on Chromium. CSP (Task 1) is the cross-browser floor and IS default-on;
 // Trusted Types is Chromium-only DiD and ships opt-in until this loader path is wired.
 
@@ -21,9 +21,7 @@ export interface ResponseFragmentApplyOptions<Target> {
   replaceFragment(target: Target, html: string): void;
 }
 
-export interface HtmlResponseFragmentApplyTarget extends Element {
-  insertAdjacentHTML(position: 'beforeend', html: string): void;
-}
+export interface HtmlResponseFragmentApplyTarget extends Element {}
 
 export function applyResponseFragment<Target>(
   fragment: FragmentChunk,
@@ -75,7 +73,10 @@ export function p(
     if (!e) continue;
 
     if (x.mode === 'append') {
-      e.insertAdjacentHTML('beforeend', x.html);
+      const t = document.createElement('template');
+      t.innerHTML = x.html;
+      for (const n of [...t.content.children]) g(n);
+      e.append(...t.content.childNodes);
     } else {
       d(e, x.html);
     }
@@ -91,14 +92,15 @@ function d(e: HtmlResponseFragmentApplyTarget, h: string): void {
   const n = firstMorphElement(t.content);
   const s = e.contains(document.activeElement) ? document.activeElement : null;
   const q: HTMLElement[] = [];
-  for (const x of e.querySelectorAll<HTMLElement>('[kovo-key]'))
+  for (const x of e.querySelectorAll<HTMLElement>('[kovo-key]')) {
     if (x.scrollTop) {
       (x as HTMLElement & { s?: number }).s = x.scrollTop;
       q.push(x);
     }
+  }
 
   if (n) {
-    m(e, n);
+    m(e, g(n));
   } else {
     e.replaceChildren();
   }
@@ -148,28 +150,49 @@ function m(c: Element, n: Element): Element {
   return c;
 }
 
-function sa(e: Element, name: string, value: string): void {
+function sa(e: Element, name: string, v: string): void {
   const n = name.toLowerCase();
-  if (n.startsWith('on') || n === 'srcdoc') {
+  if (r(n)) {
     e.removeAttribute(name);
     return;
   }
+  if (n === 'srcset') {
+    const s = y(v);
+    e.setAttribute(name, s || '#');
+    return;
+  }
   if (/^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/.test(n)) {
-    const match = /^([a-z][a-z0-9+.-]*):/.exec(stripAsciiControls(value).toLowerCase());
-    if (match && !/^(https?|mailto|tel|ftp)$/.test(match[1] ?? '')) {
+    if (w(v)) {
       e.setAttribute(name, '#');
       return;
     }
   }
-  e.setAttribute(name, value);
+  e.setAttribute(name, v);
 }
 
-function stripAsciiControls(value: string): string {
-  let result = '';
-  for (const char of value) {
-    if (char > ' ') result += char;
+function r(n: string): boolean {
+  return /^on|^(srcdoc|style|innerhtml)$/.test(n);
+}
+
+function g(e: Element): Element {
+  for (const x of [e, ...e.querySelectorAll('*')]) {
+    for (const a of [...x.attributes]) sa(x, a.name, a.value);
   }
-  return result;
+  return e;
+}
+
+function y(v: string): string | null {
+  const r: string[] = [];
+  for (const c of v.split(',')) {
+    const x = c.trim();
+    if (x && !w(x.split(/\s/)[0]!)) r.push(x);
+  }
+  return r.length ? r.join(', ') : null;
+}
+
+function w(v: string): boolean {
+  const s = v.replace(/[\x00-\x20]/g, '').toLowerCase();
+  return /^[a-z][^:]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
 }
 
 function u(c: Element, n: Element): void {
@@ -182,7 +205,7 @@ function u(c: Element, n: Element): void {
     if (x instanceof Element) {
       const z = k(x);
       const v = z ? b.get(z) : undefined;
-      return v ? m(v, x) : (x.cloneNode(true) as ChildNode);
+      return v ? m(v, x) : g(x.cloneNode(true) as Element);
     }
 
     return x.cloneNode(true) as ChildNode;

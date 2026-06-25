@@ -86,6 +86,7 @@ export async function expectInlineResponseApplyParity(
   };
   const listeners = new Map<string, (event: unknown) => void>();
   interface InlineParityTarget {
+    append?(...nodes: unknown[]): void;
     html?: string;
     insertAdjacentHTML?(position: string, html: string): void;
   }
@@ -106,6 +107,9 @@ export async function expectInlineResponseApplyParity(
       'cart-badge',
       {
         html: '',
+        append(...nodes: unknown[]) {
+          this.html += nodes.join('');
+        },
         insertAdjacentHTML(_position: string, html: string) {
           this.html += html;
         },
@@ -115,6 +119,9 @@ export async function expectInlineResponseApplyParity(
       'cart-list',
       {
         html: '<li>existing</li>',
+        append(...nodes: unknown[]) {
+          this.html += nodes.join('');
+        },
         insertAdjacentHTML(_position: string, html: string) {
           this.html += html;
         },
@@ -124,6 +131,9 @@ export async function expectInlineResponseApplyParity(
       'cart-summary',
       {
         html: '',
+        append(...nodes: unknown[]) {
+          this.html += nodes.join('');
+        },
         insertAdjacentHTML(_position: string, html: string) {
           this.html += html;
         },
@@ -213,6 +223,16 @@ export async function expectInlineResponseApplyParity(
       return true;
     };
     globalRecord.document = {
+      createElement(name: string) {
+        if (name !== 'template') throw new Error(`unexpected inline test element: ${name}`);
+        const template = {
+          content: { childNodes: [] as unknown[], children: [] as unknown[] },
+          set innerHTML(value: string) {
+            this.content.childNodes = [value];
+          },
+        };
+        return template;
+      },
       getElementById(id: string) {
         if (id === 'cart-summary') return null;
         return inlineTargets.get(id) ?? null;

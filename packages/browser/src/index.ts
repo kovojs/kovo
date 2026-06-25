@@ -12,6 +12,12 @@ export type {
   OptimisticTransform,
 } from './optimism.js';
 export { trustedHtml, trustedUrl } from './security-output.js';
-export type { BrowserTrustedHTML, TrustedHtml, TrustedUrl } from './security-output.js';
+export type {
+  BrowserTrustedHTML,
+  TrustedHtml,
+  TrustedOutputMetadata,
+  TrustedOutputMetadataInput,
+  TrustedUrl,
+} from './security-output.js';
 export { derive } from './derive.js';
 export type { DeriveDefinition } from './derive.js';

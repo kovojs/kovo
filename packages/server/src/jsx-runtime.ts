@@ -22,7 +22,7 @@ import {
   escapeAttribute,
   renderedHtml,
   type RenderedHtml,
-  safeUrlAttribute,
+  safeRuntimeAttribute,
   unwrapCoercedRenderedHtml,
 } from './html.js';
 import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
@@ -237,13 +237,20 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       continue;
     }
 
-    // SPEC.md §4.8 + §5.2#10: URL-bearing attribute names are scheme-checked so
-    // dynamic DB/query values like `href={row.url}` cannot render as `javascript:`
-    // sinks on first paint. `safeUrlAttribute` returns '#' for unsafe schemes.
-    rendered +=
-      value === true
-        ? ` ${name}`
-        : ` ${name}="${safeUrlAttribute(name, attributeText(name, value))}"`;
+    if (name === 'style' && isStyleProperties(value)) {
+      const style = renderStyleProperties(value);
+      if (style) rendered += ` style="${escapeAttribute(style)}"`;
+      renderedStyle = true;
+      continue;
+    }
+
+    // SPEC.md §4.8 + §5.2#10: every runtime attribute write passes through the
+    // shared sink policy. URL values are scheme-checked, srcset candidate lists
+    // are filtered, and executable sinks (`on*`, `srcdoc`, raw CSS/HTML text)
+    // are omitted before HTML is emitted.
+    const attributeValue = safeRuntimeAttribute(name, attributeText(name, value));
+    if (attributeValue === null) continue;
+    rendered += value === true ? ` ${name}` : ` ${name}="${attributeValue}"`;
   }
 
   if (styleAttrs?.class && !renderedClass)

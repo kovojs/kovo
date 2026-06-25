@@ -5,7 +5,7 @@ import type {
   ClosestElementLike,
   QuerySelectorAllRootLike,
 } from './dom-like.js';
-import { morphDomElement } from './morph.js';
+import { morphDomElement, sanitizeDomElementTree } from './morph.js';
 import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
 import { kovoCreateHTML } from './trusted-types.js';
@@ -342,7 +342,7 @@ function domTemplateStampElement(
   if (!element) return null;
 
   element.setAttribute('kovo-key', item.key);
-  return element;
+  return sanitizeDomElementTree(element);
 }
 
 function isHtmlTemplateElement(element: Element | null): element is HTMLTemplateElement {
@@ -671,9 +671,12 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
 
   // SPEC §1 and §5.2: generated/client-updated attributes use the shared output-context model so
   // security behavior remains auditable in emitted code and in the live update path.
-  // F2: kovoBoundAttributeValue returns null for on*/srcdoc sinks — skip the setAttribute entirely.
+  // F2: kovoBoundAttributeValue returns null for blocked sinks; remove any prior value.
   const rendered = kovoBoundAttributeValue(name, value);
-  if (rendered === null) return;
+  if (rendered === null) {
+    removeBoundAttribute(element, name);
+    return;
+  }
   element.setAttribute?.(name, rendered);
   if (name === 'value' && element.value !== undefined) {
     element.value = rendered;

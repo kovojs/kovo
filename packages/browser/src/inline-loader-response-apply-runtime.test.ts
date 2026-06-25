@@ -18,10 +18,15 @@ describe('inline loader response apply runtime', () => {
   );
 
   it('applies fragments through the runtime-owned helper', () => {
+    const globalRecord = globalThis as unknown as { document?: unknown };
+    const originalDocument = globalRecord.document;
     const targets = new Map([
       [
         'append-second-target',
         {
+          append(...nodes: unknown[]) {
+            this.html += nodes.join('');
+          },
           html: '<p>old</p>',
           insertAdjacentHTML(_position: 'beforeend', html: string) {
             this.html += html;
@@ -31,6 +36,9 @@ describe('inline loader response apply runtime', () => {
       [
         'append-target',
         {
+          append(...nodes: unknown[]) {
+            this.html += nodes.join('');
+          },
           html: '<li>existing</li>',
           innerHTML: '',
           insertAdjacentHTML(_position: 'beforeend', html: string) {
@@ -40,25 +48,42 @@ describe('inline loader response apply runtime', () => {
       ],
     ]);
 
-    const appliedFragments = applyInlineMutationResponseChunks(
-      {
-        fragments: [
-          { html: '<p>replace</p>', target: 'replace-target' },
-          { html: '<p>second</p>', mode: 'append', target: 'append-second-target' },
-          { html: '<li>new</li>', mode: 'append', target: 'append-target' },
-          { html: '<p>ignored</p>', target: 'missing-target' },
-        ],
-        queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 12, start: 1 }],
-      },
-      {
-        findFragmentTarget(target) {
-          return (targets.get(target) as unknown as HtmlResponseFragmentApplyTarget) ?? null;
+    try {
+      globalRecord.document = {
+        createElement(name: string) {
+          if (name !== 'template') throw new Error(`unexpected inline test element: ${name}`);
+          const template = {
+            content: { childNodes: [] as unknown[], children: [] as unknown[] },
+            set innerHTML(value: string) {
+              this.content.childNodes = [value];
+            },
+          };
+          return template;
         },
-      },
-    );
+      };
 
-    expect(appliedFragments).toEqual(['append-second-target', 'append-target']);
-    expect(targets.get('append-second-target')?.html).toBe('<p>old</p><p>second</p>');
-    expect(targets.get('append-target')?.html).toBe('<li>existing</li><li>new</li>');
+      const appliedFragments = applyInlineMutationResponseChunks(
+        {
+          fragments: [
+            { html: '<p>replace</p>', target: 'replace-target' },
+            { html: '<p>second</p>', mode: 'append', target: 'append-second-target' },
+            { html: '<li>new</li>', mode: 'append', target: 'append-target' },
+            { html: '<p>ignored</p>', target: 'missing-target' },
+          ],
+          queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 12, start: 1 }],
+        },
+        {
+          findFragmentTarget(target) {
+            return (targets.get(target) as unknown as HtmlResponseFragmentApplyTarget) ?? null;
+          },
+        },
+      );
+
+      expect(appliedFragments).toEqual(['append-second-target', 'append-target']);
+      expect(targets.get('append-second-target')?.html).toBe('<p>old</p><p>second</p>');
+      expect(targets.get('append-target')?.html).toBe('<li>existing</li><li>new</li>');
+    } finally {
+      globalRecord.document = originalDocument;
+    }
   });
 });

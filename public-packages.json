@@ -20,6 +20,7 @@
           "./internal/query-delta",
           "./internal/render-plan-token",
           "./internal/security-url",
+          "./internal/sink-policy",
           "./internal/source-sink-registry",
           "./internal/sql-safety",
           "./internal/component-render",
