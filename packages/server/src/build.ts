@@ -246,7 +246,7 @@ async function emitVercelPreset(
     const outDir = resolvedFileSystemPath(context.outDir);
     await mkdir(outDir, { recursive: true });
     await cp(build.staticOutput.dir, path.join(outDir, 'static'), { recursive: true });
-    await writeJson(path.join(outDir, 'config.json'), { version: 3 });
+    await writeJson(path.join(outDir, 'config.json'), vercelStaticBuildOutputConfig());
     context.log(`Emitted Kovo vercel static preset output to ${outDir}`);
     return;
   }
@@ -349,8 +349,13 @@ function vercelBuildOutputConfig(): unknown {
     routes: [
       {
         continue: true,
-        headers: { 'cache-control': immutableCacheControl },
+        headers: immutableStaticHeaders(),
         src: '/(?:assets|c)/(.*)',
+      },
+      {
+        continue: true,
+        headers: documentStaticHeaders(),
+        src: '/(.*)',
       },
       { handle: 'filesystem' },
       { dest: '/kovo', src: '/(.*)' },
@@ -359,22 +364,58 @@ function vercelBuildOutputConfig(): unknown {
   };
 }
 
+function vercelStaticBuildOutputConfig(): unknown {
+  return {
+    routes: [
+      {
+        continue: true,
+        headers: immutableStaticHeaders(),
+        src: '/(?:assets|c)/(.*)',
+      },
+      {
+        continue: true,
+        headers: documentStaticHeaders(),
+        src: '/(.*)',
+      },
+      { handle: 'filesystem' },
+    ],
+    version: 3,
+  };
+}
+
+function immutableStaticHeaders(): Record<string, string> {
+  return {
+    'cache-control': immutableCacheControl,
+    'cross-origin-resource-policy': 'same-origin',
+    'x-content-type-options': 'nosniff',
+  };
+}
+
+function documentStaticHeaders(): Record<string, string> {
+  return {
+    'x-content-type-options': 'nosniff',
+  };
+}
+
 function vercelFunctionSource(): string {
   return `const { Readable } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 
 let handlerPromise;
 
 module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
   try {
     const handler = await loadHandler();
-    const request = nodeRequestToWebRequest(nodeRequest);
+    const request = nodeRequestToWebRequest(nodeRequest, {}, nodeResponse);
     const response = await handler(request);
     await writeWebResponseToNode(response, nodeResponse, request.method);
   } catch {
-    if (!nodeResponse.headersSent) {
+    if (nodeResponse.headersSent) {
+      nodeResponse.destroy();
+    } else {
       nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+      nodeResponse.end('Internal Server Error');
     }
-    nodeResponse.end('Internal Server Error');
   }
 };
 
@@ -383,11 +424,29 @@ async function loadHandler() {
   return handlerPromise;
 }
 
-function nodeRequestToWebRequest(nodeRequest) {
+function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
   const method = nodeRequest.method ?? 'GET';
+  const headers = nodeHeadersToWebHeaders(nodeRequest);
+  const controller = new AbortController();
+  const abort = () => {
+    if (!controller.signal.aborted) controller.abort();
+  };
+  const socket = nodeRequest.socket;
+  nodeRequest.once('aborted', abort);
+  nodeRequest.once('close', abort);
+  socket?.once('close', abort);
+  if (nodeResponse) {
+    const cleanup = () => {
+      nodeRequest.off('aborted', abort);
+      nodeRequest.off('close', abort);
+      socket?.off('close', abort);
+    };
+    nodeResponse.once('close', cleanup);
+  }
   const init = {
-    headers: nodeHeadersToWebHeaders(nodeRequest),
+    headers,
     method,
+    signal: controller.signal,
     ...(method === 'GET' || method === 'HEAD'
       ? {}
       : {
@@ -396,23 +455,29 @@ function nodeRequestToWebRequest(nodeRequest) {
         }),
   };
 
-  return new Request(nodeRequestUrl(nodeRequest), init);
+  return new Request(nodeRequestUrl(nodeRequest, options), init);
 }
 
-function nodeRequestUrl(nodeRequest) {
+function nodeRequestUrl(nodeRequest, options) {
   const rawUrl = nodeRequest.url ?? '/';
-  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) return rawUrl;
+  const origin = options.origin ?? defaultOrigin(nodeRequest);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) {
+    const absolute = new URL(rawUrl);
+    return new URL(absolute.pathname + absolute.search + absolute.hash, origin).href;
+  }
 
-  const host = nodeRequest.headers.host ?? '127.0.0.1';
-  const proto = 'https';
-  return new URL(rawUrl, proto + '://' + host).href;
+  const pathOnly = rawUrl.startsWith('//') ? '/' + rawUrl.replace(/^\\/+/, '') : rawUrl;
+  return new URL(pathOnly, origin).href;
+}
+
+function defaultOrigin(nodeRequest) {
+  const pseudoHeaders = nodeRequest.headers;
+  const host = nodeRequest.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
+  return 'https://' + host;
 }
 
 async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
-  const headers = {};
-  response.headers.forEach((value, name) => {
-    headers[name] = value;
-  });
+  const headers = responseHeadersToNodeHeaders(response.headers);
 
   nodeResponse.writeHead(response.status, response.statusText, headers);
   if (method === 'HEAD' || response.body === null) {
@@ -420,19 +485,14 @@ async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
     return;
   }
 
-  await new Promise((resolvePromise, reject) => {
-    Readable.fromWeb(response.body)
-      .once('error', reject)
-      .pipe(nodeResponse)
-      .once('error', reject)
-      .once('finish', resolvePromise);
-  });
+  await pipeline(Readable.fromWeb(response.body), nodeResponse);
 }
 
 function nodeHeadersToWebHeaders(nodeRequest) {
   const headers = new Headers();
   for (const [name, value] of Object.entries(nodeRequest.headers)) {
     if (value === undefined) continue;
+    if (name.startsWith(':')) continue;
     if (Array.isArray(value)) {
       for (const entry of value) headers.append(name, entry);
     } else {
@@ -440,6 +500,17 @@ function nodeHeadersToWebHeaders(nodeRequest) {
     }
   }
   return headers;
+}
+
+function responseHeadersToNodeHeaders(headers) {
+  const nodeHeaders = {};
+  const setCookies = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : [];
+  if (setCookies.length > 0) nodeHeaders['set-cookie'] = setCookies;
+  headers.forEach((value, name) => {
+    if (name === 'set-cookie') return;
+    nodeHeaders[name] = value;
+  });
+  return nodeHeaders;
 }
 
 function firstHeaderValue(value) {
@@ -451,7 +522,13 @@ function firstHeaderValue(value) {
 function cloudflareWorkerSource(): string {
   return `import handler from './server/handler.mjs';
 
-const immutableCacheControl = ${JSON.stringify(immutableCacheControl)};
+const immutableStaticHeaders = ${JSON.stringify(immutableStaticHeaders())};
+const documentStaticHeaders = ${JSON.stringify(documentStaticHeaders())};
+const staticErrorHeaders = {
+  'cache-control': 'no-store',
+  'cross-origin-resource-policy': 'same-origin',
+  'x-content-type-options': 'nosniff',
+};
 const bodylessMethods = new Set(['GET', 'HEAD']);
 
 export default {
@@ -461,8 +538,12 @@ export default {
       const assetResponse = await env.ASSETS.fetch(request);
       if (assetResponse.status !== 404) {
         const headers = new Headers(assetResponse.headers);
-        if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/c/')) {
-          headers.set('cache-control', immutableCacheControl);
+        if (assetResponse.status >= 400) {
+          applyHeaders(headers, staticErrorHeaders);
+        } else if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/c/')) {
+          applyHeaders(headers, immutableStaticHeaders);
+        } else {
+          applyHeaders(headers, documentStaticHeaders);
         }
         return new Response(assetResponse.body, {
           headers,
@@ -475,6 +556,12 @@ export default {
     return handler(request);
   },
 };
+
+function applyHeaders(headers, policy) {
+  for (const [name, value] of Object.entries(policy)) {
+    headers.set(name, value);
+  }
+}
 `;
 }
 
@@ -565,14 +652,15 @@ function nodeServerSource(): string {
 import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, isAbsolute, relative, resolve } from 'node:path';
-import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import handler from './server/handler.mjs';
 
 const clientRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'client');
 const staticRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'static');
-const immutableCacheControl = 'public, max-age=31536000, immutable';
+const immutableStaticHeaders = ${JSON.stringify(immutableStaticHeaders())};
+const documentStaticHeaders = ${JSON.stringify(documentStaticHeaders())};
 const bodylessMethods = new Set(['GET', 'HEAD']);
 
 export function createKovoNodeServer(options = {}) {
@@ -580,14 +668,16 @@ export function createKovoNodeServer(options = {}) {
     try {
       if (await maybeServeStatic(nodeRequest, nodeResponse)) return;
 
-      const request = nodeRequestToWebRequest(nodeRequest, options);
+      const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
       const response = await handler(request);
       await writeWebResponseToNode(response, nodeResponse, request.method);
     } catch {
-      if (!nodeResponse.headersSent) {
+      if (nodeResponse.headersSent) {
+        nodeResponse.destroy();
+      } else {
         nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+        nodeResponse.end('Internal Server Error');
       }
-      nodeResponse.end('Internal Server Error');
     }
   });
 }
@@ -603,7 +693,7 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
 
   if (filePath === undefined) {
     if (!immutableAsset) return false;
-    nodeResponse.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+    nodeResponse.writeHead(403, staticErrorHeaders());
     nodeResponse.end('Forbidden');
     return true;
   }
@@ -611,13 +701,13 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
   const fileStat = await stat(filePath).catch(() => undefined);
   if (fileStat === undefined || !fileStat.isFile()) {
     if (!immutableAsset) return false;
-    nodeResponse.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    nodeResponse.writeHead(404, staticErrorHeaders());
     nodeResponse.end('Not Found');
     return true;
   }
 
   nodeResponse.writeHead(200, {
-    ...(immutableAsset ? { 'cache-control': immutableCacheControl } : {}),
+    ...(immutableAsset ? immutableStaticHeaders : documentStaticHeaders),
     'content-length': String(fileStat.size),
     'content-type': contentType(filePath),
   });
@@ -671,11 +761,29 @@ function staticFilePath(root, pathname) {
   return filePath;
 }
 
-function nodeRequestToWebRequest(nodeRequest, options) {
+function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
   const method = nodeRequest.method ?? 'GET';
+  const headers = nodeHeadersToWebHeaders(nodeRequest);
+  const controller = new AbortController();
+  const abort = () => {
+    if (!controller.signal.aborted) controller.abort();
+  };
+  const socket = nodeRequest.socket;
+  nodeRequest.once('aborted', abort);
+  nodeRequest.once('close', abort);
+  socket?.once('close', abort);
+  if (nodeResponse) {
+    const cleanup = () => {
+      nodeRequest.off('aborted', abort);
+      nodeRequest.off('close', abort);
+      socket?.off('close', abort);
+    };
+    nodeResponse.once('close', cleanup);
+  }
   const init = {
-    headers: nodeHeadersToWebHeaders(nodeRequest),
+    headers,
     method,
+    signal: controller.signal,
     ...(bodylessMethods.has(method)
       ? {}
       : {
@@ -689,32 +797,37 @@ function nodeRequestToWebRequest(nodeRequest, options) {
 
 function nodeRequestUrl(nodeRequest, options) {
   const rawUrl = nodeRequest.url ?? '/';
-  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) return rawUrl;
-
   const origin =
     typeof options.origin === 'function'
       ? options.origin(nodeRequest)
       : (options.origin ?? defaultOrigin(nodeRequest, options));
 
-  return new URL(rawUrl, origin).href;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) {
+    const absolute = new URL(rawUrl);
+    return new URL(absolute.pathname + absolute.search + absolute.hash, origin).href;
+  }
+
+  const pathOnly = rawUrl.startsWith('//') ? '/' + rawUrl.replace(/^\\/+/, '') : rawUrl;
+  return new URL(pathOnly, origin).href;
 }
 
 function defaultOrigin(nodeRequest, options) {
-  const host = nodeRequest.headers.host ?? '127.0.0.1';
+  const pseudoHeaders = nodeRequest.headers;
+  const host = nodeRequest.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
   const forwardedProto = options.trustedProxy
     ? firstHeaderValue(nodeRequest.headers['x-forwarded-proto'])
     : undefined;
+  const pseudoScheme = firstHeaderValue(pseudoHeaders[':scheme']);
   const proto =
-    forwardedProto ?? (nodeRequest.socket && nodeRequest.socket.encrypted ? 'https' : 'http');
+    forwardedProto ??
+    pseudoScheme ??
+    (nodeRequest.socket && nodeRequest.socket.encrypted ? 'https' : 'http');
 
   return proto + '://' + host;
 }
 
 async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
-  const headers = {};
-  response.headers.forEach((value, name) => {
-    headers[name] = value;
-  });
+  const headers = responseHeadersToNodeHeaders(response.headers);
 
   nodeResponse.writeHead(response.status, response.statusText, headers);
   if (method === 'HEAD' || response.body === null) {
@@ -722,19 +835,14 @@ async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
     return;
   }
 
-  await new Promise((resolvePromise, reject) => {
-    Readable.fromWeb(response.body)
-      .once('error', reject)
-      .pipe(nodeResponse)
-      .once('error', reject)
-      .once('finish', resolvePromise);
-  });
+  await pipeline(Readable.fromWeb(response.body), nodeResponse);
 }
 
 function nodeHeadersToWebHeaders(nodeRequest) {
   const headers = new Headers();
   for (const [name, value] of Object.entries(nodeRequest.headers)) {
     if (value === undefined) continue;
+    if (name.startsWith(':')) continue;
     if (Array.isArray(value)) {
       for (const entry of value) headers.append(name, entry);
     } else {
@@ -742,6 +850,17 @@ function nodeHeadersToWebHeaders(nodeRequest) {
     }
   }
   return headers;
+}
+
+function responseHeadersToNodeHeaders(headers) {
+  const nodeHeaders = {};
+  const setCookies = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : [];
+  if (setCookies.length > 0) nodeHeaders['set-cookie'] = setCookies;
+  headers.forEach((value, name) => {
+    if (name === 'set-cookie') return;
+    nodeHeaders[name] = value;
+  });
+  return nodeHeaders;
 }
 
 function contentType(filePath) {
@@ -762,6 +881,15 @@ function contentType(filePath) {
     default:
       return 'application/octet-stream';
   }
+}
+
+function staticErrorHeaders() {
+  return {
+    'cache-control': 'no-store',
+    'content-type': 'text/plain; charset=utf-8',
+    'cross-origin-resource-policy': 'same-origin',
+    'x-content-type-options': 'nosniff',
+  };
 }
 
 function firstHeaderValue(value) {
