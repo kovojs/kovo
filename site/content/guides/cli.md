@@ -58,7 +58,7 @@ So `npm run check:kovo` → `vp run kovo-check` → `kovo check`. The npm script
 
 ```sh
 $ kovo
-kovo: add, audit, build, check, compile, explain, export, mcp
+kovo: add, audit, build, check, compile, explain, export, mcp, update-docs
 ```
 
 Every command emits stable, versioned, diffable output (`kovo-check/v1`, `kovo-explain/v1`, …) — the
@@ -186,6 +186,20 @@ kovo export ./src/app.ts --vite --root . --out dist   # load the module via Vite
 Export is L0/L1 only: a route with a guard, unproven session dependence, mutation-only interaction,
 or a param path without enumerated `staticPaths` fails or skips loudly with **KV229**, according to
 the export policy (`--skip-non-exportable` chooses skip). See [deployment](/guides/deployment/).
+
+### `kovo update-docs` — refresh local agent docs
+
+Refreshes the generated Kovo section in `AGENTS.md` and mirrors agent-readable docs into
+`./.kovo/docs/`:
+
+```sh
+kovo update-docs
+```
+
+The command fetches the latest docs from kovo.sh when available. If the fetch fails, it falls back to
+the bundled docs snapshot and says so in its output. The embedded `kovo-rules-version` is package
+version provenance only; docs may still be refreshed within the same package version, so run
+`kovo update-docs` when you want the newest local agent docs.
 
 ### `kovo mcp` — Model Context Protocol server
 

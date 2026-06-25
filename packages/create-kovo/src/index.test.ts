@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readlinkSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -38,8 +39,26 @@ const TEMPLATE_FILES = [
   'src/theme.ts',
   'src/styles.css',
 ];
-const GENERATED_FILES = ['.env', '.env.example', '.gitignore'];
-const ALL_FILES = [...TEMPLATE_FILES, ...GENERATED_FILES];
+const AGENT_DOC_FILES = [
+  'AGENTS.md',
+  'CLAUDE.md',
+  '.kovo/docs/kovo-rules.md',
+  '.kovo/docs/llms.txt',
+  '.kovo/docs/llms-full.txt',
+  '.kovo/docs/spec.md',
+  '.kovo/docs/docs/project-structure.md',
+  '.kovo/docs/guides/cli.md',
+  '.kovo/docs/guides/security.md',
+  '.kovo/docs/guides/routing.md',
+  '.kovo/docs/guides/layouts.md',
+  '.kovo/docs/guides/queries.md',
+  '.kovo/docs/guides/mutations.md',
+  '.kovo/docs/guides/testing.md',
+  '.kovo/docs/reference/diagnostics.md',
+  '.kovo/docs/metadata.json',
+];
+const GENERATED_FILES = [...AGENT_DOC_FILES, '.env', '.env.example', '.gitignore'];
+const ALL_FILES = [...AGENT_DOC_FILES, ...TEMPLATE_FILES, '.env', '.env.example', '.gitignore'];
 const SQLITE_TEMPLATE_FILES = [
   'package.sqlite.json',
   'README.sqlite.md',
@@ -73,6 +92,38 @@ describe('create-kovo starter (metadata)', () => {
       const project = createKovoProject({ name: 'My App' });
       expect(project.name).toBe('my-app');
       expect(project.files.map((file) => file.path)).toEqual(ALL_FILES);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('scaffolds local agent docs and points CLAUDE.md at AGENTS.md', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-agents-'));
+
+    try {
+      writeKovoProject(root, { name: 'Agent Docs' });
+
+      const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
+      expect(agents).toContain('# Agent Instructions');
+      expect(agents).toContain('<!-- BEGIN:kovo-rules -->');
+      expect(agents).toContain('<!-- kovo-rules-version: 0.1.1 -->');
+      expect(agents).toContain('`kovo check`');
+      expect(agents).toContain('Read the local docs below');
+      expect(agents).toContain('- Spec: `./.kovo/docs/spec.md`');
+      expect(agents).toContain('<!-- END:kovo-rules -->');
+
+      expect(readlinkSync(join(root, 'CLAUDE.md'))).toBe('AGENTS.md');
+      expect(realpathSync(join(root, 'CLAUDE.md'))).toBe(realpathSync(join(root, 'AGENTS.md')));
+
+      expect(readFileSync(join(root, '.kovo/docs/kovo-rules.md'), 'utf8')).toContain('## Commands');
+      expect(readFileSync(join(root, '.kovo/docs/llms.txt'), 'utf8')).toContain(
+        'Compact local docs index',
+      );
+      const metadata = JSON.parse(readFileSync(join(root, '.kovo/docs/metadata.json'), 'utf8')) as {
+        source?: string;
+        version?: string;
+      };
+      expect(metadata).toMatchObject({ source: 'bundled', version: '0.1.1' });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -192,6 +243,7 @@ describe('create-kovo starter (metadata)', () => {
       // No fake graph apparatus or static-export wrappers remain.
       expect(existsSync(join(root, 'scripts/check-sound-subset.mjs'))).toBe(true);
       expect(existsSync(join(root, 'docs'))).toBe(false);
+      expect(existsSync(join(root, '.kovo/docs/llms.txt'))).toBe(true);
       expect(existsSync(join(root, 'src/app-shell.ts'))).toBe(false);
     } finally {
       rmSync(root, { force: true, recursive: true });
@@ -213,6 +265,10 @@ describe('create-kovo starter (metadata)', () => {
 
       for (const file of project.files) {
         if (file.path === '.env') continue;
+        if (file.symlinkTarget) {
+          expect(readlinkSync(join(root, file.path))).toBe(file.symlinkTarget);
+          continue;
+        }
         expect(readFileSync(join(root, file.path), 'utf8')).toBe(file.source);
       }
 

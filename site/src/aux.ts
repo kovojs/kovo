@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createRequestHandler } from '@kovojs/server';
+import { bundledKovoRulesSource } from '@kovojs/core/internal/agent-docs';
 
 import { siteStaticExportApp } from './app.js';
 import { loadSiteContent } from './content.js';
@@ -11,6 +12,7 @@ import { loadSiteContent } from './content.js';
 //   - search-index.json  the ⌘K search island's corpus (W8)
 //   - <section>/<slug>.md raw markdown mirrors (snippets substituted)
 //   - spec.md            the normative spec, verbatim
+//   - kovo-rules.md      the condensed app-local AGENTS.md rules block body
 //   - llms.txt           llms.txt-convention index over the mirrors
 //   - llms-full.txt      the whole corpus for ingestion
 //   - 404.html           the app's own themed not-found document
@@ -50,6 +52,7 @@ export async function emitAuxOutputs(outDir: string): Promise<void> {
     }
   }
   await writeFile(path.join(outDir, 'spec.md'), content.spec.source, 'utf8');
+  await writeFile(path.join(outDir, 'kovo-rules.md'), bundledKovoRulesSource(), 'utf8');
 
   // llms.txt + llms-full.txt — one source feeds both and the human pages.
   await writeFile(

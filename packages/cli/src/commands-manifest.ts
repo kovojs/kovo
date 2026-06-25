@@ -73,6 +73,9 @@ export const EXPORT_USAGE =
 /** @internal Usage line emitted for `kovo mcp` (see `mcpUsage`). */
 export const MCP_USAGE = 'usage: kovo mcp';
 
+/** @internal Usage line emitted for `kovo update-docs`. */
+export const UPDATE_DOCS_USAGE = 'usage: kovo update-docs';
+
 /** @internal A single command-line flag and its human description. */
 export interface CommandFlag {
   /** The flag token as typed on the command line, e.g. `--out <dir>`. */
@@ -100,7 +103,7 @@ export interface CommandManifestEntry {
 /**
  * @internal The full `kovo` command surface, in display order. Covers every
  * command `main`/`mainAsync` dispatches: check, explain, add, build, audit,
- * compile, export, mcp.
+ * compile, export, mcp, update-docs.
  */
 export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   {
@@ -323,5 +326,12 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
     usage: MCP_USAGE,
     async: true,
     examples: ['kovo mcp'],
+  },
+  {
+    name: 'update-docs',
+    summary: 'Refresh AGENTS.md and mirror the latest agent-readable Kovo docs into ./.kovo/docs.',
+    usage: UPDATE_DOCS_USAGE,
+    async: true,
+    examples: ['kovo update-docs'],
   },
 ];

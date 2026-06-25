@@ -15,6 +15,7 @@ import {
   EXPLAIN_USAGE_LINE,
   EXPORT_USAGE,
   MCP_USAGE,
+  UPDATE_DOCS_USAGE,
 } from './commands-manifest.js';
 
 /**
@@ -40,7 +41,7 @@ describe('commands manifest', () => {
   it('covers exactly the commands the bin dispatches', () => {
     // Commands dispatched in main()/mainAsync() are matched on `args[0] === '<cmd>'`.
     const dispatched = new Set(
-      [...indexSource.matchAll(/args\[0\]\s*===\s*'([a-z]+)'/g)].map((m) => m[1]),
+      [...indexSource.matchAll(/args\[0\]\s*===\s*'([a-z-]+)'/g)].map((m) => m[1]),
     );
     const manifestNames = new Set(COMMANDS_MANIFEST.map((entry) => entry.name));
 
@@ -54,13 +55,23 @@ describe('commands manifest', () => {
     }
     // Explicit belt-and-suspenders: the full known command surface.
     expect([...manifestNames].sort()).toEqual(
-      ['add', 'audit', 'build', 'check', 'compile', 'explain', 'export', 'mcp'].sort(),
+      [
+        'add',
+        'audit',
+        'build',
+        'check',
+        'compile',
+        'explain',
+        'export',
+        'mcp',
+        'update-docs',
+      ].sort(),
     );
   });
 
-  it('marks the async-dispatched commands (build, compile, export, mcp) as async', () => {
+  it('marks the async-dispatched commands (build, compile, export, mcp, update-docs) as async', () => {
     const asyncNames = COMMANDS_MANIFEST.filter((entry) => entry.async).map((entry) => entry.name);
-    expect(asyncNames.sort()).toEqual(['build', 'compile', 'export', 'mcp'].sort());
+    expect(asyncNames.sort()).toEqual(['build', 'compile', 'export', 'mcp', 'update-docs'].sort());
   });
 
   it('exposes every usage constant the bin references', () => {
@@ -89,6 +100,7 @@ describe('commands manifest', () => {
       'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--stylesheet-env <name>] [--skip-non-exportable]',
     );
     expect(MCP_USAGE).toBe('usage: kovo mcp');
+    expect(UPDATE_DOCS_USAGE).toBe('usage: kovo update-docs');
     expect(EXPLAIN_USAGE_LINE).toContain(
       'kovo explain component|mutation|query|page|context <target>',
     );
@@ -103,6 +115,7 @@ describe('commands manifest', () => {
     expect(byName.compile?.usage).toBe(COMPILE_USAGE);
     expect(byName.export?.usage).toBe(EXPORT_USAGE);
     expect(byName.mcp?.usage).toBe(MCP_USAGE);
+    expect(byName['update-docs']?.usage).toBe(UPDATE_DOCS_USAGE);
     expect(byName.explain?.usage).toBe(EXPLAIN_USAGE);
   });
 
@@ -118,6 +131,7 @@ describe('commands manifest', () => {
       'COMPILE_USAGE',
       'EXPORT_USAGE',
       'MCP_USAGE',
+      'UPDATE_DOCS_USAGE',
     ]) {
       expect(cliCommandSource, `CLI command modules should reference ${constant}`).toContain(
         constant,
