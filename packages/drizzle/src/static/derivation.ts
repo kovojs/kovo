@@ -35,6 +35,7 @@ import {
   emptySessionProvenanceContext,
   functionBody,
   isDrizzleDatabaseTypeAnnotation,
+  isDrizzleReceiver,
   isDrizzleWriteCall,
   isFunctionLikeNode,
   isOpaqueProjection,
@@ -866,6 +867,7 @@ export function extractMassAssignmentFromProject(
         return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
       };
       const serverSummaryKeys = serverSummaryKeysForSourceFile(sourceFile);
+      const privilegedHelpers = privilegedWriteHelperNames(sourceFile);
 
       for (const callback of deriveWriteCallbacks(sourceFile)) {
         const receivers = projectDrizzleReceivers(callback.fn);
@@ -885,6 +887,7 @@ export function extractMassAssignmentFromProject(
               resolveTable,
               sessionContext,
               symbolContext,
+              privilegedHelpers,
             }),
           );
         }
@@ -911,7 +914,8 @@ function governedTableInfo(table: ExtractedTable): GovernedTableInfo | undefined
 
   const governed = new Set<string>();
   // AUTO-governed: the instance/primary key and the principal owner column.
-  const key = 'key' in annotation && typeof annotation.key === 'string' ? annotation.key : undefined;
+  const key =
+    'key' in annotation && typeof annotation.key === 'string' ? annotation.key : undefined;
   const owner =
     'owner' in annotation && typeof annotation.owner === 'string' ? annotation.owner : undefined;
   if (key) governed.add(key);
@@ -932,6 +936,13 @@ interface MassAssignmentCallContext {
   resolveTable: (node: Node) => string | undefined;
   sessionContext: SessionProvenanceContext;
   symbolContext: SymbolProvenanceContext;
+  privilegedHelpers: PrivilegedWriteHelpers;
+}
+
+interface PrivilegedWriteHelpers {
+  adminAssign: ReadonlySet<string>;
+  namespaces: ReadonlySet<string>;
+  serverValue: ReadonlySet<string>;
 }
 
 function massAssignmentFactsForWriteCall(
@@ -960,15 +971,11 @@ function massAssignmentFactsForWriteCall(
   // INSERT `.values({...})` + UPDATE `.set({...})`; also UPSERT `.onConflictDoUpdate({ set })`.
   const payloadMethods: ('set' | 'values')[] = operation === 'insert' ? ['values'] : ['set'];
   for (const method of payloadMethods) {
-    facts.push(
-      ...massAssignmentFactsForPayload(chain, method, info, site, context, table),
-    );
+    facts.push(...massAssignmentFactsForPayload(chain, method, info, site, context, table));
   }
   const conflictSet = chainOnConflictSetObject(chain);
   if (conflictSet) {
-    facts.push(
-      ...massAssignmentFactsForObject(conflictSet, 'set', info, site, context, table),
-    );
+    facts.push(...massAssignmentFactsForObject(conflictSet, 'set', info, site, context, table));
   }
   return facts;
 }
@@ -1009,7 +1016,14 @@ function massAssignmentFactsForObject(
     // `{ ...input }` spread inside the payload object — same fail-closed treatment.
     if (Node.isSpreadAssignment(property)) {
       facts.push(
-        ...spreadMassAssignmentFacts(property.getExpression(), info, site, context, table, 'spread'),
+        ...spreadMassAssignmentFacts(
+          property.getExpression(),
+          info,
+          site,
+          context,
+          table,
+          'spread',
+        ),
       );
       continue;
     }
@@ -1090,10 +1104,11 @@ function governedValueVerdict(
 
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    const calleeName = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
     // adminAssign(value, reason): the audited privileged write — always passes (recorded).
-    if (calleeName === 'adminAssign') return { ok: true, provenance: 'input' };
-    if (calleeName === 'serverValue') {
+    if (isPrivilegedHelperCall(callee, 'adminAssign', context.privilegedHelpers)) {
+      return { ok: true, provenance: 'input' };
+    }
+    if (isPrivilegedHelperCall(callee, 'serverValue', context.privilegedHelpers)) {
       const inner = expression.getArguments()[0];
       // serverValue discharges only a NON-input argument; serverValue(input.x,…) still fails.
       if (!inner) return { ok: true, provenance: 'unknown' };
@@ -1131,6 +1146,42 @@ function governedValueVerdict(
   }
   // Unknown provenance on a governed column is fail-closed (opaque helper / un-narrowable spread).
   return { ok: false, provenance: 'unknown', detail: expression.getText() };
+}
+
+function isPrivilegedHelperCall(
+  callee: Node,
+  helper: 'adminAssign' | 'serverValue',
+  helpers: PrivilegedWriteHelpers,
+): boolean {
+  if (Node.isIdentifier(callee)) return helpers[helper].has(callee.getText());
+  if (!Node.isPropertyAccessExpression(callee)) return false;
+  const receiver = callee.getExpression();
+  return (
+    Node.isIdentifier(receiver) &&
+    helpers.namespaces.has(receiver.getText()) &&
+    callee.getName() === helper
+  );
+}
+
+function privilegedWriteHelperNames(sourceFile: SourceFile): PrivilegedWriteHelpers {
+  const adminAssign = new Set<string>();
+  const serverValue = new Set<string>();
+  const namespaces = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    const specifier = declaration.getModuleSpecifierValue();
+    if (specifier !== '@kovojs/server' && specifier !== '@kovojs/server/write-governance') {
+      continue;
+    }
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) namespaces.add(namespace.getText());
+    for (const named of declaration.getNamedImports()) {
+      const imported = named.getName();
+      const local = named.getAliasNode()?.getText() ?? imported;
+      if (imported === 'adminAssign') adminAssign.add(local);
+      if (imported === 'serverValue') serverValue.add(local);
+    }
+  }
+  return { adminAssign, namespaces, serverValue };
 }
 
 function symbolicLiteralValue(node: Node): JsonValue | undefined {
@@ -1273,8 +1324,13 @@ interface ConcurrencyTableInfo {
 }
 
 function concurrencyTableInfo(table: ExtractedTable): ConcurrencyTableInfo | undefined {
-  const annotation = table.annotation as { atomic?: readonly string[]; version?: readonly string[] };
-  const atomic = new Set((annotation.atomic ?? []).filter((c): c is string => typeof c === 'string'));
+  const annotation = table.annotation as {
+    atomic?: readonly string[];
+    version?: readonly string[];
+  };
+  const atomic = new Set(
+    (annotation.atomic ?? []).filter((c): c is string => typeof c === 'string'),
+  );
   const version = new Set(
     (annotation.version ?? []).filter((c): c is string => typeof c === 'string'),
   );
@@ -1294,15 +1350,18 @@ function toctouFactsForEffect(
   // see; we conservatively DO NOT flag opaque/non-keys matches (honest single-row ceiling).
   if (effect.match.kind !== 'keys') return facts;
   const guardedColumns = new Set(effect.match.eq.map((eq) => eq.column));
-  // A version column guarded anywhere in the WHERE discharges the CAS obligation.
-  const versionGuarded = [...info.version].some((column) => guardedColumns.has(column));
+  // A version column guarded anywhere in the WHERE discharges the CAS obligation only
+  // when the same write also updates a declared version column (SPEC §10.3 KV429).
+  const versionGuardedAndUpdated = [...info.version].some(
+    (column) => guardedColumns.has(column) && effect.sets[column],
+  );
 
   for (const column of info.atomic) {
     const setValue = effect.sets[column];
     if (!setValue || !valueReadsColumn(setValue, column)) continue;
     // Read-then-write on the atomic column: safe only if the WHERE eq-guards the atomic
     // column itself (true CAS) OR a declared version column.
-    if (guardedColumns.has(column) || versionGuarded) continue;
+    if (guardedColumns.has(column) || versionGuardedAndUpdated) continue;
     facts.push({ column, site, table: effect.table, ...(name ? { name } : {}) });
   }
   return facts;
@@ -1382,7 +1441,10 @@ export function extractQueryWriteReachabilityFromProject(
       };
 
       for (const loader of readOnlyQueryLoaders(sourceFile)) {
-        const receivers = projectDrizzleReceivers(loader.fn);
+        const receivers = mergeProjectDrizzleReceivers(
+          projectDrizzleReceivers(loader.fn),
+          moduleScopeDrizzleReceivers(sourceFile),
+        );
         for (const call of touchBodyCallExpressions(functionBody(loader.fn))) {
           if (!isDrizzleWriteCall(call)) continue;
           const expression = call.getExpression();
@@ -1392,7 +1454,8 @@ export function extractQueryWriteReachabilityFromProject(
           if (!isProjectDrizzleReceiverIdentifier(receiver, receivers)) continue;
           if (operation !== 'insert' && operation !== 'update' && operation !== 'delete') continue;
           const tableArgument = call.getArguments()[0];
-          const table = (tableArgument && resolveTable(tableArgument)) || UNRESOLVED_READ_SOURCE_EXPRESSION;
+          const table =
+            (tableArgument && resolveTable(tableArgument)) || UNRESOLVED_READ_SOURCE_EXPRESSION;
           facts.push({
             operation,
             query: loader.name,
@@ -1413,10 +1476,35 @@ export function extractQueryWriteReachabilityFromProject(
   }
 }
 
+function moduleScopeDrizzleReceivers(sourceFile: SourceFile): ProjectDrizzleReceivers {
+  const names = new Set<string>();
+  const symbolKeys = new Set<string>();
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const declarationList = declaration.getParent();
+    const statement = declarationList?.getParent();
+    if (!statement || !Node.isSourceFile(statement.getParent())) continue;
+    const name = declaration.getNameNode();
+    if (!Node.isIdentifier(name)) continue;
+    if (!isDrizzleReceiver(name)) continue;
+    names.add(name.getText());
+    const key = resolvedSymbolKey(name.getSymbol());
+    if (key) symbolKeys.add(key);
+  }
+  return { names, symbolKeys };
+}
+
+function mergeProjectDrizzleReceivers(
+  first: ProjectDrizzleReceivers,
+  second: ProjectDrizzleReceivers,
+): ProjectDrizzleReceivers {
+  return {
+    names: new Set([...first.names, ...second.names]),
+    symbolKeys: new Set([...first.symbolKeys, ...second.symbolKeys]),
+  };
+}
+
 /** `query('name', { load })` loaders, excluding `query.elevated(...)` (the audited GET-write escape). */
-function readOnlyQueryLoaders(
-  sourceFile: SourceFile,
-): { fn: Node; name: string }[] {
+function readOnlyQueryLoaders(sourceFile: SourceFile): { fn: Node; name: string }[] {
   const loaders: { fn: Node; name: string }[] = [];
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const initializer = declaration.getInitializer();

@@ -588,7 +588,7 @@ function sqlRawHelperDiagnostic(
   }
 
   if (!Node.isIdentifier(receiver) || receiver.getText() !== 'sql') return null;
-  if (method === 'identifier' && sqlIdentifierHasAllow(second)) return null;
+  if (method === 'identifier' && sqlAllowlistSafety(second, scopes) === 'literal') return null;
 
   const safety = sqlTextSafety(first, scopes);
   if (safety === 'literal') return null;
@@ -659,13 +659,21 @@ function sqlTextSafety(
       if (Node.isIdentifier(receiver) && receiver.getText() === 'sql') {
         const method = callExpression.getName();
         if (method === 'identifier') {
-          return sqlIdentifierHasAllow(expression.getArguments()[1]) ? 'safe' : 'unknown';
+          return sqlAllowlistSafety(expression.getArguments()[1], scopes) === 'literal'
+            ? 'safe'
+            : joinSqlTextSafety(sqlTextSafety(expression.getArguments()[0], scopes), 'unknown');
         }
         if (method === 'allow') {
-          return Node.isArrayLiteralExpression(expression.getArguments()[1]) ? 'safe' : 'unknown';
+          return sqlAllowlistSafety(expression.getArguments()[1], scopes) === 'literal'
+            ? 'safe'
+            : joinSqlTextSafety(sqlTextSafety(expression.getArguments()[0], scopes), 'unknown');
         }
-        if (method === 'join') return 'safe';
-        if (method === 'raw') return 'unknown';
+        if (method === 'join') return sqlJoinSafety(expression, scopes);
+        if (method === 'raw') {
+          return sqlTextSafety(expression.getArguments()[0], scopes) === 'literal'
+            ? 'literal'
+            : 'unknown';
+        }
       }
     }
     if (objectCarrierSafety(expression) === 'safe') return 'safe';
@@ -721,12 +729,79 @@ function objectHasLiteralProperty(
   );
 }
 
-function sqlIdentifierHasAllow(expression: Node | undefined): boolean {
-  if (!expression || !Node.isObjectLiteralExpression(expression)) return false;
-  const allow = expression.getProperty('allow');
-  if (!Node.isPropertyAssignment(allow)) return false;
-  const initializer = allow.getInitializer();
-  return !!initializer && Node.isArrayLiteralExpression(initializer);
+function sqlAllowlistSafety(
+  expression: Node | undefined,
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety {
+  if (!expression) return 'unknown';
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isObjectLiteralExpression(node)) {
+    const allow = node.getProperty('allow');
+    if (!Node.isPropertyAssignment(allow)) return 'unknown';
+    return sqlAllowlistSafety(allow.getInitializer(), scopes);
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    return node.getElements().every((item) => sqlAllowlistLiteral(item))
+      ? 'literal'
+      : combineSqlTextSafetyForNodes(node.getElements(), scopes);
+  }
+  if (Node.isIdentifier(node)) return bindingSafety(node, scopes) ?? 'unknown';
+  return requestSourceExpression(node) ? 'tainted' : 'unknown';
+}
+
+function sqlAllowlistLiteral(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  return (
+    Node.isStringLiteral(expression) ||
+    Node.isNoSubstitutionTemplateLiteral(expression) ||
+    Node.isNumericLiteral(expression) ||
+    expression.getKind() === SyntaxKind.TrueKeyword ||
+    expression.getKind() === SyntaxKind.FalseKeyword
+  );
+}
+
+function sqlJoinSafety(
+  expression: CallExpression,
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety {
+  const [parts, separator] = expression.getArguments();
+  const partSafety = sqlJoinPartsSafety(parts, scopes);
+  const separatorSafety = separator ? sqlTextSafety(separator, scopes) : 'literal';
+  if (partSafety === 'literal' && separatorSafety === 'literal') return 'literal';
+  if (
+    (partSafety === 'literal' || partSafety === 'safe') &&
+    (separatorSafety === 'literal' || separatorSafety === 'safe')
+  ) {
+    return 'safe';
+  }
+  return joinSqlTextSafety(partSafety, separatorSafety);
+}
+
+function sqlJoinPartsSafety(
+  expression: Node | undefined,
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety {
+  if (!expression) return 'unknown';
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isArrayLiteralExpression(node)) {
+    return combineSqlTextSafetyForNodes(node.getElements(), scopes);
+  }
+  if (Node.isIdentifier(node)) return bindingSafety(node, scopes) ?? 'unknown';
+  return requestSourceExpression(node) ? 'tainted' : 'unknown';
+}
+
+function combineSqlTextSafetyForNodes(
+  nodes: readonly Node[],
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety {
+  let sawSafe = false;
+  for (const node of nodes) {
+    const safety = sqlTextSafety(node, scopes);
+    if (safety === 'tainted') return 'tainted';
+    if (safety === 'unknown') return 'unknown';
+    if (safety === 'safe') sawSafe = true;
+  }
+  return sawSafe ? 'safe' : 'literal';
 }
 
 function joinSqlTextSafety(left: SqlTextSafety, right: SqlTextSafety): SqlTextSafety {
@@ -1547,6 +1622,7 @@ function extractQueryDefinitionsFromSourceFile(
     };
     const diagnostics = [
       ...(bodyResolution.unresolved ? [unresolvedQueryLoadCallbackDiagnostic()] : []),
+      ...dynamicDeclaredReadsDiagnostics(bodyObject),
       ...unresolvedQueryCallbackDiagnostics(bodyObject, receiverMode),
       ...relationalQueryDiagnostics(bodyObject, receiverReferences),
       ...(declaredOpaqueRead
@@ -1606,6 +1682,32 @@ function extractQueryDefinitionsFromSourceFile(
   }
 
   return definitions;
+}
+
+function dynamicDeclaredReadsDiagnostics(body: ObjectLiteralExpression): TouchGraphDiagnostic[] {
+  const readsProperty = body.getProperty('reads');
+  if (!Node.isPropertyAssignment(readsProperty)) return [];
+  const initializer = readsProperty.getInitializer();
+  const reads = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  if (!reads) return [];
+  if (!Node.isArrayLiteralExpression(reads)) {
+    return [dynamicDeclaredReadsDiagnostic()];
+  }
+  for (const element of reads.getElements()) {
+    const expression = unwrappedStaticExpressionNode(element);
+    if (Node.isIdentifier(expression) || Node.isPropertyAccessExpression(expression)) continue;
+    return [dynamicDeclaredReadsDiagnostic()];
+  }
+  return [];
+}
+
+function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
+  return {
+    code: 'KV410',
+    message: `${diagnosticDefinitions.KV410.message} Opaque query reads must be a fully static table list; dynamic or spread reads fail closed.`,
+    severity: diagnosticDefinitions.KV410.severity,
+    site: '',
+  };
 }
 
 /** @internal */ export function tableAnnotation(
