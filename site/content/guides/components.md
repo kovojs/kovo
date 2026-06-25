@@ -250,7 +250,7 @@ component is a starting point and future changes should live in your app.
   stylesheet contract.
 - [Accessibility](/guides/accessibility/) — the behavior `@kovojs/headless-ui` bakes into every
   primitive.
-- [Stability & Versioning](/docs/stability/) — public package boundaries and import stability.
+- [Stability & Versioning](/getting-started/stability/) — public package boundaries and import stability.
 
 <details>
 <summary>Spec & diagnostics</summary>

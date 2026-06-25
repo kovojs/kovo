@@ -12,6 +12,16 @@
 - When implementing or reviewing framework behavior, cite the relevant `SPEC.md` section in comments, tests, diagnostics, or handoff notes where that context would prevent ambiguity.
 - Emit app components as TSX/JSX source. Treat lowered IR, generated stamps, and emitted server/client modules as artifacts to inspect for verification, not as app-authored code to write by hand; `SPEC.md` §5.2 makes hand-authored lowered IR KV235.
 
+## Technical Preview Bias
+
+- Kovo is in technical preview. Do not preserve legacy compatibility at the expense of a cleaner API,
+  stronger security default, simpler invariant, or better conformance to `SPEC.md`.
+- Prefer unconditional framework behavior changes when they make the model safer or clearer. Avoid
+  compatibility modes, opt-in hardening, deprecation windows, or old-client fallbacks unless the user
+  explicitly asks for them or `SPEC.md`/rules require them.
+- When a plan item or implementation decision offers "compatibility vs stronger default", choose the
+  stronger default and update the plan, `SPEC.md`, or tests to make that contract explicit.
+
 ## Progress Discipline
 
 - For GitHub Actions workflow edits, follow `rules/github-workflows.md`.

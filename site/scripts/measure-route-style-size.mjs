@@ -14,7 +14,9 @@ const options = parseArgs(process.argv.slice(2));
 const siteRoot = path.resolve(options.root ?? defaultSiteRoot);
 const distCssRoot = path.join(siteRoot, 'dist-css');
 const routes =
-  options.routes.length > 0 ? options.routes : ['/', '/docs/quickstart', '/guides/styling'];
+  options.routes.length > 0
+    ? options.routes
+    : ['/', '/getting-started/quickstart', '/guides/styling'];
 
 await runContentPipeline();
 rmSync(distCssRoot, { force: true, recursive: true });

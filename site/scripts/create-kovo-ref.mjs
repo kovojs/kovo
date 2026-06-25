@@ -69,8 +69,8 @@ function page() {
     '',
     '## Related docs',
     '',
-    '- [Installation](/docs/installation/) - installing Kovo packages.',
-    '- [Project structure](/docs/project-structure/) - what the generated files are for.',
+    '- [Installation](/getting-started/installation/) - installing Kovo packages.',
+    '- [Project structure](/getting-started/project-structure/) - what the generated files are for.',
     '- [The kovo & vp CLIs](/guides/cli/) - day-to-day project commands after scaffolding.',
     '',
   ].join('\n');

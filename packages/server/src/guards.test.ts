@@ -635,6 +635,7 @@ describe('server guard and session primitives', () => {
 
     await expect(
       renderMutationResponse(guarded, {
+        buildToken: 'guard-build',
         fragment: true,
         rawInput: { productId: 'p1' },
         request,
@@ -642,6 +643,7 @@ describe('server guard and session primitives', () => {
     ).resolves.toMatchObject({ status: 200 });
     await expect(
       renderMutationResponse(guarded, {
+        buildToken: 'guard-build',
         fragment: true,
         rawInput: { productId: 'p1' },
         request,

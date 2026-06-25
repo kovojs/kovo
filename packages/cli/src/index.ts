@@ -15,6 +15,8 @@ import {
   runAddCommand,
   runCompileCommand,
 } from './commands/compile.js';
+import { UPDATE_DOCS_USAGE } from './commands-manifest.js';
+import { runUpdateDocsCommand } from './commands/update-docs.js';
 import {
   compileComponentV1,
   handleKovoMcpRequest,
@@ -48,6 +50,7 @@ export {
   kovoExplain,
   runMcpFallbackStdio,
   runMcpSdkServer,
+  runUpdateDocsCommand,
 };
 
 export type {
@@ -79,12 +82,20 @@ export type { KovoCheckResult } from './shared.js';
 /** @internal Synchronous argv dispatcher for the `kovo` bin; not a public API. */
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
-    process.stdout.write('kovo: add, audit, build, check, compile, explain, export, mcp\n');
+    process.stdout.write(
+      'kovo: add, audit, build, check, compile, explain, export, mcp, update-docs\n',
+    );
     return 0;
   }
 
   if (args[0] === 'compile' && args.length === 1) return writeUsageError(compileUsage());
-  if (args[0] === 'build' || args[0] === 'compile' || args[0] === 'export' || args[0] === 'mcp') {
+  if (
+    args[0] === 'build' ||
+    args[0] === 'compile' ||
+    args[0] === 'export' ||
+    args[0] === 'mcp' ||
+    args[0] === 'update-docs'
+  ) {
     throw new Error(`kovo ${args[0]} is asynchronous; call mainAsync() instead.`);
   }
 
@@ -130,7 +141,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   process.stderr.write(
-    `kovo: unknown command ${stableValue(args[0])}. expected add, build, compile, explain, check, audit, export, or mcp.\n`,
+    `kovo: unknown command ${stableValue(args[0])}. expected add, build, compile, explain, check, audit, export, mcp, or update-docs.\n`,
   );
   return 1;
 }
@@ -138,6 +149,10 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 /** @internal Async argv dispatcher (export/mcp) for the `kovo` bin; not a public API. */
 export async function mainAsync(args: readonly string[] = process.argv.slice(2)): Promise<number> {
   if (args[0] === 'mcp') return runMcpCommand(args.slice(1));
+  if (args[0] === 'update-docs') {
+    if (args.length > 1) return writeUsageError(UPDATE_DOCS_USAGE);
+    return writeCommandResult(await runUpdateDocsCommand());
+  }
   if (args[0] === 'build') {
     const parsed = parseBuildArgs(args.slice(1));
     if (!parsed.ok) return writeUsageError(parsed.message);

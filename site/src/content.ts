@@ -133,7 +133,7 @@ export interface SiteContent {
 }
 
 const SECTIONS = [
-  { dir: 'content/docs', key: 'docs', title: 'Getting Started' },
+  { dir: 'content/getting-started', key: 'getting-started', title: 'Getting Started' },
   { dir: 'content/tutorial', key: 'tutorial', title: 'Tutorial' },
   { dir: 'content/guides', key: 'guides', title: 'Guides' },
   { dir: 'gen/api', key: 'api', title: 'API Reference' },
@@ -187,7 +187,7 @@ export const SECTION_INTROS: Record<string, string> = {
   api: 'Generated reference for every public package — types, functions, and the contracts they keep.',
   components:
     'Rendered component fixtures covering the headless primitive contracts and the styled UI package.',
-  docs: 'Install Kovo, absorb the mental model, and find your way around a project.',
+  'getting-started': 'Install Kovo, absorb the mental model, and find your way around a project.',
   examples:
     'Complete Kovo apps you can run in the browser, embedded beside the authored source that renders them.',
   guides:
@@ -414,8 +414,8 @@ function navGroups(sections: DocSection[], guideGroups: NavGroup[]): NavGroup[] 
   if (tutorialIndex) {
     tutorialIndex.pages = [{ title: 'Tutorial', url: '/tutorial/' }, ...tutorialIndex.pages];
   }
-  const docsIndex = groups.find((group) => group.key === 'docs');
-  if (docsIndex) docsIndex.indexUrl = '/docs/';
+  const gettingStartedIndex = groups.find((group) => group.key === 'getting-started');
+  if (gettingStartedIndex) gettingStartedIndex.indexUrl = '/getting-started/';
   const guideInsertIndex = Math.max(groups.findIndex((group) => group.key === 'tutorial') + 1, 0);
   groups.splice(guideInsertIndex, 0, ...guideGroups);
   groups.push({

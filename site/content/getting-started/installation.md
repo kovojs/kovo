@@ -6,7 +6,7 @@ order: 4
 
 # Installation
 
-If you just want to get a page on screen fast, start with the [Quickstart](/docs/quickstart/).
+If you just want to get a page on screen fast, start with the [Quickstart](/getting-started/quickstart/).
 This page covers prerequisites, scaffold options, generated files, and the two command surfaces
 Kovo projects use.
 
@@ -64,7 +64,7 @@ The generated `.env` is for local development only. Set `BETTER_AUTH_SECRET` or
 
 ## The everyday commands
 
-This is the authoritative command table; the [Quickstart](/docs/quickstart/) links here rather than
+This is the authoritative command table; the [Quickstart](/getting-started/quickstart/) links here rather than
 repeating it.
 
 | Command              | What it does                                                 |
@@ -97,11 +97,11 @@ Newcomers trip on import paths before anything else. The split is small and stab
 | Drizzle extraction helpers                                       | `@kovojs/drizzle`     | query/write metadata the compiler can audit                                       |
 | Styled UI components                                             | `@kovojs/ui/*`        | public component subpaths, also available through `kovo add` copy-in              |
 
-The [mental model](/docs/mental-model/) and [Queries chapter](/tutorial/03-queries/) repeat this
+The [mental model](/getting-started/mental-model/) and [Queries chapter](/tutorial/03-queries/) repeat this
 inline where the primitives first appear.
 
 ## Where to go next
 
-- [Project structure](/docs/project-structure/) - every generated file and where to extend it.
-- [Quickstart](/docs/quickstart/#5-extend-the-starter-safely) - the first larger changes to make after install.
+- [Project structure](/getting-started/project-structure/) - every generated file and where to extend it.
+- [Quickstart](/getting-started/quickstart/#5-extend-the-starter-safely) - the first larger changes to make after install.
 - [Better Auth integration](/guides/auth-better-auth/) - auth wiring from the scaffold in detail.

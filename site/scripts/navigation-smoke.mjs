@@ -209,7 +209,7 @@ const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
 
-  await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
+  await page.goto(`${origin}/getting-started/mental-model/`, { waitUntil: 'networkidle' });
   await installNavigationProbe(page);
   await page.click('button[on\\:click$="theme.js#toggle"]');
   await page.waitForFunction(
@@ -233,8 +233,8 @@ try {
   );
   await assertEnhancedClick(
     page,
-    () => page.click('.site-nav a[href="/docs/why-kovo/"]'),
-    '/docs/why-kovo/',
+    () => page.click('.site-nav a[href="/getting-started/why-kovo/"]'),
+    '/getting-started/why-kovo/',
     'docs page click',
   );
   await assertTheme(page, 'light');
@@ -267,7 +267,7 @@ try {
       'same-page API rail marks active symbol, opens details, and scrolls the rail',
     );
 
-    await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
+    await page.goto(`${origin}/getting-started/mental-model/`, { waitUntil: 'networkidle' });
     await installNavigationProbe(page);
     const serverHash = await deepApiRailHashFor(page, '/api/server/');
     if (!serverHash) {
@@ -298,8 +298,8 @@ try {
       'cross-page API rail reinitializes active symbol, details, and rail scroll',
     );
 
-    await page.click('.site-nav a[href="/docs/why-kovo/"]');
-    await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');
+    await page.click('.site-nav a[href="/getting-started/why-kovo/"]');
+    await page.waitForFunction(() => location.pathname === '/getting-started/why-kovo/');
     await installNavigationProbe(page);
     await page.evaluate((targetHash) => {
       document.querySelector('#synthetic-api-symbol-link')?.remove();
@@ -328,8 +328,8 @@ try {
     );
 
     const apiScroll = await page.evaluate(() => window.scrollY);
-    await page.click('.site-nav a[href="/docs/why-kovo/"]');
-    await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');
+    await page.click('.site-nav a[href="/getting-started/why-kovo/"]');
+    await page.waitForFunction(() => location.pathname === '/getting-started/why-kovo/');
     const docsScroll = await page.evaluate(() => {
       window.scrollTo(0, 220);
       return window.scrollY;
@@ -371,7 +371,7 @@ try {
       'back restoration keeps API rail active and visible',
     );
     await page.evaluate(() => history.forward());
-    await page.waitForFunction(() => location.pathname === '/docs/why-kovo/');
+    await page.waitForFunction(() => location.pathname === '/getting-started/why-kovo/');
     await page.waitForFunction(
       (expectedY) => Math.abs(window.scrollY - expectedY) <= 2,
       docsScroll,

@@ -171,7 +171,7 @@ function sa(e: Element, name: string, v: string): void {
 }
 
 function r(n: string): boolean {
-  return /^on|^(srcdoc|style|innerhtml)$/.test(n);
+  return /^on[^:]|^(srcdoc|style|innerhtml)$/.test(n);
 }
 
 function g(e: Element): Element {

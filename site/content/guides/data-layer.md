@@ -319,7 +319,7 @@ takes over, and the verifier confirms nothing slipped.
 - [Mutations & forms](/guides/mutations/) — the request lifecycle around a write.
 - [Optimistic updates](/guides/optimistic/) — transforms derived from the same SQL shape.
 - [Testing](/guides/testing/) — running the `observed ⊆ static ∪ declared` verifier.
-- [Installation](/docs/installation/) — scaffold options, including `--dialect sqlite`.
+- [Installation](/getting-started/installation/) — scaffold options, including `--dialect sqlite`.
 
 <details>
 <summary>Spec & diagnostics</summary>

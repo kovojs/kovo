@@ -87,7 +87,7 @@ try {
     ),
     'no-JS: landing tagline renders',
   );
-  await noJsPage.click('a[href="/docs/why-kovo/"]');
+  await noJsPage.click('a[href="/getting-started/why-kovo/"]');
   check(
     (await noJsPage.locator('h1').first().textContent())?.includes('Why Kovo'),
     'no-JS: navigation to docs works',
@@ -120,7 +120,7 @@ try {
     }
   });
 
-  await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
+  await page.goto(`${origin}/getting-started/mental-model/`, { waitUntil: 'networkidle' });
   check(eagerIslandRequests.length === 0, 'JS: zero island bytes before first interaction');
 
   await page.click('button[on\\:click$="search.js#open"]');
@@ -131,7 +131,7 @@ try {
   );
   check(
     (await page.locator('#site-search-results li[data-active="true"] a').getAttribute('href')) ===
-      '/docs/quickstart/',
+      '/getting-started/quickstart/',
     'JS: search zero-state suggests useful links',
   );
 
@@ -149,7 +149,7 @@ try {
   await page.fill('#site-search input', 'mutation');
   await page.waitForFunction(() => {
     const links = [...document.querySelectorAll('#site-search-results a')];
-    return links.length > 1 && links[0]?.getAttribute('href') !== '/docs/quickstart/';
+    return links.length > 1 && links[0]?.getAttribute('href') !== '/getting-started/quickstart/';
   });
   const firstResult = await page.locator('#site-search-results a').first().getAttribute('href');
   check(Boolean(firstResult?.startsWith('/')), 'JS: search returns linked results');

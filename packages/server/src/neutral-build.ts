@@ -2,6 +2,7 @@ import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { KovoApp } from './app-types.js';
+import { versionedClientModuleHref, type VersionedClientModuleInput } from './client-modules.js';
 import type { StylesheetAsset } from './hints.js';
 import { exportStaticApp } from './static-export.js';
 import type { StaticExportAssetInput } from './static-export-types.js';
@@ -16,7 +17,7 @@ import {
   type KovoAppShellRouteBuildHints,
 } from './vite-build.js';
 import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
-import type { KovoAppShellRouteEntryMap } from './vite-manifest.js';
+import { normalizedDistFile, type KovoAppShellRouteEntryMap } from './vite-manifest.js';
 
 const neutralBuildVersion = 'kovo-neutral-build/v1';
 
@@ -120,25 +121,33 @@ export async function writeKovoNeutralBuild(
     options.manifestFile === undefined ? undefined : resolvedFileSystemPath(options.manifestFile);
   const manifestDistDir =
     manifestFilePath === undefined ? undefined : path.dirname(path.dirname(manifestFilePath));
-  const clientModules = options.clientModules ?? options.app.clientModules.entries();
+  const registeredClientModules =
+    options.clientModules === undefined
+      ? registeredClientModuleBuildArtifacts(options.app.clientModules.entries())
+      : [];
   const appShellBuild =
     manifestFilePath === undefined
       ? createKovoAppShellViteBuild({
           app: options.app,
           ...(options.base === undefined ? {} : { base: options.base }),
-          clientModules,
+          ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
           ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
         })
       : await createKovoAppShellViteBuildFromManifestFile({
           app: options.app,
           ...(options.base === undefined ? {} : { base: options.base }),
-          clientModules,
+          ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
           manifestFile: manifestFilePath,
           ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
         });
+  const buildClientModules = [...appShellBuild.clientModules, ...registeredClientModules];
+  const buildWithRegisteredClientModules = {
+    ...appShellBuild,
+    clientModules: buildClientModules,
+  };
 
   await mkdir(clientDir, { recursive: true });
-  await writeKovoAppShellViteBuildOutput(appShellBuild, {
+  await writeKovoAppShellViteBuildOutput(buildWithRegisteredClientModules, {
     outDir: clientDir,
     staticExport: false,
   });
@@ -162,15 +171,15 @@ export async function writeKovoNeutralBuild(
   const routesPath = path.join(outDir, 'routes.json');
   const metaPath = path.join(outDir, 'meta.json');
   const staticOutput = await writeNeutralStaticOutput({
-    app: appShellBuild.app,
-    assets: appShellBuild.assets,
+    app: buildWithRegisteredClientModules.app,
+    assets: buildWithRegisteredClientModules.assets,
     manifestDistDir,
     outDir,
   });
   if (staticOutput !== undefined) {
     await materializeNeutralStylesheetAssets({
-      app: appShellBuild.app,
-      assets: appShellBuild.assets,
+      app: buildWithRegisteredClientModules.app,
+      assets: buildWithRegisteredClientModules.assets,
       buildStylesheetCss: options.buildStylesheetCss ?? [],
       manifestDistDir,
       rootDir: staticOutput.dir,
@@ -178,28 +187,30 @@ export async function writeKovoNeutralBuild(
   }
   const neutral: KovoNeutralBuild = {
     clientDir,
-    clientModules: appShellBuild.clientModules,
+    clientModules: buildWithRegisteredClientModules.clientModules,
     manifestPath,
     metaPath,
     outDir,
-    routeHints: appShellBuild.routeHints,
+    routeHints: buildWithRegisteredClientModules.routeHints,
     routesPath,
     serverDir,
     ...(serverHandlerPath === undefined ? {} : { serverHandlerPath }),
-    staticAssets: appShellBuild.assets,
+    staticAssets: buildWithRegisteredClientModules.assets,
     ...(staticOutput === undefined ? {} : { staticOutput }),
-    staticOnly: neutralBuildIsStaticOnly(appShellBuild.app, staticOutput),
+    staticOnly: neutralBuildIsStaticOnly(buildWithRegisteredClientModules.app, staticOutput),
     version: neutralBuildVersion,
   };
 
   await writeJson(manifestPath, {
-    assets: appShellBuild.assets,
-    clientModules: appShellBuild.clientModules.map(({ source: _source, ...module }) => module),
-    routeHints: appShellBuild.routeHints,
+    assets: buildWithRegisteredClientModules.assets,
+    clientModules: buildWithRegisteredClientModules.clientModules.map(
+      ({ source: _source, ...module }) => module,
+    ),
+    routeHints: buildWithRegisteredClientModules.routeHints,
     version: neutralBuildVersion,
   });
   await writeJson(routesPath, {
-    routes: neutralBuildRouteEntries(appShellBuild.app, staticOutput),
+    routes: neutralBuildRouteEntries(buildWithRegisteredClientModules.app, staticOutput),
     version: neutralBuildVersion,
   });
   await writeJson(metaPath, {
@@ -209,6 +220,24 @@ export async function writeKovoNeutralBuild(
   });
 
   return neutral;
+}
+
+function registeredClientModuleBuildArtifacts(
+  modules: readonly VersionedClientModuleInput[],
+): KovoAppShellBuiltClientModule[] {
+  return modules.map((module) => {
+    const href = versionedClientModuleHref(module.path, module.version);
+    const url = new URL(href, 'https://kovo.local');
+    const built: KovoAppShellBuiltClientModule = {
+      file: normalizedDistFile(url.pathname),
+      href,
+      path: url.pathname,
+      source: module.source,
+      version: module.version,
+    };
+    if (module.contentType !== undefined) return { ...built, contentType: module.contentType };
+    return built;
+  });
 }
 
 interface NeutralStaticOutputOptions {
