@@ -171,6 +171,7 @@ export interface CompileDependencyReads {
 export type RegistryGraphInput = Pick<
   CoreGraph.KovoExplainInput,
   | 'access'
+  | 'capabilities'
   | 'components'
   | 'endpoints'
   | 'mutations'
@@ -194,7 +195,10 @@ export interface RegistryTypeFactOptions {
 }
 
 export interface CompileAppGraphOptions {
-  components?: readonly { componentGraphFacts: readonly ComponentGraphFact[] }[];
+  components?: readonly {
+    componentGraphFacts: readonly ComponentGraphFact[];
+    publishToClientFacts?: readonly PublishToClientFact[];
+  }[];
   graph?: RegistryGraphInput;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   registryTypes?: RegistryTypeFactOptions;
@@ -337,10 +341,21 @@ export interface CompileResult {
   loweredSource: string | null;
   outputContextFacts: readonly GeneratedOutputWriteFact[];
   platformSubstitutions: readonly PlatformSubstitution[];
+  publishToClientFacts: readonly PublishToClientFact[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
   updateCoverage: readonly QueryUpdateCoverageFact[];
   viewTransitions: readonly ViewTransitionStamp[];
+}
+
+/** One audited `publishToClient(import, { reason })` escape for graph capabilities. */
+export interface PublishToClientFact {
+  fileName: string;
+  localName: string;
+  moduleSpecifier: string;
+  reason: string;
+  site: string;
+  start?: number;
 }
 
 /** Compiler-owned HMR impact metadata derived from parsed/lowered facts (SPEC.md §5.2). */
@@ -522,6 +537,7 @@ export function createEmptyCompileResult(): CompileResult {
     loweredSource: null,
     outputContextFacts: [],
     platformSubstitutions: [],
+    publishToClientFacts: [],
     queryUpdatePlans: [],
     renderEquivalenceChecks: [],
     updateCoverage: [],

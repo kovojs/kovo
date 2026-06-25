@@ -50,6 +50,7 @@ import {
   packageComponentPrefixesForModule,
 } from './package-prefixes.js';
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
+import { analyzeClientCaptures } from './validate/client-capture.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
@@ -122,6 +123,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const diagnosticSource = options.source;
   const validationOffsetMap = lowering.validationOffsetMap;
   const model = lowering.model;
+  const clientCaptureAnalysis = analyzeClientCaptures(model);
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = mergeQueryUpdatePlans([
     ...collectQueryUpdatePlans(model, componentName),
@@ -313,6 +315,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...stateDerives.map((derive) => derive.outputContext),
     ]),
     platformSubstitutions: structuralLowering.platformSubstitutions,
+    publishToClientFacts: clientCaptureAnalysis.publishFacts,
     queryUpdatePlans,
     // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
     // independently, then ignore only generated runtime stamps with an explicit allowlist.

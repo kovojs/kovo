@@ -2,6 +2,7 @@ import * as ts from 'typescript';
 
 import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
+import type { PublishToClientFact } from '../types.js';
 
 /**
  * SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0 item 3: gate the named-import
@@ -59,20 +60,6 @@ interface CaptureUse {
   published: boolean;
   start: number;
   length: number;
-}
-
-// SF-WIRE(graph-output): list publishToClient in --capabilities. These PublishToClientFacts (site +
-// reason) are PRODUCED here by analyzeClientCaptures and must be threaded through the compile result
-// into graph.capabilities so `kovo explain --capabilities` enumerates the audited closure-capture
-// escapes (peer of the trustedReveal/accept.unverified escapes). The consuming render lives in
-// packages/cli/src/graph-output.ts, which this slice intentionally does NOT edit.
-/** One audited `publishToClient(import, { reason })` escape, for `kovo explain --capabilities`. */
-export interface PublishToClientFact {
-  localName: string;
-  moduleSpecifier: string;
-  reason: string;
-  fileName: string;
-  start?: number;
 }
 
 export interface ClientCaptureAnalysis {
@@ -198,13 +185,18 @@ function classifyCaptures(
       if (binding && !shadowed.has(node.text)) {
         const parent = node.parent;
         const callee = ts.isCallExpression(parent) && parent.expression === node;
-        const published = publishBound && isPublishToClientArgument(node, parent);
+        const publishReason =
+          publishBound && isPublishToClientArgument(node, parent)
+            ? publishToClientReason(parent as ts.CallExpression)
+            : null;
+        const published = publishReason !== null && publishReason.trim().length > 0;
         if (published) {
           publishFacts.push({
             fileName,
             localName: binding.localName,
             moduleSpecifier: binding.moduleSpecifier,
-            reason: publishToClientReason(parent as ts.CallExpression),
+            reason: publishReason,
+            site: sourceSite(fileName, body.getSourceFile(), node.getStart()),
             start: node.getStart(),
           });
         }
@@ -247,6 +239,11 @@ function publishToClientReason(call: ts.CallExpression): string {
     }
   }
   return '';
+}
+
+function sourceSite(fileName: string, sourceFile: ts.SourceFile, position: number): string {
+  const { line } = sourceFile.getLineAndCharacterOfPosition(position);
+  return `${fileName}:${line + 1}`;
 }
 
 function collectLocalDeclarations(root: ts.Node, names: Set<string>): void {

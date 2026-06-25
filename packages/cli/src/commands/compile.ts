@@ -1071,7 +1071,14 @@ async function runCompileComponentCommand(
     artifacts.push({
       kind: 'component-facts',
       path: options.factsOutPath,
-      source: `${JSON.stringify({ componentGraphFacts: result.componentGraphFacts }, null, 2)}\n`,
+      source: `${JSON.stringify(
+        {
+          componentGraphFacts: result.componentGraphFacts,
+          publishToClientFacts: result.publishToClientFacts,
+        },
+        null,
+        2,
+      )}\n`,
     });
   }
   if (options.emitClientFiles) {

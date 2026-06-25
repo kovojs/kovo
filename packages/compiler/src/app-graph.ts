@@ -22,6 +22,7 @@ import type {
   LiveTargetCoverageFact,
   LiveTargetQueryBindingFact,
   QueryUpdateCoverageFact,
+  PublishToClientFact,
   RegistryFacts,
   RegistryGraphInput,
   RegistryTypeFactOptions,
@@ -48,6 +49,13 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.components ?? []).flatMap((component) => component.componentGraphFacts),
   ]);
   const routePages = (options.routePages ?? []).flatMap((routePage) => routePage.routePageFacts);
+  const publishToClientCapabilities = (options.components ?? []).flatMap((component) =>
+    publishToClientCapabilitiesFromFacts(component.publishToClientFacts ?? []),
+  );
+  const capabilities = [
+    ...(options.graph?.capabilities ?? []),
+    ...publishToClientCapabilities,
+  ].sort(compareCapabilityFacts);
   const derivedRoutePages = derivedPageFactsFromRoutePages(routePages, components);
   const mergedPages =
     derivedRoutePages.length > 0 || (options.graph?.pages?.length ?? 0) > 0
@@ -68,6 +76,7 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   const graph: RegistryGraphInput = {
     ...options.graph,
     ...(access.length > 0 ? { access } : {}),
+    ...(capabilities.length > 0 ? { capabilities } : {}),
     components,
     ...(mergedPages === undefined ? {} : { pages: mergedPages }),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
@@ -131,7 +140,35 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
     registryTypes: options.registryTypes ?? null,
     routes: routeHashes,
+    publishToClientFacts: (options.components ?? [])
+      .flatMap((component) => component.publishToClientFacts ?? [])
+      .map((fact) => factHash(fact))
+      .sort(),
   });
+}
+
+function publishToClientCapabilitiesFromFacts(
+  facts: readonly PublishToClientFact[],
+): CoreGraph.CapabilityExplain[] {
+  return facts.map((fact) => ({
+    justification: fact.reason,
+    kind: 'publishToClient',
+    moduleSpecifier: fact.moduleSpecifier,
+    site: fact.site,
+    target: fact.localName,
+  }));
+}
+
+function compareCapabilityFacts(
+  left: CoreGraph.CapabilityExplain,
+  right: CoreGraph.CapabilityExplain,
+): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.site.localeCompare(right.site) ||
+    (left.moduleSpecifier ?? '').localeCompare(right.moduleSpecifier ?? '') ||
+    (left.target ?? '').localeCompare(right.target ?? '')
+  );
 }
 
 /**

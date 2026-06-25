@@ -37,6 +37,7 @@ export type {
   HmrImpactMetadata,
   HmrImpactReason,
   HmrImpactStylesheetFact,
+  PublishToClientFact,
   RouteComponentImportRewrite,
   RoutePageComponentFact,
   RoutePageComponentPropFact,
