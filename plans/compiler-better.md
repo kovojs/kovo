@@ -201,12 +201,16 @@ diagnostic in compiler/check gates that claim data-plane security.
       make missing or ambiguous metadata visible to `kovo check` as a blocking app graph diagnostic.
   - Evidence: endpoint constructors carry required metadata types, but the compiler audit did not
     find an equivalent compiler-owned graph extraction/gate for `KV423`.
-- [ ] Make missing query-shape facts a fail-closed condition for components that declare queries in
+- [x] Make missing query-shape facts a fail-closed condition for components that declare queries in
       production/security-check modes.
-  - Evidence: `validateSecretQueryWire` returns `[]` when `componentQueryShapes(options)` is absent.
-- [ ] Reject duplicate or conflicting query-shape facts before registry emission, render-plan token
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`
+    passes with production render-plan-gated KV435 coverage for component-declared queries missing
+    query-shape facts.
+- [x] Reject duplicate or conflicting query-shape facts before registry emission, render-plan token
       input, or confidentiality checks.
-  - Evidence: `queryShapesFromFacts` keeps the first fact for a query and ignores later facts.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`
+    passes after duplicate query-shape facts emit KV240 and conflicted queries are omitted from
+    `queryShapesFromFacts` instead of silently first-writer-winning.
 - [ ] Expose `PublishToClientFact` from compilation and include it in graph capabilities/explain
       output with a non-empty reason.
   - Evidence: `validate/client-capture.ts` produces publish facts and documents the intended graph
