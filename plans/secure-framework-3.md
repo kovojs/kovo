@@ -23,7 +23,7 @@ code, and current supply-chain/build surfaces.
 
 ## Tier 0 - Runtime And Wire Floors
 
-- [ ] **Centralize framework-generated system response posture.**
+- [x] **Centralize framework-generated system response posture.**
   - Evidence: pre-dispatch 429 and 413 responses are built directly in
     `packages/server/src/app-load-shed.ts:98` and carry only `Content-Type` plus optional
     `Retry-After` (`packages/server/src/app-load-shed.ts:109`, `packages/server/src/app-load-shed.ts:153`).
@@ -34,6 +34,10 @@ code, and current supply-chain/build surfaces.
     appropriate before dispatch, including body-limit, rate-limit, and normalization paths.
   - Acceptance: tests prove `/_m` and `/_q` pre-dispatch 413/429 responses keep the same private
     posture as post-dispatch mutation/query responses without weakening static asset/document caching.
+  - Verified 2026-06-25: `packages/server/src/app-system-response.ts` centralizes reserved system
+    response posture; `pnpm test packages/server/src/app.test.ts` proves `/_m` and `/_q` 413/429
+    stamping, reserved normalization redirect stamping, and no cache/build-token bleed into route
+    normalization redirects. `pnpm run check:imports` passes for the new module.
 
 - [ ] **Bound app-level rate limiter key cardinality.**
   - Evidence: app rate state is two unbounded `Map<string, RateBucket>` stores

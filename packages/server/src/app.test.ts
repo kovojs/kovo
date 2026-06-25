@@ -34,6 +34,12 @@ const rawTextResponse = {
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
 
+function expectReservedSystemResponsePosture(response: Response, buildToken: string): void {
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('vary')).toBe('Cookie');
+  expect(response.headers.get('kovo-build')).toBe(buildToken);
+}
+
 describe('server createApp request shell', () => {
   it('stores the closed app registries and options without adding middleware', () => {
     const productRoute = route('/products/:id', {});
@@ -516,8 +522,60 @@ describe('server createApp request shell', () => {
     );
 
     expect(response.status).toBe(413);
+    expect(response.headers.get('cache-control')).toBeNull();
+    expect(response.headers.get('vary')).toBeNull();
+    expect(response.headers.get('kovo-build')).toBeNull();
     await expect(response.text()).resolves.toBe('Payload Too Large');
     expect(endpointHandler).not.toHaveBeenCalled();
+  });
+
+  // SPEC §9.1.1/§9.4: framework-owned pre-dispatch system responses for
+  // reserved mutation/query endpoints carry the same private cache posture and
+  // build-token skew signal as dispatched mutation/query responses.
+  it.each([
+    ['mutation', 'https://example.test/_m/cart/oversized', 'POST'],
+    ['query', 'https://example.test/_q/cart-oversized', 'POST'],
+  ] as const)('stamps reserved %s 413 responses before dispatch', async (_surface, url, method) => {
+    const mutationHandler = vi.fn(() => ({ ok: true }));
+    const queryLoad = vi.fn(() => ({ count: 1 }));
+    const app = createApp({
+      mutations: [
+        mutation('cart/oversized', {
+          csrf: false,
+          handler: mutationHandler,
+          input: s.object({}),
+        }),
+      ],
+      queries: [
+        query('cart-oversized', {
+          load: queryLoad,
+          reads: [],
+        }),
+      ],
+      requestLimits: {
+        global: false,
+        maxBodyBytes: 4,
+        mutations: { global: false, perIp: false },
+        perIp: false,
+        queries: { global: false, perIp: false },
+      },
+    });
+    const handler = createRequestHandler(app);
+
+    const response = await handler(
+      new Request(url, {
+        body: '12345',
+        headers: { 'Content-Length': '5' },
+        method,
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    expectReservedSystemResponsePosture(response, app.clientModules.buildToken());
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    await expect(response.text()).resolves.toBe('Payload Too Large');
+    expect(mutationHandler).not.toHaveBeenCalled();
+    expect(queryLoad).not.toHaveBeenCalled();
   });
 
   it('rejects oversized streamed bodies without trusting Content-Length alone', async () => {
@@ -574,18 +632,17 @@ describe('server createApp request shell', () => {
       input: s.object({ quantity: s.number().default(1) }),
       handler: mutationHandler,
     });
-    const handler = createRequestHandler(
-      createApp({
-        mutations: [addToCart],
-        requestLimits: {
-          global: false,
-          maxBodyBytes: false,
-          perIp: false,
-          queries: { global: false, perIp: false },
-          mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
-        },
-      }),
-    );
+    const app = createApp({
+      mutations: [addToCart],
+      requestLimits: {
+        global: false,
+        maxBodyBytes: false,
+        perIp: false,
+        queries: { global: false, perIp: false },
+        mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+      },
+    });
+    const handler = createRequestHandler(app);
     const request = () =>
       new Request('https://example.test/_m/cart/add-rate-limited', {
         body: new URLSearchParams({ quantity: '2' }),
@@ -599,6 +656,8 @@ describe('server createApp request shell', () => {
 
     expect(limited.status).toBe(429);
     expect(limited.headers.get('retry-after')).toBe('60');
+    expectReservedSystemResponsePosture(limited, app.clientModules.buildToken());
+    expect(limited.headers.get('x-content-type-options')).toBe('nosniff');
     await expect(limited.text()).resolves.toBe('Too Many Requests');
     expect(mutationHandler).toHaveBeenCalledTimes(1);
   });
@@ -648,18 +707,17 @@ describe('server createApp request shell', () => {
       load: queryLoad,
       reads: [],
     });
-    const handler = createRequestHandler(
-      createApp({
-        queries: [cartQuery],
-        requestLimits: {
-          global: false,
-          maxBodyBytes: false,
-          perIp: false,
-          mutations: { global: false, perIp: false },
-          queries: { global: { max: 1, windowMs: 60_000 }, perIp: false },
-        },
-      }),
-    );
+    const app = createApp({
+      queries: [cartQuery],
+      requestLimits: {
+        global: false,
+        maxBodyBytes: false,
+        perIp: false,
+        mutations: { global: false, perIp: false },
+        queries: { global: { max: 1, windowMs: 60_000 }, perIp: false },
+      },
+    });
+    const handler = createRequestHandler(app);
 
     expect((await handler(new Request('https://example.test/_q/cart-rate-limited'))).status).toBe(
       200,
@@ -669,7 +727,44 @@ describe('server createApp request shell', () => {
 
     expect(limited.status).toBe(429);
     expect(limited.headers.get('retry-after')).toBe('60');
+    expectReservedSystemResponsePosture(limited, app.clientModules.buildToken());
+    expect(limited.headers.get('x-content-type-options')).toBe('nosniff');
+    await expect(limited.text()).resolves.toBe('Too Many Requests');
     expect(queryLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('stamps reserved normalization redirects without changing route redirect caching', async () => {
+    const reservedApp = createApp({
+      queries: [
+        query('cart-normalized', {
+          load: () => ({ count: 1 }),
+          reads: [],
+        }),
+      ],
+    });
+    const reservedHandler = createRequestHandler(reservedApp);
+
+    const reservedRedirect = await reservedHandler(
+      new Request('https://example.test//_q/cart-normalized'),
+    );
+
+    expect(reservedRedirect.status).toBe(308);
+    expect(reservedRedirect.headers.get('location')).toBe('/_q/cart-normalized');
+    expectReservedSystemResponsePosture(reservedRedirect, reservedApp.clientModules.buildToken());
+    expect(reservedRedirect.headers.get('x-content-type-options')).toBeNull();
+
+    const routeHandler = createRequestHandler(
+      createApp({
+        routes: [route('/docs', { page: () => trustedHtml('<main>Docs</main>') })],
+      }),
+    );
+    const routeRedirect = await routeHandler(new Request('https://example.test//docs'));
+
+    expect(routeRedirect.status).toBe(308);
+    expect(routeRedirect.headers.get('location')).toBe('/docs');
+    expect(routeRedirect.headers.get('cache-control')).toBeNull();
+    expect(routeRedirect.headers.get('vary')).toBeNull();
+    expect(routeRedirect.headers.get('kovo-build')).toBeNull();
   });
 
   it('dispatches endpoints before routes and strips ambient session from endpoint requests', async () => {

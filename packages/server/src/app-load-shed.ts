@@ -6,8 +6,9 @@ import type {
   ResolvedAppRequestRateLimitOptions,
   KovoApp,
 } from './app-types.js';
+import { appSystemResponse, type AppSystemResponseSurface } from './app-system-response.js';
 
-export type LoadShedSurface = 'mutation' | 'query' | 'other';
+export type LoadShedSurface = AppSystemResponseSurface;
 
 /** @internal */
 export class RequestBodyLimitExceededError extends Error {
@@ -99,19 +100,22 @@ export function preDispatchLoadShedResponse(
   app: KovoApp,
   request: Request,
   surface: LoadShedSurface,
+  buildToken?: string,
 ): Response | undefined {
-  const bodyFailure = requestBodySizeFailure(app.requestLimits, request);
+  const bodyFailure = requestBodySizeFailure(app.requestLimits, request, surface, buildToken);
   if (bodyFailure) return bodyFailure;
 
   const rateLimited = rateLimitFailure(app, request, surface, Date.now());
   if (!rateLimited) return undefined;
 
-  return new Response('Too Many Requests', {
+  return appSystemResponse('Too Many Requests', {
+    buildToken,
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Retry-After': String(rateLimited.retryAfterSeconds),
     },
     status: 429,
+    surface,
   });
 }
 
@@ -145,14 +149,18 @@ function normalizeRate(
 function requestBodySizeFailure(
   limits: ResolvedAppRequestLimitOptions,
   request: Request,
+  surface: LoadShedSurface,
+  buildToken?: string,
 ): Response | undefined {
   if (limits.maxBodyBytes === false) return undefined;
   const size = requestContentLength(request);
   if (size === undefined || size <= limits.maxBodyBytes) return undefined;
 
-  return new Response('Payload Too Large', {
+  return appSystemResponse('Payload Too Large', {
+    buildToken,
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     status: 413,
+    surface,
   });
 }
 

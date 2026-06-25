@@ -4,6 +4,7 @@ import { renderDiagnosticDocument } from './document-diagnostics.js';
 import { matchShellDispatch } from './shell.js';
 import { routeResponseToWebResponse } from './response.js';
 import type { KovoApp } from './app-types.js';
+import { appSystemResponse } from './app-system-response.js';
 import {
   preDispatchLoadShedResponse,
   requestWithBodyLimit,
@@ -26,16 +27,20 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     pathname: url.pathname,
     routes: app.routes,
   });
+  const surface = loadShedSurface(match.kind);
+  const buildToken = systemResponseBuildToken(app, surface);
 
   if (match.normalization.redirect) {
     url.pathname = match.normalization.redirect.pathname;
-    return new Response(null, {
+    return appSystemResponse(null, {
+      buildToken,
       headers: { Location: `${url.pathname}${url.search}${url.hash}` },
       status: match.normalization.redirect.status,
+      surface,
     });
   }
 
-  const loadShed = preDispatchLoadShedResponse(app, request, loadShedSurface(match.kind));
+  const loadShed = preDispatchLoadShedResponse(app, request, surface, buildToken);
   if (loadShed) return loadShed;
 
   const limitedRequest = requestWithBodyLimit(request, app.requestLimits.maxBodyBytes);
@@ -44,9 +49,11 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     return await dispatchMatchedAppRequest({ app, match, request: limitedRequest, url });
   } catch (error) {
     if (error instanceof RequestBodyLimitExceededError) {
-      return new Response('Payload Too Large', {
+      return appSystemResponse('Payload Too Large', {
+        buildToken,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         status: 413,
+        surface,
       });
     }
     reportServerError(app.onError, error, {
@@ -65,4 +72,8 @@ function loadShedSurface(kind: string): LoadShedSurface {
   if (kind === 'mutation') return 'mutation';
   if (kind === 'query') return 'query';
   return 'other';
+}
+
+function systemResponseBuildToken(app: KovoApp, surface: LoadShedSurface): string | undefined {
+  return surface === 'mutation' || surface === 'query' ? app.clientModules.buildToken() : undefined;
 }
