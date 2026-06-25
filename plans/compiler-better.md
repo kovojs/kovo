@@ -278,10 +278,12 @@ diagnostic in compiler/check gates that claim data-plane security.
 - [ ] Introduce a phase-owned source replacement accumulator that records writer, phase, original
       span, generated span, and conflict diagnostics.
   - Evidence: `applySourceReplacements` throws generic span errors with no writer or phase context.
-- [ ] Replace the manual validator array with typed validator registration by coordinate frame:
+- [x] Replace the manual validator array with typed validator registration by coordinate frame:
       original, lowered, mapped, or graph.
-  - Evidence: validators currently choose among `originalDiagnostics`, `loweredDiagnostics`, and
-    `mappedDiagnostics` manually.
+  - Evidence: `pnpm exec vitest --configLoader runner --run packages/compiler/src/compile-component.test.ts`,
+    `pnpm exec vitest --configLoader runner --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/client-secret-capture.test.ts`,
+    and `git diff --check` pass after validators were registered through `originalValidator`,
+    `loweredValidator`, `mappedValidator`, or `graphValidator`.
 - [x] Make JSX IR tree construction linear or near-linear and add stress tests for large component
       trees.
   - Evidence: `pnpm exec vitest --run packages/compiler/src/jsx-ir.test.ts` and

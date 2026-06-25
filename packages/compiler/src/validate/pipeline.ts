@@ -74,59 +74,112 @@ interface ResolvedValidatorContext extends ValidatorContext {
 
 type CompilerValidator = (context: ResolvedValidatorContext) => readonly CompilerDiagnostic[];
 
+interface FramedValidatorContext extends ValidatorContext {
+  diagnostics: DiagnosticFactory;
+}
+
+interface ModelValidatorContext extends FramedValidatorContext {
+  model: ComponentModuleModel;
+}
+
+type ModelValidator = (context: ModelValidatorContext) => readonly CompilerDiagnostic[];
+type GraphValidator = (context: ValidatorContext) => readonly CompilerDiagnostic[];
+
+function loweredValidator(run: ModelValidator): CompilerValidator {
+  return (context) =>
+    run({ ...context, diagnostics: context.loweredDiagnostics, model: context.model });
+}
+
+function originalValidator(run: ModelValidator): CompilerValidator {
+  return (context) =>
+    run({ ...context, diagnostics: context.originalDiagnostics, model: context.originalModel });
+}
+
+function mappedValidator(run: ModelValidator): CompilerValidator {
+  return (context) =>
+    run({ ...context, diagnostics: context.mappedDiagnostics, model: context.model });
+}
+
+function graphValidator(run: GraphValidator): CompilerValidator {
+  return (context) => run(context);
+}
+
 const compilerValidators: readonly CompilerValidator[] = [
-  ({ mappedDiagnostics, model }) => validateServerFactsInLocalState(mappedDiagnostics, model),
-  ({ loweredDiagnostics, model }) => validateReservedQueryNames(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model }) => validateRemovedFragmentTargetOption(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model }) =>
-    validateHandAuthoredFragmentTargetStamp(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model, options }) =>
-    validateComponentNameUniqueness(loweredDiagnostics, model, options),
-  ({ loweredDiagnostics, model, options }) =>
-    validateFragmentTargetNameUniqueness(loweredDiagnostics, model, options),
-  ({ originalDiagnostics, originalModel, options }) =>
-    validateStaticViewTransitionNameUniqueness(originalDiagnostics, originalModel, options),
-  ({ options }) => queryShapeFactDiagnostics(options.fileName, options.queryShapeFacts ?? []),
-  ({ loweredDiagnostics, model }) => validateFragmentTargetInputs(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model }) => validateIsomorphicSlotComposition(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model }) => validateFragmentTargetChildren(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model, options }) =>
-    validateNestedStatefulIslandInRefreshTarget(loweredDiagnostics, model, options),
-  ({ originalDiagnostics, originalModel, options }) =>
-    validateSecretQueryWire(originalDiagnostics, originalModel, options),
+  mappedValidator(({ diagnostics, model }) => validateServerFactsInLocalState(diagnostics, model)),
+  loweredValidator(({ diagnostics, model }) => validateReservedQueryNames(diagnostics, model)),
+  loweredValidator(({ diagnostics, model }) =>
+    validateRemovedFragmentTargetOption(diagnostics, model),
+  ),
+  loweredValidator(({ diagnostics, model }) =>
+    validateHandAuthoredFragmentTargetStamp(diagnostics, model),
+  ),
+  loweredValidator(({ diagnostics, model, options }) =>
+    validateComponentNameUniqueness(diagnostics, model, options),
+  ),
+  loweredValidator(({ diagnostics, model, options }) =>
+    validateFragmentTargetNameUniqueness(diagnostics, model, options),
+  ),
+  originalValidator(({ diagnostics, model, options }) =>
+    validateStaticViewTransitionNameUniqueness(diagnostics, model, options),
+  ),
+  graphValidator(({ options }) =>
+    queryShapeFactDiagnostics(options.fileName, options.queryShapeFacts ?? []),
+  ),
+  loweredValidator(({ diagnostics, model }) => validateFragmentTargetInputs(diagnostics, model)),
+  loweredValidator(({ diagnostics, model }) =>
+    validateIsomorphicSlotComposition(diagnostics, model),
+  ),
+  loweredValidator(({ diagnostics, model }) => validateFragmentTargetChildren(diagnostics, model)),
+  loweredValidator(({ diagnostics, model, options }) =>
+    validateNestedStatefulIslandInRefreshTarget(diagnostics, model, options),
+  ),
+  originalValidator(({ diagnostics, model, options }) =>
+    validateSecretQueryWire(diagnostics, model, options),
+  ),
   // SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0: KV437 fires on the authored source so the
   // diagnostic site is the real capture, not a lowered rewrite (peer of the KV435 query-wire gate).
-  ({ originalDiagnostics, originalModel }) =>
-    validateClientHandlerSecretCapture(originalDiagnostics, originalModel),
-  ({ loweredDiagnostics, model, options }) =>
-    validateDataBindings(loweredDiagnostics, model, options),
-  ({ originalDiagnostics, originalModel, options }) =>
-    validateStampExpressionDrift(originalDiagnostics, originalModel, options),
-  ({ loweredDiagnostics, model, options }) =>
-    validateEventPayloads(loweredDiagnostics, model, options),
-  ({ loweredDiagnostics, model }) => validateDirectDbAccess(loweredDiagnostics, model),
-  ({ originalDiagnostics, originalModel, options }) =>
-    validateDeclaredClockReadsInRender(originalDiagnostics, originalModel, options),
-  ({ loweredDiagnostics, model }) =>
-    validateUntrackedClockReadsInDerives(loweredDiagnostics, model),
-  ({ originalDiagnostics, originalModel, options }) =>
-    validateIdrefs(originalDiagnostics, originalModel, options.packageComponentPrefixes),
-  ({ loweredDiagnostics, model }) => validateStaticIds(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model, options }) =>
-    validateLiteralHrefs(loweredDiagnostics, model, options),
-  ({ originalDiagnostics, originalModel, styleOwnedSpans }) =>
-    validateOutputContexts(originalDiagnostics, originalModel, styleOwnedSpans),
-  ({ loweredDiagnostics, model }) => validateHtmlContentModel(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model }) => validateEventTriggerNames(loweredDiagnostics, model),
-  ({ originalDiagnostics, originalModel }) =>
-    validateDeferJsxChildren(originalDiagnostics, originalModel),
-  ({ loweredDiagnostics, model }) =>
-    validateHandAuthoredNavigationSegmentStamps(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model, options }) =>
-    validateResidualStamps(loweredDiagnostics, model, options),
-  ({ loweredDiagnostics, model }) => validateAttributeMergeConflicts(loweredDiagnostics, model),
-  ({ mappedDiagnostics, updateCoverage }) =>
-    unhandledUpdateCoverageDiagnostics(mappedDiagnostics, updateCoverage),
+  originalValidator(({ diagnostics, model }) =>
+    validateClientHandlerSecretCapture(diagnostics, model),
+  ),
+  loweredValidator(({ diagnostics, model, options }) =>
+    validateDataBindings(diagnostics, model, options),
+  ),
+  originalValidator(({ diagnostics, model, options }) =>
+    validateStampExpressionDrift(diagnostics, model, options),
+  ),
+  loweredValidator(({ diagnostics, model, options }) =>
+    validateEventPayloads(diagnostics, model, options),
+  ),
+  loweredValidator(({ diagnostics, model }) => validateDirectDbAccess(diagnostics, model)),
+  originalValidator(({ diagnostics, model, options }) =>
+    validateDeclaredClockReadsInRender(diagnostics, model, options),
+  ),
+  loweredValidator(({ diagnostics, model }) =>
+    validateUntrackedClockReadsInDerives(diagnostics, model),
+  ),
+  originalValidator(({ diagnostics, model, options }) =>
+    validateIdrefs(diagnostics, model, options.packageComponentPrefixes),
+  ),
+  loweredValidator(({ diagnostics, model }) => validateStaticIds(diagnostics, model)),
+  loweredValidator(({ diagnostics, model, options }) =>
+    validateLiteralHrefs(diagnostics, model, options),
+  ),
+  originalValidator(({ diagnostics, model, styleOwnedSpans }) =>
+    validateOutputContexts(diagnostics, model, styleOwnedSpans),
+  ),
+  loweredValidator(({ diagnostics, model }) => validateHtmlContentModel(diagnostics, model)),
+  loweredValidator(({ diagnostics, model }) => validateEventTriggerNames(diagnostics, model)),
+  originalValidator(({ diagnostics, model }) => validateDeferJsxChildren(diagnostics, model)),
+  loweredValidator(({ diagnostics, model }) =>
+    validateHandAuthoredNavigationSegmentStamps(diagnostics, model),
+  ),
+  loweredValidator(({ diagnostics, model, options }) =>
+    validateResidualStamps(diagnostics, model, options),
+  ),
+  loweredValidator(({ diagnostics, model }) => validateAttributeMergeConflicts(diagnostics, model)),
+  mappedValidator(({ diagnostics, updateCoverage }) =>
+    unhandledUpdateCoverageDiagnostics(diagnostics, updateCoverage),
+  ),
 ];
 
 export function collectCompilerDiagnostics(context: ValidatorContext): CompilerDiagnostic[] {
