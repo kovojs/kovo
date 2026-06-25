@@ -149,6 +149,34 @@ describe('betterAuthSession', () => {
     });
   });
 
+  it('treats JWT-shaped Better Auth session cookies as anonymous by default', async () => {
+    const auth = new FakeBetterAuth();
+    const provider = betterAuthSession(auth, () => {
+      throw new Error('JWT-backed sessions must not be mapped without opt-in');
+    });
+
+    await expect(
+      provider({
+        headers: new Headers({
+          cookie: `kovo_session=s1; better-auth.session_token=${jwtSessionValue()}`,
+        }),
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('maps JWT-shaped Better Auth session cookies only with explicit opt-in', async () => {
+    const auth = new FakeBetterAuth();
+    const provider = betterAuthSession(auth, mapSession, { sessionCookieMode: 'jwt' });
+
+    await expect(
+      provider({
+        headers: new Headers({
+          cookie: `kovo_session=s1; better-auth.session_token=${jwtSessionValue()}`,
+        }),
+      }),
+    ).resolves.toEqual(mappedAppSession);
+  });
+
   it('keeps the mapper total against the declared app session type', () => {
     const auth = new FakeBetterAuth();
     const provider: SessionProvider<RequestWithHeaders, AppSession> = betterAuthSession(
@@ -175,6 +203,16 @@ describe('betterAuthSession', () => {
     expect(incompleteProvider).toBeTypeOf('function');
   });
 });
+
+function jwtSessionValue(): string {
+  return `${base64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${base64Url(
+    JSON.stringify({ sub: 'user-1' }),
+  )}.signature`;
+}
+
+function base64Url(value: string): string {
+  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
+}
 
 describe('browser redirect protocol mount', () => {
   it('declares a prefix endpoint for Better Auth-owned redirect protocols', async () => {
