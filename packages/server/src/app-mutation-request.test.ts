@@ -10,6 +10,16 @@ import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { route } from './route.js';
 import { s } from './schema.js';
+import { createLiveTargetAttestation } from './mutation-wire.js';
+
+function attestedLiveTargetHeader(
+  target: string,
+  component: string,
+  props: Record<string, unknown> = {},
+): string {
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+}
 
 describe('server app mutation request boundary', () => {
   it('resolves mutation response options from exact-key policies', async () => {
@@ -137,7 +147,7 @@ describe('server app mutation request boundary', () => {
       headers: {
         Referer: 'https://shop.example.test/cart',
         'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': 'cart-badge#components/cart/badge:{}',
+        'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'components/cart/badge')}`,
         'Kovo-Targets': 'cart-badge=cart',
       },
       method: 'POST',

@@ -1,3 +1,5 @@
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+
 import type { CsrfValidationOptions } from './csrf.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
@@ -64,6 +66,7 @@ export interface MutationWireRequest<
   mutationKey?: string;
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore<BufferedMutationWireResponse>;
+  requestFingerprint?: string;
   rawInput: unknown;
   request: Request;
   stream?: boolean;
@@ -86,6 +89,7 @@ export interface MutationLiveTarget {
  * let generated renderers reconstruct the instance (SPEC §9.1).
  */
 export interface MutationLiveTargetDescriptor {
+  attestation?: string;
   component: string;
   props: Record<string, unknown>;
   target: string;
@@ -123,7 +127,7 @@ export interface LiveTargetRenderContext<Request = unknown> {
 export interface BufferedMutationWireResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
-  200 | 401 | 403 | 422 | 429 | 500
+  200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
 
 /**
@@ -181,7 +185,7 @@ export interface MutationWireRequestOptions<
 export interface MutationWireResponse extends ServerResponseBase<
   ReadableStream<Uint8Array> | string,
   MutationResponseHeaders,
-  200 | 401 | 403 | 422 | 429 | 500
+  200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
 
 /**
@@ -299,11 +303,15 @@ export function mutationWireRequestFromHeaders<Request>(
   options: MutationWireRequestOptions<Request>,
 ): MutationWireRequest<Request> {
   const headers = readMutationWireHeaders(options.headers);
+  const liveTargetDescriptors = headers.liveTargetDescriptors.filter((descriptor) =>
+    verifyLiveTargetDescriptor(descriptor, options),
+  );
 
   return {
     fragment: headers.fragment,
     rawInput: options.rawInput,
     request: options.request,
+    requestFingerprint: canonicalJson(options.rawInput),
     ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
     ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
@@ -321,7 +329,7 @@ export function mutationWireRequestFromHeaders<Request>(
     ...(options.mutationKey === undefined ? {} : { mutationKey: options.mutationKey }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(headers.idem === undefined ? {} : { idem: headers.idem }),
-    liveTargetDescriptors: headers.liveTargetDescriptors,
+    liveTargetDescriptors,
     liveTargets: headers.liveTargets,
     ...(options.renderFailureFragment === undefined
       ? {}
@@ -447,11 +455,79 @@ function parseLiveTargetDescriptorEntry(entry: string): MutationLiveTargetDescri
   if (propsSeparator <= componentSeparator + 1) return null;
 
   const target = trimmed.slice(0, componentSeparator).trim();
-  const component = trimmed.slice(componentSeparator + 1, propsSeparator).trim();
-  const props = parseLiveTargetProps(trimmed.slice(propsSeparator + 1).trim());
-  if (!target || !component || props === null) return null;
+  const componentAndAttestation = trimmed.slice(componentSeparator + 1, propsSeparator).trim();
+  const attestationSeparator = componentAndAttestation.lastIndexOf('@');
+  if (attestationSeparator <= 0) return null;
 
-  return { component, props, target };
+  const component = componentAndAttestation.slice(0, attestationSeparator).trim();
+  const attestation = componentAndAttestation.slice(attestationSeparator + 1).trim();
+  const props = parseLiveTargetProps(trimmed.slice(propsSeparator + 1).trim());
+  if (!target || !component || !attestation || props === null) return null;
+
+  return { attestation, component, props, target };
+}
+
+/** @internal Mint the server-owned live-target descriptor attestation (SPEC §9.3). */
+export function createLiveTargetAttestation<Request>(
+  descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
+  options: {
+    csrf?: CsrfValidationOptions<Request>;
+    request: Request;
+  },
+): string {
+  return createHmac('sha256', options.csrf?.secret ?? liveTargetAttestationSecret)
+    .update(liveTargetAttestationPayload(descriptor, options))
+    .digest('base64url');
+}
+
+function verifyLiveTargetDescriptor<Request>(
+  descriptor: MutationLiveTargetDescriptor,
+  options: MutationWireRequestOptions<Request>,
+): boolean {
+  if (descriptor.attestation === undefined) {
+    return false;
+  }
+  const expected = createLiveTargetAttestation(descriptor, {
+    ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
+    request: options.request,
+  });
+  return secureEqual(descriptor.attestation, expected);
+}
+
+const liveTargetAttestationSecret = randomBytes(32).toString('base64url');
+
+function liveTargetAttestationPayload<Request>(
+  descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
+  options: {
+    csrf?: CsrfValidationOptions<Request>;
+    request: Request;
+  },
+): string {
+  const principal = options.csrf?.sessionId(options.request) ?? 'anonymous';
+  return canonicalJson({
+    component: descriptor.component,
+    principal,
+    props: descriptor.props,
+    target: descriptor.target,
+  });
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map(
+      (key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`,
+    )
+    .join(',')}}`;
+}
+
+function secureEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  if (leftBuffer.byteLength !== rightBuffer.byteLength) return false;
+  return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function parseLiveTargetProps(value: string): Record<string, unknown> | null {

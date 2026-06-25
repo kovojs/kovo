@@ -1,3 +1,5 @@
+import { createHmac, randomBytes } from 'node:crypto';
+
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
 import { reportServerError } from './diagnostics.js';
@@ -187,12 +189,12 @@ export async function renderAppRouteDocumentResponse({
  *      the session the route lifecycle already resolved for this request. We deliberately do NOT
  *      call `app.sessionProvider` again here: the guarded route resolves the session exactly once,
  *      and re-resolving it solely for the broadcast fingerprint would double-run the provider.
- *   2. Cookie fallback: hash the first cookie value only (not the whole header) to
- *      reduce false mismatch on non-session cookie churn when no resolved session is present.
- * Returns `undefined` only when the request is genuinely anonymous (no cookies at all).
+ * Returns `undefined` when the request is anonymous or when no resolved session identity
+ * is available. Cookie fallback is deliberately absent: ambient cookie order/value is not a
+ * server-authenticated principal and must not become the BroadcastChannel identity.
  *
- * The id is hashed (FNV-1a) to keep the raw session token out of the BroadcastChannel
- * envelope (SPEC §9.3 "opaque").
+ * The id is HMACed with a server-owned secret to keep raw session/user identifiers out of the
+ * BroadcastChannel envelope (SPEC §9.3 "opaque").
  */
 function sessionFingerprintFromRequest(request: Request): string | undefined {
   // 1. Pre-resolved session id fields set by the route lifecycle / adapters.
@@ -207,32 +209,13 @@ function sessionFingerprintFromRequest(request: Request): string | undefined {
       ? req.session.user.id
       : undefined);
 
-  if (resolvedId !== undefined) return fnv1aHash(resolvedId);
-
-  // 2. Cookie fallback: hash the first cookie value only (not the whole header) to
-  //    limit false mismatch from non-session cookie churn (K3 partial mitigation).
-  const cookie = request.headers.get('cookie');
-  if (!cookie) return undefined;
-  const firstValue = firstCookieValue(cookie);
-  return firstValue !== undefined ? fnv1aHash(firstValue) : fnv1aHash(cookie);
+  return resolvedId === undefined ? undefined : hmacSessionFingerprint(resolvedId);
 }
 
-/** FNV-1a 32-bit hash — same algorithm as the previous implementation. */
-function fnv1aHash(input: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
+const broadcastFingerprintSecret = randomBytes(32);
 
-/** Extract the value portion of the first `name=value` pair in a cookie header. */
-function firstCookieValue(cookie: string): string | undefined {
-  const eq = cookie.indexOf('=');
-  if (eq < 0) return undefined;
-  const semi = cookie.indexOf(';', eq);
-  return cookie.slice(eq + 1, semi < 0 ? undefined : semi).trim() || undefined;
+function hmacSessionFingerprint(input: string): string {
+  return createHmac('sha256', broadcastFingerprintSecret).update(input).digest('base64url');
 }
 
 function appErrorDocumentResponseBody(response: RoutePageResponse): string {

@@ -3,7 +3,7 @@ import { cloneResponseHeaders, type ResponseHeaders, type ServerResponseBase } f
 export type MutationReplayResponse = ServerResponseBase<
   string,
   ResponseHeaders,
-  200 | 401 | 403 | 422 | 429 | 500
+  200 | 401 | 403 | 409 | 422 | 429 | 500
 >;
 
 /**
@@ -16,9 +16,13 @@ export type MutationReplayResponse = ServerResponseBase<
 export interface MutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
 > {
-  get(scope: string, idem: string): Promise<Response> | Response | undefined;
-  reserve(scope: string, idem: string): MutationReplayReservation<Response> | undefined;
-  set(scope: string, idem: string, response: Response): void;
+  get(scope: string, idem: string, fingerprint?: string): Promise<Response> | Response | undefined;
+  reserve(
+    scope: string,
+    idem: string,
+    fingerprint?: string,
+  ): MutationReplayReservation<Response> | undefined;
+  set(scope: string, idem: string, response: Response, fingerprint?: string): void;
 }
 
 /**
@@ -42,6 +46,7 @@ export interface MutationReplayReservation<
 export interface MutationReplayContext<
   Response extends MutationReplayResponse = MutationReplayResponse,
 > {
+  fingerprint?: string;
   idem?: string;
   replayStore?: MutationReplayStore<Response>;
   scope: string | null;
@@ -106,7 +111,7 @@ export function createMemoryMutationReplayStore<
   }
 
   return {
-    get(scope, idem) {
+    get(scope, idem, fingerprint) {
       const key = mutationReplayKey(scope, idem);
       const record = responses.get(key);
       if (!record) return undefined;
@@ -116,16 +121,26 @@ export function createMemoryMutationReplayStore<
         return undefined;
       }
 
+      if (!fingerprintsMatch(record.fingerprint, fingerprint)) {
+        throw new MutationReplayConflictError();
+      }
+
       if ('pending' in record) {
         return record.pending.then(cloneMutationReplayResponse);
       }
 
       return cloneMutationReplayResponse(record.response);
     },
-    reserve(scope, idem) {
+    reserve(scope, idem, fingerprint) {
       evictExpired();
       const key = mutationReplayKey(scope, idem);
-      if (responses.has(key)) return undefined;
+      const existing = responses.get(key);
+      if (existing) {
+        if (!fingerprintsMatch(existing.fingerprint, fingerprint)) {
+          throw new MutationReplayConflictError();
+        }
+        return undefined;
+      }
 
       // E4 (SPEC §9.1:1073 atomic reservation; §9.5:914 pre-dispatch shed): when pending
       // reservations are at `maxPending`, REFUSE a new one so callers can fail closed rather
@@ -156,6 +171,7 @@ export function createMemoryMutationReplayStore<
       pending.catch(() => undefined);
       const record: MutationReplayRecord<Response> = {
         expiresAt: Date.now() + ttlMs,
+        fingerprint,
         pending,
         reject: rejectPending,
         resolve: resolvePending,
@@ -182,16 +198,20 @@ export function createMemoryMutationReplayStore<
           if (responses.get(key) === record) pendingCount -= 1;
           responses.set(key, {
             expiresAt: Date.now() + ttlMs,
+            fingerprint,
             response: cloned,
           });
           resolvePending(cloned);
         },
       };
     },
-    set(scope, idem, response) {
+    set(scope, idem, response, fingerprint) {
       evictExpired();
       const key = mutationReplayKey(scope, idem);
       const existing = responses.get(key);
+      if (existing && !fingerprintsMatch(existing.fingerprint, fingerprint)) {
+        throw new MutationReplayConflictError();
+      }
       while (!existing && responses.size >= maxEntries) {
         const oldest = responses.keys().next().value;
         if (oldest === undefined) break;
@@ -213,6 +233,7 @@ export function createMemoryMutationReplayStore<
       const cloned = cloneMutationReplayResponse(response);
       responses.set(key, {
         expiresAt: Date.now() + ttlMs,
+        fingerprint,
         response: cloned,
       });
       if (existing && 'pending' in existing) existing.resolve(cloned);
@@ -226,12 +247,15 @@ export function mutationReplayContext<Request, Response extends MutationReplayRe
     idem?: string;
     mutationKey?: string;
     replayStore?: MutationReplayStore<Response>;
+    rawInput?: unknown;
     request: Request;
+    requestFingerprint?: string;
   },
 ): MutationReplayContext<Response> {
   const sessionScope = mutationReplayScope(csrf, wireRequest.request);
   return {
     ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
+    ...replayFingerprint(wireRequest),
     ...(wireRequest.replayStore === undefined ? {} : { replayStore: wireRequest.replayStore }),
     // Security finding M4: fold the mutation key into the replay scope so
     // idempotency is per-(session, mutation, idem). Without this, one mutation's
@@ -239,6 +263,16 @@ export function mutationReplayContext<Request, Response extends MutationReplayRe
     // that happened to share a session and Kovo-Idem.
     scope: composeMutationReplayScope(sessionScope, wireRequest.mutationKey),
   };
+}
+
+function replayFingerprint(wireRequest: { rawInput?: unknown; requestFingerprint?: string }): {
+  fingerprint?: string;
+} {
+  if (wireRequest.requestFingerprint !== undefined)
+    return { fingerprint: wireRequest.requestFingerprint };
+  return wireRequest.rawInput === undefined
+    ? {}
+    : { fingerprint: canonicalJson(wireRequest.rawInput) };
 }
 
 function composeMutationReplayScope(
@@ -254,12 +288,13 @@ export async function readMutationReplay<Response extends MutationReplayResponse
 ): Promise<Response | undefined> {
   if (!replay.idem || !replay.scope) return undefined;
   try {
-    return await replay.replayStore?.get(replay.scope, replay.idem);
+    return await replay.replayStore?.get(replay.scope, replay.idem, replay.fingerprint);
   } catch (error) {
     // A pending record this read joined was aborted (e.g. the in-flight request
     // hit a non-replayable validation failure). Treat it as a miss so this
     // request runs the handler itself.
     if (error instanceof MutationReplayAbortedError) return undefined;
+    if (error instanceof MutationReplayConflictError) throw error;
     throw error;
   }
 }
@@ -275,6 +310,7 @@ export async function readMutationReplay<Response extends MutationReplayResponse
 export async function reserveMutationReplayBeforeRun<Response extends MutationReplayResponse>(
   replay: MutationReplayContext<Response>,
 ): Promise<
+  | { kind: 'conflict' }
   | { kind: 'disabled' }
   | { kind: 'replayed'; response: Response }
   | { kind: 'reserved'; reservation: MutationReplayReservation<Response> }
@@ -282,7 +318,13 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
 > {
   if (!replay.idem || !replay.scope || !replay.replayStore) return { kind: 'disabled' };
 
-  const reservation = replay.replayStore.reserve(replay.scope, replay.idem);
+  let reservation: MutationReplayReservation<Response> | undefined;
+  try {
+    reservation = replay.replayStore.reserve(replay.scope, replay.idem, replay.fingerprint);
+  } catch (error) {
+    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    throw error;
+  }
   if (reservation) return { kind: 'reserved', reservation };
 
   // reserve() returned undefined: a concurrent request created the record between
@@ -291,23 +333,31 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
   // (e.g. a validation failure), the pending promise rejects — fall back to
   // running ourselves rather than propagating the abort.
   try {
-    const pending = await replay.replayStore.get(replay.scope, replay.idem);
+    const pending = await replay.replayStore.get(replay.scope, replay.idem, replay.fingerprint);
     if (pending) return { kind: 'replayed', response: pending };
   } catch (error) {
+    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
     if (!(error instanceof MutationReplayAbortedError)) throw error;
   }
 
   // A6: The record vanished (expired/evicted/aborted) before we could read it.
   // Re-reserve so this request runs with a proper reservation rather than falling
   // through unprotected (which would re-open the M4 double-execute hazard).
-  const retryReservation = replay.replayStore.reserve(replay.scope, replay.idem);
+  let retryReservation: MutationReplayReservation<Response> | undefined;
+  try {
+    retryReservation = replay.replayStore.reserve(replay.scope, replay.idem, replay.fingerprint);
+  } catch (error) {
+    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    throw error;
+  }
   if (retryReservation) return { kind: 'reserved', reservation: retryReservation };
 
   // Another request snuck in again — await that one.
   try {
-    const pending = await replay.replayStore.get(replay.scope, replay.idem);
+    const pending = await replay.replayStore.get(replay.scope, replay.idem, replay.fingerprint);
     if (pending) return { kind: 'replayed', response: pending };
   } catch (error) {
+    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
     if (!(error instanceof MutationReplayAbortedError)) throw error;
   }
 
@@ -321,6 +371,13 @@ export class MutationReplayAbortedError extends Error {
   constructor() {
     super('Mutation replay reservation aborted before commit.');
     this.name = 'MutationReplayAbortedError';
+  }
+}
+
+export class MutationReplayConflictError extends Error {
+  constructor() {
+    super('Mutation idempotency token was reused with a different request fingerprint.');
+    this.name = 'MutationReplayConflictError';
   }
 }
 
@@ -338,9 +395,10 @@ export async function commitReservedMutationReplay<Response extends MutationRepl
 }
 
 type MutationReplayRecord<Response extends MutationReplayResponse> =
-  | { expiresAt: number; response: Response }
+  | { expiresAt: number; fingerprint: string | undefined; response: Response }
   | {
       expiresAt: number;
+      fingerprint: string | undefined;
       pending: Promise<Response>;
       // K3 (SPEC §9.1): carried so an eviction path that drops a pending record can settle
       // any joined awaiter (reject with MutationReplayAbortedError) instead of stranding it.
@@ -383,6 +441,21 @@ function mutationReplayScope<Request>(
 
 function mutationReplayKey(scope: string, idem: string): string {
   return `${scope}\0${idem}`;
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map(
+      (key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`,
+    )
+    .join(',')}}`;
+}
+
+function fingerprintsMatch(left: string | undefined, right: string | undefined): boolean {
+  return left === undefined || right === undefined || left === right;
 }
 
 function cloneMutationReplayResponse<Response extends MutationReplayResponse>(

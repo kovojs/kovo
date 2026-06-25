@@ -16,6 +16,7 @@ export interface LiveTargetSnapshot {
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface LiveTargetDescriptor {
+  attestation?: string;
   component: string;
   props: Record<string, unknown>;
   target: string;
@@ -31,7 +32,10 @@ export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSna
   const { liveTargets, targets } = collectLiveTargetSnapshot(root);
   return {
     header: targets.join(liveTargetHeaderSeparator),
-    liveHeader: liveTargets.map(formatLiveTargetDescriptor).join(liveTargetHeaderSeparator),
+    liveHeader: liveTargets
+      .map(formatLiveTargetDescriptor)
+      .filter((descriptor) => descriptor !== '')
+      .join(liveTargetHeaderSeparator),
     liveTargets,
     targets,
   };
@@ -62,7 +66,9 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
     const component =
       element.getAttribute('kovo-live-component') ?? element.getAttribute('kovo-c') ?? target;
     if (!isHeaderSafeLiveComponentIdentity(component)) continue;
+    const attestation = readLiveTargetAttestation(element);
     liveTargets.set(target, {
+      ...(attestation === undefined ? {} : { attestation }),
       component,
       props: readLiveProps(element.getAttribute('kovo-props')),
       target,
@@ -73,7 +79,13 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
 }
 
 function formatLiveTargetDescriptor(descriptor: LiveTargetDescriptor): string {
-  return `${descriptor.target}#${descriptor.component}:${JSON.stringify(descriptor.props)}`;
+  if (descriptor.attestation === undefined) return '';
+  return `${descriptor.target}#${descriptor.component}@${descriptor.attestation}:${JSON.stringify(descriptor.props)}`;
+}
+
+function readLiveTargetAttestation(element: TargetElementLike): string | undefined {
+  const value = element.getAttribute('kovo-live-token');
+  return value && isHeaderSafeIdentity(value) ? value : undefined;
 }
 
 function isHeaderSafeIdentity(value: string): boolean {

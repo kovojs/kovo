@@ -23,6 +23,16 @@ import {
   testMutation as mutation,
 } from './test-fixtures.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
+import { createLiveTargetAttestation } from './mutation-wire.js';
+
+function attestedLiveTargetHeader(
+  target: string,
+  component: string,
+  props: Record<string, unknown> = {},
+): string {
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+}
 
 describe('server mutation primitives', () => {
   it('rejects raw string streaming fragments while keeping stream.text as escaped text', () => {
@@ -99,6 +109,7 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Kovo-Changes': '[{"domain":"cart"}]',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -140,7 +151,7 @@ describe('server mutation primitives', () => {
       renderMutationEndpointResponse(addToCart, {
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{"cartId":"c1"}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-panel', 'components/cart/panel', { cartId: 'c1' })}`,
           'Kovo-Targets': 'cart-panel=cart',
         },
         liveTargetRenderers: [
@@ -161,6 +172,7 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Kovo-Changes': '[{"domain":"cart"}]',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -189,7 +201,7 @@ describe('server mutation primitives', () => {
       renderMutationEndpointResponse(addToCart, {
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'admin-panel#components/admin/panel:{}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('admin-panel', 'components/admin/panel')}`,
           'Kovo-Targets': 'cart-badge=cart',
         },
         liveTargetRenderers: [
@@ -237,8 +249,8 @@ describe('server mutation primitives', () => {
         headers: {
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': [
-            'product-card:p1#components/product/card:{"productId":"p1"}',
-            'product-card:p2#components/product/card:{"productId":"p2"}',
+            `${attestedLiveTargetHeader('product-card:p1', 'components/product/card', { productId: 'p1' })}`,
+            `${attestedLiveTargetHeader('product-card:p2', 'components/product/card', { productId: 'p2' })}`,
           ].join('; '),
           'Kovo-Targets': 'product-card:p1=product:p1; product-card:p2=product:p2',
         },
@@ -295,7 +307,7 @@ describe('server mutation primitives', () => {
       renderMutationEndpointResponse(reserveProduct, {
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'product-card:p2#components/product/card:{"productId":"p2"}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('product-card:p2', 'components/product/card', { productId: 'p2' })}`,
           'Kovo-Targets': 'product-card:p2=product',
         },
         liveTargetRenderers: [
@@ -347,8 +359,7 @@ describe('server mutation primitives', () => {
       renderMutationEndpointResponse(postAnswer, {
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets':
-            'question-detail-region#components/question/detail:{"questionId":"q1"}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('question-detail-region', 'components/question/detail', { questionId: 'q1' })}`,
           'Kovo-Targets': 'question-detail-region=question:q1',
         },
         liveTargetRenderers: [
@@ -403,7 +414,7 @@ describe('server mutation primitives', () => {
       renderMutationEndpointResponse(addToCart, {
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{"cartId":"c1"}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-panel', 'components/cart/panel', { cartId: 'c1' })}`,
           'Kovo-Targets': 'cart-panel=cart',
         },
         liveTargetRenderers: [
@@ -429,6 +440,7 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Kovo-Changes': '[{"domain":"cart"}]',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -466,7 +478,7 @@ describe('server mutation primitives', () => {
       renderMutationEndpointResponse(addToCart, {
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{}',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-panel', 'components/cart/panel')}`,
           'Kovo-Targets': 'cart-panel=cart',
         },
         liveTargetRenderers: [
@@ -486,6 +498,7 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Kovo-Changes': '[{"domain":"cart"}]',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -541,7 +554,9 @@ describe('server mutation primitives', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="product-form:p1"><form aria-invalid="true"><output data-error-code="OUT_OF_STOCK">0</output></form></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
       },
       status: 422,
     });
@@ -591,7 +606,9 @@ describe('server mutation primitives', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="product-form:p1"><form><output role="alert" data-error-code="OUT_OF_STOCK">Only 1 left.</output></form></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
       },
       status: 422,
     });
@@ -617,8 +634,10 @@ describe('server mutation primitives', () => {
         '<kovo-fragment target="recommendations"><section kovo-c="recommendations" kovo-deps="product:p1"></section></kovo-fragment>',
       ].join('\n'),
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[{"domain":"cart"}]',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -654,8 +673,10 @@ describe('server mutation primitives', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[{"domain":"cart"}]',
+        Vary: 'Cookie',
       },
       status: 500,
     });
@@ -757,6 +778,7 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Kovo-Changes': '[{"domain":"cart"}]',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -860,8 +882,10 @@ describe('server mutation primitives', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="recommendations" error-boundary="recommendations"><link rel="stylesheet" href="/assets/recommendations.css"><section role="alert">recommendations failed</section></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[]',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -896,8 +920,10 @@ describe('server mutation primitives', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="recommendations"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[]',
+        Vary: 'Cookie',
       },
       status: 500,
     });
@@ -928,7 +954,11 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toEqual({
       body: '<kovo-fragment target="error"><output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output></kovo-fragment>',
-      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(thrown, {
@@ -956,7 +986,11 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toEqual({
       body: '<kovo-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>',
-      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 422,
     });
   });
@@ -980,7 +1014,11 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toEqual({
       body: '<kovo-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
-      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 422,
     });
   });
@@ -1010,7 +1048,11 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toEqual({
       body: '<kovo-fragment target="product-form:p1"><link rel="stylesheet" href="/assets/product-form.css"><link rel="stylesheet" href="/assets/theme.css"><form>Out of stock</form></kovo-fragment>',
-      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 422,
     });
   });
@@ -1036,7 +1078,11 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toEqual({
       body: '<kovo-fragment target="product-form:p1"><form kovo-c="product-form" aria-invalid="true"><output role="alert" data-error-code="VALIDATION">0</output></form></kovo-fragment>',
-      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 422,
     });
   });
@@ -1279,7 +1325,7 @@ describe('server mutation primitives', () => {
     ).resolves.toMatchObject({
       body: '',
       headers: {
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'private, no-store',
         'Kovo-Reauth': '/login?next=%2F',
       },
       status: 401,

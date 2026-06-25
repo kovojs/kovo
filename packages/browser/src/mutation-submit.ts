@@ -15,6 +15,7 @@ import {
 import {
   closestEnhancedMutationForm,
   fallbackEnhancedMutationSubmit,
+  isEligibleEnhancedMutationForm,
   updateUploadProgressElements,
   type EnhancedFormElementLike,
 } from './mutation-form.js';
@@ -80,6 +81,7 @@ export async function dispatchEnhancedFormSubmit(
 
   const form = closestEnhancedMutationForm(event.target);
   if (!form) return false;
+  if (!isEligibleEnhancedMutationForm(form)) return false;
 
   event.preventDefault?.();
   try {
@@ -129,7 +131,8 @@ export function isEnhancedSubmitEvent(
 ): boolean {
   if (!options || event.type !== 'submit') return false;
 
-  return closestEnhancedMutationForm(event.target) !== null;
+  const form = closestEnhancedMutationForm(event.target);
+  return form !== null && isEligibleEnhancedMutationForm(form);
 }
 
 function formDataForSubmit(form: EnhancedFormElementLike, event: DelegatedEvent): FormData {

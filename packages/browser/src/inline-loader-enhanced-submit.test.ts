@@ -168,18 +168,25 @@ describe('inline loader enhanced submit source', () => {
         method: 'post',
       };
       const targetDeps = [
-        { deps: 'cart', id: 'cart-badge' },
-        { deps: 'cart', id: 'cart-badge' },
+        { deps: 'cart', id: 'cart-badge', token: 'tok_cart' },
+        { deps: 'cart', id: 'cart-badge', token: 'tok_cart' },
         {
           component: 'components/inventory/inventory',
           deps: 'inventory, stock',
           id: 'inventory-panel',
           props: '{"warehouseId":"w1"}',
           target: 'inventory',
+          token: 'tok_inventory',
         },
         { deps: 'debug', id: 'empty-fragment-target-fallback', target: '' },
-        { deps: '', id: 'standalone-target' },
-        { component: 'cart-summary', deps: 'cart summary', id: 'cart-summary' },
+        { deps: '', id: 'standalone-target', token: 'tok_standalone' },
+        {
+          component: 'cart-summary',
+          deps: 'cart summary',
+          id: 'cart-summary',
+          token: 'tok_summary',
+          token: 'tok_summary',
+        },
       ];
       const modularRoot = new InlineParityRoot();
       const modularFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
@@ -252,6 +259,7 @@ describe('inline loader enhanced submit source', () => {
                 if (name === 'kovo-fragment-target') return dep.target ?? null;
                 if (name === 'kovo-live-component') return dep.component ?? null;
                 if (name === 'kovo-props') return dep.props ?? null;
+                if (name === 'kovo-live-token') return dep.token ?? null;
                 if (name === 'kovo-c') return null;
                 if (name === 'id') return dep.id ?? null;
                 return null;
@@ -288,7 +296,7 @@ describe('inline loader enhanced submit source', () => {
           'cart-badge=cart; inventory=inventory stock; standalone-target; cart-summary=cart summary',
         );
         expect(inlineRequest?.[1].headers['Kovo-Live-Targets']).toBe(
-          'cart-badge#cart-badge:{}; inventory#components/inventory/inventory:{"warehouseId":"w1"}; standalone-target#standalone-target:{}; cart-summary#cart-summary:{}',
+          'cart-badge#cart-badge@tok_cart:{}; inventory#components/inventory/inventory@tok_inventory:{"warehouseId":"w1"}; standalone-target#standalone-target@tok_standalone:{}; cart-summary#cart-summary@tok_summary:{}',
         );
         expect(inlineRequest?.[1].headers['Kovo-Form-Target']).toBe('your-answer');
       } finally {

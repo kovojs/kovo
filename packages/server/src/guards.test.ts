@@ -649,8 +649,10 @@ describe('server guard and session primitives', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="error"><output role="alert" data-error-code="RATE_LIMITED">{}</output></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Retry-After': '60',
+        Vary: 'Cookie',
       },
       status: 429,
     });
@@ -675,8 +677,10 @@ describe('server guard and session primitives', () => {
     ).resolves.toEqual({
       body: '',
       headers: {
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Reauth': '/login?next=%2Fcart%3Ffrom%3Dbutton',
+        Vary: 'Cookie',
       },
       status: 401,
     });
@@ -752,7 +756,9 @@ describe('server guard and session primitives', () => {
     ).resolves.toEqual({
       body: '<kovo-fragment target="refund-form"><output role="alert" data-error-code="UNAUTHORIZED">{}</output></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        Vary: 'Cookie',
       },
       status: 403,
     });

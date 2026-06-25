@@ -95,9 +95,11 @@ describe('server mutation response replay', () => {
     expect(second).toEqual({
       body: '<kovo-query name="cart">{"count":1}</kovo-query>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[{"domain":"cart"}]',
         'Kovo-Idem': 'idem_01',
+        Vary: 'Cookie',
       },
       status: 200,
     });
@@ -151,6 +153,47 @@ describe('server mutation response replay', () => {
     expect(firstResponse).toMatchObject({
       body: '<kovo-query name="cart">{"count":1}</kovo-query>',
       status: 200,
+    });
+  });
+
+  it('returns a conflict when the same Kovo-Idem is reused with a different body', async () => {
+    const cart = domain('cart');
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: { touches: [cart] },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const baseRequest = {
+      idem: 'idem_reused_body',
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    const first = await renderMutationResponse(addToCart, {
+      ...baseRequest,
+      rawInput: { productId: 'p1' },
+    });
+    const second = await renderMutationResponse(addToCart, {
+      ...baseRequest,
+      rawInput: { productId: 'p2' },
+    });
+
+    expect(writes).toBe(1);
+    expect(first.status).toBe(200);
+    expect(second).toEqual({
+      body: '<kovo-fragment target="error"><output role="alert" data-error-code="IDEMPOTENCY_CONFLICT">Conflict</output></kovo-fragment>',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Idem': 'idem_reused_body',
+        Vary: 'Cookie',
+      },
+      status: 409,
     });
   });
 
@@ -333,18 +376,22 @@ describe('server mutation response replay', () => {
       {
         body: '<kovo-query name="cart">{"count":1}</kovo-query>',
         headers: {
+          'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Changes': '[{"domain":"cart"}]',
           'Kovo-Idem': 'idem_pending_query',
+          Vary: 'Cookie',
         },
         status: 200,
       },
       {
         body: '<kovo-query name="cart">{"count":1}</kovo-query>',
         headers: {
+          'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Changes': '[{"domain":"cart"}]',
           'Kovo-Idem': 'idem_pending_query',
+          Vary: 'Cookie',
         },
         status: 200,
       },
@@ -402,18 +449,22 @@ describe('server mutation response replay', () => {
       {
         body: '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
         headers: {
+          'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Changes': '[{"domain":"cart"}]',
           'Kovo-Idem': 'idem_pending_fragment',
+          Vary: 'Cookie',
         },
         status: 200,
       },
       {
         body: '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
         headers: {
+          'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Changes': '[{"domain":"cart"}]',
           'Kovo-Idem': 'idem_pending_fragment',
+          Vary: 'Cookie',
         },
         status: 200,
       },
@@ -464,16 +515,20 @@ describe('server mutation response replay', () => {
       {
         body: '<kovo-fragment target="error"><output role="alert">Sold out</output></kovo-fragment>',
         headers: {
+          'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Idem': 'idem_pending_failure',
+          Vary: 'Cookie',
         },
         status: 422,
       },
       {
         body: '<kovo-fragment target="error"><output role="alert">Sold out</output></kovo-fragment>',
         headers: {
+          'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
           'Kovo-Idem': 'idem_pending_failure',
+          Vary: 'Cookie',
         },
         status: 422,
       },
@@ -508,8 +563,10 @@ describe('server mutation response replay', () => {
     await expect(renderMutationResponse(addToCart, request)).resolves.toEqual({
       body: '<kovo-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Idem': 'idem_422',
+        Vary: 'Cookie',
       },
       status: 422,
     });
@@ -740,9 +797,11 @@ describe('server mutation response replay', () => {
     expect(first).toEqual({
       body: '<kovo-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></kovo-fragment>',
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[{"domain":"cart"}]',
         'Kovo-Idem': 'idem_render_failure',
+        Vary: 'Cookie',
       },
       status: 500,
     });
@@ -786,7 +845,7 @@ describe('server mutation response replay', () => {
     // re-enter auth with 401, not replay the stored 200.
     expect(second.status).toBe(401);
     expect(second.headers).toMatchObject({
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'private, no-store',
       'Kovo-Reauth': '/login?next=%2F',
     });
     expect(second.body).toBe('');

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   closestEnhancedMutationForm,
   fallbackEnhancedMutationSubmit,
+  isEligibleEnhancedMutationForm,
   isEnhancedForm,
   updateUploadProgressElements,
 } from './mutation-form.js';
@@ -20,6 +21,50 @@ describe('enhanced mutation form helpers', () => {
     expect(isEnhancedForm(new FakeElement({ enhance: '' }))).toBe(true);
     expect(isEnhancedForm(new FakeElement({ 'data-enhance': '' }))).toBe(true);
     expect(isEnhancedForm(plain)).toBe(false);
+  });
+
+  it('allows enhanced interception only for same-origin /_m/ POST forms', () => {
+    const previousLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: new URL('https://shop.example.test/cart'),
+    });
+    try {
+      expect(
+        isEligibleEnhancedMutationForm(
+          new FakeFormElement(
+            { 'data-mutation': 'cart/add' },
+            { action: '/_m/cart/add', method: 'post' },
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        isEligibleEnhancedMutationForm(
+          new FakeFormElement({ 'data-mutation': 'cart/add' }, { action: '/cart', method: 'post' }),
+        ),
+      ).toBe(false);
+      expect(
+        isEligibleEnhancedMutationForm(
+          new FakeFormElement(
+            { 'data-mutation': 'cart/add' },
+            { action: '/_m/cart/add', method: 'get' },
+          ),
+        ),
+      ).toBe(false);
+      expect(
+        isEligibleEnhancedMutationForm(
+          new FakeFormElement(
+            { 'data-mutation': 'cart/add' },
+            { action: 'https://evil.example/_m/cart/add', method: 'post' },
+          ),
+        ),
+      ).toBe(false);
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: previousLocation,
+      });
+    }
   });
 
   it('falls back to native submit or visible form error attributes', () => {

@@ -39,6 +39,20 @@ export function isEnhancedForm(form: EventElementLike): boolean {
   );
 }
 
+export function isEligibleEnhancedMutationForm(form: EnhancedFormElementLike): boolean {
+  if (!isEnhancedForm(form)) return false;
+  if ((form.method ?? 'get').toUpperCase() !== 'POST') return false;
+
+  try {
+    const base = globalThis.location?.href ?? 'http://localhost/';
+    const action = new URL(form.action, base);
+    const current = new URL(base);
+    return action.origin === current.origin && action.pathname.startsWith('/_m/');
+  } catch {
+    return false;
+  }
+}
+
 export function updateUploadProgressElements(
   form: EventElementLike,
   progress: UploadProgress,

@@ -364,10 +364,11 @@ function installInlineKovoLoader(im) {
     for (const el of doc.querySelectorAll('[kovo-deps]')) {
       const target = targetIdentity(el);
       const component = liveTargetIdentity(el);
-      if (!hsaf(target) || !hsc(component)) continue;
+      const token = el.getAttribute('kovo-live-token');
+      if (!hsaf(target) || !hsc(component) || !hsaf(token)) continue;
       if (!target || seen.has(target)) continue;
       seen.add(target);
-      targets.push(target + '#' + component + ':' + JSON.stringify(liveProps(el)));
+      targets.push(target + '#' + component + '@' + token + ':' + JSON.stringify(liveProps(el)));
     }
     return targets;
   };
