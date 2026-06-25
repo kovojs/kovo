@@ -169,6 +169,7 @@ export type {
   ChangeRecord,
   CsrfAnonymousCookieOptions,
   CsrfOptions,
+  CsrfSecret,
   CsrfValidationOptions,
   Domain,
   ElevatedQueryFact,

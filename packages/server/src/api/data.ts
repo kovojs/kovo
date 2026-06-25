@@ -8,7 +8,12 @@ export type {
   VerifiedMachineAccess,
 } from '../access.js';
 export { csrfField, csrfToken } from '../csrf.js';
-export type { CsrfAnonymousCookieOptions, CsrfOptions, CsrfValidationOptions } from '../csrf.js';
+export type {
+  CsrfAnonymousCookieOptions,
+  CsrfOptions,
+  CsrfSecret,
+  CsrfValidationOptions,
+} from '../csrf.js';
 export { domain, tag } from '../domain.js';
 export type { Domain, Tag } from '../domain.js';
 export type { JsonSerializable } from '../json-boundary.js';

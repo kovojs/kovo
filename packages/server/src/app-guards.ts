@@ -293,7 +293,16 @@ function isOptionalFunction(value: unknown): boolean {
 function isOptionalCsrfOptions(value: unknown): boolean {
   return (
     value === undefined ||
-    (isRecord(value) && typeof value.secret === 'string' && typeof value.sessionId === 'function')
+    (isRecord(value) && isCsrfSecret(value.secret) && typeof value.sessionId === 'function')
+  );
+}
+
+function isCsrfSecret(value: unknown): boolean {
+  return (
+    typeof value === 'string' ||
+    (isRecord(value) &&
+      typeof value.current === 'string' &&
+      (value.previous === undefined || typeof value.previous === 'string'))
   );
 }
 

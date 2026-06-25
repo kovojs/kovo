@@ -17,11 +17,19 @@ export interface CsrfAnonymousCookieOptions {
   secure?: boolean;
 }
 
+/** CSRF HMAC secret. Object form supports one previous key during deploy rotation. */
+export type CsrfSecret =
+  | string
+  | {
+      current: string;
+      previous?: string;
+    };
+
 /** CSRF config: a `secret`, a session extractor, and optional anonymous form binding. */
 export interface CsrfOptions<Request> {
   /** Configure or disable the anonymous CSRF cookie used when `sessionId` returns undefined. */
   anonymousCookie?: CsrfAnonymousCookieOptions | false;
-  secret: string;
+  secret: CsrfSecret;
   sessionId: (request: Request) => string | undefined;
   /**
    * Allowlist of cross-origin origins permitted to make unsafe-verb requests (SPEC §6.6/§9.1). Each
@@ -181,7 +189,11 @@ export function validateCsrfToken<Request>(
   const submitted = formLikeToRecord(rawInput)[options.field ?? 'kovo-csrf'];
   if (typeof submitted !== 'string') return false;
 
-  return secureEqual(submitted, createCsrfToken(binding.value, options.secret));
+  let valid = false;
+  for (const secret of csrfVerificationSecrets(options.secret)) {
+    valid = secureEqual(submitted, createCsrfTokenWithSecret(binding.value, secret)) || valid;
+  }
+  return valid;
 }
 
 export function mutationCsrfOptions<Request>(
@@ -311,8 +323,23 @@ function requestIsHttps(request: unknown): boolean {
   return request instanceof Request && new URL(request.url).protocol === 'https:';
 }
 
-function createCsrfToken(binding: string, secret: string): string {
+function createCsrfToken(binding: string, secret: CsrfSecret): string {
+  return createCsrfTokenWithSecret(binding, currentCsrfSecret(secret));
+}
+
+function createCsrfTokenWithSecret(binding: string, secret: string): string {
   return createHmac('sha256', secret).update(binding).digest('base64url');
+}
+
+/** @internal Return the active CSRF/framework signing key for new tokens and non-CSRF attestations. */
+export function currentCsrfSecret(secret: CsrfSecret): string {
+  return typeof secret === 'string' ? secret : secret.current;
+}
+
+function csrfVerificationSecrets(secret: CsrfSecret): readonly string[] {
+  if (typeof secret === 'string' || secret.previous === undefined)
+    return [currentCsrfSecret(secret)];
+  return secret.previous === secret.current ? [secret.current] : [secret.current, secret.previous];
 }
 
 function secureEqual(left: string, right: string): boolean {

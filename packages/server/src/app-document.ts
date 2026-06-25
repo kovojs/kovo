@@ -10,6 +10,7 @@ import {
 } from './document-core.js';
 import { normalizeForwardedSetCookie } from './cookies.js';
 import { createSignUrl } from './capability-route.js';
+import { currentCsrfSecret } from './csrf.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
 import { isRenderedHtml, renderHtmlValue, unwrapCoercedRenderedHtml } from './html.js';
@@ -51,7 +52,9 @@ export async function renderAppRouteDocumentResponse({
   // configured (the CSRF/anonymous-CSRF HMAC secret). A page can then mint a short-lived, scope-bound
   // capability URL for a stored object pointing at the framework download route's verify sink.
   const signUrlContext =
-    app.csrf?.secret === undefined ? undefined : createSignUrl({ secret: app.csrf.secret });
+    app.csrf?.secret === undefined
+      ? undefined
+      : createSignUrl({ secret: currentCsrfSecret(app.csrf.secret) });
   const signUrl =
     signUrlContext === undefined ? undefined : signUrlContext.signUrl.bind(signUrlContext);
   const routeInput: RouteRequestInput = {

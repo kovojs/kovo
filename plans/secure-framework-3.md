@@ -91,7 +91,7 @@ code, and current supply-chain/build surfaces.
     `pnpm exec vitest run packages/server/src/csrf.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts`
     proves the strict Origin floor for CSRF helper coverage plus mutation/endpoint request paths.
 
-- [ ] **Support CSRF secret rotation without dropping valid in-flight forms.**
+- [x] **Support CSRF secret rotation without dropping valid in-flight forms.**
   - Evidence: `CsrfOptions` accepts one `secret` string (`packages/server/src/csrf.ts:20`), and token
     minting is a raw HMAC over the binding with no key id or previous-secret window
     (`packages/server/src/csrf.ts:326`).
@@ -99,6 +99,11 @@ code, and current supply-chain/build surfaces.
     key, verify within a bounded previous-key window, and document deploy rotation.
   - Acceptance: tests show old forms survive one configured rotation window, stale keys fail after the
     window, and weak/missing production secrets still refuse boot through the existing env policy.
+  - Verified 2026-06-25: `packages/server/src/csrf.ts` accepts `secret: { current, previous }`, mints
+    new tokens with `current`, and validates against at most the configured previous key; non-CSRF
+    framework signing paths resolve the active key through `currentCsrfSecret()`. `pnpm exec vitest run packages/server/src/csrf.test.ts packages/server/src/env.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/app-document.test.ts`
+    proves current-token minting, previous-token acceptance, stale previous-key rejection, and
+    production boot validation for weak rotated secrets.
 
 - [ ] **Drain runtime sink security events instead of discarding them.**
   - Evidence: the shared sink policy creates structured `KV236` events

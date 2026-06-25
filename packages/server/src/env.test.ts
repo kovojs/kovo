@@ -15,6 +15,7 @@ import { s } from './schema.js';
 // A real, length-clearing secret (~43 base64url chars ≈ 192 bits), matching what the
 // anonymous-CSRF path mints with `randomBytes(32).toString('base64url')`.
 const STRONG_SECRET = 'pX2k9QwErT7yUiOpAsDfGhJkLzXcVbNmQwErTyUiOpA';
+const STRONG_PREVIOUS_SECRET = 'nB7vCxZaQwErTyUiOpAsDfGhJkLzXcVbNmQwErTyU';
 const sessionId = () => 'session-1';
 
 describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () => {
@@ -55,6 +56,27 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
       expect(() =>
         validateAppEnv({ csrfSecret: STRONG_SECRET }, { mode: 'production' }),
       ).not.toThrow();
+    });
+
+    it('validates current and previous CSRF rotation secrets', () => {
+      expect(() =>
+        validateAppEnv(
+          { csrfSecret: { current: STRONG_SECRET, previous: STRONG_PREVIOUS_SECRET } },
+          { mode: 'production' },
+        ),
+      ).not.toThrow();
+
+      const error = captureBootError(() =>
+        validateAppEnv(
+          { csrfSecret: { current: STRONG_SECRET, previous: 'short' } },
+          { mode: 'production' },
+        ),
+      );
+      expect(error.issues[0]).toMatchObject({
+        code: 'too-short',
+        path: 'csrf.secret.previous',
+        fatal: true,
+      });
     });
 
     it('does not throw when no csrf secret is configured (CSRF is opt-in)', () => {

@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
+import { currentCsrfSecret } from './csrf.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
@@ -475,7 +476,12 @@ export function createLiveTargetAttestation<Request>(
     request: Request;
   },
 ): string {
-  return createHmac('sha256', options.csrf?.secret ?? liveTargetAttestationSecret)
+  return createHmac(
+    'sha256',
+    options.csrf === undefined
+      ? liveTargetAttestationSecret
+      : currentCsrfSecret(options.csrf.secret),
+  )
     .update(liveTargetAttestationPayload(descriptor, options))
     .digest('base64url');
 }

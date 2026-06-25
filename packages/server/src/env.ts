@@ -158,6 +158,22 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
   // app declares it; the gate fires on a *declared-but-weak* secret.
   if (value === undefined) return;
 
+  if (isRecord(value)) {
+    validateFrameworkSecretValue(value.current, `${path}.current`, issues);
+    if (value.previous !== undefined) {
+      validateFrameworkSecretValue(value.previous, `${path}.previous`, issues);
+    }
+    return;
+  }
+
+  validateFrameworkSecretValue(value, path, issues);
+}
+
+function validateFrameworkSecretValue(
+  value: unknown,
+  path: string,
+  issues: EnvValidationIssue[],
+): void {
   if (typeof value !== 'string') {
     issues.push({
       code: 'invalid',
@@ -198,6 +214,10 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
       message: `Framework secret \`${path}\` clears the length floor but estimates only ~${Math.round(entropyBits)} bits of entropy (heuristic; FPs possible). A repetitive or low-variety secret weakens the HMAC. Prefer \`crypto.randomBytes(32).toString('base64url')\` (SPEC §6.6).`,
     });
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**

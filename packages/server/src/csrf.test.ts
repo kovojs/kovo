@@ -43,6 +43,27 @@ describe('csrf helpers', () => {
     expect(validateCsrfToken({ 'csrf<input>': token }, { sessionId: '' }, csrf)).toBe(false);
   });
 
+  it('mints with the current CSRF secret while accepting one configured previous secret', () => {
+    const current = 'current-secret-at-least-32-characters-long';
+    const previous = 'previous-secret-at-least-32-characters-long';
+    const currentToken = csrfToken(request, { ...csrf, secret: current });
+    const previousToken = csrfToken(request, { ...csrf, secret: previous });
+    const rotated = { ...csrf, secret: { current, previous } };
+
+    expect(csrfToken(request, rotated)).toBe(currentToken);
+    expect(validateCsrfToken({ 'csrf<input>': currentToken }, request, rotated)).toBe(true);
+    expect(validateCsrfToken({ 'csrf<input>': previousToken }, request, rotated)).toBe(true);
+    expect(
+      validateCsrfToken({ 'csrf<input>': previousToken }, request, { ...csrf, secret: current }),
+    ).toBe(false);
+    expect(
+      validateCsrfToken({ 'csrf<input>': previousToken }, request, {
+        ...csrf,
+        secret: { current, previous: 'older-secret-at-least-32-characters-long' },
+      }),
+    ).toBe(false);
+  });
+
   it('renders and validates anonymous CSRF tokens bound to the framework cookie', () => {
     const anonymousCsrf = {
       field: 'csrf',
