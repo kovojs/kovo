@@ -754,9 +754,15 @@ export interface QueryShapeFact {
  */
 export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
   const shapes: Record<string, QueryShape> = {};
+  const duplicateQueries = new Set<string>();
 
   for (const fact of facts) {
-    if (!(fact.query in shapes)) shapes[fact.query] = fact.shape;
+    if (fact.query in shapes) {
+      duplicateQueries.add(fact.query);
+      delete shapes[fact.query];
+      continue;
+    }
+    if (!duplicateQueries.has(fact.query)) shapes[fact.query] = fact.shape;
   }
 
   return shapes;
