@@ -221,13 +221,16 @@ Median job durations across those runs:
   - Evidence when complete: those fixtures exercise compiler-emitted wiring without direct
     `@kovojs/*/internal` client imports.
 
-- [ ] **Add a test-inventory meta-test.**
+- [x] **Add a test-inventory meta-test.**
   - Assert every integration spec has an owner axis (`compiler`, `server`, `browser`, `data`, `security`,
     `a11y`, `perf`) and intended CI tier (`required`, `scheduled`, `local-only`).
   - Use the inventory to decide shard groupings and to prevent accidental growth of the required slow
     path.
   - Evidence when complete: failing meta-test for an unclassified spec and passing inventory for the
     current suite.
+  - Evidence 2026-06-25: `tests/integration/spec-inventory.ts` classifies every current integration spec
+    by owner axis and tier, and `tests/integration-inventory.meta.test.ts` asserts both full-suite
+    coverage and fail-closed behavior for `new-unknown-behavior.spec.ts`.
 
 - [x] **Centralize repeated wire/header assertions.**
   - Move repeated checks for `Set-Cookie`, CSRF, cache headers, `Kovo-*` protocol headers, and fragment
@@ -270,6 +273,7 @@ packages/test/src/assertions.test.ts packages/test/src/headers.test.ts --reporte
 - Focused Vitest gate passed: `scripts/ci-shards.test.mjs`, `scripts/ci-timing-report.test.mjs`,
   and `tests/flaky-reporter.meta.test.ts` (9 tests).
 - `vp exec vitest --run tests/integration-import-boundary.meta.test.ts --reporter=dot` passed.
+- `vp exec vitest --run tests/integration-inventory.meta.test.ts --reporter=dot` passed.
 - `vp exec vitest --run packages/test/src/assertions.test.ts packages/test/src/headers.test.ts
 --reporter=dot` passed (12 tests).
 - `vp exec playwright test --config tests/integration/playwright.config.ts --project=chromium
