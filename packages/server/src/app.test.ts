@@ -1059,6 +1059,33 @@ describe('server createApp request shell', () => {
     expect(sideEffects).toBe(0);
   });
 
+  it('preserves request extensions after endpoint body-limit preflight', async () => {
+    const upload = endpoint('/extension-upload', {
+      csrf: false,
+      csrfJustification: 'test endpoint uses a non-browser caller',
+      handler(request) {
+        return new Response(String((request as Request & { db?: string }).db));
+      },
+      method: 'POST',
+      reason: 'request extension preservation test',
+      response: rawTextResponse,
+    });
+    const handler = createRequestHandler(createApp({ endpoints: [upload] }));
+    const request = new Request('https://example.test/extension-upload', {
+      body: 'ok',
+      method: 'POST',
+    });
+    Object.defineProperty(request, 'db', {
+      configurable: true,
+      value: 'fixture-db',
+    });
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('fixture-db');
+  });
+
   // SPEC §9.5 / §10.3: coarse per-IP mutation limiting runs before replay, parse,
   // and guards, so the second request cannot execute the mutation handler.
   it('rate-limits mutation requests before parsing or running the handler', async () => {
