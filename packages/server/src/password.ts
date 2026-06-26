@@ -77,8 +77,51 @@ const ARGON2ID_ALGORITHM = 2;
 const ARGON2_VERSION_13 = 1;
 const PHC_ARGON2ID_PREFIX = '$argon2id$';
 const PHC_BASE64 = /^[A-Za-z0-9+/]+$/;
-const CREDENTIAL_VERIFY_DECOY_DIGEST =
-  '$argon2id$v=19$m=19456,t=2,p=1$wUyZMkz0f9Q8lxUmpoYhWQ$lJqAy+vFypMXMsFlJiUhrBBU1Spa3MLjUIbzYeLk6ZA';
+
+/**
+ * Framework-owned fixed plaintext used when hashing the per-param-set decoy digest.
+ * Not a user credential; serves only to produce a correctly-costed argon2id PHC string.
+ * SPEC §6.6: absent-account verification work must match the call's resolved floor.
+ */
+const CREDENTIAL_DECOY_SECRET = 'kovo.credential-verify.decoy';
+
+/**
+ * Per-param-set decoy digest cache.
+ *
+ * Keyed by canonical "m=N,t=N,p=N,len=N" string; value is a Promise<string> so that
+ * concurrent absent-account logins with the same params share a single hash computation
+ * rather than each triggering a separate (expensive) argon2 hash.
+ *
+ * SPEC §6.6: the decoy must be derived from the call's resolved params (not the compile-time
+ * floor constant) so absent-account timing matches present-account timing even when the app
+ * configures stronger hashing than the minimum floor.
+ */
+const decoyDigestCache = new Map<string, Promise<string>>();
+
+function decoyParamKey(params: Argon2Options): string {
+  return `m=${params.memoryCost},t=${params.timeCost},p=${params.parallelism},len=${params.outputLen}`;
+}
+
+/**
+ * Lazily produce (and cache) an argon2id PHC digest whose encoded m/t/p/outputLen match
+ * the given resolved params.  The decoy is hashed against the fixed framework-owned
+ * `CREDENTIAL_DECOY_SECRET`, not against user-supplied data.
+ */
+async function getDecoyDigest(params: Argon2Options): Promise<string> {
+  const key = decoyParamKey(params);
+  let pending = decoyDigestCache.get(key);
+  if (!pending) {
+    // Set the Promise before awaiting so concurrent callers all receive the same Promise.
+    pending = (async () => {
+      const { hash } = await loadArgon2();
+      // No AbortSignal: the decoy computation is cached across requests and must not be
+      // abandoned mid-flight (a cancelled hash would leave the cache slot unresolved).
+      return hash(CREDENTIAL_DECOY_SECRET, params, null);
+    })();
+    decoyDigestCache.set(key, pending);
+  }
+  return pending;
+}
 
 type Argon2Module = typeof import('@node-rs/argon2');
 
@@ -130,8 +173,9 @@ export async function verifyPassword(
  * Verify a login credential while doing argon2id work even when the account is absent.
  *
  * SPEC §6.6: this is a runtime defense-in-depth floor at the credential verification sink. Missing,
- * malformed, or legacy stored digests verify against a fixed framework-owned argon2id decoy digest
- * and return the same generic failed shape, so this helper boundary does not expose user existence.
+ * malformed, or legacy stored digests verify against a framework-owned argon2id decoy digest
+ * derived from the call's resolved params, so absent-account work matches present-account work at
+ * any configured cost level and this helper boundary does not expose user existence through timing.
  */
 export async function verifyCredential(
   secret: string | Uint8Array,
@@ -143,11 +187,17 @@ export async function verifyCredential(
     storedDigest === null || storedDigest === undefined
       ? undefined
       : parseArgon2idPasswordDigest(storedDigest);
-  const digest = parsed === undefined ? CREDENTIAL_VERIFY_DECOY_DIGEST : storedDigest!;
+
+  // When no valid digest is present, derive the decoy from the call's resolved params so the
+  // argon2 library reads the correct m/t/p from the PHC header and does equivalent work.
+  // A decoy pinned to the compile-time floor would be faster than a present-account digest
+  // hashed with stronger params, leaking existence through timing (bugz M3).
+  const decoy = parsed === undefined ? await getDecoyDigest(params) : undefined;
+  const digest = decoy ?? storedDigest!;
   const result = await verifyParsedPasswordDigest(
     secret,
     digest,
-    parsed ?? parseArgon2idPasswordDigest(CREDENTIAL_VERIFY_DECOY_DIGEST)!,
+    parsed ?? parseArgon2idPasswordDigest(decoy!)!,
     params,
     options.signal ?? null,
   );

@@ -160,6 +160,29 @@ describe('password primitive: argon2id-only sink', () => {
     expect(argon2Mock.verify.mock.calls[0]![0]).toBe(missingDigest);
   });
 
+  it('decoy digest encodes the configured params, not the floor, preventing user-enumeration timing oracle (bugz M3)', async () => {
+    // SPEC §6.6: absent-account verify work must match present-account work at any cost level.
+    // Previously the decoy was pinned at the compile-time floor (m=19456,t=2,p=1), so apps
+    // storing stronger digests (e.g. memoryCost:65536) had a ~4x timing gap that leaked existence.
+    // The fix derives the decoy from the call's resolved params and caches it per param-set.
+
+    // Use params above the floor so the encoded m/t/p in the decoy PHC header are distinct.
+    await verifyCredential('candidate', undefined, {
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 2,
+    });
+
+    expect(argon2Mock.verify).toHaveBeenCalledTimes(1);
+    const decoyDigest: string = argon2Mock.verify.mock.calls[0]![0];
+
+    // The decoy's PHC-encoded m/t/p must reflect the hardened params, not the compile-time floor.
+    // argon2 derives its work cost from these encoded values, so this is the deterministic
+    // correctness check that absent-account cost matches present-account cost.
+    expect(decoyDigest).toMatch(/\$argon2id\$v=19\$/);
+    expect(decoyDigest).toMatch(/\$m=65536,t=3,p=2\$/);
+  });
+
   it('reports stale but valid account digests only after successful credential verification', async () => {
     const digest = await hashPassword('password', { memoryCost: 19 * 1024 });
 
