@@ -165,6 +165,117 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'session' }]);
   });
 
+  it('accepts a write guarded by a summarized principal on the owner-column predicate', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+              '',
+              'export async function cancelMine(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "cancelled" }).where(eq(orders.userId, currentGuardUser(ctx)));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({
+        detail: a.detail,
+        domain: a.domain,
+        kind: a.kind,
+        scope: a.scope,
+      })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'order',
+        kind: 'write',
+        scope: 'session',
+      },
+    ]);
+  });
+
+  it('keeps a write with a mismatched session predicate scope:unknown', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export async function cancelBySessionId(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, req.session.userId));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({
+        detail: a.detail,
+        domain: a.domain,
+        kind: a.kind,
+        scope: a.scope,
+      })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; session predicate does not compare the owner column to the matching session/principal symbol',
+        domain: 'order',
+        kind: 'write',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
+  it('keeps a write with an unsummarized guard helper scope:unknown', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              '',
+              'export async function cancelMine(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "cancelled" }).where(eq(orders.userId, currentGuardUser(ctx)));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'unknown' }]);
+  });
+
   // A2 (SPEC §11.1 / KV414): a combinator-wrapped owner read must not disarm the gate.
   // `and(eq(orders.id, input.id), eq(orders.status, "open"))` keys an owner read by a
   // client arg → scope:'args'; a sibling `and(eq(orders.userId, req.session.userId), …)`

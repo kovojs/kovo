@@ -501,6 +501,13 @@ function ownerAuthorizationDataProofDetail(
   argScopedWriteKeys?: readonly OwnerScopeKey[];
   /** The mutation/handler name that owns this write (for `owns()` discharge in `kovo check`). */
   name: string;
+  /**
+   * Narrow OPP-28 Authorization-gates-DATA subset for writes: owner-annotated domains whose
+   * owner column is compared against the matching session/principal private symbol.
+   */
+  ownerScopedSessionWrites?: readonly string[];
+  /** Exact private principal symbols for `ownerScopedSessionWrites`, e.g. `guard:userId`. */
+  ownerScopedPrivateWriteKeys?: readonly OwnerPrivateScopeKey[];
   /** Owner-table domains this write touches (the audited surface). */
   reads: readonly string[];
   /** Owner-table domains keyed by `req.session.*` → `session` (safe). */
@@ -512,17 +519,18 @@ function ownerAuthorizationDataProofDetail(
  * Scope-audit facts for WRITES against an `owner:`-annotated domain (SPEC §10.3,
  * §11.1; KV414 A1). Parallels `scopeAuditsFromQueryFacts` but emits `kind:'write'`: a
  * write keyed by a client-visible `args.*` is the write-side IDOR candidate the CLI
- * enforces unless an `owns()` guard discharges it; a `req.session.*`-anchored write is
- * safe (`session`); a write keyed by neither emits no fact (no false positive without
- * inter-procedural session tracing — mirrors the read side).
+ * enforces unless an `owns()` guard discharges it; an owner-column `req.session.*`/guard
+ * predicate is safe (`session`); a write touching an owner domain without that proof emits
+ * `unknown`, matching the read-side fail-closed audit.
  *
  * @internal
  */
 /** @internal */ export function scopeAuditsFromWriteFacts(
   facts: readonly WriteScopeFact[],
-  ownerDomains: Iterable<string>,
+  ownerDomains: Iterable<string | OwnerDomainScope>,
 ): ScopeAuditFact[] {
-  const owners = new Set(ownerDomains);
+  const ownerScopes = ownerDomainScopes(ownerDomains);
+  const owners = new Set(ownerScopes.map((owner) => owner.domain));
   const audits: ScopeAuditFact[] = [];
 
   for (const fact of facts) {
@@ -550,8 +558,40 @@ function ownerAuthorizationDataProofDetail(
         continue;
       }
 
-      if (fact.sessionAnchoredWrites.includes(domain)) {
+      const ownerSessionScoped = (fact.ownerScopedSessionWrites ?? []).includes(domain);
+      if (ownerSessionScoped) {
+        const privateKey = (fact.ownerScopedPrivateWriteKeys ?? []).find(
+          (scoped) => scoped.domain === domain,
+        )?.privateKey;
+        audits.push({
+          ...(privateKey
+            ? { detail: ownerAuthorizationDataProofDetail(ownerScopes, domain, privateKey) }
+            : {}),
+          domain,
+          kind: 'write',
+          name: fact.name,
+          scope: 'session',
+          site: fact.site,
+        });
+        continue;
+      }
+
+      const sessionScoped = fact.sessionAnchoredWrites.includes(domain);
+      const ownerScope = ownerScopes.find((owner) => owner.domain === domain);
+      if (sessionScoped && !ownerScope?.owner) {
         audits.push({ domain, kind: 'write', name: fact.name, scope: 'session', site: fact.site });
+        continue;
+      }
+
+      if (ownerScope?.owner) {
+        audits.push({
+          detail: ownerAuthorizationDataDetail(ownerScope, sessionScoped),
+          domain,
+          kind: 'write',
+          name: fact.name,
+          scope: 'unknown',
+          site: fact.site,
+        });
       }
     }
   }
@@ -1157,10 +1197,7 @@ function extractTouchGraphFromPreparedFiles(
   // are both audited (A1 added the write half, which the framework never produced).
   const scopeAudits = [
     ...scopeAuditsFromQueryFacts(extractQueryFactsFromProject(options), ownerDomains),
-    ...scopeAuditsFromWriteFacts(
-      extractWriteScopeFactsFromProject(options),
-      ownerDomains.map((owner) => owner.domain),
-    ),
+    ...scopeAuditsFromWriteFacts(extractWriteScopeFactsFromProject(options), ownerDomains),
   ];
   return { ownerDomains, scopeAudits };
 }
@@ -1215,12 +1252,22 @@ function writeScopeFactsForFunction(
 
     const argScopedWrites = queryArgScopedDomains(call.instanceKeyComparisons, tables);
     const argScopedWriteKeys = queryArgScopedDomainKeys(call.instanceKeyComparisons, tables);
+    const ownerScopedSessionWrites = queryOwnerSessionAnchoredDomains(
+      call.instanceKeyComparisons,
+      tables,
+    );
+    const ownerScopedPrivateWriteKeys = queryOwnerPrivateScopedKeys(
+      call.instanceKeyComparisons,
+      tables,
+    );
     const sessionAnchoredWrites = querySessionAnchoredDomains(call.instanceKeyComparisons, tables);
 
     facts.push({
       argScopedWrites,
       ...(argScopedWriteKeys.length > 0 ? { argScopedWriteKeys } : {}),
       name: fn.name,
+      ...(ownerScopedPrivateWriteKeys.length > 0 ? { ownerScopedPrivateWriteKeys } : {}),
+      ...(ownerScopedSessionWrites.length > 0 ? { ownerScopedSessionWrites } : {}),
       reads: [...domains].sort(),
       sessionAnchoredWrites,
       site: call.site ?? '',
