@@ -13,6 +13,7 @@ import {
   logChannelSinkFindings,
   publicSinkPolicyEscapeFindings,
   responseFragmentApplyInvariantFindings,
+  rootedFileServeInvariantFindings,
   sqlBlessedBrandLaunderingFindings,
   sqlBlessedBrandStampFindings,
   sqlGuardDowngradeFindings,
@@ -40,6 +41,7 @@ function runFixture(files) {
     publicEntrypointFiles: Object.hasOwn(files, 'public.ts') ? ['public.ts'] : [],
     readText: (file) => files[file],
     responseFragmentApplyPath: undefined,
+    rootedFileServeSinkFiles: [],
     sinkPolicyPath: 'sink-policy.ts',
     sqlBlessedBrandFiles: [],
     sqlGuardDowngradeFiles: [],
@@ -225,6 +227,116 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('asserts rootedFiles keeps constructor-owned root and witness checks', () => {
+    expect(
+      rootedFileServeInvariantFindings(
+        'packages/server/src/file.ts',
+        `
+          const ROOTED_FILE_SERVE_SINK = 'rooted-file-serve';
+          export async function rootedFiles(root) {
+            const realRoot = await realpath(root);
+            const capability = {
+              root: realRoot,
+              serve: (path, options) => serveRootedFile(realRoot, path, options),
+            };
+            return blessSink(ROOTED_FILE_SERVE_SINK, Object.freeze(capability));
+          }
+          export function isRootedFileServeCapability(value) {
+            return isBlessedSink(ROOTED_FILE_SERVE_SINK, value);
+          }
+          async function serveRootedFile(realRoot, requestedPath, options) {
+            const candidate = rootedCandidate(realRoot, requestedPath);
+            const resolved = await safeRealpath(candidate);
+            if (!containsPath(realRoot, resolved)) return undefined;
+            const handle = await safeOpen(resolved);
+            const [stat, postOpenResolved] = await Promise.all([
+              handle.stat(),
+              safeRealpath(resolved),
+            ]);
+            if (!stat.isFile() || !containsPath(realRoot, postOpenResolved)) return undefined;
+            return respond.stream(await handle.readFile(), options);
+          }
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      rootedFileServeInvariantFindings(
+        'packages/server/src/file.ts',
+        `
+          export async function rootedFiles(root) {
+            const capability = {
+              root,
+              serve: (path, options) => serveRootedFile(root, path, options),
+            };
+            return capability;
+          }
+          export function isRootedFileServeCapability(_value) {
+            return true;
+          }
+          async function serveRootedFile(realRoot, requestedPath, options) {
+            const candidate = rootedCandidate(realRoot, requestedPath);
+            const handle = await safeOpen(candidate);
+            const stat = await handle.stat();
+            if (!stat.isFile()) return undefined;
+            return respond.stream(await handle.readFile(), options);
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/file.ts: rooted file primitive must declare the registered rooted-file-serve sink kind',
+      'packages/server/src/file.ts: rootedFiles() must normalize the constructor root through realpath() before minting a capability',
+      'packages/server/src/file.ts: rootedFiles() must close serve() over the constructor-owned realRoot',
+      'packages/server/src/file.ts: rootedFiles() must mint a frozen RootedFiles capability with the registered sink witness',
+      'packages/server/src/file.ts: isRootedFileServeCapability() must re-check the registered rooted-file-serve witness',
+      'packages/server/src/file.ts: rooted file serving must realpath the candidate before opening it',
+      'packages/server/src/file.ts: rooted file serving must reject candidate realpaths outside the constructor root',
+      'packages/server/src/file.ts: rooted file serving must re-stat and re-realpath after open',
+      'packages/server/src/file.ts: rooted file serving must reject post-open realpaths outside the constructor root',
+    ]);
+  });
+
+  it('runs the rooted file-serve ownership gate over the configured sink file', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: [],
+        deserializationFiles: [],
+        exists: (file) => file === 'sink-policy.ts' || file === 'packages/server/src/file.ts',
+        logChannelFiles: [],
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : `
+              const ROOTED_FILE_SERVE_SINK = 'rooted-file-serve';
+              export async function rootedFiles(root) {
+                const capability = {
+                  root,
+                  serve: (path, options) => serveRootedFile(root, path, options),
+                };
+                return blessSink(ROOTED_FILE_SERVE_SINK, capability);
+              }
+            `,
+        responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: ['packages/server/src/file.ts'],
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([
+      'packages/server/src/file.ts: rootedFiles() must normalize the constructor root through realpath() before minting a capability',
+      'packages/server/src/file.ts: rootedFiles() must close serve() over the constructor-owned realRoot',
+      'packages/server/src/file.ts: rootedFiles() must mint a frozen RootedFiles capability with the registered sink witness',
+      'packages/server/src/file.ts: isRootedFileServeCapability() must re-check the registered rooted-file-serve witness',
+      'packages/server/src/file.ts: rooted file serving must realpath the candidate before opening it',
+      'packages/server/src/file.ts: rooted file serving must reject candidate realpaths outside the constructor root',
+      'packages/server/src/file.ts: rooted file serving must re-stat and re-realpath after open',
+      'packages/server/src/file.ts: rooted file serving must reject post-open realpaths outside the constructor root',
+    ]);
+  });
+
   it('runs the command execution gate over configured server source files', () => {
     expect(
       checkSinkPolicyGate({
@@ -239,6 +351,7 @@ describe('sink-policy gate', () => {
             ? validPolicy
             : 'import { execSync } from "node:child_process";',
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -326,6 +439,7 @@ describe('sink-policy gate', () => {
               ? 'export const run = Function("return 1");'
               : 'export const ok = 1;',
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -423,6 +537,7 @@ describe('sink-policy gate', () => {
             ? validPolicy
             : 'export const decoded = JSON.parse(payload, revivePayload);',
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -479,6 +594,7 @@ describe('sink-policy gate', () => {
             ? validPolicy
             : 'export function handle(request) { console.info(request.url); }',
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -664,6 +780,7 @@ describe('sink-policy gate', () => {
           export function isBlessedSink(sink, value) { return true; }
         `,
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -870,6 +987,7 @@ describe('sink-policy gate', () => {
             ? validPolicy
             : 'import { stampStaticSql } from "@kovojs/core/internal/sql-safety";',
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: ['packages/server/src/unsafe.ts'],
         sqlBlessedBrandStampFiles: [],

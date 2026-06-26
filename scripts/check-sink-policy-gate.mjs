@@ -25,6 +25,8 @@ export const defaultCommandExecutionRoots = ['packages/server/src'];
 
 export const defaultCommandExecutionSinkFiles = ['packages/server/src/command.ts'];
 
+export const defaultRootedFileServeSinkFiles = ['packages/server/src/file.ts'];
+
 export const defaultDynamicCodeExecutionSinkFiles = [];
 
 export const defaultDeserializationRoots = ['packages/server/src'];
@@ -153,6 +155,8 @@ export function checkSinkPolicyGate(options = {}) {
   );
   const commandExecutionFiles =
     options.commandExecutionFiles ?? collectSourceFiles(root, commandExecutionRoots);
+  const rootedFileServeSinkFiles =
+    options.rootedFileServeSinkFiles ?? defaultRootedFileServeSinkFiles;
   const logChannelFiles = options.logChannelFiles ?? collectSourceFiles(root, logChannelRoots);
   const publicEntrypointFiles = options.publicEntrypointFiles ?? defaultPublicEntrypointFiles;
   const readText =
@@ -242,6 +246,7 @@ export function checkSinkPolicyGate(options = {}) {
 
   const commandExecutionSinkFileSet = new Set(commandExecutionSinkFiles);
   const dynamicCodeExecutionSinkFileSet = new Set(dynamicCodeExecutionSinkFiles);
+  const rootedFileServeSinkFileSet = new Set(rootedFileServeSinkFiles);
   const logChannelNeutralizerFileSet = new Set(logChannelNeutralizerFiles);
   for (const filePath of commandExecutionFiles) {
     if (!exists(filePath)) {
@@ -265,6 +270,18 @@ export function checkSinkPolicyGate(options = {}) {
     if (commandExecutionSinkFileSet.has(filePath)) {
       findings.push(...commandPrimitiveInvariantFindings(filePath, text));
     }
+    if (rootedFileServeSinkFileSet.has(filePath)) {
+      findings.push(...rootedFileServeInvariantFindings(filePath, text));
+    }
+  }
+
+  for (const filePath of rootedFileServeSinkFiles) {
+    if (commandExecutionFiles.includes(filePath)) continue;
+    if (!exists(filePath)) {
+      findings.push(`${filePath}: rooted file-serve gate input is missing`);
+      continue;
+    }
+    findings.push(...rootedFileServeInvariantFindings(filePath, readText(filePath)));
   }
 
   for (const filePath of deserializationFiles) {
@@ -892,6 +909,67 @@ export function commandPrimitiveInvariantFindings(filePath, text) {
   }
   if (!/\bshell\s*:\s*false\b/.test(source)) {
     findings.push(`${filePath}: runCommand() execFile options must set shell: false`);
+  }
+
+  return findings;
+}
+
+export function rootedFileServeInvariantFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+
+  if (!/\bconst\s+ROOTED_FILE_SERVE_SINK\s*(?::[^=]+)?=\s*['"]rooted-file-serve['"]/.test(source)) {
+    findings.push(
+      `${filePath}: rooted file primitive must declare the registered rooted-file-serve sink kind`,
+    );
+  }
+  if (!/\bconst\s+realRoot\s*=\s*await\s+realpath\s*\(\s*root\s*\)/.test(source)) {
+    findings.push(
+      `${filePath}: rootedFiles() must normalize the constructor root through realpath() before minting a capability`,
+    );
+  }
+  if (
+    !/\bserve\s*:\s*\([^)]*\)\s*=>\s*serveRootedFile\s*\(\s*realRoot\s*,\s*path\s*,\s*options\s*\)/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: rootedFiles() must close serve() over the constructor-owned realRoot`,
+    );
+  }
+  if (
+    !/\bblessSink\s*(?:<[^>()]*>)?\s*\(\s*ROOTED_FILE_SERVE_SINK\s*,\s*Object\s*\.\s*freeze\s*\(/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: rootedFiles() must mint a frozen RootedFiles capability with the registered sink witness`,
+    );
+  }
+  if (!/\bisBlessedSink\s*(?:<[^>()]*>)?\s*\(\s*ROOTED_FILE_SERVE_SINK\s*,/.test(source)) {
+    findings.push(
+      `${filePath}: isRootedFileServeCapability() must re-check the registered rooted-file-serve witness`,
+    );
+  }
+  if (!/\bconst\s+resolved\s*=\s*await\s+safeRealpath\s*\(\s*candidate\s*\)/.test(source)) {
+    findings.push(`${filePath}: rooted file serving must realpath the candidate before opening it`);
+  }
+  if (!/\bcontainsPath\s*\(\s*realRoot\s*,\s*resolved\s*\)/.test(source)) {
+    findings.push(
+      `${filePath}: rooted file serving must reject candidate realpaths outside the constructor root`,
+    );
+  }
+  if (
+    !/\bconst\s+\[\s*stat\s*,\s*postOpenResolved\s*\]\s*=\s*await\s+Promise\s*\.\s*all\s*\(/.test(
+      source,
+    )
+  ) {
+    findings.push(`${filePath}: rooted file serving must re-stat and re-realpath after open`);
+  }
+  if (!/\bcontainsPath\s*\(\s*realRoot\s*,\s*postOpenResolved\s*\)/.test(source)) {
+    findings.push(
+      `${filePath}: rooted file serving must reject post-open realpaths outside the constructor root`,
+    );
   }
 
   return findings;
