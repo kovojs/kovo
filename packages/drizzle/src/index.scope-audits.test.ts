@@ -841,6 +841,182 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('accepts a nested readonly wrapper around an explicitly summarized guard object', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
+              '',
+              'export const ordersForPrincipal = query("ordersForPrincipal", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '    const wrapper: Readonly<{ principal: Readonly<{ userId: string }> }> = { principal: currentPrincipal(ctx) };',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({ detail: a.detail, domain: a.domain, scope: a.scope })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'order',
+        scope: 'session',
+      },
+    ]);
+  });
+
+  it('keeps a spread-overwritten guard-object wrapper scope:unknown', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
+              '',
+              'export const ordersForPrincipal = query("ordersForPrincipal", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }, override: { principal: { userId: string } }) {',
+              '    const wrapper = { principal: currentPrincipal(ctx), ...override } as const;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({ detail: a.detail, domain: a.domain, scope: a.scope })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
+  it('keeps a duplicate-property guard-object wrapper scope:unknown', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
+              '',
+              'export const ordersForPrincipal = query("ordersForPrincipal", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }, principal: { userId: string }) {',
+              '    const wrapper = { principal: currentPrincipal(ctx), principal } as const;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({ detail: a.detail, domain: a.domain, scope: a.scope })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
+  it('keeps a mutable guard-object wrapper scope:unknown', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
+              '',
+              'export const ordersForPrincipal = query("ordersForPrincipal", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '    let wrapper = { principal: currentPrincipal(ctx) };',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({ detail: a.detail, domain: a.domain, scope: a.scope })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
   it('accepts a literal element read from an explicitly summarized guard object', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
