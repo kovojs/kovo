@@ -4,8 +4,22 @@ import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Supported alert variant values.
+ *
+ * @example
+ * import type { AlertVariant } from "@kovojs/ui/alert";
+ * const value: AlertVariant = 'info';
+ */
 export type AlertVariant = 'info' | 'success' | 'warning' | 'danger';
 
+/**
+ * Props for the alert component.
+ *
+ * @example
+ * import type { AlertProps } from "@kovojs/ui/alert";
+ * const props: AlertProps = { children: 'Content' };
+ */
 export interface AlertProps {
   children?: string;
   role?: 'alert' | 'status';
@@ -61,11 +75,25 @@ const variants = style.create({
   },
 });
 
+/**
+ * Style definitions used by the alert components.
+ *
+ * @example
+ * import { alertStyles } from "@kovojs/ui/alert";
+ * const styles = alertStyles;
+ */
 export const alertStyles = {
   base,
   variants,
 } as const;
 
+/**
+ * Renders the styled alert primitive.
+ *
+ * @example
+ * import { Alert } from "@kovojs/ui/alert";
+ * const component = Alert;
+ */
 export const Alert = component({
   render(props: AlertProps) {
     const attrs = style.attrs(base.root, variants[props.variant ?? 'info'], props.style);

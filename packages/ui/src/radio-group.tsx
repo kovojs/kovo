@@ -14,6 +14,13 @@ import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the radio group components.
+ *
+ * @example
+ * import type { RadioGroupStyleOverrides } from "@kovojs/ui/radio-group";
+ * const styles: RadioGroupStyleOverrides = {};
+ */
 export interface RadioGroupStyleOverrides {
   item?: style.StyleInput;
   label?: style.StyleInput;
@@ -22,6 +29,13 @@ export interface RadioGroupStyleOverrides {
   root?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the radio group component family.
+ *
+ * @example
+ * import type { RadioGroupStateProps } from "@kovojs/ui/radio-group";
+ * const state: RadioGroupStateProps = {};
+ */
 export interface RadioGroupStateProps {
   descriptionId?: string;
   dir?: TextDirection;
@@ -37,6 +51,13 @@ export interface RadioGroupStateProps {
   value?: string;
 }
 
+/**
+ * Props for the radio group component.
+ *
+ * @example
+ * import type { RadioGroupProps } from "@kovojs/ui/radio-group";
+ * const props: RadioGroupProps = { children: 'Content' };
+ */
 export interface RadioGroupProps extends RadioGroupStateProps {
   children?: string;
   id?: string;
@@ -44,6 +65,13 @@ export interface RadioGroupProps extends RadioGroupStateProps {
   styles?: RadioGroupStyleOverrides;
 }
 
+/**
+ * Props for the radio group item component.
+ *
+ * @example
+ * import type { RadioGroupItemProps } from "@kovojs/ui/radio-group";
+ * const props: RadioGroupItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface RadioGroupItemProps extends RadioGroupStateProps {
   children?: string;
   id?: string;
@@ -52,6 +80,13 @@ export interface RadioGroupItemProps extends RadioGroupStateProps {
   styles?: RadioGroupStyleOverrides;
 }
 
+/**
+ * Props for the radio group radio component.
+ *
+ * @example
+ * import type { RadioGroupRadioProps } from "@kovojs/ui/radio-group";
+ * const props: RadioGroupRadioProps = { itemValue: 'item' };
+ */
 export interface RadioGroupRadioProps extends RadioGroupStateProps {
   controlId?: string;
   itemDisabled?: boolean;
@@ -59,6 +94,13 @@ export interface RadioGroupRadioProps extends RadioGroupStateProps {
   styles?: RadioGroupStyleOverrides;
 }
 
+/**
+ * Props for the radio group label component.
+ *
+ * @example
+ * import type { RadioGroupLabelProps } from "@kovojs/ui/radio-group";
+ * const props: RadioGroupLabelProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface RadioGroupLabelProps extends RadioGroupStateProps {
   children?: string;
   controlId?: string;
@@ -68,6 +110,13 @@ export interface RadioGroupLabelProps extends RadioGroupStateProps {
   styles?: RadioGroupStyleOverrides;
 }
 
+/**
+ * Style definitions used by the radio group components.
+ *
+ * @example
+ * import { radioGroupStyles } from "@kovojs/ui/radio-group";
+ * const styles = radioGroupStyles;
+ */
 export const radioGroupStyles = style.create({
   item: {
     alignItems: 'center',
@@ -157,6 +206,13 @@ export const radioGroupStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled radio group primitive.
+ *
+ * @example
+ * import { RadioGroup } from "@kovojs/ui/radio-group";
+ * const component = RadioGroup;
+ */
 export const RadioGroup = component({
   render(props: RadioGroupProps) {
     const attrs = radioGroupRootAttributes({
@@ -199,6 +255,13 @@ export const RadioGroup = component({
   },
 });
 
+/**
+ * Renders the styled radio group item primitive.
+ *
+ * @example
+ * import { RadioGroupItem } from "@kovojs/ui/radio-group";
+ * const component = RadioGroupItem;
+ */
 export const RadioGroupItem = component({
   render(props: RadioGroupItemProps) {
     const attrs = radioGroupItemAttributes({
@@ -232,6 +295,13 @@ export const RadioGroupItem = component({
   },
 });
 
+/**
+ * Renders the styled radio group radio primitive.
+ *
+ * @example
+ * import { RadioGroupRadio } from "@kovojs/ui/radio-group";
+ * const component = RadioGroupRadio;
+ */
 export const RadioGroupRadio = component({
   render(props: RadioGroupRadioProps) {
     const attrs = radioGroupRadioAttributes({
@@ -282,6 +352,13 @@ export const RadioGroupRadio = component({
   },
 });
 
+/**
+ * Renders the styled radio group label primitive.
+ *
+ * @example
+ * import { RadioGroupLabel } from "@kovojs/ui/radio-group";
+ * const component = RadioGroupLabel;
+ */
 export const RadioGroupLabel = component({
   render(props: RadioGroupLabelProps) {
     const attrs = radioGroupLabelAttributes({

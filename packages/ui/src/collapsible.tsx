@@ -11,23 +11,51 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Shared state props for the collapsible component family.
+ *
+ * @example
+ * import type { CollapsibleStateProps } from "@kovojs/ui/collapsible";
+ * const state: CollapsibleStateProps = {};
+ */
 export interface CollapsibleStateProps {
   disabled?: boolean;
   open?: boolean;
 }
 
+/**
+ * Style override slots accepted by the collapsible components.
+ *
+ * @example
+ * import type { CollapsibleStyleOverrides } from "@kovojs/ui/collapsible";
+ * const styles: CollapsibleStyleOverrides = {};
+ */
 export interface CollapsibleStyleOverrides {
   content?: style.StyleInput;
   root?: style.StyleInput;
   trigger?: style.StyleInput;
 }
 
+/**
+ * Props for the collapsible component.
+ *
+ * @example
+ * import type { CollapsibleProps } from "@kovojs/ui/collapsible";
+ * const props: CollapsibleProps = { children: 'Content' };
+ */
 export interface CollapsibleProps extends CollapsibleStateProps {
   children?: string;
   id?: string;
   styles?: CollapsibleStyleOverrides;
 }
 
+/**
+ * Props for the collapsible trigger component.
+ *
+ * @example
+ * import type { CollapsibleTriggerProps } from "@kovojs/ui/collapsible";
+ * const props: CollapsibleTriggerProps = { children: 'Content' };
+ */
 export interface CollapsibleTriggerProps extends CollapsibleStateProps {
   children?: string;
   contentId?: string;
@@ -35,12 +63,26 @@ export interface CollapsibleTriggerProps extends CollapsibleStateProps {
   styles?: CollapsibleStyleOverrides;
 }
 
+/**
+ * Props for the collapsible content component.
+ *
+ * @example
+ * import type { CollapsibleContentProps } from "@kovojs/ui/collapsible";
+ * const props: CollapsibleContentProps = { children: 'Content' };
+ */
 export interface CollapsibleContentProps extends CollapsibleStateProps {
   children?: string;
   contentId?: string;
   styles?: CollapsibleStyleOverrides;
 }
 
+/**
+ * Style definitions used by the collapsible components.
+ *
+ * @example
+ * import { collapsibleStyles } from "@kovojs/ui/collapsible";
+ * const styles = collapsibleStyles;
+ */
 export const collapsibleStyles = style.create({
   // Grid wrapper animates open/close via grid-template-rows 0fr<->1fr. The author
   // `display:grid` overrides both the UA `details:not([open]) > *{display:none}`
@@ -129,6 +171,13 @@ function collapsibleState(props: CollapsibleStateProps) {
   };
 }
 
+/**
+ * Renders the styled collapsible primitive.
+ *
+ * @example
+ * import { Collapsible } from "@kovojs/ui/collapsible";
+ * const component = Collapsible;
+ */
 export const Collapsible = component({
   render(props: CollapsibleProps) {
     const attrs = collapsibleRootAttributes(collapsibleState(props));
@@ -149,6 +198,13 @@ export const Collapsible = component({
   },
 });
 
+/**
+ * Renders the styled collapsible trigger primitive.
+ *
+ * @example
+ * import { CollapsibleTrigger } from "@kovojs/ui/collapsible";
+ * const component = CollapsibleTrigger;
+ */
 export const CollapsibleTrigger = component({
   render(props: CollapsibleTriggerProps) {
     const attrs = collapsibleTriggerAttributes({
@@ -173,6 +229,13 @@ export const CollapsibleTrigger = component({
   },
 });
 
+/**
+ * Renders the styled collapsible content primitive.
+ *
+ * @example
+ * import { CollapsibleContent } from "@kovojs/ui/collapsible";
+ * const component = CollapsibleContent;
+ */
 export const CollapsibleContent = component({
   render(props: CollapsibleContentProps) {
     const attrs = collapsibleContentAttributes({

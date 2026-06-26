@@ -16,6 +16,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the select components.
+ *
+ * @example
+ * import type { SelectStyleOverrides } from "@kovojs/ui/select";
+ * const styles: SelectStyleOverrides = {};
+ */
 export interface SelectStyleOverrides {
   content?: style.StyleInput;
   hiddenInput?: style.StyleInput;
@@ -25,6 +32,13 @@ export interface SelectStyleOverrides {
   value?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the select component family.
+ *
+ * @example
+ * import type { SelectStateProps } from "@kovojs/ui/select";
+ * const state: SelectStateProps = {};
+ */
 export interface SelectStateProps {
   disabled?: boolean;
   form?: string;
@@ -39,12 +53,26 @@ export interface SelectStateProps {
   value?: string;
 }
 
+/**
+ * Props for the select component.
+ *
+ * @example
+ * import type { SelectProps } from "@kovojs/ui/select";
+ * const props: SelectProps = { children: 'Content' };
+ */
 export interface SelectProps extends SelectStateProps {
   children?: string;
   id?: string;
   styles?: SelectStyleOverrides;
 }
 
+/**
+ * Props for the select trigger component.
+ *
+ * @example
+ * import type { SelectTriggerProps } from "@kovojs/ui/select";
+ * const props: SelectTriggerProps = { children: 'Content' };
+ */
 export interface SelectTriggerProps extends SelectStateProps {
   'aria-activedescendant'?: string;
   children?: string;
@@ -55,11 +83,25 @@ export interface SelectTriggerProps extends SelectStateProps {
   styles?: SelectStyleOverrides;
 }
 
+/**
+ * Props for the select hidden input component.
+ *
+ * @example
+ * import type { SelectHiddenInputProps } from "@kovojs/ui/select";
+ * const props: SelectHiddenInputProps = {};
+ */
 export interface SelectHiddenInputProps extends SelectStateProps {
   id?: string;
   styles?: SelectStyleOverrides;
 }
 
+/**
+ * Props for the select content component.
+ *
+ * @example
+ * import type { SelectContentProps } from "@kovojs/ui/select";
+ * const props: SelectContentProps = { children: 'Content' };
+ */
 export interface SelectContentProps extends SelectStateProps {
   children?: string;
   id?: string;
@@ -68,6 +110,13 @@ export interface SelectContentProps extends SelectStateProps {
   styles?: SelectStyleOverrides;
 }
 
+/**
+ * Props for the select item component.
+ *
+ * @example
+ * import type { SelectItemProps } from "@kovojs/ui/select";
+ * const props: SelectItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface SelectItemProps extends SelectStateProps {
   children?: string;
   id?: string;
@@ -77,6 +126,13 @@ export interface SelectItemProps extends SelectStateProps {
   styles?: SelectStyleOverrides;
 }
 
+/**
+ * Props for the select value component.
+ *
+ * @example
+ * import type { SelectValueProps } from "@kovojs/ui/select";
+ * const props: SelectValueProps = { children: 'Content' };
+ */
 export interface SelectValueProps extends SelectStateProps {
   children?: string;
   id?: string;
@@ -87,6 +143,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the select components.
+ *
+ * @example
+ * import { selectStyles } from "@kovojs/ui/select";
+ * const styles = selectStyles;
+ */
 export const selectStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
@@ -217,6 +280,13 @@ export const selectStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled select primitive.
+ *
+ * @example
+ * import { Select } from "@kovojs/ui/select";
+ * const component = Select;
+ */
 export const Select = component({
   render(props: SelectProps) {
     const attrs = selectRootAttributes({
@@ -251,6 +321,13 @@ export const Select = component({
   },
 });
 
+/**
+ * Renders the styled select trigger primitive.
+ *
+ * @example
+ * import { SelectTrigger } from "@kovojs/ui/select";
+ * const component = SelectTrigger;
+ */
 export const SelectTrigger = component({
   render(props: SelectTriggerProps) {
     const attrs = selectTriggerAttributes({
@@ -299,6 +376,13 @@ export const SelectTrigger = component({
   },
 });
 
+/**
+ * Renders the styled select hidden input primitive.
+ *
+ * @example
+ * import { SelectHiddenInput } from "@kovojs/ui/select";
+ * const component = SelectHiddenInput;
+ */
 export const SelectHiddenInput = component({
   render(props: SelectHiddenInputProps) {
     const attrs = selectHiddenInputAttributes({
@@ -324,6 +408,13 @@ export const SelectHiddenInput = component({
   },
 });
 
+/**
+ * Renders the styled select content primitive.
+ *
+ * @example
+ * import { SelectContent } from "@kovojs/ui/select";
+ * const component = SelectContent;
+ */
 export const SelectContent = component({
   render(props: SelectContentProps) {
     const attrs = selectContentAttributes({
@@ -362,6 +453,13 @@ export const SelectContent = component({
   },
 });
 
+/**
+ * Renders the styled select item primitive.
+ *
+ * @example
+ * import { SelectItem } from "@kovojs/ui/select";
+ * const component = SelectItem;
+ */
 export const SelectItem = component({
   render(props: SelectItemProps) {
     const attrs = selectItemAttributes({
@@ -402,6 +500,13 @@ export const SelectItem = component({
   },
 });
 
+/**
+ * Renders the styled select value primitive.
+ *
+ * @example
+ * import { SelectValue } from "@kovojs/ui/select";
+ * const component = SelectValue;
+ */
 export const SelectValue = component({
   render(props: SelectValueProps) {
     const attrs = selectValueAttributes({

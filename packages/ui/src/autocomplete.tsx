@@ -15,6 +15,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the autocomplete components.
+ *
+ * @example
+ * import type { AutocompleteStyleOverrides } from "@kovojs/ui/autocomplete";
+ * const styles: AutocompleteStyleOverrides = {};
+ */
 export interface AutocompleteStyleOverrides {
   input?: style.StyleInput;
   list?: style.StyleInput;
@@ -23,6 +30,13 @@ export interface AutocompleteStyleOverrides {
   value?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the autocomplete component family.
+ *
+ * @example
+ * import type { AutocompleteStateProps } from "@kovojs/ui/autocomplete";
+ * const state: AutocompleteStateProps = {};
+ */
 export interface AutocompleteStateProps {
   disabled?: boolean;
   form?: string;
@@ -38,12 +52,26 @@ export interface AutocompleteStateProps {
   value?: string;
 }
 
+/**
+ * Props for the autocomplete component.
+ *
+ * @example
+ * import type { AutocompleteProps } from "@kovojs/ui/autocomplete";
+ * const props: AutocompleteProps = { children: 'Content' };
+ */
 export interface AutocompleteProps extends AutocompleteStateProps {
   children?: string;
   id?: string;
   styles?: AutocompleteStyleOverrides;
 }
 
+/**
+ * Props for the autocomplete input component.
+ *
+ * @example
+ * import type { AutocompleteInputProps } from "@kovojs/ui/autocomplete";
+ * const props: AutocompleteInputProps = {};
+ */
 export interface AutocompleteInputProps extends AutocompleteStateProps {
   autocomplete?: string;
   descriptionId?: string;
@@ -53,6 +81,13 @@ export interface AutocompleteInputProps extends AutocompleteStateProps {
   styles?: AutocompleteStyleOverrides;
 }
 
+/**
+ * Props for the autocomplete list component.
+ *
+ * @example
+ * import type { AutocompleteListProps } from "@kovojs/ui/autocomplete";
+ * const props: AutocompleteListProps = { children: 'Content' };
+ */
 export interface AutocompleteListProps extends AutocompleteStateProps {
   children?: string;
   id?: string;
@@ -60,6 +95,13 @@ export interface AutocompleteListProps extends AutocompleteStateProps {
   styles?: AutocompleteStyleOverrides;
 }
 
+/**
+ * Props for the autocomplete option component.
+ *
+ * @example
+ * import type { AutocompleteOptionProps } from "@kovojs/ui/autocomplete";
+ * const props: AutocompleteOptionProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface AutocompleteOptionProps extends AutocompleteStateProps {
   children?: string;
   id?: string;
@@ -69,6 +111,13 @@ export interface AutocompleteOptionProps extends AutocompleteStateProps {
   styles?: AutocompleteStyleOverrides;
 }
 
+/**
+ * Props for the autocomplete value component.
+ *
+ * @example
+ * import type { AutocompleteValueProps } from "@kovojs/ui/autocomplete";
+ * const props: AutocompleteValueProps = {};
+ */
 export interface AutocompleteValueProps extends AutocompleteStateProps {
   id?: string;
   styles?: AutocompleteStyleOverrides;
@@ -78,6 +127,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the autocomplete components.
+ *
+ * @example
+ * import { autocompleteStyles } from "@kovojs/ui/autocomplete";
+ * const styles = autocompleteStyles;
+ */
 export const autocompleteStyles = style.create({
   input: {
     backgroundColor: uiTheme.color.background,
@@ -194,6 +250,13 @@ export const autocompleteStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled autocomplete primitive.
+ *
+ * @example
+ * import { Autocomplete } from "@kovojs/ui/autocomplete";
+ * const component = Autocomplete;
+ */
 export const Autocomplete = component({
   render(props: AutocompleteProps) {
     const attrs = autocompleteRootAttributes({
@@ -230,6 +293,13 @@ export const Autocomplete = component({
   },
 });
 
+/**
+ * Renders the styled autocomplete input primitive.
+ *
+ * @example
+ * import { AutocompleteInput } from "@kovojs/ui/autocomplete";
+ * const component = AutocompleteInput;
+ */
 export const AutocompleteInput = component({
   render(props: AutocompleteInputProps) {
     const attrs = autocompleteInputAttributes({
@@ -285,6 +355,13 @@ export const AutocompleteInput = component({
   },
 });
 
+/**
+ * Renders the styled autocomplete list primitive.
+ *
+ * @example
+ * import { AutocompleteList } from "@kovojs/ui/autocomplete";
+ * const component = AutocompleteList;
+ */
 export const AutocompleteList = component({
   render(props: AutocompleteListProps) {
     const attrs = autocompleteListAttributes({
@@ -325,6 +402,13 @@ export const AutocompleteList = component({
   },
 });
 
+/**
+ * Renders the styled autocomplete option primitive.
+ *
+ * @example
+ * import { AutocompleteOption } from "@kovojs/ui/autocomplete";
+ * const component = AutocompleteOption;
+ */
 export const AutocompleteOption = component({
   render(props: AutocompleteOptionProps) {
     const attrs = autocompleteOptionAttributes({
@@ -367,6 +451,13 @@ export const AutocompleteOption = component({
   },
 });
 
+/**
+ * Renders the styled autocomplete value primitive.
+ *
+ * @example
+ * import { AutocompleteValue } from "@kovojs/ui/autocomplete";
+ * const component = AutocompleteValue;
+ */
 export const AutocompleteValue = component({
   render(props: AutocompleteValueProps) {
     const attrs = autocompleteValueAttributes({

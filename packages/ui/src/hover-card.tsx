@@ -12,23 +12,51 @@ import { safeUrl } from './safe-url.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the hover card components.
+ *
+ * @example
+ * import type { HoverCardStyleOverrides } from "@kovojs/ui/hover-card";
+ * const styles: HoverCardStyleOverrides = {};
+ */
 export interface HoverCardStyleOverrides {
   content?: style.StyleInput;
   root?: style.StyleInput;
   trigger?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the hover card component family.
+ *
+ * @example
+ * import type { HoverCardStateProps } from "@kovojs/ui/hover-card";
+ * const state: HoverCardStateProps = {};
+ */
 export interface HoverCardStateProps {
   disabled?: boolean;
   open?: boolean;
 }
 
+/**
+ * Props for the hover card component.
+ *
+ * @example
+ * import type { HoverCardProps } from "@kovojs/ui/hover-card";
+ * const props: HoverCardProps = { children: 'Content' };
+ */
 export interface HoverCardProps extends HoverCardStateProps {
   children?: string;
   id?: string;
   styles?: HoverCardStyleOverrides;
 }
 
+/**
+ * Props for the hover card trigger component.
+ *
+ * @example
+ * import type { HoverCardTriggerProps } from "@kovojs/ui/hover-card";
+ * const props: HoverCardTriggerProps = { children: 'Content' };
+ */
 export interface HoverCardTriggerProps extends HoverCardStateProps {
   children?: string;
   contentId?: string;
@@ -37,12 +65,26 @@ export interface HoverCardTriggerProps extends HoverCardStateProps {
   styles?: HoverCardStyleOverrides;
 }
 
+/**
+ * Props for the hover card content component.
+ *
+ * @example
+ * import type { HoverCardContentProps } from "@kovojs/ui/hover-card";
+ * const props: HoverCardContentProps = { children: 'Content' };
+ */
 export interface HoverCardContentProps extends HoverCardStateProps {
   children?: string;
   contentId?: string;
   styles?: HoverCardStyleOverrides;
 }
 
+/**
+ * Style definitions used by the hover card components.
+ *
+ * @example
+ * import { hoverCardStyles } from "@kovojs/ui/hover-card";
+ * const styles = hoverCardStyles;
+ */
 export const hoverCardStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
@@ -104,6 +146,13 @@ function hoverCardState(props: HoverCardStateProps) {
   };
 }
 
+/**
+ * Renders the styled hover card primitive.
+ *
+ * @example
+ * import { HoverCard } from "@kovojs/ui/hover-card";
+ * const component = HoverCard;
+ */
 export const HoverCard = component({
   render(props: HoverCardProps) {
     const attrs = hoverCardRootAttributes(hoverCardState(props));
@@ -123,6 +172,13 @@ export const HoverCard = component({
   },
 });
 
+/**
+ * Renders the styled hover card trigger primitive.
+ *
+ * @example
+ * import { HoverCardTrigger } from "@kovojs/ui/hover-card";
+ * const component = HoverCardTrigger;
+ */
 export const HoverCardTrigger = component({
   render(props: HoverCardTriggerProps) {
     const attrs = hoverCardTriggerAttributes({
@@ -153,6 +209,13 @@ export const HoverCardTrigger = component({
   },
 });
 
+/**
+ * Renders the styled hover card content primitive.
+ *
+ * @example
+ * import { HoverCardContent } from "@kovojs/ui/hover-card";
+ * const component = HoverCardContent;
+ */
 export const HoverCardContent = component({
   render(props: HoverCardContentProps) {
     const attrs = hoverCardContentAttributes({

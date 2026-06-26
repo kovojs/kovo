@@ -6,9 +6,30 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Supported button variant values.
+ *
+ * @example
+ * import type { ButtonVariant } from "@kovojs/ui/button";
+ * const value: ButtonVariant = 'primary';
+ */
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'outline';
+/**
+ * Supported button size values.
+ *
+ * @example
+ * import type { ButtonSize } from "@kovojs/ui/button";
+ * const value: ButtonSize = 'md';
+ */
 export type ButtonSize = 'sm' | 'md';
 
+/**
+ * Props for the button component.
+ *
+ * @example
+ * import type { ButtonProps } from "@kovojs/ui/button";
+ * const props: ButtonProps = { children: 'Content' };
+ */
 export interface ButtonProps {
   children?: string;
   disabled?: boolean;
@@ -120,12 +141,26 @@ const variants = style.create({
   },
 });
 
+/**
+ * Style definitions used by the button components.
+ *
+ * @example
+ * import { buttonStyles } from "@kovojs/ui/button";
+ * const styles = buttonStyles;
+ */
 export const buttonStyles = {
   base,
   sizes,
   variants,
 } as const;
 
+/**
+ * Renders the styled button primitive.
+ *
+ * @example
+ * import { Button } from "@kovojs/ui/button";
+ * const component = Button;
+ */
 export const Button = component({
   render(props: ButtonProps) {
     const attrs = style.attrs(

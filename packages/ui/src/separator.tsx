@@ -7,6 +7,13 @@ import { separatorRootAttributes, type SeparatorOrientation } from '@kovojs/head
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Props for the separator component.
+ *
+ * @example
+ * import type { SeparatorProps } from "@kovojs/ui/separator";
+ * const props: SeparatorProps = {};
+ */
 export interface SeparatorProps {
   decorative?: boolean;
   orientation?: SeparatorOrientation;
@@ -31,11 +38,25 @@ const orientations = style.create({
   },
 });
 
+/**
+ * Style definitions used by the separator components.
+ *
+ * @example
+ * import { separatorStyles } from "@kovojs/ui/separator";
+ * const styles = separatorStyles;
+ */
 export const separatorStyles = {
   base,
   orientations,
 } as const;
 
+/**
+ * Renders the styled separator primitive.
+ *
+ * @example
+ * import { Separator } from "@kovojs/ui/separator";
+ * const component = Separator;
+ */
 export const Separator = component({
   render(props: SeparatorProps) {
     const orientation = props.orientation ?? 'horizontal';

@@ -8,6 +8,13 @@ import { safeUrl } from './safe-url.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the breadcrumb components.
+ *
+ * @example
+ * import type { BreadcrumbStyleOverrides } from "@kovojs/ui/breadcrumb";
+ * const styles: BreadcrumbStyleOverrides = {};
+ */
 export interface BreadcrumbStyleOverrides {
   current?: style.StyleInput;
   item?: style.StyleInput;
@@ -17,22 +24,50 @@ export interface BreadcrumbStyleOverrides {
   separator?: style.StyleInput;
 }
 
+/**
+ * Props for the breadcrumb component.
+ *
+ * @example
+ * import type { BreadcrumbProps } from "@kovojs/ui/breadcrumb";
+ * const props: BreadcrumbProps = { children: 'Content' };
+ */
 export interface BreadcrumbProps {
   children?: string;
   label?: string;
   styles?: BreadcrumbStyleOverrides;
 }
 
+/**
+ * Props for the breadcrumb part component.
+ *
+ * @example
+ * import type { BreadcrumbPartProps } from "@kovojs/ui/breadcrumb";
+ * const props: BreadcrumbPartProps = { children: 'Content' };
+ */
 export interface BreadcrumbPartProps {
   children?: string;
   styles?: BreadcrumbStyleOverrides;
 }
 
+/**
+ * Props for the breadcrumb link component.
+ *
+ * @example
+ * import type { BreadcrumbLinkProps } from "@kovojs/ui/breadcrumb";
+ * const props: BreadcrumbLinkProps = { children: 'Content' };
+ */
 export interface BreadcrumbLinkProps extends BreadcrumbPartProps {
   current?: boolean;
   href?: string;
 }
 
+/**
+ * Style definitions used by the breadcrumb components.
+ *
+ * @example
+ * import { breadcrumbStyles } from "@kovojs/ui/breadcrumb";
+ * const styles = breadcrumbStyles;
+ */
 export const breadcrumbStyles = style.create({
   current: {
     color: uiTheme.color.foreground,
@@ -93,6 +128,13 @@ export const breadcrumbStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled breadcrumb primitive.
+ *
+ * @example
+ * import { Breadcrumb } from "@kovojs/ui/breadcrumb";
+ * const component = Breadcrumb;
+ */
 export const Breadcrumb = component({
   render(props: BreadcrumbProps) {
     const rootAttrs = style.attrs(breadcrumbStyles.root, props.styles?.root);
@@ -106,6 +148,13 @@ export const Breadcrumb = component({
   },
 });
 
+/**
+ * Renders the styled breadcrumb item primitive.
+ *
+ * @example
+ * import { BreadcrumbItem } from "@kovojs/ui/breadcrumb";
+ * const component = BreadcrumbItem;
+ */
 export const BreadcrumbItem = component({
   render(props: BreadcrumbPartProps) {
     const attrs = style.attrs(breadcrumbStyles.item, props.styles?.item);
@@ -114,6 +163,13 @@ export const BreadcrumbItem = component({
   },
 });
 
+/**
+ * Renders the styled breadcrumb link primitive.
+ *
+ * @example
+ * import { BreadcrumbLink } from "@kovojs/ui/breadcrumb";
+ * const component = BreadcrumbLink;
+ */
 export const BreadcrumbLink = component({
   render(props: BreadcrumbLinkProps) {
     const current = props.current === true;
@@ -138,6 +194,13 @@ export const BreadcrumbLink = component({
   },
 });
 
+/**
+ * Renders the styled breadcrumb separator primitive.
+ *
+ * @example
+ * import { BreadcrumbSeparator } from "@kovojs/ui/breadcrumb";
+ * const component = BreadcrumbSeparator;
+ */
 export const BreadcrumbSeparator = component({
   render(props: BreadcrumbPartProps) {
     const attrs = separatorRootAttributes();

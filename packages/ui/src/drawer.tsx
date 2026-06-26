@@ -12,8 +12,22 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Supported drawer side values.
+ *
+ * @example
+ * import type { DrawerSide } from "@kovojs/ui/drawer";
+ * const value: DrawerSide = 'right';
+ */
 export type DrawerSide = 'top' | 'right' | 'bottom' | 'left';
 
+/**
+ * Style override slots accepted by the drawer components.
+ *
+ * @example
+ * import type { DrawerStyleOverrides } from "@kovojs/ui/drawer";
+ * const styles: DrawerStyleOverrides = {};
+ */
 export interface DrawerStyleOverrides {
   body?: style.StyleInput;
   close?: style.StyleInput;
@@ -26,6 +40,13 @@ export interface DrawerStyleOverrides {
   trigger?: style.StyleInput;
 }
 
+/**
+ * Props for the drawer component.
+ *
+ * @example
+ * import type { DrawerProps } from "@kovojs/ui/drawer";
+ * const props: DrawerProps = { contentId: 'content-id', title: 'Title', children: 'Content' };
+ */
 export interface DrawerProps {
   children?: string;
   closeLabel?: string;
@@ -39,23 +60,51 @@ export interface DrawerProps {
   trigger?: string;
 }
 
+/**
+ * Shared state props for the drawer component family.
+ *
+ * @example
+ * import type { DrawerStateProps } from "@kovojs/ui/drawer";
+ * const state: DrawerStateProps = {};
+ */
 export interface DrawerStateProps {
   disabled?: boolean;
   open?: boolean;
   styles?: DrawerStyleOverrides;
 }
 
+/**
+ * Props for the drawer root component.
+ *
+ * @example
+ * import type { DrawerRootProps } from "@kovojs/ui/drawer";
+ * const props: DrawerRootProps = { children: 'Content' };
+ */
 export interface DrawerRootProps extends DrawerStateProps {
   children?: string;
   id?: string;
 }
 
+/**
+ * Props for the drawer trigger component.
+ *
+ * @example
+ * import type { DrawerTriggerProps } from "@kovojs/ui/drawer";
+ * const props: DrawerTriggerProps = { contentId: 'content-id', children: 'Content' };
+ */
 export interface DrawerTriggerProps extends DrawerStateProps {
   children?: string;
   contentId: string;
   id?: string;
 }
 
+/**
+ * Props for the drawer content component.
+ *
+ * @example
+ * import type { DrawerContentProps } from "@kovojs/ui/drawer";
+ * const props: DrawerContentProps = { contentId: 'content-id', titleId: 'title-id', children: 'Content' };
+ */
 export interface DrawerContentProps extends DrawerStateProps {
   children?: string;
   contentId: string;
@@ -64,12 +113,26 @@ export interface DrawerContentProps extends DrawerStateProps {
   titleId: string;
 }
 
+/**
+ * Props for the drawer part component.
+ *
+ * @example
+ * import type { DrawerPartProps } from "@kovojs/ui/drawer";
+ * const props: DrawerPartProps = { children: 'Content' };
+ */
 export interface DrawerPartProps {
   children?: string;
   id?: string;
   styles?: DrawerStyleOverrides;
 }
 
+/**
+ * Props for the drawer close component.
+ *
+ * @example
+ * import type { DrawerCloseProps } from "@kovojs/ui/drawer";
+ * const props: DrawerCloseProps = { contentId: 'content-id', children: 'Content' };
+ */
 export interface DrawerCloseProps extends DrawerStateProps {
   children?: string;
   contentId: string;
@@ -80,6 +143,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the drawer components.
+ *
+ * @example
+ * import { drawerStyles } from "@kovojs/ui/drawer";
+ * const styles = drawerStyles;
+ */
 export const drawerStyles = style.create({
   body: {
     fontSize: 14,
@@ -186,6 +256,13 @@ export const drawerStyles = style.create({
   },
 });
 
+/**
+ * Style definitions used by the drawer side components.
+ *
+ * @example
+ * import { drawerSideStyles } from "@kovojs/ui/drawer";
+ * const styles = drawerSideStyles;
+ */
 export const drawerSideStyles = style.create({
   bottom: {
     borderTopLeftRadius: uiTheme.radius.lg,
@@ -255,6 +332,13 @@ export const drawerSideStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled drawer primitive.
+ *
+ * @example
+ * import { Drawer } from "@kovojs/ui/drawer";
+ * const component = Drawer;
+ */
 export const Drawer = component({
   render(props: DrawerProps) {
     const open = props.open === true;
@@ -361,6 +445,13 @@ export const Drawer = component({
   },
 });
 
+/**
+ * Renders the styled drawer root primitive.
+ *
+ * @example
+ * import { DrawerRoot } from "@kovojs/ui/drawer";
+ * const component = DrawerRoot;
+ */
 export const DrawerRoot = component({
   render(props: DrawerRootProps) {
     const attrs = dialogRootAttributes({
@@ -383,6 +474,13 @@ export const DrawerRoot = component({
   },
 });
 
+/**
+ * Renders the styled drawer trigger primitive.
+ *
+ * @example
+ * import { DrawerTrigger } from "@kovojs/ui/drawer";
+ * const component = DrawerTrigger;
+ */
 export const DrawerTrigger = component({
   render(props: DrawerTriggerProps) {
     const attrs = dialogTriggerAttributes({
@@ -413,6 +511,13 @@ export const DrawerTrigger = component({
   },
 });
 
+/**
+ * Renders the styled drawer content primitive.
+ *
+ * @example
+ * import { DrawerContent } from "@kovojs/ui/drawer";
+ * const component = DrawerContent;
+ */
 export const DrawerContent = component({
   render(props: DrawerContentProps) {
     const side = props.side ?? 'bottom';
@@ -447,6 +552,13 @@ export const DrawerContent = component({
   },
 });
 
+/**
+ * Renders the styled drawer handle primitive.
+ *
+ * @example
+ * import { DrawerHandle } from "@kovojs/ui/drawer";
+ * const component = DrawerHandle;
+ */
 export const DrawerHandle = component({
   render(props: DrawerPartProps) {
     const styleAttrs = style.attrs(drawerStyles.handle, props.styles?.handle);
@@ -454,6 +566,13 @@ export const DrawerHandle = component({
   },
 });
 
+/**
+ * Renders the styled drawer header primitive.
+ *
+ * @example
+ * import { DrawerHeader } from "@kovojs/ui/drawer";
+ * const component = DrawerHeader;
+ */
 export const DrawerHeader = component({
   render(props: DrawerPartProps) {
     const styleAttrs = style.attrs(drawerStyles.header, props.styles?.header);
@@ -465,6 +584,13 @@ export const DrawerHeader = component({
   },
 });
 
+/**
+ * Renders the styled drawer title primitive.
+ *
+ * @example
+ * import { DrawerTitle } from "@kovojs/ui/drawer";
+ * const component = DrawerTitle;
+ */
 export const DrawerTitle = component({
   render(props: DrawerPartProps) {
     const styleAttrs = style.attrs(drawerStyles.title, props.styles?.title);
@@ -476,6 +602,13 @@ export const DrawerTitle = component({
   },
 });
 
+/**
+ * Renders the styled drawer description primitive.
+ *
+ * @example
+ * import { DrawerDescription } from "@kovojs/ui/drawer";
+ * const component = DrawerDescription;
+ */
 export const DrawerDescription = component({
   render(props: DrawerPartProps) {
     const styleAttrs = style.attrs(drawerStyles.description, props.styles?.description);
@@ -487,6 +620,13 @@ export const DrawerDescription = component({
   },
 });
 
+/**
+ * Renders the styled drawer close primitive.
+ *
+ * @example
+ * import { DrawerClose } from "@kovojs/ui/drawer";
+ * const component = DrawerClose;
+ */
 export const DrawerClose = component({
   render(props: DrawerCloseProps) {
     const attrs = dialogCloseAttributes({

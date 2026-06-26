@@ -11,23 +11,51 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Shared state props for the disclosure component family.
+ *
+ * @example
+ * import type { DisclosureStateProps } from "@kovojs/ui/disclosure";
+ * const state: DisclosureStateProps = {};
+ */
 export interface DisclosureStateProps {
   disabled?: boolean;
   open?: boolean;
 }
 
+/**
+ * Style override slots accepted by the disclosure components.
+ *
+ * @example
+ * import type { DisclosureStyleOverrides } from "@kovojs/ui/disclosure";
+ * const styles: DisclosureStyleOverrides = {};
+ */
 export interface DisclosureStyleOverrides {
   content?: style.StyleInput;
   root?: style.StyleInput;
   trigger?: style.StyleInput;
 }
 
+/**
+ * Props for the disclosure component.
+ *
+ * @example
+ * import type { DisclosureProps } from "@kovojs/ui/disclosure";
+ * const props: DisclosureProps = { children: 'Content' };
+ */
 export interface DisclosureProps extends DisclosureStateProps {
   children?: string;
   id?: string;
   styles?: DisclosureStyleOverrides;
 }
 
+/**
+ * Props for the disclosure trigger component.
+ *
+ * @example
+ * import type { DisclosureTriggerProps } from "@kovojs/ui/disclosure";
+ * const props: DisclosureTriggerProps = { children: 'Content' };
+ */
 export interface DisclosureTriggerProps extends DisclosureStateProps {
   children?: string;
   contentId?: string;
@@ -35,12 +63,26 @@ export interface DisclosureTriggerProps extends DisclosureStateProps {
   styles?: DisclosureStyleOverrides;
 }
 
+/**
+ * Props for the disclosure content component.
+ *
+ * @example
+ * import type { DisclosureContentProps } from "@kovojs/ui/disclosure";
+ * const props: DisclosureContentProps = { children: 'Content' };
+ */
 export interface DisclosureContentProps extends DisclosureStateProps {
   children?: string;
   contentId?: string;
   styles?: DisclosureStyleOverrides;
 }
 
+/**
+ * Style definitions used by the disclosure components.
+ *
+ * @example
+ * import { disclosureStyles } from "@kovojs/ui/disclosure";
+ * const styles = disclosureStyles;
+ */
 export const disclosureStyles = style.create({
   // Grid wrapper animates open/close via grid-template-rows 0fr<->1fr. The author
   // `display:grid` overrides the UA `[hidden]{display:none}` so the panel can
@@ -138,6 +180,13 @@ function disclosureState(props: DisclosureStateProps) {
   };
 }
 
+/**
+ * Renders the styled disclosure primitive.
+ *
+ * @example
+ * import { Disclosure } from "@kovojs/ui/disclosure";
+ * const component = Disclosure;
+ */
 export const Disclosure = component({
   render(props: DisclosureProps) {
     const attrs = disclosureRootAttributes(disclosureState(props));
@@ -157,6 +206,13 @@ export const Disclosure = component({
   },
 });
 
+/**
+ * Renders the styled disclosure trigger primitive.
+ *
+ * @example
+ * import { DisclosureTrigger } from "@kovojs/ui/disclosure";
+ * const component = DisclosureTrigger;
+ */
 export const DisclosureTrigger = component({
   render(props: DisclosureTriggerProps) {
     const attrs = disclosureTriggerAttributes({
@@ -183,6 +239,13 @@ export const DisclosureTrigger = component({
   },
 });
 
+/**
+ * Renders the styled disclosure content primitive.
+ *
+ * @example
+ * import { DisclosureContent } from "@kovojs/ui/disclosure";
+ * const component = DisclosureContent;
+ */
 export const DisclosureContent = component({
   render(props: DisclosureContentProps) {
     const attrs = disclosureContentAttributes({

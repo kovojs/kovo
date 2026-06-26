@@ -14,6 +14,13 @@ import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the checkbox group components.
+ *
+ * @example
+ * import type { CheckboxGroupStyleOverrides } from "@kovojs/ui/checkbox-group";
+ * const styles: CheckboxGroupStyleOverrides = {};
+ */
 export interface CheckboxGroupStyleOverrides {
   control?: style.StyleInput;
   item?: style.StyleInput;
@@ -21,6 +28,13 @@ export interface CheckboxGroupStyleOverrides {
   root?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the checkbox group component family.
+ *
+ * @example
+ * import type { CheckboxGroupStateProps } from "@kovojs/ui/checkbox-group";
+ * const state: CheckboxGroupStateProps = {};
+ */
 export interface CheckboxGroupStateProps {
   activeValue?: string;
   descriptionId?: string;
@@ -37,6 +51,13 @@ export interface CheckboxGroupStateProps {
   value?: readonly string[];
 }
 
+/**
+ * Props for the checkbox group component.
+ *
+ * @example
+ * import type { CheckboxGroupProps } from "@kovojs/ui/checkbox-group";
+ * const props: CheckboxGroupProps = { children: 'Content' };
+ */
 export interface CheckboxGroupProps extends CheckboxGroupStateProps {
   children?: string;
   id?: string;
@@ -44,6 +65,13 @@ export interface CheckboxGroupProps extends CheckboxGroupStateProps {
   styles?: CheckboxGroupStyleOverrides;
 }
 
+/**
+ * Props for the checkbox group item component.
+ *
+ * @example
+ * import type { CheckboxGroupItemProps } from "@kovojs/ui/checkbox-group";
+ * const props: CheckboxGroupItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface CheckboxGroupItemProps extends CheckboxGroupStateProps {
   children?: string;
   id?: string;
@@ -52,6 +80,13 @@ export interface CheckboxGroupItemProps extends CheckboxGroupStateProps {
   styles?: CheckboxGroupStyleOverrides;
 }
 
+/**
+ * Props for the checkbox group control component.
+ *
+ * @example
+ * import type { CheckboxGroupControlProps } from "@kovojs/ui/checkbox-group";
+ * const props: CheckboxGroupControlProps = { itemValue: 'item' };
+ */
 export interface CheckboxGroupControlProps extends CheckboxGroupStateProps {
   controlId?: string;
   itemDisabled?: boolean;
@@ -59,6 +94,13 @@ export interface CheckboxGroupControlProps extends CheckboxGroupStateProps {
   styles?: CheckboxGroupStyleOverrides;
 }
 
+/**
+ * Props for the checkbox group label component.
+ *
+ * @example
+ * import type { CheckboxGroupLabelProps } from "@kovojs/ui/checkbox-group";
+ * const props: CheckboxGroupLabelProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface CheckboxGroupLabelProps extends CheckboxGroupStateProps {
   children?: string;
   controlId?: string;
@@ -68,6 +110,13 @@ export interface CheckboxGroupLabelProps extends CheckboxGroupStateProps {
   styles?: CheckboxGroupStyleOverrides;
 }
 
+/**
+ * Style definitions used by the checkbox group components.
+ *
+ * @example
+ * import { checkboxGroupStyles } from "@kovojs/ui/checkbox-group";
+ * const styles = checkboxGroupStyles;
+ */
 export const checkboxGroupStyles = style.create({
   // Custom square matching the standalone Checkbox box. Carries data-state to
   // paint the teal fill + check/dash glyph (mirrors checkbox.tsx `box`). Kept
@@ -174,6 +223,13 @@ export const checkboxGroupStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled checkbox group primitive.
+ *
+ * @example
+ * import { CheckboxGroup } from "@kovojs/ui/checkbox-group";
+ * const component = CheckboxGroup;
+ */
 export const CheckboxGroup = component({
   render(props: CheckboxGroupProps) {
     const attrs = checkboxGroupRootAttributes({
@@ -217,6 +273,13 @@ export const CheckboxGroup = component({
   },
 });
 
+/**
+ * Renders the styled checkbox group item primitive.
+ *
+ * @example
+ * import { CheckboxGroupItem } from "@kovojs/ui/checkbox-group";
+ * const component = CheckboxGroupItem;
+ */
 export const CheckboxGroupItem = component({
   render(props: CheckboxGroupItemProps) {
     const attrs = checkboxGroupItemAttributes({
@@ -251,6 +314,13 @@ export const CheckboxGroupItem = component({
   },
 });
 
+/**
+ * Renders the styled checkbox group control primitive.
+ *
+ * @example
+ * import { CheckboxGroupControl } from "@kovojs/ui/checkbox-group";
+ * const component = CheckboxGroupControl;
+ */
 export const CheckboxGroupControl = component({
   render(props: CheckboxGroupControlProps) {
     const attrs = checkboxGroupControlAttributes({
@@ -306,6 +376,13 @@ export const CheckboxGroupControl = component({
   },
 });
 
+/**
+ * Renders the styled checkbox group label primitive.
+ *
+ * @example
+ * import { CheckboxGroupLabel } from "@kovojs/ui/checkbox-group";
+ * const component = CheckboxGroupLabel;
+ */
 export const CheckboxGroupLabel = component({
   render(props: CheckboxGroupLabelProps) {
     const attrs = checkboxGroupLabelAttributes({

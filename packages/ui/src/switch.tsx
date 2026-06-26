@@ -7,6 +7,13 @@ import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the switch components.
+ *
+ * @example
+ * import type { SwitchStyleOverrides } from "@kovojs/ui/switch";
+ * const styles: SwitchStyleOverrides = {};
+ */
 export interface SwitchStyleOverrides {
   input?: style.StyleInput;
   root?: style.StyleInput;
@@ -14,6 +21,13 @@ export interface SwitchStyleOverrides {
   track?: style.StyleInput;
 }
 
+/**
+ * Props for the switch component.
+ *
+ * @example
+ * import type { SwitchProps } from "@kovojs/ui/switch";
+ * const props: SwitchProps = { children: 'Content' };
+ */
 export interface SwitchProps {
   describedBy?: string;
   checked?: boolean;
@@ -28,6 +42,13 @@ export interface SwitchProps {
   value?: string;
 }
 
+/**
+ * Style definitions used by the switch components.
+ *
+ * @example
+ * import { switchStyles } from "@kovojs/ui/switch";
+ * const styles = switchStyles;
+ */
 export const switchStyles = style.create({
   // Native checkbox kept for a11y/form state; visually hidden but still the
   // click/focus target (stretched over the track via absolute positioning).
@@ -103,6 +124,13 @@ export const switchStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled switch primitive.
+ *
+ * @example
+ * import { Switch } from "@kovojs/ui/switch";
+ * const component = Switch;
+ */
 export const Switch = component({
   render(props: SwitchProps) {
     const attrs = switchRootAttributes({
