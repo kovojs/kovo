@@ -1832,6 +1832,11 @@
             "path": "./build",
             "slug": "server-build",
             "description": "Build-time deployment presets and neutral artifact helpers for kovo build."
+          },
+          {
+            "path": "./vite",
+            "slug": "server-vite",
+            "description": "The Vite plugin that serves authored Kovo apps through the app shell in development and build."
           }
         ]
       }
