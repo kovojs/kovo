@@ -1,6 +1,8 @@
 # Plan: Adversarial Compiler Soundness & Security-Guarantee Audit
 
-**Status:** audit complete; 3 confirmed holes fully fixed (F1, F2, P1-1) + follow-ups tracked. Goal: stress the
+**Status:** audit complete; all confirmed holes fixed and merged to `main` (F1, F2, P1-1, P2-1/S4, P3-1,
+S7-1, P0). One residual is a by-construction-gate wiring item in the external `vp` toolchain (P3-1's
+static KV418 firing); the runtime floor already closes that hole fail-closed. Goal: stress the
 Kovo compiler's *static* security guarantees (the by-construction proofs in `SPEC.md` §5.2, §6.6, §4.8,
 §10.2, §11, §6.5) for **soundness holes** — inputs where a stated guarantee can be defeated from
 app-authored TSX/config while the build stays green.
@@ -15,11 +17,16 @@ artifact? right honesty tier?). Confirmed holes were fixed in a throwaway worktr
 (fail-closed floor, bypassable by privileged same-process code) · type-only · audit-only. A finding
 only counts if it breaks a guarantee at the tier the framework *claims* for it.
 
-**Fixes (throwaway worktree, branch `agent/compiler-soundness-fixes`):**
+**Fixes (all merged to `main`).** Round 1 (branch `agent/compiler-soundness-fixes`):
 - `9d9114ac1` F1 — KV236 trusted-brand by AST symbol-identity (3 sites + guard-zone).
 - `3967817f2` F2 fix #2 — KV435 secret backstop over the folded read set.
 - `f4dfbbc60` P1-1 — `sanitizeNext` fails closed on normalized protocol-relative path.
-- `8d74ba1e9` (branch `agent/fu-f2reads`) F2 fix #1 — KV410 requires a `reads:` set on every opaque projection.
+
+Round 2 (parallel worktree fan-out, one branch per slice):
+- `8d74ba1e9` (`agent/fu-f2reads`) F2 fix #1 — KV410 requires a `reads:` set on every opaque projection.
+- `deb3865e6`+`665be8d84` (`agent/fu-p3csrf`) P3-1 — KV418-for-mutations + csrf:false runtime no-ambient-session floor + explain posture.
+- `e89a8a647` (`agent/fu-kv236spread`) P2-1/S4 — KV236 direct ≡ spread ≡ attrs-merge channel symmetry.
+- `6607efcce`+`675370242` (`agent/fu-eqcache`) P0 cache-key completeness + S7-1 render-equivalence honesty.
 
 ---
 
@@ -30,12 +37,12 @@ only counts if it breaks a guarantee at the tier the framework *claims* for it.
 | **F1** (S1-A/S6-1) | KV236 trusted-brand regex (script/style XSS) | **Critical** | by-construction | real-hole | **FIXED** |
 | **F2** (S5-001) | opaque `sql<T>` secret-column leak to client wire | **High** | by-construction | real-hole | **FIXED** (fix #1 + #2) |
 | **P1-1** | `sanitizeNext` open-redirect via URL normalization | **Medium** | runtime-DiD | real-hole | **FIXED** |
-| **P3-1** | `csrf:false` mutation rides ambient cookie session | **High** | by-construction | real-hole | follow-up (multi-surface) |
+| **P3-1** | `csrf:false` mutation rides ambient cookie session | **High** | by-construction + runtime-DiD | real-hole | **FIXED** (runtime floor closes it; static gate landed, producer-pending) |
 | P2-1 | primitive `attrs={{…}}` channel skips KV236 | Low | by-construction→DiD | completeness | **FIXED** |
 | S4 | static object-spread `style` skips KV236 | Low | by-construction→DiD | completeness | **FIXED** |
-| S7-1 | render-equivalence gate normalizes `escapeText` away | Info | gate-honesty | completeness | follow-up |
-| P3-3 | `explain --endpoints` omits mutation CSRF posture | Low | audit-only | confirmed | folds into P3-1 |
-| P0 | cache key omits `productionRenderPlanGate` | Low | latent (unwired) | partial, not app-reachable | follow-up (cheap) |
+| S7-1 | render-equivalence gate normalizes `escapeText` away | Info | gate-honesty | completeness | **FIXED** |
+| P3-3 | `explain --endpoints` omits mutation CSRF posture | Low | audit-only | confirmed | **FIXED** (in P3-1) |
+| P0 | cache key omits `productionRenderPlanGate` | Low | latent (unwired) | partial, not app-reachable | **FIXED** |
 | S1-B | dynamic `dangerouslySetInnerHTML` no compile brand | Info | labeling | false-alarm (runtime fail-closed) | doc note |
 | P1-2, P4-01, P5-1, P0-tamper, P3-2 | `external` marker / module-URL injection / `@kovojs/*` prefix spoof / cache tamper / endpoint KV418 wrapper | — | — | refuted | ruled out |
 
@@ -128,13 +135,25 @@ will carry; any non-strict-single-leading-slash result fails closed to `/`.
   `pipelineByStage` was a no-op: its local `query()` factory has no `output`, so the new `hasOutput`
   branch never applies.) Evidence: `vitest --run packages/drizzle/src packages/conformance-fixtures/src`
   → 617 passed / 0 failed.
-- [ ] **P3-1 — KV418 for mutations + a runtime "no ambient session" floor for `csrf:false` (HIGH).**
-  KV418 is implemented only for endpoints (`graph-output.ts:880`); the compiler does **zero** csrf
-  processing for mutations and there is no runtime floor, so a `csrf:false` mutation that reads
-  `req.session`/runs a session guard rides the victim's ambient cookie — the unsound exemption §6.6/§9.1
-  forbid. Fix: typed `csrf: 'checked'|'exempt'` posture on `MutationExplain` (`core/graph.ts`) + KV418
-  for mutations + serve a `csrf:false` mutation with no ambient `req.session` (cookies uninterpreted).
-  Folds in **P3-3** (surface the posture in `explain --endpoints`).
+- [x] **P3-1 — KV418 for mutations + a runtime "no ambient session" floor for `csrf:false` (HIGH).**
+  Done in `deb3865e6` + `665be8d84` (branch `agent/fu-p3csrf`). Three parts:
+  (1) **Runtime floor (the load-bearing protection, VERIFIED end-to-end).** `app-mutation-request.ts`
+  omits `sessionProvider` from `resolveLifecycleRequest` when the mutation is csrf-exempt
+  (`!mutationRequiresPreBodyCsrf(mutation, app)`, read from the real mutation option), so `req.session`
+  is genuinely absent — a `csrf:false` mutation cannot ride the victim's ambient cookie. Proven by
+  `app-mutation-request.test.ts` ("with an app `sessionProvider` configured, the provider is never
+  invoked and `req.session`" is absent). This closes the hole fail-closed regardless of the static gate.
+  (2) **Static KV418 (by-construction).** `MutationExplain.csrf: 'checked'|'exempt'` (+ justification) on
+  `core/graph.ts`; `graph-output.ts` raises KV418 when `mutation.csrf === 'exempt' && mutationReferencesSession(mutation)`
+  (session read, session-derived guard `authed`/`role()`/`owns()`, or session auth posture — fails
+  closed; `verifier:*`/`custom:*` machine-auth correctly excluded). Shared `isSessionDerivedGuard` with
+  the endpoint gate. (3) **P3-3 audit:** `kovo explain --endpoints` now lists every mutation with its
+  CSRF posture. ⚠ The static gate fires only once the graph **producer** populates `mutation.csrf:'exempt'`
+  — the `KovoGraph` is emitted by the external `vp`/vite-plus toolchain (the CLI reads it from a file),
+  the same emitter that already populates `endpoint.csrf`. Confirm/extend that emitter to set
+  `mutation.csrf` (see the new follow-up below). Until then the by-construction gate is latent, but the
+  runtime floor still fails closed (a session-reading `csrf:false` mutation gets `req.session===undefined`
+  → its guard fails → unauthorized, never insecure).
 - [x] **P2-1 / S4 — close the compile-time KV236 completeness gap for the primitive `attrs={{…}}` merge
   channel and static object-spread `style`.** Fixed in `security/output-context.ts`: spread and attrs
   channels unified onto `validateStaticObjectEntrySinks` (over `ObjectLiteralEntry`) with a `style`→
@@ -149,28 +168,44 @@ will carry; any non-strict-single-leading-slash result fails closed to `/`.
   plain-element guard green). Residual (pre-existing, out of scope): the direct `isDirectHtmlEventHandlerAttribute`
   predicate is `/^on[a-z]/` (no `i` flag), so a static camelCase `onClick`/uppercase `ONCLICK` handler is
   unflagged in *all* channels — the symmetry fix mirrors the direct form rather than introducing this gap.
-- [ ] **S7-1 — make the §5.2 #3 render-equivalence gate honest.** It normalizes `escapeText(x) → x`
-  before comparing (`render-equivalence.ts:495`), so a real encoder presence/absence asymmetry (the
-  lowered pipeline double-escapes) is silently equated and the byte-identical claim is unproven. Remove
-  the encoder-stripping normalization so the gate fails closed on encoder drift.
-- [ ] **P0 — fold `productionRenderPlanGate` into the compile cache key (cheap, latent).** It is the one
-  compile-affecting option dropped from `compileComponentCacheKeyInput`/`compileCacheKey`; it flips the
-  prod KV435-missing-shape + KV416 gates. Currently unreachable (no build wires the gate), but the key
-  should be a total function of compile-affecting inputs. Add a canonical projection of the option.
+- [x] **S7-1 — make the §5.2 #3 render-equivalence gate honest.** Done in `675370242` (branch
+  `agent/fu-eqcache`). Removed the `escapeText(x) → x` encoder-stripping normalization from
+  `render-equivalence.ts:normalizeGeneratedSemanticExpression`, so the gate compares the actual encoded
+  output and fails closed on any encoder asymmetry. No genuine divergence surfaced (both sides already
+  carry `escapeText`); the two genuinely-generated-only mutation-field normalizations are kept.
+- [x] **P0 — fold `productionRenderPlanGate` into the compile cache key.** Done in `6607efcce` (branch
+  `agent/fu-eqcache`). `compileComponentCacheKeyInput` projects the option to a stable
+  `{ hasTokenFn, previous }` form and `compileCacheKey` includes it, so the key is now a total function
+  of compile-affecting options. Regression test asserts inputs differing only in the gate (presence /
+  `previous` / `tokenFn` presence) produce distinct keys.
 
-## Latest verification (in `agent/compiler-soundness-fixes` worktree)
+## Remaining follow-ups
 
-- **F1:** `output-context-trusted-brand-identity.test.ts` 9/9 (legit single-call + aliased import
-  suppress; shadow/foreign-import/undefined/concat/method-wrapper/style-shadow all fire KV236).
-  `_adv-guard-coverage` proves the fixed file is clean under the hard-rule #9 guard and the guard would
-  have flagged the old regex. **Full compiler suite: 682 passed** (the only failures, 4 in
-  `package-styles.test.ts`, reproduce identically on clean source — environmental `@kovojs/ui`
-  resolution in worktrees, not this change).
-- **F2 fix #1 + #2:** `confidentiality-folded-read-set.test.ts` — CONTROL + CASE A (KV410) + CASE B
-  (KV435) + NEGATIVE all pass. **`vitest --run packages/drizzle/src packages/conformance-fixtures/src`:
-  617 passed, 0 failed** (in `agent/fu-f2reads`).
-- **P1-1:** `guards.test.ts` 36/36 (incl. `/..//evil.com`, `/a/../..//evil.com`, `/%2e%2e//evil.com` → `/`).
-  **Full server suite: 1005 tests passed** (2 test *files* fail to load on the `@node-rs/argon2` native
-  binding — an `onlyBuiltDependencies` postinstall absent in the symlinked worktree, unrelated).
-- **Not run in-session:** the broad `pnpm acceptance` / `conformance` gates (heavy; required before the
-  F2 fix #1 migration). All changes live in the throwaway worktree; nothing landed on `main`.
+- [ ] **Confirm/extend the `vp`/vite-plus graph emitter to populate `mutation.csrf:'exempt'`** (the
+  producer that already emits `endpoint.csrf`), so the by-construction KV418-for-mutations gate fires at
+  compile time. The runtime floor already closes the hole fail-closed; this makes it a compile error too.
+  External to this repo (vite-plus dependency).
+- [ ] **Case-insensitive static event-handler detection (adjacent to P2-1/S4, low).** `isDirectHtmlEventHandlerAttribute`
+  is `/^on[a-z]/` (no `i`), so a static literal `onClick="…"`/`ONCLICK="…"` is unflagged in all channels
+  (author-self-XSS only; the dynamic/attacker path uses `/^on/i` and is covered). Tighten without
+  breaking legit JSX `onClick={handler}` handler-refs.
+- [ ] **Run the heavy `pnpm acceptance` / `conformance` build gates** once (not run in-session; they need
+  a full build). All package-level vitest suites are green on `main`.
+
+## Latest verification (full suites on `main`'s real toolchain, post-merge)
+
+All round-2 slices merged to `main` and re-verified on the real toolchain (which resolves the worktree
+symlink/env noise — `package-styles`/`argon2` failures seen in worktrees do **not** occur on `main`):
+
+- **Drizzle: 442 passed / 0 failed** (F2 fix #1 + the migrated `reads:` fixtures; CASE A fires KV410).
+- **Compiler: 697 passed / 0 failed** (P2-1/S4 channel symmetry, S7-1 gate, P0 cache key).
+- **CLI: 213 passed / 1 skipped / 0 failed** (P3-1 KV418-mutation gate + `explain --endpoints` posture —
+  the cross-package `MutationExplain.csrf` type resolves on `main`).
+- **Server: 1026 passed / 8 failed** — the 8 are the **pre-existing** `password.test.ts` argon2-mock
+  failures (verified identical at the pre-merge commit; unrelated to this work). P3-1's runtime-floor
+  test passes (`app-mutation-request.test.ts` 11/11: a `csrf:false` mutation never invokes
+  `sessionProvider`, so `req.session` is absent).
+- Round-1 regressions (F1 `output-context-trusted-brand-identity` 9/9, F2 `confidentiality-folded-read-set`,
+  P1-1 `guards` 36/36) all pass on `main`.
+- **Not run in-session:** the broad `pnpm acceptance` / `conformance` build gates (heavy; need a full
+  build) and the external-`vp` graph emit confirming `mutation.csrf` — both tracked under Remaining follow-ups.
