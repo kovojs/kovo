@@ -111,6 +111,45 @@ import {
   ];
 }
 
+/**
+ * SPEC §10.2/§11.1: an opaque/raw query read that takes the declared-opaque-read escape — it
+ * declares an `output` schema AND a `reads:` set (so the generic "unclassified Drizzle receiver"
+ * KV406 is suppressed) — but whose `reads:` resolves to NO invalidation domain has an empty folded
+ * read set: no write can ever invalidate it (silent staleness). This is the fully-raw case
+ * (`db.execute(sql`…`)` with no analyzable builder, or a `reads:` naming only unmapped tables /
+ * non-domain values). SPEC §10.2 — "a KV410 projection with no `reads:` declaration is itself a
+ * KV410 error" — and a `reads:` that resolves to no domain is no usable declaration. Require a
+ * resolvable, non-empty read set; otherwise the seam stays invisible to invalidation.
+ *
+ * KV411 (an exempt `reads:` entry) is the more specific diagnostic for an exempt table, so callers
+ * suppress this KV410 when the exempt check already fired.
+ *
+ * @internal
+ */
+export function opaqueReadWithoutResolvableReadsDiagnostics(
+  query: string,
+  hasOutputSchema: boolean,
+  declaredReadExpressions: readonly string[],
+  declaredReadDomains: readonly string[],
+  resolvedReads: readonly string[],
+  site: string,
+): TouchGraphDiagnostic[] {
+  const declaredOpaqueRead =
+    hasOutputSchema && (declaredReadExpressions.length > 0 || declaredReadDomains.length > 0);
+  if (!declaredOpaqueRead || resolvedReads.length > 0) return [];
+
+  const definition = diagnosticDefinitions.KV410;
+  const message = diagnosticDefinitionText('KV410', { preferHelp: true });
+  return [
+    {
+      code: 'KV410',
+      message: `${message} ${query} declares an opaque read whose reads: set resolves to no invalidation domain; declare a resolvable reads: domain set so the read folds into the query read set (§11.1).`,
+      severity: definition.severity,
+      site,
+    },
+  ];
+}
+
 /** @internal */ export function unmodeledRelationReadDiagnostics(
   tableExpressions: readonly string[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
