@@ -197,7 +197,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       file-serving/open sink gate while non-sink `readFile` stays quiet; focused sink-policy tests,
       `pnpm run check:sink-policy`, and `git diff --check` passed. Wildcard filesystem re-exports from
       `fs`/`node:fs/promises` now fail the rooted-file sink gate; focused sink-policy tests,
-      `pnpm run check:sink-policy`, and `git diff --check` passed. Remaining gap: other §3 candidates and full
+      `pnpm run check:sink-policy`, and `git diff --check` passed. SQL blessed-brand object-spread laundering
+      through contextual variable and return annotations is now rejected outside the owning SQL constructor
+      module; focused sink-policy tests, `pnpm run check:sink-policy`, `git diff --check`, and
+      `pnpm run check:vp` passed. Remaining gap: other §3 candidates and full
       static by-construction value-path analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
@@ -319,7 +322,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       post-review assignment cannot replace default-reject ambient posture with an opt-in posture; focused
       agent-tool tests and `git diff --check` passed. Focused coverage now pins duplicate and unknown
       `credentialKinds` as rejected while preserving valid multi-kind opt-ins; focused agent-tool tests,
-      `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
+      `git diff --check`, and `pnpm run check:vp` passed. Runtime invocation and audit now reject structurally
+      forged declarations that did not originate from `tool()`, so a forged object cannot widen ambient posture;
+      focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
       framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
@@ -451,6 +456,9 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       focused opaque-session tests and `git diff --check` passed. Custom-store and memory-store lifecycle
       timestamps now fail closed unless they are non-negative safe integer epoch milliseconds, and malformed
       store-created records cannot set browser cookies; focused opaque-session tests, `git diff --check`, and
+      `pnpm run check:vp` passed. `manager.revoke(id)` now verifies well-formed ids are no longer live after
+      store revocation and refuses to emit the browser clearing cookie when revocation is ineffective or
+      unverifiable; focused opaque-session/app tests, `git diff --check`, and
       `pnpm run check:vp` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
