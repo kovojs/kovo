@@ -973,4 +973,71 @@ export const CartBadge = component({
 
     expect(result.diagnostics).toEqual([]);
   });
+
+  // SPEC §5.x (bugz L3): attribute bindings (data-bind:href etc.) must NOT emit a child-body
+  // placeholder in a list stamp — that would clobber the element's label text with the URL.
+  // Runtime applyItemRelativeBindings/setBoundAttribute handles attribute updates separately.
+  it('does not emit a child-body placeholder for a data-bind:<attr> binding in a list stamp', () => {
+    const result = compileComponentModule({
+      fileName: 'nav-list.tsx',
+      queryShapes: {
+        site: {
+          nav: [{ url: 'string', label: 'string' }],
+        },
+      },
+      source: `
+export const NavList = component({
+  render: () => (
+    <ul data-bind-list="site.nav" kovo-key="url">
+      <template kovo-stamp>
+        <li><a data-bind:href=".url">Open</a></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+
+    // A stamp with only attribute bindings (no text data-bind) produces no child-body
+    // placeholders and is excluded from templateStamps entirely (the runtime handles
+    // attribute-only updates via applyItemRelativeBindings without a stamp placeholder).
+    const plan = result.queryUpdatePlans?.find((p) => p.query === 'site');
+    expect(plan?.templateStamps ?? []).toHaveLength(0);
+  });
+
+  it('emits child-body placeholder for text binding but not for attr binding on the same element', () => {
+    // Mixed element: data-bind:href (attribute) + data-bind (text).
+    // Only the text binding must produce a child-body placeholder (bugz L3).
+    const result = compileComponentModule({
+      fileName: 'nav-list.tsx',
+      queryShapes: {
+        site: {
+          nav: [{ url: 'string', label: 'string' }],
+        },
+      },
+      source: `
+export const NavList = component({
+  render: () => (
+    <ul data-bind-list="site.nav" kovo-key="url">
+      <template kovo-stamp>
+        <li><a data-bind:href=".url" data-bind=".label">Link</a></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+
+    const plan = result.queryUpdatePlans?.find((p) => p.query === 'site');
+    const stamp = plan?.templateStamps?.[0];
+    expect(stamp).toBeDefined();
+
+    // Exactly one placeholder — for .label (the text binding); .url (href attr) is excluded.
+    expect(stamp?.itemBindingPlaceholders).toHaveLength(1);
+    expect(stamp?.itemBindingPlaceholders?.[0]?.readPath).toBe('label');
+  });
 });

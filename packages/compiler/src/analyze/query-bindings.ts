@@ -133,9 +133,13 @@ function templateItemBindingPlaceholders(
     .filter((candidate) => isWithinElement(candidate, template))
     .flatMap((candidate) =>
       candidate.attributes
+        // SPEC §5.x: Only TEXT bindings (data-bind, no colon suffix) produce a child-body
+        // placeholder. Attribute bindings (data-bind:href, data-bind:hidden, …) are applied
+        // by the runtime applyItemRelativeBindings/setBoundAttribute path — interpolating them
+        // into the element child body would clobber the element's own label text (bugz L3).
         .filter(
           (attribute) =>
-            isBindingAttribute(attribute.name) &&
+            attribute.name === 'data-bind' &&
             attribute.value !== undefined &&
             attribute.value !== '' &&
             dataBindAttributeFact(attribute.name, attribute.value).relativeReadPath !== null,
