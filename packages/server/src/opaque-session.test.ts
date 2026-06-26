@@ -400,6 +400,58 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     ).resolves.toBeNull();
   });
 
+  it('rejects ambiguous Bearer session material before consulting the opaque session store', async () => {
+    let validateCalls = 0;
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      acceptAuthorizationHeader: true,
+      store: {
+        ...baseStore,
+        validate(id: string) {
+          validateCalls += 1;
+          return baseStore.validate(id);
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+    const requestWithAuthorization = (authorization: string): Request =>
+      ({
+        headers: {
+          get(name: string): string | null {
+            if (name.toLowerCase() === 'authorization') return authorization;
+            if (name.toLowerCase() === 'cookie') return cookie;
+            return null;
+          },
+        },
+      }) as Request;
+
+    await expect(
+      manager.validateRequest(
+        new Request('https://app.test/account', {
+          headers: { authorization: `Bearer ${established.session.id}` },
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(validateCalls).toBe(1);
+
+    for (const authorization of [
+      `Bearer ${established.session.id}, Bearer ${established.session.id}`,
+      `Bearer ${established.session.id},Bearer ${established.session.id}`,
+      `Bearer\t${established.session.id}`,
+      `Bearer  ${established.session.id}`,
+      `Bearer ${established.session.id} `,
+      `Bearer ${established.session.id}\n Bearer ${established.session.id}`,
+      ` Bearer ${established.session.id}`,
+      `Bearer ${established.session.id}\u0000`,
+    ]) {
+      await expect(
+        manager.validateRequest(requestWithAuthorization(authorization)),
+      ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    }
+    expect(validateCalls).toBe(1);
+  });
+
   it('requires opaque session cookies to be presented exactly as emitted', async () => {
     const manager = createOpaqueSessionManager({
       acceptAuthorizationHeader: true,

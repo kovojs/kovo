@@ -669,10 +669,12 @@ function extractOpaqueSessionId(
 }
 
 function readAuthorizationBearer(header: string): string | null {
-  if (!/^Bearer(?:\s|$)/i.test(header)) return null;
-  const match = /^Bearer\s+([^\s]+)$/i.exec(header);
+  if (!/^(?:Bearer|[\s]+Bearer)(?:[\s,]|$)/i.test(header)) return null;
+  const match = /^Bearer (kos_[A-Za-z0-9_-]{43})$/i.exec(header);
   // SPEC §6.5 / OPP-11: a malformed Bearer session credential must not be ignored in favor of a
   // simultaneously presented cookie, because that would accept ambiguous browser credential state.
+  // Accept only the exact Kovo-owned credential shape; folded, comma-joined, control-character,
+  // padded, or otherwise normalized variants fail before custom store validation.
   if (match === null) return AMBIGUOUS_OPAQUE_SESSION_ID;
   return match[1] ?? AMBIGUOUS_OPAQUE_SESSION_ID;
 }
