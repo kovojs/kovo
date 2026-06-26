@@ -15,6 +15,7 @@ import {
   UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER,
   callbackFunctionFromReference,
   computedPropertyNameExpression,
+  isKovoServerCalleeExpression,
   lineForIndex,
   objectPropertyInitializer,
   propertyNameText,
@@ -48,7 +49,8 @@ import {
       const domainCall = unwrappedStaticExpressionNode(initializer);
       if (!Node.isCallExpression(domainCall)) continue;
       const expression = domainCall.getExpression();
-      if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
+      // SPEC §11.1 (bugz-3 L11): match the @kovojs/server `domain` binding (bare/alias/namespace).
+      if (!isKovoServerCalleeExpression(expression, 'domain')) continue;
 
       const domainArgument = domainCall.getArguments()[0];
       const domainObject = domainWriteObject(domainArgument);
@@ -549,7 +551,8 @@ import {
   const writeCall = unwrappedStaticExpressionNode(initializer);
   if (!Node.isCallExpression(writeCall)) return null;
   const expression = writeCall.getExpression();
-  if (!Node.isIdentifier(expression) || expression.getText() !== 'write') return null;
+  // SPEC §11.1 (bugz-3 L11): match the @kovojs/server `write` binding (bare/alias/namespace).
+  if (!isKovoServerCalleeExpression(expression, 'write')) return null;
 
   for (const argument of writeCall.getArguments().toReversed()) {
     const callback = writeCallbackArgumentFunction(argument);
@@ -572,7 +575,8 @@ import {
       const domainCall = unwrappedStaticExpressionNode(initializer);
       if (!Node.isCallExpression(domainCall)) continue;
       const expression = domainCall.getExpression();
-      if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
+      // SPEC §11.1 (bugz-3 L11): match the @kovojs/server `domain` binding (bare/alias/namespace).
+      if (!isKovoServerCalleeExpression(expression, 'domain')) continue;
 
       const domainObject = domainWriteObject(domainCall.getArguments()[0]);
       if (!domainObject.body) continue;
@@ -596,7 +600,8 @@ import {
   const writeCall = unwrappedStaticExpressionNode(initializer);
   if (!Node.isCallExpression(writeCall)) return [];
   const expression = writeCall.getExpression();
-  if (!Node.isIdentifier(expression) || expression.getText() !== 'write') return [];
+  // SPEC §11.1 (bugz-3 L11): match the @kovojs/server `write` binding (bare/alias/namespace).
+  if (!isKovoServerCalleeExpression(expression, 'write')) return [];
 
   for (const argument of writeCall.getArguments()) {
     const object = unwrappedStaticExpressionNode(argument);

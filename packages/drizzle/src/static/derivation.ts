@@ -38,6 +38,7 @@ import {
   isDrizzleReceiver,
   isDrizzleWriteCall,
   isFunctionLikeNode,
+  isKovoServerCalleeExpression,
   isOpaqueProjection,
   isProjectDrizzleReceiverIdentifier,
   isSelectQueryCallName,
@@ -1912,7 +1913,8 @@ function readOnlyQueryLoaders(sourceFile: SourceFile): { fn: Node; name: string 
     if (!Node.isCallExpression(queryCall)) continue;
     const expression = queryCall.getExpression();
     // `query(...)` is a read surface; `query.elevated(...)` is the audited escape.
-    if (!Node.isIdentifier(expression) || expression.getText() !== 'query') continue;
+    // SPEC §11.1 (bugz-3 H1): match the @kovojs/server `query` binding (bare/alias/namespace).
+    if (!isKovoServerCalleeExpression(expression, 'query')) continue;
 
     const [queryArgument, bodyArgument] = queryCall.getArguments();
     if (!queryArgument || !Node.isStringLiteral(queryArgument)) continue;
@@ -2005,7 +2007,8 @@ function deriveQueryLoaders(
     const queryCall = unwrappedStaticExpressionNode(initializer);
     if (!Node.isCallExpression(queryCall)) continue;
     const expression = queryCall.getExpression();
-    if (!Node.isIdentifier(expression) || expression.getText() !== 'query') continue;
+    // SPEC §11.1 (bugz-3 H1): match the @kovojs/server `query` binding (bare/alias/namespace).
+    if (!isKovoServerCalleeExpression(expression, 'query')) continue;
 
     const [queryArgument, bodyArgument] = queryCall.getArguments();
     if (!queryArgument || !Node.isStringLiteral(queryArgument)) continue;

@@ -56,6 +56,7 @@ import {
   isDrizzleDatabaseTypeAnnotation,
   isDrizzleReceiver,
   isDrizzleWriteCall,
+  isKovoServerCalleeExpression,
   isReadSourceCall,
   isSelectQueryCallName,
   lineForIndex,
@@ -108,7 +109,8 @@ import {
     const domainCall = unwrappedStaticExpressionNode(initializer);
     if (!Node.isCallExpression(domainCall)) continue;
     const expression = domainCall.getExpression();
-    if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
+    // SPEC §11.1 (bugz-3 L11): match the @kovojs/server `domain` binding (bare/alias/namespace).
+    if (!isKovoServerCalleeExpression(expression, 'domain')) continue;
 
     const domainObject = domainWriteObject(domainCall.getArguments()[0]);
     if (!domainObject.body) continue;

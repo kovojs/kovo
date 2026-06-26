@@ -128,11 +128,19 @@ import {
 
   const shape: Record<string, QueryShape> = {};
   const unresolvedPaths: string[] = [];
-  appendRelationalProjectionShape(shape, unresolvedPaths, table, projection, columnShapes);
+  const opaquePaths: string[] = [];
+  appendRelationalProjectionShape(
+    shape,
+    unresolvedPaths,
+    opaquePaths,
+    table,
+    projection,
+    columnShapes,
+  );
 
   return {
     hasTablelessScalar: false,
-    opaquePaths: [],
+    opaquePaths,
     shape,
     scalarTables: new Set([table]),
     unresolvedPaths,
@@ -141,12 +149,17 @@ import {
 
 interface RelationalProjection {
   columns: readonly string[];
+  // SPEC §10.2/§11.3 (bugz-3 M4): the RQB `extras` keys (computed/raw-SQL fields that ARE returned
+  // on the wire). They carry no resolvable Drizzle column, so they are treated as opaque projection
+  // paths — see {@link appendRelationalProjectionShape}.
+  extras: readonly string[];
   relations: Readonly<Record<string, RelationalProjection | null>>;
 }
 
 function appendRelationalProjectionShape(
   shape: Record<string, QueryShape>,
   unresolvedPaths: string[],
+  opaquePaths: string[],
   table: string,
   projection: RelationalProjection,
   columnShapes: Readonly<Record<string, QueryShape>>,
@@ -160,20 +173,29 @@ function appendRelationalProjectionShape(
     }
   }
 
+  // SPEC §10.2/§11.3 (bugz-3 M4): every `extras` field is a raw-SQL projection — invisible to the
+  // column walk and capable of returning a secret/whole-row value. Over-approximate each to an opaque
+  // projection path so the KV435 secret backstop fires when the read table is secret (and KV410 fires
+  // otherwise, unless the author takes the audited output+reads escape), mirroring db.select({...sql}).
+  for (const extra of projection.extras) opaquePaths.push(extra);
+
   for (const [relation, relationProjection] of Object.entries(projection.relations)) {
     if (!relationProjection) continue;
 
     const relationShape: Record<string, QueryShape> = {};
     const relationUnresolvedPaths: string[] = [];
+    const relationOpaquePaths: string[] = [];
     appendRelationalProjectionShape(
       relationShape,
       relationUnresolvedPaths,
+      relationOpaquePaths,
       relation,
       relationProjection,
       columnShapes,
     );
     shape[relation] = relationShape;
     unresolvedPaths.push(...relationUnresolvedPaths.map((path) => `${relation}.${path}`));
+    opaquePaths.push(...relationOpaquePaths.map((path) => `${relation}.${path}`));
   }
 }
 
@@ -421,9 +443,64 @@ function relationalQueryProjection(call: CallExpression): RelationalProjection |
 
   const columns = relationalQueryColumns(config);
   const relations = relationalQueryRelations(config);
-  if (columns.length === 0 && Object.keys(relations).length === 0) return null;
+  const extras = relationalQueryExtras(config);
+  if (columns.length === 0 && Object.keys(relations).length === 0 && extras.length === 0)
+    return null;
 
-  return { columns, relations };
+  return { columns, extras, relations };
+}
+
+/**
+ * SPEC §10.2/§11.3 (bugz-3 M4): enumerate the `extras` field names of a `db.query.<t>.findMany({...})`
+ * projection. `extras` is `{ name: sql`...`.as('name') }` or a `(fields, ops) => ({ ... })` callback;
+ * each field is a returned raw-SQL value. We never resolve the SQL — every field is over-approximated
+ * to an opaque projection path (KV435/KV410), so a secret column raw-projected via `extras` cannot
+ * escape the confidentiality backstops. When `extras` is present but its fields cannot be statically
+ * enumerated, fail closed with a single synthetic `extras` path.
+ */
+function relationalQueryExtras(config: ObjectLiteralExpression): string[] {
+  const extrasProperty = config.getProperty('extras');
+  if (!extrasProperty) return [];
+  if (!Node.isPropertyAssignment(extrasProperty)) return ['extras'];
+
+  const object = relationalExtrasObjectLiteral(extrasProperty.getInitializer());
+  if (!object) return ['extras'];
+
+  const names = object
+    .getProperties()
+    .map((property) =>
+      Node.isPropertyAssignment(property) || Node.isShorthandPropertyAssignment(property)
+        ? (propertyNameText(property.getNameNode()) ?? 'extras')
+        : 'extras',
+    );
+  return names.length > 0 ? names : ['extras'];
+}
+
+function relationalExtrasObjectLiteral(
+  initializer: Node | undefined,
+): ObjectLiteralExpression | undefined {
+  if (!initializer) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (Node.isObjectLiteralExpression(expression)) return expression;
+
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
+    const body = unwrappedStaticExpressionNode(expression.getBody());
+    if (Node.isObjectLiteralExpression(body)) return body;
+    if (Node.isBlock(body)) {
+      const statements = body.getStatements();
+      const statement = statements.length === 1 ? statements[0] : undefined;
+      if (statement && Node.isReturnStatement(statement)) {
+        const returned = statement.getExpression();
+        const returnedExpression = returned ? unwrappedStaticExpressionNode(returned) : undefined;
+        if (returnedExpression && Node.isObjectLiteralExpression(returnedExpression)) {
+          return returnedExpression;
+        }
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function relationalQueryColumns(config: ObjectLiteralExpression): string[] {
@@ -462,6 +539,7 @@ function relationalQueryRelations(
       initializer && Node.isObjectLiteralExpression(initializer)
         ? {
             columns: relationalQueryColumns(initializer),
+            extras: relationalQueryExtras(initializer),
             relations: relationalQueryRelations(initializer),
           }
         : null;

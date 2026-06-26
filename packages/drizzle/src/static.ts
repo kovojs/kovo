@@ -865,6 +865,74 @@ function kovoSqlReceiverTextsForSourceFile(sourceFile: SourceFile): Set<string> 
   return receivers;
 }
 
+const KOVO_SERVER_MODULE_SPECIFIER = '@kovojs/server';
+
+interface KovoServerImportBindings {
+  /** export name → local identifier texts bound to it (`import { query as q }` → `q`). */
+  identifiersByExport: ReadonlyMap<string, ReadonlySet<string>>;
+  /** local names of `import * as ns from '@kovojs/server'` namespace imports. */
+  namespaces: ReadonlySet<string>;
+}
+
+const kovoServerImportBindingsCache = new WeakMap<SourceFile, KovoServerImportBindings>();
+
+function kovoServerImportBindings(sourceFile: SourceFile): KovoServerImportBindings {
+  const cached = kovoServerImportBindingsCache.get(sourceFile);
+  if (cached) return cached;
+
+  const identifiersByExport = new Map<string, Set<string>>();
+  const namespaces = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== KOVO_SERVER_MODULE_SPECIFIER) continue;
+    for (const named of declaration.getNamedImports()) {
+      const exportName = named.getName();
+      const local = named.getAliasNode()?.getText() ?? exportName;
+      const set = identifiersByExport.get(exportName) ?? new Set<string>();
+      set.add(local);
+      identifiersByExport.set(exportName, set);
+    }
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) namespaces.add(namespace.getText());
+  }
+
+  const bindings: KovoServerImportBindings = { identifiersByExport, namespaces };
+  kovoServerImportBindingsCache.set(sourceFile, bindings);
+  return bindings;
+}
+
+/**
+ * SPEC §6.6/§10.2/§11.1 (KV435/KV414/KV410/KV406/KV438): does `expression` name the `@kovojs/server`
+ * export `exportName` (e.g. `query`/`domain`/`write`) as a call callee? Recognizes the canonical bare
+ * identifier, a local import alias (`import { query as q }` → `q(...)`), and a namespace-member
+ * accessor (`import * as srv` → `srv.query(...)`). Mirrors the established alias-hardening of Kovo's
+ * `sql`/`kovo()`/`route()` recognizers so an aliased or namespaced loader/write/domain definition
+ * cannot silently erase its security surface the way a literal `expression.getText() === 'query'`
+ * compare did (bugz-3 H1/L11). The bare name is always accepted because the canonical app/fixture
+ * form references these primitives globally and the un-aliased binding IS the export name.
+ *
+ * @internal
+ */
+export function isKovoServerCalleeExpression(expression: Node, exportName: string): boolean {
+  const callee = unwrappedStaticExpressionNode(expression);
+  if (Node.isIdentifier(callee)) {
+    if (callee.getText() === exportName) return true;
+    return (
+      kovoServerImportBindings(callee.getSourceFile())
+        .identifiersByExport.get(exportName)
+        ?.has(callee.getText()) ?? false
+    );
+  }
+  if (Node.isPropertyAccessExpression(callee)) {
+    if (callee.getName() !== exportName) return false;
+    const receiver = unwrappedStaticExpressionNode(callee.getExpression());
+    return (
+      Node.isIdentifier(receiver) &&
+      kovoServerImportBindings(callee.getSourceFile()).namespaces.has(receiver.getText())
+    );
+  }
+  return false;
+}
+
 function sqlSinkReceiverIsRawDriverClient(
   call: CallExpression,
   rawDriverClients: ReadonlySet<string>,
@@ -1950,7 +2018,9 @@ function extractQueryDefinitionsFromSourceFile(
     if (!Node.isCallExpression(queryCall)) continue;
 
     const expression = queryCall.getExpression();
-    if (!Node.isIdentifier(expression) || expression.getText() !== 'query') continue;
+    // SPEC §11.1 (bugz-3 H1): resolve `query` to its @kovojs/server binding (bare/alias/namespace)
+    // so an aliased or namespaced loader still yields QueryFacts and KV435/KV414/KV410/KV406 stay engaged.
+    if (!isKovoServerCalleeExpression(expression, 'query')) continue;
 
     const [queryArgument, bodyArgument] = queryCall.getArguments();
     if (!Node.isStringLiteral(queryArgument)) {
