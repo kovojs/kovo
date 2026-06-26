@@ -185,6 +185,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       sink-policy tests, `git diff --check`, and `pnpm run check:vp` passed. SQL stamp helpers are now confined to
       `packages/core/src/internal/sql-safety.ts` and the reviewed Drizzle runtime adapter, with unowned imports,
       direct/namespace calls, and re-exports rejected by the sink-policy gate; focused sink-policy tests,
+      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. The sink-policy gate now
+      pins the rooted file-serve constructor to `realpath(root)`, frozen `rooted-file-serve` witnesses,
+      `isBlessedSink` re-checks, and pre/post-open realpath containment; focused sink-policy tests,
       `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3
       candidates and full static by-construction value-path analyzer integration are not complete.
 
@@ -258,7 +261,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       helper callback wrappers such as `const callbacks = { run: callback }; callbacks.run()` now preserve
       enforced callback-body reachability, while computed, spread, element-access, mutated, and escaped object
       aliases remain outside the proof; focused registry tests, `git diff --check`, and `pnpm run check:vp`
-      passed.
+      passed. Static callback array aliases such as `const callbacks = [callback] as const; callbacks[0]()`
+      now preserve enforced callback-body reachability, while spread arrays, mutated entries, escaped aliases,
+      and nonliteral indexes remain outside the proof; focused registry tests, `git diff --check`, and
+      `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -281,8 +287,11 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `git diff --cached --check`, file-level `vp check`, and `pnpm run check:api-surface` passed. Additional
       reverse-proxy identity headers (`remote-*`, `x-forwarded-*`, `x-remote-*`) are now treated as ambient
       `auth-proxy` credentials, and partial ambient declarations fail closed unless `allow: true` is explicit;
-      focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader
-      analyzer integration beyond the framework-owned `tool()` boundary.
+      focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Ambient opt-in declarations
+      now require `allow`, `credentialKinds`, `justification`, and nested review fields to be own data properties,
+      so accessor-backed or prototype-inherited review claims fail closed without invoking getters; focused
+      agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer
+      integration beyond the framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
@@ -400,7 +409,10 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       Kovo-owned opaque provider; focused app/session tests, `git diff --check`, and `pnpm run check:vp` passed.
       Owned opaque session rotation now requires a live prior session, rejects prior-id reuse, and verifies the
       store immediately revoked the prior id before setting the rotated browser cookie; focused opaque-session/app/
-      Better Auth tests, `git diff --check`, and `pnpm run check:vp` passed.
+      Better Auth tests, `git diff --check`, and `pnpm run check:vp` passed. Custom opaque-session store
+      `validate()` results now fail closed as `malformed` when the result shape or rejection reason is outside the
+      declared lifecycle vocabulary, and provider validation treats that as anonymous; focused opaque-session/app
+      tests, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
@@ -636,7 +648,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       `git diff --check`, and `pnpm run check:vp` passed. `Object.freeze({ ... })` literal wrappers around
       summarized guard principals now preserve static property-path provenance such as `wrapper.principal.userId`,
       while spread, duplicate, mismatched, unsummarized, mutable, and dynamic-access cases remain `scope: unknown`;
-      the same focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
+      the same focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed. Nested `const`
+      object destructuring from proven summarized guard/session objects now preserves exact owner-principal
+      provenance, while spread, duplicate, computed, mutable, and defaulted bindings remain `scope: unknown`;
+      the focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
