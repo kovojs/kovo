@@ -22,6 +22,7 @@ import {
   renderReferenceLoginForm,
   type ReferenceAuthBindings,
   type ReferenceRequest,
+  type ReferenceSession,
 } from './app.js';
 
 export type ReferenceShellRequest = Request & ReferenceRequest;
@@ -94,7 +95,7 @@ export const referenceLoginRoute = route('/login', {
 
 export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) {
   const auth = options.auth ?? createReferenceAuth(createReferenceBetterAuth());
-  const app = createApp({
+  const app = createApp<ReferenceSession>({
     document: { lang: 'en-US' },
     mutationResponses: {
       [referenceSignIn.key]: ({ rawInput, request }) => {
@@ -128,6 +129,12 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
       justification:
         'The reference app delegates validation, rotation, expiry, and revocation to its auth fixture.',
       lifecycle: 'delegated',
+      lifecycleAssertions: {
+        expiry: 'The reference auth fixture owns Better Auth session expiry.',
+        revocation: 'The reference sign-out mutation delegates revocation to the auth fixture.',
+        rotation: 'The reference auth fixture issues fresh credentials after sign-in.',
+        validation: 'The reference auth fixture validates Better Auth browser credentials.',
+      },
       provider: (request) => auth.sessionProvider(request as ReferenceShellRequest),
     },
   });

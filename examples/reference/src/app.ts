@@ -24,7 +24,7 @@ export interface ReferenceSession {
     email: string;
     id: string;
     name: string;
-    roles: ReferenceRole[];
+    roles: string[];
   };
 }
 
@@ -164,15 +164,18 @@ export function createReferenceAuth(auth: ReferenceBetterAuth) {
       ReferenceBetterAuthUser,
       ReferenceSession,
       ReferenceRequest
-    >(auth, ({ session: authSession, user }) => ({
-      id: authSession.id,
-      user: {
-        email: user.email,
-        id: user.id,
-        name: user.name ?? user.email,
-        roles: [...(user.roles ?? defaultRolesForEmail(user.email))],
-      },
-    })),
+    >(auth, ({ session: authSession, user }) => {
+      const roles: ReferenceRole[] = [...(user.roles ?? defaultRolesForEmail(user.email))];
+      return {
+        id: authSession.id,
+        user: {
+          email: user.email,
+          id: user.id,
+          name: user.name ?? user.email,
+          roles,
+        },
+      };
+    }),
   );
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', ReferenceRequest>(auth, {
     // Sign-in runs before authentication, so its KV436 access decision is public
