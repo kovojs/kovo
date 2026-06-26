@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
+import type { Redirect } from '@kovojs/core';
 import { signingKeyRingFromCsrfSecret, type CsrfValidationOptions } from './csrf.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
@@ -207,7 +208,12 @@ export interface NoJsMutationRequest<
    */
   idem?: string;
   rawInput: unknown;
-  redirectTo: string | ((result: MutationSuccess<Value>) => string);
+  /**
+   * POST-redirect-GET success target (SPEC §9.1). Accepts a plain `string`, a typed `redirect()`
+   * {@link Redirect} value (SPEC §6.4), or a function of the result returning either (the
+   * create-then-navigate form). Resolved by `mutationRedirectLocation`.
+   */
+  redirectTo: string | Redirect | ((result: MutationSuccess<Value>) => string | Redirect);
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
   /** Replay store for no-JS dedup (A2, SPEC §10.3:1063). Typed as a separate interface to allow 303 responses. */
   replayStore?: NoJsMutationReplayStore;
@@ -254,7 +260,11 @@ export interface MutationEndpointRequest<
   Value,
   SessionValue = unknown,
 > extends MutationWireRequestOptions<Request, SessionValue> {
-  redirectTo: string | ((result: MutationSuccess<Value>) => string);
+  /**
+   * POST-redirect-GET success target (SPEC §9.1). Accepts a plain `string`, a typed `redirect()`
+   * {@link Redirect} value (SPEC §6.4), or a function of the result returning either.
+   */
+  redirectTo: string | Redirect | ((result: MutationSuccess<Value>) => string | Redirect);
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
 }
 

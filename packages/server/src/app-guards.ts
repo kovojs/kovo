@@ -145,9 +145,7 @@ function isMutationResponses(value: unknown): value is KovoApp['mutationResponse
 function isMutationResponseOptions(value: unknown): boolean {
   return (
     isRecord(value) &&
-    (value.redirectTo === undefined ||
-      typeof value.redirectTo === 'string' ||
-      typeof value.redirectTo === 'function') &&
+    isRedirectToOption(value.redirectTo) &&
     isOptionalFunction(value.renderFailureFragment) &&
     isOptionalFunction(value.renderFailurePage) &&
     (value.failureTarget === undefined || typeof value.failureTarget === 'string') &&
@@ -230,9 +228,7 @@ function isMutationDeclarations(value: unknown): value is KovoApp['mutations'] {
         isOptionalFunction(mutation.guard) &&
         (mutation.defaultRedirectTo === undefined ||
           typeof mutation.defaultRedirectTo === 'string') &&
-        (mutation.redirectTo === undefined ||
-          typeof mutation.redirectTo === 'string' ||
-          typeof mutation.redirectTo === 'function') &&
+        isRedirectToOption(mutation.redirectTo) &&
         (mutation.registry === undefined || isRecord(mutation.registry)) &&
         isOptionalFunction(mutation.transaction),
     )
@@ -321,6 +317,20 @@ function isSchemaLike(value: unknown): boolean {
 
 function isOptionalFunction(value: unknown): boolean {
   return value === undefined || typeof value === 'function';
+}
+
+/**
+ * Validate a mutation/response `redirectTo` (SPEC §9.1 PRG / §6.4): a plain `string` path, a
+ * function of the result, or a typed `redirect()` {@link import('@kovojs/core').Redirect} value
+ * (`{ location: string; status: 303 }`). Mirrors the type union on `MutationDefinition.redirectTo`.
+ */
+function isRedirectToOption(value: unknown): boolean {
+  return (
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'function' ||
+    (isRecord(value) && typeof value.location === 'string' && value.status === 303)
+  );
 }
 
 function isOptionalCsrfOptions(value: unknown): boolean {

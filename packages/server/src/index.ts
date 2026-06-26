@@ -365,6 +365,7 @@ export {
 } from './api/routing.js';
 export type {
   AuthenticatedRequest,
+  ClientIpRequestLike,
   CookieClass,
   CookieOptions,
   DeferredFragmentChunk,

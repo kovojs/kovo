@@ -104,6 +104,20 @@ export interface SessionRequestLike {
   } | null;
 }
 
+/**
+ * A request carrying the framework-resolved, trustworthy client IP that `guards.rateLimit({ per:
+ * 'ip' })` keys on (SPEC §9.5). The request shell attaches `req.clientIp` (via
+ * `resolveLifecycleRequest`'s `clientIp` resolver) from the SAME trusted source the coarse
+ * pre-dispatch load-shed limiter uses — the app-configured `createApp({ requestLimits: { clientIp }
+ * })` extractor, else `X-Forwarded-For`/`X-Real-IP`/`Forwarded` ONLY when `trustedProxy` is set
+ * (`app-load-shed.ts` `resolveRequestClientIp`). The guard never reads a raw client-supplied header
+ * itself, so a spoofed `X-Forwarded-For` cannot pick the rate-limit bucket on an untrusted edge.
+ */
+export interface ClientIpRequestLike {
+  /** Framework-resolved client IP attached by the request shell before the guard chain (SPEC §9.5). */
+  clientIp?: string;
+}
+
 /** A request narrowed to one with a present session user, produced by `guards.authed`. */
 export type AuthenticatedRequest<Request extends SessionRequestLike> = Request & {
   session: NonNullable<Request['session']> & {
@@ -198,6 +212,15 @@ export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> 
 /** Per-request options shared across the lifecycle: error hook plus session/db providers. */
 /** @internal */
 export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbValue = unknown> {
+  /**
+   * @internal SPEC §9.5: optional resolver the request shell uses to attach a trustworthy
+   * `req.clientIp` BEFORE the guard chain, so `guards.rateLimit({ per: 'ip' })` keys by IP (see
+   * {@link ClientIpRequestLike}). Callers pass the SAME trusted source the coarse pre-dispatch
+   * limiter uses (`app-load-shed.ts` `resolveRequestClientIp`: the app-configured `clientIp`
+   * extractor, else forwarding headers ONLY behind a trusted proxy). A caller that cannot resolve a
+   * trustworthy IP omits it; per-IP guard keying then fails loud rather than collapsing clients.
+   */
+  clientIp?: (request: RawRequest) => string | undefined;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   /** @internal Query/list result item ceiling enforced by the query runtime sink (SPEC §9.5). */
   maxListItems?: number;
@@ -281,12 +304,20 @@ interface HttpGuardFailureResponse extends ServerResponseBase<
   303 | 403
 > {}
 
-/** Options for `guards.rateLimit`: window size, max requests, scope, and key function. */
+/**
+ * Options for `guards.rateLimit`: window size, max requests, scope, and key function (SPEC
+ * §9.5/§10.3). The `per` dimension keys the per-principal budget: `'session'` (default) keys by
+ * session id, `'global'` collapses all callers into one bucket, and `'ip'` keys by the
+ * framework-resolved client IP (`req.clientIp`, see {@link ClientIpRequestLike}) so an anonymous /
+ * per-IP budget can be expressed at the guard layer (SPEC §9.5:935). This per-principal guard
+ * combinator composes with — does not replace — the coarse pre-dispatch per-IP/global load-shed
+ * limiter (SPEC §9.5; `app-load-shed.ts`).
+ */
 export interface RateLimitOptions<Request> {
   key?: (request: Request) => string;
   max: number;
   maxKeys?: number;
-  per?: 'global' | 'session';
+  per?: 'global' | 'session' | 'ip';
   windowMs?: number;
 }
 
@@ -467,6 +498,17 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
       sessionValue = resolved ?? null;
     }
     lifecycleRequest = requestWithProperty(lifecycleRequest, 'session', sessionValue);
+  }
+
+  // SPEC §9.5: attach the framework-resolved trustworthy client IP onto the request BEFORE the guard
+  // chain so `guards.rateLimit({ per: 'ip' })` (and any arg-aware guard) can read `req.clientIp`. The
+  // resolver is the SAME trusted source the coarse limiter uses (app-configured extractor / trusted
+  // proxy headers only); an empty/undefined result is not attached, so per-IP keying fails loud.
+  if (options.clientIp) {
+    const clientIp = options.clientIp(request);
+    if (clientIp !== undefined && clientIp !== '') {
+      lifecycleRequest = requestWithProperty(lifecycleRequest, 'clientIp', clientIp);
+    }
   }
 
   if (options.db) {
@@ -751,6 +793,26 @@ function rateLimitKey<Request extends SessionRequestLike>(
 ): string {
   if (options.key) return options.key(request);
   if (options.per === 'global') return 'global';
+
+  if (options.per === 'ip') {
+    // SPEC §9.5:935: key by the framework-resolved client IP the request shell attached to
+    // `req.clientIp` (see ClientIpRequestLike) from the trusted source the coarse limiter uses —
+    // never a raw header read here. Namespace with an `ip:` prefix so an IP can never collide with
+    // a session id bucket.
+    const clientIp = (request as ClientIpRequestLike).clientIp;
+    if (clientIp !== undefined && clientIp !== '') return `ip:${clientIp}`;
+
+    // Mirror the M3 protection below: refuse to silently collapse every client whose IP the shell
+    // could not resolve into one shared `ip:unknown` bucket (a DoS lever that lets one attacker
+    // 429-lock everyone). An absent `req.clientIp` means no trusted client-IP source is configured,
+    // so fail loud rather than fake per-IP semantics.
+    throw new Error(
+      "guards.rateLimit({ per: 'ip' }) cannot derive a client IP: the request shell did not attach " +
+        'a trustworthy `req.clientIp`. Configure the trusted client-IP source on ' +
+        '`createApp({ requestLimits: { clientIp, trustedProxy } })` (SPEC §9.5), supply an explicit ' +
+        "`key`, or use `per:'global'`/`per:'session'`.",
+    );
+  }
 
   const sessionKey = request.session?.id ?? request.session?.user?.id;
   if (sessionKey !== undefined) return sessionKey;

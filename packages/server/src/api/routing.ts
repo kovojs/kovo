@@ -29,6 +29,7 @@ export type {
 export { guards, session } from '../guards.js';
 export type {
   AuthenticatedRequest,
+  ClientIpRequestLike,
   ForbiddenContext,
   ForbiddenDenial,
   ForbiddenRenderer,
