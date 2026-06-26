@@ -63,4 +63,9 @@ export {
   type StylesheetManifestEntry,
 } from '../hints.js';
 export { readHeader } from '../response.js';
-export { renderQueryScript, type QueryScriptRenderOptions } from '../wire-html.js';
+export {
+  renderQueryPageWireHtml,
+  renderQueryScript,
+  type QueryPageWireRenderOptions,
+  type QueryScriptRenderOptions,
+} from '../wire-html.js';

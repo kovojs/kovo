@@ -31,7 +31,7 @@ import { defaultDelegatedEvents } from './loader.js';
 
 function createOversizedInlineLoaderSource(): string {
   let state = 0x12345678;
-  const payload = Array.from({ length: 1900 }, () => {
+  const payload = Array.from({ length: 2100 }, () => {
     state = (state * 1664525 + 1013904223) >>> 0;
     return `'${state.toString(36).padStart(7, '0')}'`;
   }).join(',');

@@ -9,6 +9,13 @@ import type { FragmentChunk } from './wire-response-scanner.js';
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface MorphTarget {
   appendHtml?(html: string): void;
+  /**
+   * Insert keyed rows at the START of the target (SPEC §9.3 `mode="prepend"`),
+   * deduped by `kovo-key` (§13.2) with the framework scroll-anchor guarantee so
+   * "load older" content does not shift the viewport. Optional: a target without
+   * it falls back to a morphed prepend (no scroll anchor).
+   */
+  prependHtml?(html: string): void;
   readHtml?(): string;
   replaceWithHtml(html: string): void;
 }
@@ -41,6 +48,33 @@ export class DomMorphTarget implements MorphTarget {
     template.innerHTML = kovoCreateHTML(html.trim());
     sanitizeDomFragment(template.content);
     this.element.append(...Array.from(template.content.childNodes));
+  }
+
+  prependHtml(html: string): void {
+    const template = document.createElement('template');
+    // SF (secure-framework Tier 3): Trusted Types policy seam (see appendHtml).
+    template.innerHTML = kovoCreateHTML(html.trim());
+    sanitizeDomFragment(template.content);
+    // SPEC §9.3/§13.2: dedupe prepended rows by kovo-key (a key already present is
+    // skipped, never re-inserted), insert the rest at the START in wire order, and
+    // preserve the scroll anchor — the target is treated as the scroll container, so
+    // its scrollTop is shifted by the inserted height to keep existing ("load older")
+    // content visually fixed (no jump). Inert-until-touched holds as for append.
+    const present = new Set<string>();
+    for (const child of this.element.children) {
+      const key = domMorphKey(child);
+      if (key !== null) present.add(key);
+    }
+    const insert: Element[] = [];
+    for (const node of Array.from(template.content.children)) {
+      const key = domMorphKey(node);
+      if (key !== null && present.has(key)) continue;
+      insert.push(node);
+    }
+    const scrollTop = this.element.scrollTop;
+    const scrollHeight = this.element.scrollHeight;
+    this.element.prepend(...insert);
+    this.element.scrollTop = scrollTop + (this.element.scrollHeight - scrollHeight);
   }
 
   replaceWithHtml(html: string): void {
@@ -135,6 +169,7 @@ export function applyFragments(
   return applyResponseFragments<MorphTarget>(fragments, {
     appendFragment: (target, html) => appendFragment(target, html, morph),
     findFragmentTarget: (target) => root.findFragmentTarget(target),
+    prependFragment: (target, html) => prependFragment(target, html, morph),
     replaceFragment(target, html) {
       abortRemovedIslandSignals(target.readHtml?.() ?? '', html, islandSignalScope);
       morph(target, html);
@@ -215,6 +250,24 @@ function appendFragment(target: MorphTarget, html: string, morph: MorphFragment)
   const current = target.readHtml?.();
   if (current !== undefined) {
     morph(target, `${current}${html}`);
+    return;
+  }
+
+  morph(target, html);
+}
+
+/** @internal Apply a `mode="prepend"` fragment (SPEC §9.3): insert keyed rows at the START.
+ * Uses the target's {@link MorphTarget.prependHtml} (keyed dedup + scroll anchor) when present;
+ * otherwise morphs the prepended HTML ahead of the current content so rows still land first. */
+function prependFragment(target: MorphTarget, html: string, morph: MorphFragment): void {
+  if (target.prependHtml) {
+    target.prependHtml(html);
+    return;
+  }
+
+  const current = target.readHtml?.();
+  if (current !== undefined) {
+    morph(target, `${html}${current}`);
     return;
   }
 

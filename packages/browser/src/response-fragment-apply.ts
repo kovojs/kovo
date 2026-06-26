@@ -60,6 +60,12 @@ function trustedHtml(h: string): string {
 export interface ResponseFragmentApplyOptions<Target> {
   appendFragment(target: Target, html: string): void;
   findFragmentTarget(target: string): Target | null | undefined;
+  /**
+   * Insert prepended keyed rows at the START of the target with the §9.3
+   * scroll-anchor guarantee (SPEC §9.3/§13.2). Optional: callers that omit it
+   * (e.g. plain-object fragment harnesses) fall back to {@link appendFragment}.
+   */
+  prependFragment?(target: Target, html: string): void;
   replaceFragment(target: Target, html: string): void;
 }
 
@@ -74,6 +80,16 @@ export function applyResponseFragment<Target>(
 
   if (fragment.mode === 'append') {
     options.appendFragment(element, fragment.html);
+  } else if (fragment.mode === 'prepend') {
+    // SPEC §9.3: prepend inserts at the START with a scroll-anchor guarantee. A
+    // caller without a prepend sink degrades to append (still an ordered insert,
+    // just at the end) rather than a whole-target replace. Each sink is invoked
+    // through the `options` receiver so an object-method sink keeps its `this`.
+    if (options.prependFragment) {
+      options.prependFragment(element, fragment.html);
+    } else {
+      options.appendFragment(element, fragment.html);
+    }
   } else {
     options.replaceFragment(element, fragment.html);
   }
@@ -114,15 +130,38 @@ export function p(
     const e = f(x.target);
     if (!e) continue;
 
-    if (x.mode === 'append') {
+    if (x.mode === 'append' || x.mode === 'prepend') {
       // Concurrent hardening (template + g() attribute sanitization) PLUS Trusted Types routing:
       // the raw-HTML write goes through the inlined `trustedHtml` shim so it mints a TrustedHTML
       // under the strict CSP's `require-trusted-types-for 'script'`, and g() still neutralizes
-      // dangerous attributes/URLs on the appended children (SPEC §4.4/§9.1/§6.6).
+      // dangerous attributes/URLs on the inserted children (SPEC §4.4/§9.1/§6.6).
       const t = document.createElement('template');
       t.innerHTML = trustedHtml(x.html);
       for (const n of t.content.children) g(n);
-      e.append(...t.content.childNodes);
+      if (x.mode === 'prepend') {
+        // SPEC §9.3/§13.2: insert keyed rows at the START, deduped by kovo-key (a
+        // row whose key is already present is skipped, never re-inserted), and keep
+        // the scroll anchor — the target is the scroll container, so its scrollTop is
+        // shifted by the inserted height to keep existing ("load older") content
+        // visually fixed (no jump). Inert-until-touched holds as for append.
+        const ex = new Set<string>();
+        for (const c of e.children) {
+          const ck = k(c);
+          if (ck !== null) ex.add(ck);
+        }
+        const ins: Element[] = [];
+        for (const n of [...t.content.children]) {
+          const nk = k(n);
+          if (nk !== null && ex.has(nk)) continue;
+          ins.push(n);
+        }
+        const top = e.scrollTop;
+        const height = e.scrollHeight;
+        e.prepend(...ins);
+        e.scrollTop = top + (e.scrollHeight - height);
+      } else {
+        e.append(...t.content.childNodes);
+      }
     } else {
       d(e, x.html);
     }
