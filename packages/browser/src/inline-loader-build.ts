@@ -62,9 +62,9 @@ type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpec
 // Kovo's own hydration on Chromium; (3) the extracted fragment sanitizer now byte-tracks the shared
 // KV236 sink policy for imagesrcset, comma-aware srcset, CSS text, and raw-HTML sink names; (4) the
 // inline dynamic-import wall now matches the modular runtime's localhost-only TS/TSX dev exception
-// and production `/c/` modulepreload manifest restriction. The TT API tokens, sanitizer grammar, and
-// import allowlist are irreducible over the hardened loader; future increases require comparable
-// security-boundary evidence.
+// and production `/c/` restriction with an opt-in marked allowlist manifest. The TT API tokens,
+// sanitizer grammar, and import allowlist are irreducible over the hardened loader; future increases
+// require comparable security-boundary evidence.
 export const inlineKovoLoaderGzipByteBudget = 10200;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
@@ -229,7 +229,7 @@ function installInlineKovoLoader(im) {
       if (!pn.startsWith('/c/')) return false;
       let f = false;
       const k = p.origin + pn + p.search;
-      for (const a of qa(doc, 'link[rel~="modulepreload"][href]')) {
+      for (const a of qa(doc, 'link[data-kovo-module-allowlist][rel~="modulepreload"][href]')) {
         try {
           const u = new URL(a.getAttribute?.('href') || '', l.href);
           if (u.origin === l.origin && u.pathname.startsWith('/c/')) {
