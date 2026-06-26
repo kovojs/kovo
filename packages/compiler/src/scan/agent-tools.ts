@@ -22,7 +22,7 @@ export interface AgentToolModuleSource {
  * default exports that alias a summarized local helper, static namespace-property calls into
  * exported local helpers, default object exports whose properties statically point at summarized
  * local helpers, handler properties that reference a summarized local/imported helper function,
- * and inline callbacks passed to a same-module helper that directly invokes that callback
+ * and inline callbacks passed to a local/imported helper that directly invokes that callback
  * parameter. It does not inspect raw source text after parse and it skips non-invoked nested
  * function bodies, so ordinary callbacks, computed namespace access, computed/spread object
  * exports, export-star namespaces, and dynamic paths remain outside the SPEC.md §6.6 sound subset
@@ -580,7 +580,7 @@ function reachableSinkFacts(
         ),
       );
 
-      for (const callback of directlyInvokedCallbackArguments(node, helper, moduleFacts)) {
+      for (const callback of directlyInvokedCallbackArguments(node, helper)) {
         facts.push(
           ...reachableSinkFacts(
             sourceFile,
@@ -617,10 +617,8 @@ function directlyInvokedInlineFunction(node: ts.Node): ts.FunctionLikeDeclaratio
 function directlyInvokedCallbackArguments(
   node: ts.Node,
   helper: HelperDefinition,
-  callerModuleFacts: ModuleFacts,
 ): ts.FunctionLikeDeclaration[] {
   if (!ts.isCallExpression(node)) return [];
-  if (helper.moduleFacts.sourceFile !== callerModuleFacts.sourceFile) return [];
 
   const invokedParameters = directlyInvokedCallbackParameters(helper.node);
   if (invokedParameters.size === 0) return [];
