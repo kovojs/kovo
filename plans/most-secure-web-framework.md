@@ -462,7 +462,10 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       `pnpm run check:vp` passed. `manager.revoke(id)` now verifies well-formed ids are no longer live after
       store revocation and refuses to emit the browser clearing cookie when revocation is ineffective or
       unverifiable; focused opaque-session/app tests, `git diff --check`, and
-      `pnpm run check:vp` passed.
+      `pnpm run check:vp` passed. Opaque session managers now snapshot accepted store lifecycle methods and
+      option-derived knobs at construction, so later mutation of the original store object or cookie/header
+      options cannot change validation, rotation, revocation, or credential extraction behavior; focused
+      opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
