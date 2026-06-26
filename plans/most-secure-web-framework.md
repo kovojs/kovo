@@ -781,6 +781,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       exact owner scopes, while client, multi-element, mixed, wrong-column, mutable, and computed arrays fail
       closed; `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`,
       and `pnpm run check:vp` passed.
+      Direct non-equality owner predicates (`ne(...)` and `not(eq(...))`) now feed the fail-closed arg-candidate
+      path for read/write audits while remaining excluded from exact session/principal owner proof, so client
+      non-equality scopes report `args` and session non-equality stays `unknown`; the focused scope-audit test,
+      `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
