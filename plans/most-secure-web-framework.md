@@ -296,7 +296,10 @@ packages/server/src/opaque-session.test.ts`, `git diff --check`, and `pnpm run c
       `git diff --check`, and `pnpm run check:vp` passed. `createApp()` now rejects Kovo-owned opaque manager
       providers routed through the delegated `sessionProvider` boundary, requiring `session: manager` so the
       request shell records owned opaque lifecycle posture; focused app/session/API tests, `git diff --check`,
-      `pnpm run check:api-surface`, and `pnpm run check:vp` passed. Remaining gap:
+      `pnpm run check:api-surface`, and `pnpm run check:vp` passed. Owned opaque credential extraction now
+      fails closed on duplicate cookie aliases or cookie-plus-bearer ambiguity instead of choosing by header
+      precedence; `pnpm exec vitest --run packages/server/src/opaque-session.test.ts
+packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
       Better Auth delegation and explicit `sessionProvider` remain supported boundaries, so opaque sessions are
       not yet the only framework-wide default lifecycle.
 
