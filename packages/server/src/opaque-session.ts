@@ -301,7 +301,11 @@ export function createOpaqueSessionManager<SessionValue>(
         session,
         setCookie: serializeCookie(cookieName, session.id, {
           ...cookieOptions,
-          maxAge: Math.max(1, Math.floor((session.expiresAt - session.createdAt) / 1000)),
+          // SPEC §6.5 / OPP-11: the browser credential must not outlive the store-backed
+          // lifecycle. Derive cookie expiry from the store's absolute expiry at emission time,
+          // not from a store-supplied createdAt delta.
+          expires: new Date(session.expiresAt),
+          maxAge: resolveOpaqueSessionCookieMaxAge(session),
         }),
       };
     },
@@ -391,6 +395,18 @@ function assertEstablishedOpaqueSession<SessionValue>(
     );
   }
   return snapshot;
+}
+
+function resolveOpaqueSessionCookieMaxAge<SessionValue>(
+  session: OpaqueSessionRecord<SessionValue>,
+): number {
+  const remainingMs = session.expiresAt - Date.now();
+  if (remainingMs <= 0) {
+    throw new Error(
+      'Opaque session store returned an expired session record; refusing to set a browser session cookie',
+    );
+  }
+  return Math.max(1, Math.floor(remainingMs / 1000));
 }
 
 function isCoherentOpaqueSessionRecord<SessionValue>(
