@@ -200,7 +200,7 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `pnpm run check:sink-policy`, and `git diff --check` passed. SQL blessed-brand object-spread laundering
       through contextual variable and return annotations is now rejected outside the owning SQL constructor
       module; focused sink-policy tests, `pnpm run check:sink-policy`, `git diff --check`, and
-      `pnpm run check:vp` passed. KV442 now flags `new RegExp(...)` built from request/input-derived values
+      `pnpm run check:vp` passed. KV442 now flags `RegExp(...)`/`new RegExp(...)` built from request/input-derived values
       while keeping literal/template/static-constant pattern construction quiet; focused sink-policy tests,
       `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3 candidates and full
       static by-construction value-path analyzer integration are not complete.
