@@ -94,6 +94,95 @@ ${planBody}
 `;
 }
 
+// SPEC.md §6.1 / §10.6 / §11.1 — emit the app's `@kovojs/core` registry augmentation as a
+// generated module-augmentation artifact instead of a hand-authored `declare module` block.
+// The compiler emits the same interfaces from compiled components (compiler/src/emit/registry.ts);
+// this serializer covers the Drizzle data-plane path: it folds the (analyzer-derived) mutation
+// touch graph against the query read set into `InvalidationSets`, and maps each query to its
+// loader result type in `QueryRegistry`, so `OptimisticFor`/the inline `mutation({optimistic})`
+// exhaustiveness check (SPEC.md §10.6, server/mutation/definition.ts `MutationOptimisticMap`)
+// bites WITHOUT the app hand-listing the mutation→query union (which silently drifts from the real
+// invalidation graph, capability-gaps §3). Pair with `OptimisticDerivationSets` once derived
+// optimism is wired (SPEC.md §10.5); until then it stays empty so every invalidated query is a
+// REQUIRED optimistic entry.
+
+/** @internal One `QueryRegistry` entry: a query key and the TypeScript type its loader produces. */
+export interface CoreRegistryQueryEntry {
+  /** The query registry key (must match the query's `query('<name>', …)` key). */
+  name: string;
+  /** The result type expression, e.g. `QueryResult<typeof import('../queries.js').questionList>`. */
+  type: string;
+}
+
+/** @internal Options for {@link serializeCoreRegistryModule}. */
+export interface SerializeCoreRegistryModuleOptions {
+  /** `QueryRegistry` entries (query key → loader result type expression). */
+  queries: readonly CoreRegistryQueryEntry[];
+  /** `InvalidationSets` entries: mutation key → invalidated query keys. */
+  invalidations: Readonly<Record<string, readonly string[]>>;
+  /** `OptimisticDerivationSets` entries: mutation key → derived (optional) query keys (SPEC.md §10.5). */
+  derivations?: Readonly<Record<string, readonly string[]>>;
+  /** Top-level imports the type expressions reference (also make the file a module for augmentation). */
+  headerImports?: readonly string[];
+}
+
+const REGISTRY_DO_NOT_EDIT = [
+  '// DO NOT EDIT — generated @kovojs/core registry augmentation (SPEC.md §6.1/§10.6/§11.1).',
+  '// Produced from the Drizzle touch graph + query read set so the mutation→query',
+  '// InvalidationSets union cannot drift from the real graph (capability-gaps §3).',
+  '// QueryRegistry result types come from each query loader, the single source of truth.',
+].join('\n');
+
+/**
+ * @internal
+ *
+ * Serialize a `declare module '@kovojs/core'` augmentation (`QueryRegistry`, `InvalidationSets`,
+ * and `OptimisticDerivationSets`) into a generated `.d.ts`/`.ts` module the app's `tsc` program
+ * includes (SPEC.md §6.1/§10.6/§11.1). The file is a module (top-level imports), so the
+ * `declare module` block is a declaration-merging augmentation, not an ambient redefinition.
+ */
+export function serializeCoreRegistryModule(options: SerializeCoreRegistryModuleOptions): string {
+  const queryLines = [...options.queries]
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((entry) => indent(`${propertyKey(entry.name)}: ${entry.type};`, 4))
+    .join('\n');
+  const invalidationLines = registryUnionLines(options.invalidations);
+  const derivationLines = registryUnionLines(options.derivations ?? {});
+  const header = (options.headerImports ?? []).join('\n');
+
+  return `${REGISTRY_DO_NOT_EDIT}
+${header}
+
+declare module '@kovojs/core' {
+  interface QueryRegistry {
+${queryLines}
+  }
+
+  interface InvalidationSets {
+${invalidationLines}
+  }
+
+  interface OptimisticDerivationSets {
+${derivationLines}
+  }
+}
+`;
+}
+
+function registryUnionLines(map: Readonly<Record<string, readonly string[]>>): string {
+  return Object.entries(map)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, queries]) => {
+      const union =
+        [...new Set(queries)]
+          .sort()
+          .map((query) => `'${query}'`)
+          .join(' | ') || 'never';
+      return indent(`${propertyKey(key)}: ${union};`, 4);
+    })
+    .join('\n');
+}
+
 /**
  * @internal
  *

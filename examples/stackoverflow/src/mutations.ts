@@ -2,7 +2,7 @@ import { guards, mutation, s, type MutationContext } from '@kovojs/server';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
-import { type SoRequest } from './model.js';
+import { type QuestionListItem, type SoRequest } from './model.js';
 import { answers, questions, votes } from './schema.js';
 
 // Top-level mutation handlers for the demo. Drizzle writes stay inline so the
@@ -164,6 +164,27 @@ export const voteUpMutation = mutation('voteUp', {
   }),
   csrf: soCsrf,
   guard: guards.authed<SoRequest>(),
+  // SPEC §10.4/§10.6: this optimistic map is exhaustiveness-checked (KV310) against the GENERATED
+  // `@kovojs/core` InvalidationSets in `src/generated/registry.d.ts`. voteUp touches the
+  // question + vote domains, so the generator derives `voteUp: questionDetail | questionList |
+  // questionScore`; omitting any entry below is a `tsc` error — with NO hand-authored
+  // `declare module` to drift from the real invalidation graph (capability-gaps §3). The draft
+  // types come from each query loader via `QueryRegistry` (the single source of truth).
+  optimistic: {
+    // The ranked list bumps the voted question's score the instant the upvote is clicked.
+    // `item` is annotated so the example still type-checks before the generated registry exists
+    // (e.g. a bare `vp check`); `typecheck-examples` regenerates it and enforces KV310.
+    questionList(draft, input) {
+      const target = draft.items.find((item: QuestionListItem) => item.id === input.targetId);
+      if (target) target.score += 1;
+    },
+    // The aggregate vote total moves immediately, then settles to server truth on reconcile.
+    questionScore(draft, _input) {
+      draft.score += 1;
+    },
+    // The question detail region reconciles to the refreshed server fragment (SPEC §10.4).
+    questionDetail: 'await-fragment',
+  },
   handler: voteUp,
 });
 
