@@ -1,4 +1,4 @@
-import { type EndpointDeclaration, type SessionProvider } from '@kovojs/server';
+import { createApp, type EndpointDeclaration, type SessionProvider } from '@kovojs/server';
 import {
   endpointMatches,
   resolveLifecycleRequest,
@@ -49,6 +49,26 @@ describe('betterAuthSession', () => {
         headers: new Headers({ cookie: 'better-auth.session_token=opaque-session-1' }),
       }),
     ).resolves.toEqual(mappedAppSession);
+  });
+
+  it('requires Better Auth delegation to be declared at the createApp session boundary', () => {
+    const auth = new FakeBetterAuth();
+    const provider = betterAuthSession(auth, mapSession);
+    const app = createApp({
+      sessionProvider: {
+        justification:
+          'Better Auth owns validation, rotation, expiry, and revocation for this app session.',
+        lifecycle: 'delegated',
+        provider,
+      },
+    });
+
+    expect(app.session).toBeUndefined();
+    expect(app.sessionProvider).toBe(provider);
+    expect(app.sessionProviderBoundary).toBe('delegated');
+    expect(() => createApp({ sessionProvider: provider as never })).toThrow(
+      'createApp({ sessionProvider }) now requires an explicit delegated lifecycle declaration',
+    );
   });
 
   it('fails closed when Better Auth returns a payload without a browser session cookie', async () => {

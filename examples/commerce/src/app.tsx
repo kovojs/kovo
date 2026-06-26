@@ -158,7 +158,12 @@ export function createCommerceApp(options: CommerceAppOptions = {}): CommerceApp
       return routeValueToHtml(value);
     },
     routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
-    sessionProvider: (request) => commerceSessionProvider(request as CommerceRouteRequest),
+    sessionProvider: {
+      justification:
+        'The commerce example delegates validation, rotation, expiry, and revocation to its auth module.',
+      lifecycle: 'delegated',
+      provider: (request) => commerceSessionProvider(request as CommerceRouteRequest),
+    },
   });
   const requestHandler = createRequestHandler(app);
 

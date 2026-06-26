@@ -38,6 +38,14 @@ const rawTextResponse = {
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
 
+function delegatedSessionProvider(provider: (request: Request) => unknown) {
+  return {
+    justification: 'test delegates session lifecycle to an app-owned provider',
+    lifecycle: 'delegated' as const,
+    provider,
+  };
+}
+
 function expectReservedSystemResponsePosture(response: Response, buildToken: string): void {
   expect(response.headers.get('cache-control')).toBe('private, no-store');
   expect(response.headers.get('vary')).toBe('Cookie');
@@ -252,7 +260,7 @@ describe('server createApp request shell', () => {
       endpoints: [statusEndpoint],
       queries: [productQuery],
       routes: [productRoute],
-      sessionProvider,
+      sessionProvider: delegatedSessionProvider(sessionProvider),
       stylesheets: [appStylesheet],
     });
 
@@ -339,9 +347,9 @@ describe('server createApp request shell', () => {
     ).resolves.toBeNull();
   });
 
-  it('keeps delegated sessionProvider as an explicit non-owned boundary', () => {
+  it('keeps an explicitly justified delegated sessionProvider as a non-owned boundary', () => {
     const sessionProvider = () => ({ user: { id: 'delegated' } });
-    const app = createApp({ sessionProvider });
+    const app = createApp({ sessionProvider: delegatedSessionProvider(sessionProvider) });
 
     expect(app.session).toBeUndefined();
     expect(app.sessionProvider).toBe(sessionProvider);
@@ -353,9 +361,33 @@ describe('server createApp request shell', () => {
       store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
     });
 
-    expect(() => createApp({ sessionProvider: manager.provider })).toThrow(
+    expect(() =>
+      createApp({ sessionProvider: delegatedSessionProvider(manager.provider as () => unknown) }),
+    ).toThrow(
       'createApp() received a Kovo-owned opaque session provider through `sessionProvider`. Pass the manager as `session`',
     );
+  });
+
+  it('rejects ambiguous delegated sessionProvider shorthand without lifecycle posture', () => {
+    expect(() =>
+      createApp({
+        sessionProvider: (() => ({ user: { id: 'legacy' } })) as never,
+      }),
+    ).toThrow(
+      'createApp({ sessionProvider }) now requires an explicit delegated lifecycle declaration',
+    );
+  });
+
+  it('rejects delegated sessionProvider declarations without justification', () => {
+    expect(() =>
+      createApp({
+        sessionProvider: {
+          justification: '   ',
+          lifecycle: 'delegated',
+          provider: () => ({ user: { id: 'delegated' } }),
+        },
+      }),
+    ).toThrow('requires a non-empty delegated session justification');
   });
 
   it('rejects ambiguous owned and delegated session lifecycles', () => {
@@ -366,7 +398,7 @@ describe('server createApp request shell', () => {
     expect(() =>
       createApp({
         session: manager,
-        sessionProvider: () => ({ user: { id: 'delegated' } }),
+        sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'delegated' } })),
       }),
     ).toThrow(
       'createApp() received both `session` and `sessionProvider`. `session` gives the request shell Kovo-owned opaque session lifecycle control',
@@ -1183,7 +1215,7 @@ describe('server createApp request shell', () => {
       createApp({
         endpoints: [statusEndpoint],
         routes: [route('/status', { page: () => trustedHtml('route') })],
-        sessionProvider: () => ({ user: { id: 'u1' } }),
+        sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
       }),
     );
 
@@ -1231,10 +1263,10 @@ describe('server createApp request shell', () => {
     const handler = createRequestHandler(
       createApp({
         routes: [adminRoute],
-        sessionProvider() {
+        sessionProvider: delegatedSessionProvider(() => {
           sessionReads += 1;
           return { user: { id: 'u1' } };
-        },
+        }),
       }),
     );
 
@@ -1315,7 +1347,7 @@ describe('server createApp request shell', () => {
             },
           }),
         ],
-        sessionProvider: () => ({ user: { id: 'u1' } }),
+        sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
       }),
     );
 
