@@ -466,6 +466,9 @@ scripts/check-pack-security.test.mjs` passed; `pnpm run check:pack-security -- -
       passed; latest destructured-arg coverage used `pnpm exec vitest run
 packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm run check:vp`; latest
       property-call helper coverage used the same focused test, `git diff --check`, and `pnpm run check:vp`.
+      Local `const` aliases to explicitly summarized static property-call guard helpers now preserve the guard
+      principal proof while unsummarized aliases remain `scope: unknown`; `pnpm exec vitest run
+packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
