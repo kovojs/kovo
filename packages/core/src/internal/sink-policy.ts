@@ -6,6 +6,27 @@ import {
 } from './security-url.js';
 
 /**
+ * @internal Framework-owned sink witness kinds that may use the shared Blessed<Sink> substrate.
+ *
+ * SPEC §4.8 / §5.2 #10 and §6.6: unsafe output and execution-adjacent sinks need an explicit,
+ * centrally auditable constructor monopoly. Additions here must be reviewed with their owning
+ * validator/escaper; scripts/check-sink-policy-gate.mjs rejects unregistered drift.
+ */
+export const FRAMEWORK_BLESSED_SINK_KINDS = [
+  'core:route-redirect',
+  'parameterized-sql',
+  'rooted-file-serve',
+  'server:redirect-location',
+  'sql-identifier',
+  'sql-keyword',
+  'static-sql',
+  'trusted-sql',
+] as const;
+
+/** @internal */
+export type FrameworkBlessedSinkKind = (typeof FRAMEWORK_BLESSED_SINK_KINDS)[number];
+
+/**
  * @internal Type-only carrier for a value blessed for one framework-owned sink.
  *
  * SPEC §6.6: brands are defense-in-depth, not the proof. The enforcement witness is the
