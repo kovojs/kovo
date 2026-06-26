@@ -18,11 +18,11 @@ export interface AgentToolModuleSource {
  * This scanner intentionally accepts a narrow subset: a named `tool` import from `@kovojs/server`,
  * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
- * helpers reached through static named imports including static local re-export barrels, and static
- * namespace-property calls into exported local helpers. It does not inspect raw source text after
- * parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace
- * access, export-star namespaces, and dynamic paths remain outside the SPEC.md §6.6 sound subset
- * until a dedicated analyzer proves them.
+ * helpers reached through static named/default imports including static local re-export barrels,
+ * and static namespace-property calls into exported local helpers. It does not inspect raw source
+ * text after parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed
+ * namespace access, export-star namespaces, default object exports, and dynamic paths remain outside
+ * the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -122,10 +122,20 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
     if (ts.isFunctionDeclaration(statement) && statement.name) {
       topLevelBindings.add(statement.name.text);
       helpers.set(statement.name.text, {
-        exported: hasExportModifier(statement),
+        exported: hasExportModifier(statement) && !hasDefaultModifier(statement),
         id: helperId(sourceFile, statement.name.text),
         moduleFacts,
         node: statement,
+      });
+    }
+
+    const defaultExportedFunction = defaultExportedFunctionHelper(statement);
+    if (defaultExportedFunction) {
+      helpers.set('default', {
+        exported: true,
+        id: helperId(sourceFile, 'default'),
+        moduleFacts,
+        node: defaultExportedFunction,
       });
       continue;
     }
@@ -184,6 +194,14 @@ function linkImportedHelpers(
 
       const importedFacts = facts.get(importedSourceFile);
       if (!importedFacts) continue;
+
+      const defaultBinding = statement.importClause?.name;
+      if (
+        defaultBinding &&
+        linkHelperBinding(helpers, defaultBinding.text, importedFacts.helpers.get('default'))
+      ) {
+        changed = true;
+      }
 
       const bindings = statement.importClause?.namedBindings;
       if (!bindings) continue;
@@ -321,6 +339,34 @@ function hasExportModifier(node: ts.Node): boolean {
     ? (ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
         false)
     : false;
+}
+
+function hasDefaultModifier(node: ts.Node): boolean {
+  return ts.canHaveModifiers(node)
+    ? (ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ??
+        false)
+    : false;
+}
+
+function defaultExportedFunctionHelper(
+  statement: ts.Statement,
+): ts.FunctionLikeDeclaration | undefined {
+  if (
+    ts.isFunctionDeclaration(statement) &&
+    hasExportModifier(statement) &&
+    hasDefaultModifier(statement)
+  ) {
+    return statement;
+  }
+
+  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return undefined;
+
+  const expression = unwrapParentheses(statement.expression);
+  if (ts.isFunctionExpression(expression) || ts.isArrowFunction(expression)) {
+    return expression;
+  }
+
+  return undefined;
 }
 
 function collectImportBindingNames(statement: ts.ImportDeclaration, names: Set<string>): void {
