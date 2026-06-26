@@ -349,6 +349,48 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
   });
 
+  it('snapshots custom-store records so post-validation mutation cannot change the request session', async () => {
+    type Session = { user: { id: string } };
+    const baseStore = createMemoryOpaqueSessionStore<Session>();
+    let validatedRecord:
+      | { id: string; createdAt: number; expiresAt: number; value: Session }
+      | undefined;
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        async validate(id: string) {
+          const result = await baseStore.validate(id);
+          if (!result.ok) return result;
+          validatedRecord = {
+            ...result.session,
+            value: structuredClone(result.session.value),
+          };
+          return { ok: true, session: validatedRecord };
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    const validation = await manager.validate(established.session.id);
+
+    if (!validation.ok || validatedRecord === undefined) {
+      throw new Error('test setup expected a live validated session');
+    }
+    validatedRecord.value.user.id = 'attacker';
+    expect(validation.session.value.user.id).toBe('u1');
+
+    const requestSession = await manager.provider(
+      new Request('https://app.test/account', { headers: { cookie } }),
+    );
+
+    if (requestSession === null || validatedRecord === undefined) {
+      throw new Error('test setup expected a live request session');
+    }
+    validatedRecord.value.user.id = 'mutated-again';
+    expect(requestSession.user.id).toBe('u1');
+  });
+
   it('refuses to set a browser cookie when a custom store creates a malformed session record', async () => {
     const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
     const malformedStore: OpaqueSessionStore<{ user: { id: string } }> = {

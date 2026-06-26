@@ -287,7 +287,7 @@ export function createOpaqueSessionManager<SessionValue>(
         priorId?: string | null | undefined;
       } = {},
     ): Promise<OpaqueSessionEstablishResult<SessionValue>> {
-      const session =
+      const rawSession =
         establishOptions.priorId === null || establishOptions.priorId === undefined
           ? await options.store.create(value, establishOptions)
           : await rotateOpaqueSession(
@@ -296,7 +296,7 @@ export function createOpaqueSessionManager<SessionValue>(
               value,
               establishOptions.ttlMs === undefined ? {} : { ttlMs: establishOptions.ttlMs },
             );
-      assertEstablishedOpaqueSession(session);
+      const session = assertEstablishedOpaqueSession(rawSession);
       return {
         session,
         setCookie: serializeCookie(cookieName, session.id, {
@@ -336,8 +336,7 @@ async function rotateOpaqueSession<SessionValue>(
     );
   }
 
-  const next = await store.rotate(priorId, value, options);
-  assertEstablishedOpaqueSession(next);
+  const next = assertEstablishedOpaqueSession(await store.rotate(priorId, value, options));
   if (next.id === priorId) {
     throw new Error(
       'Opaque session store returned the prior id during rotation; refusing to set a browser session cookie',
@@ -371,13 +370,11 @@ function normalizeOpaqueSessionValidation<SessionValue>(
       ? { ok: false, reason: validation.reason }
       : { ok: false, reason: 'malformed' };
   }
-  if (
-    !isCoherentOpaqueSessionRecord<SessionValue>(validation.session) ||
-    validation.session.id !== presentedId
-  ) {
+  const session = snapshotCoherentOpaqueSessionRecord<SessionValue>(validation.session);
+  if (session === undefined || session.id !== presentedId) {
     return { ok: false, reason: 'malformed' };
   }
-  return { ok: true, session: validation.session };
+  return { ok: true, session };
 }
 
 function isOpaqueSessionRejectReason(value: unknown): value is OpaqueSessionRejectReason {
@@ -386,12 +383,14 @@ function isOpaqueSessionRejectReason(value: unknown): value is OpaqueSessionReje
 
 function assertEstablishedOpaqueSession<SessionValue>(
   session: OpaqueSessionRecord<SessionValue>,
-): void {
-  if (!isCoherentOpaqueSessionRecord(session)) {
+): OpaqueSessionRecord<SessionValue> {
+  const snapshot = snapshotCoherentOpaqueSessionRecord<SessionValue>(session);
+  if (snapshot === undefined) {
     throw new Error(
       'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
     );
   }
+  return snapshot;
 }
 
 function isCoherentOpaqueSessionRecord<SessionValue>(
@@ -411,6 +410,22 @@ function isCoherentOpaqueSessionRecord<SessionValue>(
     expiresAt > createdAt &&
     'value' in record
   );
+}
+
+function snapshotCoherentOpaqueSessionRecord<SessionValue>(
+  value: unknown,
+): OpaqueSessionRecord<SessionValue> | undefined {
+  if (!isCoherentOpaqueSessionRecord<SessionValue>(value)) return undefined;
+  try {
+    return {
+      id: value.id,
+      createdAt: value.createdAt,
+      expiresAt: value.expiresAt,
+      value: structuredClone(value.value) as SessionValue,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function assertOpaqueSessionManagerOptions<SessionValue>(
