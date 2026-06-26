@@ -300,7 +300,11 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `Object.freeze(existingAlias)` now preserves enforced reachability when the existing alias is already a
       proven static object, array, or nested-object helper alias and is not mutated, while unresolved, computed,
       spread, mutated, shadowed-`Object`, non-alias, and ambiguous shapes remain outside the proof; focused
-      registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
+      registry/check tests, `git diff --check`, and `pnpm run check:vp` passed. Frozen default-object helper
+      exports such as `const mail = { sendMail }; export default Object.freeze(mail)` now preserve enforced
+      reachability for already-proven static aliases, while computed, spread, mutable, shadowed, unresolved, and
+      ambiguous default-object shapes remain outside the proof; focused registry/check tests, `git diff --check`,
+      and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
