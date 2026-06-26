@@ -540,11 +540,18 @@ export default defaultExport;
 `;
 
 const KOVO_DTS = String.raw`
+export type ComponentElementNode = any;
+export type ComponentNode = any;
+export type ComponentRegistry = any;
+export type ComponentRegistryEntry = any;
+export type ComponentRegistryInput = any;
+export type ComponentTextNode = any;
 export type IconProps = any;
 export type SelectTriggerAttributeOptions = any;
 export type StyleInput = any;
 export type CsrfValidationOptions<Request = any> = any;
 
+export class ComponentXmlError extends Error {}
 export const BodyEnd: any;
 export const Button: any;
 export const Defer: any;
@@ -581,10 +588,14 @@ export const layout: any;
 export const metaFromQuery: any;
 export const mutation: <Value = any>(...args: any[]) => any;
 export const notFound: any;
+export const parseComponentXml: any;
 export const query: any;
 export const redirect: any;
+export const renderRegistry: any;
+export const renderTree: any;
 export const route: any;
 export const s: any;
+export const safeRichHtml: any;
 export const serverValue: any;
 export const selectTriggerAttributes: any;
 export const session: any;
@@ -602,10 +613,17 @@ type AnyFn = (...args: any[]) => any;
 
 const anyFn = ((..._args: any[]) => ({})) as AnyFn;
 
+export type ComponentElementNode = any;
+export type ComponentNode = any;
+export type ComponentRegistry = any;
+export type ComponentRegistryEntry = any;
+export type ComponentRegistryInput = any;
+export type ComponentTextNode = any;
 export type IconProps = any;
 export type SelectTriggerAttributeOptions = any;
 export type StyleInput = any;
 
+export class ComponentXmlError extends Error {}
 export const BodyEnd = anyFn;
 export const Button = anyFn;
 export const Defer = anyFn;
@@ -635,10 +653,14 @@ export const layout = anyFn;
 export const metaFromQuery = anyFn;
 export const mutation = anyFn;
 export const notFound = anyFn;
+export const parseComponentXml = anyFn;
 export const query = anyFn;
 export const redirect = anyFn;
+export const renderRegistry = anyFn;
+export const renderTree = anyFn;
 export const route = anyFn;
 export const selectTriggerAttributes = anyFn;
+export const safeRichHtml = anyFn;
 export const serverValue = anyFn;
 export const session = anyFn;
 export const stylesheet = anyFn;
