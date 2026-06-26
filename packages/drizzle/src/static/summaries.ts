@@ -848,6 +848,14 @@ function eqOperandsAreTableColumnArgKeyed(
       };
     }
 
+    const constLiteralAccess = localConstLiteralAccessPrivateScope(expression, sessionContext);
+    if (constLiteralAccess) {
+      return {
+        privateKey: privateScopeKey(constLiteralAccess),
+        ...(constLiteralAccess.kind === 'session' ? { sessionKey: constLiteralAccess.path } : {}),
+      };
+    }
+
     // SPEC §11.1 / KV414 (minimal session-via-local tracing): recognize a session
     // value bound to a local const and then used in the scoping predicate, e.g.
     // `const uid = req.session.userId; …where(eq(orders.userId, uid))`. The shared
@@ -975,6 +983,67 @@ function localConstObjectBindingPrivateScope(
     privateScopeForExpression(value, sessionContext) ??
     summarizedStaticCallPrivateScope(value, sessionContext)
   );
+}
+
+function localConstLiteralAccessPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const value = localConstLiteralStaticAccessValue(expression);
+  if (!value) return undefined;
+  return (
+    privateScopeForExpression(value, sessionContext) ??
+    summarizedStaticCallPrivateScope(value, sessionContext)
+  );
+}
+
+function localConstLiteralStaticAccessValue(expression: Node, depth = 0): Node | undefined {
+  if (depth > 4) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
+    return undefined;
+  }
+
+  const base = localConstLiteralStaticAccessBaseValue(node.getExpression(), depth + 1);
+  if (!base) return undefined;
+  if (Node.isObjectLiteralExpression(base)) {
+    const property = staticAccessName(node);
+    return property ? objectLiteralSingleStaticPropertyValue(base, property) : undefined;
+  }
+  if (!Node.isArrayLiteralExpression(base) || !Node.isElementAccessExpression(node)) {
+    return undefined;
+  }
+
+  const argument = node.getArgumentExpression();
+  if (!Node.isNumericLiteral(argument)) return undefined;
+  const index = Number(argument.getText());
+  if (!Number.isInteger(index) || index < 0) return undefined;
+  const value = base.getElements()[index];
+  return value && !Node.isSpreadElement(value) ? value : undefined;
+}
+
+function localConstLiteralStaticAccessBaseValue(expression: Node, depth: number): Node | undefined {
+  if (depth > 4) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    return localConstLiteralStaticAccessValue(node, depth + 1);
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  return value && (Node.isObjectLiteralExpression(value) || Node.isArrayLiteralExpression(value))
+    ? value
+    : undefined;
 }
 
 function objectBindingPropertyName(
