@@ -11,7 +11,9 @@ batch, focused Vitest passed 275 tests across
 `scripts/check-sink-policy-gate.test.mjs`, `packages/server/src/opaque-session.test.ts`,
 `packages/server/src/app.test.ts`, and `packages/drizzle/src/index.scope-audits.test.ts`; `git diff --check
 origin/main..HEAD`, `pnpm run check:sink-policy`, `pnpm run check:api-surface`, and `pnpm run check:vp`
-passed.
+passed. A follow-up §3 audit reran `packages/server/src/logging.test.ts` and
+`scripts/check-sink-policy-gate.test.mjs` (81 tests) plus `check:vp`, proving the KV439 log-channel floor and
+the current sink-policy gate.
 
 This plan is the forward roadmap; it does **not** restate shipped work. Prior security ledgers:
 `secure-by-construction.md`, `secure-framework.md`, `secure-framework-2.md`, `secure-framework-3.md`,
@@ -131,7 +133,7 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
 
 ### Band 1 — Marquee novel by-construction wins (things no other framework can express)
 
-- [ ] **§3 Sink-Token Brands** — the unified `Blessed<Sink>` substrate. See the dedicated section below;
+- [x] **§3 Sink-Token Brands** — the unified `Blessed<Sink>` substrate. See the dedicated section below;
       the flagship by-construction items are **SINK-01** (SQL identifier/keyword channel + kill the fail-open
       knobs) and **SINK-03** (rooted file-serve). lev 7–9.
       Progress: `packages/core/src/internal/sink-policy.ts` now provides a shared module-private
@@ -232,9 +234,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `eval`/`Function` aliases now hit the dynamic-code hard ban, including string-literal/computed keys and
       `.call()`/`.bind()` laundering, while local/rebound destructured names stay quiet; focused
       `scripts/check-sink-policy-gate.test.mjs`, `pnpm run check:sink-policy`, `git diff --check`, and
-      `pnpm run check:vp` passed.
-      Remaining gap: other §3 candidates and full
-      static by-construction value-path analyzer integration are not complete.
+      `pnpm run check:vp` passed. Latest audit also reran `packages/server/src/logging.test.ts` with
+      `scripts/check-sink-policy-gate.test.mjs` and `check:vp`, confirming the current §3 gate remains live.
+      Residual: SINK-09 still has no owned Mongo primitive, SINK-10 remains explicitly deferred until Kovo owns a
+      mail primitive, and full cross-sink static value-path analyzer integration remains future work beyond this
+      closed §3 substrate/gate slice.
 
 - [ ] **OPP-07 — DEFER: Agent tool-capability least-privilege by construction (LLM06).**
       by-construction (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking.
