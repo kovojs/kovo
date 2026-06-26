@@ -13,6 +13,7 @@ import {
   referenceAuthRequest,
   referenceAuthToken,
   referenceSessionProvider,
+  referenceSignIn,
   renderReferenceLoginForm,
   renderReferenceLogoutForm,
   type ReferenceAuthBindings,
@@ -71,9 +72,14 @@ async function submitReferenceSignOutNoJs(
   request: ReferenceRequest,
   auth: ReferenceAuthBindings = referenceAuth,
 ) {
-  const result = await runMutation(auth.signOut, { csrf: referenceAuthToken(request) }, request, {
-    sessionProvider: auth.sessionProvider,
-  });
+  const result = await runMutation(
+    auth.signOut,
+    { csrf: referenceAuthToken(request, auth.signOut) },
+    request,
+    {
+      sessionProvider: auth.sessionProvider,
+    },
+  );
 
   if (!result.ok) {
     return {
@@ -141,7 +147,7 @@ describe('reference auth adoption', () => {
     const request = referenceAuthRequest();
     const signIn = await submitReferenceSignInNoJs(
       {
-        csrf: referenceAuthToken(request),
+        csrf: referenceAuthToken(request, referenceSignIn),
         email: 'ada@example.com',
         password: 'correct',
       },
@@ -166,7 +172,7 @@ describe('reference auth adoption', () => {
     await expect(
       submitReferenceSignInNoJs(
         {
-          csrf: referenceAuthToken(request),
+          csrf: referenceAuthToken(request, referenceSignIn),
           email: 'ada@example.com',
           next: '/admin',
           password: 'wrong',
@@ -182,7 +188,7 @@ describe('reference auth adoption', () => {
     await expect(
       submitReferenceSignInNoJs(
         {
-          csrf: referenceAuthToken(request),
+          csrf: referenceAuthToken(request, referenceSignIn),
           email: 'ada@example.com',
           next: '/admin',
           password: 'correct',
@@ -210,7 +216,7 @@ describe('reference auth adoption', () => {
     const memberRequest = referenceAuthRequest();
     const memberSignIn = await submitReferenceSignInNoJs(
       {
-        csrf: referenceAuthToken(memberRequest),
+        csrf: referenceAuthToken(memberRequest, referenceSignIn),
         email: 'grace@example.com',
         password: 'correct',
       },
@@ -227,7 +233,7 @@ describe('reference auth adoption', () => {
     const adminRequest = referenceAuthRequest();
     const adminSignIn = await submitReferenceSignInNoJs(
       {
-        csrf: referenceAuthToken(adminRequest),
+        csrf: referenceAuthToken(adminRequest, referenceSignIn),
         email: 'ada@example.com',
         password: 'correct',
       },
@@ -246,7 +252,7 @@ describe('reference auth adoption', () => {
     const request = referenceAuthRequest();
     const signIn = await submitReferenceSignInNoJs(
       {
-        csrf: referenceAuthToken(request),
+        csrf: referenceAuthToken(request, referenceSignIn),
         email: 'ada@example.com',
         password: 'correct',
       },
@@ -298,7 +304,7 @@ describe('reference auth adoption', () => {
     const memberRequest = referenceAuthRequest();
     const memberSignIn = await submitReferenceSignInNoJs(
       {
-        csrf: referenceAuthToken(memberRequest),
+        csrf: referenceAuthToken(memberRequest, referenceSignIn),
         email: 'member@example.com',
         password: 'correct horse battery staple',
       },
@@ -325,7 +331,7 @@ describe('reference auth adoption', () => {
     const adminRequest = referenceAuthRequest();
     const adminSignIn = await submitReferenceSignInNoJs(
       {
-        csrf: referenceAuthToken(adminRequest),
+        csrf: referenceAuthToken(adminRequest, referenceSignIn),
         email: 'admin@example.com',
         next: '/admin',
         password: 'correct horse battery staple',

@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 
 import {
   commerceAuthCsrf,
+  commerceSignOut,
   createCommerceDb,
   type AddToCartInput,
   type CommerceDb,
@@ -190,6 +191,10 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
     mergeHeaders(headers, options.headers);
     const cookie = cookieHeader(cookies);
     if (cookie && !headers.has('cookie')) headers.set('cookie', cookie);
+    // SPEC §6.6/§9.1: the CSRF Origin floor rejects unsafe-verb requests without a usable, same-origin
+    // `Origin` header. A real browser always sends it; `fetch`/`new Request` in Node do not, so the
+    // scenario client supplies the same-origin value the floor expects (mirrors a browser submit).
+    if (!headers.has('origin')) headers.set('origin', commerceOrigin);
 
     const request = new Request(new URL(path, commerceOrigin), {
       ...init,
@@ -248,6 +253,8 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
 
   async function signOut(): Promise<Response> {
     return postForm('/_m/auth/sign-out', {
+      // SPEC §6.5/§9.1 (audit trap #3): bind the hand-minted logout token to the sign-out mutation
+      // so its audience matches the `{ audience: 'auth/sign-out' }` dispatch validates against.
       csrf: csrfToken(
         {
           authCsrfId: 'commerce-shell-login',
@@ -256,6 +263,7 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
           session: { id: 'session-u1', user: { id: 'u1' } },
         },
         commerceAuthCsrf,
+        { mutation: commerceSignOut },
       ),
     });
   }

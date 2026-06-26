@@ -62,7 +62,9 @@ describe('reference app shell HTTP entry', () => {
       loginForm.set('next', '/admin');
       const login = await fetch(`${origin}/_m/auth/sign-in`, {
         body: loginForm,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        // SPEC §6.6/§9.1: browsers send a same-origin Origin on unsafe POSTs; the CSRF Origin floor
+        // requires it. Node fetch omits it, so the test supplies it (mirrors a real form submit).
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin },
         method: 'POST',
         redirect: 'manual',
       });
@@ -177,7 +179,8 @@ describe('reference app shell HTTP entry', () => {
     failedForm.set('next', '/admin');
     const failedLogin = await fetch(`${origin}/_m/auth/sign-in`, {
       body: failedForm,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      // SPEC §6.6/§9.1: supply the same-origin Origin header the CSRF floor requires (see above).
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin },
       method: 'POST',
       redirect: 'manual',
     });
@@ -193,7 +196,7 @@ describe('reference app shell HTTP entry', () => {
     loginForm.set('next', '/admin');
     const login = await fetch(`${origin}/_m/auth/sign-in`, {
       body: loginForm,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin },
       method: 'POST',
       redirect: 'manual',
     });
@@ -228,6 +231,7 @@ describe('reference app shell HTTP entry', () => {
       headers: {
         cookie: sessionCookie,
         'Content-Type': 'application/x-www-form-urlencoded',
+        Origin: origin,
       },
       method: 'POST',
       redirect: 'manual',
