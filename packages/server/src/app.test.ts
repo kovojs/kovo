@@ -14,6 +14,7 @@ import { registerGeneratedMutationTouchRegistry } from './generated-mutation-reg
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { guards } from './guards.js';
 import { mutation } from './mutation.js';
+import { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
 import { query } from './query.js';
 import { registerGeneratedLiveTargetRenderer } from './live-target-registry.js';
 import { layout, route } from './route.js';
@@ -272,6 +273,56 @@ describe('server createApp request shell', () => {
       windowMs: 60_000,
     });
     expect('use' in app).toBe(false);
+  });
+
+  it('wires Kovo-owned opaque sessions as the request-shell sessionProvider', async () => {
+    const manager = createOpaqueSessionManager({
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } | null }>(),
+    });
+    const app = createApp({ session: manager });
+    const anonymous = await app.session!.establish({ user: null });
+    const authenticated = await app.session!.establish(
+      { user: { id: 'u1' } },
+      { priorId: anonymous.session.id },
+    );
+
+    expect(app.session).toBe(manager);
+    expect(app.sessionProvider).toBe(manager.provider);
+    await expect(app.session!.validate(anonymous.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'revoked',
+    });
+    await expect(
+      app.sessionProvider!(
+        new Request('https://app.test/account', {
+          headers: { cookie: authenticated.setCookie.split(';')[0]! },
+        }),
+      ),
+    ).resolves.toEqual({ user: { id: 'u1' } });
+
+    await app.session!.revoke(authenticated.session.id);
+    await expect(
+      app.sessionProvider!(
+        new Request('https://app.test/account', {
+          headers: { cookie: authenticated.setCookie.split(';')[0]! },
+        }),
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it('rejects ambiguous owned and delegated session lifecycles', () => {
+    const manager = createOpaqueSessionManager({
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+
+    expect(() =>
+      createApp({
+        session: manager,
+        sessionProvider: () => ({ user: { id: 'delegated' } }),
+      }),
+    ).toThrow(
+      'createApp() received both `session` and `sessionProvider`. `session` gives the request shell Kovo-owned opaque session lifecycle control',
+    );
   });
 
   it('uses compiler-registered live target renderers when createApp does not receive explicit wiring', () => {

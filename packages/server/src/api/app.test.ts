@@ -743,11 +743,15 @@ describe('server app-shell public API barrels', () => {
 
   it('validates dynamically loaded app-shell aggregates through the shared core guard', () => {
     const app = publicApi.createApp();
+    const opaqueSession = publicApi.createOpaqueSessionManager({
+      store: publicApi.createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
 
     expect(publicApi.isKovoApp(app)).toBe(true);
     expect(publicApi.isKovoApp(publicApi.createApp({ document: publicApi.Document({}) }))).toBe(
       true,
     );
+    expect(publicApi.isKovoApp(publicApi.createApp({ session: opaqueSession }))).toBe(true);
     expect(() =>
       publicApi.createApp({ document: { template: () => '<html></html>' } as any }),
     ).toThrow('createApp({ document.template }) is not supported');
@@ -760,6 +764,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(publicApi.isKovoApp({ ...app, clientModules: {} })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, renderRoute: '<main>compat</main>' })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, session: { provider: () => null } })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, sessionProvider: { session: null } })).toBe(false);
     expect(
       publicApi.isKovoApp({
