@@ -1,6 +1,6 @@
 # Plan: Adversarial Compiler Soundness & Security-Guarantee Audit
 
-**Status:** audit complete; 3 confirmed holes fixed, 1 partial + follow-ups tracked. Goal: stress the
+**Status:** audit complete; 3 confirmed holes fully fixed (F1, F2, P1-1) + follow-ups tracked. Goal: stress the
 Kovo compiler's *static* security guarantees (the by-construction proofs in `SPEC.md` §5.2, §6.6, §4.8,
 §10.2, §11, §6.5) for **soundness holes** — inputs where a stated guarantee can be defeated from
 app-authored TSX/config while the build stays green.
@@ -19,6 +19,7 @@ only counts if it breaks a guarantee at the tier the framework *claims* for it.
 - `9d9114ac1` F1 — KV236 trusted-brand by AST symbol-identity (3 sites + guard-zone).
 - `3967817f2` F2 fix #2 — KV435 secret backstop over the folded read set.
 - `f4dfbbc60` P1-1 — `sanitizeNext` fails closed on normalized protocol-relative path.
+- `8d74ba1e9` (branch `agent/fu-f2reads`) F2 fix #1 — KV410 requires a `reads:` set on every opaque projection.
 
 ---
 
@@ -27,7 +28,7 @@ only counts if it breaks a guarantee at the tier the framework *claims* for it.
 | ID | Surface | Sev | Tier | Verdict | Status |
 | --- | --- | --- | --- | --- | --- |
 | **F1** (S1-A/S6-1) | KV236 trusted-brand regex (script/style XSS) | **Critical** | by-construction | real-hole | **FIXED** |
-| **F2** (S5-001) | opaque `sql<T>` secret-column leak to client wire | **High** | by-construction | real-hole | **fix #2 LANDED**; fix #1 follow-up |
+| **F2** (S5-001) | opaque `sql<T>` secret-column leak to client wire | **High** | by-construction | real-hole | **FIXED** (fix #1 + #2) |
 | **P1-1** | `sanitizeNext` open-redirect via URL normalization | **Medium** | runtime-DiD | real-hole | **FIXED** |
 | **P3-1** | `csrf:false` mutation rides ambient cookie session | **High** | by-construction | real-hole | follow-up (multi-surface) |
 | P2-1 | primitive `attrs={{…}}` channel skips KV236 | Low | by-construction→DiD | completeness | follow-up (runtime-backed) |
@@ -82,6 +83,12 @@ keyed its secret-table check on `tableExpressions` only, ignoring `declaredReadE
 **Fix #2 LANDED (`3967817f2`).** Fold `declaredReadExpressions` into the read set the KV435 backstop
 checks (`static.ts`). Closes the conformant (declared-`reads:`) path — CASE B now fires KV435.
 
+**Fix #1 LANDED (`8d74ba1e9`, branch `agent/fu-f2reads`).** `opaqueProjectionDiagnostics`
+(`query-shapes.ts`) suppresses KV410 only when `hasOutput && hasDeclaredReads`; `static.ts` passes
+`query.declaredReadExpressions.length > 0`. Closes residual CASE A — an omitted-`reads:` raw-SQL-only
+secret projection now fails the build (KV410). Migrated the opaque-projection unit fixtures + conformance
+source-fixtures (`selectShape`, `sqlitePortability`) to declare `reads:`.
+
 ### P1-1 — `sanitizeNext` open-redirect via URL normalization (MEDIUM, FIXED)
 
 **Defeated:** SPEC §6.5 — `next` MUST be a same-origin single-leading-slash path (no `//`),
@@ -113,16 +120,14 @@ will carry; any non-strict-single-leading-slash result fails closed to `/`.
 
 ## Open follow-ups
 
-- [ ] **F2 fix #1 — KV410 must require a `reads:` set on every opaque projection (SPEC §10.2).** Closes
-  the residual CASE A (omitted-`reads:` raw-SQL-only secret leak). Exact change: `opaqueProjectionDiagnostics`
-  (`query-shapes.ts`) suppresses KV410 only when `hasOutput && hasDeclaredReads`; pass
-  `query.declaredReadExpressions.length > 0` from the call site (`static.ts`). **Blast radius
-  (cross-package SPEC-conformance migration):** 8 drizzle unit tests (`index.query-shapes.test.ts` ×7,
-  `index.serialization.test.ts` ×1) that encode the old "output-only is green" behavior, plus example
-  opaque projections (`examples/crm/src/queries.ts:165` `pipelineByStage`) and conformance fixtures
-  (`source-fixtures.ts` sql<T> fixtures) that must declare `reads:`. Land with all fixture/example
-  updates + `acceptance`/`conformance` gate verification. (Tracked as `it.todo` CASE A in
-  `confidentiality-folded-read-set.test.ts`.)
+- [x] **F2 fix #1 — KV410 requires a `reads:` set on every opaque projection (SPEC §10.2).** Done in
+  `8d74ba1e9` (branch `agent/fu-f2reads`). `opaqueProjectionDiagnostics` suppresses KV410 only when
+  `hasOutput && hasDeclaredReads`; `static.ts` passes `query.declaredReadExpressions.length > 0`.
+  Migrated 8 drizzle unit tests + conformance `source-fixtures.ts` (`selectShape`, `sqlitePortability`)
+  to declare `reads:`; CASE A flipped from `it.todo` to a passing KV410 assertion. (CRM
+  `pipelineByStage` was a no-op: its local `query()` factory has no `output`, so the new `hasOutput`
+  branch never applies.) Evidence: `vitest --run packages/drizzle/src packages/conformance-fixtures/src`
+  → 617 passed / 0 failed.
 - [ ] **P3-1 — KV418 for mutations + a runtime "no ambient session" floor for `csrf:false` (HIGH).**
   KV418 is implemented only for endpoints (`graph-output.ts:880`); the compiler does **zero** csrf
   processing for mutations and there is no runtime floor, so a `csrf:false` mutation that reads
@@ -152,8 +157,9 @@ will carry; any non-strict-single-leading-slash result fails closed to `/`.
   have flagged the old regex. **Full compiler suite: 682 passed** (the only failures, 4 in
   `package-styles.test.ts`, reproduce identically on clean source — environmental `@kovojs/ui`
   resolution in worktrees, not this change).
-- **F2 fix #2:** `confidentiality-folded-read-set.test.ts` — CONTROL + CASE B + NEGATIVE pass, CASE A
-  `it.todo` (follow-up). **Full drizzle suite: 429 passed, 1 todo, 0 failed.**
+- **F2 fix #1 + #2:** `confidentiality-folded-read-set.test.ts` — CONTROL + CASE A (KV410) + CASE B
+  (KV435) + NEGATIVE all pass. **`vitest --run packages/drizzle/src packages/conformance-fixtures/src`:
+  617 passed, 0 failed** (in `agent/fu-f2reads`).
 - **P1-1:** `guards.test.ts` 36/36 (incl. `/..//evil.com`, `/a/../..//evil.com`, `/%2e%2e//evil.com` → `/`).
   **Full server suite: 1005 tests passed** (2 test *files* fail to load on the `@node-rs/argon2` native
   binding — an `onlyBuiltDependencies` postinstall absent in the symlinked worktree, unrelated).

@@ -275,6 +275,7 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
 
         export const cartQuery = query("cart", {
           output: s.object({ count: s.number() }),
+          reads: [cartItems, products],
           async load(input, db) {
             return db.select({
               count: sql<number>\`count(*)\`,
@@ -333,6 +334,7 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
 
           export const searchQuery = query("search/sqlite", {
             output: s.object({ id: s.string() }),
+            reads: [productSearch],
             load(_input, db: BaseSQLiteDatabase) {
               return db.select({ id: sql<string>\`id\` }).from(productSearch);
             },

@@ -56,6 +56,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const cartQuery = query("cart", {',
             '  output: s.object({ count: s.number() }),',
+            // SPEC §10.2: an opaque sql<T>/raw projection must declare the tables it reads.
+            '  reads: [cartItems, products],',
             '  async load(input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      count: sql<number>`count(*)`,',
@@ -463,6 +465,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const searchQuery = query("search", {
             output: s.object({ name: s.string() }),
+            reads: [productSearch],
             load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ name: sql<string>\`name\` })
                 .from(productSearch)
@@ -529,6 +532,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const searchQuery = query("search/sqlite", {
             output: s.object({ name: s.string() }),
+            reads: [productSearch],
             load(_input, db: BaseSQLiteDatabase) {
               return db.select({ name: sql<string>\`name\` }).from(productSearch);
             },
@@ -564,6 +568,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const statsQuery = query("stats", {
             output: s.object({ productId: s.string() }),
+            reads: [productStats],
             load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ productId: sql<string>\`product_id\` }).from(productStats);
             },
@@ -878,6 +883,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const literalOutputQuery = query("cart/literal", {
             "output": s.object({ count: s.number() }),
+            reads: [cartItems],
             async load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
@@ -885,6 +891,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const computedOutputQuery = query("cart/computed", {
             ["output"]: s.object({ count: s.number() }),
+            reads: [cartItems],
             async load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
@@ -911,6 +918,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const userStats = query("user", {
             output: s.object({ count: s.number() }),
+            // Even a fully-declared opaque projection over a secret table must still fire KV435.
+            reads: [users],
             load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ count: sql<number>\`count(*)\` }).from(users);
             },
@@ -1246,6 +1255,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const subscriptionQuery = query("subscription", {
             output: s.object({ serverNow: s.string() }),
+            reads: [subscriptions],
             async load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ serverNow: sql<string>\`now()\` }).from(subscriptions);
             },

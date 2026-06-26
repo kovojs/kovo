@@ -2171,14 +2171,23 @@ function sourcePosition(node: ts.Node): string {
   opaquePaths: readonly string[],
   line: string,
   hasOutput: boolean,
+  hasDeclaredReads: boolean,
 ): TouchGraphDiagnostic[] {
-  if (hasOutput) return [];
+  // SPEC §10.2: an opaque `sql<T>`/raw query projection MUST declare BOTH an `output` schema AND a
+  // `reads:` table set — "a KV410 projection with no `reads:` declaration is itself a KV410 error".
+  // The secret/exempt table referenced by a raw projection can live only in raw SQL text (invisible
+  // to static table extraction, hard-rule #9), so the author-declared `reads:` set is the only thing
+  // that lets the confidentiality/freshness backstops see it. Suppress KV410 only when both are present.
+  if (hasOutput && hasDeclaredReads) return [];
 
   const definition = diagnosticDefinitions.KV410;
   const message = diagnosticDefinitionText('KV410', { preferHelp: true });
+  const reason = hasOutput
+    ? 'without a reads: table set (an opaque projection must declare the tables it reads)'
+    : 'without output';
   return opaquePaths.map((path) => ({
     code: 'KV410',
-    message: `${message} ${query}.${path} uses sql/raw projection without output.`,
+    message: `${message} ${query}.${path} uses sql/raw projection ${reason}.`,
     severity: definition.severity,
     site: line,
   }));
