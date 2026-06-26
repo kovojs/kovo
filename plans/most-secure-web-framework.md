@@ -507,7 +507,10 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       rotation path; focused opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed.
       Rotation and revocation now fail closed when post-action lifecycle verification throws or normalizes to a
       malformed validation result, avoiding browser cookie emission after unverifiable custom-store transitions;
-      focused opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed.
+      focused opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed. When authorization
+      header sessions are enabled, malformed `Bearer` session material now fails closed instead of being ignored
+      in favor of a valid cookie, while unrelated auth schemes remain outside opaque-session extraction; focused
+      opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
