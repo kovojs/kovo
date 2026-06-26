@@ -534,6 +534,9 @@ packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm 
 packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed.
       Summarized guard objects now have literal element-access coverage (`principal["userId"]`) while computed
       element reads remain `scope: unknown`; the same focused scope-audit test, `git diff --check`, and
+      `pnpm run check:vp` passed. Owner-table writes keyed only through a non-owner table client arg now fail
+      closed as `scope: args`, while an owner-column session predicate keeps the same shape `scope: session`;
+      `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and
       `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
