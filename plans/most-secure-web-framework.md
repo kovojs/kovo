@@ -148,8 +148,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `child_process` command execution imports/calls outside `packages/server/src/command.ts` and asserts the
       command primitive keeps the `server:command-exec-file` witness plus `execFile(..., { shell: false })`;
       focused sink-policy/command tests, `pnpm run check:sink-policy`, `git diff --check`, and
-      `pnpm run check:vp` passed. Remaining gap: other §3 candidates and static
-      by-construction analyzer integration are not complete.
+      `pnpm run check:vp` passed. The sink-policy gate now hard-bans unowned server-side dynamic code sinks
+      (`eval`, `Function`, and `node:vm`/`vm`) because SINK-07 has no safe value to bless; focused gate tests,
+      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other
+      §3 candidates and static by-construction analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
@@ -185,7 +187,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       namespace imports such as `import * as mail from './mail'` now preserve enforced helper egress/secret-read
       reachability for exported local helper calls, while computed namespace access and export-star namespaces
       remain outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp`
-      passed.
+      passed. Static default imports now preserve enforced helper egress/secret-read reachability for local
+      default-exported function helpers, while default object exports and default identifier aliases remain
+      outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: callbacks, nonliteral/dynamic calls, computed/export-star namespace shapes, unresolved
       imports, and broader egress/secret analyzer reachability.
 
@@ -201,7 +205,8 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       graph subset now enforces declared write capabilities for matching framework-owned tool rows and renders
       declared audit-grade reachable sinks; direct AST-produced `process.env` reads plus literal `fetch()` egress
       from framework-owned tool handlers, same-module helper calls, directly invoked inline functions, and simple
-      imported helper calls, including static local named re-export barrels and static namespace imports, are
+      imported helper calls, including static local named re-export barrels, static namespace imports, and
+      static default imports, are
       enforced when declared capabilities do not cover them. Remaining gap: broader analyzer integration beyond
       the framework-owned `tool()` boundary.
 
@@ -492,7 +497,10 @@ packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm 
       `git diff --check`, and `pnpm run check:vp` passed. Explicitly summarized guard-object helpers with
       `path: ""` now have positive/negative coverage proving `principal.userId` scopes while mismatched
       `principal.actorId` stays `scope: unknown`; focused scope-audit tests, `git diff --check`, and
-      `pnpm run check:vp` passed.
+      `pnpm run check:vp` passed. Explicitly summarized prefixed guard-object helpers such as
+      `returns: { kind: "guard", path: "profile" }` now have positive/negative coverage proving
+      `profile.userId` scopes only against owner `profile.userId`; focused scope-audit tests,
+      `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
