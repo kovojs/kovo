@@ -1,4 +1,5 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
+import type { LookupAddress } from 'node:dns';
 import { createRequire } from 'node:module';
 import type { Agent as UndiciAgent, Dispatcher } from 'undici';
 
@@ -110,23 +111,36 @@ export class EgressGatingDispatcher extends Agent {
     options: Dispatcher.DispatchOptions,
     handler: Dispatcher.DispatchHandler,
   ): Promise<void> {
-    let resolvedIp: string;
+    let resolved: LookupAddress[];
     try {
-      const { address } = await dnsLookup(host);
-      resolvedIp = address;
+      // SPEC §6.6 rule 2: resolve ALL addresses, not just one. autoSelectFamily/RFC-8305
+      // happy-eyeballs may dial ANY record of a multi-A answer, so a single passing record can
+      // hide a private/metadata sibling. Validate every resolved IP below (mirror of the
+      // net.connect layer's pinning lookup in egress.ts).
+      resolved = await dnsLookup(host, { all: true });
     } catch (error) {
       rejectHandler(handler, error instanceof Error ? error : new Error(String(error)));
       return;
     }
-    this.#resolutionCache.set(host, {
-      ip: resolvedIp,
-      expires: Date.now() + ORIGIN_RESOLUTION_CACHE_MS,
-    });
-    const blocked = evaluateEgress({ host, port, resolvedIp, policy: this.#policy });
-    if (blocked) {
-      rejectHandler(handler, blocked);
+    if (resolved.length === 0) {
+      // No address resolved — fail CLOSED rather than forward an unvalidated dial.
+      rejectHandler(handler, new Error(`DNS lookup for ${host} returned no addresses`));
       return;
     }
+    // Fail the whole request CLOSED if ANY resolved IP is non-public/not-allowlisted; never
+    // forward on the strength of one passing record.
+    for (const { address } of resolved) {
+      const blocked = evaluateEgress({ host, port, resolvedIp: address, policy: this.#policy });
+      if (blocked) {
+        rejectHandler(handler, blocked);
+        return;
+      }
+    }
+    // All addresses passed; pin the first for the short rebind-resistance cache window.
+    this.#resolutionCache.set(host, {
+      ip: resolved[0]!.address,
+      expires: Date.now() + ORIGIN_RESOLUTION_CACHE_MS,
+    });
     super.dispatch(options, handler);
   }
 }

@@ -318,3 +318,118 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     }).not.toThrow(EGRESS_BLOCKED_ERROR_NAME);
   });
 });
+
+// ---------------------------------------------------------------------------
+// SPEC §6.6 rule 2: the pinning lookup must validate EVERY entry of a multi-A DNS answer,
+// not just address[0]. Under Node's default autoSelectFamily the injected lookup is invoked
+// with `{ all: true }`, so RFC-8305 happy-eyeballs may dial address[1..n] when address[0] is
+// slow/refused. A multi-A answer mixing a public IP with a private/metadata sibling must fail
+// the WHOLE lookup closed; the old code validated address[0] only and forwarded the rest.
+// ---------------------------------------------------------------------------
+
+describe('net.connect floor: multi-A DNS answer is validated per-entry (SPEC §6.6 rule 2)', () => {
+  let uninstall: (() => void) | undefined;
+
+  afterEach(() => uninstall?.());
+
+  // A fake DNS resolver returning a fixed multi-A answer; honors the {all:true} array form
+  // (the autoSelectFamily case) and the legacy single-address form.
+  type FakeLookup = (hostname: string, opts: unknown, cb: unknown) => void;
+  const fakeLookup =
+    (addresses: { address: string; family: number }[]): FakeLookup =>
+    (_hostname, opts, cb) => {
+      const callback = (typeof opts === 'function' ? opts : cb) as (
+        err: Error | null,
+        address: unknown,
+        family?: number,
+      ) => void;
+      const o = (typeof opts === 'function' ? {} : opts) as { all?: boolean };
+      if (o && o.all) callback(null, addresses);
+      else callback(null, addresses[0]!.address, addresses[0]!.family);
+    };
+
+  const dialResult = (host: string, lookup: FakeLookup): Promise<unknown> =>
+    new Promise((resolve, reject) => {
+      const req = http.get(
+        {
+          host,
+          port: 80,
+          lookup: lookup as unknown as http.RequestOptions['lookup'],
+          autoSelectFamily: true,
+          timeout: 300,
+        } as http.RequestOptions,
+        (res) => {
+          res.resume();
+          res.on('end', () =>
+            reject(new Error('unexpected success — multi-A answer was NOT blocked')),
+          );
+        },
+      );
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('unexpected timeout — a sibling address was dialed, not blocked'));
+      });
+      req.on('error', (e) => resolve(e));
+    });
+
+  it('BLOCKS [<public>, 169.254.169.254] under empty deny policy (metadata sibling)', async () => {
+    uninstall = installNetConnectFloor(emptyPolicy());
+    const err = await dialResult(
+      'rebind-metadata.test',
+      fakeLookup([
+        { address: '8.8.8.8', family: 4 },
+        { address: '169.254.169.254', family: 4 },
+      ]),
+    );
+    expect(err).toBeInstanceOf(EgressBlockedError);
+    expect((err as EgressBlockedError).name).toBe(EGRESS_BLOCKED_ERROR_NAME);
+    expect((err as EgressBlockedError).classification).toBe('metadata');
+  });
+
+  it('BLOCKS [<public>, 127.0.0.1] under empty deny policy (loopback sibling)', async () => {
+    uninstall = installNetConnectFloor(emptyPolicy());
+    const err = await dialResult(
+      'rebind-loopback.test',
+      fakeLookup([
+        { address: '8.8.8.8', family: 4 },
+        { address: '127.0.0.1', family: 4 },
+      ]),
+    );
+    expect(err).toBeInstanceOf(EgressBlockedError);
+    expect((err as EgressBlockedError).classification).toBe('loopback');
+  });
+
+  it('forwards a multi-A answer whose entries ALL pass (every entry allowlisted)', async () => {
+    // Both resolved records are the same allowlisted loopback host:port → both pass → forwarded.
+    const server = http.createServer((_req, res) => res.end('ok'));
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const livePort = (server.address() as { port: number }).port;
+    try {
+      uninstall = installNetConnectFloor(
+        resolveEgressPolicy({ allowInternal: [`127.0.0.1:${livePort}`] }, () => {}),
+      );
+      const body = await new Promise<string>((resolve, reject) => {
+        const req = http.get(
+          {
+            host: 'all-allowed.test',
+            port: livePort,
+            lookup: fakeLookup([
+              { address: '127.0.0.1', family: 4 },
+              { address: '127.0.0.1', family: 4 },
+            ]) as unknown as http.RequestOptions['lookup'],
+            autoSelectFamily: true,
+          } as http.RequestOptions,
+          (res) => {
+            let data = '';
+            res.on('data', (c) => (data += c));
+            res.on('end', () => resolve(data));
+          },
+        );
+        req.on('error', reject);
+      });
+      expect(body).toBe('ok');
+    } finally {
+      server.close();
+    }
+  });
+});

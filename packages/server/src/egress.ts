@@ -610,9 +610,28 @@ export function installNetConnectFloor(
       const resolver = (userLookup ?? dns.lookup) as typeof dns.lookup;
       resolver(hostname, opts as dns.LookupOptions, (err, address, family) => {
         if (err) return cb(err, address as unknown as string, family as unknown as number);
-        const resolvedIp = Array.isArray(address)
-          ? (address[0] as LookupAddress).address
-          : (address as string);
+        // SPEC §6.6 rule 2 ("the answer we validate is the answer we connect to"): classify
+        // EVERY resolved IP, not just address[0]. Under Node's default autoSelectFamily the
+        // lookup is invoked with `{ all: true }` and `address` is a `LookupAddress[]` that
+        // RFC-8305 happy-eyeballs may dial at ANY index when an earlier record is slow/refused.
+        // Validating only address[0] and then forwarding the whole array (the old bug) let a
+        // multi-A answer like `[<public>, 169.254.169.254]` (or `[<public>, 127.0.0.1]`) pass
+        // the floor and then connect to the private sibling — SSRF/DNS-rebind to cloud metadata.
+        // Fail the WHOLE lookup CLOSED if any entry is non-public/not-allowlisted; never forward
+        // an unvalidated array on the strength of one passing record.
+        if (Array.isArray(address)) {
+          for (const entry of address as LookupAddress[]) {
+            const blocked = evaluateEgress({
+              host,
+              port,
+              resolvedIp: entry.address,
+              policy: activePolicy,
+            });
+            if (blocked) return cb(blocked, entry.address, family as unknown as number);
+          }
+          return cb(null, address as unknown as string, family as unknown as number);
+        }
+        const resolvedIp = address as string;
         const blocked = evaluateEgress({ host, port, resolvedIp, policy: activePolicy });
         if (blocked) return cb(blocked, resolvedIp, family as unknown as number);
         cb(null, address as unknown as string, family as unknown as number);
