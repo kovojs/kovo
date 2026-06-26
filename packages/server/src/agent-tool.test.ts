@@ -78,6 +78,47 @@ describe('agent tool capability primitive', () => {
       tool({
         ...base,
         ambientCredentials: {
+          allow: true,
+          credentialKinds: ['cookie', 'cookie'],
+          justification: {
+            authorityBoundary: 'handler re-checks the bound principal before every read',
+            reason: 'legacy browser-authenticated assistant action under review',
+          },
+        },
+      }),
+    ).toThrow(
+      'tool.ambientCredentials.credentialKinds must not contain duplicate credential kinds',
+    );
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: {
+          allow: true,
+          credentialKinds: ['cookie', 'bearer-token'],
+          justification: {
+            authorityBoundary: 'handler re-checks the bound principal before every read',
+            reason: 'legacy browser-authenticated assistant action under review',
+          },
+        } as never,
+      }),
+    ).toThrow('tool.ambientCredentials.credentialKinds[] must be a known credential kind');
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: {
+          allow: true,
+          credentialKinds: ['cookie', 'authorization', 'auth-proxy'],
+          justification: {
+            authorityBoundary: 'handler re-checks the bound principal before every read',
+            reason: 'legacy browser-authenticated assistant action under review',
+          },
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: {
           allow: false,
           credentialKinds: ['cookie'],
           justification: {
