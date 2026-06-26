@@ -483,7 +483,9 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed. `manager.revoke(id)` now
       clears browser cookies without passing malformed, empty, null, or undefined ids into custom stores, while
       valid opaque ids still run the verified revocation path; focused opaque-session/app tests,
-      `git diff --check`, and `pnpm run check:vp` passed.
+      `git diff --check`, and `pnpm run check:vp` passed. Rotation now rejects malformed non-empty `priorId`
+      values before calling custom store validation or rotation, while valid opaque prior ids keep the verified
+      rotation path; focused opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
