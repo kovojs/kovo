@@ -247,7 +247,11 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `git diff --check`, and `pnpm run check:vp` passed. Static top-level `const` array/tuple helper aliases now
       preserve enforced helper egress/secret-read reachability through literal numeric indexes such as
       `helpers[0]()`, while mutable arrays, spreads, holes, non-helper elements, and dynamic indexes stay outside
-      the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
+      the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed. Static
+      top-level `const` destructuring from already-proven helper namespaces, object aliases, and array aliases now
+      preserves enforced helper egress/secret-read reachability, while defaulted, computed, nested, mutable, and
+      ambiguous destructuring remains outside the proof; `pnpm exec vitest run
+      packages/compiler/src/registry.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
