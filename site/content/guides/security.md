@@ -72,8 +72,9 @@ failure paths.
 7. **Leave CSRF on**; justify every `csrf: false` and confirm it in `kovo explain --endpoints`.
 8. **Use capability URLs for downloads**: mint with `ctx.signUrl(...)`, serve through
    `createStorageDownloadEndpoint`, and review `kovo explain --capabilities`.
-9. **Run the six review modes in CI** next to `kovo check`: `--unguarded`, `--unscoped`,
-   `--endpoints`, `--revealed`, `--access`, and `--capabilities`.
+9. **Run the security review modes in CI** next to `kovo check`: `--unguarded`, `--unscoped`,
+   `--endpoints`, `--revealed`, `--trust`, `--access`, `--capabilities`, `--cookies`, and
+   `--sources-sinks`.
 10. **Review every escape hatch** in the source/sink table before merging raw protocol code.
 
 ## Type your session
@@ -218,8 +219,11 @@ kovo explain --unguarded graph.json   # reachable without an authed guard
 kovo explain --unscoped graph.json    # owner-annotated rows not provably session-scoped (IDOR)
 kovo explain --endpoints graph.json   # machine ingress: auth scheme + CSRF posture
 kovo explain --revealed graph.json    # confidential fields intentionally revealed
+kovo explain --trust graph.json       # trusted HTML/SQL/URL escapes and their evidence
 kovo explain --access graph.json      # explicit public/authenticated/machine access decisions
 kovo explain --capabilities graph.json # held dangerous capabilities and capability URLs
+kovo explain --cookies graph.json     # cookie posture and downgrade findings
+kovo explain --sources-sinks          # source/sink inventory
 ```
 
 ### `--unguarded` — what's reachable without auth

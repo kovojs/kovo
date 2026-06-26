@@ -172,6 +172,7 @@ async function writeSupportFiles(outDir) {
 }
 
 async function writeNodeModuleStubs(outDir) {
+  await writePackage(outDir, '@kovojs/better-auth', { '.': EXTERNAL_DTS });
   await writePackage(outDir, '@kovojs/core', { '.': KOVO_DTS });
   await writePackage(outDir, '@kovojs/server', { '.': KOVO_DTS });
   await writePackage(outDir, '@kovojs/style', { '.': KOVO_DTS });
@@ -331,6 +332,7 @@ declare global {
   var createSession: any;
   var createApp: any;
   var createCommerceDb: any;
+  var createMemoryVersionedClientModuleRegistry: any;
   var createOrderInput: any;
   var createStorageDownloadEndpoint: any;
   var created: any;
@@ -360,6 +362,7 @@ declare global {
   var harness: any;
   var harnessOptions: any;
   var hmacSignature: any;
+  var healthEndpoint: any;
   var homeRoute: any;
   var id: any;
   var input: any;
@@ -499,6 +502,7 @@ export const KovoDevtool: any;
 export const PGlite: any;
 export const assertMutationError: any;
 export const betterAuth: any;
+export const betterAuthSession: any;
 export const betterSqlite3: any;
 export const buildBundle: any;
 export const createDevtoolApp: any;
@@ -528,6 +532,7 @@ const KOVO_DTS = String.raw`
 export type IconProps = any;
 export type SelectTriggerAttributeOptions = any;
 export type StyleInput = any;
+export type CsrfValidationOptions<Request = any> = any;
 
 export const BodyEnd: any;
 export const Button: any;

@@ -105,9 +105,9 @@ rather than writing a test that would pass without proving anything:
 
 The accessibility conformance contract — that every claimed primitive family is axe-clean across its
 interactive state tiers (open/expanded/checked/selected/pressed/complete/error end-states), with
-documented exclusions only where a state cannot be represented in an axe-stable DOM — is **SPEC
-§12.1**. The proving suite is the gallery browser axe suite
-(`examples/gallery/src/interactive-gallery.browser.test.ts`), which runs axe-core in Chromium at each
+documented exclusions only where a state cannot be represented in an axe-stable DOM — is enforced by
+`rules/accessibility-conformance.md`. The proving suite is the gallery browser axe suite
+(`examples/gallery/src/interactive-gallery.axe.browser.test.ts`), which runs axe-core in Chromium at each
 primitive's terminal awaited state and on the static styled fixtures. Run it with
 `pnpm --filter @kovojs/example-gallery run test:browser`.
 

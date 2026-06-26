@@ -191,15 +191,18 @@ set correctly or turns CI red.
 
 ## The security review modes
 
-Six explain modes answer security review's first questions from the same artifact:
+Explain modes answer security review's first questions from the same artifact:
 
 ```sh
 kovo explain --unguarded graph.json   # every mutation, route, and query reachable without authed
 kovo explain --unscoped graph.json    # owner-annotated tables whose key predicate isn't session-traceable (IDOR)
 kovo explain --endpoints graph.json   # machine ingress: endpoints, webhooks, file/stream routes + auth/CSRF posture
 kovo explain --revealed graph.json    # confidential fields intentionally revealed
+kovo explain --trust graph.json       # trusted HTML/SQL/URL escapes and their evidence
 kovo explain --access graph.json      # explicit public/authenticated/machine access decisions
 kovo explain --capabilities graph.json # held dangerous capabilities and capability URLs
+kovo explain --cookies graph.json     # cookie posture and downgrade findings
+kovo explain --sources-sinks          # source/sink inventory
 ```
 
 ```txt
@@ -222,10 +225,14 @@ can't land quietly.
   executing anything.
 - `--revealed` lists confidential data reveals, including `trustedReveal(...)` rows that need human
   review.
+- `--trust` lists trusted HTML, SQL, URL, and similar escape hatches with the evidence that made them
+  reviewable.
 - `--access` lists explicit public/authenticated/machine access decisions, including missing
   decisions that block under `kovo check`.
 - `--capabilities` lists held dangerous capabilities: agent tools, audit-grade reveals, and signed
   download/capability URL mints.
+- `--cookies` lists cookie posture and downgrade findings.
+- `--sources-sinks` emits the source/sink inventory used by the security gates.
 
 ## Debug from the Network panel
 

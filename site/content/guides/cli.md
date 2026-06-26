@@ -67,14 +67,17 @@ same artifact a reviewer reads and an agent consumes.
 ### `kovo check` — the graph/coverage check
 
 Runs the framework's consistency and exhaustiveness verifier over the app graph: touch-graph
-consistency, optimistic exhaustiveness (KV310), update coverage (KV311), and the fixpoint /
-render-equivalence invariants. The two sub-checks are positional, not dash-flags:
+consistency, optimistic exhaustiveness (KV310), update coverage (KV311), endpoint posture,
+source/sink inventory, and the fixpoint / render-equivalence invariants. The focused sub-checks are
+positional, not dash-flags:
 
 ```sh
 kovo check                      # full consistency check
 kovo check optimistic           # optimistic exhaustiveness only
 kovo check coverage             # update-coverage (every query/state position has a status)
 kovo check coverage graph.json  # against a pre-emitted graph artifact
+kovo check endpoint-posture .kovo/endpoint-posture.json
+kovo check sources-sinks
 ```
 
 ### `kovo explain` — print the decision tree
@@ -90,6 +93,7 @@ kovo explain component cart          # extracted handlers, derives, capture chan
 kovo explain query cart              # read set, consumers, every mutation that invalidates it
 kovo explain mutation cart/add       # writes → domains → invalidated queries → consumers; guard chain
 kovo explain page /products/:id      # modulepreloads, prefetch config, param/search schemas, query payloads
+kovo explain document                # document shell, head/body slots, CSP, scripts, and stylesheets
 ```
 
 Two target-specific flags:
@@ -108,6 +112,7 @@ kovo explain --unscoped  [--fail-on-findings] [graph.json]   # rows not tied to 
 kovo explain --endpoints [graph.json]                        # the machine-ingress audit (see below)
 kovo explain --revealed [graph.json]                         # confidential fields intentionally revealed
 kovo explain --access [--fail-on-findings] [graph.json]      # explicit access decisions
+kovo explain --sources-sinks                                 # source/sink inventory
 kovo explain --capabilities [graph.json]                     # held dangerous capabilities and capability URLs
 kovo explain --cookies [graph.json]                          # cookie downgrade and posture audit
 ```

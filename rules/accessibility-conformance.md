@@ -29,6 +29,6 @@ auto-dismiss countdowns, and hover-only visual states with no ARIA/DOM delta.
 Each exclusion MUST be justified in the proving suite.
 
 Conformance is proven by the gallery browser axe suite
-(`examples/gallery/src/interactive-gallery.browser.test.ts`), run under
+(`examples/gallery/src/interactive-gallery.axe.browser.test.ts`), run under
 Chromium. Public docs that summarize this rule should point readers here or to
-SPEC §12.1 rather than rephrasing the full proof inline.
+the accessibility guide rather than rephrasing the full proof inline.

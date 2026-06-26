@@ -101,7 +101,7 @@ forms, and let the server handle enhanced and no-JS outcomes through the mutatio
 
 Login forms do not have a session yet, so the starter binds their token to an anonymous id under a
 private HMAC secret. After login, the same CSRF config binds to `request.session.id`. Keep that
-single config in `src/auth.ts` and reuse it for product mutations. SPEC section 6.6
+single config in `src/auth.ts` and reuse it for product mutations.
 
 `create-kovo` writes a fresh local `KOVO_CSRF_SECRET` into `.env` and a placeholder into
 `.env.example`. The app fails closed if the secret is missing or still the placeholder. In
@@ -126,7 +126,7 @@ Use `authed<AppRequest>()` for mutations that require a signed-in user. Auth fai
 authorization failures are different server outcomes; keep those rules in the route/mutation facts
 instead of hiding them in component code.
 
-## Audit commands
+## Verify the integration
 
 ```sh
 vp check
