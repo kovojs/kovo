@@ -264,6 +264,11 @@ export function checkSinkPolicyGate(options = {}) {
         allowedExecutionSink: dynamicCodeExecutionSinkFileSet.has(filePath),
       }),
     );
+    findings.push(
+      ...rootedFileServeRawSinkFindings(filePath, text, {
+        allowedFileServeSink: rootedFileServeSinkFileSet.has(filePath),
+      }),
+    );
     if (deserializationFiles.includes(filePath)) {
       findings.push(...deserializationSinkFindings(filePath, text));
     }
@@ -782,6 +787,41 @@ export function dynamicCodeExecutionSinkFindings(filePath, text, options = {}) {
   return dedupe(findings);
 }
 
+export function rootedFileServeRawSinkFindings(filePath, text, options = {}) {
+  if (options.allowedFileServeSink === true) return [];
+
+  const findings = [];
+  const source = stripCommentsAndStringContents(text);
+  const fsImports = fsImportLocals(text);
+
+  for (const imported of fsImports.named) {
+    if (!rootedFileServeRawSinkNames.has(imported.imported)) continue;
+    findings.push(
+      `${filePath}: KV424 raw filesystem ${imported.imported} import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed`,
+    );
+
+    const pattern = new RegExp(`\\b${escapeRegExp(imported.local)}\\s*\\(`);
+    if (pattern.test(source)) {
+      findings.push(
+        `${filePath}: KV424 raw filesystem ${imported.imported} call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed`,
+      );
+    }
+  }
+
+  for (const local of fsImports.namespaces) {
+    for (const sinkName of rootedFileServeRawSinkNames) {
+      const pattern = new RegExp(`\\b${escapeRegExp(local)}\\s*\\.\\s*${sinkName}\\s*\\(`);
+      if (pattern.test(source)) {
+        findings.push(
+          `${filePath}: KV424 raw filesystem ${sinkName} call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed`,
+        );
+      }
+    }
+  }
+
+  return dedupe(findings);
+}
+
 export function deserializationSinkFindings(filePath, text) {
   const source = stripComments(text);
   const findings = [];
@@ -1126,6 +1166,12 @@ const commandExecutionImportNames = new Set([
   'spawnSync',
 ]);
 const deserializationImportNames = new Set(['deserialize', 'unserialize']);
+const rootedFileServeRawSinkNames = new Set([
+  'createReadStream',
+  'createWriteStream',
+  'open',
+  'openSync',
+]);
 
 function consoleLogCalls(text) {
   const calls = [];
@@ -1207,6 +1253,54 @@ function childProcessImportLocals(text) {
   );
   let namespaceRequire;
   while ((namespaceRequire = namespaceRequirePattern.exec(text)) !== null) {
+    namespaces.add(namespaceRequire[1]);
+  }
+
+  return { named, namespaces };
+}
+
+function fsImportLocals(text) {
+  const named = [];
+  const namespaces = new Set();
+  const fsModule = String.raw`(?:node:)?fs(?:\/promises)?`;
+
+  const namedImportPattern = new RegExp(
+    String.raw`\bimport\s*\{([^}]+)\}\s*from\s*(['"])${fsModule}\2`,
+    'g',
+  );
+  let namedImport;
+  while ((namedImport = namedImportPattern.exec(text)) !== null) {
+    if (isInsideStringOrComment(text, namedImport.index)) continue;
+    named.push(...parseNamedSpecifiers(namedImport[1]));
+  }
+
+  const namespaceImportPattern = new RegExp(
+    String.raw`\bimport\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*(['"])${fsModule}\2`,
+    'g',
+  );
+  let namespaceImport;
+  while ((namespaceImport = namespaceImportPattern.exec(text)) !== null) {
+    if (isInsideStringOrComment(text, namespaceImport.index)) continue;
+    namespaces.add(namespaceImport[1]);
+  }
+
+  const destructuredRequirePattern = new RegExp(
+    String.raw`\b(?:const|let|var)\s*\{([^}]+)\}\s*=\s*require\s*\(\s*(['"])${fsModule}\2\s*\)`,
+    'g',
+  );
+  let destructuredRequire;
+  while ((destructuredRequire = destructuredRequirePattern.exec(text)) !== null) {
+    if (isInsideStringOrComment(text, destructuredRequire.index)) continue;
+    named.push(...parseObjectBindingSpecifiers(destructuredRequire[1]));
+  }
+
+  const namespaceRequirePattern = new RegExp(
+    String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*require\s*\(\s*(['"])${fsModule}\2\s*\)`,
+    'g',
+  );
+  let namespaceRequire;
+  while ((namespaceRequire = namespaceRequirePattern.exec(text)) !== null) {
+    if (isInsideStringOrComment(text, namespaceRequire.index)) continue;
     namespaces.add(namespaceRequire[1]);
   }
 
@@ -1487,6 +1581,80 @@ function stringLiterals(text) {
 
 function stripComments(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+function stripCommentsAndStringContents(text) {
+  let output = '';
+  let quote = '';
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (lineComment) {
+      if (char === '\n') {
+        lineComment = false;
+        output += '\n';
+      } else {
+        output += ' ';
+      }
+      continue;
+    }
+
+    if (blockComment) {
+      if (char === '*' && next === '/') {
+        blockComment = false;
+        output += '  ';
+        index += 1;
+      } else {
+        output += char === '\n' ? '\n' : ' ';
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      output += char === '\n' ? '\n' : ' ';
+      continue;
+    }
+
+    if (char === '/' && next === '/') {
+      lineComment = true;
+      output += '  ';
+      index += 1;
+      continue;
+    }
+
+    if (char === '/' && next === '*') {
+      blockComment = true;
+      output += '  ';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      output += ' ';
+      continue;
+    }
+
+    output += char;
+  }
+
+  return output;
+}
+
+function isInsideStringOrComment(text, offset) {
+  return stripCommentsAndStringContents(text).slice(offset, offset + 1) === ' ';
 }
 
 function escapeRegExp(value) {

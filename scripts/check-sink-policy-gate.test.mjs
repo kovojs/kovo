@@ -13,6 +13,7 @@ import {
   logChannelSinkFindings,
   publicSinkPolicyEscapeFindings,
   responseFragmentApplyInvariantFindings,
+  rootedFileServeRawSinkFindings,
   rootedFileServeInvariantFindings,
   sqlBlessedBrandLaunderingFindings,
   sqlBlessedBrandStampFindings,
@@ -334,6 +335,68 @@ describe('sink-policy gate', () => {
       'packages/server/src/file.ts: rooted file serving must reject candidate realpaths outside the constructor root',
       'packages/server/src/file.ts: rooted file serving must re-stat and re-realpath after open',
       'packages/server/src/file.ts: rooted file serving must reject post-open realpaths outside the constructor root',
+    ]);
+  });
+
+  it('rejects raw filesystem file-serve sinks outside the rooted file primitive', () => {
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/server/src/unsafe-file.ts',
+        `
+          import { createReadStream, open as rawOpen } from "node:fs";
+          import * as fsPromises from "node:fs/promises";
+          const stream = createReadStream(requestedPath);
+          rawOpen(requestedPath, "r", () => {});
+          await fsPromises.open(requestedPath);
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createReadStream import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createReadStream call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem open import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem open call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+    ]);
+  });
+
+  it('allows raw filesystem file-serve sinks only in the rooted file primitive owner', () => {
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/server/src/file.ts',
+        `
+          import { open } from "node:fs/promises";
+          export async function safeOpen(path) {
+            return await open(path);
+          }
+        `,
+        { allowedFileServeSink: true },
+      ),
+    ).toEqual([]);
+  });
+
+  it('runs the raw filesystem file-serve sink gate over configured server source files', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: ['packages/server/src/unsafe-file.ts'],
+        deserializationFiles: [],
+        exists: (file) =>
+          file === 'packages/server/src/unsafe-file.ts' || file === 'sink-policy.ts',
+        logChannelFiles: [],
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'import { createWriteStream } from "node:fs"; createWriteStream(path);',
+        responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createWriteStream import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createWriteStream call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
     ]);
   });
 
