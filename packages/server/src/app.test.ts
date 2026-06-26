@@ -381,6 +381,21 @@ describe('server createApp request shell', () => {
     );
   });
 
+  it('does not treat forged global-symbol opaque provider markers as framework-owned', () => {
+    const forgedProvider = (() => ({ user: { id: 'delegated' } })) as (() => {
+      user: { id: string };
+    }) & {
+      [key: symbol]: true;
+    };
+    forgedProvider[Symbol.for('kovo.opaqueSessionProvider')] = true;
+
+    const app = createApp({ sessionProvider: delegatedSessionProvider(forgedProvider) });
+
+    expect(app.session).toBeUndefined();
+    expect(app.sessionProvider).toBe(forgedProvider);
+    expect(app.sessionProviderBoundary).toBe('delegated');
+  });
+
   it('rejects ambiguous delegated sessionProvider shorthand without lifecycle posture', () => {
     expect(() =>
       createApp({

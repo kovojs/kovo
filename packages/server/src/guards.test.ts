@@ -93,6 +93,21 @@ describe('server guard and session primitives', () => {
     ).rejects.toThrow('Plain session provider functions cannot be passed directly');
   });
 
+  it('rejects forged global-symbol session provider normalization markers', async () => {
+    const forged = (() => ({ user: { id: 'forged' } })) as (() => {
+      user: { id: string };
+    }) & {
+      [key: symbol]: string;
+    };
+    forged[Symbol.for('kovo.normalizedSessionProvider')] = 'delegated';
+
+    await expect(
+      resolveLifecycleRequest(new Request('https://app.test/account'), {
+        sessionProvider: forged,
+      }),
+    ).rejects.toThrow('Plain session provider functions cannot be passed directly');
+  });
+
   it('accepts explicitly wrapped session providers in lower-level lifecycle helpers', async () => {
     const appSession = session(s.object({ user: s.object({ id: s.string() }) }));
     const request = await resolveLifecycleRequest(new Request('https://app.test/account'), {

@@ -2,7 +2,7 @@ import type { SessionProvider } from './guards.js';
 
 export type SessionProviderBoundary = 'default-owned' | 'delegated' | 'owned';
 
-const NORMALIZED_SESSION_PROVIDER = Symbol.for('kovo.normalizedSessionProvider');
+const NORMALIZED_SESSION_PROVIDER = Symbol('kovo.normalizedSessionProvider');
 
 export type NormalizedSessionProvider<RawRequest, SessionValue> = SessionProvider<
   RawRequest,
