@@ -74,6 +74,62 @@ describe('inline optimistic mutation lowering', () => {
       "
     `);
   });
+
+  it('captures the per-entry keyed `{ keys, transform }` instance-key derivation (SPEC §10.2/§10.4)', () => {
+    const source = `
+      export const voteUpMutation = mutation('voteUp', {
+        optimistic: {
+          questionScore(draft, _input) {
+            draft.score += 1;
+          },
+          questionDetail: {
+            keys: (input) => ({ id: input.targetId }),
+            transform(draft, _input) {
+              if (draft) draft.score += 1;
+            },
+          },
+          questionList: 'await-fragment',
+        },
+        handler() {},
+      });
+    `;
+    const [plan] = inlineOptimisticPlansFromSource('mutations.ts', source);
+    if (!plan) throw new Error('expected optimistic plan');
+
+    const detail = plan.transforms.find((transform) => transform.query === 'questionDetail');
+    expect(detail?.status).toBe('hand-written');
+    // The instance-key derivation is captured as a typed lowering fact, not folded into the
+    // transform source string (SPEC §5.2 #9).
+    expect(detail?.keys).toBe('(input) => ({ id: input.targetId })');
+    expect(detail?.source).toContain('transform(draft, _input)');
+    // The keyed derivation appears in the canonical fixpoint IR so recompilation cannot drop it.
+    expect(serializeInlineOptimisticPlanIr(plan)).toContain(
+      'questionDetail keys (input) => ({ id: input.targetId })',
+    );
+  });
+
+  it('captures a standalone OptimisticFor sibling `keys` map (SPEC §10.4)', () => {
+    const source = `
+      export const voteOptimistic = {
+        keys: {
+          questionDetail: (input) => ({ id: input.targetId }),
+        },
+        transforms: {
+          questionDetail(draft, _input) {
+            if (draft) draft.score += 1;
+          },
+          questionList: 'await-fragment',
+        },
+      } satisfies OptimisticFor<typeof voteUpMutation>;
+    `;
+    const [plan] = inlineOptimisticPlansFromSource('optimistic.ts', source);
+    if (!plan) throw new Error('expected optimistic plan');
+
+    const detail = plan.transforms.find((transform) => transform.query === 'questionDetail');
+    expect(detail?.keys).toBe('(input) => ({ id: input.targetId })');
+    const list = plan.transforms.find((transform) => transform.query === 'questionList');
+    expect(list?.keys).toBeUndefined();
+  });
 });
 
 function comparablePlan(plan: InlineOptimisticPlanFact): InlineOptimisticPlanFact {
