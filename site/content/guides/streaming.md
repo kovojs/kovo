@@ -1,16 +1,14 @@
 ---
 title: Streaming & defer
-description: Answer immediately with the cheap parts of a page and stream the expensive parts into the same response with kovo-defer.
+description: Answer immediately with the cheap parts of a page and stream the expensive parts into the same response with Defer.
 order: 8
 ---
 
 # Streaming & defer
 
-A product page where recommendations come from a slow model shouldn't make the whole page wait on
-them. With `<kovo-defer>` the page answers immediately with everything cheap, and the expensive subtree
-streams into the same response: the shell renders with a fallback, the real fragment arrives as a
-later chunk, and the morph layer patches it in. It reuses the fragment protocol within first render
-rather than adding a second mechanism.
+Use `<Defer>` when one slow region would hold back an otherwise cheap page. The shell answers with
+ordinary JSX fallback content, then Kovo streams the real region later in the same response and
+morphs it into place.
 
 Kovo has three different streaming surfaces:
 
@@ -18,18 +16,17 @@ Kovo has three different streaming surfaces:
   or custom integrations. CSV/TSV/spreadsheet exports stay in that app-owned bucket; Kovo does not
   present them as a safe-by-default framework lane. They do not run the enhanced mutation apply
   path.
-- `<kovo-defer>` is first-render streaming. It replaces a fallback inside the document response.
+- `<Defer>` is first-render streaming. It replaces a fallback inside the document response.
 - Streaming mutations are post-submit streams. They keep the normal mutation lifecycle and stream
   Kovo wire chunks back through the enhanced form response.
 
 ## The app shape
 
-From the commerce reference app, the app authors declare the route and the query-backed component.
-The app shell owns the deferred document wire:
+Author the boundary with the public JSX primitive from `@kovojs/server`:
 
 ```tsx
 import { component } from '@kovojs/core';
-import { route } from '@kovojs/server';
+import { Defer, route } from '@kovojs/server';
 
 export const ProductGrid = component({
   queries: { productGrid },
@@ -37,12 +34,24 @@ export const ProductGrid = component({
 });
 
 export const productPage = route('/products', {
-  page: () => <ProductGrid />,
+  page: () => (
+    <main>
+      <h1>Products</h1>
+      <Defer
+        target="product-grid"
+        priority="after-paint"
+        fallback={<section aria-busy="true">Loading products...</section>}
+        render={() => <ProductGrid />}
+      />
+    </main>
+  ),
   stylesheets: commerceStylesheets,
 });
 ```
 
-The response is one chunked HTML document. Internally, the wire stays ordered like this:
+`fallback` and `render` are normal JSX, so text and attributes go through the same escaping rules as
+the rest of the page. The response is one chunked HTML document. Internally, Kovo emits the owned
+wire placeholder and the later fragment:
 
 ```html
 <!doctype html>
@@ -66,10 +75,10 @@ The vocabulary is the mutation response's — `<kovo-query>` then `<kovo-fragmen
 render instead of after a POST. It reads top to bottom in view-source, like everything else on the
 wire.
 
-## How the fallback gets replaced
+## Replace the fallback
 
-The `<kovo-defer>` element is the fallback. Whatever you render inside it — a skeleton, a spinner, a
-static placeholder — paints with the shell at first byte. When the matching
+The framework-emitted `<kovo-defer>` element carries the fallback you authored on `<Defer>`. A
+skeleton, spinner, or static summary paints with the shell at first byte. When the matching
 `<kovo-fragment target="…">` chunk arrives, the morph layer patches it in. Because it morphs rather
 than replaces, the swap preserves focus, scroll position, selection, CSS transitions, and the state
 of any islands nested in the fallback. Patched-in islands are inert-until-touched like everything
@@ -129,7 +138,7 @@ bindings, fragments morph into their targets.
 ## When to reach for it
 
 Projected children all ship in the initial HTML — every tab panel, dialog body, accordion content.
-There's no client-side lazy mount. So the question `<kovo-defer>` answers is about server render cost at
+There's no client-side lazy mount. So the question `<Defer>` answers is about server render cost at
 first paint, not payload size.
 
 **Use it when** a subtree is expensive to produce and the rest of the page isn't: recommendations
@@ -157,7 +166,7 @@ identifiable subtree, then defer exactly that subtree. The wire stays readable e
 
 Use a streaming mutation when the user has submitted a real form and the response should render
 progressively, such as a chat assistant answer. It is not an SSE subscription and it is not
-`<kovo-defer>`; it is one enhanced mutation POST response. The server still runs CSRF, input schema
+`<Defer>`; it is one enhanced mutation POST response. The server still runs CSRF, input schema
 validation, guards, replay/idempotency, and the mutation transaction before user-visible assistant
 chunks are emitted.
 
@@ -228,6 +237,7 @@ server-truth reconciliation: SPEC §9.1. `respond.stream()` as an app-owned esca
 `on:visible` and inert-until-touched islands: SPEC §4.7. Projected children shipping in initial HTML:
 SPEC §4.5. Priority hinting and open stream-ordering areas: SPEC §13.3. Stylesheets for late
 fragments: SPEC §13.1. Defer vs. post-load data updates: SPEC §9.3. `kovo explain page` as one
-surface: SPEC §5.3.
+surface: SPEC §5.3. App-authored `defer(...)` as a JSX child is **KV244**; author `<Defer>` and let
+Kovo emit `<kovo-defer>`.
 
 </details>

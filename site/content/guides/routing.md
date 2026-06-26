@@ -6,13 +6,9 @@ order: 0.5
 
 # Routing & navigation
 
-Kovo is a multi-page app: every page is a complete server document, and there is no client router.
-A route is a declared value whose path string is captured as a literal type, so the path becomes
-part of the type system. You link to it by that literal, type its params and search schema once, and
-get one property the spine is built on — **rename a route and every `<Link>`, GET form, and
-`redirect()` that pointed at it turns red under `vp check`.** This guide is the MPA spine: declaring
-routes, typing the URL, the sanctioned non-200 outcomes, guards, and the navigation affordances
-layered on top of plain `<a href>`.
+Declare a route once, then use that same route shape for links, redirects, GET forms, metadata,
+guards, and static export. Rename a path and `vp check` points at every stale consumer before you
+ship.
 
 ## Declare a route
 
@@ -25,7 +21,7 @@ import { route, s } from '@kovojs/server';
 export const dealDetailRoute = route('/deals/:id', {
   meta: { description: 'CRM deal detail.', title: 'Deal · Atlas CRM' },
   params: s.object({ id: s.string() }), // coercion declared once, like FormData
-  staticPaths: crmStaticDealPaths, // enumerated paths for static export (KV229)
+  staticPaths: crmStaticDealPaths,
   page({ params }: { params: { id: string } }) {
     return <DealDetailRegion dealId={params.id} />;
   },
@@ -62,6 +58,44 @@ Route matching is static-first at each path segment; two routes that can match t
 request path is a **compile error, KV228**, not a runtime precedence footnote. Trailing slashes
 normalize to one canonical path with a 308 before matching, and a page path answers `GET`/`HEAD`
 (other methods are 405, because mutations own POST under `/_m/`).
+
+## Add route metadata
+
+`meta` writes the document head for that route. Static metadata covers the common page-head fields,
+including the Open Graph image:
+
+```tsx
+export const productRoute = route('/products/:id', {
+  meta: {
+    title: 'Product detail',
+    description: 'View price, inventory, and shipping windows.',
+    image: '/images/products/default-card.png',
+  },
+  params: s.object({ id: s.string() }),
+  page: ProductPage,
+});
+```
+
+When the title or image comes from query data, derive it from the query instead of duplicating a
+loader in the route:
+
+```tsx
+import { metaFromQuery, route, s } from '@kovojs/server';
+
+export const productRoute = route('/products/:id', {
+  params: s.object({ id: s.string() }),
+  queries: { product: productQuery.args(({ params }) => ({ id: params.id })) },
+  meta: metaFromQuery(productQuery, (product) => ({
+    title: `${product.name} · Kovo Shop`,
+    description: product.summary,
+    image: product.imageUrl,
+  })),
+  page: ProductPage,
+});
+```
+
+`meta.image` is a URL sink. Kovo scheme-checks it before emitting `<meta property="og:image">`, so
+query-derived image URLs go through the same output rules as authored attributes.
 
 ## Type the path params
 
@@ -275,6 +309,27 @@ export const productRoute = route('/products/:id', {
 });
 ```
 
+<details>
+<summary>Credentialed prerender on guarded routes</summary>
+
+`prefetch: 'moderate'` may prerender the route's page, metadata, and queries with the user's
+credentials on hover. Guarded, session-dependent, or not-proven-side-effect-free routes must stay on
+`prefetch: 'conservative'` unless you add a named `prefetchJustification` explaining why the
+credentialed prerender is safe:
+
+```tsx
+export const accountOverviewRoute = route('/account', {
+  guard: authed,
+  prefetch: 'moderate',
+  prefetchJustification: 'Read-only account chrome; no analytics or write effects during render.',
+  page: AccountOverviewPage,
+});
+```
+
+Without that justification, `vp check` reports KV419.
+
+</details>
+
 All three count against the inline loader's 8KB gzip budget and must not break bfcache (no `unload`
 handlers). Navigation partials are not a v1 protocol: enhanced navigation uses the full target
 document as its oracle, and app TSX never authors navigation segment stamps or persistence policy.
@@ -291,11 +346,13 @@ document as its oracle, and app TSX never authors navigation segment stamps or p
 
 The MPA spine, enhanced navigation, View Transitions, Speculation Rules, and the degradation
 contract: SPEC §8. Typed routes, params/search schemas, `<Link>`/`href()`, `redirect()`,
-`notFound()`, guards on routes, and the propagation property: SPEC §6.4. The session schema and fixed
-guard-failure outcomes: SPEC §6.5. The Interaction Ladder and the typed URL coordination channel:
-SPEC §7. The request shell, dispatch order, static-first matching, and static export: SPEC §9.5. A
-literal `href`/form `action` that matches no declared route is **KV220**; an ambiguous or duplicate
-route path is **KV228**; a route that cannot be statically exported as L0/L1 is **KV229**; a
-duplicate static view-transition name is **KV239**.
+`notFound()`, guards on routes, static and query-driven metadata, and the propagation property:
+SPEC §6.4. The session schema and fixed guard-failure outcomes: SPEC §6.5. The Interaction Ladder
+and the typed URL coordination channel: SPEC §7. The request shell, dispatch order, static-first
+matching, and static export: SPEC §9.5. OG image URL-sink checking for `meta.image` and
+`metaFromQuery(...)`: SPEC §4.8 and §13.5. A literal `href`/form `action` that matches no declared
+route is **KV220**; an ambiguous or duplicate route path is **KV228**; a route that cannot be
+statically exported as L0/L1 is **KV229**; a duplicate static view-transition name is **KV239**;
+unguarded credentialed prerender with `prefetch: 'moderate'` is **KV419**.
 
 </details>

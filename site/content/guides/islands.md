@@ -26,7 +26,7 @@ Reach for the lowest layer that does the job:
 | **L1** | Pure client island: local state + update plan (this guide)             | Tabs, toggle, filter   | handler module on first touch |
 | **L2** | Mutation: real form + enhanced fetch → fragment/query patch            | Add to cart            | loader + form module          |
 | **L3** | Optimistic: transform over query values                                | Instant badge tick     | transform module              |
-| **L4** | Live: SSE pushing the same fragment/query chunks                       | Order status, presence | `<kovo-live>` subscriber      |
+| **L4** | Roadmap live transport over the same fragment/query chunks             | Order status, presence | Not in technical preview      |
 
 If a `<details>` element or `commandfor`/`command` does it, write that and ship zero JS — the
 compiler enforces L0 substitutions. L1 is for state the platform can't express on its own: a pressed
@@ -148,6 +148,71 @@ the ladder: extract a derive, lower to a CSS/attribute toggle, make the componen
 fragment target, or mark `isomorphic: true` (lint-gated escape hatch for logic beyond paths/derives/
 keyed lists).
 
+## Declare clocks for time-dependent UI
+
+Relative time, countdowns, and expiring badges need a cadence. Do not call `Date.now()` or
+`new Date()` inside a derive. Declare a `clocks` input and read it through `now`:
+
+```tsx
+import { component } from '@kovojs/core';
+
+export const MessageTime = component({
+  queries: { message: messageQuery },
+  clocks: { ago: { every: '30s' } },
+  render: ({ message, now }) => (
+    <time dateTime={message.createdAt}>{formatRelative(now.ago, message.createdAt)}</time>
+  ),
+});
+```
+
+Kovo lowers `now.ago` to the shared browser tick bus and reruns only the derives that declared that
+clock input. The server-rendered text is still useful without JavaScript; the clock just keeps it
+fresh while the document stays open.
+
+For time-dependent query data, put the cadence on the query binding so Kovo knows when to ask the
+server for fresh truth:
+
+```tsx
+export const TrialBadge = component({
+  queries: {
+    trial: trialQuery.refresh({ every: '1m' }),
+  },
+  render: ({ trial }) => <strong>{trial.daysLeft} days left</strong>,
+});
+
+export const AuctionBadge = component({
+  queries: {
+    auction: auctionQuery.refresh({ at: (auction) => auction.endsAt }),
+  },
+  render: ({ auction }) => <strong>{auction.status}</strong>,
+});
+
+export const QueueBadge = component({
+  queries: {
+    queue: queueQuery.refresh({ until: (queue) => queue.done }),
+  },
+  render: ({ queue }) => <strong>{queue.position}</strong>,
+});
+```
+
+Use `renderOnce(...)` when freezing a clock value for the document lifetime is intentional, such as a
+published date that should not tick while the page is open:
+
+```tsx
+import { component, renderOnce } from '@kovojs/core';
+
+export const PublishedAt = component({
+  queries: { post: postQuery },
+  clocks: { published: { renderOnce: true } },
+  render: ({ post, now }) => (
+    <time dateTime={post.publishedAt}>{renderOnce(formatDate(now.published))}</time>
+  ),
+});
+```
+
+`renderOnce` is an escape hatch, not a freshness tool. If the value should change while the page is
+open, declare a clock or query refresh cadence instead.
+
 ## Execution triggers: `on:click`, `on:visible`
 
 Interaction is the default trigger. Three declared alternatives extend the same
@@ -259,6 +324,8 @@ SPEC §7. Server-refreshable fragment targets and KV420: SPEC §4.5 and §9.1. S
 state is **KV301**; unserializable closure capture is **KV201**;
 hand-written stamp disagreement is **KV222**, redundant stamp is **KV223**; `on:load` without
 justification is **KV211**; event payload overlapping query data is **KV320**; an uncovered
-query/state-dependent position is **KV311**.
+query/state-dependent position is **KV311**. Time-dependent rendered positions and derives require
+declared `clocks`, query `.refresh({ every | at | until })`, or `renderOnce`: SPEC §4.8 and §4.9;
+missing cadence is **KV312**, and raw clock reads in derives are **KV315**.
 
 </details>

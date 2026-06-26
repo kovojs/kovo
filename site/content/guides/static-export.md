@@ -6,10 +6,10 @@ order: 5.1
 
 # Static export
 
-Static export is Kovo's request shell replayed at build time. The exporter sends synthetic GET
-`Request`s through the same handler that serves the app dynamically, then writes HTML, immutable
-`/c/__v/*` modules, and static assets. There is no parallel renderer and no hand-authored static
-variant.
+Use static export when a route can ship as HTML plus immutable modules and stay correct without a
+runtime request shell. Kovo proves that by replaying synthetic GET `Request`s through the same
+handler that serves the app dynamically, then writing HTML, immutable `/c/__v/*` modules, and static
+assets. There is no parallel renderer and no hand-authored static variant.
 
 ## Exportable route shape
 
@@ -21,7 +21,9 @@ Export is for L0/L1 pages:
 - No requirement for server refetch after the document is published.
 
 The exporter fails or skips loudly, according to policy, when a route has a guard, unproven session
-dependence, mutation-only interaction, or an unenumerated param path. That is **KV229**.
+dependence, mutation-only interaction, or an unenumerated param path. This page is the source of
+truth for that static-export constraint; the deployment guide links back here instead of repeating
+the diagnostic rules.
 
 ## When to keep a server
 

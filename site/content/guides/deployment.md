@@ -1,15 +1,14 @@
 ---
 title: Deployment
-description: Run a stateless server, keep old modules and typed reads available across deploys, and choose the right live-query infrastructure.
+description: Run a stateless server, keep old modules and typed reads available across deploys, and choose the right liveness posture.
 order: 5
 ---
 
 # Deployment
 
-To ship a Kovo app you run a stateless app server (or, for sites without mutations, no server at
-all), a database, and one thing most platforms leave implicit: you keep versioned client modules
-and prior-token typed reads available across deploys. This guide covers each piece, live-query
-infrastructure, and static export.
+To ship a Kovo app, pick the smallest deploy shape that matches the app: a static host for L0/L1
+pages, or a stateless server for mutations, guarded routes, typed reads, and per-request data. In
+both shapes, keep versioned client modules available across deploys.
 
 ## The stateless server
 
@@ -18,17 +17,14 @@ The v1 server holds no state between requests. Concretely:
 - **No session of what's on screen.** An enhanced mutation tells the server which fragments to render
   through the `Kovo-Targets` header, read off the live DOM's `kovo-deps` stamps at submit time. The
   server answers a self-contained question on every request.
-- **Live subscriptions are explicit infrastructure.** Ordinary mutation refreshes, refetch-on-focus,
-  and BroadcastChannel tab sync stay stateless. A query with `live: true` can additionally be
-  subscribed with `<kovo-live>` over SSE; single-node apps use the in-process emitter, and multi-node
-  apps use Redis pub/sub or an equivalent fan-out layer.
+- **Preview liveness stays stateless.** Ordinary mutation refreshes, refetch-on-focus, and
+  BroadcastChannel tab sync need no instance affinity. SSE live queries are roadmap, not part of the
+  technical preview.
 - **No optimistic state server-side.** Predictions live in the document and die with it.
 
 Operationally, this means any instance can answer ordinary routes, mutations, and typed reads. You
-do not need sticky sessions. If you enable SSE live queries in a multi-node deploy, events need a
-shared pub/sub bus so the node holding a subscription can hear writes committed by another node.
-Session data follows whatever your `sessionProvider` reads — a signed cookie, a session table —
-while the framework itself pins no UI state to an instance.
+do not need sticky sessions. Session data follows whatever your `sessionProvider` reads — a signed
+cookie, a session table — while the framework itself pins no UI state to an instance.
 
 Two request-shaped facts worth knowing at the infrastructure layer:
 
@@ -111,14 +107,13 @@ module files during the skew window when you re-upload.
 
 Static export replays synthetic GET `Request`s through the same request handler; there is no second
 render path. Use it when every exported route is L0/L1: platform behavior, pure islands, static
-assets, and no per-request server truth. A route with a guard, unproven session dependence,
-mutation-only interaction, or a parameterized path without explicit `staticPaths` is not silently
-made static. It fails or skips according to export policy with **KV229**.
+assets, and no per-request server truth.
 
-Use a server deploy instead when the app needs mutations, live queries, guarded routes, parameterized
-queries without an enumerable path set, raw endpoints, webhooks, or per-request data. Exported
+Use a server deploy instead when the app needs mutations, guarded routes, parameterized queries
+without an enumerable path set, raw endpoints, webhooks, typed reads, or per-request data. Exported
 documents should not assume server refetches will exist later; the no-JS HTML document is the
-artifact.
+artifact. The detailed static-export constraints and diagnostic ownership live in
+[Static export](/guides/static-export/).
 
 ### A node-server entrypoint
 
@@ -173,9 +168,9 @@ connection), `CSRF_SECRET` (the session-bound token secret behind §9.1 `kovo-cs
 secret your `sessionProvider` validates against. None of these is instance-specific — the same image
 runs behind a load balancer unchanged.
 
-## Liveness and live queries
+## Liveness in the technical preview
 
-Kovo has three liveness mechanisms, each with a different operational cost:
+Kovo has three shipped liveness paths, each with a different operational cost:
 
 - **BroadcastChannel rebroadcast** — a mutation's `<kovo-query>` response is rebroadcast to the user's
   other open tabs. Add to cart in tab A, and the badge in tab B ticks. Zero server cost, no
@@ -184,14 +179,12 @@ Kovo has three liveness mechanisms, each with a different operational cost:
 - **Refetch on focus/visibility** — the loader re-runs queries over the typed read endpoint
   (`GET /_q/…`) when a stale tab returns, with per-query opt-out. One conditional in the loader fakes
   a lot of live UX.
-- **SSE live queries** — `<kovo-live query="cart">` subscribes to a query declared with `live: true`.
-  The SSE stream carries the same `<kovo-query>` / `<kovo-fragment>` vocabulary mutation responses
-  use. Guards run at subscription time and again for every push, so a fragment push cannot become a
-  privilege-escalation channel.
+- **Enhanced mutation responses** — the submitting tab gets server truth in the POST response, using
+  the same `<kovo-query>` / `<kovo-fragment>` vocabulary that powers later refreshes.
 
-For a single process, the in-process emitter is enough. For multiple app instances, route write
-events through Redis pub/sub or another fan-out bus keyed by the same query instance keys the typed
-read endpoint uses. See [live queries](/guides/live-queries/) for the authoring contract.
+SSE live queries are roadmap, not part of the technical preview. Do not deploy `live: true`,
+`<kovo-live>`, `createApp({ live })`, or live emitters in preview apps. See
+[Live queries](/guides/live-queries/) for the shipped paths and the roadmap caveat.
 
 ## Pre-deploy gates
 
@@ -225,20 +218,21 @@ are already proven. See [reading kovo check & kovo explain](/guides/kovo-explain
 ## Next
 
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — the gates in that checklist.
-- [Live queries](/guides/live-queries/) — SSE over the fragment/query vocabulary.
+- [Live queries](/guides/live-queries/) — shipped liveness paths and the roadmap SSE caveat.
 - [Static export](/guides/static-export/) — deciding whether a route can ship without a server.
 - [Streaming & defer](/guides/streaming/) — response streaming and what it needs from the edge.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
-The stateless-server guarantee and live subscriptions: SPEC §9.3. `Kovo-Targets` and the mutation
-round-trip: SPEC §9.1. Session providers: SPEC §6.5. The typed read endpoint: SPEC §9.4.
+The stateless-server guarantee, BroadcastChannel, and refetch-on-focus: SPEC §9.3. `Kovo-Targets`
+and the mutation round-trip: SPEC §9.1. Session providers: SPEC §6.5. The typed read endpoint:
+SPEC §9.4.
 `keepalive` and bfcache hygiene, plus per-route Speculation Rules: SPEC §8. Immutable versioned
 module URLs, prior-token typed reads, the 24-hour retention floor, and deploy-skew recovery:
-SPEC §6.6 and §14. Static export through the request shell and KV229: SPEC §9.5. Schema-validated
-old-form recovery via the 422 path: SPEC §9.2. The request lifecycle: SPEC §10.3. Browser-free
-pre-deploy gates: SPEC §11.4. KV417 reports a serving layer that cannot meet the skew-retention
-floor.
+SPEC §6.6 and §14. Static export through the request shell: SPEC §9.5; see
+[Static export](/guides/static-export/) for exportability diagnostics. Schema-validated old-form
+recovery via the 422 path: SPEC §9.2. The request lifecycle: SPEC §10.3. Browser-free pre-deploy
+gates: SPEC §11.4. KV417 reports a serving layer that cannot meet the skew-retention floor.
 
 </details>

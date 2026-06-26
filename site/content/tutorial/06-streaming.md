@@ -7,23 +7,43 @@ order: 6
 # Streaming & defer
 
 Suppose the product list gets expensive — a slow join, a recommendations service. Blocking the
-whole document on it would trade away the MPA's instant first paint. In this chapter you use
-`<kovo-defer>` to render a fallback in the shell and stream the real fragment later, in the same
+whole document on it would trade away the MPA's instant first paint. In this chapter you author
+`<Defer>` in TSX so the shell can paint now and the product list can stream later in the same
 response. Step state: `site/tutorial/steps/06-streaming/`.
 
 ## Defer an expensive fragment
 
+Import `Defer` from `@kovojs/server`, give it a stable target, render an honest fallback, and put
+the slow region behind `render`:
+
+```tsx
+import { Defer } from '@kovojs/server';
+
+export function ShopPage() {
+  return (
+    <main>
+      <CartBadge />
+      <Defer
+        target="product-list"
+        priority="after-paint"
+        fallback={<section aria-busy="true">Loading products...</section>}
+        render={() => <ProductList />}
+      />
+    </main>
+  );
+}
+```
+
 Deferred content reuses a mechanism you already have. The chunks that arrive after the shell are
-the same `<kovo-query>` and `<kovo-fragment>` elements the mutation wire used in chapters 4 and 5 —
-the fragment protocol, reused within first render. Nothing new ships in the loader, and nothing
-new needs auditing on the wire.
+the same `<kovo-query>` and `<kovo-fragment>` elements the mutation wire used in chapters 4 and 5.
+The emitted placeholder is `<kovo-defer>`, but app code authors `<Defer>`.
 
 {{snippet:06-streaming/src/app.test.ts#deferred-stream}}
 
-The shell carries the cart badge (cheap, rendered inline) and a `<kovo-defer>` placeholder with
-declared fallback content. The stream then appends the products query value and the product-list
-fragment; the loader morphs the fragment over the placeholder exactly as it would morph a
-mutation response.
+The shell carries the cart badge, which is cheap and rendered inline. Kovo emits a `<kovo-defer>`
+wire placeholder with your fallback content. The stream then appends the products query value and
+the product-list fragment; the loader morphs the fragment over the placeholder exactly as it would
+morph a mutation response.
 
 ## Assert the stream as a string
 
@@ -40,14 +60,14 @@ not hold yet:
 
 ## When to defer
 
-`<kovo-defer>` is the relief valve for expensive subtrees, and it's the only lazy-content
+`<Defer>` is the relief valve for expensive subtrees, and it's the only lazy-content
 mechanism — projected children otherwise ship in the initial HTML, which is the MPA model, not an
 oversight (SPEC §4.5). Reach for it when a fragment's render cost would delay first paint; skip it
 when the data is cheap, because a placeholder that flashes for 10ms is worse than content.
 
 ## Multiple defers in one response
 
-A page can hold more than one `<kovo-defer>`, and each is independent: a slow recommendations rail
+A page can hold more than one `<Defer>`, and each is independent: a slow recommendations rail
 and a slow reviews block can both stream while the shell — and everything cheap in it — paints
 immediately. Split them when their costs differ, so a 50ms fragment isn't held behind a 2s one;
 each chunk arrives and morphs in as its own work finishes. Don't over-split, though. Every defer
@@ -63,7 +83,7 @@ import or a navigation prefetch, interleave with the in-flight stream and don't 
 Over HTTP/1.1 there is no multiplexing on a single connection: a long-running deferred response can
 hold the line, and a browser limited to a handful of parallel HTTP/1.1 connections per origin can
 stall other requests behind your slow fragment. This is a property of the transport, not of
-`<kovo-defer>` — but it changes the calculus. On HTTP/1.1, a defer that takes seconds can cost you
+`<Defer>` — but it changes the calculus. On HTTP/1.1, a defer that takes seconds can cost you
 more in blocked sibling requests than it saves in first paint, so prefer fewer, coarser defers and
 make sure your hosting terminates HTTP/2. Finer priority semantics and query-JSON placement under
 HTTP/1.1 fallbacks are still open design areas; the before-or-with ordering guarantee below is the
@@ -89,9 +109,10 @@ framework's biggest claim: proving all of this behavior, mechanically, without a
 <details>
 <summary>Spec & diagnostics</summary>
 
-`<kovo-defer>` and streaming within first render: SPEC §8. Reused fragment protocol and morph over
-the placeholder: SPEC §9.1. Deferred query JSON ordered before or with its consumers: SPEC §8.
-Projected children ship in initial HTML; `<kovo-defer>` is the only lazy-content mechanism: SPEC
-§4.5. Priority and HTTP/1.1 considerations: SPEC §13.3.
+`<Defer>` and streaming within first render: SPEC §8. Reused fragment protocol and morph over the
+framework-emitted `<kovo-defer>` placeholder: SPEC §9.1. Deferred query JSON ordered before or with
+its consumers: SPEC §8. Projected children ship in initial HTML; Defer is the only lazy-content
+mechanism: SPEC §4.5. Priority and HTTP/1.1 considerations: SPEC §13.3. App-authored `defer(...)`
+as a JSX child is **KV244**.
 
 </details>
