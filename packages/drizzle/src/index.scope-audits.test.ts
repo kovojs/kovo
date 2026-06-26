@@ -305,6 +305,86 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('keeps const-destructured query args as arg-keyed owner reads', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const orderById = query("orderById", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
+              '    const { id: orderId } = input;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId));',
+              '  },',
+              '});',
+              '',
+              'export const ordersForUser = query("ordersForUser", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    const { userId } = input;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ domain: a.domain, key: a.key, name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { domain: 'order', key: 'arg:id', name: 'orderById', scope: 'args' },
+      { domain: 'order', key: 'arg:userId', name: 'ordersForUser', scope: 'args' },
+    ]);
+  });
+
+  it('does not treat non-input destructured locals as query args', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const orderMine = query("orderMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+              '    const source = { userId: "u1" };',
+              '    const { userId } = source;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
+      { domain: 'order', scope: 'unknown' },
+    ]);
+  });
+
   // KV414 join-keyed bypass (SPEC §10.3, fail-closed). Reading an owner table through a
   // JOIN keyed on the JOINED (non-owner) table emitted NO scope audit and shipped green:
   // the arg predicate (`input.itemId`) resolves to `items` (non-owner), so the owner read
