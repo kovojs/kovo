@@ -831,6 +831,7 @@ function hasForbiddenEvalCall(source) {
     );
   }
   patterns.push(...dynamicCodeMemberHelperCallPatterns('eval', globalEvalExpression, aliases));
+  patterns.push(...dynamicCodeImmediateBindCallPatterns('eval', globalEvalExpression, aliases));
 
   for (const pattern of patterns) {
     for (const call of callArgumentLists(source, pattern)) {
@@ -865,6 +866,11 @@ function hasForbiddenFunctionConstructorCall(source, options = {}) {
     patterns.push(
       ...dynamicCodeMemberHelperCallPatterns('Function', globalFunctionExpression, aliases),
     );
+    patterns.push(
+      ...dynamicCodeImmediateBindCallPatterns('Function', globalFunctionExpression, aliases, {
+        callOnly: true,
+      }),
+    );
   }
 
   if (options.callOnly !== true) {
@@ -885,6 +891,11 @@ function hasForbiddenFunctionConstructorCall(source, options = {}) {
         ),
       );
     }
+    patterns.push(
+      ...dynamicCodeImmediateBindCallPatterns('Function', globalFunctionExpression, aliases, {
+        newOnly: true,
+      }),
+    );
   }
 
   for (const pattern of patterns) {
@@ -982,11 +993,38 @@ function dynamicCodeMemberHelperCallPatterns(targetName, globalExpression, alias
   return patterns;
 }
 
+function dynamicCodeImmediateBindCallPatterns(targetName, globalExpression, aliases, options = {}) {
+  const directTarget = String.raw`(?:${targetName}|\(\s*${targetName}\s*\)|${globalExpression}|\(\s*${globalExpression}\s*\))`;
+  const patterns = [];
+  const addPattern = (targetExpression) => {
+    const boundExpression = String.raw`${targetExpression}\s*\.\s*bind\s*\([^)]*\)`;
+    const maybeParenthesizedBoundExpression = String.raw`(?:${boundExpression}|\(\s*${boundExpression}\s*\))`;
+    if (options.newOnly === true) {
+      patterns.push(
+        new RegExp(String.raw`(^|[^\w$.])new\s+${maybeParenthesizedBoundExpression}\s*\(`, 'g'),
+      );
+      return;
+    }
+    patterns.push(
+      new RegExp(String.raw`(^|[^\w$.])${maybeParenthesizedBoundExpression}\s*\(`, 'g'),
+    );
+  };
+
+  addPattern(directTarget);
+
+  for (const alias of aliases.keys()) {
+    addPattern(String.raw`(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(alias)}\s*\))`);
+  }
+
+  return patterns;
+}
+
 function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()) {
   const openParenIndex = source.indexOf('(', call.index);
   const callPrefix =
     openParenIndex < 0 ? source.slice(call.index) : source.slice(call.index, openParenIndex);
   const nearbyPrefix = source.slice(Math.max(0, call.index - 40), openParenIndex);
+  const nearbyCallWindow = source.slice(call.index, Math.min(source.length, call.index + 160));
   if (
     new RegExp(String.raw`\bfunction\s+${escapeRegExp(targetName)}\s*$`).test(callPrefix) ||
     new RegExp(String.raw`\bfunction\s+${escapeRegExp(targetName)}\s*$`).test(nearbyPrefix)
@@ -996,6 +1034,24 @@ function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()
   if (
     /\bglobalThis\b/.test(callPrefix) &&
     hasLocalBindingBefore(source, 'globalThis', call.index)
+  ) {
+    return true;
+  }
+  if (
+    /\bglobalThis\b/.test(nearbyPrefix) &&
+    hasLocalBindingBefore(source, 'globalThis', call.index)
+  ) {
+    return true;
+  }
+  if (
+    /\bglobalThis\b/.test(nearbyCallWindow) &&
+    hasLocalBindingBefore(source, 'globalThis', call.index)
+  ) {
+    return true;
+  }
+  if (
+    new RegExp(String.raw`\b${escapeRegExp(targetName)}\s*\.\s*bind\b`).test(nearbyPrefix) &&
+    hasLocalBindingBefore(source, targetName, call.index)
   ) {
     return true;
   }
@@ -1043,10 +1099,10 @@ function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()
 }
 
 function dynamicCodeMemberHelperBaseName(callPrefix) {
-  if (!/\.\s*(?:call|apply)\s*$/.test(callPrefix)) return undefined;
+  if (!/\.\s*(?:call|apply|bind)\s*(?:\([^)]*\))?\s*$/.test(callPrefix)) return undefined;
   const targetExpression = callPrefix
     .replace(/^([^\w$]*)/, '')
-    .replace(/\.\s*(?:call|apply)\s*$/, '')
+    .replace(/\.\s*(?:call|apply|bind)\s*(?:\([^)]*\))?\s*$/, '')
     .trim()
     .replace(/^\(\s*/, '')
     .replace(/\s*\)$/, '')

@@ -542,6 +542,8 @@ describe('sink-policy gate', () => {
       'const run = globalThis["eval"]; export const result = run.apply(null, [code]);',
       'const run = globalThis.eval.bind(globalThis); export const result = run(code);',
       'const run = globalThis["eval"].bind(globalThis); export const result = (run)(code);',
+      'export const run = globalThis.eval.bind(globalThis)(code);',
+      "export const run = (globalThis['eval'].bind(globalThis))(code);",
     ]) {
       expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
         finding,
@@ -644,6 +646,9 @@ describe('sink-policy gate', () => {
       'const Make = globalThis["Function"]; export const call = Make.apply(null, [code]);',
       'const Make = globalThis.Function.bind(globalThis); export const call = Make("return 1");',
       'const Make = globalThis["Function"].bind(globalThis); export const call = (Make)(code);',
+      'export const call = Function.bind(null)("return 1");',
+      'export const call = globalThis.Function.bind(globalThis)("return 1");',
+      "export const call = (globalThis['Function'].bind(globalThis))('return 1');",
     ]) {
       expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
         callFinding,
@@ -653,6 +658,8 @@ describe('sink-policy gate', () => {
     for (const source of [
       'const Make = globalThis.Function.bind(globalThis); export const made = new Make("return 1");',
       'const Make = globalThis["Function"].bind(globalThis); export const made = new (Make)(code);',
+      "export const made = new (globalThis.Function.bind(globalThis))('return 1');",
+      "export const made = new (globalThis['Function'].bind(globalThis))('return 1');",
     ]) {
       expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
         constructorFinding,
@@ -681,7 +688,7 @@ describe('sink-policy gate', () => {
         `
           // (0, eval)(code); globalThis.Function(code); globalThis["eval"](code);
           const note =
-            "eval(code); new Function(code); globalThis.eval(code); globalThis['Function'](code)";
+            "eval(code); new Function(code); globalThis.eval(code); globalThis['Function'](code); Function.bind(null)('value')";
           export function safe(eval, globalThis) {
             const run = eval;
             function Function(value) {
@@ -700,6 +707,10 @@ describe('sink-policy gate', () => {
               globalThis["eval"].apply(null, ["value"]),
               Function.call(null, "value"),
               globalThis.Function.bind(null)("value"),
+              globalThis.eval.bind(globalThis)("value"),
+              (globalThis["eval"].bind(globalThis))("value"),
+              Function.bind(null)("value"),
+              new (globalThis.Function.bind(null))("value"),
             ];
           }
         `,
