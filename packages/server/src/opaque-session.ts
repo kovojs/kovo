@@ -427,11 +427,8 @@ function normalizeOpaqueSessionValidation<SessionValue>(
   // malformed validation outcomes as anonymous/malformed instead of throwing or accepting an
   // undeclared lifecycle reason.
   if (result === null || typeof result !== 'object') return { ok: false, reason: 'malformed' };
-  const validation = result as {
-    ok?: unknown;
-    reason?: unknown;
-    session?: unknown;
-  };
+  const validation = snapshotOpaqueSessionValidationResult(result);
+  if (validation === undefined) return { ok: false, reason: 'malformed' };
   if (validation.ok !== true) {
     return isOpaqueSessionRejectReason(validation.reason)
       ? { ok: false, reason: validation.reason }
@@ -446,6 +443,20 @@ function normalizeOpaqueSessionValidation<SessionValue>(
 
 function isOpaqueSessionRejectReason(value: unknown): value is OpaqueSessionRejectReason {
   return value === 'missing' || value === 'malformed' || value === 'expired' || value === 'revoked';
+}
+
+function snapshotOpaqueSessionValidationResult(
+  value: object,
+): { ok: unknown; reason: unknown; session: unknown } | undefined {
+  try {
+    return {
+      ok: getOwnDataPropertyValue(value, 'ok', 'Opaque session validation.ok'),
+      reason: getOwnDataPropertyValue(value, 'reason', 'Opaque session validation.reason'),
+      session: getOwnDataPropertyValue(value, 'session', 'Opaque session validation.session'),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function assertEstablishedOpaqueSession<SessionValue>(
@@ -472,20 +483,40 @@ function resolveOpaqueSessionCookieMaxAge<SessionValue>(
   return Math.max(1, Math.floor(remainingMs / 1000));
 }
 
-function isCoherentOpaqueSessionRecord<SessionValue>(
-  value: unknown,
-): value is OpaqueSessionRecord<SessionValue> {
-  if (value === null || typeof value !== 'object') return false;
-  const record = value as Partial<OpaqueSessionRecord<SessionValue>>;
-  const { createdAt, expiresAt, id } = record;
-  return (
-    typeof id === 'string' &&
+function snapshotOpaqueSessionRecordFields(value: unknown):
+  | {
+      id: string;
+      createdAt: number;
+      expiresAt: number;
+      value: unknown;
+    }
+  | undefined {
+  if (value === null || typeof value !== 'object') return undefined;
+  let id: unknown;
+  let createdAt: unknown;
+  let expiresAt: unknown;
+  let sessionValue: unknown;
+  try {
+    id = getOwnDataPropertyValue(value, 'id', 'Opaque session record.id');
+    createdAt = getOwnDataPropertyValue(value, 'createdAt', 'Opaque session record.createdAt');
+    expiresAt = getOwnDataPropertyValue(value, 'expiresAt', 'Opaque session record.expiresAt');
+    const sessionValueDescriptor = getOwnDataPropertyDescriptor(
+      value,
+      'value',
+      'Opaque session record.value',
+    );
+    if (sessionValueDescriptor === undefined) return undefined;
+    sessionValue = sessionValueDescriptor.value;
+  } catch {
+    return undefined;
+  }
+  return typeof id === 'string' &&
     isOpaqueSessionId(id) &&
     isCoherentEpochMillisecond(createdAt) &&
     isCoherentEpochMillisecond(expiresAt) &&
-    expiresAt > createdAt &&
-    'value' in record
-  );
+    expiresAt > createdAt
+    ? { id, createdAt, expiresAt, value: sessionValue }
+    : undefined;
 }
 
 function isCoherentEpochMillisecond(value: unknown): value is number {
@@ -497,13 +528,14 @@ function isCoherentEpochMillisecond(value: unknown): value is number {
 function snapshotCoherentOpaqueSessionRecord<SessionValue>(
   value: unknown,
 ): OpaqueSessionRecord<SessionValue> | undefined {
-  if (!isCoherentOpaqueSessionRecord<SessionValue>(value)) return undefined;
+  const record = snapshotOpaqueSessionRecordFields(value);
+  if (record === undefined) return undefined;
   try {
     return {
-      id: value.id,
-      createdAt: value.createdAt,
-      expiresAt: value.expiresAt,
-      value: structuredClone(value.value) as SessionValue,
+      id: record.id,
+      createdAt: record.createdAt,
+      expiresAt: record.expiresAt,
+      value: structuredClone(record.value) as SessionValue,
     };
   } catch {
     return undefined;

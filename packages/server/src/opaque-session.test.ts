@@ -903,6 +903,60 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     ).resolves.toBeNull();
   });
 
+  it('fails closed on inherited custom-store validation fields', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        async validate(id: string) {
+          const result = await baseStore.validate(id);
+          if (!result.ok) return result;
+          return Object.create({
+            ok: true,
+            session: result.session,
+          }) as never;
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+    await expect(
+      manager.provider(new Request('https://app.test/account', { headers: { cookie } })),
+    ).resolves.toBeNull();
+  });
+
+  it('fails closed on accessor-backed custom-store validation fields without invoking them', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    let getterCalls = 0;
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        validate: async () => {
+          const validation = {};
+          Object.defineProperty(validation, 'ok', {
+            get() {
+              getterCalls += 1;
+              return true;
+            },
+          });
+          return validation as never;
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+    expect(getterCalls).toBe(0);
+  });
+
   it('fails closed when a custom store throws during request validation', async () => {
     const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
     const manager = createOpaqueSessionManager({
@@ -999,6 +1053,56 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     await expect(manager.establish({ user: { id: 'u1' } })).rejects.toThrow(
       'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
     );
+  });
+
+  it('refuses custom-store records with inherited lifecycle fields', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const validSession = baseStore.create({ user: { id: 'u1' } });
+    const inheritedSession = Object.create(validSession);
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        create: async () => inheritedSession,
+        validate: async () => ({ ok: true, session: inheritedSession }),
+      },
+    });
+
+    await expect(manager.establish({ user: { id: 'u1' } })).rejects.toThrow(
+      'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
+    );
+    await expect(manager.validate(validSession.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+  });
+
+  it('refuses accessor-backed custom-store record fields without invoking them', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const validSession = baseStore.create({ user: { id: 'u1' } });
+    let getterCalls = 0;
+    const accessorSession = { ...validSession };
+    Object.defineProperty(accessorSession, 'value', {
+      get() {
+        getterCalls += 1;
+        return { user: { id: 'attacker' } };
+      },
+    });
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        create: async () => accessorSession,
+        validate: async () => ({ ok: true, session: accessorSession }),
+      },
+    });
+
+    await expect(manager.establish({ user: { id: 'u1' } })).rejects.toThrow(
+      'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
+    );
+    await expect(manager.validate(validSession.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+    expect(getterCalls).toBe(0);
   });
 
   it.each([
