@@ -19,12 +19,13 @@ ledger's H1-H9/M1-M4/L1-L5 list.
 
 ## HIGH
 
-- [ ] **H1 - `stream.fragment()` accepts forged `{ html: string }` objects as raw fragment HTML.** `packages/server/src/mutation/streaming.ts:17-24,96-106,345-354,372-383`
+- [x] **H1 - `stream.fragment()` accepts forged `{ html: string }` objects as raw fragment HTML.** `packages/server/src/mutation/streaming.ts:17-24,96-106,345-354,372-383`
   - The public type/comment says streaming fragments accept rendered JSX or explicit `trustedHtml` (SPEC §9.1 / §4.8 KV236), but `renderMutationStreamFragmentHtml` has a structural fallback: any object with an `html` string is returned raw. An attacker-shaped JSON object can be accidentally passed through `stream.fragment({ html: value, target })`; `stream.text()` would escape the same bytes.
   - **Exploit:** model/user/CMS output `{ html: '<img src=x onerror=...>' }` reaches a streaming mutation fragment and is emitted as live markup in `<kovo-fragment>`.
   - **Verified:** server sub-agent throwaway worktree vitest drove exported `stream.fragment()` + `renderStreamingMutationWireResponse`; forged object emitted raw `<img ...onerror...>`, control `stream.text()` escaped it.
   - **Distinct from `bugz.md`:** related shape to H6 trust-brand forgery, but this is a separate server streaming primitive and does not depend on `__kovoTrustedHtml`.
   - **Fix:** delete the structural `{ html: string }` fallback; accept only `isRenderedHtml(value)` or a non-forgeable `trustedHtml` witness, otherwise fail closed / emit empty with a KV236 event.
+  - Evidence 2026-06-26: `renderMutationStreamFragmentHtml` now accepts only rendered HTML or `trustedHtml`; `pnpm exec vitest --run packages/server/src/mutation-response.test.ts`, `git diff --check`, and `pnpm run check:vp` passed after integration.
 
 - [ ] **H2 - Aliased/namespace `kovo()` table annotations are ignored, dropping owner/governed facts.** `packages/drizzle/src/static/schema.ts:1464-1468`, `packages/drizzle/src/static.ts:2066-2106,2115-2117`
   - `isKovoAnnotationCall` recognizes only a call expression whose callee text is literally the identifier `kovo`. Valid public imports such as `import { kovo as kv } from '@kovojs/drizzle'` and namespace calls `d.kovo(...)` are missed. `tableAnnotation` then falls back to a default domain/name annotation, silently losing `key`, `owner`, `governed`, secret, and related schema facts.
