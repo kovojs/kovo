@@ -12,6 +12,7 @@ import {
   guardFailureIsUnauthenticated,
   resolveLifecycleRequest,
   runGuard,
+  withGuardArgs,
   type RequestLifecycleOptions,
   type ResolvedGuardFailure,
 } from './guards.js';
@@ -155,11 +156,21 @@ export async function runMutation<
     };
   }
 
-  const inputResult = await parseMutationInput(definition.input, rawInput);
+  // The enhanced/no-JS dispatch paths parse+coerce the input once to thread `req.args` onto the
+  // pre-replay arg-aware guard (SPEC §10.3 lifecycle: parse → guard) and pass the parsed value in
+  // via `preParsedInput` so we do not re-parse here; direct callers (fixtures/tests) parse here.
+  const inputResult = options.preParsedInput
+    ? { ok: true as const, value: options.preParsedInput.value as InferSchema<InputSchema> }
+    : await parseMutationInput(definition.input, rawInput);
   if (!inputResult.ok) return inputResult.failure;
 
   const input = inputResult.value as InferSchema<InputSchema>;
-  const lifecycleRequest = await resolveLifecycleRequest(request, options);
+  // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)"): merge the query's/mutation's *validated*
+  // args onto the request so an arg-aware guard (`guards.owns` reading `req.args`) and the handler
+  // both see the same `s.*`-coerced values, discharging KV414 for the covered key. In the
+  // enhanced/no-JS paths the authoritative arg-aware guard already ran pre-replay against this same
+  // merged shape, so `guardResolved` skips the re-run below (avoiding double-running rateLimit).
+  const lifecycleRequest = withGuardArgs(await resolveLifecycleRequest(request, options), input);
 
   // A1 (SPEC §10.3): when the dispatch layer already evaluated the guard chain before the replay
   // lookup, skip it here so a stateful guard (rateLimit) is not double-executed.
@@ -321,14 +332,33 @@ export async function renderMutationResponse<
     };
   }
 
+  // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §10.3 lifecycle (parse → guard):
+  // parse+coerce the input BEFORE the guard chain so the pre-replay arg-aware guard (`guards.owns`)
+  // sees the validated `req.args` and can deny a foreign-key request before any replay re-serve
+  // ("a replay never re-serves a private response after ... ownership lost"). A parse failure is the
+  // §9.2 VALIDATION fragment (422); validation failures are non-replayable, so we return before any
+  // reservation. The parsed value is reused by `runMutation` via `preParsedInput` (no re-parse).
+  const wireInputResult = await parseMutationInput(definition.input, wireRequest.rawInput);
+  if (!wireInputResult.ok) {
+    return {
+      body: await renderFailureFragment(wireInputResult.failure, wireRequest),
+      headers: mutationWireResponseHeaders(wireRequest),
+      status: 422,
+    };
+  }
+
   // A1 (SPEC §10.3:1061): evaluate the session-bound guard chain against the
   // *current* principal BEFORE checking the replay store. A replay hit must not
   // bypass authorization — the cached response was produced for an authorized
-  // principal; if that principal's role has since been revoked, we must reject.
-  // Order: CSRF (above) → lifecycle/guard → replay reserve/lookup → handler.
-  const lifecycleRequestForGuard = await resolveLifecycleRequest(
-    wireRequest.request,
-    runMutationOptions(wireRequest.csrf, wireRequest),
+  // principal; if that principal's role has since been revoked (or ownership lost,
+  // §10.3), we must reject. Order: CSRF (above) → parse → lifecycle/guard (arg-aware)
+  // → replay reserve/lookup → handler.
+  const lifecycleRequestForGuard = withGuardArgs(
+    await resolveLifecycleRequest(
+      wireRequest.request,
+      runMutationOptions(wireRequest.csrf, wireRequest),
+    ),
+    wireInputResult.value,
   );
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {
@@ -387,6 +417,9 @@ export async function renderMutationResponse<
     result = await runMutation(definition, wireRequest.rawInput, wireRequest.request, {
       ...runMutationOptions(wireRequest.csrf, wireRequest),
       guardResolved: true,
+      // Reuse the value parsed for the pre-replay arg-aware guard (SPEC §10.3:1155-1157) instead of
+      // re-parsing; the guard already ran against this same coerced input.
+      preParsedInput: { value: wireInputResult.value },
     });
   } catch (error) {
     // The handler threw before producing a result; release the reservation so a
@@ -786,17 +819,35 @@ export async function renderNoJsMutationResponse<
       ? String((noJsRequest.rawInput as Record<string, unknown>)['Kovo-Idem'])
       : undefined);
 
+  // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §10.3 lifecycle (parse → guard):
+  // parse+coerce the input BEFORE the guard chain so the pre-replay arg-aware guard (`guards.owns`)
+  // sees the validated `req.args`. A parse failure is the §9.2 VALIDATION page (422), returned before
+  // any replay reservation (validation failures are non-replayable). The parsed value is reused by
+  // `runMutation` via `preParsedInput` (no re-parse).
+  const noJsInputResult = await parseMutationInput(definition.input, noJsRequest.rawInput);
+  if (!noJsInputResult.ok) {
+    const body = noJsRequest.renderFailurePage
+      ? await noJsRequest.renderFailurePage(noJsInputResult.failure)
+      : renderDefaultFailurePage(noJsInputResult.failure);
+    return {
+      body,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 422,
+    };
+  }
+
   // A1 (SPEC §10.3:1061) + A2: guard runs before replay check in the no-JS path too.
   // guardResolved: the no-JS guard chain is evaluated once below (A1) before the replay lookup, so
   // runMutation must not re-run it (would double-execute a stateful rateLimit guard). The flag is
-  // inert for resolveLifecycleRequest.
+  // inert for resolveLifecycleRequest. `preParsedInput` hands runMutation the value parsed above.
   const lifecycleOpts = {
     ...runMutationOptions(noJsRequest.csrf, noJsRequest),
     guardResolved: true,
+    preParsedInput: { value: noJsInputResult.value },
   };
-  const lifecycleRequestForGuard = await resolveLifecycleRequest(
-    noJsRequest.request,
-    lifecycleOpts,
+  const lifecycleRequestForGuard = withGuardArgs(
+    await resolveLifecycleRequest(noJsRequest.request, lifecycleOpts),
+    noJsInputResult.value,
   );
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {

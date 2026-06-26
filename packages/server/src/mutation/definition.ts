@@ -265,6 +265,14 @@ export interface RunMutationOptions<
    * direct callers (fixtures, tests) keep the in-handler guard evaluation.
    */
   guardResolved?: boolean;
+  /**
+   * The already parsed+coerced input, wrapped so a value of `undefined` is still distinguishable
+   * from "not provided". The enhanced/no-JS dispatch paths parse the input once before the
+   * pre-replay arg-aware guard (SPEC §10.3:1155-1157 — to thread validated `req.args` onto the
+   * guard) and pass it here so `runMutation` reuses it instead of re-parsing. Only set alongside
+   * `guardResolved`; direct callers omit it and `runMutation` parses `rawInput` itself.
+   */
+  preParsedInput?: { value: unknown };
 }
 
 /** App-scoped mutation factory. `createApp()` uses this to contextually type handlers from configured request providers (SPEC §9.5/§10.3). */
