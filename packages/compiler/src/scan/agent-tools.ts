@@ -22,12 +22,14 @@ export interface AgentToolModuleSource {
  * unique local `export *` barrels for named imports, default exports that alias a summarized local
  * helper, static namespace-property calls into exported local helpers, local `const` object aliases
  * whose properties statically point at summarized helpers, `Object.freeze(...)` wrappers around
- * those same static object aliases, local `const` array/tuple aliases whose literal indexes
- * statically point at summarized helpers, `Object.freeze(...)` wrappers around those same static
- * array/tuple aliases, default object exports whose properties statically point at summarized
- * local helpers, top-level `const` destructuring from already-proven helper object/array aliases or
- * namespaces, handler properties that reference a summarized local/imported helper function, and
- * inline callbacks passed to a local/imported helper that directly invokes that callback parameter,
+ * those same static object aliases or already-proven object/nested-object aliases that are not
+ * assigned or mutated, local `const` array/tuple aliases whose literal indexes statically point at
+ * summarized helpers, `Object.freeze(...)` wrappers around those same static array/tuple aliases
+ * or already-proven array aliases that are not assigned or mutated, default object exports whose
+ * properties statically point at summarized local helpers, top-level `const` destructuring from
+ * already-proven helper object/array aliases or namespaces, handler properties that reference a
+ * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
+ * that directly invokes that callback parameter,
  * a simple `const` alias of that parameter, a static `const` object property alias of that
  * parameter, a static `const` array index alias of that parameter, a readonly array wrapper method
  * that directly invokes each proven callback element, a static object wrapper around a proven or
@@ -36,10 +38,10 @@ export interface AgentToolModuleSource {
  * namespace imports. It does not inspect raw source text after parse and it skips non-invoked
  * nested function bodies, so ordinary callbacks, computed namespace access,
  * computed/spread/duplicate object/array aliases and exports, export-star namespaces, ambiguous
- * export-star names, reassigned callback aliases, mutated callback property/index aliases,
- * mutable/defaulted/nested destructuring, mutating/dynamic array methods, shadowed `Object.freeze`,
- * and dynamic paths remain outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves
- * them.
+ * export-star names, reassigned callback aliases, mutated callback property/index aliases, mutable
+ * frozen-existing aliases, mutable/defaulted/nested destructuring, mutating/dynamic array methods,
+ * shadowed `Object.freeze`, and dynamic paths remain outside the SPEC.md §6.6 sound subset until a
+ * dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -430,10 +432,7 @@ function collectArrayAliasHelperBindings(
   for (const declaration of statement.declarationList.declarations) {
     if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
 
-    const expression = staticHelperAliasInitializer(declaration.initializer, moduleFacts);
-    if (!ts.isArrayLiteralExpression(expression)) continue;
-
-    const helperBindings = helperBindingsFromArrayLiteral(expression, moduleFacts);
+    const helperBindings = arrayHelperBindingsFromInitializer(declaration.initializer, moduleFacts);
     if (!helperBindings) continue;
 
     const arrayAliasHelpers = moduleFacts.arrayAliasHelpers as Map<
@@ -463,10 +462,10 @@ function collectObjectAliasHelperBindings(
   for (const declaration of statement.declarationList.declarations) {
     if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
 
-    const expression = staticHelperAliasInitializer(declaration.initializer, moduleFacts);
-    if (!ts.isObjectLiteralExpression(expression)) continue;
-
-    const helperBindings = helperBindingsFromObjectLiteral(expression, moduleFacts);
+    const helperBindings = objectHelperBindingsFromInitializer(
+      declaration.initializer,
+      moduleFacts,
+    );
     if (!helperBindings) continue;
 
     const objectAliasHelpers = moduleFacts.objectAliasHelpers as Map<
@@ -497,10 +496,10 @@ function collectNestedObjectAliasHelperBindings(
     if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
     if (isAssignedBinding(moduleFacts.sourceFile, declaration.name.text)) continue;
 
-    const expression = staticHelperAliasInitializer(declaration.initializer, moduleFacts);
-    if (!ts.isObjectLiteralExpression(expression)) continue;
-
-    const helperBindings = nestedHelperBindingsFromObjectLiteral(expression, moduleFacts);
+    const helperBindings = nestedObjectHelperBindingsFromInitializer(
+      declaration.initializer,
+      moduleFacts,
+    );
     if (!helperBindings) continue;
 
     const nestedObjectAliasHelpers = moduleFacts.nestedObjectAliasHelpers as Map<
@@ -635,16 +634,52 @@ function collectDefaultObjectHelperBindings(
 ): void {
   if (!ts.isExportAssignment(statement) || statement.isExportEquals) return;
 
-  const expression = staticHelperAliasInitializer(statement.expression, moduleFacts);
-  if (!ts.isObjectLiteralExpression(expression)) return;
-
-  const helperBindings = helperBindingsFromObjectLiteral(expression, moduleFacts);
+  const helperBindings = objectHelperBindingsFromInitializer(statement.expression, moduleFacts);
   if (!helperBindings) return;
 
   const defaultObjectHelpers = moduleFacts.defaultObjectHelpers as Map<string, HelperDefinition>;
   for (const [propertyName, helper] of helperBindings) {
     defaultObjectHelpers.set(propertyName, helper);
   }
+}
+
+function arrayHelperBindingsFromInitializer(
+  initializer: ts.Expression,
+  moduleFacts: ModuleFacts,
+): ReadonlyMap<string, HelperDefinition> | undefined {
+  const expression = staticHelperAliasInitializer(initializer, moduleFacts);
+  if (ts.isArrayLiteralExpression(expression)) {
+    return helperBindingsFromArrayLiteral(expression, moduleFacts);
+  }
+
+  const aliasName = staticFrozenExistingAliasName(initializer, moduleFacts);
+  return aliasName === undefined ? undefined : moduleFacts.arrayAliasHelpers.get(aliasName);
+}
+
+function objectHelperBindingsFromInitializer(
+  initializer: ts.Expression,
+  moduleFacts: ModuleFacts,
+): ReadonlyMap<string, HelperDefinition> | undefined {
+  const expression = staticHelperAliasInitializer(initializer, moduleFacts);
+  if (ts.isObjectLiteralExpression(expression)) {
+    return helperBindingsFromObjectLiteral(expression, moduleFacts);
+  }
+
+  const aliasName = staticFrozenExistingAliasName(initializer, moduleFacts);
+  return aliasName === undefined ? undefined : moduleFacts.objectAliasHelpers.get(aliasName);
+}
+
+function nestedObjectHelperBindingsFromInitializer(
+  initializer: ts.Expression,
+  moduleFacts: ModuleFacts,
+): ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>> | undefined {
+  const expression = staticHelperAliasInitializer(initializer, moduleFacts);
+  if (ts.isObjectLiteralExpression(expression)) {
+    return nestedHelperBindingsFromObjectLiteral(expression, moduleFacts);
+  }
+
+  const aliasName = staticFrozenExistingAliasName(initializer, moduleFacts);
+  return aliasName === undefined ? undefined : moduleFacts.nestedObjectAliasHelpers.get(aliasName);
 }
 
 function helperBindingsFromArrayLiteral(
@@ -2511,6 +2546,32 @@ function staticHelperAliasInitializer(
 
   const [argument] = initializer.arguments;
   return argument ? unwrapParentheses(argument) : initializer;
+}
+
+function staticFrozenExistingAliasName(
+  expression: ts.Expression,
+  moduleFacts: ModuleFacts,
+): string | undefined {
+  const initializer = unwrapParentheses(expression);
+  if (!ts.isCallExpression(initializer)) return undefined;
+  if (initializer.arguments.length !== 1) return undefined;
+
+  const callee = initializer.expression;
+  if (!ts.isPropertyAccessExpression(callee)) return undefined;
+  if (!ts.isIdentifier(callee.expression) || callee.expression.text !== 'Object') {
+    return undefined;
+  }
+  if (callee.name.text !== 'freeze') return undefined;
+  if (moduleFacts.topLevelBindings.has('Object')) return undefined;
+
+  const [argument] = initializer.arguments;
+  if (!argument) return undefined;
+
+  const alias = unwrapParentheses(argument);
+  if (!ts.isIdentifier(alias)) return undefined;
+  if (isAssignedBinding(moduleFacts.sourceFile, alias.text)) return undefined;
+
+  return alias.text;
 }
 
 function namesBlockedInFunctionBody(
