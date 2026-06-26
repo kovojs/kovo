@@ -173,8 +173,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
 packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts --run`,
       `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Latest helper-scan
       and inline-IIFE extensions verified the same focused Vitest command plus `git diff --check` and
-      `pnpm run check:vp`.
-      Remaining gap: imported helpers, callbacks, nonliteral/dynamic calls, and broader egress/secret analyzer
+      `pnpm run check:vp`. Simple statically resolvable relative named imports now contribute enforced
+      imported-helper egress/secret-read rows for exported helper functions; focused registry/check tests,
+      `git diff --check`, and `pnpm run check:vp` passed.
+      Remaining gap: callbacks, nonliteral/dynamic calls, namespace/unresolved imports, and broader egress/secret analyzer
       reachability.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
@@ -188,9 +190,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       and `kovo audit --fail-on-findings` flags missing justification for ambient-credential opt-in. The OPP-07
       graph subset now enforces declared write capabilities for matching framework-owned tool rows and renders
       declared audit-grade reachable sinks; direct AST-produced `process.env` reads plus literal `fetch()` egress
-      from framework-owned tool handlers, same-module helper calls, and directly invoked inline functions are
-      enforced when declared capabilities do not cover them. Remaining gap: broader analyzer integration beyond
-      the framework-owned `tool()` boundary.
+      from framework-owned tool handlers, same-module helper calls, directly invoked inline functions, and simple
+      imported helper calls are enforced when declared capabilities do not cover them. Remaining gap: broader
+      analyzer integration beyond the framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
