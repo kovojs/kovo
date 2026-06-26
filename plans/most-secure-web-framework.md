@@ -5,10 +5,10 @@ the most secure web framework, benchmarked against Rails, Laravel, Django, Next.
 meta-frameworks (SvelteKit/Remix/Astro), Spring Security / ASP.NET Core / Phoenix, the modern browser
 security platform, supply-chain SOTA (SLSA/Sigstore/pnpm), and the OWASP Top 10 / API Top 10 / LLM Top 10.
 
-**Latest local verification (2026-06-25 PDT):** after the latest OPP-07/08, OPP-11, OPP-28, and sink-token
-worker batches, focused registry/check, scope-audit, sink-policy/SQL/deserialization, and server session Vitest
-suites passed; latest integration reran the sink-policy gate test, Drizzle scope-audit test, `git diff --check`,
-and `pnpm run check:vp` on the integration branch.
+**Latest local verification (2026-06-26 PDT):** after the latest OPP-07/08, OPP-11, OPP-28, and sink-token
+worker batches, focused registry, scope-audit, sink-policy, and server session Vitest suites passed; latest
+integration reran the sink-policy gate, Drizzle scope-audit, registry, agent-tool, and opaque-session focused
+tests before the batch gates.
 
 This plan is the forward roadmap; it does **not** restate shipped work. Prior security ledgers:
 `secure-by-construction.md`, `secure-framework.md`, `secure-framework-2.md`, `secure-framework-3.md`,
@@ -195,6 +195,8 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       by the same rooted-file gate; focused sink-policy tests, `pnpm run check:sink-policy`, and
       `git diff --check` passed. Static dynamic imports of `fs`/`node:fs/promises` now feed the same raw
       file-serving/open sink gate while non-sink `readFile` stays quiet; focused sink-policy tests,
+      `pnpm run check:sink-policy`, and `git diff --check` passed. Wildcard filesystem re-exports from
+      `fs`/`node:fs/promises` now fail the rooted-file sink gate; focused sink-policy tests,
       `pnpm run check:sink-policy`, and `git diff --check` passed. Remaining gap: other §3 candidates and full
       static by-construction value-path analyzer integration are not complete.
 
@@ -280,7 +282,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `pnpm run check:vp` passed. Inline const-literal callback array wrappers such as
       `{ callbacks: [callback] as const }` now preserve enforced callback-body reachability for static wrapper
       methods, while inline spread, dynamic method, and escaped variants remain outside the proof; focused registry
-      tests, `git diff --check`, and `pnpm run check:vp` passed.
+      tests, `git diff --check`, and `pnpm run check:vp` passed. One additional static const object wrapper around
+      a proven callback-array object wrapper now preserves enforced callback-body reachability, while computed,
+      spread, mutated, and escaped variants remain outside the proof; focused registry tests, `git diff --check`,
+      and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -312,7 +317,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       fact snapshots, including nested ambient justification, authority, capability, and reachable-sink data;
       focused agent-tool tests and `git diff --check` passed. `tool()` now freezes the returned declaration so
       post-review assignment cannot replace default-reject ambient posture with an opt-in posture; focused
-      agent-tool tests and `git diff --check` passed. Remaining gap: broader analyzer integration beyond the
+      agent-tool tests and `git diff --check` passed. Focused coverage now pins duplicate and unknown
+      `credentialKinds` as rejected while preserving valid multi-kind opt-ins; focused agent-tool tests,
+      `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
       framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
@@ -441,7 +448,10 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       already-expired custom-store records before setting a cookie; focused opaque-session tests and
       `git diff --check` passed. Custom-store validation exceptions now fail closed as `malformed`, and the
       request-shell provider treats those credentials as anonymous instead of leaking lifecycle exceptions;
-      focused opaque-session tests and `git diff --check` passed.
+      focused opaque-session tests and `git diff --check` passed. Custom-store and memory-store lifecycle
+      timestamps now fail closed unless they are non-negative safe integer epoch milliseconds, and malformed
+      store-created records cannot set browser cookies; focused opaque-session tests, `git diff --check`, and
+      `pnpm run check:vp` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
@@ -688,7 +698,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       alias variants stay `scope: unknown`; the focused scope-audit test and `git diff --check` passed.
       `Object.freeze()` around a const summarized guard/session scalar alias now preserves exact owner-principal
       provenance, while unsummarized, mismatched, and mutable scalar aliases stay `scope: unknown`; the focused
-      scope-audit test and `git diff --check` passed.
+      scope-audit test and `git diff --check` passed. Focused coverage now pins `Object.freeze({ userId:
+      guardUserId })` wrappers around summarized guard scalar aliases as exact owner predicates, with
+      unsummarized, mismatched, mutable, spread, and computed-access cases staying `scope: unknown`; the focused
+      scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
