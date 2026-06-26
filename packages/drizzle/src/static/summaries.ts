@@ -2342,9 +2342,13 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   if (name === 'inArray') {
     const [left, right] = expression.getArguments();
     const onlyElement = right ? singleLiteralArrayElement(right) : undefined;
-    return left && onlyElement
-      ? { kind: 'eq', left, right: onlyElement }
-      : { expr: expression.getText(), kind: 'opaque' };
+    if (left && onlyElement) return { kind: 'eq', left, right: onlyElement };
+    return (
+      nonliteralMembershipPnf(expression, 'inArray') ?? {
+        expr: expression.getText(),
+        kind: 'opaque',
+      }
+    );
   }
 
   if (name === 'ne' || name === 'gt' || name === 'gte' || name === 'lt' || name === 'lte') {
@@ -2369,12 +2373,20 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   }
 
   if (name === 'notInArray') {
-    return nonEqMembershipPnf(expression) ?? { expr: expression.getText(), kind: 'opaque' };
+    return (
+      nonEqMembershipPnf(expression) ??
+      nonliteralMembershipPnf(expression, 'notInArray') ?? {
+        expr: expression.getText(),
+        kind: 'opaque',
+      }
+    );
   }
 
   if (name === 'not') {
     const [argument] = expression.getArguments();
-    const negatedMembership = argument ? nonEqMembershipPnf(argument, 'inArray') : undefined;
+    const negatedMembership = argument
+      ? (nonEqMembershipPnf(argument, 'inArray') ?? nonliteralMembershipPnf(argument, 'inArray'))
+      : undefined;
     if (negatedMembership) return negatedMembership;
 
     const pnf = argument ? predicatePnf(argument) : undefined;
@@ -2411,6 +2423,23 @@ function nonEqMembershipPnf(
   const elements = right ? literalArrayElements(right) : undefined;
   if (!left || !elements || elements.length === 0) return undefined;
   return { kind: 'non-eq-membership', left, rights: elements };
+}
+
+function nonliteralMembershipPnf(
+  node: Node,
+  expectedName: 'inArray' | 'notInArray',
+): PredicatePnf | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression)) return undefined;
+
+  const callee = expression.getExpression();
+  if (!Node.isIdentifier(callee) || callee.getText() !== expectedName) return undefined;
+
+  const [left, right] = expression.getArguments();
+  if (!left || !right || Node.isArrayLiteralExpression(unwrappedStaticExpressionNode(right))) {
+    return undefined;
+  }
+  return { kind: 'non-eq-membership', left, rights: [right] };
 }
 
 function singleLiteralArrayElement(node: Node): Node | undefined {
