@@ -287,6 +287,71 @@ describe('agent tool capability primitive', () => {
     ).toThrow('tool.authority[].kind must be declared as an own data property');
   });
 
+  it('requires declaration arrays to be dense own data elements without invoking element getters', () => {
+    const base = {
+      audit: { owner: 'security' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'orders.write', reason: 'update one order status' }],
+      handler: () => undefined,
+      name: 'orders.updateStatus',
+      purpose: 'Update a single order status.',
+    };
+    let capabilityGetterRan = false;
+    let credentialKindGetterRan = false;
+
+    const accessorCapabilities = [] as unknown[];
+    Object.defineProperty(accessorCapabilities, '0', {
+      configurable: true,
+      get() {
+        capabilityGetterRan = true;
+        return { name: 'orders.write', reason: 'update one order status' };
+      },
+    });
+
+    expect(() =>
+      tool({
+        ...base,
+        capabilities: accessorCapabilities as never,
+      }),
+    ).toThrow('tool.capabilities[] must be a dense array of own data properties');
+    expect(capabilityGetterRan).toBe(false);
+
+    const sparseAuthority = new Array<AgentToolAuthority>(1);
+
+    expect(() =>
+      tool({
+        ...base,
+        authority: sparseAuthority,
+      }),
+    ).toThrow('tool.authority[] must be a dense array of own data properties');
+
+    const accessorCredentialKinds = [] as unknown[];
+    Object.defineProperty(accessorCredentialKinds, '0', {
+      configurable: true,
+      get() {
+        credentialKindGetterRan = true;
+        return 'cookie';
+      },
+    });
+
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: {
+          allow: true,
+          credentialKinds: accessorCredentialKinds,
+          justification: {
+            authorityBoundary: 'handler re-checks the bound principal before every read',
+            reason: 'legacy browser-authenticated assistant action under review',
+          },
+        } as never,
+      }),
+    ).toThrow(
+      'tool.ambientCredentials.credentialKinds[] must be a dense array of own data properties',
+    );
+    expect(credentialKindGetterRan).toBe(false);
+  });
+
   it('rejects ambient browser/session credentials by default at the invocation boundary', async () => {
     const updateOrder = declaredTool();
 
@@ -512,8 +577,12 @@ describe('agent tool capability primitive', () => {
       reachableSinks,
     });
 
-    authority[0]!.principal = 'user:mutated';
-    capabilities[0]!.name = 'secrets.read';
+    authority[0] = {
+      kind: 'capability',
+      capability: 'orders:mutated',
+      requirement: 'mutated after declaration',
+    };
+    capabilities[0] = { name: 'mutated.slot', reason: 'mutated after declaration' };
     audit.owner = 'mutated-owner';
     (
       reachableSinks as unknown as [
@@ -525,7 +594,13 @@ describe('agent tool capability primitive', () => {
           target: string;
         },
       ]
-    )[0]!.target = 'mutated-smtp';
+    )[0] = {
+      capability: 'mutated.slot',
+      evidence: 'mutated after declaration',
+      kind: 'egress',
+      site: 'app/tools/orders.ts:35',
+      target: 'mutated-smtp',
+    };
 
     expect(Object.isFrozen(notifyOrder.audit)).toBe(true);
     expect(Object.isFrozen(notifyOrder.authority)).toBe(true);

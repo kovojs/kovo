@@ -436,12 +436,14 @@ function snapshotAuditMetadata(audit: unknown): AgentToolAuditMetadata {
 }
 
 function snapshotAuthority(authority: unknown): readonly AgentToolAuthority[] {
-  if (!Array.isArray(authority) || authority.length === 0) {
-    throw new AgentToolCapabilityError('tool.authority must declare at least one authority.');
-  }
+  const entries = requiredOwnArrayElements(
+    authority,
+    'tool.authority',
+    'tool.authority must declare at least one authority.',
+  );
 
   return Object.freeze(
-    authority.map((entry) => {
+    entries.map((entry) => {
       assertObject(entry, 'tool.authority[]');
       const kind = requiredOwnDataProperty(entry, 'kind', 'tool.authority[].kind');
       const requirement = requiredOwnString(entry, 'requirement', 'tool.authority[].requirement');
@@ -465,12 +467,14 @@ function snapshotAuthority(authority: unknown): readonly AgentToolAuthority[] {
 }
 
 function snapshotCapabilities(capabilities: unknown): readonly AgentToolCapability[] {
-  if (!Array.isArray(capabilities) || capabilities.length === 0) {
-    throw new AgentToolCapabilityError('tool.capabilities must declare at least one capability.');
-  }
+  const entries = requiredOwnArrayElements(
+    capabilities,
+    'tool.capabilities',
+    'tool.capabilities must declare at least one capability.',
+  );
 
   return Object.freeze(
-    capabilities.map((capability) => {
+    entries.map((capability) => {
       assertObject(capability, 'tool.capabilities[]');
       return Object.freeze({
         name: requiredOwnString(capability, 'name', 'tool.capabilities[].name'),
@@ -482,12 +486,10 @@ function snapshotCapabilities(capabilities: unknown): readonly AgentToolCapabili
 
 function snapshotReachableSinks(sinks: unknown): readonly AgentToolReachableSink[] | undefined {
   if (sinks === undefined) return undefined;
-  if (!Array.isArray(sinks)) {
-    throw new AgentToolCapabilityError('tool.reachableSinks must be an array.');
-  }
+  const entries = optionalOwnArrayElements(sinks, 'tool.reachableSinks');
 
   return Object.freeze(
-    sinks.map((sink) => {
+    entries.map((sink) => {
       assertObject(sink, 'tool.reachableSinks[]');
       const kind = requiredOwnDataProperty(sink, 'kind', 'tool.reachableSinks[].kind');
       if (kind !== 'egress' && kind !== 'mutation' && kind !== 'secret-read' && kind !== 'write') {
@@ -505,29 +507,65 @@ function snapshotReachableSinks(sinks: unknown): readonly AgentToolReachableSink
   );
 }
 
+function requiredOwnArrayElements(
+  value: unknown,
+  field: string,
+  emptyMessage: string,
+): readonly unknown[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new AgentToolCapabilityError(emptyMessage);
+  }
+  return ownArrayElements(value, field);
+}
+
+function optionalOwnArrayElements(value: unknown, field: string): readonly unknown[] {
+  if (!Array.isArray(value)) {
+    throw new AgentToolCapabilityError(`${field} must be an array.`);
+  }
+  return ownArrayElements(value, field);
+}
+
+function ownArrayElements(value: readonly unknown[], field: string): readonly unknown[] {
+  const elements: unknown[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new AgentToolCapabilityError(
+        `${field}[] must be a dense array of own data properties.`,
+      );
+    }
+    elements.push(descriptor.value);
+  }
+  return elements;
+}
+
 function assertAmbientCredentialKinds(
   kinds: readonly AgentToolAmbientCredentialKind[] | undefined,
-): void {
-  if (!Array.isArray(kinds) || kinds.length === 0) {
-    throw new AgentToolCapabilityError(
-      'tool.ambientCredentials.credentialKinds must declare at least one credential kind.',
-    );
-  }
+): readonly AgentToolAmbientCredentialKind[] {
+  const entries = requiredOwnArrayElements(
+    kinds,
+    'tool.ambientCredentials.credentialKinds',
+    'tool.ambientCredentials.credentialKinds must declare at least one credential kind.',
+  );
 
+  const validated: AgentToolAmbientCredentialKind[] = [];
   const seen = new Set<AgentToolAmbientCredentialKind>();
-  for (const kind of kinds) {
-    if (!ambientCredentialKinds.includes(kind)) {
+  for (const kind of entries) {
+    if (!ambientCredentialKinds.includes(kind as AgentToolAmbientCredentialKind)) {
       throw new AgentToolCapabilityError(
         'tool.ambientCredentials.credentialKinds[] must be a known credential kind.',
       );
     }
-    if (seen.has(kind)) {
+    const credentialKind = kind as AgentToolAmbientCredentialKind;
+    if (seen.has(credentialKind)) {
       throw new AgentToolCapabilityError(
         'tool.ambientCredentials.credentialKinds must not contain duplicate credential kinds.',
       );
     }
-    seen.add(kind);
+    seen.add(credentialKind);
+    validated.push(credentialKind);
   }
+  return validated;
 }
 
 function snapshotAmbientCredentials(
@@ -561,8 +599,7 @@ function snapshotAmbientCredentials(
     'tool.ambientCredentials.justification',
   );
 
-  assertAmbientCredentialKinds(credentialKinds);
-  const validatedCredentialKinds = credentialKinds as readonly AgentToolAmbientCredentialKind[];
+  const validatedCredentialKinds = assertAmbientCredentialKinds(credentialKinds);
   assertObject(justification, 'tool.ambientCredentials.justification');
   assertNonEmpty(
     requiredOwnDataProperty(
