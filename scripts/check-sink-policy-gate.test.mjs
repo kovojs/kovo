@@ -450,6 +450,45 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects TS-only angle-bracket SQL blessed-brand assertions outside the owning constructor module', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/unsafe.ts',
+        `
+          import type { KovoStaticSql, KovoTrustedSql } from './runtime.js';
+          const statement = <KovoTrustedSql>raw;
+          return <KovoStaticSql & { readonly text: string }>raw;
+        `,
+      ),
+    ).toEqual([
+      'packages/drizzle/src/unsafe.ts: KV440 SQL blessed-brand laundering via angle-bracket type assertion; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+  });
+
+  it('does not treat generic type arguments or TSX tags as SQL blessed-brand assertions', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/generic.ts',
+        `
+          import type { KovoTrustedSql } from './runtime.js';
+          const statement = identity<KovoTrustedSql>(raw);
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/server/src/component.tsx',
+        `
+          import type { TrustedSql } from '@kovojs/core/internal/sql-safety';
+          export function View() {
+            return <TrustedSql>{label}</TrustedSql>;
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
   it('allows SQL blessed-brand assertions only in the owning constructor module', () => {
     expect(
       sqlBlessedBrandLaunderingFindings(
