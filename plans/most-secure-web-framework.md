@@ -137,8 +137,12 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `pnpm run check:build`, and `pnpm run check:kovo` passed. The root `check` gate now runs
       `scripts/check-sink-policy-gate.mjs`, which rejects unregistered blessed sink kinds, global `Symbol.for()`
       witnesses, and public generic bless/trust escape-hatch exports; focused gate tests, `pnpm run check`,
-      `pnpm run check:api-surface`, `pnpm run check:build`, and `pnpm run check:kovo` passed. Remaining gap:
-      other §3 candidates and static by-construction analyzer integration are not complete.
+      `pnpm run check:api-surface`, `pnpm run check:build`, and `pnpm run check:kovo` passed. SINK-02 now has a
+      shell-free `cmd(program, argv)`/`runCommand()` server primitive that mints a `server:command-exec-file`
+      witness, re-checks it before `execFile(..., { shell: false })`, rejects forged command objects and unsafe
+      command text, and is covered by focused command, sink-policy, API-surface, `git diff --check`, and
+      `pnpm run check:vp` gates. Remaining gap: other §3 candidates and static by-construction analyzer
+      integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
