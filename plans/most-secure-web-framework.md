@@ -154,8 +154,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       command primitive keeps the `server:command-exec-file` witness plus `execFile(..., { shell: false })`;
       focused sink-policy/command tests, `pnpm run check:sink-policy`, `git diff --check`, and
       `pnpm run check:vp` passed. The sink-policy gate now hard-bans unowned server-side dynamic code sinks
-      (`eval`, `Function`, and `node:vm`/`vm`) because SINK-07 has no safe value to bless; focused gate tests,
-      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. The browser
+      (`eval`, `Function`, and `node:vm`/`vm`) because SINK-07 has no safe value to bless; it also catches
+      indirect/member/one-hop alias `eval` and `Function` forms while preserving local shadowing. Focused gate
+      tests, `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. The browser
       response-fragment raw HTML route is now centrally registered as `browser:response-fragment-html`, and
       `scripts/check-sink-policy-gate.mjs` pins it to the `trustedHtml()`/`kovo` Trusted Types/template
       sanitizer path; focused sink-policy/browser gate tests, `pnpm run check:sink-policy`, `git diff --check`,
