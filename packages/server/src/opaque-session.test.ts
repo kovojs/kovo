@@ -143,6 +143,32 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     );
   });
 
+  it('refuses to set a rotated browser cookie when rotation cannot be verified', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    let verifyingRotation = false;
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        async rotate(priorId, value, options) {
+          const next = await baseStore.rotate(priorId, value, options);
+          verifyingRotation = true;
+          return next;
+        },
+        validate(id: string) {
+          if (verifyingRotation) return undefined as never;
+          return baseStore.validate(id);
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(
+      manager.establish({ user: { id: 'u2' } }, { priorId: established.session.id }),
+    ).rejects.toThrow(
+      'Opaque session store could not verify rotation; refusing to set a browser session cookie',
+    );
+  });
+
   it('validates revoked sessions as anonymous immediately', async () => {
     const manager = createOpaqueSessionManager({
       store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
@@ -222,6 +248,24 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
         validate: async () => {
           throw new Error('revocation verifier unavailable');
         },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(manager.revoke(established.session.id)).rejects.toThrow(
+      'Opaque session store could not verify revocation; refusing to emit a browser session clearing cookie',
+    );
+  });
+
+  it('refuses to emit a clearing cookie when revocation verification is malformed', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        async revoke(id: string) {
+          await baseStore.revoke(id);
+        },
+        validate: async () => undefined as never,
       },
     });
     const established = await manager.establish({ user: { id: 'u1' } });

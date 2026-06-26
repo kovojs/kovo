@@ -355,6 +355,11 @@ async function revokeOpaqueSession<SessionValue>(
       'Opaque session store could not verify revocation; refusing to emit a browser session clearing cookie',
     );
   }
+  if (!revoked.ok && revoked.reason === 'malformed') {
+    throw new Error(
+      'Opaque session store could not verify revocation; refusing to emit a browser session clearing cookie',
+    );
+  }
   if (revoked.ok) {
     throw new Error(
       'Opaque session store did not immediately revoke the id; refusing to emit a browser session clearing cookie',
@@ -392,7 +397,19 @@ async function rotateOpaqueSession<SessionValue>(
     );
   }
 
-  const revokedPrior = normalizeOpaqueSessionValidation(priorId, await store.validate(priorId));
+  let revokedPrior: OpaqueSessionValidation<SessionValue>;
+  try {
+    revokedPrior = normalizeOpaqueSessionValidation(priorId, await store.validate(priorId));
+  } catch {
+    throw new Error(
+      'Opaque session store could not verify rotation; refusing to set a browser session cookie',
+    );
+  }
+  if (!revokedPrior.ok && revokedPrior.reason === 'malformed') {
+    throw new Error(
+      'Opaque session store could not verify rotation; refusing to set a browser session cookie',
+    );
+  }
   if (revokedPrior.ok) {
     throw new Error(
       'Opaque session store did not immediately revoke the prior id during rotation; refusing to set a browser session cookie',
