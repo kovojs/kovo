@@ -3,6 +3,7 @@ import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
+import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { guards } from './guards.js';
 import { stylesheet } from './hints.js';
@@ -236,10 +237,13 @@ describe('server app mutation request boundary', () => {
   });
 
   it('resolves the app session once before mutation response options and guarded handlers', async () => {
+    // SPEC §6.6/§9.1: a session-authenticated mutation is CSRF-checked (KV418 forbids the
+    // `csrf: false` + session combination), so this exercises the normal protected path. The
+    // synchronizer token is stamped into the form and validated before the guard chain.
     const seen: string[] = [];
     let sessionReads = 0;
+    const csrf = { secret: 'mutation-session-once-secret-key-0123456789', sessionId: () => 's1' };
     const addToCart = mutation('cart/add', {
-      csrf: false,
       guard: guards.authed(),
       input: s.object({ productId: s.string() }),
       handler(input, request) {
@@ -251,6 +255,7 @@ describe('server app mutation request boundary', () => {
       },
     });
     const app = createApp({
+      csrf,
       mutationResponses: {
         'cart/add': ({ currentUrl, rawInput, request }) => {
           const session = (
@@ -268,8 +273,10 @@ describe('server app mutation request boundary', () => {
     });
     const form = new FormData();
     form.set('productId', 'p1');
+    form.set('kovo-csrf', csrfToken({}, csrf, { audience: 'cart/add' }));
     const request = new Request('https://shop.example.test/_m/cart/add?from=button', {
       body: form,
+      headers: { origin: 'https://shop.example.test' },
       method: 'POST',
     });
 
@@ -280,6 +287,45 @@ describe('server app mutation request boundary', () => {
     expect(sessionReads).toBe(1);
     expect(seen).toEqual(['response:u1:/_m/cart/add?from=button:true', 'handler:u1:p1']);
     expect('session' in request).toBe(false);
+  });
+
+  it('serves a csrf:false mutation with no ambient session (SPEC §6.6/§9.1 KV418 runtime floor)', async () => {
+    // SPEC §6.6/§9.1: a `csrf: false` mutation skips the synchronizer token, so it MUST be served
+    // with no ambient session — cookies are not interpreted, mirroring the §9.1 endpoint()
+    // guarantee. This defense-in-depth floor backs the by-construction KV418 compile gate: even
+    // with an app `sessionProvider` configured, the provider is never invoked and `req.session`
+    // is genuinely absent rather than the victim's ambient cookie.
+    const seen: string[] = [];
+    let sessionReads = 0;
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler(input, request) {
+        const typed = request as Request & { session?: { user?: { id?: string } } };
+        seen.push(`handler:${'session' in typed}:${typed.session?.user?.id}:${input.productId}`);
+        return input;
+      },
+    });
+    const app = createApp({
+      mutations: [addToCart],
+      sessionProvider() {
+        sessionReads += 1;
+        return { user: { id: 'u1' } };
+      },
+    });
+    const form = new FormData();
+    form.set('productId', 'p1');
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: form,
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+
+    expect(response.status).toBe(303);
+    // The session provider is never consulted and the handler sees no ambient session.
+    expect(sessionReads).toBe(0);
+    expect(seen).toEqual(['handler:false:undefined:p1']);
   });
 
   // H1 (high) — SPEC §9.2: malformed/wrong-Content-Type mutation body → 422, before CSRF.

@@ -320,14 +320,24 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
   }
 
   if ('endpoints' in options) {
+    // SPEC §11.4: the machine-ingress audit lists every endpoint and webhook PLUS every
+    // mutation(), each with its CSRF posture, so review can answer "what can reach this app, and
+    // what can it touch?" without executing a browser. A `csrf: false` mutation appears with
+    // posture `exempt:<justification>`; KV418 (§6.6) guarantees it references no ambient session.
     const endpoints = [...(graph.endpoints ?? [])].sort(compareEndpointExplain);
+    const mutations = [...(graph.mutations ?? [])].sort((left, right) =>
+      left.key.localeCompare(right.key),
+    );
     lines.push('ENDPOINTS');
 
     for (const endpoint of endpoints) {
       lines.push(endpointExplainLine(endpoint));
     }
+    for (const mutation of mutations) {
+      lines.push(mutationEndpointExplainLine(mutation));
+    }
 
-    lines.push(`SUMMARY total=${endpoints.length}`);
+    lines.push(`SUMMARY total=${endpoints.length + mutations.length}`);
     return ok(lines);
   }
 
@@ -900,10 +910,7 @@ export function kovoCheck(
       // A signature/verifier-authed webhook (auth:'verifier:*') is the legitimate exempt pattern.
       if (
         endpoint.csrf === 'exempt' &&
-        (endpoint.auth === 'authed' ||
-          (endpoint.guards ?? []).some(
-            (guard) => guard === 'authed' || guard.startsWith('role:') || isOwnsGuard(guard),
-          ))
+        (endpoint.auth === 'authed' || (endpoint.guards ?? []).some(isSessionDerivedGuard))
       ) {
         const message = diagnosticDefinitionText('KV418', { includeHelp: true });
         pushFinding(
@@ -914,6 +921,25 @@ export function kovoCheck(
     }
 
     for (const mutation of graph.mutations ?? []) {
+      if (mutation.csrf === 'exempt' && !mutation.csrfJustification) {
+        pushFinding(
+          `WARN MUTATION ${mutation.key} csrf exemption requires a named justification.`,
+        );
+      }
+      // SPEC §6.6/§9.1: KV418 — a `csrf: false` mutation MUST NOT reference ambient browser
+      // authority. It skips the synchronizer-token check yet still rides the victim's ambient
+      // cookie, so reading `req.session` (surfaced as `mutation.session`) or running a
+      // session/cookie-derived guard (authed, role(), owns()) is the unsound exemption §9.1
+      // forbids. The exemption is sound only by construction: a `csrf: false` mutation is served
+      // with no ambient session (cookies uninterpreted). Truly non-browser writes belong in
+      // endpoint()/webhook(). Fails closed — any session-authority signal raises KV418.
+      if (mutation.csrf === 'exempt' && mutationReferencesSession(mutation)) {
+        const message = diagnosticDefinitionText('KV418', { includeHelp: true });
+        pushFinding(
+          `ERROR KV418 MUTATION ${mutation.key} csrf-exempt mutation references ambient session authority. ${message}`,
+          true,
+        );
+      }
       for (const domain of mutation.manualInvalidates ?? []) {
         pushFinding(
           `WARN INVALIDATE ${mutation.key} -> ${domain} Manual invalidate escape hatch requires review.`,
@@ -2146,6 +2172,33 @@ function endpointCsrf(endpoint: CoreGraph.EndpointExplain): string {
   return `exempt:${endpoint.csrfJustification ?? '-'}`;
 }
 
+/**
+ * SPEC §6.6/§11.4: render a mutation's CSRF posture for the `--endpoints` audit. `checked`
+ * (the default) verifies the synchronizer token before the guard chain; `exempt:<justification>`
+ * is the `csrf: false` opt-out (KV418 guarantees such a mutation references no ambient session).
+ */
+function mutationCsrf(mutation: CoreGraph.MutationExplain): string {
+  if (mutation.csrf !== 'exempt') return mutation.csrf ?? 'checked';
+  return `exempt:${mutation.csrfJustification ?? '-'}`;
+}
+
+/**
+ * SPEC §11.4: every `mutation()` appears in the `kovo explain --endpoints` machine-ingress audit
+ * alongside endpoints and webhooks, with its CSRF posture and session/guard authority. Mutations
+ * dispatch as a single keyed POST (§9.5), so `method` is always POST. `auth` folds the guard chain
+ * the same way `endpointAuth` does, and `session` surfaces the ambient-session read that KV418 gates.
+ */
+function mutationEndpointExplainLine(mutation: CoreGraph.MutationExplain): string {
+  return [
+    `MUTATION ${mutation.key}`,
+    `method=POST`,
+    `auth=${mutation.auth ?? list(mutation.guards)}`,
+    `csrf=${mutationCsrf(mutation)}`,
+    `session=${mutation.session ?? '-'}`,
+    `writes=${list(mutation.writes)}`,
+  ].join(' ');
+}
+
 function optimisticSummary(coverages: readonly CoreGraph.OptimisticCoverage[]): string {
   // SPEC.md §10.6: v2 adds `derived` to the status partition. PUNTED is a separate
   // dimension (derivation metadata that never counts as coverage), reported
@@ -2439,6 +2492,31 @@ function ownsGuardFact(guard: string): OwnsGuardFact | undefined {
 
 function isOwnsGuard(guard: string): boolean {
   return guard === 'owns' || ownsGuardFact(guard) !== undefined;
+}
+
+/**
+ * SPEC §6.6/§9.1: classify a guard name as session/cookie-derived. The enumerated
+ * session-authority combinators are `authed`, `role(...)`, and `owns(...)`; their authority
+ * derives from `req.session`, so a CSRF-exempt endpoint or mutation that runs one is the
+ * forgeable contradiction KV418 forbids. Shared by the endpoint and mutation KV418 gates.
+ */
+function isSessionDerivedGuard(guard: string): boolean {
+  return guard === 'authed' || guard.startsWith('role:') || isOwnsGuard(guard);
+}
+
+/**
+ * SPEC §6.6/§9.1: does this mutation reference ambient browser (session/cookie) authority?
+ * Fails closed across every session-authority signal a `MutationExplain` can carry:
+ *  (a) `session` — the handler or guard reads `req.session` (the typed session schema name);
+ *  (b) a session/cookie-derived guard in the `guard:` chain (authed/role()/owns());
+ *  (c) a session-derived `auth` posture (authed/role:). A `verifier:*`/`custom:*` posture is
+ *      machine auth (not session-derived) and is NOT a KV418 trigger, mirroring the legitimate
+ *      signature-verifier exempt pattern for endpoints/webhooks.
+ */
+function mutationReferencesSession(mutation: CoreGraph.MutationExplain): boolean {
+  if (mutation.session) return true;
+  if ((mutation.guards ?? []).some(isSessionDerivedGuard)) return true;
+  return mutation.auth === 'authed' || mutation.auth?.startsWith('role:') === true;
 }
 
 function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {
