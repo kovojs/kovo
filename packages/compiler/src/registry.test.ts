@@ -1420,7 +1420,7 @@ export const ProductGrid = component({
     expect(derived.graph.agentToolSinks).toBeUndefined();
   });
 
-  it('does not produce enforced agent-tool sink rows from unproven imported helper shapes', () => {
+  it('produces sound agent-tool sink rows from static namespace imported helper calls', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
         {
@@ -1437,14 +1437,53 @@ export const ProductGrid = component({
           ].join('\n'),
         },
         {
-          fileName: 'src/tools/local-only.ts',
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.namespaceImport',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.namespaceImport',
+      },
+    ]);
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven namespace helper shapes', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/computed.ts',
           source: [
             "import { tool } from '@kovojs/server';",
-            "import { sendMail } from './mail';",
+            "import * as mail from './mail';",
             'export const notify = tool({',
-            "  name: 'orders.localOnlyImport',",
+            "  name: 'orders.computedNamespaceImport',",
             '  handler() {',
-            '    return sendMail();',
+            "    return mail['sendMail']();",
             '  },',
             '});',
           ].join('\n'),
@@ -1452,10 +1491,9 @@ export const ProductGrid = component({
         {
           fileName: 'src/tools/mail.ts',
           source: [
-            'function sendMail() {',
+            'export function sendMail() {',
             "  return fetch('https://api.sendgrid.com/v3/mail/send');",
             '}',
-            'export const otherHelper = () => undefined;',
           ].join('\n'),
         },
         {
@@ -1474,11 +1512,11 @@ export const ProductGrid = component({
           fileName: 'src/tools/star-import.ts',
           source: [
             "import { tool } from '@kovojs/server';",
-            "import { sendMail } from './star-barrel';",
+            "import * as mail from './star-barrel';",
             'export const notify = tool({',
             "  name: 'orders.starBarrel',",
             '  handler() {',
-            '    return sendMail();',
+            '    return mail.sendMail();',
             '  },',
             '});',
           ].join('\n'),

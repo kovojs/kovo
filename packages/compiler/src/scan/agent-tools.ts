@@ -18,10 +18,11 @@ export interface AgentToolModuleSource {
  * This scanner intentionally accepts a narrow subset: a named `tool` import from `@kovojs/server`,
  * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
- * helpers reached through static named imports including static local re-export barrels. It does not
- * inspect raw source text after parse and it skips non-invoked nested function bodies, so ordinary
- * callbacks and dynamic paths remain outside the SPEC.md §6.6 sound subset until a dedicated
- * analyzer proves them.
+ * helpers reached through static named imports including static local re-export barrels, and static
+ * namespace-property calls into exported local helpers. It does not inspect raw source text after
+ * parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace
+ * access, export-star namespaces, and dynamic paths remain outside the SPEC.md §6.6 sound subset
+ * until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -64,6 +65,7 @@ export function agentToolSinksFromSource(
 
 interface ModuleFacts {
   helpers: ReadonlyMap<string, HelperDefinition>;
+  namespaceImports: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   sourceFile: ts.SourceFile;
   topLevelBindings: ReadonlySet<string>;
 }
@@ -107,8 +109,9 @@ function summarizeModules(moduleSources: readonly AgentToolModuleSource[]): Modu
 
 function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   const helpers = new Map<string, HelperDefinition>();
+  const namespaceImports = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const topLevelBindings = new Set<string>();
-  const moduleFacts: ModuleFacts = { helpers, sourceFile, topLevelBindings };
+  const moduleFacts: ModuleFacts = { helpers, namespaceImports, sourceFile, topLevelBindings };
 
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement)) {
@@ -160,6 +163,10 @@ function linkImportedHelpers(
   facts: ReadonlyMap<ts.SourceFile, ModuleFacts>,
 ): boolean {
   const helpers = moduleFacts.helpers as Map<string, HelperDefinition>;
+  const namespaceImports = moduleFacts.namespaceImports as Map<
+    string,
+    ReadonlyMap<string, HelperDefinition>
+  >;
   let changed = false;
 
   for (const statement of moduleFacts.sourceFile.statements) {
@@ -179,7 +186,18 @@ function linkImportedHelpers(
       if (!importedFacts) continue;
 
       const bindings = statement.importClause?.namedBindings;
-      if (!bindings || !ts.isNamedImports(bindings)) continue;
+      if (!bindings) continue;
+
+      if (ts.isNamespaceImport(bindings)) {
+        const exportedHelpers = exportedHelperBindings(importedFacts.helpers);
+        if (!helperBindingMapsEqual(namespaceImports.get(bindings.name.text), exportedHelpers)) {
+          namespaceImports.set(bindings.name.text, exportedHelpers);
+          changed = true;
+        }
+        continue;
+      }
+
+      if (!ts.isNamedImports(bindings)) continue;
 
       for (const element of bindings.elements) {
         if (element.isTypeOnly) continue;
@@ -223,6 +241,30 @@ function linkImportedHelpers(
   }
 
   return changed;
+}
+
+function exportedHelperBindings(
+  helpers: ReadonlyMap<string, HelperDefinition>,
+): ReadonlyMap<string, HelperDefinition> {
+  const exportedHelpers = new Map<string, HelperDefinition>();
+  for (const [name, helper] of helpers) {
+    if (helper.exported) exportedHelpers.set(name, helper);
+  }
+
+  return exportedHelpers;
+}
+
+function helperBindingMapsEqual(
+  left: ReadonlyMap<string, HelperDefinition> | undefined,
+  right: ReadonlyMap<string, HelperDefinition>,
+): boolean {
+  if (!left || left.size !== right.size) return false;
+
+  for (const [name, helper] of right) {
+    if (left.get(name)?.id !== helper.id) return false;
+  }
+
+  return true;
 }
 
 function linkHelperBinding(
@@ -361,7 +403,7 @@ function reachableSinkFacts(
       );
     }
 
-    const helper = calledHelper(node, moduleFacts.helpers, blockedNames);
+    const helper = calledHelper(node, moduleFacts, blockedNames);
     if (helper !== undefined && !activeHelpers.has(helper.id)) {
       const helperOrigin =
         origin === 'imported-helper'
@@ -465,14 +507,25 @@ function collectBindingNames(name: ts.BindingName, names: Set<string>): void {
 
 function calledHelper(
   node: ts.Node,
-  helpers: ReadonlyMap<string, HelperDefinition>,
+  moduleFacts: ModuleFacts,
   blockedNames: ReadonlySet<string>,
 ): HelperDefinition | undefined {
-  if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return undefined;
+  if (!ts.isCallExpression(node)) return undefined;
+
+  if (ts.isPropertyAccessExpression(node.expression)) {
+    const namespaceName = node.expression.expression;
+    if (!ts.isIdentifier(namespaceName)) return undefined;
+    if (blockedNames.has(namespaceName.text)) return undefined;
+
+    const namespaceHelpers = moduleFacts.namespaceImports.get(namespaceName.text);
+    return namespaceHelpers?.get(node.expression.name.text);
+  }
+
+  if (!ts.isIdentifier(node.expression)) return undefined;
 
   const name = node.expression.text;
   if (blockedNames.has(name)) return undefined;
-  return helpers.get(name);
+  return moduleFacts.helpers.get(name);
 }
 
 function egressSinkFact(
