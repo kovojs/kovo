@@ -159,12 +159,14 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       for egress and secret-read can now remain sound and be enforced; `packages/compiler/src/scan/agent-tools.ts`
       derives direct framework-owned `tool()` handler `fetch("https://host/...")` and `process.env.NAME` sinks
       from parsed AST while ignoring type-only imports, nested declarations, and public/manual rows as audit-grade;
-      direct same-module helper calls now contribute enforced helper egress/secret-read sink rows while shadowed,
-      imported, dynamic, and callback paths stay outside the proof. Focused graph/check/explain/registry/agent-tool
+      direct same-module helper calls now contribute enforced helper egress/secret-read sink rows, and directly
+      invoked inline function bodies now contribute enforced inline egress/secret-read rows while ordinary
+      callbacks, shadowed, imported, and dynamic paths stay outside the proof. Focused graph/check/explain/registry/agent-tool
       tests plus `pnpm exec vitest run
 packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts --run`,
       `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Latest helper-scan
-      extension verified the same focused Vitest command plus `git diff --check` and `pnpm run check:vp`.
+      and inline-IIFE extensions verified the same focused Vitest command plus `git diff --check` and
+      `pnpm run check:vp`.
       Remaining gap: imported helpers, callbacks, nonliteral/dynamic calls, and broader egress/secret analyzer
       reachability.
 
@@ -179,8 +181,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       and `kovo audit --fail-on-findings` flags missing justification for ambient-credential opt-in. The OPP-07
       graph subset now enforces declared write capabilities for matching framework-owned tool rows and renders
       declared audit-grade reachable sinks; direct AST-produced `process.env` reads plus literal `fetch()` egress
-      from framework-owned tool handlers and same-module helper calls are enforced when declared capabilities do
-      not cover them. Remaining gap: broader analyzer integration beyond the framework-owned `tool()` boundary.
+      from framework-owned tool handlers, same-module helper calls, and directly invoked inline functions are
+      enforced when declared capabilities do not cover them. Remaining gap: broader analyzer integration beyond
+      the framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
