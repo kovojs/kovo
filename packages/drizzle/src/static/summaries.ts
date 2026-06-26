@@ -2378,9 +2378,8 @@ function localDestructuredInputKey(expression: Node): string | undefined {
     if (negatedMembership) return negatedMembership;
 
     const pnf = argument ? predicatePnf(argument) : undefined;
-    return pnf?.kind === 'eq'
-      ? { kind: 'non-eq-comparison', left: pnf.left, right: pnf.right }
-      : { expr: expression.getText(), kind: 'opaque' };
+    if (pnf?.kind === 'eq') return { kind: 'non-eq-comparison', left: pnf.left, right: pnf.right };
+    return pnf && !pnfContainsEq(pnf) ? pnf : { expr: expression.getText(), kind: 'opaque' };
   }
 
   if (name !== 'eq') return { expr: expression.getText(), kind: 'opaque' };
@@ -2388,6 +2387,12 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   return left && right
     ? { kind: 'eq', left, right }
     : { expr: expression.getText(), kind: 'opaque' };
+}
+
+function pnfContainsEq(pnf: PredicatePnf): boolean {
+  if (pnf.kind === 'eq') return true;
+  if (pnf.kind === 'and' || pnf.kind === 'or') return pnf.nodes.some(pnfContainsEq);
+  return false;
 }
 
 function nonEqMembershipPnf(
