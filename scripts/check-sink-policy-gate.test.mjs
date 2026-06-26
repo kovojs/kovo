@@ -735,10 +735,12 @@ describe('sink-policy gate', () => {
         'packages/server/src/unsafe-match.ts',
         `
           const { RegExp: Pattern } = globalThis;
+          const { RegExp } = globalThis;
           const { ["RegExp"]: BracketPattern } = globalThis;
           const { "RegExp": QuotedPattern } = (globalThis);
           export function matchesRequest(request) {
             return [
+              RegExp(request.url),
               Pattern(request.url),
               new BracketPattern(request.headers.get("x-pattern") ?? ""),
               QuotedPattern?.(request.query.get("pattern")),
@@ -781,6 +783,7 @@ describe('sink-policy gate', () => {
           const STATIC_PATTERN = "^[a-z0-9_-]+$";
           const RAW_STATIC_PATTERN = String.raw\`^/assets/[a-z]+$\`;
           const input = STATIC_PATTERN;
+          const { RegExp } = globalThis;
           const { RegExp: Pattern } = globalThis;
           const { ["RegExp"]: BracketPattern } = globalThis;
           export function decodeAndMatch(raw) {
@@ -804,6 +807,7 @@ describe('sink-policy gate', () => {
               globalThis.RegExp?.("^[a-z]+$", "i"),
               globalThis["RegExp"]?.(STATIC_PATTERN),
               new (globalThis["RegExp"])(STATIC_PATTERN),
+              RegExp(STATIC_PATTERN),
               Pattern("^[a-z]+$", "i"),
               new BracketPattern(STATIC_PATTERN),
             ];
@@ -821,6 +825,7 @@ describe('sink-policy gate', () => {
           const Pattern = RegExp;
           const StaticPattern = RegExp;
           const { RegExp: DestructuredPattern } = globalThis;
+          let { RegExp: ReboundRegExp } = globalThis;
           const Parser = URLPattern;
           export function decodeAndMatch(request) {
             function Pattern(value) {
@@ -829,6 +834,7 @@ describe('sink-policy gate', () => {
             function DestructuredPattern(value) {
               return value;
             }
+            ReboundRegExp = (value) => value;
             return [
               Pattern(request.url),
               Pattern?.(request.url),
@@ -836,6 +842,7 @@ describe('sink-policy gate', () => {
               StaticPattern("^[a-z]+$"),
               StaticPattern?.("^[a-z]+$"),
               DestructuredPattern(request.url),
+              ReboundRegExp(request.url),
               Parser(request.url),
               new RegExp("^[a-z]+$", "i"),
             ];
@@ -873,7 +880,9 @@ describe('sink-policy gate', () => {
           export function decodeAndMatch(globalThis, request) {
             const Pattern = globalThis.RegExp;
             const { RegExp: DestructuredPattern } = globalThis;
+            const { RegExp } = globalThis;
             return [
+              RegExp(request.url),
               globalThis.RegExp(request.url),
               globalThis.RegExp?.(request.url),
               globalThis["RegExp"]?.(request.headers.get("x-pattern") ?? ""),
@@ -882,6 +891,21 @@ describe('sink-policy gate', () => {
               Pattern(request.url),
               DestructuredPattern(request.url),
             ];
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('allows locally rebound unrenamed destructured RegExp aliases', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/safe-match.ts',
+        `
+          let { RegExp } = globalThis;
+          RegExp = (value) => value;
+          export function decodeAndMatch(request) {
+            return RegExp(request.url);
           }
         `,
       ),
