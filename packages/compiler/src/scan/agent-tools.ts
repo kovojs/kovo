@@ -30,9 +30,10 @@ export interface AgentToolModuleSource {
  * object property alias of that parameter, a static `const` array index alias of that parameter,
  * a readonly array wrapper method that directly invokes each proven callback element, a static
  * object wrapper around a proven or inline const-literal callback array, or one additional static
- * const object wrapper around such an object wrapper. It does not inspect raw source text after
- * parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace
- * access,
+ * const object wrapper around such an object wrapper, and one static const object wrapper around
+ * already-proven helper object aliases or namespace imports. It does not inspect raw source text
+ * after parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed
+ * namespace access,
  * computed/spread object/array aliases and exports, export-star namespaces, ambiguous export-star
  * names, reassigned callback aliases, mutated callback property/index aliases, mutable/defaulted/
  * nested destructuring, mutating/dynamic array methods, and dynamic paths remain outside the
@@ -82,6 +83,10 @@ interface ModuleFacts {
   arrayAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   defaultObjectHelpers: ReadonlyMap<string, HelperDefinition>;
   helpers: ReadonlyMap<string, HelperDefinition>;
+  nestedObjectAliasHelpers: ReadonlyMap<
+    string,
+    ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>
+  >;
   objectAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   namespaceImports: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   sourceFile: ts.SourceFile;
@@ -137,6 +142,10 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   const arrayAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const defaultObjectHelpers = new Map<string, HelperDefinition>();
   const helpers = new Map<string, HelperDefinition>();
+  const nestedObjectAliasHelpers = new Map<
+    string,
+    ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>
+  >();
   const objectAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const namespaceImports = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const topLevelBindings = new Set<string>();
@@ -145,6 +154,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
     arrayAliasHelpers,
     defaultObjectHelpers,
     helpers,
+    nestedObjectAliasHelpers,
     objectAliasHelpers,
     namespaceImports,
     sourceFile,
@@ -322,6 +332,7 @@ function linkImportedHelpers(
   for (const statement of moduleFacts.sourceFile.statements) {
     changed = collectArrayAliasHelperBindings(statement, moduleFacts) || changed;
     changed = collectObjectAliasHelperBindings(statement, moduleFacts) || changed;
+    changed = collectNestedObjectAliasHelperBindings(statement, moduleFacts) || changed;
     changed = collectDestructuredHelperBindings(statement, moduleFacts) || changed;
   }
 
@@ -465,6 +476,45 @@ function collectObjectAliasHelperBindings(
     }
 
     objectAliasHelpers.set(declaration.name.text, helperBindings);
+    changed = true;
+  }
+
+  return changed;
+}
+
+function collectNestedObjectAliasHelperBindings(
+  statement: ts.Statement,
+  moduleFacts: ModuleFacts,
+): boolean {
+  if (!ts.isVariableStatement(statement)) return false;
+  if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) return false;
+
+  let changed = false;
+
+  for (const declaration of statement.declarationList.declarations) {
+    if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+    if (isAssignedBinding(moduleFacts.sourceFile, declaration.name.text)) continue;
+
+    const expression = unwrapParentheses(declaration.initializer);
+    if (!ts.isObjectLiteralExpression(expression)) continue;
+
+    const helperBindings = nestedHelperBindingsFromObjectLiteral(expression, moduleFacts);
+    if (!helperBindings) continue;
+
+    const nestedObjectAliasHelpers = moduleFacts.nestedObjectAliasHelpers as Map<
+      string,
+      ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>
+    >;
+    if (
+      nestedHelperBindingMapsEqual(
+        nestedObjectAliasHelpers.get(declaration.name.text),
+        helperBindings,
+      )
+    ) {
+      continue;
+    }
+
+    nestedObjectAliasHelpers.set(declaration.name.text, helperBindings);
     changed = true;
   }
 
@@ -648,6 +698,57 @@ function helperBindingsFromObjectLiteral(
   }
 
   return helperBindings;
+}
+
+function nestedHelperBindingsFromObjectLiteral(
+  expression: ts.ObjectLiteralExpression,
+  moduleFacts: ModuleFacts,
+): ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>> | undefined {
+  const helperBindings = new Map<string, ReadonlyMap<string, HelperDefinition>>();
+  for (const property of expression.properties) {
+    if (ts.isSpreadAssignment(property)) return undefined;
+
+    let propertyName: string | undefined;
+    let initializer: ts.Expression;
+    if (ts.isShorthandPropertyAssignment(property)) {
+      propertyName = property.name.text;
+      initializer = property.name;
+    } else if (ts.isPropertyAssignment(property)) {
+      if (property.name === undefined || ts.isComputedPropertyName(property.name)) return undefined;
+      propertyName = staticPropertyName(property.name);
+      initializer = property.initializer;
+    } else {
+      return undefined;
+    }
+
+    if (propertyName === undefined || helperBindings.has(propertyName)) return undefined;
+
+    const alias = unwrapParentheses(initializer);
+    if (!ts.isIdentifier(alias)) return undefined;
+    if (isAssignedBinding(moduleFacts.sourceFile, alias.text)) return undefined;
+
+    const nestedBindings =
+      moduleFacts.objectAliasHelpers.get(alias.text) ??
+      moduleFacts.namespaceImports.get(alias.text);
+    if (!nestedBindings) return undefined;
+
+    helperBindings.set(propertyName, nestedBindings);
+  }
+
+  return helperBindings.size === 0 ? undefined : helperBindings;
+}
+
+function nestedHelperBindingMapsEqual(
+  left: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>> | undefined,
+  right: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>,
+): boolean {
+  if (!left || left.size !== right.size) return false;
+
+  for (const [name, helpers] of right) {
+    if (!helperBindingMapsEqual(left.get(name), helpers)) return false;
+  }
+
+  return true;
 }
 
 function collectDefaultHelperAlias(statement: ts.Statement, moduleFacts: ModuleFacts): void {
@@ -2302,6 +2403,56 @@ function assignedIdentifierName(node: ts.Node): string | undefined {
   return undefined;
 }
 
+function isAssignedBinding(sourceFile: ts.SourceFile, name: string): boolean {
+  let assigned = false;
+
+  const visit = (node: ts.Node): void => {
+    if (assigned) return;
+
+    const assignedName = assignedIdentifierName(node);
+    if (assignedName === name) {
+      assigned = true;
+      return;
+    }
+
+    if (assignedPropertyBaseName(node) === name) {
+      assigned = true;
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return assigned;
+}
+
+function assignedPropertyBaseName(node: ts.Node): string | undefined {
+  let left: ts.Expression | undefined;
+  if (
+    ts.isBinaryExpression(node) &&
+    isAssignmentOperator(node.operatorToken.kind) &&
+    (ts.isPropertyAccessExpression(node.left) || ts.isElementAccessExpression(node.left))
+  ) {
+    left = node.left;
+  }
+
+  if (
+    (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+    (node.operator === ts.SyntaxKind.PlusPlusToken ||
+      node.operator === ts.SyntaxKind.MinusMinusToken) &&
+    (ts.isPropertyAccessExpression(node.operand) || ts.isElementAccessExpression(node.operand))
+  ) {
+    left = node.operand;
+  }
+
+  if (!left || (!ts.isPropertyAccessExpression(left) && !ts.isElementAccessExpression(left))) {
+    return undefined;
+  }
+  const base = left.expression;
+  return ts.isIdentifier(base) ? base.text : undefined;
+}
+
 function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
   switch (kind) {
     case ts.SyntaxKind.FirstAssignment:
@@ -2415,6 +2566,9 @@ function calledHelper(
   }
 
   if (ts.isPropertyAccessExpression(node.expression)) {
+    const nestedHelper = nestedObjectAliasHelper(node.expression, moduleFacts, blockedNames);
+    if (nestedHelper) return nestedHelper;
+
     const namespaceName = node.expression.expression;
     if (!ts.isIdentifier(namespaceName)) return undefined;
     if (blockedNames.has(namespaceName.text)) return undefined;
@@ -2430,6 +2584,24 @@ function calledHelper(
   const name = node.expression.text;
   if (blockedNames.has(name)) return undefined;
   return moduleFacts.helpers.get(name);
+}
+
+function nestedObjectAliasHelper(
+  expression: ts.PropertyAccessExpression,
+  moduleFacts: ModuleFacts,
+  blockedNames: ReadonlySet<string>,
+): HelperDefinition | undefined {
+  const wrapperProperty = expression.expression;
+  if (!ts.isPropertyAccessExpression(wrapperProperty)) return undefined;
+
+  const wrapperName = wrapperProperty.expression;
+  if (!ts.isIdentifier(wrapperName)) return undefined;
+  if (blockedNames.has(wrapperName.text)) return undefined;
+
+  return moduleFacts.nestedObjectAliasHelpers
+    .get(wrapperName.text)
+    ?.get(wrapperProperty.name.text)
+    ?.get(expression.name.text);
 }
 
 function staticElementIndex(expression: ts.Expression): string | undefined {

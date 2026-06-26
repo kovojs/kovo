@@ -2785,6 +2785,90 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from static nested const object helper aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/nested-object-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import * as importedMail from './mail';",
+            'function localMail() {',
+            '  const token = process.env.LOCAL_TOKEN;',
+            "  return fetch('https://local-mail.example.test/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'const local = { localMail };',
+            'const providers = { importedMail, local };',
+            'export const notifyImported = tool({',
+            "  name: 'orders.nestedImportedObjectAlias',",
+            '  handler() {',
+            '    return providers.importedMail.sendMail();',
+            '  },',
+            '});',
+            'export const notifyLocal = tool({',
+            "  name: 'orders.nestedLocalObjectAlias',",
+            '  handler() {',
+            '    return providers.local.localMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.nestedImportedObjectAlias',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.nestedImportedObjectAlias',
+      },
+      {
+        capability: 'egress:local-mail.example.test',
+        evidence: 'static-tool-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/nested-object-alias.ts:5:10',
+        target: 'local-mail.example.test',
+        tool: 'orders.nestedLocalObjectAlias',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/nested-object-alias.ts:4:17',
+        target: 'env.LOCAL_TOKEN',
+        tool: 'orders.nestedLocalObjectAlias',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from static const array helper aliases', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -3195,6 +3279,58 @@ export const ProductGrid = component({
             "  name: 'orders.dynamicObjectAlias',",
             '  handler() {',
             '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/computed-nested-object-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://computed-nested.example.test/mail');",
+            '}',
+            'const mail = { sendMail };',
+            "const providers = { ['mail']: mail };",
+            'export const notify = tool({',
+            "  name: 'orders.computedNestedObjectAlias',",
+            '  handler() {',
+            '    return providers.mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/spread-nested-object-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://spread-nested.example.test/mail');",
+            '}',
+            'const mail = { sendMail };',
+            'const providers = { ...{ mail } };',
+            'export const notify = tool({',
+            "  name: 'orders.spreadNestedObjectAlias',",
+            '  handler() {',
+            '    return providers.mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mutable-nested-object-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://mutable-nested.example.test/mail');",
+            '}',
+            'const mail = { sendMail };',
+            'const providers = { mail };',
+            'providers.mail = { sendMail };',
+            'export const notify = tool({',
+            "  name: 'orders.mutableNestedObjectAlias',",
+            '  handler() {',
+            '    return providers.mail.sendMail();',
             '  },',
             '});',
           ].join('\n'),
