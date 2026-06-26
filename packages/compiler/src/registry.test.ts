@@ -2076,6 +2076,95 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from static const array helper aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/array-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import { sendMail } from './mail';",
+            "import defaultSendMail from './default-mail';",
+            'const mail = [sendMail, defaultSendMail] as const;',
+            'export const notifyNamed = tool({',
+            "  name: 'orders.arrayAliasNamed',",
+            '  handler() {',
+            '    return mail[0]();',
+            '  },',
+            '});',
+            'export const notifyDefault = tool({',
+            "  name: 'orders.arrayAliasDefault',",
+            '  handler() {',
+            '    return mail[1]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-mail.ts',
+          source: [
+            'export default function sendMail() {',
+            '  const token = process.env.POSTMARK_TOKEN;',
+            "  return fetch('https://api.postmarkapp.com/email', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.postmarkapp.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/default-mail.ts:3:10',
+        target: 'api.postmarkapp.com',
+        tool: 'orders.arrayAliasDefault',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/default-mail.ts:2:17',
+        target: 'env.POSTMARK_TOKEN',
+        tool: 'orders.arrayAliasDefault',
+      },
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.arrayAliasNamed',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.arrayAliasNamed',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from static default object helper exports', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -2232,6 +2321,65 @@ export const ProductGrid = component({
             "  name: 'orders.dynamicObjectAlias',",
             '  handler() {',
             '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven const array aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/spread-array-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '}',
+            'const helpers = [sendMail] as const;',
+            'const mail = [...helpers] as const;',
+            'export const notify = tool({',
+            "  name: 'orders.spreadArrayAlias',",
+            '  handler() {',
+            '    return mail[0]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/dynamic-array-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '}',
+            'const mail = [sendMail] as const;',
+            'const index = 0;',
+            'export const notify = tool({',
+            "  name: 'orders.dynamicArrayAlias',",
+            '  handler() {',
+            '    return mail[index]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mutable-array-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '}',
+            'let mail = [sendMail];',
+            'export const notify = tool({',
+            "  name: 'orders.mutableArrayAlias',",
+            '  handler() {',
+            '    return mail[0]();',
             '  },',
             '});',
           ].join('\n'),
