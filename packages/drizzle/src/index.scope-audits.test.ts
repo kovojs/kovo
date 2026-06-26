@@ -718,6 +718,94 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('accepts a prefixed property read from an explicitly summarized guard object', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), "profile.userId": text("profile_user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: "profile.userId" }));',
+              '',
+              'function currentProfile(ctx: { guard: { profile: { userId: string } } }) { return ctx.guard.profile; }',
+              'kovoAnalyzerSummary(currentProfile, { returns: { kind: "guard", path: "profile" } });',
+              '',
+              'export const ordersForProfile = query("ordersForProfile", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { profile: { userId: string } } }) {',
+              '    const profile = currentProfile(ctx);',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders["profile.userId"], profile.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({ detail: a.detail, domain: a.domain, scope: a.scope })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=profile.userId; owner column compared to guard:profile.userId',
+        domain: 'order',
+        scope: 'session',
+      },
+    ]);
+  });
+
+  it('keeps a mismatched prefixed summarized guard-object field scope:unknown', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), "profile.userId": text("profile_user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: "profile.userId" }));',
+              '',
+              'function currentProfile(ctx: { guard: { profile: { actorId: string } } }) { return ctx.guard.profile; }',
+              'kovoAnalyzerSummary(currentProfile, { returns: { kind: "guard", path: "profile" } });',
+              '',
+              'export const ordersForProfile = query("ordersForProfile", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { profile: { actorId: string } } }) {',
+              '    const profile = currentProfile(ctx);',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders["profile.userId"], profile.actorId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({ detail: a.detail, domain: a.domain, scope: a.scope })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=profile.userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
   it('accepts a nested destructured guard principal on the owner-column predicate', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
