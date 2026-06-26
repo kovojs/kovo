@@ -5,9 +5,18 @@ import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import {
+  createInlineKovoLoaderSource,
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleVersion,
+} from '@kovojs/browser/internal/inline-loader';
 
 import { createApp } from './app.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import {
+  createMemoryVersionedClientModuleRegistry,
+  versionedClientModuleHref,
+} from './client-modules.js';
+import { cspSha256 } from './csp.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 import {
@@ -36,8 +45,14 @@ const runtimeClientModuleFile = expect.objectContaining({
   path: expect.stringMatching(runtimeClientModulePath),
   status: 200,
 });
-const staticExportDocumentCsp =
-  "default-src 'self'; script-src 'self' 'sha256-RDAlv0JoxoJjk6uuSWyT8OxnHRu+ty0P0xR5QEGfTp0='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo";
+const staticExportRuntimeHref = versionedClientModuleHref(
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleVersion,
+);
+const staticExportBootstrapCspHash = cspSha256(
+  createInlineKovoLoaderSource(JSON.stringify(staticExportRuntimeHref), '(url)=>import(url)'),
+);
+const staticExportDocumentCsp = `default-src 'self'; script-src 'self' '${staticExportBootstrapCspHash}'; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo`;
 const staticExportReportingHeaders = {
   'report-to':
     '{"endpoints":[{"url":"https://kovo.local/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
