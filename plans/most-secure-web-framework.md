@@ -516,6 +516,9 @@ packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm 
       owner-column principal proof: summarized guard/session predicates on the owner column are `scope: session`,
       while mismatched or unsummarized write predicates fail closed as `scope: unknown`; `pnpm exec vitest run
 packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed.
+      Summarized guard objects now have literal element-access coverage (`principal["userId"]`) while computed
+      element reads remain `scope: unknown`; the same focused scope-audit test, `git diff --check`, and
+      `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
