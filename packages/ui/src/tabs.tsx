@@ -15,6 +15,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the tabs components.
+ *
+ * @example
+ * import type { TabsStyleOverrides } from "@kovojs/ui/tabs";
+ * const styles: TabsStyleOverrides = {};
+ */
 export interface TabsStyleOverrides {
   list?: style.StyleInput;
   panel?: style.StyleInput;
@@ -22,6 +29,13 @@ export interface TabsStyleOverrides {
   trigger?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the tabs component family.
+ *
+ * @example
+ * import type { TabsStateProps } from "@kovojs/ui/tabs";
+ * const state: TabsStateProps = {};
+ */
 export interface TabsStateProps {
   activationMode?: TabsActivationMode;
   activeValue?: string;
@@ -33,12 +47,26 @@ export interface TabsStateProps {
   value?: string;
 }
 
+/**
+ * Props for the tabs component.
+ *
+ * @example
+ * import type { TabsProps } from "@kovojs/ui/tabs";
+ * const props: TabsProps = { children: 'Content' };
+ */
 export interface TabsProps extends TabsStateProps {
   children?: string;
   id?: string;
   styles?: TabsStyleOverrides;
 }
 
+/**
+ * Props for the tabs list component.
+ *
+ * @example
+ * import type { TabsListProps } from "@kovojs/ui/tabs";
+ * const props: TabsListProps = { children: 'Content' };
+ */
 export interface TabsListProps extends TabsStateProps {
   children?: string;
   descriptionId?: string;
@@ -48,6 +76,13 @@ export interface TabsListProps extends TabsStateProps {
   styles?: TabsStyleOverrides;
 }
 
+/**
+ * Props for the tabs trigger component.
+ *
+ * @example
+ * import type { TabsTriggerProps } from "@kovojs/ui/tabs";
+ * const props: TabsTriggerProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface TabsTriggerProps extends TabsStateProps {
   children?: string;
   id?: string;
@@ -57,6 +92,13 @@ export interface TabsTriggerProps extends TabsStateProps {
   styles?: TabsStyleOverrides;
 }
 
+/**
+ * Props for the tabs panel component.
+ *
+ * @example
+ * import type { TabsPanelProps } from "@kovojs/ui/tabs";
+ * const props: TabsPanelProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface TabsPanelProps extends TabsStateProps {
   children?: string;
   id?: string;
@@ -77,6 +119,13 @@ const panelFade = style.keyframes(
   { namespace: 'tabsPanelFade', source: 'tabs.tsx' },
 );
 
+/**
+ * Style definitions used by the tabs components.
+ *
+ * @example
+ * import { tabsStyles } from "@kovojs/ui/tabs";
+ * const styles = tabsStyles;
+ */
 export const tabsStyles = style.create({
   list: {
     alignItems: 'center',
@@ -163,6 +212,13 @@ export const tabsStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled tabs primitive.
+ *
+ * @example
+ * import { Tabs } from "@kovojs/ui/tabs";
+ * const component = Tabs;
+ */
 export const Tabs = component({
   render(props: TabsProps) {
     const attrs = tabsRootAttributes({
@@ -192,6 +248,13 @@ export const Tabs = component({
   },
 });
 
+/**
+ * Renders the styled tabs list primitive.
+ *
+ * @example
+ * import { TabsList } from "@kovojs/ui/tabs";
+ * const component = TabsList;
+ */
 export const TabsList = component({
   render(props: TabsListProps) {
     const attrs = tabsListAttributes({
@@ -230,6 +293,13 @@ export const TabsList = component({
   },
 });
 
+/**
+ * Renders the styled tabs trigger primitive.
+ *
+ * @example
+ * import { TabsTrigger } from "@kovojs/ui/tabs";
+ * const component = TabsTrigger;
+ */
 export const TabsTrigger = component({
   render(props: TabsTriggerProps) {
     const attrs = tabsTriggerAttributes({
@@ -269,6 +339,13 @@ export const TabsTrigger = component({
   },
 });
 
+/**
+ * Renders the styled tabs panel primitive.
+ *
+ * @example
+ * import { TabsPanel } from "@kovojs/ui/tabs";
+ * const component = TabsPanel;
+ */
 export const TabsPanel = component({
   render(props: TabsPanelProps) {
     const attrs = tabsPanelAttributes({

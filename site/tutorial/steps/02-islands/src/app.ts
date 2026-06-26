@@ -3,9 +3,9 @@ import { notFound, route, s } from '@kovojs/server';
 import { ProductActions } from './components/product-actions.js';
 
 // Tutorial step 02 (chapter 2): the product page gains an interactive island.
-// The app renders committed lowered artifacts through an explicit fixture, so
-// served HTML carries the compiler-derived stamps and handler references
-// (SPEC.md sections 4.2 and 4.8) while app code avoids direct generated imports.
+// The app renders the authored component directly; served HTML carries the
+// compiler-derived stamps and handler references (SPEC.md sections 4.2 and 4.8)
+// while app code avoids direct generated imports.
 
 export interface Product {
   id: string;

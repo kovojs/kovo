@@ -7,13 +7,26 @@ import { meterRootAttributes } from '@kovojs/headless-ui/meter';
 
 import { uiTheme } from './theme.js';
 
-/** Style override slots for the meter primitive. */
+/**
+ * Style override slots accepted by the meter components.
+ *
+ * @example
+ * import type { MeterStyleOverrides } from "@kovojs/ui/meter";
+ * const styles: MeterStyleOverrides = {};
+ */
 export interface MeterStyleOverrides {
   indicator?: style.StyleInput;
   native?: style.StyleInput;
   root?: style.StyleInput;
 }
 
+/**
+ * Props for the meter component.
+ *
+ * @example
+ * import type { MeterProps } from "@kovojs/ui/meter";
+ * const props: MeterProps = { children: 'Content' };
+ */
 export interface MeterProps {
   children?: string;
   high?: number;
@@ -27,6 +40,13 @@ export interface MeterProps {
   valueText?: string;
 }
 
+/**
+ * Style definitions used by the meter components.
+ *
+ * @example
+ * import { meterStyles } from "@kovojs/ui/meter";
+ * const styles = meterStyles;
+ */
 export const meterStyles = style.create({
   // Custom indicator filled by value ratio (set inline). Color tracks the
   // optimum/suboptimum/even-less-good state.
@@ -87,6 +107,13 @@ function fillStyle(
   return `${(ratio * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
 }
 
+/**
+ * Renders the styled meter primitive.
+ *
+ * @example
+ * import { Meter } from "@kovojs/ui/meter";
+ * const component = Meter;
+ */
 export const Meter = component({
   render(props: MeterProps) {
     const attrs = meterRootAttributes({

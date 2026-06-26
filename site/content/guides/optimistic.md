@@ -107,10 +107,10 @@ When the user submits, the loader runs a fixed sequence:
 5. **On error**, the snapshots are restored and the typed error fragment renders. See the
    [mutations guide](/guides/mutations/) for the 422 path.
 
-If server truth never arrives for an applied transform, the client raises **KV313** and discards the
-prediction. The affected query rolls back to its pre-transform snapshot or refetches from `/_q/<key>`;
-it does not keep the optimistic value on screen as settled data. Fragment-only responses are allowed
-when you declared `'await-fragment'`, but silent inconsistency is not.
+If server truth never arrives for an applied transform, the client discards the prediction. The
+affected query rolls back to its pre-transform snapshot or refetches from `/_q/<key>`; it does not
+keep the optimistic value on screen as settled data. Fragment-only responses are allowed when you
+declared `'await-fragment'`, but silent inconsistency is not.
 
 ## Rebase concurrent mutations
 

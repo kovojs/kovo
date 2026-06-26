@@ -7,8 +7,32 @@ import {
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
 
+/**
+ * Public type used by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderOrientation } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderOrientation = {} as SliderOrientation;
+ * ```
+ */
 export type SliderOrientation = 'horizontal' | 'vertical';
 
+/**
+ * State snapshot consumed by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderState } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderState = {} as SliderState;
+ * ```
+ */
 export interface SliderState {
   disabled?: boolean;
   invalid?: boolean;
@@ -22,10 +46,34 @@ export interface SliderState {
   value?: number;
 }
 
+/**
+ * Options accepted by the Slider primitive slider root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderRootAttributeOptions } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderRootAttributeOptions = {} as SliderRootAttributeOptions;
+ * ```
+ */
 export interface SliderRootAttributeOptions extends SliderState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Slider primitive slider input attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderInputAttributeOptions } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderInputAttributeOptions = {} as SliderInputAttributeOptions;
+ * ```
+ */
 export interface SliderInputAttributeOptions extends SliderState {
   descriptionId?: string;
   errorId?: string;
@@ -36,14 +84,50 @@ export interface SliderInputAttributeOptions extends SliderState {
   valueText?: string;
 }
 
+/**
+ * Options accepted by the Slider primitive slider hidden input attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderHiddenInputAttributeOptions } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderHiddenInputAttributeOptions = {} as SliderHiddenInputAttributeOptions;
+ * ```
+ */
 export interface SliderHiddenInputAttributeOptions extends SliderState {
   form?: string;
 }
 
+/**
+ * Options accepted by the Slider primitive slider part attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderPartAttributeOptions } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderPartAttributeOptions = {} as SliderPartAttributeOptions;
+ * ```
+ */
 export interface SliderPartAttributeOptions extends SliderState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Slider primitive slider thumb attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderThumbAttributeOptions } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderThumbAttributeOptions = {} as SliderThumbAttributeOptions;
+ * ```
+ */
 export interface SliderThumbAttributeOptions extends SliderPartAttributeOptions {
   descriptionId?: string;
   errorId?: string;
@@ -52,20 +136,80 @@ export interface SliderThumbAttributeOptions extends SliderPartAttributeOptions 
   valueText?: string;
 }
 
+/**
+ * Reason token reported by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderChangeReason } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderChangeReason = {} as SliderChangeReason;
+ * ```
+ */
 export type SliderChangeReason = 'input' | 'keyboard' | 'pointer' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderChangeDetail } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderChangeDetail = {} as SliderChangeDetail;
+ * ```
+ */
 export type SliderChangeDetail = PrimitiveChangeDetail<SliderChangeReason, number>;
 
+/**
+ * Options accepted by the Slider primitive slider change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderChangeOptions } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderChangeOptions = {} as SliderChangeOptions;
+ * ```
+ */
 export interface SliderChangeOptions {
   onValueChange?: (detail: SliderChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Slider primitive slider change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderChangeResult } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderChangeResult = {} as SliderChangeResult;
+ * ```
+ */
 export interface SliderChangeResult {
   changed: boolean;
   detail?: SliderChangeDetail;
   value: number;
 }
 
+/**
+ * State snapshot consumed by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderComputedState } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderComputedState = {} as SliderComputedState;
+ * ```
+ */
 export interface SliderComputedState {
   max: number;
   min: number;
@@ -75,19 +219,67 @@ export interface SliderComputedState {
   valueRatio: number;
 }
 
+/**
+ * Serializable attribute record returned by Slider primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderPrimitiveAttributes } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderPrimitiveAttributes = {} as SliderPrimitiveAttributes;
+ * ```
+ */
 export type SliderPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderInputEvent } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderInputEvent = {} as SliderInputEvent;
+ * ```
+ */
 export type SliderInputEvent = Event & {
   readonly currentTarget?: { value: string } | null;
   readonly target?: { value: string } | null;
 };
 
+/**
+ * Event shape consumed by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderKeyboardEvent } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderKeyboardEvent = {} as SliderKeyboardEvent;
+ * ```
+ */
 export type SliderKeyboardEvent = Event & {
   readonly key?: string;
   readonly shiftKey?: boolean;
 };
 
+/**
+ * Public interface used by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderPointerTarget } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderPointerTarget = {} as SliderPointerTarget;
+ * ```
+ */
 export interface SliderPointerTarget {
   readonly clientHeight?: number;
   readonly clientWidth?: number;
@@ -100,6 +292,18 @@ export interface SliderPointerTarget {
   readonly parentElement?: SliderPointerTarget | null;
 }
 
+/**
+ * Event shape consumed by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderPointerEvent } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderPointerEvent = {} as SliderPointerEvent;
+ * ```
+ */
 export type SliderPointerEvent = Event & {
   readonly clientX?: number;
   readonly clientY?: number;
@@ -109,16 +313,53 @@ export type SliderPointerEvent = Event & {
   readonly target?: SliderPointerTarget | null;
 };
 
+/**
+ * Public interface used by the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderPointerDragStart } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderPointerDragStart = {} as SliderPointerDragStart;
+ * ```
+ */
 export interface SliderPointerDragStart {
   readonly pointerStart: number;
   readonly valueStart: number;
 }
 
+/**
+ * Options accepted by the Slider primitive slider pointer drag.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SliderPointerDragOptions } from '@kovojs/headless-ui/slider';
+ *
+ * const value: SliderPointerDragOptions = {} as SliderPointerDragOptions;
+ * ```
+ */
 export interface SliderPointerDragOptions extends SliderChangeOptions {
   pointerStart: number;
   valueStart: number;
 }
 
+/**
+ * Computes slider value state for the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { sliderValueState } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderValueState>[0];
+ * const result = sliderValueState(input);
+ * ```
+ */
 export function sliderValueState(options: SliderState = {}): SliderComputedState {
   const min = normalizeSliderMin(options.min);
   const max = normalizeSliderMax(options.max, min);
@@ -135,6 +376,19 @@ export function sliderValueState(options: SliderState = {}): SliderComputedState
   });
 }
 
+/**
+ * Builds the slider root attributes record for the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { sliderRootAttributes } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderRootAttributes>[0];
+ * const result = sliderRootAttributes(input);
+ * ```
+ */
 export function sliderRootAttributes(
   options: SliderRootAttributeOptions = {},
 ): SliderPrimitiveAttributes {
@@ -144,6 +398,19 @@ export function sliderRootAttributes(
   });
 }
 
+/**
+ * Builds the slider input attributes record for the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { sliderInputAttributes } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderInputAttributes>[0];
+ * const result = sliderInputAttributes(input);
+ * ```
+ */
 export function sliderInputAttributes(
   options: SliderInputAttributeOptions = {},
 ): SliderPrimitiveAttributes {
@@ -173,6 +440,21 @@ export function sliderInputAttributes(
   });
 }
 
+/**
+ * Builds the slider hidden input attributes record for the Slider primitive.
+ *
+ * Emits `hidden`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { sliderHiddenInputAttributes } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderHiddenInputAttributes>[0];
+ * const result = sliderHiddenInputAttributes(input);
+ * ```
+ */
 export function sliderHiddenInputAttributes(
   options: SliderHiddenInputAttributeOptions = {},
 ): SliderPrimitiveAttributes {
@@ -187,18 +469,57 @@ export function sliderHiddenInputAttributes(
   });
 }
 
+/**
+ * Builds the slider track attributes record for the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { sliderTrackAttributes } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderTrackAttributes>[0];
+ * const result = sliderTrackAttributes(input);
+ * ```
+ */
 export function sliderTrackAttributes(
   options: SliderPartAttributeOptions = {},
 ): SliderPrimitiveAttributes {
   return sliderPartAttributes(options, 'track');
 }
 
+/**
+ * Builds the slider range attributes record for the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { sliderRangeAttributes } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderRangeAttributes>[0];
+ * const result = sliderRangeAttributes(input);
+ * ```
+ */
 export function sliderRangeAttributes(
   options: SliderPartAttributeOptions = {},
 ): SliderPrimitiveAttributes {
   return sliderPartAttributes(options, 'range');
 }
 
+/**
+ * Builds the slider thumb attributes record for the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { sliderThumbAttributes } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderThumbAttributes>[0];
+ * const result = sliderThumbAttributes(input);
+ * ```
+ */
 export function sliderThumbAttributes(
   options: SliderThumbAttributeOptions = {},
 ): SliderPrimitiveAttributes {
@@ -225,12 +546,42 @@ export function sliderThumbAttributes(
   });
 }
 
+/**
+ * Computes slider value from string for the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { sliderValueFromString } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderValueFromString>[0];
+ * const state = {} as Parameters<typeof sliderValueFromString>[1];
+ * const result = sliderValueFromString(input, state);
+ * ```
+ */
 export function sliderValueFromString(value: string, state: SliderState = {}): number {
   const parsed = Number(value.trim());
   const computed = sliderValueState(state);
   return normalizeSliderValue(parsed, computed.min, computed.max, state.step);
 }
 
+/**
+ * Computes the set slider value transition for the Slider primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setSliderValue } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof setSliderValue>[0];
+ * const state = {} as Parameters<typeof setSliderValue>[1];
+ * const options = {} as Parameters<typeof setSliderValue>[2];
+ * const detail = {} as Parameters<typeof setSliderValue>[3];
+ * const result = setSliderValue(input, state, options, detail);
+ * ```
+ */
 export function setSliderValue(
   state: SliderState,
   value: number,
@@ -253,6 +604,18 @@ export function setSliderValue(
 }
 
 /**
+ * Handles the slider input interaction for the Slider primitive.
+ *
+ * @example
+ * ```ts
+ * import { sliderInput } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderInput>[0];
+ * const state = {} as Parameters<typeof sliderInput>[1];
+ * const options = {} as Parameters<typeof sliderInput>[2];
+ * const result = sliderInput(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -290,6 +653,18 @@ export function sliderInput(
 }
 
 /**
+ * Handles the slider key down interaction for the Slider primitive.
+ *
+ * @example
+ * ```ts
+ * import { sliderKeyDown } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderKeyDown>[0];
+ * const state = {} as Parameters<typeof sliderKeyDown>[1];
+ * const options = {} as Parameters<typeof sliderKeyDown>[2];
+ * const result = sliderKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -336,6 +711,18 @@ export function sliderKeyDown(
 }
 
 /**
+ * Handles the slider track pointer down interaction for the Slider primitive.
+ *
+ * @example
+ * ```ts
+ * import { sliderTrackPointerDown } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderTrackPointerDown>[0];
+ * const state = {} as Parameters<typeof sliderTrackPointerDown>[1];
+ * const options = {} as Parameters<typeof sliderTrackPointerDown>[2];
+ * const result = sliderTrackPointerDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -356,6 +743,17 @@ export function sliderTrackPointerDown(
 }
 
 /**
+ * Computes slider thumb drag start for the Slider primitive.
+ *
+ * @example
+ * ```ts
+ * import { sliderThumbDragStart } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderThumbDragStart>[0];
+ * const state = {} as Parameters<typeof sliderThumbDragStart>[1];
+ * const result = sliderThumbDragStart(input, state);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -379,6 +777,18 @@ export function sliderThumbDragStart(
 }
 
 /**
+ * Computes slider thumb drag for the Slider primitive.
+ *
+ * @example
+ * ```ts
+ * import { sliderThumbDrag } from '@kovojs/headless-ui/slider';
+ *
+ * const input = {} as Parameters<typeof sliderThumbDrag>[0];
+ * const state = {} as Parameters<typeof sliderThumbDrag>[1];
+ * const options = {} as Parameters<typeof sliderThumbDrag>[2];
+ * const result = sliderThumbDrag(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

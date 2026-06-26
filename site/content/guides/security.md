@@ -23,18 +23,16 @@ A guard is a function from a request to `true` or a denial. The same `guards` co
 mutations, routes, and queries, so authorization is one vocabulary across the app.
 
 ```ts
-import { guards, mutation, route } from '@kovojs/server';
+import { guards, route } from '@kovojs/server';
 
-export const adminPage = route('/admin', {
-  guard: guards.role<AdminRequest>('admin'),
-  page: () => <AdminDashboard />,
-});
-
-export const refundOrder = mutation('refund/order', {
-  guard: guards.all(guards.role('admin'), guards.rateLimit({ max: 20, per: 'ip' })),
-  // …
+export const accountPage = route('/account', {
+  guard: guards.authed(),
+  page: () => <AccountOverviewPage />,
 });
 ```
+
+Layer role checks, rate limits, and mutation-specific authorization after the first protected page
+works.
 
 The combinators (verified against `@kovojs/server`'s `guards`):
 
@@ -175,7 +173,7 @@ and a `sessionId` resolver:
 ```ts
 export const commerceCsrf = {
   field: 'csrf',
-  secret: process.env.CSRF_SECRET!,
+  secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET!,
   sessionId(request: CommerceRequest) {
     return request.session?.id;
   },
@@ -194,7 +192,8 @@ const csrf = csrfField(request, commerceCsrf); // → <input type="hidden" name=
 
 CSRF stays on for server-rendered mutation endpoints. The only opt-out is `csrf: false` on an
 individual mutation, reserved for non-browser or externally authenticated endpoints. A `csrf: false`
-mutation must not read `req.session` or run a session/cookie-derived guard; doing so is **KV418**
+mutation must not read `req.session` or run a session/cookie-derived guard; doing so is a
+CSRF/session diagnostic
 because the mutation would skip CSRF while still using ambient browser authority. Route non-browser
 writes through [endpoints and webhooks](/guides/endpoints-webhooks/), where cookies are not
 interpreted and verifier auth is explicit. Every opt-out shows up in the `--endpoints` audit with
@@ -297,6 +296,9 @@ Mark confidential fields at the data boundary. A `secret` field is not eligible 
 wire or a client module. That keeps readable HTML and query frames from becoming a data leak.
 
 ```ts
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
+
 export const users = pgTable(
   'users',
   {
@@ -323,10 +325,13 @@ If a reviewed admin or support tool must reveal something the analyzer cannot pr
 decision visible:
 
 ```ts
+import { trustedReveal } from '@kovojs/core';
+
 trustedReveal(maskedEmail, { justification: 'support staff can see masked email on open tickets' });
 ```
 
-An unresolved projection from a table with secret columns is **KV435**. Remove the secret field,
+An unresolved projection from a table with secret columns is reported as a confidential-data
+diagnostic. Remove the secret field,
 rewrite the projection so it is statically visible, or use `trustedReveal(...)` with a concrete
 justification and review `kovo explain --revealed`.
 
@@ -336,6 +341,9 @@ Do not let request input choose server-owned columns. Mark those columns `govern
 through explicit server provenance.
 
 ```ts
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
+
 export const accounts = pgTable(
   'accounts',
   {
@@ -353,10 +361,12 @@ This is the bad shape:
 await db.update(accounts).set({ displayName: input.displayName, role: input.role });
 ```
 
-`role` came from the request, so Kovo reports **KV438**. Use a server-derived value or an explicit
+`role` came from the request, so Kovo reports a governed-write diagnostic. Use a server-derived value or an explicit
 admin assignment instead:
 
 ```ts
+import { adminAssign, serverValue } from '@kovojs/server';
+
 await db.update(accounts).set({
   displayName: input.displayName,
   role: serverValue('member'),
@@ -376,6 +386,8 @@ Do not hand-build storage URLs or raw download endpoints. Use a framework downlo
 short-lived signed URL from the request context.
 
 ```ts
+import { createStorageDownloadEndpoint, guards, mutation } from '@kovojs/server';
+
 export const downloads = createStorageDownloadEndpoint({
   path: '/downloads',
   storage: invoicesBucket,
@@ -406,14 +418,14 @@ database, model, generated DOM stamp, static-export path, or environment boundar
 Kovo parser, schema, guard, or trust API narrows it. Treat every output that can execute, navigate,
 select, cache, download, store, or authorize as a sink.
 
-| Source                                                      | Safe Kovo path                                                                                   | Dangerous sink                                                           | Escape hatch                                                 |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| Request params, search, forms, query args, headers, cookies | Route/query/mutation schemas, CSRF, guards, typed redirects                                      | HTML text/attributes, URL attrs, redirects, selectors                    | `trustedHtml` / `trustedUrl` with provenance                 |
-| Session and provider state                                  | `session(s.object(...))`, `sessionProvider`, `guards.authed`, `owner:` predicates                | Owner-table reads/writes, auth redirects, cacheable private reads        | Public-read or custom guard justification                    |
-| Raw endpoint or webhook body                                | `endpoint()` audit metadata, executable verifier auth, `webhook()` verify-before-parse lifecycle | Raw `Response`, `Location`, headers, cookies, file/stream output         | Raw endpoint purpose plus verifier/custom/none justification |
-| Database, model, or streamed text                           | Query output schemas, `<kovo-query>`, `<kovo-text>`, contextual escaping                         | SQL text, raw HTML insertion, script/JSON islands, stream renderers      | `trustedSql` / `trustedHtml` from reviewed renderer code     |
-| Files, storage keys, manifests, static export paths         | `respond.file`, `respond.stream`, containment checks, static-export validation                   | Filesystem/S3 paths, `Content-Disposition`, inline HTML/SVG/MIME         | App-owned raw download endpoint with review                  |
-| Framework code paths and generated artifacts                | Shared source/sink registry plus drift detection                                                 | `innerHTML`, `Headers`, `querySelector`, dynamic import, eval/process/fs | Narrow repo-internal exclusion with evidence                 |
+| Source                                                      | Safe Kovo path                                                                                                                   | Dangerous sink                                                           | Escape hatch                                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| Request params, search, forms, query args, headers, cookies | Route/query/mutation schemas, CSRF, guards, typed redirects                                                                      | HTML text/attributes, URL attrs, redirects, selectors                    | `trustedHtml` / `trustedUrl` with provenance                 |
+| Session and provider state                                  | `session(s.object(...))`, `sessionProvider`, `guards.authed`, `owner:` predicates                                                | Owner-table reads/writes, auth redirects, cacheable private reads        | Public-read or custom guard justification                    |
+| Raw endpoint or webhook body                                | `endpoint()` audit metadata, executable verifier auth, `webhook()` verify-before-parse lifecycle                                 | Raw `Response`, `Location`, headers, cookies, file/stream output         | Raw endpoint purpose plus verifier/custom/none justification |
+| Database, model, or streamed text                           | Query output schemas, `<kovo-query>`, `<kovo-text>`, contextual escaping                                                         | SQL text, raw HTML insertion, script/JSON islands, stream renderers      | `trustedSql` / `trustedHtml` from reviewed renderer code     |
+| Files, storage keys, manifests, static export paths         | Capability URLs, `createStorageDownloadEndpoint`, `respond.file`, `respond.stream`, containment checks, static-export validation | Filesystem/S3 paths, `Content-Disposition`, inline HTML/SVG/MIME         | `ctx.signUrl` / `signCapability` with per-object scope       |
+| Framework code paths and generated artifacts                | Shared source/sink registry plus drift detection                                                                                 | `innerHTML`, `Headers`, `querySelector`, dynamic import, eval/process/fs | Narrow repo-internal exclusion with evidence                 |
 
 Common app code rules are intentionally blunt:
 
@@ -423,9 +435,9 @@ Common app code rules are intentionally blunt:
 - Do not present CSV, TSV, spreadsheet, or formula hardening as a Kovo-supported safe-by-default
   lane. If an app exports spreadsheet-readable data, it is app-owned raw endpoint/download code
   behind its own security review.
-- Prefer typed `mutation()`, `query()`, `route()`, `respond.file()`, `respond.stream()`, cookies, and
-  verifier helpers over hand-built response strings. When you need an escape hatch, make it show up
-  in `kovo explain`.
+- Prefer typed `mutation()`, `query()`, `route()`, capability downloads, cookies, and verifier
+  helpers over hand-built response strings. When you need an escape hatch, make it show up in
+  `kovo explain`.
 
 For agentic or LLM-backed features, treat model output like any other untrusted source until a Kovo
 schema, guard, or sink-specific trust API narrows it. Prompt injection is about confused instructions;

@@ -13,8 +13,22 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Supported sheet side values.
+ *
+ * @example
+ * import type { SheetSide } from "@kovojs/ui/sheet";
+ * const value: SheetSide = 'right';
+ */
 export type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 
+/**
+ * Style override slots accepted by the sheet components.
+ *
+ * @example
+ * import type { SheetStyleOverrides } from "@kovojs/ui/sheet";
+ * const styles: SheetStyleOverrides = {};
+ */
 export interface SheetStyleOverrides {
   body?: style.StyleInput;
   close?: style.StyleInput;
@@ -26,6 +40,13 @@ export interface SheetStyleOverrides {
   trigger?: style.StyleInput;
 }
 
+/**
+ * Props for the sheet component.
+ *
+ * @example
+ * import type { SheetProps } from "@kovojs/ui/sheet";
+ * const props: SheetProps = { contentId: 'content-id', title: 'Title', children: 'Content' };
+ */
 export interface SheetProps {
   children?: string;
   closeLabel?: string;
@@ -39,23 +60,51 @@ export interface SheetProps {
   trigger?: string;
 }
 
+/**
+ * Shared state props for the sheet component family.
+ *
+ * @example
+ * import type { SheetStateProps } from "@kovojs/ui/sheet";
+ * const state: SheetStateProps = {};
+ */
 export interface SheetStateProps {
   disabled?: boolean;
   open?: boolean;
   styles?: SheetStyleOverrides;
 }
 
+/**
+ * Props for the sheet root component.
+ *
+ * @example
+ * import type { SheetRootProps } from "@kovojs/ui/sheet";
+ * const props: SheetRootProps = { children: 'Content' };
+ */
 export interface SheetRootProps extends SheetStateProps {
   children?: string;
   id?: string;
 }
 
+/**
+ * Props for the sheet trigger component.
+ *
+ * @example
+ * import type { SheetTriggerProps } from "@kovojs/ui/sheet";
+ * const props: SheetTriggerProps = { contentId: 'content-id', children: 'Content' };
+ */
 export interface SheetTriggerProps extends SheetStateProps {
   children?: string;
   contentId: string;
   id?: string;
 }
 
+/**
+ * Props for the sheet content component.
+ *
+ * @example
+ * import type { SheetContentProps } from "@kovojs/ui/sheet";
+ * const props: SheetContentProps = { contentId: 'content-id', titleId: 'title-id', children: 'Content' };
+ */
 export interface SheetContentProps extends SheetStateProps {
   children?: string;
   contentId: string;
@@ -64,12 +113,26 @@ export interface SheetContentProps extends SheetStateProps {
   titleId: string;
 }
 
+/**
+ * Props for the sheet part component.
+ *
+ * @example
+ * import type { SheetPartProps } from "@kovojs/ui/sheet";
+ * const props: SheetPartProps = { children: 'Content' };
+ */
 export interface SheetPartProps {
   children?: string;
   id?: string;
   styles?: SheetStyleOverrides;
 }
 
+/**
+ * Props for the sheet close component.
+ *
+ * @example
+ * import type { SheetCloseProps } from "@kovojs/ui/sheet";
+ * const props: SheetCloseProps = { contentId: 'content-id', children: 'Content' };
+ */
 export interface SheetCloseProps extends SheetStateProps {
   children?: string;
   contentId: string;
@@ -80,6 +143,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the sheet components.
+ *
+ * @example
+ * import { sheetStyles } from "@kovojs/ui/sheet";
+ * const styles = sheetStyles;
+ */
 export const sheetStyles = style.create({
   body: {
     fontSize: 14,
@@ -194,6 +264,13 @@ export const sheetStyles = style.create({
   },
 });
 
+/**
+ * Style definitions used by the sheet side components.
+ *
+ * @example
+ * import { sheetSideStyles } from "@kovojs/ui/sheet";
+ * const styles = sheetSideStyles;
+ */
 export const sheetSideStyles = style.create({
   bottom: {
     borderTopWidth: 1,
@@ -373,12 +450,26 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): Component
   );
 }
 
+/**
+ * Renders the styled sheet primitive.
+ *
+ * @example
+ * import { Sheet } from "@kovojs/ui/sheet";
+ * const component = Sheet;
+ */
 export const Sheet = component({
   render(props: SheetProps) {
     return renderDialogPanel(props, 'right');
   },
 });
 
+/**
+ * Renders the styled sheet root primitive.
+ *
+ * @example
+ * import { SheetRoot } from "@kovojs/ui/sheet";
+ * const component = SheetRoot;
+ */
 export const SheetRoot = component({
   render(props: SheetRootProps) {
     const attrs = dialogRootAttributes({
@@ -401,6 +492,13 @@ export const SheetRoot = component({
   },
 });
 
+/**
+ * Renders the styled sheet trigger primitive.
+ *
+ * @example
+ * import { SheetTrigger } from "@kovojs/ui/sheet";
+ * const component = SheetTrigger;
+ */
 export const SheetTrigger = component({
   render(props: SheetTriggerProps) {
     const attrs = dialogTriggerAttributes({
@@ -431,6 +529,13 @@ export const SheetTrigger = component({
   },
 });
 
+/**
+ * Renders the styled sheet content primitive.
+ *
+ * @example
+ * import { SheetContent } from "@kovojs/ui/sheet";
+ * const component = SheetContent;
+ */
 export const SheetContent = component({
   render(props: SheetContentProps) {
     const side = props.side ?? 'right';
@@ -465,6 +570,13 @@ export const SheetContent = component({
   },
 });
 
+/**
+ * Renders the styled sheet header primitive.
+ *
+ * @example
+ * import { SheetHeader } from "@kovojs/ui/sheet";
+ * const component = SheetHeader;
+ */
 export const SheetHeader = component({
   render(props: SheetPartProps) {
     const styleAttrs = style.attrs(sheetStyles.header, props.styles?.header);
@@ -476,6 +588,13 @@ export const SheetHeader = component({
   },
 });
 
+/**
+ * Renders the styled sheet title primitive.
+ *
+ * @example
+ * import { SheetTitle } from "@kovojs/ui/sheet";
+ * const component = SheetTitle;
+ */
 export const SheetTitle = component({
   render(props: SheetPartProps) {
     const styleAttrs = style.attrs(sheetStyles.title, props.styles?.title);
@@ -487,6 +606,13 @@ export const SheetTitle = component({
   },
 });
 
+/**
+ * Renders the styled sheet description primitive.
+ *
+ * @example
+ * import { SheetDescription } from "@kovojs/ui/sheet";
+ * const component = SheetDescription;
+ */
 export const SheetDescription = component({
   render(props: SheetPartProps) {
     const styleAttrs = style.attrs(sheetStyles.description, props.styles?.description);
@@ -498,6 +624,13 @@ export const SheetDescription = component({
   },
 });
 
+/**
+ * Renders the styled sheet close primitive.
+ *
+ * @example
+ * import { SheetClose } from "@kovojs/ui/sheet";
+ * const component = SheetClose;
+ */
 export const SheetClose = component({
   render(props: SheetCloseProps) {
     const attrs = dialogCloseAttributes({

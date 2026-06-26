@@ -4,6 +4,13 @@ import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the table components.
+ *
+ * @example
+ * import type { TableStyleOverrides } from "@kovojs/ui/table";
+ * const styles: TableStyleOverrides = {};
+ */
 export interface TableStyleOverrides {
   body?: style.StyleInput;
   caption?: style.StyleInput;
@@ -15,17 +22,38 @@ export interface TableStyleOverrides {
   wrapper?: style.StyleInput;
 }
 
+/**
+ * Props for the table component.
+ *
+ * @example
+ * import type { TableProps } from "@kovojs/ui/table";
+ * const props: TableProps = { children: 'Content' };
+ */
 export interface TableProps {
   caption?: string;
   children?: unknown;
   styles?: TableStyleOverrides;
 }
 
+/**
+ * Props for the table section component.
+ *
+ * @example
+ * import type { TableSectionProps } from "@kovojs/ui/table";
+ * const props: TableSectionProps = { children: 'Content' };
+ */
 export interface TableSectionProps {
   children?: unknown;
   styles?: TableStyleOverrides;
 }
 
+/**
+ * Props for the table cell component.
+ *
+ * @example
+ * import type { TableCellProps } from "@kovojs/ui/table";
+ * const props: TableCellProps = { children: 'Content' };
+ */
 export interface TableCellProps {
   children?: unknown;
   colSpan?: number;
@@ -73,6 +101,13 @@ function escapeAttribute(value: string): string {
   return escapeHtml(value).replaceAll('"', '&quot;');
 }
 
+/**
+ * Style definitions used by the table components.
+ *
+ * @example
+ * import { tableStyles } from "@kovojs/ui/table";
+ * const styles = tableStyles;
+ */
 export const tableStyles = style.create({
   body: {
     '[&_tr:last-child]': {
@@ -125,6 +160,13 @@ export const tableStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled table primitive.
+ *
+ * @example
+ * import { Table } from "@kovojs/ui/table";
+ * const component = Table;
+ */
 export const Table = component({
   render(props: TableProps) {
     const wrapperAttrs = style.attrs(tableStyles.wrapper, props.styles?.wrapper);
@@ -141,24 +183,52 @@ export const Table = component({
   },
 });
 
+/**
+ * Renders the styled table head primitive.
+ *
+ * @example
+ * import { TableHead } from "@kovojs/ui/table";
+ * const component = TableHead;
+ */
 export const TableHead = component({
   render(props: TableSectionProps) {
     return tablePart('thead', style.attrs(tableStyles.head, props.styles?.head), props.children);
   },
 });
 
+/**
+ * Renders the styled table body primitive.
+ *
+ * @example
+ * import { TableBody } from "@kovojs/ui/table";
+ * const component = TableBody;
+ */
 export const TableBody = component({
   render(props: TableSectionProps) {
     return tablePart('tbody', style.attrs(tableStyles.body, props.styles?.body), props.children);
   },
 });
 
+/**
+ * Renders the styled table row primitive.
+ *
+ * @example
+ * import { TableRow } from "@kovojs/ui/table";
+ * const component = TableRow;
+ */
 export const TableRow = component({
   render(props: TableSectionProps) {
     return tablePart('tr', style.attrs(tableStyles.row, props.styles?.row), props.children);
   },
 });
 
+/**
+ * Renders the styled table header cell primitive.
+ *
+ * @example
+ * import { TableHeaderCell } from "@kovojs/ui/table";
+ * const component = TableHeaderCell;
+ */
 export const TableHeaderCell = component({
   render(props: TableCellProps) {
     return tablePart(
@@ -173,6 +243,13 @@ export const TableHeaderCell = component({
   },
 });
 
+/**
+ * Renders the styled table cell primitive.
+ *
+ * @example
+ * import { TableCell } from "@kovojs/ui/table";
+ * const component = TableCell;
+ */
 export const TableCell = component({
   render(props: TableCellProps) {
     return tablePart(

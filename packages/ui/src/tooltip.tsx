@@ -11,23 +11,51 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the tooltip components.
+ *
+ * @example
+ * import type { TooltipStyleOverrides } from "@kovojs/ui/tooltip";
+ * const styles: TooltipStyleOverrides = {};
+ */
 export interface TooltipStyleOverrides {
   content?: style.StyleInput;
   root?: style.StyleInput;
   trigger?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the tooltip component family.
+ *
+ * @example
+ * import type { TooltipStateProps } from "@kovojs/ui/tooltip";
+ * const state: TooltipStateProps = {};
+ */
 export interface TooltipStateProps {
   disabled?: boolean;
   open?: boolean;
 }
 
+/**
+ * Props for the tooltip component.
+ *
+ * @example
+ * import type { TooltipProps } from "@kovojs/ui/tooltip";
+ * const props: TooltipProps = { children: 'Content' };
+ */
 export interface TooltipProps extends TooltipStateProps {
   children?: string;
   id?: string;
   styles?: TooltipStyleOverrides;
 }
 
+/**
+ * Props for the tooltip trigger component.
+ *
+ * @example
+ * import type { TooltipTriggerProps } from "@kovojs/ui/tooltip";
+ * const props: TooltipTriggerProps = { children: 'Content' };
+ */
 export interface TooltipTriggerProps extends TooltipStateProps {
   children?: string;
   contentId?: string;
@@ -35,12 +63,26 @@ export interface TooltipTriggerProps extends TooltipStateProps {
   styles?: TooltipStyleOverrides;
 }
 
+/**
+ * Props for the tooltip content component.
+ *
+ * @example
+ * import type { TooltipContentProps } from "@kovojs/ui/tooltip";
+ * const props: TooltipContentProps = { children: 'Content' };
+ */
 export interface TooltipContentProps extends TooltipStateProps {
   children?: string;
   contentId?: string;
   styles?: TooltipStyleOverrides;
 }
 
+/**
+ * Style definitions used by the tooltip components.
+ *
+ * @example
+ * import { tooltipStyles } from "@kovojs/ui/tooltip";
+ * const styles = tooltipStyles;
+ */
 export const tooltipStyles = style.create({
   // Rotated-square arrow at the bottom center of the content, pointing down to
   // the trigger. Same fill as the content so the two read as one shape.
@@ -129,6 +171,13 @@ function tooltipState(props: TooltipStateProps) {
   };
 }
 
+/**
+ * Renders the styled tooltip primitive.
+ *
+ * @example
+ * import { Tooltip } from "@kovojs/ui/tooltip";
+ * const component = Tooltip;
+ */
 export const Tooltip = component({
   render(props: TooltipProps) {
     const attrs = tooltipRootAttributes(tooltipState(props));
@@ -148,6 +197,13 @@ export const Tooltip = component({
   },
 });
 
+/**
+ * Renders the styled tooltip trigger primitive.
+ *
+ * @example
+ * import { TooltipTrigger } from "@kovojs/ui/tooltip";
+ * const component = TooltipTrigger;
+ */
 export const TooltipTrigger = component({
   render(props: TooltipTriggerProps) {
     const attrs = tooltipTriggerAttributes({
@@ -174,6 +230,13 @@ export const TooltipTrigger = component({
   },
 });
 
+/**
+ * Renders the styled tooltip content primitive.
+ *
+ * @example
+ * import { TooltipContent } from "@kovojs/ui/tooltip";
+ * const component = TooltipContent;
+ */
 export const TooltipContent = component({
   render(props: TooltipContentProps) {
     const attrs = tooltipContentAttributes({

@@ -16,6 +16,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the context menu components.
+ *
+ * @example
+ * import type { ContextMenuStyleOverrides } from "@kovojs/ui/context-menu";
+ * const styles: ContextMenuStyleOverrides = {};
+ */
 export interface ContextMenuStyleOverrides {
   content?: style.StyleInput;
   group?: style.StyleInput;
@@ -25,6 +32,13 @@ export interface ContextMenuStyleOverrides {
   trigger?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the context menu component family.
+ *
+ * @example
+ * import type { ContextMenuStateProps } from "@kovojs/ui/context-menu";
+ * const state: ContextMenuStateProps = {};
+ */
 export interface ContextMenuStateProps {
   disabled?: boolean;
   highlightedValue?: string;
@@ -33,12 +47,26 @@ export interface ContextMenuStateProps {
   point?: ContextMenuPoint;
 }
 
+/**
+ * Props for the context menu component.
+ *
+ * @example
+ * import type { ContextMenuProps } from "@kovojs/ui/context-menu";
+ * const props: ContextMenuProps = { children: 'Content' };
+ */
 export interface ContextMenuProps extends ContextMenuStateProps {
   children?: string;
   id?: string;
   styles?: ContextMenuStyleOverrides;
 }
 
+/**
+ * Props for the context menu trigger component.
+ *
+ * @example
+ * import type { ContextMenuTriggerProps } from "@kovojs/ui/context-menu";
+ * const props: ContextMenuTriggerProps = { children: 'Content' };
+ */
 export interface ContextMenuTriggerProps extends ContextMenuStateProps {
   children?: string;
   contentId?: string;
@@ -47,6 +75,13 @@ export interface ContextMenuTriggerProps extends ContextMenuStateProps {
   styles?: ContextMenuStyleOverrides;
 }
 
+/**
+ * Props for the context menu content component.
+ *
+ * @example
+ * import type { ContextMenuContentProps } from "@kovojs/ui/context-menu";
+ * const props: ContextMenuContentProps = { children: 'Content' };
+ */
 export interface ContextMenuContentProps extends ContextMenuStateProps {
   children?: string;
   id?: string;
@@ -54,6 +89,13 @@ export interface ContextMenuContentProps extends ContextMenuStateProps {
   styles?: ContextMenuStyleOverrides;
 }
 
+/**
+ * Props for the context menu item component.
+ *
+ * @example
+ * import type { ContextMenuItemProps } from "@kovojs/ui/context-menu";
+ * const props: ContextMenuItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface ContextMenuItemProps extends ContextMenuStateProps {
   children?: string;
   id?: string;
@@ -63,6 +105,13 @@ export interface ContextMenuItemProps extends ContextMenuStateProps {
   styles?: ContextMenuStyleOverrides;
 }
 
+/**
+ * Props for the context menu group component.
+ *
+ * @example
+ * import type { ContextMenuGroupProps } from "@kovojs/ui/context-menu";
+ * const props: ContextMenuGroupProps = { children: 'Content' };
+ */
 export interface ContextMenuGroupProps extends ContextMenuStateProps {
   children?: string;
   id?: string;
@@ -70,6 +119,13 @@ export interface ContextMenuGroupProps extends ContextMenuStateProps {
   styles?: ContextMenuStyleOverrides;
 }
 
+/**
+ * Props for the context menu separator component.
+ *
+ * @example
+ * import type { ContextMenuSeparatorProps } from "@kovojs/ui/context-menu";
+ * const props: ContextMenuSeparatorProps = {};
+ */
 export interface ContextMenuSeparatorProps {
   id?: string;
   styles?: ContextMenuStyleOverrides;
@@ -79,6 +135,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the context menu components.
+ *
+ * @example
+ * import { contextMenuStyles } from "@kovojs/ui/context-menu";
+ * const styles = contextMenuStyles;
+ */
 export const contextMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
@@ -198,6 +261,13 @@ export const contextMenuStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled context menu primitive.
+ *
+ * @example
+ * import { ContextMenu } from "@kovojs/ui/context-menu";
+ * const component = ContextMenu;
+ */
 export const ContextMenu = component({
   render(props: ContextMenuProps) {
     const attrs = contextMenuRootAttributes({
@@ -224,6 +294,13 @@ export const ContextMenu = component({
   },
 });
 
+/**
+ * Renders the styled context menu trigger primitive.
+ *
+ * @example
+ * import { ContextMenuTrigger } from "@kovojs/ui/context-menu";
+ * const component = ContextMenuTrigger;
+ */
 export const ContextMenuTrigger = component({
   render(props: ContextMenuTriggerProps) {
     const attrs = contextMenuTriggerAttributes({
@@ -260,6 +337,13 @@ export const ContextMenuTrigger = component({
   },
 });
 
+/**
+ * Renders the styled context menu content primitive.
+ *
+ * @example
+ * import { ContextMenuContent } from "@kovojs/ui/context-menu";
+ * const component = ContextMenuContent;
+ */
 export const ContextMenuContent = component({
   render(props: ContextMenuContentProps) {
     const attrs = contextMenuContentAttributes({
@@ -293,6 +377,13 @@ export const ContextMenuContent = component({
   },
 });
 
+/**
+ * Renders the styled context menu item primitive.
+ *
+ * @example
+ * import { ContextMenuItem } from "@kovojs/ui/context-menu";
+ * const component = ContextMenuItem;
+ */
 export const ContextMenuItem = component({
   render(props: ContextMenuItemProps) {
     const attrs = contextMenuItemAttributes({
@@ -329,6 +420,13 @@ export const ContextMenuItem = component({
   },
 });
 
+/**
+ * Renders the styled context menu group primitive.
+ *
+ * @example
+ * import { ContextMenuGroup } from "@kovojs/ui/context-menu";
+ * const component = ContextMenuGroup;
+ */
 export const ContextMenuGroup = component({
   render(props: ContextMenuGroupProps) {
     const attrs = contextMenuGroupAttributes({
@@ -358,6 +456,13 @@ export const ContextMenuGroup = component({
   },
 });
 
+/**
+ * Renders the styled context menu separator primitive.
+ *
+ * @example
+ * import { ContextMenuSeparator } from "@kovojs/ui/context-menu";
+ * const component = ContextMenuSeparator;
+ */
 export const ContextMenuSeparator = component({
   render(props: ContextMenuSeparatorProps) {
     const attrs = contextMenuSeparatorAttributes(props.id === undefined ? {} : { id: props.id });

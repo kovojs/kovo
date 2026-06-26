@@ -25,6 +25,18 @@ Kovo has three different streaming surfaces:
 Author the boundary with the public JSX primitive from `@kovojs/server`:
 
 ```tsx
+import { Defer } from '@kovojs/server';
+
+<Defer
+  target="product-grid"
+  fallback={<section aria-busy="true">Loading products...</section>}
+  render={() => <ProductGrid />}
+/>;
+```
+
+In a page, that boundary sits beside the cheap content that can render immediately:
+
+```tsx
 import { component } from '@kovojs/core';
 import { Defer, route } from '@kovojs/server';
 

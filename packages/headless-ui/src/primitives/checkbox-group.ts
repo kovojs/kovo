@@ -13,11 +13,35 @@ import {
   type TextDirection,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupItem } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupItem = {} as CheckboxGroupItem;
+ * ```
+ */
 export interface CheckboxGroupItem {
   disabled?: boolean;
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupState } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupState = {} as CheckboxGroupState;
+ * ```
+ */
 export interface CheckboxGroupState {
   activeValue?: string;
   dir?: TextDirection;
@@ -32,6 +56,18 @@ export interface CheckboxGroupState {
   value?: readonly string[];
 }
 
+/**
+ * Options accepted by the Checkbox Group primitive checkbox group root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupRootAttributeOptions } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupRootAttributeOptions = {} as CheckboxGroupRootAttributeOptions;
+ * ```
+ */
 export interface CheckboxGroupRootAttributeOptions extends CheckboxGroupState {
   descriptionId?: string;
   errorId?: string;
@@ -39,54 +75,213 @@ export interface CheckboxGroupRootAttributeOptions extends CheckboxGroupState {
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Checkbox Group primitive checkbox group item attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupItemAttributeOptions } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupItemAttributeOptions = {} as CheckboxGroupItemAttributeOptions;
+ * ```
+ */
 export interface CheckboxGroupItemAttributeOptions extends CheckboxGroupState {
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Checkbox Group primitive checkbox group control attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupControlAttributeOptions } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupControlAttributeOptions = {} as CheckboxGroupControlAttributeOptions;
+ * ```
+ */
 export interface CheckboxGroupControlAttributeOptions extends CheckboxGroupItemAttributeOptions {
   controlId?: string;
 }
 
+/**
+ * Options accepted by the Checkbox Group primitive checkbox group label attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupLabelAttributeOptions } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupLabelAttributeOptions = {} as CheckboxGroupLabelAttributeOptions;
+ * ```
+ */
 export interface CheckboxGroupLabelAttributeOptions extends CheckboxGroupItemAttributeOptions {
   controlId?: string;
 }
 
+/**
+ * Reason token reported by the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupChangeReason } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupChangeReason = {} as CheckboxGroupChangeReason;
+ * ```
+ */
 export type CheckboxGroupChangeReason = 'item-click' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupChangeDetail } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupChangeDetail = {} as CheckboxGroupChangeDetail;
+ * ```
+ */
 export type CheckboxGroupChangeDetail = PrimitiveChangeDetail<
   CheckboxGroupChangeReason,
   readonly string[]
 >;
 
+/**
+ * Options accepted by the Checkbox Group primitive checkbox group change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupChangeOptions } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupChangeOptions = {} as CheckboxGroupChangeOptions;
+ * ```
+ */
 export interface CheckboxGroupChangeOptions {
   onValueChange?: (detail: CheckboxGroupChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Checkbox Group primitive checkbox group change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupChangeResult } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupChangeResult = {} as CheckboxGroupChangeResult;
+ * ```
+ */
 export interface CheckboxGroupChangeResult {
   changed: boolean;
   detail?: CheckboxGroupChangeDetail;
   value: readonly string[];
 }
 
+/**
+ * Result returned by the Checkbox Group primitive checkbox group move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupMoveResult } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupMoveResult = {} as CheckboxGroupMoveResult;
+ * ```
+ */
 export interface CheckboxGroupMoveResult {
   index: number;
   value: string | undefined;
 }
 
+/**
+ * Serializable attribute record returned by Checkbox Group primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupPrimitiveAttributes } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupPrimitiveAttributes = {} as CheckboxGroupPrimitiveAttributes;
+ * ```
+ */
 export type CheckboxGroupPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupItemEvent } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupItemEvent = {} as CheckboxGroupItemEvent;
+ * ```
+ */
 export type CheckboxGroupItemEvent = Event & {
   readonly currentTarget: (EventTarget & { checked?: boolean }) | null;
 };
+
+/**
+ * Event shape consumed by the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CheckboxGroupKeyboardEvent } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const value: CheckboxGroupKeyboardEvent = {} as CheckboxGroupKeyboardEvent;
+ * ```
+ */
 export type CheckboxGroupKeyboardEvent = Event & { readonly key: string };
 
+/**
+ * Computes checkbox group item checked for the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { checkboxGroupItemChecked } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof checkboxGroupItemChecked>[0];
+ * const result = checkboxGroupItemChecked(input);
+ * ```
+ */
 export function checkboxGroupItemChecked(options: CheckboxGroupItemAttributeOptions): boolean {
   return checkboxGroupValue(options).includes(options.itemValue);
 }
 
+/**
+ * Computes checkbox group roving index for the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { checkboxGroupRovingIndex } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof checkboxGroupRovingIndex>[0];
+ * const result = checkboxGroupRovingIndex(input);
+ * ```
+ */
 export function checkboxGroupRovingIndex(state: CheckboxGroupState): number {
   const items = state.items ?? [];
   if (items.length === 0) return -1;
@@ -109,6 +304,21 @@ export function checkboxGroupRovingIndex(state: CheckboxGroupState): number {
   });
 }
 
+/**
+ * Builds the checkbox group root attributes record for the Checkbox Group primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { checkboxGroupRootAttributes } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof checkboxGroupRootAttributes>[0];
+ * const result = checkboxGroupRootAttributes(input);
+ * ```
+ */
 export function checkboxGroupRootAttributes(
   options: CheckboxGroupRootAttributeOptions = {},
 ): CheckboxGroupPrimitiveAttributes {
@@ -126,6 +336,19 @@ export function checkboxGroupRootAttributes(
   });
 }
 
+/**
+ * Builds the checkbox group item attributes record for the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { checkboxGroupItemAttributes } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof checkboxGroupItemAttributes>[0];
+ * const result = checkboxGroupItemAttributes(input);
+ * ```
+ */
 export function checkboxGroupItemAttributes(
   options: CheckboxGroupItemAttributeOptions,
 ): CheckboxGroupPrimitiveAttributes {
@@ -135,6 +358,21 @@ export function checkboxGroupItemAttributes(
   });
 }
 
+/**
+ * Builds the checkbox group control attributes record for the Checkbox Group primitive.
+ *
+ * Emits `aria-checked`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { checkboxGroupControlAttributes } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof checkboxGroupControlAttributes>[0];
+ * const result = checkboxGroupControlAttributes(input);
+ * ```
+ */
 export function checkboxGroupControlAttributes(
   options: CheckboxGroupControlAttributeOptions,
 ): CheckboxGroupPrimitiveAttributes {
@@ -158,6 +396,19 @@ export function checkboxGroupControlAttributes(
   });
 }
 
+/**
+ * Builds the checkbox group label attributes record for the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { checkboxGroupLabelAttributes } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof checkboxGroupLabelAttributes>[0];
+ * const result = checkboxGroupLabelAttributes(input);
+ * ```
+ */
 export function checkboxGroupLabelAttributes(
   options: CheckboxGroupLabelAttributeOptions,
 ): CheckboxGroupPrimitiveAttributes {
@@ -168,6 +419,22 @@ export function checkboxGroupLabelAttributes(
   });
 }
 
+/**
+ * Computes the set checkbox group value transition for the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setCheckboxGroupValue } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof setCheckboxGroupValue>[0];
+ * const state = {} as Parameters<typeof setCheckboxGroupValue>[1];
+ * const options = {} as Parameters<typeof setCheckboxGroupValue>[2];
+ * const detail = {} as Parameters<typeof setCheckboxGroupValue>[3];
+ * const result = setCheckboxGroupValue(input, state, options, detail);
+ * ```
+ */
 export function setCheckboxGroupValue(
   state: CheckboxGroupState,
   value: readonly string[],
@@ -197,6 +464,21 @@ export function setCheckboxGroupValue(
   return { changed: true, detail, value: normalizedValue };
 }
 
+/**
+ * Computes the toggle checkbox group item transition for the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { toggleCheckboxGroupItem } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof toggleCheckboxGroupItem>[0];
+ * const state = {} as Parameters<typeof toggleCheckboxGroupItem>[1];
+ * const options = {} as Parameters<typeof toggleCheckboxGroupItem>[2];
+ * const result = toggleCheckboxGroupItem(input, state, options);
+ * ```
+ */
 export function toggleCheckboxGroupItem(
   state: CheckboxGroupItemAttributeOptions,
   reason: CheckboxGroupChangeReason,
@@ -209,6 +491,20 @@ export function toggleCheckboxGroupItem(
   return setCheckboxGroupValue(state, nextCheckboxGroupValue(state), reason, options);
 }
 
+/**
+ * Handles the checkbox group move focus interaction for the Checkbox Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { checkboxGroupMoveFocus } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof checkboxGroupMoveFocus>[0];
+ * const state = {} as Parameters<typeof checkboxGroupMoveFocus>[1];
+ * const result = checkboxGroupMoveFocus(input, state);
+ * ```
+ */
 export function checkboxGroupMoveFocus(
   state: CheckboxGroupState,
   intent: NavigationIntent,
@@ -232,6 +528,18 @@ export function checkboxGroupMoveFocus(
 }
 
 /**
+ * Handles the checkbox group item click interaction for the Checkbox Group primitive.
+ *
+ * @example
+ * ```ts
+ * import { checkboxGroupItemClick } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof checkboxGroupItemClick>[0];
+ * const state = {} as Parameters<typeof checkboxGroupItemClick>[1];
+ * const options = {} as Parameters<typeof checkboxGroupItemClick>[2];
+ * const result = checkboxGroupItemClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -256,6 +564,17 @@ export function checkboxGroupItemClick(
 }
 
 /**
+ * Handles the checkbox group key down interaction for the Checkbox Group primitive.
+ *
+ * @example
+ * ```ts
+ * import { checkboxGroupKeyDown } from '@kovojs/headless-ui/checkbox-group';
+ *
+ * const input = {} as Parameters<typeof checkboxGroupKeyDown>[0];
+ * const state = {} as Parameters<typeof checkboxGroupKeyDown>[1];
+ * const result = checkboxGroupKeyDown(input, state);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

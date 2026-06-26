@@ -8,12 +8,26 @@ import { progressRootAttributes } from '@kovojs/headless-ui/progress';
 import { uiTheme } from './theme.js';
 
 /** Style override slots for the progress primitive. */
+/**
+ * Style override slots accepted by the progress components.
+ *
+ * @example
+ * import type { ProgressStyleOverrides } from "@kovojs/ui/progress";
+ * const styles: ProgressStyleOverrides = {};
+ */
 export interface ProgressStyleOverrides {
   indicator?: style.StyleInput;
   native?: style.StyleInput;
   root?: style.StyleInput;
 }
 
+/**
+ * Props for the progress component.
+ *
+ * @example
+ * import type { ProgressProps } from "@kovojs/ui/progress";
+ * const props: ProgressProps = { children: 'Content' };
+ */
 export interface ProgressProps {
   children?: string;
   max?: number;
@@ -34,6 +48,13 @@ const indeterminateSlide = style.keyframes(
   { namespace: 'progressIndeterminate', source: 'progress.tsx' },
 );
 
+/**
+ * Style definitions used by the progress components.
+ *
+ * @example
+ * import { progressStyles } from "@kovojs/ui/progress";
+ * const styles = progressStyles;
+ */
 export const progressStyles = style.create({
   // Custom indicator filled by value ratio (set inline). In the indeterminate
   // state a partial-width bar slides across the track.
@@ -89,6 +110,13 @@ function fillStyle(value: string | undefined, max: string | undefined): string |
   return `${(ratio * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
 }
 
+/**
+ * Renders the styled progress primitive.
+ *
+ * @example
+ * import { Progress } from "@kovojs/ui/progress";
+ * const component = Progress;
+ */
 export const Progress = component({
   render(props: ProgressProps) {
     const attrs = progressRootAttributes({

@@ -53,26 +53,16 @@ queries, route components, theme, and stylesheet, then creates the app:
 createApp({
   clientModules: createMemoryVersionedClientModuleRegistry(),
   db: () => appDb,
-  endpoints: [healthEndpoint],
   mutations: [addContact, appSignIn, appSignOut],
   queries: [contactsQuery],
-  sessionProvider: {
-    justification: 'Better Auth owns the starter session lifecycle.',
-    lifecycle: 'delegated',
-    lifecycleAssertions: {
-      expiry: 'Better Auth enforces starter session expiry.',
-      revocation: 'Better Auth revokes starter sessions on sign-out.',
-      rotation: 'Better Auth owns token rotation and reissue.',
-      validation: 'Better Auth validates the session cookie before Kovo sees request.session.',
-    },
-    provider: appSessionProvider,
-  },
+  sessionProvider: appSessionProvider,
   routes: [homeRoute, loginRoute],
 });
 ```
 
 The home route redirects unauthenticated requests to `/login`; the login route renders the auth
-form. Both use the same `layout()` and stylesheet declaration.
+form. The full scaffold wraps `appSessionProvider` in delegated lifecycle assertions, registers the
+health endpoint, and uses the same `layout()` and stylesheet declaration on both pages.
 
 ## Auth and secrets
 
@@ -141,7 +131,6 @@ the server keeps no record of what's on screen. `kovo build ./src/app.tsx` emits
 
 The [deployment guide](/guides/deployment/) covers the two real obligations: keeping versioned
 `/c/*` client modules published across deploys, and not breaking the stateless-server guarantee.
-See SPEC §9.5 for request-shell, static-export, and deploy-shape details.
 
 ## Next
 

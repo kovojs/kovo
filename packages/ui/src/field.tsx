@@ -15,6 +15,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the field components.
+ *
+ * @example
+ * import type { FieldStyleOverrides } from "@kovojs/ui/field";
+ * const styles: FieldStyleOverrides = {};
+ */
 export interface FieldStyleOverrides {
   control?: style.StyleInput;
   description?: style.StyleInput;
@@ -28,18 +35,39 @@ export interface FieldStyleOverrides {
   textarea?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the field component family.
+ *
+ * @example
+ * import type { FieldStateProps } from "@kovojs/ui/field";
+ * const state: FieldStateProps = {};
+ */
 export interface FieldStateProps {
   disabled?: boolean;
   invalid?: boolean;
   required?: boolean;
 }
 
+/**
+ * Props for the field component.
+ *
+ * @example
+ * import type { FieldProps } from "@kovojs/ui/field";
+ * const props: FieldProps = { children: 'Content' };
+ */
 export interface FieldProps extends FieldStateProps {
   children?: string;
   id?: string;
   styles?: FieldStyleOverrides;
 }
 
+/**
+ * Props for the field label component.
+ *
+ * @example
+ * import type { FieldLabelProps } from "@kovojs/ui/field";
+ * const props: FieldLabelProps = { children: 'Content' };
+ */
 export interface FieldLabelProps extends FieldStateProps {
   children?: string;
   controlId?: string;
@@ -47,6 +75,13 @@ export interface FieldLabelProps extends FieldStateProps {
   styles?: FieldStyleOverrides;
 }
 
+/**
+ * Props for the field control component.
+ *
+ * @example
+ * import type { FieldControlProps } from "@kovojs/ui/field";
+ * const props: FieldControlProps = {};
+ */
 export interface FieldControlProps extends FieldStateProps {
   autoComplete?: string;
   descriptionId?: string;
@@ -64,6 +99,13 @@ export interface FieldControlProps extends FieldStateProps {
   value?: string;
 }
 
+/**
+ * Props for the field textarea component.
+ *
+ * @example
+ * import type { FieldTextareaProps } from "@kovojs/ui/field";
+ * const props: FieldTextareaProps = { children: 'Content' };
+ */
 export interface FieldTextareaProps extends FieldStateProps {
   autoComplete?: string;
   children?: string;
@@ -80,6 +122,13 @@ export interface FieldTextareaProps extends FieldStateProps {
   styles?: FieldStyleOverrides;
 }
 
+/**
+ * Props for the field select component.
+ *
+ * @example
+ * import type { FieldSelectProps } from "@kovojs/ui/field";
+ * const props: FieldSelectProps = { children: 'Content' };
+ */
 export interface FieldSelectProps extends FieldStateProps {
   children?: string;
   descriptionId?: string;
@@ -91,6 +140,13 @@ export interface FieldSelectProps extends FieldStateProps {
   value?: string;
 }
 
+/**
+ * Props for the field select option component.
+ *
+ * @example
+ * import type { FieldSelectOptionProps } from "@kovojs/ui/field";
+ * const props: FieldSelectOptionProps = { children: 'Content' };
+ */
 export interface FieldSelectOptionProps {
   children?: string;
   disabled?: boolean;
@@ -99,6 +155,13 @@ export interface FieldSelectOptionProps {
   value?: string;
 }
 
+/**
+ * Props for the field message component.
+ *
+ * @example
+ * import type { FieldMessageProps } from "@kovojs/ui/field";
+ * const props: FieldMessageProps = { children: 'Content' };
+ */
 export interface FieldMessageProps extends FieldStateProps {
   children?: string;
   id?: string;
@@ -106,6 +169,13 @@ export interface FieldMessageProps extends FieldStateProps {
   visible?: boolean;
 }
 
+/**
+ * Props for the fieldset component.
+ *
+ * @example
+ * import type { FieldsetProps } from "@kovojs/ui/field";
+ * const props: FieldsetProps = { children: 'Content' };
+ */
 export interface FieldsetProps extends FieldStateProps {
   children?: string;
   descriptionId?: string;
@@ -116,6 +186,13 @@ export interface FieldsetProps extends FieldStateProps {
   styles?: FieldStyleOverrides;
 }
 
+/**
+ * Props for the fieldset legend component.
+ *
+ * @example
+ * import type { FieldsetLegendProps } from "@kovojs/ui/field";
+ * const props: FieldsetLegendProps = { children: 'Content' };
+ */
 export interface FieldsetLegendProps extends FieldStateProps {
   children?: string;
   id?: string;
@@ -157,6 +234,13 @@ const nativeControlStyle = {
   },
 } as const;
 
+/**
+ * Style definitions used by the field components.
+ *
+ * @example
+ * import { fieldStyles } from "@kovojs/ui/field";
+ * const styles = fieldStyles;
+ */
 export const fieldStyles = style.create({
   control: {
     ...nativeControlStyle,
@@ -241,6 +325,13 @@ export const fieldStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled field primitive.
+ *
+ * @example
+ * import { Field } from "@kovojs/ui/field";
+ * const component = Field;
+ */
 export const Field = component({
   render(props: FieldProps) {
     const attrs = fieldRootAttributes({
@@ -266,6 +357,13 @@ export const Field = component({
   },
 });
 
+/**
+ * Renders the styled field label primitive.
+ *
+ * @example
+ * import { FieldLabel } from "@kovojs/ui/field";
+ * const component = FieldLabel;
+ */
 export const FieldLabel = component({
   render(props: FieldLabelProps) {
     const attrs = fieldLabelAttributes({
@@ -293,6 +391,13 @@ export const FieldLabel = component({
   },
 });
 
+/**
+ * Renders the styled field control primitive.
+ *
+ * @example
+ * import { FieldControl } from "@kovojs/ui/field";
+ * const component = FieldControl;
+ */
 export const FieldControl = component({
   render(props: FieldControlProps) {
     const attrs = fieldControlAttributes({
@@ -339,6 +444,13 @@ export const FieldControl = component({
   },
 });
 
+/**
+ * Renders the styled field textarea primitive.
+ *
+ * @example
+ * import { FieldTextarea } from "@kovojs/ui/field";
+ * const component = FieldTextarea;
+ */
 export const FieldTextarea = component({
   render(props: FieldTextareaProps) {
     const attrs = fieldControlAttributes({
@@ -384,6 +496,13 @@ export const FieldTextarea = component({
   },
 });
 
+/**
+ * Renders the styled field select primitive.
+ *
+ * @example
+ * import { FieldSelect } from "@kovojs/ui/field";
+ * const component = FieldSelect;
+ */
 export const FieldSelect = component({
   render(props: FieldSelectProps) {
     const attrs = fieldControlAttributes({
@@ -420,6 +539,13 @@ export const FieldSelect = component({
   },
 });
 
+/**
+ * Renders the styled field select option primitive.
+ *
+ * @example
+ * import { FieldSelectOption } from "@kovojs/ui/field";
+ * const component = FieldSelectOption;
+ */
 export const FieldSelectOption = component({
   render(props: FieldSelectOptionProps) {
     const styleAttrs = style.attrs(fieldStyles.selectOption, props.styles?.selectOption);
@@ -438,6 +564,13 @@ export const FieldSelectOption = component({
   },
 });
 
+/**
+ * Renders the styled field description primitive.
+ *
+ * @example
+ * import { FieldDescription } from "@kovojs/ui/field";
+ * const component = FieldDescription;
+ */
 export const FieldDescription = component({
   render(props: FieldMessageProps) {
     const attrs = fieldDescriptionAttributes({
@@ -465,6 +598,13 @@ export const FieldDescription = component({
   },
 });
 
+/**
+ * Renders the styled field error primitive.
+ *
+ * @example
+ * import { FieldError } from "@kovojs/ui/field";
+ * const component = FieldError;
+ */
 export const FieldError = component({
   render(props: FieldMessageProps) {
     const attrs = fieldErrorAttributes({
@@ -493,6 +633,13 @@ export const FieldError = component({
   },
 });
 
+/**
+ * Renders the styled fieldset primitive.
+ *
+ * @example
+ * import { Fieldset } from "@kovojs/ui/field";
+ * const component = Fieldset;
+ */
 export const Fieldset = component({
   render(props: FieldsetProps) {
     const attrs = fieldsetRootAttributes({
@@ -527,6 +674,13 @@ export const Fieldset = component({
   },
 });
 
+/**
+ * Renders the styled fieldset legend primitive.
+ *
+ * @example
+ * import { FieldsetLegend } from "@kovojs/ui/field";
+ * const component = FieldsetLegend;
+ */
 export const FieldsetLegend = component({
   render(props: FieldsetLegendProps) {
     const attrs = fieldsetLegendAttributes({

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   renderDoneWireHtml,
   renderFragmentWireHtml,
+  renderQueryPageWireHtml,
   renderQueryScript,
   renderQueryWireHtml,
   renderTextWireHtml,
@@ -86,6 +87,18 @@ describe('server wire html emitters', () => {
     );
   });
 
+  it('emits mode="prepend" for the SPEC §9.3 load-older insert vocabulary', () => {
+    expect(
+      renderFragmentWireHtml({
+        html: '<article kovo-key="m1">Older</article>',
+        mode: 'prepend',
+        target: 'chat-log',
+      }),
+    ).toBe(
+      '<kovo-fragment target="chat-log" mode="prepend"><article kovo-key="m1">Older</article></kovo-fragment>',
+    );
+  });
+
   it('omits replace mode because it is the default fragment wire behavior', () => {
     expect(
       renderFragmentWireHtml({
@@ -158,6 +171,36 @@ describe('wire codec — unserializable value normalization (bugs-part4 L3/L4/L5
   it('emits null for an invalid Date rather than throwing', () => {
     expect(renderQueryWireHtml({ name: 'q', value: { at: new Date('not-a-date') } })).toBe(
       '<kovo-query name="q">{"at":{"$kovo":"date","value":null}}</kovo-query>',
+    );
+  });
+});
+
+describe('renderQueryPageWireHtml (read-side pagination, SPEC §9.1.1/§9.3)', () => {
+  it('emits a delta chunk carrying ONLY the new page rows under lists.<path>.upsert (no re-ship)', () => {
+    expect(
+      renderQueryPageWireHtml({
+        name: 'productGrid',
+        path: 'items',
+        keyField: 'id',
+        rows: [{ id: 'p3' }, { id: 'p4' }],
+      }),
+    ).toBe(
+      '<kovo-query name="productGrid" delta>{"lists":{"items":{"key":"id","upsert":[{"id":"p3"},{"id":"p4"}]}}}</kovo-query>',
+    );
+  });
+
+  it('flags prepend for a load-older page against a keyed instance', () => {
+    expect(
+      renderQueryPageWireHtml({
+        name: 'messages',
+        key: 'messages:room-1',
+        path: 'items',
+        keyField: 'id',
+        mode: 'prepend',
+        rows: [{ id: 'm1' }],
+      }),
+    ).toBe(
+      '<kovo-query name="messages" key="messages:room-1" delta>{"lists":{"items":{"key":"id","upsert":[{"id":"m1"}],"prepend":true}}}</kovo-query>',
     );
   });
 });

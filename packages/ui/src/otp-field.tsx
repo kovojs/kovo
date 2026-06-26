@@ -12,6 +12,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the otp field components.
+ *
+ * @example
+ * import type { OtpFieldStyleOverrides } from "@kovojs/ui/otp-field";
+ * const styles: OtpFieldStyleOverrides = {};
+ */
 export interface OtpFieldStyleOverrides {
   group?: style.StyleInput;
   hiddenInput?: style.StyleInput;
@@ -19,6 +26,13 @@ export interface OtpFieldStyleOverrides {
   root?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the otp field component family.
+ *
+ * @example
+ * import type { OtpFieldStateProps } from "@kovojs/ui/otp-field";
+ * const state: OtpFieldStateProps = {};
+ */
 export interface OtpFieldStateProps {
   disabled?: boolean;
   form?: string;
@@ -31,6 +45,13 @@ export interface OtpFieldStateProps {
   value?: string;
 }
 
+/**
+ * Props for the otp field component.
+ *
+ * @example
+ * import type { OtpFieldProps } from "@kovojs/ui/otp-field";
+ * const props: OtpFieldProps = { children: 'Content' };
+ */
 export interface OtpFieldProps extends OtpFieldStateProps {
   children?: string;
   descriptionId?: string;
@@ -40,11 +61,25 @@ export interface OtpFieldProps extends OtpFieldStateProps {
   styles?: OtpFieldStyleOverrides;
 }
 
+/**
+ * Props for the otp field hidden input component.
+ *
+ * @example
+ * import type { OtpFieldHiddenInputProps } from "@kovojs/ui/otp-field";
+ * const props: OtpFieldHiddenInputProps = {};
+ */
 export interface OtpFieldHiddenInputProps extends OtpFieldStateProps {
   id?: string;
   styles?: OtpFieldStyleOverrides;
 }
 
+/**
+ * Props for the otp field input component.
+ *
+ * @example
+ * import type { OtpFieldInputProps } from "@kovojs/ui/otp-field";
+ * const props: OtpFieldInputProps = { slotIndex: 0 };
+ */
 export interface OtpFieldInputProps extends OtpFieldStateProps {
   id?: string;
   label?: string;
@@ -53,6 +88,13 @@ export interface OtpFieldInputProps extends OtpFieldStateProps {
   styles?: OtpFieldStyleOverrides;
 }
 
+/**
+ * Style definitions used by the otp field components.
+ *
+ * @example
+ * import { otpFieldStyles } from "@kovojs/ui/otp-field";
+ * const styles = otpFieldStyles;
+ */
 export const otpFieldStyles = style.create({
   group: {
     alignItems: 'center',
@@ -140,6 +182,13 @@ export const otpFieldStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled otp field primitive.
+ *
+ * @example
+ * import { OtpField } from "@kovojs/ui/otp-field";
+ * const component = OtpField;
+ */
 export const OtpField = component({
   render(props: OtpFieldProps) {
     const attrs = otpFieldRootAttributes({
@@ -180,6 +229,13 @@ export const OtpField = component({
   },
 });
 
+/**
+ * Renders the styled otp field group primitive.
+ *
+ * @example
+ * import { OtpFieldGroup } from "@kovojs/ui/otp-field";
+ * const component = OtpFieldGroup;
+ */
 export const OtpFieldGroup = component({
   render(props: { children?: string; styles?: OtpFieldStyleOverrides }) {
     const styleAttrs = style.attrs(otpFieldStyles.group, props.styles?.group);
@@ -187,6 +243,13 @@ export const OtpFieldGroup = component({
   },
 });
 
+/**
+ * Renders the styled otp field hidden input primitive.
+ *
+ * @example
+ * import { OtpFieldHiddenInput } from "@kovojs/ui/otp-field";
+ * const component = OtpFieldHiddenInput;
+ */
 export const OtpFieldHiddenInput = component({
   render(props: OtpFieldHiddenInputProps) {
     const attrs = otpFieldHiddenInputAttributes({
@@ -231,6 +294,13 @@ export const OtpFieldHiddenInput = component({
   },
 });
 
+/**
+ * Renders the styled otp field input primitive.
+ *
+ * @example
+ * import { OtpFieldInput } from "@kovojs/ui/otp-field";
+ * const component = OtpFieldInput;
+ */
 export const OtpFieldInput = component({
   render(props: OtpFieldInputProps) {
     const attrs = otpFieldInputAttributes({

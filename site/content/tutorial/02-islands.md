@@ -36,9 +36,9 @@ Three things to notice in what you wrote — and didn't:
 
 ## Render it into the page
 
-The app renders the authored TSX component into the product page. The compiler may emit generated
-artifacts under `src/generated/` for inspection, but those are outputs to verify, not source you
-author or import by hand:
+The app renders the authored TSX component into the product page. The compiler may emit transient
+generated artifacts for inspection during a build, but those are outputs to verify, not source you
+author, commit, or import by hand:
 
 {{snippet:02-islands/src/app.ts#render-island}}
 
@@ -85,8 +85,8 @@ data — queries, and the bindings the compiler derives from them.
 Interaction ladder and lowest-layer rule: SPEC §7. Compiler-derived stamps: SPEC §4.1, §4.8;
 hand-written stamp is **KV223**, a stamp that disagrees with its typed expression is **KV222**.
 Serializable island state: SPEC §4.1. Popover lowering and naming nudge: SPEC §5.2 rule 4,
-**KV210**. Committed lowered IR under `src/generated/`: Constitution #3. Legible served HTML and
-load-bearing names: SPEC §4.2, `rules/v1-acceptance.md`, Constitution #1. Handler signature and lazy load: SPEC
-§4.3, §4.4.
+**KV210**. Generated lowered IR is a verification artifact, not app-authored source: Constitution
+#3. Legible served HTML and load-bearing names: SPEC §4.2, `rules/v1-acceptance.md`, Constitution
+#1. Handler signature and lazy load: SPEC §4.3, §4.4.
 
 </details>

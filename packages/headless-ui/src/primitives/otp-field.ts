@@ -6,6 +6,18 @@ import {
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
 
+/**
+ * Public type used by the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldInputMode } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldInputMode = {} as OtpFieldInputMode;
+ * ```
+ */
 export type OtpFieldInputMode =
   | 'decimal'
   | 'email'
@@ -16,6 +28,18 @@ export type OtpFieldInputMode =
   | 'text'
   | 'url';
 
+/**
+ * State snapshot consumed by the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldState } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldState = {} as OtpFieldState;
+ * ```
+ */
 export interface OtpFieldState {
   disabled?: boolean;
   form?: string;
@@ -28,6 +52,18 @@ export interface OtpFieldState {
   value?: string;
 }
 
+/**
+ * Options accepted by the Otp Field primitive otp field root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldRootAttributeOptions } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldRootAttributeOptions = {} as OtpFieldRootAttributeOptions;
+ * ```
+ */
 export interface OtpFieldRootAttributeOptions extends OtpFieldState {
   descriptionId?: string;
   errorId?: string;
@@ -35,10 +71,34 @@ export interface OtpFieldRootAttributeOptions extends OtpFieldState {
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Otp Field primitive otp field hidden input attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldHiddenInputAttributeOptions } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldHiddenInputAttributeOptions = {} as OtpFieldHiddenInputAttributeOptions;
+ * ```
+ */
 export interface OtpFieldHiddenInputAttributeOptions extends OtpFieldState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Otp Field primitive otp field input attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldInputAttributeOptions } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldInputAttributeOptions = {} as OtpFieldInputAttributeOptions;
+ * ```
+ */
 export interface OtpFieldInputAttributeOptions extends OtpFieldState {
   id?: string;
   label?: string;
@@ -46,14 +106,62 @@ export interface OtpFieldInputAttributeOptions extends OtpFieldState {
   slotIndex: number;
 }
 
+/**
+ * Reason token reported by the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldChangeReason } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldChangeReason = {} as OtpFieldChangeReason;
+ * ```
+ */
 export type OtpFieldChangeReason = 'delete' | 'input' | 'paste' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldChangeDetail } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldChangeDetail = {} as OtpFieldChangeDetail;
+ * ```
+ */
 export type OtpFieldChangeDetail = PrimitiveChangeDetail<OtpFieldChangeReason, string>;
 
+/**
+ * Options accepted by the Otp Field primitive otp field change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldChangeOptions } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldChangeOptions = {} as OtpFieldChangeOptions;
+ * ```
+ */
 export interface OtpFieldChangeOptions {
   onValueChange?: (detail: OtpFieldChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Otp Field primitive otp field change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldChangeResult } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldChangeResult = {} as OtpFieldChangeResult;
+ * ```
+ */
 export interface OtpFieldChangeResult {
   changed: boolean;
   complete: boolean;
@@ -62,40 +170,144 @@ export interface OtpFieldChangeResult {
   value: string;
 }
 
+/**
+ * Result returned by the Otp Field primitive otp field move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldMoveResult } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldMoveResult = {} as OtpFieldMoveResult;
+ * ```
+ */
 export interface OtpFieldMoveResult {
   focusIndex: number;
 }
 
+/**
+ * Serializable attribute record returned by Otp Field primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldPrimitiveAttributes } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldPrimitiveAttributes = {} as OtpFieldPrimitiveAttributes;
+ * ```
+ */
 export type OtpFieldPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 type OtpFieldInputTarget = { value: string } | null;
 type OtpFieldRestorableTarget = { value?: string } | null;
 
+/**
+ * Event shape consumed by the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldInputEvent } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldInputEvent = {} as OtpFieldInputEvent;
+ * ```
+ */
 export type OtpFieldInputEvent = Event & {
   readonly currentTarget: OtpFieldInputTarget;
   readonly target?: { value?: string } | null;
 };
+
+/**
+ * Event shape consumed by the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldKeyboardEvent } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldKeyboardEvent = {} as OtpFieldKeyboardEvent;
+ * ```
+ */
 export type OtpFieldKeyboardEvent = Event & {
   readonly currentTarget?: OtpFieldRestorableTarget;
   readonly key: string;
 };
+
+/**
+ * Event shape consumed by the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { OtpFieldPasteEvent } from '@kovojs/headless-ui/otp-field';
+ *
+ * const value: OtpFieldPasteEvent = {} as OtpFieldPasteEvent;
+ * ```
+ */
 export type OtpFieldPasteEvent = Event & {
   readonly clipboardData: { getData(format: string): string } | null;
   readonly currentTarget?: OtpFieldRestorableTarget;
   readonly target?: { value?: string } | null;
 };
 
+/**
+ * Computes otp field complete for the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldComplete } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldComplete>[0];
+ * const result = otpFieldComplete(input);
+ * ```
+ */
 export function otpFieldComplete(state: OtpFieldState): boolean {
   return normalizeOtpFieldValue(state.value, state.length).length === otpFieldLength(state.length);
 }
 
+/**
+ * Computes otp field slot value for the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldSlotValue } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldSlotValue>[0];
+ * const state = {} as Parameters<typeof otpFieldSlotValue>[1];
+ * const result = otpFieldSlotValue(input, state);
+ * ```
+ */
 export function otpFieldSlotValue(state: OtpFieldState, slotIndex: number): string {
   return (
     otpFieldChars(state.value, state.length)[normalizeOtpFieldSlotIndex(state, slotIndex)] ?? ''
   );
 }
 
+/**
+ * Builds the otp field root attributes record for the Otp Field primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldRootAttributes } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldRootAttributes>[0];
+ * const result = otpFieldRootAttributes(input);
+ * ```
+ */
 export function otpFieldRootAttributes(
   options: OtpFieldRootAttributeOptions = {},
 ): OtpFieldPrimitiveAttributes {
@@ -112,6 +324,21 @@ export function otpFieldRootAttributes(
   });
 }
 
+/**
+ * Builds the otp field hidden input attributes record for the Otp Field primitive.
+ *
+ * Emits `aria-hidden`, `data-slot`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldHiddenInputAttributes } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldHiddenInputAttributes>[0];
+ * const result = otpFieldHiddenInputAttributes(input);
+ * ```
+ */
 export function otpFieldHiddenInputAttributes(
   options: OtpFieldHiddenInputAttributeOptions = {},
 ): OtpFieldPrimitiveAttributes {
@@ -139,6 +366,19 @@ export function otpFieldHiddenInputAttributes(
   });
 }
 
+/**
+ * Builds the otp field input attributes record for the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldInputAttributes } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldInputAttributes>[0];
+ * const result = otpFieldInputAttributes(input);
+ * ```
+ */
 export function otpFieldInputAttributes(
   options: OtpFieldInputAttributeOptions,
 ): OtpFieldPrimitiveAttributes {
@@ -166,6 +406,22 @@ export function otpFieldInputAttributes(
   });
 }
 
+/**
+ * Computes the set otp field value transition for the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setOtpFieldValue } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof setOtpFieldValue>[0];
+ * const state = {} as Parameters<typeof setOtpFieldValue>[1];
+ * const options = {} as Parameters<typeof setOtpFieldValue>[2];
+ * const detail = {} as Parameters<typeof setOtpFieldValue>[3];
+ * const result = setOtpFieldValue(input, state, options, detail);
+ * ```
+ */
 export function setOtpFieldValue(
   state: OtpFieldState,
   value: string,
@@ -187,6 +443,23 @@ export function setOtpFieldValue(
   return otpFieldChangeResult(true, nextValue, state, detail);
 }
 
+/**
+ * Computes the set otp field slot value transition for the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setOtpFieldSlotValue } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof setOtpFieldSlotValue>[0];
+ * const state = {} as Parameters<typeof setOtpFieldSlotValue>[1];
+ * const options = {} as Parameters<typeof setOtpFieldSlotValue>[2];
+ * const detail = {} as Parameters<typeof setOtpFieldSlotValue>[3];
+ * const extra = {} as Parameters<typeof setOtpFieldSlotValue>[4];
+ * const result = setOtpFieldSlotValue(input, state, options, detail, extra);
+ * ```
+ */
 export function setOtpFieldSlotValue(
   state: OtpFieldState,
   slotIndex: number,
@@ -201,6 +474,21 @@ export function setOtpFieldSlotValue(
   return { ...result, focusIndex };
 }
 
+/**
+ * Handles the otp field move focus interaction for the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldMoveFocus } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldMoveFocus>[0];
+ * const state = {} as Parameters<typeof otpFieldMoveFocus>[1];
+ * const options = {} as Parameters<typeof otpFieldMoveFocus>[2];
+ * const result = otpFieldMoveFocus(input, state, options);
+ * ```
+ */
 export function otpFieldMoveFocus(
   state: OtpFieldState,
   slotIndex: number,
@@ -217,11 +505,37 @@ export function otpFieldMoveFocus(
   return undefined;
 }
 
+/**
+ * Computes otp field value from string for the Otp Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldValueFromString } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldValueFromString>[0];
+ * const state = {} as Parameters<typeof otpFieldValueFromString>[1];
+ * const result = otpFieldValueFromString(input, state);
+ * ```
+ */
 export function otpFieldValueFromString(value: string, length?: number): string {
   return normalizeOtpFieldValue(value, length);
 }
 
 /**
+ * Handles the otp field input interaction for the Otp Field primitive.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldInput } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldInput>[0];
+ * const state = {} as Parameters<typeof otpFieldInput>[1];
+ * const options = {} as Parameters<typeof otpFieldInput>[2];
+ * const result = otpFieldInput(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -247,6 +561,18 @@ export function otpFieldInput(
 }
 
 /**
+ * Handles the otp field key down interaction for the Otp Field primitive.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldKeyDown } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldKeyDown>[0];
+ * const state = {} as Parameters<typeof otpFieldKeyDown>[1];
+ * const options = {} as Parameters<typeof otpFieldKeyDown>[2];
+ * const result = otpFieldKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -290,6 +616,18 @@ export function otpFieldKeyDown(
 }
 
 /**
+ * Handles the otp field paste interaction for the Otp Field primitive.
+ *
+ * @example
+ * ```ts
+ * import { otpFieldPaste } from '@kovojs/headless-ui/otp-field';
+ *
+ * const input = {} as Parameters<typeof otpFieldPaste>[0];
+ * const state = {} as Parameters<typeof otpFieldPaste>[1];
+ * const options = {} as Parameters<typeof otpFieldPaste>[2];
+ * const result = otpFieldPaste(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

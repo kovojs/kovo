@@ -10,6 +10,18 @@ import {
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandItem } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandItem = {} as CommandItem;
+ * ```
+ */
 export interface CommandItem {
   disabled?: boolean;
   id?: string;
@@ -19,6 +31,18 @@ export interface CommandItem {
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandState } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandState = {} as CommandState;
+ * ```
+ */
 export interface CommandState {
   disabled?: boolean;
   form?: string;
@@ -33,26 +57,86 @@ export interface CommandState {
   value?: string;
 }
 
+/**
+ * Options accepted by the Command primitive command root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandRootAttributeOptions } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandRootAttributeOptions = {} as CommandRootAttributeOptions;
+ * ```
+ */
 export interface CommandRootAttributeOptions extends CommandState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Command primitive command trigger attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandTriggerAttributeOptions } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandTriggerAttributeOptions = {} as CommandTriggerAttributeOptions;
+ * ```
+ */
 export interface CommandTriggerAttributeOptions extends CommandState {
   contentId?: string;
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Command primitive command dialog attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandDialogAttributeOptions } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandDialogAttributeOptions = {} as CommandDialogAttributeOptions;
+ * ```
+ */
 export interface CommandDialogAttributeOptions extends CommandState {
   contentId?: string;
   descriptionId?: string;
   titleId?: string;
 }
 
+/**
+ * Options accepted by the Command primitive command close attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandCloseAttributeOptions } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandCloseAttributeOptions = {} as CommandCloseAttributeOptions;
+ * ```
+ */
 export interface CommandCloseAttributeOptions extends CommandState {
   contentId?: string;
 }
 
+/**
+ * Options accepted by the Command primitive command input attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandInputAttributeOptions } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandInputAttributeOptions = {} as CommandInputAttributeOptions;
+ * ```
+ */
 export interface CommandInputAttributeOptions extends CommandState {
   autocomplete?: string;
   descriptionId?: string;
@@ -61,11 +145,35 @@ export interface CommandInputAttributeOptions extends CommandState {
   listboxId?: string;
 }
 
+/**
+ * Options accepted by the Command primitive command listbox attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandListboxAttributeOptions } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandListboxAttributeOptions = {} as CommandListboxAttributeOptions;
+ * ```
+ */
 export interface CommandListboxAttributeOptions extends CommandState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Command primitive command item attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandItemAttributeOptions } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandItemAttributeOptions = {} as CommandItemAttributeOptions;
+ * ```
+ */
 export interface CommandItemAttributeOptions extends CommandState {
   id?: string;
   itemDisabled?: boolean;
@@ -73,10 +181,34 @@ export interface CommandItemAttributeOptions extends CommandState {
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Command primitive command empty attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandEmptyAttributeOptions } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandEmptyAttributeOptions = {} as CommandEmptyAttributeOptions;
+ * ```
+ */
 export interface CommandEmptyAttributeOptions extends CommandState {
   id?: string;
 }
 
+/**
+ * Reason token reported by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandOpenChangeReason } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandOpenChangeReason = {} as CommandOpenChangeReason;
+ * ```
+ */
 export type CommandOpenChangeReason =
   | 'cancel-event'
   | 'close-click'
@@ -86,76 +218,335 @@ export type CommandOpenChangeReason =
   | 'programmatic'
   | 'trigger-click';
 
+/**
+ * Reason token reported by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandInputChangeReason } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandInputChangeReason = {} as CommandInputChangeReason;
+ * ```
+ */
 export type CommandInputChangeReason = 'input' | 'programmatic';
 
+/**
+ * Reason token reported by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandValueChangeReason } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandValueChangeReason = {} as CommandValueChangeReason;
+ * ```
+ */
 export type CommandValueChangeReason = 'enter-key' | 'item-click' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandOpenChangeDetail } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandOpenChangeDetail = {} as CommandOpenChangeDetail;
+ * ```
+ */
 export type CommandOpenChangeDetail = PrimitiveChangeDetail<CommandOpenChangeReason, boolean>;
 
+/**
+ * Cancelable change detail emitted by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandInputChangeDetail } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandInputChangeDetail = {} as CommandInputChangeDetail;
+ * ```
+ */
 export type CommandInputChangeDetail = PrimitiveChangeDetail<CommandInputChangeReason, string>;
 
+/**
+ * Cancelable change detail emitted by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandValueChangeDetail } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandValueChangeDetail = {} as CommandValueChangeDetail;
+ * ```
+ */
 export type CommandValueChangeDetail = PrimitiveChangeDetail<
   CommandValueChangeReason,
   string | undefined
 >;
 
+/**
+ * Options accepted by the Command primitive command change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandChangeOptions } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandChangeOptions = {} as CommandChangeOptions;
+ * ```
+ */
 export interface CommandChangeOptions {
   onInputChange?: (detail: CommandInputChangeDetail) => void;
   onOpenChange?: (detail: CommandOpenChangeDetail) => void;
   onValueChange?: (detail: CommandValueChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Command primitive command open change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandOpenChangeResult } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandOpenChangeResult = {} as CommandOpenChangeResult;
+ * ```
+ */
 export interface CommandOpenChangeResult {
   changed: boolean;
   detail?: CommandOpenChangeDetail;
   open: boolean;
 }
 
+/**
+ * Result returned by the Command primitive command input change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandInputChangeResult } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandInputChangeResult = {} as CommandInputChangeResult;
+ * ```
+ */
 export interface CommandInputChangeResult {
   changed: boolean;
   detail?: CommandInputChangeDetail;
   inputValue: string;
 }
 
+/**
+ * Result returned by the Command primitive command value change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandValueChangeResult } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandValueChangeResult = {} as CommandValueChangeResult;
+ * ```
+ */
 export interface CommandValueChangeResult {
   changed: boolean;
   detail?: CommandValueChangeDetail;
   value: string | undefined;
 }
 
+/**
+ * Result returned by the Command primitive command select.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandSelectResult } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandSelectResult = {} as CommandSelectResult;
+ * ```
+ */
 export interface CommandSelectResult {
   open: CommandOpenChangeResult;
   selected: boolean;
   value: CommandValueChangeResult;
 }
 
+/**
+ * Result returned by the Command primitive command move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandMoveResult } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandMoveResult = {} as CommandMoveResult;
+ * ```
+ */
 export interface CommandMoveResult {
   highlightedIndex: number;
   highlightedValue: string | undefined;
 }
 
+/**
+ * Result returned by the Command primitive command keyboard.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandKeyboardResult } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandKeyboardResult = {} as CommandKeyboardResult;
+ * ```
+ */
 export type CommandKeyboardResult =
   | CommandMoveResult
   | CommandOpenChangeResult
   | CommandSelectResult;
 
+/**
+ * Serializable attribute record returned by Command primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandPrimitiveAttributes } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandPrimitiveAttributes = {} as CommandPrimitiveAttributes;
+ * ```
+ */
 export type CommandPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandTriggerEvent } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandTriggerEvent = {} as CommandTriggerEvent;
+ * ```
+ */
 export type CommandTriggerEvent = Event;
+
+/**
+ * Event shape consumed by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandCloseEvent } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandCloseEvent = {} as CommandCloseEvent;
+ * ```
+ */
 export type CommandCloseEvent = Event;
+
+/**
+ * Event shape consumed by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandCancelEvent } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandCancelEvent = {} as CommandCancelEvent;
+ * ```
+ */
 export type CommandCancelEvent = Event;
+
+/**
+ * Event shape consumed by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandItemEvent } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandItemEvent = {} as CommandItemEvent;
+ * ```
+ */
 export type CommandItemEvent = Event;
+
+/**
+ * Event shape consumed by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandInputEvent } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandInputEvent = {} as CommandInputEvent;
+ * ```
+ */
 export type CommandInputEvent = Event & {
   readonly currentTarget: (EventTarget & { value?: string }) | null;
   readonly target?: (EventTarget & { value?: string }) | null;
 };
+
+/**
+ * Event shape consumed by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandKeyboardEvent } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandKeyboardEvent = {} as CommandKeyboardEvent;
+ * ```
+ */
 export type CommandKeyboardEvent = Event & { readonly key: string };
+
+/**
+ * Event shape consumed by the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { CommandBeforeToggleEvent } from '@kovojs/headless-ui/command';
+ *
+ * const value: CommandBeforeToggleEvent = {} as CommandBeforeToggleEvent;
+ * ```
+ */
 export type CommandBeforeToggleEvent = Event &
   Readonly<{
     newState?: 'closed' | 'open';
   }>;
 
+/**
+ * Builds the command root attributes record for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandRootAttributes } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandRootAttributes>[0];
+ * const result = commandRootAttributes(input);
+ * ```
+ */
 export function commandRootAttributes(
   options: CommandRootAttributeOptions = {},
 ): CommandPrimitiveAttributes {
@@ -165,6 +556,21 @@ export function commandRootAttributes(
   });
 }
 
+/**
+ * Builds the command trigger attributes record for the Command primitive.
+ *
+ * Emits `aria-controls`, `aria-expanded`, `aria-haspopup`, `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandTriggerAttributes } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandTriggerAttributes>[0];
+ * const result = commandTriggerAttributes(input);
+ * ```
+ */
 export function commandTriggerAttributes(
   options: CommandTriggerAttributeOptions = {},
 ): CommandPrimitiveAttributes {
@@ -188,6 +594,21 @@ export function commandTriggerAttributes(
   });
 }
 
+/**
+ * Builds the command dialog attributes record for the Command primitive.
+ *
+ * Emits `aria-describedby`, `aria-labelledby`, `aria-modal`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandDialogAttributes } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandDialogAttributes>[0];
+ * const result = commandDialogAttributes(input);
+ * ```
+ */
 export function commandDialogAttributes(
   options: CommandDialogAttributeOptions = {},
 ): CommandPrimitiveAttributes {
@@ -201,6 +622,19 @@ export function commandDialogAttributes(
   });
 }
 
+/**
+ * Builds the command close attributes record for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandCloseAttributes } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandCloseAttributes>[0];
+ * const result = commandCloseAttributes(input);
+ * ```
+ */
 export function commandCloseAttributes(
   options: CommandCloseAttributeOptions = {},
 ): CommandPrimitiveAttributes {
@@ -219,6 +653,21 @@ export function commandCloseAttributes(
   });
 }
 
+/**
+ * Builds the command input attributes record for the Command primitive.
+ *
+ * Emits `aria-autocomplete`, `aria-expanded`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandInputAttributes } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandInputAttributes>[0];
+ * const result = commandInputAttributes(input);
+ * ```
+ */
 export function commandInputAttributes(
   options: CommandInputAttributeOptions = {},
 ): CommandPrimitiveAttributes {
@@ -248,6 +697,21 @@ export function commandInputAttributes(
   });
 }
 
+/**
+ * Builds the command listbox attributes record for the Command primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandListboxAttributes } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandListboxAttributes>[0];
+ * const result = commandListboxAttributes(input);
+ * ```
+ */
 export function commandListboxAttributes(
   options: CommandListboxAttributeOptions = {},
 ): CommandPrimitiveAttributes {
@@ -260,6 +724,21 @@ export function commandListboxAttributes(
   });
 }
 
+/**
+ * Builds the command item attributes record for the Command primitive.
+ *
+ * Emits `aria-disabled`, `aria-selected`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandItemAttributes } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandItemAttributes>[0];
+ * const result = commandItemAttributes(input);
+ * ```
+ */
 export function commandItemAttributes(
   options: CommandItemAttributeOptions,
 ): CommandPrimitiveAttributes {
@@ -279,6 +758,21 @@ export function commandItemAttributes(
   });
 }
 
+/**
+ * Builds the command empty attributes record for the Command primitive.
+ *
+ * Emits `data-empty`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandEmptyAttributes } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandEmptyAttributes>[0];
+ * const result = commandEmptyAttributes(input);
+ * ```
+ */
 export function commandEmptyAttributes(
   options: CommandEmptyAttributeOptions = {},
 ): CommandPrimitiveAttributes {
@@ -289,20 +783,72 @@ export function commandEmptyAttributes(
   });
 }
 
+/**
+ * Computes command item highlighted for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandItemHighlighted } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandItemHighlighted>[0];
+ * const result = commandItemHighlighted(input);
+ * ```
+ */
 export function commandItemHighlighted(options: CommandItemAttributeOptions): boolean {
   return options.highlightedValue === options.itemValue;
 }
 
+/**
+ * Computes command item selected for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandItemSelected } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandItemSelected>[0];
+ * const result = commandItemSelected(input);
+ * ```
+ */
 export function commandItemSelected(options: CommandItemAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
 
+/**
+ * Computes command value text for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandValueText } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandValueText>[0];
+ * const result = commandValueText(input);
+ * ```
+ */
 export function commandValueText(state: CommandState): string {
   const selected = state.items?.find((item) => item.value === state.value);
   if (selected) return selected.label ?? selected.textValue ?? selected.value;
   return state.value ?? '';
 }
 
+/**
+ * Computes command filtered items for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandFilteredItems } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandFilteredItems>[0];
+ * const result = commandFilteredItems(input);
+ * ```
+ */
 export function commandFilteredItems(state: CommandState): readonly CommandItem[] {
   const query = normalizeCommandQuery(state.inputValue);
   const items = state.items ?? [];
@@ -311,6 +857,22 @@ export function commandFilteredItems(state: CommandState): readonly CommandItem[
   return Object.freeze(items.filter((item) => commandItemMatches(item, query)));
 }
 
+/**
+ * Computes the set command open transition for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setCommandOpen } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof setCommandOpen>[0];
+ * const state = {} as Parameters<typeof setCommandOpen>[1];
+ * const options = {} as Parameters<typeof setCommandOpen>[2];
+ * const detail = {} as Parameters<typeof setCommandOpen>[3];
+ * const result = setCommandOpen(input, state, options, detail);
+ * ```
+ */
 export function setCommandOpen(
   state: CommandState,
   open: boolean,
@@ -329,6 +891,22 @@ export function setCommandOpen(
   return { changed: true, detail, open };
 }
 
+/**
+ * Computes the set command input value transition for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setCommandInputValue } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof setCommandInputValue>[0];
+ * const state = {} as Parameters<typeof setCommandInputValue>[1];
+ * const options = {} as Parameters<typeof setCommandInputValue>[2];
+ * const detail = {} as Parameters<typeof setCommandInputValue>[3];
+ * const result = setCommandInputValue(input, state, options, detail);
+ * ```
+ */
 export function setCommandInputValue(
   state: CommandState,
   inputValue: string,
@@ -348,6 +926,22 @@ export function setCommandInputValue(
   return { changed: true, detail, inputValue };
 }
 
+/**
+ * Computes the set command value transition for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setCommandValue } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof setCommandValue>[0];
+ * const state = {} as Parameters<typeof setCommandValue>[1];
+ * const options = {} as Parameters<typeof setCommandValue>[2];
+ * const detail = {} as Parameters<typeof setCommandValue>[3];
+ * const result = setCommandValue(input, state, options, detail);
+ * ```
+ */
 export function setCommandValue(
   state: CommandState,
   value: string | undefined,
@@ -366,6 +960,21 @@ export function setCommandValue(
   return { changed: true, detail, value };
 }
 
+/**
+ * Computes the toggle command transition for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { toggleCommand } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof toggleCommand>[0];
+ * const state = {} as Parameters<typeof toggleCommand>[1];
+ * const options = {} as Parameters<typeof toggleCommand>[2];
+ * const result = toggleCommand(input, state, options);
+ * ```
+ */
 export function toggleCommand(
   state: CommandState,
   reason: CommandOpenChangeReason,
@@ -374,6 +983,22 @@ export function toggleCommand(
   return setCommandOpen(state, !(state.open === true), reason, options);
 }
 
+/**
+ * Computes the select command item transition for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectCommandItem } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof selectCommandItem>[0];
+ * const state = {} as Parameters<typeof selectCommandItem>[1];
+ * const options = {} as Parameters<typeof selectCommandItem>[2];
+ * const detail = {} as Parameters<typeof selectCommandItem>[3];
+ * const result = selectCommandItem(input, state, options, detail);
+ * ```
+ */
 export function selectCommandItem(
   state: CommandState,
   value: string | undefined,
@@ -409,6 +1034,21 @@ export function selectCommandItem(
   };
 }
 
+/**
+ * Computes command move for the Command primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { commandMove } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandMove>[0];
+ * const state = {} as Parameters<typeof commandMove>[1];
+ * const options = {} as Parameters<typeof commandMove>[2];
+ * const result = commandMove(input, state, options);
+ * ```
+ */
 export function commandMove(
   state: CommandState,
   key: string,
@@ -434,6 +1074,18 @@ export function commandMove(
 }
 
 /**
+ * Handles the command trigger click interaction for the Command primitive.
+ *
+ * @example
+ * ```ts
+ * import { commandTriggerClick } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandTriggerClick>[0];
+ * const state = {} as Parameters<typeof commandTriggerClick>[1];
+ * const options = {} as Parameters<typeof commandTriggerClick>[2];
+ * const result = commandTriggerClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -455,6 +1107,18 @@ export function commandTriggerClick(
 }
 
 /**
+ * Handles the command close click interaction for the Command primitive.
+ *
+ * @example
+ * ```ts
+ * import { commandCloseClick } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandCloseClick>[0];
+ * const state = {} as Parameters<typeof commandCloseClick>[1];
+ * const options = {} as Parameters<typeof commandCloseClick>[2];
+ * const result = commandCloseClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -476,6 +1140,18 @@ export function commandCloseClick(
 }
 
 /**
+ * Handles the command cancel interaction for the Command primitive.
+ *
+ * @example
+ * ```ts
+ * import { commandCancel } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandCancel>[0];
+ * const state = {} as Parameters<typeof commandCancel>[1];
+ * const options = {} as Parameters<typeof commandCancel>[2];
+ * const result = commandCancel(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -497,6 +1173,18 @@ export function commandCancel(
 }
 
 /**
+ * Handles the command before toggle interaction for the Command primitive.
+ *
+ * @example
+ * ```ts
+ * import { commandBeforeToggle } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandBeforeToggle>[0];
+ * const state = {} as Parameters<typeof commandBeforeToggle>[1];
+ * const options = {} as Parameters<typeof commandBeforeToggle>[2];
+ * const result = commandBeforeToggle(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -519,6 +1207,18 @@ export function commandBeforeToggle(
 }
 
 /**
+ * Handles the command input interaction for the Command primitive.
+ *
+ * @example
+ * ```ts
+ * import { commandInput } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandInput>[0];
+ * const state = {} as Parameters<typeof commandInput>[1];
+ * const options = {} as Parameters<typeof commandInput>[2];
+ * const result = commandInput(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -545,6 +1245,18 @@ export function commandInput(
 }
 
 /**
+ * Handles the command item click interaction for the Command primitive.
+ *
+ * @example
+ * ```ts
+ * import { commandItemClick } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandItemClick>[0];
+ * const state = {} as Parameters<typeof commandItemClick>[1];
+ * const options = {} as Parameters<typeof commandItemClick>[2];
+ * const result = commandItemClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -566,6 +1278,18 @@ export function commandItemClick(
 }
 
 /**
+ * Handles the command key down interaction for the Command primitive.
+ *
+ * @example
+ * ```ts
+ * import { commandKeyDown } from '@kovojs/headless-ui/command';
+ *
+ * const input = {} as Parameters<typeof commandKeyDown>[0];
+ * const state = {} as Parameters<typeof commandKeyDown>[1];
+ * const options = {} as Parameters<typeof commandKeyDown>[2];
+ * const result = commandKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

@@ -41,7 +41,7 @@ const PUBLIC_KOVO_DEPS = new Set([
 /** Parse every `import … from '<mod>'` statement, returning { module, symbols[] }. */
 function parseImports(source) {
   const results = [];
-  const re = /import\s+(?:type\s+)?([^;]*?)\s+from\s+'([^']+)';/gs;
+  const re = /^\s*import\s+(?:type\s+)?([^;]*?)\s+from\s+'([^']+)';/gm;
   let match;
   while ((match = re.exec(source)) !== null) {
     const clause = match[1].trim();

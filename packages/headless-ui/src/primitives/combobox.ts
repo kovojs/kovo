@@ -13,6 +13,18 @@ import {
   type TypeaheadState,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxItem } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxItem = {} as ComboboxItem;
+ * ```
+ */
 export interface ComboboxItem {
   disabled?: boolean;
   id?: string;
@@ -21,6 +33,18 @@ export interface ComboboxItem {
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxState } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxState = {} as ComboboxState;
+ * ```
+ */
 export interface ComboboxState {
   disabled?: boolean;
   form?: string;
@@ -35,10 +59,34 @@ export interface ComboboxState {
   value?: string;
 }
 
+/**
+ * Options accepted by the Combobox primitive combobox root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxRootAttributeOptions } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxRootAttributeOptions = {} as ComboboxRootAttributeOptions;
+ * ```
+ */
 export interface ComboboxRootAttributeOptions extends ComboboxState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Combobox primitive combobox input attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxInputAttributeOptions } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxInputAttributeOptions = {} as ComboboxInputAttributeOptions;
+ * ```
+ */
 export interface ComboboxInputAttributeOptions extends ComboboxState {
   descriptionId?: string;
   errorId?: string;
@@ -46,11 +94,35 @@ export interface ComboboxInputAttributeOptions extends ComboboxState {
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Combobox primitive combobox listbox attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxListboxAttributeOptions } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxListboxAttributeOptions = {} as ComboboxListboxAttributeOptions;
+ * ```
+ */
 export interface ComboboxListboxAttributeOptions extends ComboboxState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Combobox primitive combobox option attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxOptionAttributeOptions } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxOptionAttributeOptions = {} as ComboboxOptionAttributeOptions;
+ * ```
+ */
 export interface ComboboxOptionAttributeOptions extends ComboboxState {
   id?: string;
   itemDisabled?: boolean;
@@ -58,12 +130,48 @@ export interface ComboboxOptionAttributeOptions extends ComboboxState {
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Combobox primitive combobox value attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxValueAttributeOptions } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxValueAttributeOptions = {} as ComboboxValueAttributeOptions;
+ * ```
+ */
 export interface ComboboxValueAttributeOptions extends ComboboxState {
   id?: string;
 }
 
+/**
+ * Reason token reported by the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxValueChangeReason } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxValueChangeReason = {} as ComboboxValueChangeReason;
+ * ```
+ */
 export type ComboboxValueChangeReason = 'input' | 'option-select' | 'programmatic' | 'typeahead';
 
+/**
+ * Reason token reported by the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxOpenChangeReason } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxOpenChangeReason = {} as ComboboxOpenChangeReason;
+ * ```
+ */
 export type ComboboxOpenChangeReason =
   | 'arrow-key'
   | 'escape-key'
@@ -72,40 +180,136 @@ export type ComboboxOpenChangeReason =
   | 'programmatic'
   | 'typeahead';
 
+/**
+ * Cancelable change detail emitted by the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxValueChangeDetail } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxValueChangeDetail = {} as ComboboxValueChangeDetail;
+ * ```
+ */
 export type ComboboxValueChangeDetail = PrimitiveChangeDetail<
   ComboboxValueChangeReason,
   string | undefined
 >;
 
+/**
+ * Cancelable change detail emitted by the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxOpenChangeDetail } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxOpenChangeDetail = {} as ComboboxOpenChangeDetail;
+ * ```
+ */
 export type ComboboxOpenChangeDetail = PrimitiveChangeDetail<ComboboxOpenChangeReason, boolean>;
 
+/**
+ * Options accepted by the Combobox primitive combobox change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxChangeOptions } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxChangeOptions = {} as ComboboxChangeOptions;
+ * ```
+ */
 export interface ComboboxChangeOptions {
   onOpenChange?: (detail: ComboboxOpenChangeDetail) => void;
   onValueChange?: (detail: ComboboxValueChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Combobox primitive combobox value change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxValueChangeResult } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxValueChangeResult = {} as ComboboxValueChangeResult;
+ * ```
+ */
 export interface ComboboxValueChangeResult {
   changed: boolean;
   detail?: ComboboxValueChangeDetail;
   value: string | undefined;
 }
 
+/**
+ * Result returned by the Combobox primitive combobox open change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxOpenChangeResult } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxOpenChangeResult = {} as ComboboxOpenChangeResult;
+ * ```
+ */
 export interface ComboboxOpenChangeResult {
   changed: boolean;
   detail?: ComboboxOpenChangeDetail;
   open: boolean;
 }
 
+/**
+ * Result returned by the Combobox primitive combobox move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxMoveResult } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxMoveResult = {} as ComboboxMoveResult;
+ * ```
+ */
 export interface ComboboxMoveResult {
   highlightedIndex: number;
   highlightedValue: string | undefined;
 }
 
+/**
+ * Result returned by the Combobox primitive combobox option select.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxOptionSelectResult } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxOptionSelectResult = {} as ComboboxOptionSelectResult;
+ * ```
+ */
 export interface ComboboxOptionSelectResult {
   open: ComboboxOpenChangeResult;
   value: ComboboxValueChangeResult;
 }
 
+/**
+ * Options accepted by the Combobox primitive combobox typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxTypeaheadOptions } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxTypeaheadOptions = {} as ComboboxTypeaheadOptions;
+ * ```
+ */
 export interface ComboboxTypeaheadOptions {
   currentValue?: string;
   loop?: boolean;
@@ -114,34 +318,148 @@ export interface ComboboxTypeaheadOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Result returned by the Combobox primitive combobox typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxTypeaheadResult } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxTypeaheadResult = {} as ComboboxTypeaheadResult;
+ * ```
+ */
 export interface ComboboxTypeaheadResult {
   matchIndex: number;
   state: TypeaheadState;
   value: string | undefined;
 }
 
+/**
+ * Serializable attribute record returned by Combobox primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxPrimitiveAttributes } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxPrimitiveAttributes = {} as ComboboxPrimitiveAttributes;
+ * ```
+ */
 export type ComboboxPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxInputEvent } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxInputEvent = {} as ComboboxInputEvent;
+ * ```
+ */
 export type ComboboxInputEvent = Event & {
   readonly currentTarget: (EventTarget & { value?: string }) | null;
   readonly target?: (EventTarget & { value?: string }) | null;
 };
+
+/**
+ * Event shape consumed by the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxOptionEvent } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxOptionEvent = {} as ComboboxOptionEvent;
+ * ```
+ */
 export type ComboboxOptionEvent = Event;
+
+/**
+ * Event shape consumed by the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxKeyboardEvent } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxKeyboardEvent = {} as ComboboxKeyboardEvent;
+ * ```
+ */
 export type ComboboxKeyboardEvent = Event & { readonly key: string };
+
+/**
+ * Result returned by the Combobox primitive combobox keyboard.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ComboboxKeyboardResult } from '@kovojs/headless-ui/combobox';
+ *
+ * const value: ComboboxKeyboardResult = {} as ComboboxKeyboardResult;
+ * ```
+ */
 export type ComboboxKeyboardResult =
   | ComboboxMoveResult
   | ComboboxOpenChangeResult
   | ComboboxOptionSelectResult;
 
+/**
+ * Computes combobox option selected for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxOptionSelected } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxOptionSelected>[0];
+ * const result = comboboxOptionSelected(input);
+ * ```
+ */
 export function comboboxOptionSelected(options: ComboboxOptionAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
 
+/**
+ * Computes combobox option highlighted for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxOptionHighlighted } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxOptionHighlighted>[0];
+ * const result = comboboxOptionHighlighted(input);
+ * ```
+ */
 export function comboboxOptionHighlighted(options: ComboboxOptionAttributeOptions): boolean {
   return options.highlightedValue === options.itemValue;
 }
 
+/**
+ * Computes combobox value text for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxValueText } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxValueText>[0];
+ * const result = comboboxValueText(input);
+ * ```
+ */
 export function comboboxValueText(state: ComboboxState): string {
   const selected = state.items?.find((item) => item.value === state.value);
   if (selected) return selected.label ?? selected.textValue ?? selected.value;
@@ -149,6 +467,19 @@ export function comboboxValueText(state: ComboboxState): string {
   return state.value;
 }
 
+/**
+ * Computes combobox filtered items for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxFilteredItems } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxFilteredItems>[0];
+ * const result = comboboxFilteredItems(input);
+ * ```
+ */
 export function comboboxFilteredItems(state: ComboboxState): readonly ComboboxItem[] {
   const query = normalizeComboboxQuery(state.value);
   const items = state.items ?? [];
@@ -157,6 +488,19 @@ export function comboboxFilteredItems(state: ComboboxState): readonly ComboboxIt
   return Object.freeze(items.filter((item) => comboboxItemMatches(item, query)));
 }
 
+/**
+ * Builds the combobox root attributes record for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxRootAttributes } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxRootAttributes>[0];
+ * const result = comboboxRootAttributes(input);
+ * ```
+ */
 export function comboboxRootAttributes(
   options: ComboboxRootAttributeOptions = {},
 ): ComboboxPrimitiveAttributes {
@@ -166,6 +510,21 @@ export function comboboxRootAttributes(
   });
 }
 
+/**
+ * Builds the combobox input attributes record for the Combobox primitive.
+ *
+ * Emits `aria-autocomplete`, `aria-expanded`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxInputAttributes } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxInputAttributes>[0];
+ * const result = comboboxInputAttributes(input);
+ * ```
+ */
 export function comboboxInputAttributes(
   options: ComboboxInputAttributeOptions = {},
 ): ComboboxPrimitiveAttributes {
@@ -195,6 +554,21 @@ export function comboboxInputAttributes(
   });
 }
 
+/**
+ * Builds the combobox listbox attributes record for the Combobox primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxListboxAttributes } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxListboxAttributes>[0];
+ * const result = comboboxListboxAttributes(input);
+ * ```
+ */
 export function comboboxListboxAttributes(
   options: ComboboxListboxAttributeOptions = {},
 ): ComboboxPrimitiveAttributes {
@@ -207,6 +581,19 @@ export function comboboxListboxAttributes(
   });
 }
 
+/**
+ * Builds the combobox option attributes record for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxOptionAttributes } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxOptionAttributes>[0];
+ * const result = comboboxOptionAttributes(input);
+ * ```
+ */
 export function comboboxOptionAttributes(
   options: ComboboxOptionAttributeOptions,
 ): ComboboxPrimitiveAttributes {
@@ -230,6 +617,19 @@ export function comboboxOptionAttributes(
   });
 }
 
+/**
+ * Builds the combobox value attributes record for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxValueAttributes } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxValueAttributes>[0];
+ * const result = comboboxValueAttributes(input);
+ * ```
+ */
 export function comboboxValueAttributes(
   options: ComboboxValueAttributeOptions = {},
 ): ComboboxPrimitiveAttributes {
@@ -239,6 +639,22 @@ export function comboboxValueAttributes(
   });
 }
 
+/**
+ * Computes the set combobox value transition for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setComboboxValue } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof setComboboxValue>[0];
+ * const state = {} as Parameters<typeof setComboboxValue>[1];
+ * const options = {} as Parameters<typeof setComboboxValue>[2];
+ * const detail = {} as Parameters<typeof setComboboxValue>[3];
+ * const result = setComboboxValue(input, state, options, detail);
+ * ```
+ */
 export function setComboboxValue(
   state: ComboboxState,
   value: string | undefined,
@@ -257,6 +673,22 @@ export function setComboboxValue(
   return { changed: true, detail, value };
 }
 
+/**
+ * Computes the set combobox open transition for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setComboboxOpen } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof setComboboxOpen>[0];
+ * const state = {} as Parameters<typeof setComboboxOpen>[1];
+ * const options = {} as Parameters<typeof setComboboxOpen>[2];
+ * const detail = {} as Parameters<typeof setComboboxOpen>[3];
+ * const result = setComboboxOpen(input, state, options, detail);
+ * ```
+ */
 export function setComboboxOpen(
   state: ComboboxState,
   open: boolean,
@@ -275,6 +707,21 @@ export function setComboboxOpen(
   return { changed: true, detail, open };
 }
 
+/**
+ * Computes the select combobox option transition for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectComboboxOption } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof selectComboboxOption>[0];
+ * const state = {} as Parameters<typeof selectComboboxOption>[1];
+ * const options = {} as Parameters<typeof selectComboboxOption>[2];
+ * const result = selectComboboxOption(input, state, options);
+ * ```
+ */
 export function selectComboboxOption(
   state: ComboboxState,
   value: string | undefined,
@@ -303,6 +750,21 @@ export function selectComboboxOption(
   };
 }
 
+/**
+ * Computes combobox typeahead for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxTypeahead } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxTypeahead>[0];
+ * const state = {} as Parameters<typeof comboboxTypeahead>[1];
+ * const options = {} as Parameters<typeof comboboxTypeahead>[2];
+ * const result = comboboxTypeahead(input, state, options);
+ * ```
+ */
 export function comboboxTypeahead(
   state: ComboboxState,
   key: string,
@@ -340,6 +802,21 @@ export function comboboxTypeahead(
   };
 }
 
+/**
+ * Computes combobox move for the Combobox primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { comboboxMove } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxMove>[0];
+ * const state = {} as Parameters<typeof comboboxMove>[1];
+ * const options = {} as Parameters<typeof comboboxMove>[2];
+ * const result = comboboxMove(input, state, options);
+ * ```
+ */
 export function comboboxMove(
   state: ComboboxState,
   key: string,
@@ -370,6 +847,18 @@ export function comboboxMove(
 }
 
 /**
+ * Handles the combobox input interaction for the Combobox primitive.
+ *
+ * @example
+ * ```ts
+ * import { comboboxInput } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxInput>[0];
+ * const state = {} as Parameters<typeof comboboxInput>[1];
+ * const options = {} as Parameters<typeof comboboxInput>[2];
+ * const result = comboboxInput(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -396,6 +885,18 @@ export function comboboxInput(
 }
 
 /**
+ * Handles the combobox option click interaction for the Combobox primitive.
+ *
+ * @example
+ * ```ts
+ * import { comboboxOptionClick } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxOptionClick>[0];
+ * const state = {} as Parameters<typeof comboboxOptionClick>[1];
+ * const options = {} as Parameters<typeof comboboxOptionClick>[2];
+ * const result = comboboxOptionClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -417,6 +918,18 @@ export function comboboxOptionClick(
 }
 
 /**
+ * Handles the combobox key down interaction for the Combobox primitive.
+ *
+ * @example
+ * ```ts
+ * import { comboboxKeyDown } from '@kovojs/headless-ui/combobox';
+ *
+ * const input = {} as Parameters<typeof comboboxKeyDown>[0];
+ * const state = {} as Parameters<typeof comboboxKeyDown>[1];
+ * const options = {} as Parameters<typeof comboboxKeyDown>[2];
+ * const result = comboboxKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

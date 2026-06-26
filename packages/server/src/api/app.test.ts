@@ -378,12 +378,7 @@ describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on subpaths while root preserves SPEC §9.5 built-harness entries', () => {
     const publicValues = publicApi as Record<string, unknown>;
     const packageRootValues = packageRootApi as Record<string, unknown>;
-    const renderingSubpathOnlyValues = new Set([
-      'ComponentXmlError',
-      'parseComponentXml',
-      'renderRegistry',
-      'renderTree',
-    ]);
+    const renderingSubpathOnlyValues = new Set<string>();
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
       // SPEC §6.6: agent tool-capability runtime substrate. Public at the root

@@ -64,11 +64,31 @@ export async function collectCodeSnippets(dir = contentDir) {
   return snippets.sort((a, b) => a.id.localeCompare(b.id));
 }
 
+export async function checkAuthoredDocStyle({ dir = contentDir } = {}) {
+  const issues = [];
+  for (const file of await markdownFiles(dir)) {
+    const markdown = readFileSync(file, 'utf8');
+    const sourcePath = path.relative(dir, file);
+    issues.push(...checkDocStyle(markdown, sourcePath));
+  }
+
+  if (issues.length > 0) {
+    for (const issue of issues) {
+      process.stderr.write(
+        `doc-style: ${issue.sourcePath}:${issue.line} ${issue.code} ${issue.message}\n`,
+      );
+    }
+    throw new Error(`doc-style: ${issues.length} issue(s) found`);
+  }
+}
+
 export async function checkAuthoredCodeSnippets({
   dir = contentDir,
   outDir = scratchDir,
   keepOnSuccess = false,
 } = {}) {
+  await checkAuthoredDocStyle({ dir });
+
   const snippets = await collectCodeSnippets(dir);
   if (snippets.length === 0) {
     throw new Error(`code-snippets: no ts/tsx fences found in ${path.relative(repoRoot, dir)}`);
@@ -128,6 +148,149 @@ export async function checkAuthoredCodeSnippets({
   if (!keepOnSuccess) rmSync(outDir, { force: true, recursive: true });
   process.stdout.write(`code-snippets/v1 snippets=${snippets.length} OK\n`);
   return { ok: true, outDir, snippets };
+}
+
+const FIRST_CODE_MAX_LINES = 12;
+const CITATION_ALLOWLIST = new Set([
+  'guides/cli.md',
+  'guides/kovo-explain.md',
+  'guides/static-export.md',
+  'guides/testing.md',
+]);
+
+const OPENER_FRAMEWORK_NOUNS = [
+  'touch set',
+  'domain',
+  'invalidation graph',
+  'stylex',
+  'interaction ladder',
+  'broadcastchannel',
+  'request shell',
+];
+
+const OPENER_APP_NOUNS = [
+  'account',
+  'admin',
+  'app',
+  'badge',
+  'button',
+  'cart',
+  'checkout',
+  'customer',
+  'dashboard',
+  'download',
+  'form',
+  'invoice',
+  'link',
+  'login',
+  'order',
+  'page',
+  'product',
+  'route',
+  'session',
+  'user',
+];
+
+function checkDocStyle(markdown, sourcePath) {
+  const lines = markdown.split('\n');
+  const issues = [];
+  let inFence = false;
+  let fenceLang = '';
+  let inDetails = false;
+  let firstCode = null;
+  let firstProse = null;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const fence = /^```([A-Za-z0-9_-]*)\s*$/.exec(line);
+    if (fence) {
+      if (!inFence) {
+        fenceLang = fence[1].toLowerCase();
+        const bodyStart = index + 1;
+        let bodyEnd = bodyStart;
+        while (bodyEnd < lines.length && !/^```\s*$/.test(lines[bodyEnd])) bodyEnd += 1;
+        if (!firstCode && TS_LANGS.has(fenceLang)) {
+          firstCode = {
+            body: lines.slice(bodyStart, bodyEnd),
+            line: index + 1,
+            lang: fenceLang,
+          };
+        }
+      }
+      inFence = !inFence;
+      fenceLang = inFence ? fenceLang : '';
+      continue;
+    }
+
+    if (inFence) continue;
+    if (/<details\b/.test(line)) inDetails = true;
+
+    if (
+      !inDetails &&
+      !CITATION_ALLOWLIST.has(sourcePath) &&
+      /(SPEC §|SPEC section|KV\d{3})/.test(line)
+    ) {
+      issues.push({
+        code: 'citation-quarantine',
+        line: index + 1,
+        message: 'move SPEC/KV citations into the collapsed Spec & diagnostics section',
+        sourcePath,
+      });
+    }
+
+    if (!firstProse) {
+      const trimmed = line.trim();
+      const frontmatterFence = index === 0 && trimmed === '---';
+      if (
+        trimmed &&
+        !frontmatterFence &&
+        !trimmed.startsWith('title:') &&
+        !trimmed.startsWith('description:') &&
+        !trimmed.startsWith('order:') &&
+        trimmed !== '---' &&
+        !trimmed.startsWith('#') &&
+        !trimmed.startsWith('<')
+      ) {
+        firstProse = { line: index + 1, text: trimmed };
+      }
+    }
+
+    if (/<\/details>/.test(line)) inDetails = false;
+  }
+
+  if (firstCode && !CITATION_ALLOWLIST.has(sourcePath)) {
+    const body = firstCode.body.filter((line) => line.trim() !== '');
+    if (body.length > FIRST_CODE_MAX_LINES) {
+      issues.push({
+        code: 'first-code-block-size',
+        line: firstCode.line,
+        message: `first TypeScript block has ${body.length} nonblank lines; keep it at ${FIRST_CODE_MAX_LINES} or fewer`,
+        sourcePath,
+      });
+    }
+
+    // Unresolved identifiers are still enforced by the TypeScript snippet project below. Keep
+    // this style pass focused on structural checks; name-only heuristics produce too many false
+    // positives on JSX text, env vars, and deliberately declared app-local stubs.
+  }
+
+  if (firstProse) {
+    const sentence = firstProse.text.split(/(?<=[.!?])\s+/)[0].toLowerCase();
+    const hasFrameworkNoun = OPENER_FRAMEWORK_NOUNS.some((noun) => sentence.includes(noun));
+    const hasAppNoun = OPENER_APP_NOUNS.some((noun) =>
+      new RegExp(`\\b${noun}s?\\b`).test(sentence),
+    );
+    if (hasFrameworkNoun && !hasAppNoun) {
+      issues.push({
+        code: 'opener-app-noun',
+        line: firstProse.line,
+        message: 'opening sentence leads with framework vocabulary before an app outcome',
+        sourcePath,
+      });
+    }
+  }
+
+  return issues;
 }
 
 function inferSnippetLanguage(lang, code) {
@@ -540,11 +703,18 @@ export default defaultExport;
 `;
 
 const KOVO_DTS = String.raw`
+export type ComponentElementNode = any;
+export type ComponentNode = any;
+export type ComponentRegistry = any;
+export type ComponentRegistryEntry = any;
+export type ComponentRegistryInput = any;
+export type ComponentTextNode = any;
 export type IconProps = any;
 export type SelectTriggerAttributeOptions = any;
 export type StyleInput = any;
 export type CsrfValidationOptions<Request = any> = any;
 
+export class ComponentXmlError extends Error {}
 export const BodyEnd: any;
 export const Button: any;
 export const Defer: any;
@@ -555,6 +725,7 @@ export const InlineScript: any;
 export const Link: any;
 export const Search: any;
 export const Select: any;
+export const adminAssign: any;
 export const component: any;
 export const create: any;
 export const createApp: any;
@@ -580,16 +751,22 @@ export const layout: any;
 export const metaFromQuery: any;
 export const mutation: <Value = any>(...args: any[]) => any;
 export const notFound: any;
+export const parseComponentXml: any;
 export const query: any;
 export const redirect: any;
+export const renderRegistry: any;
+export const renderTree: any;
 export const route: any;
 export const s: any;
+export const safeRichHtml: any;
+export const serverValue: any;
 export const selectTriggerAttributes: any;
 export const session: any;
 export const StaleVersionError: any;
 export const stylesheet: any;
 export const toNodeHandler: any;
 export const tokens: any;
+export const trustedReveal: any;
 export const webhook: any;
 export const write: any;
 `;
@@ -599,10 +776,17 @@ type AnyFn = (...args: any[]) => any;
 
 const anyFn = ((..._args: any[]) => ({})) as AnyFn;
 
+export type ComponentElementNode = any;
+export type ComponentNode = any;
+export type ComponentRegistry = any;
+export type ComponentRegistryEntry = any;
+export type ComponentRegistryInput = any;
+export type ComponentTextNode = any;
 export type IconProps = any;
 export type SelectTriggerAttributeOptions = any;
 export type StyleInput = any;
 
+export class ComponentXmlError extends Error {}
 export const BodyEnd = anyFn;
 export const Button = anyFn;
 export const Defer = anyFn;
@@ -613,6 +797,7 @@ export const InlineScript = anyFn;
 export const Link = anyFn;
 export const Search = anyFn;
 export const Select = anyFn;
+export const adminAssign = anyFn;
 export const create = anyFn;
 export const component = anyFn;
 export const createApp = anyFn;
@@ -631,13 +816,19 @@ export const layout = anyFn;
 export const metaFromQuery = anyFn;
 export const mutation = anyFn;
 export const notFound = anyFn;
+export const parseComponentXml = anyFn;
 export const query = anyFn;
 export const redirect = anyFn;
+export const renderRegistry = anyFn;
+export const renderTree = anyFn;
 export const route = anyFn;
 export const selectTriggerAttributes = anyFn;
+export const safeRichHtml = anyFn;
+export const serverValue = anyFn;
 export const session = anyFn;
 export const stylesheet = anyFn;
 export const toNodeHandler = anyFn;
+export const trustedReveal = anyFn;
 export const webhook = anyFn;
 export const write = anyFn;
 export const tokens = new Proxy({}, { get: () => 'var(--kovo-snippet-token)' }) as any;

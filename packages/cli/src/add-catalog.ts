@@ -110,7 +110,7 @@ function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [strin
 function readVendoredSource(name: string, sourcePath: string): string {
   verifyVendoredSourceHash(name, sourcePath);
   const source = vendoredUiComponentSource(readFileSync(sourcePath, 'utf8'));
-  if (source.includes('@kovojs/ui')) {
+  if (importsUiPackage(source)) {
     throw new Error(`vendored @kovojs/ui source must not import @kovojs/ui: ${sourcePath}`);
   }
   if (importsNonPublicKovoSubpath(source)) {
@@ -373,7 +373,22 @@ function bindingProps(props: object, attrs?: readonly string[]): Record<string, 
 function importsNonPublicKovoSubpath(source: string): boolean {
   const nonPublicKovoSubpath =
     /['"](?:@kovojs\/[^'"]+\/(?:internal|generated)(?:\/[^'"]*)?|kovo\/internal(?:\/[^'"]*)?)['"]/;
-  return new RegExp(`(?:from\\s+|import\\s*\\()${nonPublicKovoSubpath.source}`).test(source);
+  return (
+    new RegExp(
+      `^\\s*import\\s+(?:type\\s+)?[^;]*?\\s+from\\s+${nonPublicKovoSubpath.source}`,
+      'm',
+    ).test(source) ||
+    new RegExp(`^\\s*import\\s*\\(\\s*${nonPublicKovoSubpath.source}`, 'm').test(source)
+  );
+}
+
+function importsUiPackage(source: string): boolean {
+  const uiPackage = /['"]@kovojs\/ui(?:\/[^'"]*)?['"]/;
+  return (
+    new RegExp(`^\\s*import\\s+(?:type\\s+)?[^;]*?\\s+from\\s+${uiPackage.source}`, 'm').test(
+      source,
+    ) || new RegExp(`^\\s*import\\s*\\(\\s*${uiPackage.source}`, 'm').test(source)
+  );
 }
 
 function isUiPackageManifest(value: unknown): value is UiPackageManifest {

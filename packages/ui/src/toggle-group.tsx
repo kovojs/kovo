@@ -15,12 +15,26 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the toggle group components.
+ *
+ * @example
+ * import type { ToggleGroupStyleOverrides } from "@kovojs/ui/toggle-group";
+ * const styles: ToggleGroupStyleOverrides = {};
+ */
 export interface ToggleGroupStyleOverrides {
   button?: style.StyleInput;
   item?: style.StyleInput;
   root?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the toggle group component family.
+ *
+ * @example
+ * import type { ToggleGroupStateProps } from "@kovojs/ui/toggle-group";
+ * const state: ToggleGroupStateProps = {};
+ */
 export interface ToggleGroupStateProps {
   activeValue?: string;
   collapsible?: boolean;
@@ -33,6 +47,13 @@ export interface ToggleGroupStateProps {
   value?: ToggleGroupValue;
 }
 
+/**
+ * Props for the toggle group component.
+ *
+ * @example
+ * import type { ToggleGroupProps } from "@kovojs/ui/toggle-group";
+ * const props: ToggleGroupProps = { children: 'Content' };
+ */
 export interface ToggleGroupProps extends ToggleGroupStateProps {
   children?: string;
   descriptionId?: string;
@@ -41,6 +62,13 @@ export interface ToggleGroupProps extends ToggleGroupStateProps {
   styles?: ToggleGroupStyleOverrides;
 }
 
+/**
+ * Props for the toggle group item component.
+ *
+ * @example
+ * import type { ToggleGroupItemProps } from "@kovojs/ui/toggle-group";
+ * const props: ToggleGroupItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface ToggleGroupItemProps extends ToggleGroupStateProps {
   children?: string;
   id?: string;
@@ -49,6 +77,13 @@ export interface ToggleGroupItemProps extends ToggleGroupStateProps {
   styles?: ToggleGroupStyleOverrides;
 }
 
+/**
+ * Props for the toggle group button component.
+ *
+ * @example
+ * import type { ToggleGroupButtonProps } from "@kovojs/ui/toggle-group";
+ * const props: ToggleGroupButtonProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface ToggleGroupButtonProps extends ToggleGroupStateProps {
   children?: string;
   id?: string;
@@ -57,6 +92,13 @@ export interface ToggleGroupButtonProps extends ToggleGroupStateProps {
   styles?: ToggleGroupStyleOverrides;
 }
 
+/**
+ * Style definitions used by the toggle group components.
+ *
+ * @example
+ * import { toggleGroupStyles } from "@kovojs/ui/toggle-group";
+ * const styles = toggleGroupStyles;
+ */
 export const toggleGroupStyles = style.create({
   button: {
     // Button reset: kill the native UA <button> bevel so items read as a flat
@@ -124,6 +166,13 @@ export const toggleGroupStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled toggle group primitive.
+ *
+ * @example
+ * import { ToggleGroup } from "@kovojs/ui/toggle-group";
+ * const component = ToggleGroup;
+ */
 export const ToggleGroup = component({
   render(props: ToggleGroupProps) {
     const attrs = toggleGroupRootAttributes({
@@ -161,6 +210,13 @@ export const ToggleGroup = component({
   },
 });
 
+/**
+ * Renders the styled toggle group item primitive.
+ *
+ * @example
+ * import { ToggleGroupItem } from "@kovojs/ui/toggle-group";
+ * const component = ToggleGroupItem;
+ */
 export const ToggleGroupItem = component({
   render(props: ToggleGroupItemProps) {
     const attrs = toggleGroupItemAttributes({
@@ -194,6 +250,13 @@ export const ToggleGroupItem = component({
   },
 });
 
+/**
+ * Renders the styled toggle group button primitive.
+ *
+ * @example
+ * import { ToggleGroupButton } from "@kovojs/ui/toggle-group";
+ * const component = ToggleGroupButton;
+ */
 export const ToggleGroupButton = component({
   render(props: ToggleGroupButtonProps) {
     const attrs = toggleGroupButtonAttributes({

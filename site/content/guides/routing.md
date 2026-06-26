@@ -55,9 +55,9 @@ const app = createApp({
 ```
 
 Route matching is static-first at each path segment; two routes that can match the same canonical
-request path is a **compile error, KV228**, not a runtime precedence footnote. Trailing slashes
-normalize to one canonical path with a 308 before matching, and a page path answers `GET`/`HEAD`
-(other methods are 405, because mutations own POST under `/_m/`).
+request path is a compile error, not a runtime precedence footnote. Trailing slashes normalize to
+one canonical path with a 308 before matching, and a page path answers `GET`/`HEAD` (other methods
+are 405, because mutations own POST under `/_m/`).
 
 ## Add route metadata
 
@@ -180,8 +180,8 @@ The reference apps author the lowered form directly when they don't need param s
 </a>
 ```
 
-Residual literal `href`s in emitted IR are validated against the route table at compile time
-(**KV220**). Full-origin URLs and an explicit `external` marker opt out.
+Residual literal `href`s in emitted IR are validated against the route table at compile time.
+Full-origin URLs and an explicit `external` marker opt out.
 
 ## `redirect()` — including POST-redirect-GET
 
@@ -219,7 +219,7 @@ export const dealDetailRoute = route('/deals/:id', {
 
 `redirect()` and `notFound()` are the two sanctioned non-200 page outcomes in v1. (Routes may also
 return `respond.file()` / `respond.stream()` for non-HTML 200/304 bodies; those are still ordinary
-routes with params, guards, KV220 validation, and the audits applied. See
+routes with params, guards, route validation, and the audits applied. See
 [endpoints and webhooks](/guides/endpoints-webhooks/) for raw machine ingress.)
 
 ## Route guards
@@ -297,8 +297,8 @@ enhancements, never as an app mode:
   failure) it falls back to a normal full GET. Safari and Firefox get ordinary navigations either way;
   there is no blank-screen failure mode.
 - **View Transitions.** Cross-document View Transitions are opt-in per element pair via
-  `view-transition-name`; the compiler stamps matching names across route templates (a duplicate
-  static name is KV239).
+  `view-transition-name`; the compiler stamps matching names across route templates and rejects
+  duplicate static names.
 - **Speculation Rules.** Opt-in per route via `prefetch: 'conservative' | 'moderate' | false`,
   declared on the `route()` object and **default off**. Auto-prerender has real hazards (analytics
   firing in prerendered pages, non-idempotent per-user renders), so apps opt in route-by-route where

@@ -4,11 +4,25 @@ import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Props for the card component.
+ *
+ * @example
+ * import type { CardProps } from "@kovojs/ui/card";
+ * const props: CardProps = { children: 'Content' };
+ */
 export interface CardProps {
   children?: string;
   style?: style.StyleInput;
 }
 
+/**
+ * Style definitions used by the card components.
+ *
+ * @example
+ * import { cardStyles } from "@kovojs/ui/card";
+ * const styles = cardStyles;
+ */
 export const cardStyles = style.create({
   root: {
     backgroundColor: uiTheme.color.background,
@@ -22,6 +36,13 @@ export const cardStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled card primitive.
+ *
+ * @example
+ * import { Card } from "@kovojs/ui/card";
+ * const component = Card;
+ */
 export const Card = component({
   render(props: CardProps) {
     const attrs = style.attrs(cardStyles.root, props.style);

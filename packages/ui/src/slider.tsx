@@ -14,6 +14,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the slider components.
+ *
+ * @example
+ * import type { SliderStyleOverrides } from "@kovojs/ui/slider";
+ * const styles: SliderStyleOverrides = {};
+ */
 export interface SliderStyleOverrides {
   input?: style.StyleInput;
   range?: style.StyleInput;
@@ -22,6 +29,13 @@ export interface SliderStyleOverrides {
   track?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the slider component family.
+ *
+ * @example
+ * import type { SliderStateProps } from "@kovojs/ui/slider";
+ * const state: SliderStateProps = {};
+ */
 export interface SliderStateProps {
   disabled?: boolean;
   invalid?: boolean;
@@ -34,12 +48,26 @@ export interface SliderStateProps {
   value?: number;
 }
 
+/**
+ * Props for the slider component.
+ *
+ * @example
+ * import type { SliderProps } from "@kovojs/ui/slider";
+ * const props: SliderProps = { children: 'Content' };
+ */
 export interface SliderProps extends SliderStateProps {
   children?: string;
   id?: string;
   styles?: SliderStyleOverrides;
 }
 
+/**
+ * Props for the slider input component.
+ *
+ * @example
+ * import type { SliderInputProps } from "@kovojs/ui/slider";
+ * const props: SliderInputProps = {};
+ */
 export interface SliderInputProps extends SliderStateProps {
   descriptionId?: string;
   errorId?: string;
@@ -51,12 +79,26 @@ export interface SliderInputProps extends SliderStateProps {
   valueText?: string;
 }
 
+/**
+ * Props for the slider part component.
+ *
+ * @example
+ * import type { SliderPartProps } from "@kovojs/ui/slider";
+ * const props: SliderPartProps = { children: 'Content' };
+ */
 export interface SliderPartProps extends SliderStateProps {
   children?: string;
   id?: string;
   styles?: SliderStyleOverrides;
 }
 
+/**
+ * Props for the slider thumb component.
+ *
+ * @example
+ * import type { SliderThumbProps } from "@kovojs/ui/slider";
+ * const props: SliderThumbProps = { children: 'Content' };
+ */
 export interface SliderThumbProps extends SliderPartProps {
   descriptionId?: string;
   errorId?: string;
@@ -65,6 +107,13 @@ export interface SliderThumbProps extends SliderPartProps {
   valueText?: string;
 }
 
+/**
+ * Style definitions used by the slider components.
+ *
+ * @example
+ * import { sliderStyles } from "@kovojs/ui/slider";
+ * const styles = sliderStyles;
+ */
 export const sliderStyles = style.create({
   // Native range kept for keyboard/form/validation; visually hidden but
   // stretched over the track so it stays the pointer/focus target.
@@ -185,6 +234,13 @@ function valuePercent(ratio: string | undefined): string {
   return `${(clamped * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
 }
 
+/**
+ * Renders the styled slider primitive.
+ *
+ * @example
+ * import { Slider } from "@kovojs/ui/slider";
+ * const component = Slider;
+ */
 export const Slider = component({
   render(props: SliderProps) {
     const attrs = sliderRootAttributes({
@@ -220,6 +276,13 @@ export const Slider = component({
   },
 });
 
+/**
+ * Renders the styled slider input primitive.
+ *
+ * @example
+ * import { SliderInput } from "@kovojs/ui/slider";
+ * const component = SliderInput;
+ */
 export const SliderInput = component({
   render(props: SliderInputProps) {
     const attrs = sliderInputAttributes({
@@ -274,6 +337,13 @@ export const SliderInput = component({
   },
 });
 
+/**
+ * Renders the styled slider track primitive.
+ *
+ * @example
+ * import { SliderTrack } from "@kovojs/ui/slider";
+ * const component = SliderTrack;
+ */
 export const SliderTrack = component({
   render(props: SliderPartProps) {
     const attrs = sliderTrackAttributes({
@@ -312,6 +382,13 @@ export const SliderTrack = component({
   },
 });
 
+/**
+ * Renders the styled slider range primitive.
+ *
+ * @example
+ * import { SliderRange } from "@kovojs/ui/slider";
+ * const component = SliderRange;
+ */
 export const SliderRange = component({
   render(props: SliderPartProps) {
     const attrs = sliderRangeAttributes({
@@ -353,6 +430,13 @@ export const SliderRange = component({
   },
 });
 
+/**
+ * Renders the styled slider thumb primitive.
+ *
+ * @example
+ * import { SliderThumb } from "@kovojs/ui/slider";
+ * const component = SliderThumb;
+ */
 export const SliderThumb = component({
   render(props: SliderThumbProps) {
     const attrs = sliderThumbAttributes({

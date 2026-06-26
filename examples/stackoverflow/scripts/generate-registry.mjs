@@ -48,7 +48,7 @@ const { writeExampleCoreRegistry } = await import(
   resolve(exampleRoot, '../drizzle-registry-runtime.ts')
 );
 
-writeExampleCoreRegistry({
+const derivationFacts = writeExampleCoreRegistry({
   outPath,
   sourceRoot,
   // Query loaders are exported by key from `src/queries.ts`; `../queries.js` is relative to the
@@ -73,4 +73,12 @@ writeExampleCoreRegistry({
   ],
 });
 
+// SPEC.md §10.5/§10.6 — surface each (mutation × invalidated query) derivation outcome: a
+// DERIVED pair gets a compiler-proven transform (no hand-written entry); a hand-written /
+// await-fragment pair is NAMED with its punt reason (coverage is never silently dropped).
 process.stdout.write(`kovo-generate-registry/v1\nWRITE ${outPath}\n`);
+for (const fact of derivationFacts) {
+  const verb = fact.status === 'derived' ? 'DERIVED' : 'PUNT';
+  const reason = fact.reason ? ` (${fact.reason})` : '';
+  process.stdout.write(`${verb} ${fact.mutation} -> ${fact.query}${reason}\n`);
+}

@@ -2,7 +2,7 @@ import { guards, mutation, s, type MutationContext } from '@kovojs/server';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
-import { type QuestionListItem, type SoRequest } from './model.js';
+import { type SoRequest } from './model.js';
 import { answers, questions, votes } from './schema.js';
 
 // Top-level mutation handlers for the demo. Drizzle writes stay inline so the
@@ -164,26 +164,32 @@ export const voteUpMutation = mutation('voteUp', {
   }),
   csrf: soCsrf,
   guard: guards.authed<SoRequest>(),
-  // SPEC §10.4/§10.6: this optimistic map is exhaustiveness-checked (KV310) against the GENERATED
-  // `@kovojs/core` InvalidationSets in `src/generated/registry.d.ts`. voteUp touches the
-  // question + vote domains, so the generator derives `voteUp: questionDetail | questionList |
-  // questionScore`; omitting any entry below is a `tsc` error — with NO hand-authored
-  // `declare module` to drift from the real invalidation graph (capability-gaps §3). The draft
-  // types come from each query loader via `QueryRegistry` (the single source of truth).
+  // SPEC §10.4/§10.5/§10.6: this optimistic map is exhaustiveness-checked (KV310) against the
+  // GENERATED `@kovojs/core` registry in `src/generated/registry.d.ts`. voteUp touches the
+  // question + vote domains, so the generator derives `InvalidationSets[voteUp] = questionDetail |
+  // questionList | questionScore`. Of those, the §10.5 deriver COMPILER-DERIVES `questionList`
+  // (UPDATE × AGG → guarded exact-row `score += 1`) and `questionScore` (INSERT × SUM →
+  // `score += 1`) from the Drizzle write effects + query shapes, so the generator emits them into
+  // `OptimisticDerivationSets[voteUp]` and the author does NOT hand-write them — they are OPTIONAL
+  // here (omitting them is no longer a `tsc` error). Only the NAMED-punt pair below stays
+  // hand-written; with NO hand-authored `declare module` to drift from the real invalidation graph
+  // (capability-gaps §1/§3). The draft types come from each query loader via `QueryRegistry`.
   optimistic: {
-    // The ranked list bumps the voted question's score the instant the upvote is clicked.
-    // `item` is annotated so the example still type-checks before the generated registry exists
-    // (e.g. a bare `vp check`); `typecheck-examples` regenerates it and enforces KV310.
-    questionList(draft, input) {
-      const target = draft.items.find((item: QuestionListItem) => item.id === input.targetId);
-      if (target) target.score += 1;
+    // PUNTED by the §10.5 deriver (`kovo explain --optimistic`: OPTIMISTIC-PUNT questionDetail) —
+    // its loader returns a keyed WHOLE row (`return row ?? null`), a scalar-from-keyed-row return
+    // the Stage-2 classifier does not yet model, AND a derived keyed `{ keys, transform }` is not
+    // yet emittable, so it stays REQUIRED and hand-written. The question-detail page is a KEYED
+    // query: `questionDetail:q3` vs `questionDetail:q7` coexist (SPEC §10.2). Optimism is keyed to
+    // the query (§10.4), so the transform says WHICH instance it predicts — `keys` derives that
+    // instance key from the voted question id (`input.targetId`), exactly as `questionDetail`'s
+    // own WHERE eq-predicate resolves `id` from args (§10.2). Server truth reconciles by
+    // `kovo-key` (§13.2). `draft` is `QuestionDetailResult | null` (loader returns `row ?? null`).
+    questionDetail: {
+      keys: (input) => ({ id: input.targetId }),
+      transform(draft, _input) {
+        if (draft) draft.score += 1;
+      },
     },
-    // The aggregate vote total moves immediately, then settles to server truth on reconcile.
-    questionScore(draft, _input) {
-      draft.score += 1;
-    },
-    // The question detail region reconciles to the refreshed server fragment (SPEC §10.4).
-    questionDetail: 'await-fragment',
   },
   handler: voteUp,
 });

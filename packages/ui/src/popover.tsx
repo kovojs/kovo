@@ -11,23 +11,51 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the popover components.
+ *
+ * @example
+ * import type { PopoverStyleOverrides } from "@kovojs/ui/popover";
+ * const styles: PopoverStyleOverrides = {};
+ */
 export interface PopoverStyleOverrides {
   content?: style.StyleInput;
   root?: style.StyleInput;
   trigger?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the popover component family.
+ *
+ * @example
+ * import type { PopoverStateProps } from "@kovojs/ui/popover";
+ * const state: PopoverStateProps = {};
+ */
 export interface PopoverStateProps {
   disabled?: boolean;
   open?: boolean;
 }
 
+/**
+ * Props for the popover component.
+ *
+ * @example
+ * import type { PopoverProps } from "@kovojs/ui/popover";
+ * const props: PopoverProps = { children: 'Content' };
+ */
 export interface PopoverProps extends PopoverStateProps {
   children?: string;
   id?: string;
   styles?: PopoverStyleOverrides;
 }
 
+/**
+ * Props for the popover trigger component.
+ *
+ * @example
+ * import type { PopoverTriggerProps } from "@kovojs/ui/popover";
+ * const props: PopoverTriggerProps = { children: 'Content' };
+ */
 export interface PopoverTriggerProps extends PopoverStateProps {
   children?: string;
   contentId?: string;
@@ -35,12 +63,26 @@ export interface PopoverTriggerProps extends PopoverStateProps {
   styles?: PopoverStyleOverrides;
 }
 
+/**
+ * Props for the popover content component.
+ *
+ * @example
+ * import type { PopoverContentProps } from "@kovojs/ui/popover";
+ * const props: PopoverContentProps = { children: 'Content' };
+ */
 export interface PopoverContentProps extends PopoverStateProps {
   children?: string;
   contentId?: string;
   styles?: PopoverStyleOverrides;
 }
 
+/**
+ * Style definitions used by the popover components.
+ *
+ * @example
+ * import { popoverStyles } from "@kovojs/ui/popover";
+ * const styles = popoverStyles;
+ */
 export const popoverStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
@@ -126,6 +168,13 @@ function popoverState(props: PopoverStateProps) {
   };
 }
 
+/**
+ * Renders the styled popover primitive.
+ *
+ * @example
+ * import { Popover } from "@kovojs/ui/popover";
+ * const component = Popover;
+ */
 export const Popover = component({
   render(props: PopoverProps) {
     const attrs = popoverRootAttributes(popoverState(props));
@@ -145,6 +194,13 @@ export const Popover = component({
   },
 });
 
+/**
+ * Renders the styled popover trigger primitive.
+ *
+ * @example
+ * import { PopoverTrigger } from "@kovojs/ui/popover";
+ * const component = PopoverTrigger;
+ */
 export const PopoverTrigger = component({
   render(props: PopoverTriggerProps) {
     const attrs = popoverTriggerAttributes({
@@ -173,6 +229,13 @@ export const PopoverTrigger = component({
   },
 });
 
+/**
+ * Renders the styled popover content primitive.
+ *
+ * @example
+ * import { PopoverContent } from "@kovojs/ui/popover";
+ * const component = PopoverContent;
+ */
 export const PopoverContent = component({
   render(props: PopoverContentProps) {
     const attrs = popoverContentAttributes({

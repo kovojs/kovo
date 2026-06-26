@@ -103,6 +103,26 @@ not a shipped feature.
 The one-line version: if you like Astro's islands and htmx's wire but want the database-to-DOM
 wiring to be a _type error when it's wrong_, that's the gap Kovo fills.
 
+## Design principles
+
+Kovo's Prime Principle is security by construction: trust-boundary mistakes should be impossible
+where static analysis can prove them, fail closed where it cannot, and show every escape hatch in
+`kovo explain`.
+
+The five design tests are the pressure checks behind that claim:
+
+| Test                          | Consequence for app code                                                  |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| Legibility is load-bearing    | Handler, query, route, and wire names stay visible in HTML and Network.   |
+| No global knowledge           | Declare security and data facts once; do not enumerate distant consumers. |
+| Sugar lowers to authorable IR | Compiler output is inspectable Kovo source, not an opaque VM.             |
+| The wire documents decisions  | Frames show what the server sent while `secret` data stays ineligible.    |
+| Server truth wins             | Optimistic UI is disposable; reconciliation morphs authoritative HTML.    |
+
+That is why the framework is strict about imports, sound TypeScript, generated artifacts, and
+audits: those constraints are what make rename, stale-data, and security failures show up before
+runtime.
+
 ## Next steps
 
 - [Quickstart](/getting-started/quickstart/) — get a page rendering and see the checks fire.

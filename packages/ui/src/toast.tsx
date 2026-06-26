@@ -31,6 +31,13 @@ const toastEnter = style.keyframes(
   { namespace: 'toastEnter', source: 'toast.tsx' },
 );
 
+/**
+ * Style override slots accepted by the toast components.
+ *
+ * @example
+ * import type { ToastStyleOverrides } from "@kovojs/ui/toast";
+ * const styles: ToastStyleOverrides = {};
+ */
 export interface ToastStyleOverrides {
   action?: style.StyleInput;
   close?: style.StyleInput;
@@ -40,6 +47,13 @@ export interface ToastStyleOverrides {
   viewport?: style.StyleInput;
 }
 
+/**
+ * Props for the toast viewport component.
+ *
+ * @example
+ * import type { ToastViewportProps } from "@kovojs/ui/toast";
+ * const props: ToastViewportProps = { children: 'Content' };
+ */
 export interface ToastViewportProps {
   children?: string;
   disabled?: boolean;
@@ -49,6 +63,13 @@ export interface ToastViewportProps {
   styles?: ToastStyleOverrides;
 }
 
+/**
+ * Props for the toast component.
+ *
+ * @example
+ * import type { ToastProps } from "@kovojs/ui/toast";
+ * const props: ToastProps = { id: 'id', children: 'Content' };
+ */
 export interface ToastProps {
   children?: string;
   descriptionId?: string;
@@ -61,12 +82,26 @@ export interface ToastProps {
   variant?: ToastVariant;
 }
 
+/**
+ * Props for the toast part component.
+ *
+ * @example
+ * import type { ToastPartProps } from "@kovojs/ui/toast";
+ * const props: ToastPartProps = { children: 'Content' };
+ */
 export interface ToastPartProps {
   children?: string;
   id?: string;
   styles?: ToastStyleOverrides;
 }
 
+/**
+ * Props for the toast action component.
+ *
+ * @example
+ * import type { ToastActionProps } from "@kovojs/ui/toast";
+ * const props: ToastActionProps = { id: 'id', children: 'Content' };
+ */
 export interface ToastActionProps {
   actionValue?: string;
   children?: string;
@@ -78,8 +113,22 @@ export interface ToastActionProps {
   variant?: ToastVariant;
 }
 
+/**
+ * Props for the toast close component.
+ *
+ * @example
+ * import type { ToastCloseProps } from "@kovojs/ui/toast";
+ * const props: ToastCloseProps = { id: 'id' };
+ */
 export type ToastCloseProps = ToastActionProps;
 
+/**
+ * Style definitions used by the toast components.
+ *
+ * @example
+ * import { toastStyles } from "@kovojs/ui/toast";
+ * const styles = toastStyles;
+ */
 export const toastStyles = style.create({
   action: {
     alignItems: 'center',
@@ -262,6 +311,13 @@ export const toastStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled toast viewport primitive.
+ *
+ * @example
+ * import { ToastViewport } from "@kovojs/ui/toast";
+ * const component = ToastViewport;
+ */
 export const ToastViewport = component({
   render(props: ToastViewportProps) {
     const attrs = toastViewportAttributes({
@@ -289,6 +345,13 @@ export const ToastViewport = component({
   },
 });
 
+/**
+ * Renders the styled toast primitive.
+ *
+ * @example
+ * import { Toast } from "@kovojs/ui/toast";
+ * const component = Toast;
+ */
 export const Toast = component({
   render(props: ToastProps) {
     const attrs = toastRootAttributes({
@@ -323,6 +386,13 @@ export const Toast = component({
   },
 });
 
+/**
+ * Renders the styled toast title primitive.
+ *
+ * @example
+ * import { ToastTitle } from "@kovojs/ui/toast";
+ * const component = ToastTitle;
+ */
 export const ToastTitle = component({
   render(props: ToastPartProps) {
     const attrs = toastTitleAttributes(props.id === undefined ? {} : { id: props.id });
@@ -336,6 +406,13 @@ export const ToastTitle = component({
   },
 });
 
+/**
+ * Renders the styled toast description primitive.
+ *
+ * @example
+ * import { ToastDescription } from "@kovojs/ui/toast";
+ * const component = ToastDescription;
+ */
 export const ToastDescription = component({
   render(props: ToastPartProps) {
     const attrs = toastDescriptionAttributes(props.id === undefined ? {} : { id: props.id });
@@ -349,6 +426,13 @@ export const ToastDescription = component({
   },
 });
 
+/**
+ * Renders the styled toast action primitive.
+ *
+ * @example
+ * import { ToastAction } from "@kovojs/ui/toast";
+ * const component = ToastAction;
+ */
 export const ToastAction = component({
   render(props: ToastActionProps) {
     const attrs = toastActionAttributes({
@@ -380,6 +464,13 @@ export const ToastAction = component({
   },
 });
 
+/**
+ * Renders the styled toast close primitive.
+ *
+ * @example
+ * import { ToastClose } from "@kovojs/ui/toast";
+ * const component = ToastClose;
+ */
 export const ToastClose = component({
   render(props: ToastCloseProps) {
     const attrs = toastCloseAttributes({

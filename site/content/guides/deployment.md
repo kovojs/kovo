@@ -60,7 +60,7 @@ So the rule for your serving layer:
   a server-controlled choice), so `Cache-Control: public, max-age=31536000, immutable` is correct.
 - **Keep the required skew window.** Retain prior immutable modules and prior-token `/_q/` reads for
   the supported deploy-skew window, with a required minimum of 24 hours. Configuring less, or using a
-  platform that cannot retain both artifact classes for that window, is **KV417**.
+  platform that cannot retain both artifact classes for that window, is a deploy-skew error.
 
 A CDN or object store in front of `/c/*` makes this nearly free: deploys upload new versions and
 touch nothing else.
@@ -115,11 +115,23 @@ documents should not assume server refetches will exist later; the no-JS HTML do
 artifact. The detailed static-export constraints and diagnostic ownership live in
 [Static export](/guides/static-export/).
 
-### A node-server entrypoint
+### Run a Node server entrypoint
 
-The server is the `createApp()` aggregate (SPEC §9.3): your routes, mutations, queries, the `db`
-provider, and the §6.5 `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request ->
-Response` handler to a `node:http` listener, so the entrypoint is small:
+The server is the `createApp()` aggregate: your routes, mutations, queries, the `db` provider, and
+the `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request -> Response` handler to a
+`node:http` listener. Start with the adapter shape:
+
+```ts
+import { createServer } from 'node:http';
+import { createApp, createRequestHandler, toNodeHandler } from '@kovojs/server';
+
+const app = createApp({ routes, mutations, queries });
+const handler = toNodeHandler(createRequestHandler(app));
+createServer(handler).listen(Number(process.env.PORT ?? 3000));
+```
+
+The production entrypoint usually adds database setup, session resolution, CSRF secrets, and early
+hints:
 
 ```ts
 // server.ts — production entrypoint
@@ -137,9 +149,9 @@ const app = createApp({
   routes,
   mutations,
   queries,
-  // Runs once before route/query/mutation guards; return null for anonymous (SPEC §6.5).
+  // Runs once before route/query/mutation guards; return null for anonymous.
   sessionProvider,
-  csrf: { secret: process.env.CSRF_SECRET! },
+  csrf: { secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET! },
 });
 
 const handler = toNodeHandler(createRequestHandler(app), { earlyHints: true });
@@ -163,10 +175,25 @@ EXPOSE 3000
 CMD ["node", "dist/server.js"]
 ```
 
-The container needs three things from the environment: `DATABASE_URL` (your `db` provider's
-connection), `CSRF_SECRET` (the session-bound token secret behind §9.1 `kovo-csrf`), and whatever
-secret your `sessionProvider` validates against. None of these is instance-specific — the same image
-runs behind a load balancer unchanged.
+The container needs database and auth secrets from the environment. None of these is
+instance-specific — the same image runs behind a load balancer unchanged.
+
+| Variable                           | Owner              | Required when                                                                        |
+| ---------------------------------- | ------------------ | ------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                     | Your `db` provider | The app opens a remote database connection.                                          |
+| `KOVO_CSRF_SECRET`                 | Kovo CSRF          | Always set for deployed mutation forms.                                              |
+| `BETTER_AUTH_SECRET`               | Better Auth        | Set when using Better Auth; the scaffold also accepts it as the CSRF HMAC secret.    |
+| `BETTER_AUTH_URL`                  | Better Auth        | Set when the public origin is not `http://localhost:5173`.                           |
+| `PORT`                             | Node preset        | Optional; defaults to `3000`.                                                        |
+| `HOST`                             | Node preset        | Optional; defaults to `0.0.0.0` in emitted Node servers.                             |
+| `NODE_ENV`                         | Runtime posture    | Set to `production` for secure-cookie and boot-secret floors.                        |
+| `KOVO_PRESET`                      | `kovo build`       | Optional override: `node`, `vercel`, or `cloudflare`.                                |
+| `VERCEL`, `CLOUDFLARE`, `CF_PAGES` | Host detection     | Read by `kovo build` when no preset is configured.                                   |
+| `KOVO_SQL_GUARD`                   | Raw SQL migration  | Temporary fail-open escape for unmanaged raw SQL sinks; managed sinks still enforce. |
+
+`KOVO_CSRF_SECRET` is the scaffold's local-development name. The generated auth adapter reads
+`BETTER_AUTH_SECRET ?? KOVO_CSRF_SECRET`, so one strong deployment secret can back both Better Auth
+and Kovo's CSRF HMAC, or you can split them by wiring separate values in your app config.
 
 ## Liveness in the technical preview
 
@@ -185,6 +212,40 @@ Kovo has three shipped liveness paths, each with a different operational cost:
 SSE live queries are roadmap, not part of the technical preview. Do not deploy `live: true`,
 `<kovo-live>`, `createApp({ live })`, or live emitters in preview apps. See
 [Live queries](/guides/live-queries/) for the shipped paths and the roadmap caveat.
+
+## Observe the request shell
+
+The app server gives operators two stable handles before you add product-specific metrics:
+name-shaped framework paths and the `onError` hook.
+
+Access logs can group by endpoint without parsing a framework envelope:
+
+- `POST /_m/<mutation-key>` — mutation submissions, including no-JS form posts.
+- `GET /_q/<query-key>` — typed reads, refetch-on-focus, and stale-tab recovery.
+- `/c/__v/<version>/<module>` — immutable client modules.
+- Declared `endpoint()` and `webhook()` paths — raw machine ingress.
+
+Use `createApp({ onError })` for runtime exceptions from the request shell. It receives the thrown
+error plus a `ServerErrorDiagnosticContext` with the failing operation and any known route,
+mutation, query, target, status, URL, or request identity. The hook is diagnostic only: errors thrown
+inside it are swallowed, and it cannot change Kovo's stable 403/404/500 responses.
+
+```ts
+import { createApp } from '@kovojs/server';
+
+export default createApp({
+  routes,
+  mutations,
+  queries,
+  onError(error, context) {
+    console.error('kovo request failed', { error, ...context });
+  },
+});
+```
+
+Keep build-time and runtime signals separate. `vp check`, `kovo check`, `kovo explain`, and the
+source/sink audits answer "what can this app do?" before deploy. `onError`, access logs, and rate
+limit counters answer "what happened in production?" after deploy.
 
 ## Pre-deploy gates
 
@@ -233,6 +294,8 @@ module URLs, prior-token typed reads, the 24-hour retention floor, and deploy-sk
 SPEC §6.6 and §14. Static export through the request shell: SPEC §9.5; see
 [Static export](/guides/static-export/) for exportability diagnostics. Schema-validated old-form
 recovery via the 422 path: SPEC §9.2. The request lifecycle: SPEC §10.3. Browser-free pre-deploy
-gates: SPEC §11.4. KV417 reports a serving layer that cannot meet the skew-retention floor.
+gates: SPEC §11.4. `createApp({ onError })` and `ServerErrorDiagnosticContext` report
+request-shell runtime failures without changing stable error responses: SPEC §9.2. KV417 reports a
+serving layer that cannot meet the skew-retention floor.
 
 </details>

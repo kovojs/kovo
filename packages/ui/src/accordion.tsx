@@ -16,6 +16,13 @@ import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the accordion components.
+ *
+ * @example
+ * import type { AccordionStyleOverrides } from "@kovojs/ui/accordion";
+ * const styles: AccordionStyleOverrides = {};
+ */
 export interface AccordionStyleOverrides {
   content?: style.StyleInput;
   header?: style.StyleInput;
@@ -24,6 +31,13 @@ export interface AccordionStyleOverrides {
   trigger?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the accordion component family.
+ *
+ * @example
+ * import type { AccordionStateProps } from "@kovojs/ui/accordion";
+ * const state: AccordionStateProps = {};
+ */
 export interface AccordionStateProps {
   collapsible?: boolean;
   disabled?: boolean;
@@ -32,12 +46,26 @@ export interface AccordionStateProps {
   value?: AccordionValue;
 }
 
+/**
+ * Props for the accordion component.
+ *
+ * @example
+ * import type { AccordionProps } from "@kovojs/ui/accordion";
+ * const props: AccordionProps = { children: 'Content' };
+ */
 export interface AccordionProps extends AccordionStateProps {
   children?: string;
   id?: string;
   styles?: AccordionStyleOverrides;
 }
 
+/**
+ * Props for the accordion item component.
+ *
+ * @example
+ * import type { AccordionItemProps } from "@kovojs/ui/accordion";
+ * const props: AccordionItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface AccordionItemProps extends AccordionStateProps {
   children?: string;
   itemDisabled?: boolean;
@@ -45,20 +73,48 @@ export interface AccordionItemProps extends AccordionStateProps {
   styles?: AccordionStyleOverrides;
 }
 
+/**
+ * Props for the accordion header component.
+ *
+ * @example
+ * import type { AccordionHeaderProps } from "@kovojs/ui/accordion";
+ * const props: AccordionHeaderProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface AccordionHeaderProps extends AccordionItemProps {
   level?: number;
 }
 
+/**
+ * Props for the accordion trigger component.
+ *
+ * @example
+ * import type { AccordionTriggerProps } from "@kovojs/ui/accordion";
+ * const props: AccordionTriggerProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface AccordionTriggerProps extends AccordionItemProps {
   contentId?: string;
   triggerId?: string;
 }
 
+/**
+ * Props for the accordion content component.
+ *
+ * @example
+ * import type { AccordionContentProps } from "@kovojs/ui/accordion";
+ * const props: AccordionContentProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface AccordionContentProps extends AccordionItemProps {
   contentId?: string;
   triggerId?: string;
 }
 
+/**
+ * Style definitions used by the accordion components.
+ *
+ * @example
+ * import { accordionStyles } from "@kovojs/ui/accordion";
+ * const styles = accordionStyles;
+ */
 export const accordionStyles = style.create({
   // Outer grid wrapper animates open/close via grid-template-rows 0fr<->1fr
   // (SPEC complaint #9: panel should smoothly animate height). The inner
@@ -192,6 +248,13 @@ function accordionItemState(props: AccordionItemProps) {
   };
 }
 
+/**
+ * Renders the styled accordion primitive.
+ *
+ * @example
+ * import { Accordion } from "@kovojs/ui/accordion";
+ * const component = Accordion;
+ */
 export const Accordion = component({
   render(props: AccordionProps) {
     const attrs = accordionRootAttributes(accordionState(props));
@@ -211,6 +274,13 @@ export const Accordion = component({
   },
 });
 
+/**
+ * Renders the styled accordion item primitive.
+ *
+ * @example
+ * import { AccordionItem } from "@kovojs/ui/accordion";
+ * const component = AccordionItem;
+ */
 export const AccordionItem = component({
   render(props: AccordionItemProps) {
     const attrs = accordionItemAttributes(accordionItemState(props));
@@ -230,6 +300,13 @@ export const AccordionItem = component({
   },
 });
 
+/**
+ * Renders the styled accordion header primitive.
+ *
+ * @example
+ * import { AccordionHeader } from "@kovojs/ui/accordion";
+ * const component = AccordionHeader;
+ */
 export const AccordionHeader = component({
   render(props: AccordionHeaderProps) {
     const attrs = accordionHeaderAttributes({
@@ -253,6 +330,13 @@ export const AccordionHeader = component({
   },
 });
 
+/**
+ * Renders the styled accordion trigger primitive.
+ *
+ * @example
+ * import { AccordionTrigger } from "@kovojs/ui/accordion";
+ * const component = AccordionTrigger;
+ */
 export const AccordionTrigger = component({
   render(props: AccordionTriggerProps) {
     const attrs = accordionTriggerAttributes({
@@ -280,6 +364,13 @@ export const AccordionTrigger = component({
   },
 });
 
+/**
+ * Renders the styled accordion content primitive.
+ *
+ * @example
+ * import { AccordionContent } from "@kovojs/ui/accordion";
+ * const component = AccordionContent;
+ */
 export const AccordionContent = component({
   render(props: AccordionContentProps) {
     const attrs = accordionContentAttributes({

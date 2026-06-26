@@ -7,8 +7,22 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Supported toggle variant values.
+ *
+ * @example
+ * import type { ToggleVariant } from "@kovojs/ui/toggle";
+ * const value: ToggleVariant = 'outline';
+ */
 export type ToggleVariant = 'outline' | 'subtle';
 
+/**
+ * Props for the toggle component.
+ *
+ * @example
+ * import type { ToggleProps } from "@kovojs/ui/toggle";
+ * const props: ToggleProps = { children: 'Content' };
+ */
 export interface ToggleProps {
   children?: string;
   disabled?: boolean;
@@ -72,11 +86,25 @@ const variants = style.create({
   },
 });
 
+/**
+ * Style definitions used by the toggle components.
+ *
+ * @example
+ * import { toggleStyles } from "@kovojs/ui/toggle";
+ * const styles = toggleStyles;
+ */
 export const toggleStyles = {
   base,
   variants,
 } as const;
 
+/**
+ * Renders the styled toggle primitive.
+ *
+ * @example
+ * import { Toggle } from "@kovojs/ui/toggle";
+ * const component = Toggle;
+ */
 export const Toggle = component({
   render(props: ToggleProps) {
     const attrs = toggleRootAttributes({

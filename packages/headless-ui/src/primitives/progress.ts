@@ -1,13 +1,49 @@
 import { type PrimitiveDataAttributes } from '../lib/index.js';
 
+/**
+ * State snapshot consumed by the Progress primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ProgressDataState } from '@kovojs/headless-ui/progress';
+ *
+ * const value: ProgressDataState = {} as ProgressDataState;
+ * ```
+ */
 export type ProgressDataState = 'complete' | 'indeterminate' | 'loading';
 
+/**
+ * Options accepted by the Progress primitive progress attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ProgressAttributeOptions } from '@kovojs/headless-ui/progress';
+ *
+ * const value: ProgressAttributeOptions = {} as ProgressAttributeOptions;
+ * ```
+ */
 export interface ProgressAttributeOptions {
   max?: number;
   value?: number | null;
   valueText?: string;
 }
 
+/**
+ * State snapshot consumed by the Progress primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ProgressComputedState } from '@kovojs/headless-ui/progress';
+ *
+ * const value: ProgressComputedState = {} as ProgressComputedState;
+ * ```
+ */
 export interface ProgressComputedState {
   max: number;
   state: ProgressDataState;
@@ -15,9 +51,34 @@ export interface ProgressComputedState {
   valueRatio: number | null;
 }
 
+/**
+ * Serializable attribute record returned by Progress primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ProgressPrimitiveAttributes } from '@kovojs/headless-ui/progress';
+ *
+ * const value: ProgressPrimitiveAttributes = {} as ProgressPrimitiveAttributes;
+ * ```
+ */
 export type ProgressPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, number | string>>;
 
+/**
+ * Computes progress value state for the Progress primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { progressValueState } from '@kovojs/headless-ui/progress';
+ *
+ * const input = {} as Parameters<typeof progressValueState>[0];
+ * const result = progressValueState(input);
+ * ```
+ */
 export function progressValueState(options: ProgressAttributeOptions = {}): ProgressComputedState {
   const max = normalizeProgressMax(options.max);
   const value = normalizeProgressValue(options.value, max);
@@ -39,6 +100,21 @@ export function progressValueState(options: ProgressAttributeOptions = {}): Prog
   });
 }
 
+/**
+ * Builds the progress root attributes record for the Progress primitive.
+ *
+ * Emits `aria-valuetext`, `data-max`, `data-state`, `data-value`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { progressRootAttributes } from '@kovojs/headless-ui/progress';
+ *
+ * const input = {} as Parameters<typeof progressRootAttributes>[0];
+ * const result = progressRootAttributes(input);
+ * ```
+ */
 export function progressRootAttributes(
   options: ProgressAttributeOptions = {},
 ): ProgressPrimitiveAttributes {
