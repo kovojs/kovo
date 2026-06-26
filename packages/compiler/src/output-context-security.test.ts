@@ -615,3 +615,95 @@ export const SingleElemAttr = component({
     expect(generated).toMatch(/derive\(\["rows"\],\s*\(rows[^)]*\)\s*=>\s*rows\[0\]\.name\)/);
   });
 });
+
+// P2-1 / S4 (SPEC §4.8 / §5.2 #10, KV236): output safety is contextual and default-on, and the
+// compile-time gate must be COMPLETE across every channel a static sink can reach a lowered
+// attribute by. A directly-authored attribute, a static object spread (`{...{…}}`), and a
+// primitive-composition `attrs={{…}}` merge bag all lower to the same authored sink, so all three
+// must raise an identical KV236 — otherwise the spread/attrs channels are a silent bypass that
+// breaks the audit-visible-brand guarantee (only the runtime sink-policy floor would catch them).
+describe('KV236 direct ≡ spread ≡ attrs-merge channel symmetry (P2-1 / S4)', () => {
+  const kv236Messages = (source: string): string[] =>
+    compileComponentModule({ fileName: 'symmetry.tsx', source })
+      .diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')
+      .map((diagnostic) => diagnostic.message);
+
+  // Each entry renders the same sink three ways; all three MUST produce the same KV236 message.
+  const unsafeChannels: ReadonlyArray<{
+    name: string;
+    expected: string;
+    direct: string;
+    spread: string;
+    attrs: string;
+  }> = [
+    {
+      name: 'javascript: CSS url() in a style sink',
+      expected: `${kv236} style attribute contains an unsafe CSS url()`,
+      direct: `<div style="background:url('javascript:alert(1)')">x</div>`,
+      spread: `<div {...{ style: "background:url('javascript:alert(1)')" }}>x</div>`,
+      attrs: `<Tooltip.Trigger asChild attrs={{ style: "background:url('javascript:alert(1)')" }}><div>x</div></Tooltip.Trigger>`,
+    },
+    {
+      name: 'javascript: URL scheme in an href sink',
+      expected: `${kv236} href="javascript:alert(1)" uses an unsafe URL scheme`,
+      direct: `<a href="javascript:alert(1)">x</a>`,
+      spread: `<a {...{ href: "javascript:alert(1)" }}>x</a>`,
+      attrs: `<Tooltip.Trigger asChild attrs={{ href: "javascript:alert(1)" }}><a>x</a></Tooltip.Trigger>`,
+    },
+    {
+      name: 'plain string into a raw-HTML sink',
+      expected: `${kv236} dangerouslySetInnerHTML receives a plain string; use Kovo TrustedHtml`,
+      direct: `<div dangerouslySetInnerHTML="<img src=x onerror=alert(1)>">x</div>`,
+      spread: `<div {...{ dangerouslySetInnerHTML: "<img src=x onerror=alert(1)>" }}>x</div>`,
+      attrs: `<Tooltip.Trigger asChild attrs={{ dangerouslySetInnerHTML: "<img src=x onerror=alert(1)>" }}><div>x</div></Tooltip.Trigger>`,
+    },
+    {
+      name: 'lowercase onclick event-handler sink',
+      expected: `${kv236} onclick is an event-handler sink (on* attribute)`,
+      direct: `<button onclick="alert(1)">x</button>`,
+      spread: `<button {...{ onclick: "alert(1)" }}>x</button>`,
+      attrs: `<Tooltip.Trigger asChild attrs={{ onclick: "alert(1)" }}><button>x</button></Tooltip.Trigger>`,
+    },
+  ];
+
+  it.each(unsafeChannels)(
+    'raises an identical KV236 for $name across direct, spread, and attrs-merge',
+    ({ expected, direct, spread, attrs }) => {
+      const wrap = (markup: string) =>
+        `export const Sym = component({ render: () => (${markup}) });`;
+      const directMessages = kv236Messages(wrap(direct));
+      const spreadMessages = kv236Messages(wrap(spread));
+      const attrsMessages = kv236Messages(wrap(attrs));
+
+      expect(directMessages).toContain(expected);
+      expect(spreadMessages).toContain(expected);
+      expect(attrsMessages).toContain(expected);
+    },
+  );
+
+  it('keeps safe values green in every channel (direct ≡ spread ≡ attrs-merge)', () => {
+    const wrap = (markup: string) =>
+      `export const Safe = component({ render: () => (${markup}) });`;
+    const safeChannels = [
+      `<div style="background: red; color: blue">x</div>`,
+      `<div {...{ style: "background: red; color: blue" }}>x</div>`,
+      `<Tooltip.Trigger asChild attrs={{ style: "color: red", class: "btn" }}><div>x</div></Tooltip.Trigger>`,
+      // `on:click` is Kovo's handler-ref binding, not a raw HTML on* sink — every channel must
+      // leave it green, exactly like the direct form's `isDirectHtmlEventHandlerAttribute` gate.
+      `<Tooltip.Trigger asChild attrs={{ 'on:click': '/c/handler#click', style: 'color: red' }}><button>x</button></Tooltip.Trigger>`,
+    ];
+
+    for (const markup of safeChannels) {
+      expect(kv236Messages(wrap(markup))).toEqual([]);
+    }
+  });
+
+  it('does not flag a plain (non-component) element attrs attribute (false-positive guard)', () => {
+    // The `attrs={{…}}` merge channel only exists for component tags; a plain element's unrelated
+    // `attrs` value never lowers to a child sink, so it must stay green even with an unsafe scheme.
+    const messages = kv236Messages(
+      `export const Plain = component({ render: () => <div attrs={{ href: "javascript:alert(1)" }}>x</div> });`,
+    );
+    expect(messages).toEqual([]);
+  });
+});

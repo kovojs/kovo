@@ -14,7 +14,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
   type JsxExpressionModel,
-  type JsxSpreadAttributeModel,
+  type ObjectLiteralEntry,
   type SourceSpan,
 } from '../scan/parse.js';
 export type { OutputContext } from '../output-context-facts.js';
@@ -246,38 +246,87 @@ function validateElementAttributes(
 
   // SPEC §4.8 / §5.2 #10 (KV236, A3): output-context validation must also expand static object
   // spreads (`<a {...{ href: 'javascript:…' }}>`). The spread lowers to a directly-authored
-  // attribute, so the same URL-scheme / raw-HTML / on* / srcdoc checks must run over its object
-  // entries; otherwise the spread is a silent bypass of the sink validation the direct form gets.
+  // attribute, so the same URL-scheme / style-CSS-url / raw-HTML / on* / srcdoc checks must run
+  // over its object entries; otherwise the spread is a silent bypass of the sink validation the
+  // direct form gets.
   for (const spread of element.spreadAttributes) {
-    found.push(...validateStaticSpreadEntries(diagnostics, spread, hasExternalEscape));
+    if (!spread.objectEntries) continue;
+    found.push(
+      ...validateStaticObjectEntrySinks(
+        diagnostics,
+        spread.objectEntries,
+        { end: spread.end, start: spread.start },
+        hasExternalEscape,
+      ),
+    );
   }
+
+  // SPEC §4.8 / §5.2 #10 (KV236, P2-1): the primitive-composition `attrs={{…}}` bag lowers (via
+  // `mergePrimitiveAndAuthorAttributes`) to directly-authored attributes on the child element AFTER
+  // this validator runs, so its static sink entries must re-enter the SAME per-sink checks here or
+  // a `javascript:` URL / CSS-url / raw-HTML / on* / srcdoc inside `attrs` is a silent KV236 bypass
+  // that only the runtime sink-policy floor catches. Only inline `attrs={{…}}` object literals are a
+  // merge channel (matching `primitiveCompositionCandidates`' `expressionObjectEntries` gate); a
+  // dynamic `attrs` value carries no statically-decidable literal sink and is deferred to runtime.
+  found.push(...validatePrimitiveAttrsEntries(diagnostics, element, hasExternalEscape));
 
   return found;
 }
 
 /**
- * SPEC §4.8 (KV236, A3): validate each entry of a static object spread as if it were a directly
- * authored attribute. Only literal (non-dynamic) string values are statically decidable here; a
- * dynamic spread value flows through the binding/derive sinks gated elsewhere. The synthesized
- * attribute reuses the existing per-sink validators so the spread and direct forms cannot diverge.
+ * SPEC §4.8 / §5.2 #10 (KV236, P2-1): validate the static literal sink entries of a primitive
+ * composition `attrs={{…}}` bag on a component-tag element. The merge channel only fires for
+ * component tags (`isComponentTag`) and inline object literals (`expressionObjectEntries`), so we
+ * gate on exactly that to avoid flagging a plain element's unrelated `attrs` attribute while still
+ * closing the merge-channel bypass for every sink the direct/spread forms catch.
  */
-function validateStaticSpreadEntries(
+function validatePrimitiveAttrsEntries(
   diagnostics: DiagnosticFactory,
-  spread: JsxSpreadAttributeModel,
+  element: JsxElementModel,
   hasExternalEscape: boolean,
 ): CompilerDiagnostic[] {
-  if (!spread.objectEntries) return [];
+  if (!isComponentTag(element.tag)) return [];
 
   const found: CompilerDiagnostic[] = [];
-  for (const entry of spread.objectEntries) {
+  for (const attribute of element.attributes) {
+    if (attribute.name !== 'attrs' || !attribute.expressionObjectEntries) continue;
+    found.push(
+      ...validateStaticObjectEntrySinks(
+        diagnostics,
+        attribute.expressionObjectEntries,
+        { end: attribute.end, start: attribute.start },
+        hasExternalEscape,
+      ),
+    );
+  }
+  return found;
+}
+
+/**
+ * SPEC §4.8 (KV236, A3 / P2-1): validate each entry of a static object — a `{...{…}}` spread or a
+ * primitive-composition `attrs={{…}}` bag — as if it were a directly authored attribute. Only
+ * literal (non-dynamic) string values are statically decidable here; a dynamic value flows through
+ * the binding/derive sinks gated elsewhere. The synthesized attribute reuses the existing per-sink
+ * validators (URL scheme, style/CSS-url, raw-HTML, on*, srcdoc) so the object-spread, attrs-merge,
+ * and direct forms cannot diverge. Fail-closed: an unrecognized key is ignored, a non-literal value
+ * is deferred, and every recognized sink reuses the direct path's validator verbatim.
+ */
+function validateStaticObjectEntrySinks(
+  diagnostics: DiagnosticFactory,
+  entries: readonly ObjectLiteralEntry[],
+  span: SourceSpan,
+  hasExternalEscape: boolean,
+): CompilerDiagnostic[] {
+  const found: CompilerDiagnostic[] = [];
+  for (const entry of entries) {
     if (entry.value === undefined) continue;
     const literal = literalStringValue(entry.value);
     if (literal === null) continue;
     const synthetic: JsxAttributeModel = {
-      end: spread.end,
-      leadingStart: spread.start,
+      end: span.end,
+      leadingStart: span.start,
       name: entry.key,
-      start: spread.start,
+      start: span.start,
       value: literal,
     };
 
@@ -285,18 +334,29 @@ function validateStaticSpreadEntries(
       found.push(...validateUrlAttribute(diagnostics, synthetic, hasExternalEscape));
       continue;
     }
+    // SPEC §4.8 / §5.2 #10 (KV236, S4): a synthesized `style` entry is a CSS sink exactly like a
+    // direct `style="…"`; route it through the same static CSS-url check (`validateStaticCssText`)
+    // so `{...{ style: "background:url('javascript:…')" }}` cannot bypass the direct form's gate.
+    if (synthetic.name === 'style') {
+      found.push(...validateStyleAttribute(diagnostics, synthetic));
+      continue;
+    }
     if (isRawHtmlAttribute(synthetic.name)) {
       found.push(...validateRawHtmlAttribute(diagnostics, synthetic));
       continue;
     }
-    if (/^on/i.test(synthetic.name)) {
+    // SPEC §4.8 / §5.2 #10 (KV236): use the direct path's exact event-handler predicate
+    // (`isDirectHtmlEventHandlerAttribute`, `/^on[a-z]/`) so the synthesized form flags a raw
+    // `onclick`/`onerror` HTML sink while leaving Kovo's `on:click` binding ref and JSX-style
+    // `onClick` untouched — identical accept/reject set to a directly-authored attribute.
+    if (isDirectHtmlEventHandlerAttribute(synthetic)) {
       found.push(
         outputContextDiagnostic(
           diagnostics,
           `${synthetic.name} is an event-handler sink (on* attribute)`,
           {
-            start: spread.start,
-            length: spread.end - spread.start,
+            start: span.start,
+            length: span.end - span.start,
           },
         ),
       );
@@ -308,6 +368,15 @@ function validateStaticSpreadEntries(
     }
   }
   return found;
+}
+
+/**
+ * SPEC §5.2: component-tag predicate matching the primitive-composition lowering
+ * (`primitive-composition.ts` `isComponentTag`): a dotted member tag (`Tooltip.Trigger`) or an
+ * uppercase-initial tag (`Menu`) is a component, never a plain HTML element.
+ */
+function isComponentTag(tag: string): boolean {
+  return tag.includes('.') || /^[A-Z]/.test(tag);
 }
 
 function spanContainsAttribute(
