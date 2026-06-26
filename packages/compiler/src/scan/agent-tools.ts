@@ -29,8 +29,9 @@ export interface AgentToolModuleSource {
  * indexes statically point at summarized helpers, `Object.freeze(...)` wrappers around those same
  * static array/tuple aliases or already-proven array aliases that are not assigned or mutated,
  * default object exports whose properties statically point at summarized helpers or freeze an
- * already-proven object alias, default nested object exports whose static properties point at
- * already-proven helper object aliases or namespace imports,
+ * already-proven object alias, default nested object exports or `Object.freeze(...)` wrappers
+ * around already-proven nested object aliases whose static properties point at already-proven
+ * helper object aliases or namespace imports,
  * top-level `const` destructuring from
  * already-proven helper object/array aliases or namespaces, handler properties that reference a
  * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
