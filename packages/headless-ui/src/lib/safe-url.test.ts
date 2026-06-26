@@ -42,6 +42,25 @@ describe('safeUrl', () => {
     expect(safeUrl('tel:+1')).toBe('tel:+1');
   });
 
+  // bugz-3 L9: a bare `&` in a relative path segment is NOT scheme obfuscation
+  // and must be kept verbatim (the previous check over-blocked `AT&T/products`
+  // to `#`). An HTML character reference that decodes to a colon in the scheme
+  // position stays neutralized.
+  it('keeps benign relative URLs whose path segment contains `&` (L9)', () => {
+    expect(safeUrl('AT&T/products')).toBe('AT&T/products');
+    expect(safeUrl('R&D/projects')).toBe('R&D/projects');
+    expect(safeUrl('a&b/c')).toBe('a&b/c');
+    expect(safeUrl('AT&T')).toBe('AT&T');
+    expect(safeUrl('products/AT&T')).toBe('products/AT&T');
+    expect(safeUrl('/x?a=1&b=2')).toBe('/x?a=1&b=2');
+    // The dangerous-scheme and entity-encoded-colon defenses are unchanged.
+    expect(safeUrl('javascript:alert(1)')).toBe('#');
+    expect(safeUrl('javascript&#58;alert(1)')).toBe('#');
+    expect(safeUrl('javascript&#x3a;alert(1)')).toBe('#');
+    expect(safeUrl('javascript&#58alert(1)')).toBe('#'); // numeric ref, no `;`
+    expect(safeUrl('javascript&colon;alert(1)')).toBe('#');
+  });
+
   it('returns the fallback for nullish or empty input', () => {
     expect(safeUrl(undefined)).toBe('#');
     expect(safeUrl(undefined, '/login')).toBe('/login');

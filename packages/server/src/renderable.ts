@@ -36,10 +36,13 @@ export function renderServerRenderable(children: InternalServerRenderable): Mayb
       : (rendered as string[]).join('');
   }
 
-  // SPEC.md §4.5/§5.2: escape the scalar child to a plain string. `escapeText`
-  // brands its result as RenderedHtml so the compiler-injected `{escapeText(expr)}`
-  // child is not re-escaped here; this final scalar branch must NOT re-brand, or a
-  // nested render would double-escape, so it uses the string-returning escaper.
+  // SPEC.md §4.5/§5.2: escape a RAW scalar child (an app-authored `{expr}` with no
+  // compiler escaper) to a plain string. The compiler-injected `{escapeText(expr)}` child
+  // never reaches this branch: `escapeText` brands its already-escaped result as
+  // RenderedHtml, so it is handled by the `isRenderedHtml` fast-path above and passed
+  // through verbatim (single-escape, bugz.md M2). This final scalar branch must NOT brand
+  // its result, or a value that is itself later re-escaped would double-escape; it uses the
+  // string-returning escaper (which also resolves any embedded coerced-rendered-html marker).
   return escapeTextWithRenderedHtml(children);
 }
 

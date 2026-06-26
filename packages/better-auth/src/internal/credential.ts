@@ -322,15 +322,6 @@ function hasSessionEstablishingSetCookie(
   });
 }
 
-/** @internal True when request cookies include a JWT-shaped session credential. */
-export function hasBetterAuthJwtSessionCookie(headers: Headers | undefined): boolean {
-  for (const value of readIncomingSessionCredentials(headers).values()) {
-    if (isJwtShapedSessionValue(value)) return true;
-  }
-
-  return false;
-}
-
 /** @internal True when the request carries a browser session credential accepted by the mode. */
 export function hasBetterAuthAcceptedSessionCookie(
   headers: Headers | undefined,

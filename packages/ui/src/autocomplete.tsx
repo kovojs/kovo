@@ -123,10 +123,6 @@ export interface AutocompleteValueProps extends AutocompleteStateProps {
   styles?: AutocompleteStyleOverrides;
 }
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
 /**
  * Style definitions used by the autocomplete components.
  *
@@ -445,7 +441,7 @@ export const AutocompleteOption = component({
         role={attrs.role}
         value={attrs.value}
       >
-        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue ?? '')}
+        {props.children ?? props.itemLabel ?? props.itemValue ?? ''}
       </div>
     );
   },
@@ -484,7 +480,7 @@ export const AutocompleteValue = component({
         data-placeholder={attrs['data-placeholder']}
         id={attrs.id}
       >
-        {escapeHtml(autocompleteValueText(props))}
+        {autocompleteValueText(props)}
       </span>
     );
   },

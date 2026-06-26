@@ -245,6 +245,51 @@ describe('headless-ui command primitive', () => {
     });
   });
 
+  // bugz-3 M13: with no explicit per-item ids and no listboxId (the default
+  // command palette), the synthesized aria-activedescendant must reference an id
+  // the rendered option actually carries — previously commandItemAttributes
+  // emitted no fallback id, so the IDREF dangled (getElementById → null).
+  it('synthesizes a command option id matching the input aria-activedescendant (M13/L17)', () => {
+    const idlessItems: readonly CommandItem[] = Object.freeze([
+      { label: 'Alpha', value: 'alpha' },
+      { label: 'Beta', value: 'beta' },
+    ]);
+    const state = {
+      highlightedValue: 'beta',
+      inputValue: 'beta',
+      items: idlessItems,
+      open: true,
+    };
+
+    // Filtering to 'beta' renders only the highlighted item.
+    expect(commandFilteredItems(state).map(({ value }) => value)).toEqual(['beta']);
+
+    const activeDescendant = commandInputAttributes(state)['aria-activedescendant'];
+    expect(activeDescendant).toMatch(/^command-[0-9a-z]+-item-0$/);
+
+    // The rendered option carries exactly that id (no dangling IDREF).
+    expect(commandItemAttributes({ ...state, itemValue: 'beta' }).id).toBe(activeDescendant);
+
+    // L17: a filtered-out item synthesizes no id, so it cannot collide with the
+    // matching item on `…-item-0`.
+    expect(commandItemAttributes({ ...state, itemValue: 'alpha' }).id).toBeUndefined();
+
+    // L17: a second id-less palette with a different item set does not share the
+    // synthesized prefix.
+    const otherState = {
+      highlightedValue: 'gamma',
+      inputValue: 'gamma',
+      items: Object.freeze([
+        { label: 'Gamma', value: 'gamma' },
+        { label: 'Delta', value: 'delta' },
+      ]) as readonly CommandItem[],
+      open: true,
+    };
+    const otherId = commandItemAttributes({ ...otherState, itemValue: 'gamma' }).id;
+    expect(otherId).toMatch(/^command-[0-9a-z]+-item-0$/);
+    expect(otherId).not.toBe(activeDescendant);
+  });
+
   it('filters items and resolves selected value text from labels, text values, or raw values', () => {
     expect(
       commandFilteredItems({ items: commandItems, inputValue: 'doc' }).map(({ value }) => value),

@@ -53,6 +53,86 @@ export function semanticRenderEquivalenceCheck(
   };
 }
 
+/**
+ * SPEC §5.2 rule 3 (authored → lowered leg): a conservative authored-vs-lowered structural
+ * differential. The full byte-identical authored↔lowered gate is NOT achievable here, because
+ * lowering legitimately rewrites the visible HTML in ways the semantic renderer does not replicate
+ * for the authored model: `escapeText(...)` text wrapping, mixed-text `<span data-bind>` insertion,
+ * and `style={…}` → `class="kv-…"` style extraction (verified empirically: 10/18 example components
+ * diverge at the visible-HTML level even after stripping generated attributes). Re-deriving every
+ * lowering pass inside the semantic renderer would be the forbidden source-normalization gate.
+ *
+ * Instead this check verifies the ONE authored→lowered invariant that is sound regardless of those
+ * transforms: every literal (non-dynamic, non-generated) text token the AUTHOR wrote must still
+ * appear, in order, in the lowered render. Lowering may ADD text (template stamps, generated spans)
+ * but must never DROP or reorder author-written copy. A future lowering pass that mangles or loses
+ * visible author text fails closed here, which the lowered-baseline {@link semanticRenderEquivalenceCheck}
+ * cannot catch (both of its sides are already lowered). bugz-3 L5; coupled to bugz.md M2 (the
+ * runtime escapeText single-escape, fixed in `@kovojs/server`).
+ */
+export function authoredStaticTextEquivalenceCheck(
+  artifact: string,
+  authoredModel: ComponentModuleModel,
+  loweredModel: ComponentModuleModel,
+  options: SemanticRenderContext = {},
+): RenderEquivalenceCheck {
+  const authored = staticTextTokens(semanticRenderModel(authoredModel, options));
+  const lowered = staticTextTokens(semanticRenderModel(loweredModel, options));
+  const missing = firstMissingSubsequenceToken(authored, lowered);
+  const ok = missing === null;
+
+  return {
+    actual: lowered.join(' '),
+    artifact,
+    detail:
+      'SPEC §5.2 rule 3 (authored→lowered): authored literal text must survive lowering. ' +
+      (ok
+        ? 'authored text is an ordered subsequence of the lowered render.'
+        : `lowering dropped or reordered authored text token ${JSON.stringify(missing)}.`),
+    expected: authored.join(' '),
+    ok,
+  };
+}
+
+/**
+ * Literal static-text tokens of a semantic render: drop element tags and `{expr}` dynamic
+ * containers, then split the remaining author-written copy on whitespace. Dynamic expressions are
+ * intentionally excluded — only literal text the author typed (e.g. headings, labels) is compared,
+ * so the check is robust to escapeText/span/style lowering of the dynamic parts.
+ */
+function staticTextTokens(html: string): string[] {
+  const withoutTags = html.replace(/<[^>]*>/g, ' ');
+  let withoutExpressions = '';
+  let depth = 0;
+  for (const char of withoutTags) {
+    if (char === '{') depth += 1;
+    else if (char === '}') depth = Math.max(0, depth - 1);
+    else if (depth === 0) withoutExpressions += char;
+  }
+  return withoutExpressions
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+}
+
+/** Return the first `needle` token that is not present as an ordered subsequence of `haystack`. */
+function firstMissingSubsequenceToken(needle: string[], haystack: string[]): string | null {
+  let cursor = 0;
+  for (const token of needle) {
+    let found = false;
+    while (cursor < haystack.length) {
+      const current = haystack[cursor];
+      cursor += 1;
+      if (current === token) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) return token;
+  }
+  return null;
+}
+
 function emittedServerRenderSource(serverSource: string): string {
   try {
     const actual = runInNewContext(`${serverSource}\n;renderSource();`, {}, { timeout: 1000 });

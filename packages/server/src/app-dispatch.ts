@@ -120,17 +120,39 @@ async function validateEndpointCsrf(
 
   // SPEC §9.1 / §6.6: endpoint() is default-CSRF for unsafe browser verbs.
   // Exempt endpoints keep raw-body access; protected endpoints validate a cloned
-  // form body before the raw handler can run.
+  // body before the raw handler can run.
   if (csrf === undefined) return endpointCsrfFailureResponse();
 
-  let rawInput: unknown;
-  try {
-    rawInput = await request.clone().formData();
-  } catch {
-    rawInput = {};
-  }
+  // bugz-3 L15: read the synchronizer token from the parsed body regardless of
+  // content-type, mirroring readMutationRequestBody. SPEC.md §9.1 (line 45) puts
+  // ad-hoc JSON/REST APIs behind endpoint(), so a JSON-body `kovo-csrf` token MUST
+  // be honored — previously the token was read only via formData(), which throws on
+  // an application/json body, so a legitimate JSON endpoint POST always 422'd.
+  const rawInput = await readEndpointCsrfInput(request);
 
   return validateCsrfToken(rawInput, request, csrf) ? undefined : endpointCsrfFailureResponse();
+}
+
+/**
+ * Extract the CSRF synchronizer-token carrier from a cloned request body so the
+ * raw handler still receives the original body. JSON for `application/json`,
+ * form-data otherwise (mirrors `readMutationRequestBody`). Any parse failure — or
+ * a JSON body that is not a record (array/string/number/null) and therefore cannot
+ * carry a named token field — falls back to `{}`, so the Origin floor inside
+ * `validateCsrfToken` still runs and the missing token fails closed with 422.
+ */
+async function readEndpointCsrfInput(request: Request): Promise<unknown> {
+  const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';
+  const clone = request.clone();
+  try {
+    if (contentType.includes('application/json')) {
+      const value: unknown = await clone.json();
+      return typeof value === 'object' && value !== null ? value : {};
+    }
+    return await clone.formData();
+  } catch {
+    return {};
+  }
 }
 
 function requiresCsrf(method: string): boolean {

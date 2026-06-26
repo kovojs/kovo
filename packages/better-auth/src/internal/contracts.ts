@@ -271,6 +271,11 @@ export interface BetterAuthDeclaredTableTouch {
 export interface BetterAuthSchemaBridgeDomainAnnotation {
   domain: BetterAuthTouchDomain;
   key?: string;
+  // bugz-3 M6 (SPEC.md §10.1): credential/token/bearer columns that must never reach the
+  // client wire. Emitted into the schema.ts `kovo({ ..., secret: [...] })` annotation so the
+  // Drizzle confidentiality gate (KV435) brands any projection that reads them `kind:'secret'`,
+  // while legitimate owner-scoped non-secret reads of the same table stay green.
+  secret?: readonly string[];
 }
 
 /** @internal Schema-bridge annotation: either a domain mapping or an exempt-with-rationale entry. */
@@ -499,7 +504,15 @@ export const betterAuthUserDomain = domain('user');
 // Archived D5 auth plan B1: app-owned schema.ts tables stay visible to the touch graph.
 // User rows are intentionally not exempt; app queries commonly render names/avatars.
 export const betterAuthSchemaBridge = {
-  account: { domain: 'auth', key: 'userId' },
+  // bugz-3 M6 (SPEC.md §10.1): `account` stores the password hash and OAuth access/refresh/id
+  // tokens. They stay owner-scoped (`auth`/`userId`) so apps can still render non-secret
+  // columns (provider, scope), but the credential columns are classified `secret:` so a
+  // projection that reaches them fires KV435 instead of serializing a long-lived credential.
+  account: {
+    domain: 'auth',
+    key: 'userId',
+    secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
+  },
   deviceCode: {
     exempt: true,
     rationale:
@@ -522,7 +535,10 @@ export const betterAuthSchemaBridge = {
     rationale:
       'Better Auth database-backed rate-limit counters are adapter enforcement state; SPEC.md §10.1 forbids app queries from reading exempt tables.',
   },
-  session: { domain: 'auth', key: 'userId' },
+  // bugz-3 M6 (SPEC.md §10.1): `session.token` is the raw bearer credential. Owner-scoped
+  // reads of non-secret session columns (expiry, ip, userAgent) stay green; the token column
+  // is `secret:` so it can never be projected onto the client wire.
+  session: { domain: 'auth', key: 'userId', secret: ['token'] },
   team: { domain: 'organization', key: 'organizationId' },
   teamMember: { domain: 'organization', key: 'teamId' },
   twoFactor: { domain: 'auth', key: 'userId' },

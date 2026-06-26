@@ -347,6 +347,86 @@ describe('deferred streams', () => {
     expect(result.body).toContain(`t.includes("--${boundary}")`);
   });
 
+  // M3 (bugz-3; SPEC §9 deferred stream): the emitted client apply/cleanup scripts match the
+  // boundary by SUBSTRING (`textContent.includes("--<boundary>")`), while the old re-roll check was
+  // exact-line (`line === "--<boundary>"`). Stored content that merely CONTAINS `--kovo-boundary`
+  // (not a standalone line) would forge a client break/cleanup but never trigger a re-roll. The
+  // fix mirrors the client's substring test, so a substring collision now re-rolls the boundary.
+  it('re-rolls when fragment content merely CONTAINS `--kovo-boundary` as a substring (M3)', () => {
+    const result = renderDeferredStream({
+      chunks: [
+        {
+          // A SUBSTRING, not a standalone `--kovo-boundary` line: the old exact-line check missed
+          // this, so the default boundary survived and the client `.includes` broke the apply walk.
+          fragments: [{ html: '<section>oops--kovo-boundary-injected</section>', target: 'a' }],
+        },
+      ],
+      shell: '<!doctype html><html><body>',
+    });
+
+    const lines = result.body.split('\n');
+    const realSep = lines.find((line) => /^--[\w-]+$/.test(line) && !line.endsWith('--'));
+    expect(realSep).toBeDefined();
+    // KEY ASSERTION (fails on old exact-line behavior): a content substring forces a re-roll, so
+    // the default boundary is NOT kept.
+    expect(realSep).not.toBe('--kovo-boundary');
+    const marker = realSep as string;
+    // The chosen `--<boundary>` marker must not appear as a substring of the attacker's fragment
+    // content (mirrors the client's `.includes` test), so the client cannot forge a break on it.
+    const fragmentLine = lines.find((line) => line.includes('oops--kovo-boundary-injected'));
+    expect(fragmentLine).toBeDefined();
+    expect((fragmentLine as string).includes(marker)).toBe(false);
+    // The malicious substring is still present verbatim (inert content), just never the boundary.
+    expect(result.body).toContain('oops--kovo-boundary-injected');
+  });
+
+  // M3 (bugz-3): the page SHELL (which the client cleanup walks over `document.body.childNodes`)
+  // was never fed to `collectContentLines`, so a colliding shell node could not force a re-roll —
+  // the cleanup would then delete that whole shell node. The fix scans `options.shell` too.
+  it('re-rolls when the page SHELL text contains `--kovo-boundary` (M3 shell scan)', () => {
+    const result = renderDeferredStream({
+      chunks: [{ fragments: [{ html: '<section>Ready</section>', target: 'main' }] }],
+      // Shell body text contains the marker — previously unscanned, so the cleanup would remove
+      // this <main> for every viewer. The collision must now re-roll the boundary.
+      shell: '<!doctype html><html><body><main>hello --kovo-boundary world</main>',
+    });
+
+    const lines = result.body.split('\n');
+    const realSep = lines.find((line) => /^--[\w-]+$/.test(line) && !line.endsWith('--'));
+    expect(realSep).toBeDefined();
+    // KEY ASSERTION (fails on old behavior, which never scanned the shell): a colliding shell
+    // forces a re-roll away from the default boundary.
+    expect(realSep).not.toBe('--kovo-boundary');
+  });
+
+  // L4 (bugz-3; SPEC §6.x inline-script JSON): a `visible` Defer target embedded in the apply
+  // <script> body must be script-context escaped. Plain `JSON.stringify` leaves `<` raw, so a
+  // target containing `</script>` breaks out of the inline script; `escapeScriptJson` turns `<`
+  // into `<` so the closing tag can no longer terminate the script.
+  it('script-context-escapes visible Defer targets in the apply script (L4)', () => {
+    const result = renderDeferredStream({
+      chunks: [
+        {
+          fragments: [
+            {
+              html: '<aside>Rail</aside>',
+              priority: 'visible',
+              target: '</script><img src=x onerror=alert(1)>',
+            },
+          ],
+          priority: 'visible',
+        },
+      ],
+      shell: '<!doctype html><html><body><kovo-defer></kovo-defer>',
+    });
+
+    // KEY ASSERTION (fails on old `JSON.stringify` behavior): the raw `</script><img ...>`
+    // breakout never appears verbatim anywhere in the rendered stream.
+    expect(result.body).not.toContain('</script><img');
+    // The target survives, script-context-escaped (`<` -> <), inside the apply <script>.
+    expect(result.body).toContain('\\u003c/script>\\u003cimg src=x onerror=alert(1)>');
+  });
+
   // L13-1: when content does NOT collide, the default boundary is preserved so the
   // canonical wire byte layout (golden `defer-stream.http`) is unchanged.
   it('keeps the default `kovo-boundary` when no content collides (L13-1 byte-layout stability)', () => {

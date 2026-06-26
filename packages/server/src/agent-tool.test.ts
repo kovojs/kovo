@@ -108,7 +108,7 @@ describe('agent tool capability primitive', () => {
         ...base,
         ambientCredentials: {
           allow: true,
-          credentialKinds: ['cookie', 'authorization', 'auth-proxy'],
+          credentialKinds: ['cookie', 'authorization', 'auth-proxy-identity', 'auth-proxy-token'],
           justification: {
             authorityBoundary: 'handler re-checks the bound principal before every read',
             reason: 'legacy browser-authenticated assistant action under review',
@@ -385,7 +385,7 @@ describe('agent tool capability primitive', () => {
           value: {},
         },
       ),
-    ).rejects.toThrow('auth-proxy(header:x-auth-request-user)');
+    ).rejects.toThrow('auth-proxy-identity(header:x-auth-request-user)');
 
     await expect(
       runAgentTool(
@@ -405,7 +405,7 @@ describe('agent tool capability primitive', () => {
         },
       ),
     ).rejects.toThrow(
-      'auth-proxy(header:remote-user), auth-proxy(header:x-forwarded-email), auth-proxy(header:x-forwarded-user), auth-proxy(header:x-remote-user)',
+      'auth-proxy-identity(header:remote-user), auth-proxy-identity(header:x-forwarded-email), auth-proxy-identity(header:x-forwarded-user), auth-proxy-identity(header:x-remote-user)',
     );
 
     const request = new Request('https://example.test/tool') as Request & {
@@ -870,7 +870,7 @@ describe('agent tool capability primitive', () => {
         value: {},
       }),
     ).rejects.toThrow(
-      'authorization(header:authorization), auth-proxy(header:x-auth-request-user), auth-proxy(header:x-forwarded-user)',
+      'authorization(header:authorization), auth-proxy-identity(header:x-auth-request-user), auth-proxy-identity(header:x-forwarded-user)',
     );
   });
 
@@ -1120,7 +1120,7 @@ describe('agent tool capability primitive', () => {
     const profile = tool({
       ambientCredentials: {
         allow: true,
-        credentialKinds: ['cookie', 'auth-proxy'],
+        credentialKinds: ['cookie', 'auth-proxy-identity'],
         justification: {
           authorityBoundary: 'handler re-checks the bound principal before reading profile data',
           reason: 'legacy browser-authenticated assistant action under review',
@@ -1137,7 +1137,7 @@ describe('agent tool capability primitive', () => {
     expect(agentToolAuditFacts([profile])).toEqual([
       {
         ambientBrowserCredentials: 'allowed',
-        ambientCredentialKinds: ['cookie', 'auth-proxy'],
+        ambientCredentialKinds: ['cookie', 'auth-proxy-identity'],
         ambientJustification: {
           authorityBoundary: 'handler re-checks the bound principal before reading profile data',
           reason: 'legacy browser-authenticated assistant action under review',
@@ -1219,5 +1219,127 @@ describe('agent tool capability primitive', () => {
         },
       ],
     });
+  });
+
+  // bugz-3 M8 (SPEC §6.6, default-deny over default-allow): under the default
+  // allow:false posture the handler request is rebuilt from an allowlist, so the
+  // OPEN set of reverse-proxy identity/authz headers a denylist can never
+  // enumerate (X-Forwarded-Groups, Remote-Groups, Tailscale-User-Login,
+  // X-Pomerium-Claim-*, X-Vouch-User, ...) is removed BY CONSTRUCTION. On the old
+  // denylist these flowed verbatim to the handler while the audit said 'rejected'.
+  it('strips unlisted reverse-proxy identity/authz headers under the default allow:false posture', async () => {
+    let observed: Record<string, string | null> | undefined;
+    const auditTool = tool({
+      audit: { owner: 'security' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'orders.write', reason: 'update one order status' }],
+      handler: (_input: { id: string }, context) => {
+        observed = {
+          pomeriumClaim: context.request?.headers.get('x-pomerium-claim-email') ?? null,
+          remoteGroups: context.request?.headers.get('remote-groups') ?? null,
+          tailscaleUser: context.request?.headers.get('tailscale-user-login') ?? null,
+          vouchUser: context.request?.headers.get('x-vouch-user') ?? null,
+          // The content-type allowlist header survives so the handler can still
+          // parse its body.
+          contentType: context.request?.headers.get('content-type') ?? null,
+          forwardedGroups: context.request?.headers.get('x-forwarded-groups') ?? null,
+        };
+        return { ok: true, id: _input.id };
+      },
+      name: 'orders.auditStatus',
+      purpose: 'Update a single order status after a human-approved agent action.',
+    });
+
+    await expect(
+      runAgentTool(
+        auditTool,
+        { id: 'ord_1' },
+        {
+          authority: principalAuthority,
+          request: new Request('https://example.test/tool', {
+            body: '{"id":"ord_1"}',
+            headers: {
+              'content-type': 'application/json',
+              'remote-groups': 'admins',
+              'tailscale-user-login': 'victim@example.test',
+              'x-forwarded-groups': 'admins,billing',
+              'x-pomerium-claim-email': 'victim@example.test',
+              'x-vouch-user': 'victim',
+            },
+            method: 'POST',
+          }),
+          value: {},
+        },
+      ),
+    ).resolves.toEqual({ ok: true, id: 'ord_1' });
+
+    // KEY ASSERTION: every ambient proxy identity/authz header is gone; only the
+    // ambient-free content-type allowlist header survives.
+    expect(observed).toEqual({
+      contentType: 'application/json',
+      forwardedGroups: null,
+      pomeriumClaim: null,
+      remoteGroups: null,
+      tailscaleUser: null,
+      vouchUser: null,
+    });
+
+    // The audit fact reflects reality: ambient credentials are actually rejected.
+    expect(agentToolAuditFacts([auditTool])[0]?.ambientBrowserCredentials).toBe('rejected');
+  });
+
+  // bugz-3 L12 (SPEC §6.6): the auth-proxy kind is split so a reviewer can grant a
+  // tool the asserted end-user identity (x-forwarded-email) WITHOUT also handing it
+  // a live OAuth bearer access token (x-forwarded-access-token). On the old single
+  // 'auth-proxy' kind, granting identity unavoidably also granted the token.
+  it('grants auth-proxy identity without bundling live OAuth bearer tokens', async () => {
+    const identityTool = tool({
+      ambientCredentials: {
+        allow: true,
+        credentialKinds: ['auth-proxy-identity'],
+        justification: {
+          authorityBoundary: 'handler re-checks the bound principal before reading profile data',
+          reason: 'legacy identity-aware-proxy assistant action under review',
+        },
+      },
+      audit: { owner: 'security', review: 'SEC-200' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: (_input: undefined, context) => ({
+        accessToken: context.request?.headers.get('x-forwarded-access-token') ?? null,
+        email: context.request?.headers.get('x-forwarded-email') ?? null,
+      }),
+      name: 'profile.identitySummary',
+      purpose: 'Read the current user profile summary for an agent response.',
+    });
+
+    // Identity granted in isolation: the asserted email is readable.
+    await expect(
+      runAgentTool(identityTool, undefined, {
+        authority: principalAuthority,
+        request: new Request('https://example.test/tool', {
+          headers: { 'x-forwarded-email': 'user@example.test' },
+        }),
+        value: {},
+      }),
+    ).resolves.toEqual({ accessToken: null, email: 'user@example.test' });
+
+    // KEY ASSERTION: a live bearer access token is now a DISTINCT, ungranted kind,
+    // so it can no longer ride an identity grant — the invocation is rejected
+    // rather than silently handing the token to the handler (old behavior).
+    await expect(
+      runAgentTool(identityTool, undefined, {
+        authority: principalAuthority,
+        request: new Request('https://example.test/tool', {
+          headers: {
+            'x-forwarded-access-token': 'live-oauth-bearer',
+            'x-forwarded-email': 'user@example.test',
+          },
+        }),
+        value: {},
+      }),
+    ).rejects.toThrow(
+      'received undeclared ambient credential kinds: auth-proxy-token(header:x-forwarded-access-token)',
+    );
   });
 });

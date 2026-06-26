@@ -8,6 +8,14 @@ import {
   unsafeCookie,
   validateRawSetCookie,
 } from './cookies.js';
+// bugz-3 L1: the opaque-session manager is the primary session credential's cookie sink; its L1
+// regression (Secure on an HTTPS request) is asserted here because opaque-session.test.ts is owned
+// by a different slice. The behavior under test (the credential floor + per-request HTTPS signal)
+// belongs to this module's cookie story.
+import {
+  createMemoryOpaqueSessionStore,
+  createOpaqueSessionManager,
+} from './opaque-session.js';
 
 describe('cookie header helpers', () => {
   it('serializes structured Set-Cookie values', () => {
@@ -228,6 +236,66 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     expect(cookie.startsWith('__Host-sid=')).toBe(true);
   });
 
+  // L1 (SPEC §6.6/§9.1): an HTTPS-request signal (`secure: true`) forces the credential Secure floor
+  // (+ __Host- prefix) even when NODE_ENV is not production — the floor no longer depends SOLELY on
+  // the env string. The dev-localhost carve-out (plain http, no signal) still omits Secure.
+  it('forces Secure + __Host- on an HTTPS request signal independent of NODE_ENV (L1)', () => {
+    process.env.NODE_ENV = 'development';
+    const cookie = serializeCookie('sid', 'abc', { class: 'session', secure: true });
+    expect(cookie).toContain('Secure');
+    expect(cookie.startsWith('__Host-sid=')).toBe(true);
+    // Control: dev plain-http (no signal) keeps the carve-out — no Secure, no prefix.
+    expect(serializeCookie('sid', 'abc', { class: 'session' })).toBe(
+      'sid=abc; Path=/; HttpOnly; SameSite=Lax',
+    );
+  });
+
+  // M1 (SPEC §6.6/§9.1, KV432): `productionSecure:false` is a credential Secure downgrade routed
+  // through the SAME KV432 throw as `secure:false`. BEFORE the fix it flowed into
+  // `resolveProductionSecure()` → effective secure=false with NO throw and NO recorded fact, even
+  // under NODE_ENV=production (an un-audited insecure session cookie). It must now reject.
+  it('emits KV432 on a productionSecure:false credential downgrade in production (M1)', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => serializeCookie('sid', 'abc', { class: 'session', productionSecure: false })).toThrow(
+      CookieDowngradeError,
+    );
+    expect(() => serializeCookie('sid', 'abc', { class: 'auth', productionSecure: false })).toThrow(
+      'KV432',
+    );
+    // The downgrade must not have silently emitted a no-Secure cookie + no audit fact (old behavior).
+    expect(drainCookieDowngradeFacts()).toEqual([]);
+    // A forced HTTPS signal (`secure: true`) also makes `productionSecure:false` a downgrade in dev.
+    process.env.NODE_ENV = 'development';
+    expect(() =>
+      serializeCookie('sid', 'abc', { class: 'session', secure: true, productionSecure: false }),
+    ).toThrow('KV432');
+    // Dev plain-http: `productionSecure:false` suppresses a floor that is not engaged, so it is the
+    // dev default (a no-op), not a downgrade — consistent with `secure:false` in dev.
+    expect(() =>
+      serializeCookie('sid', 'abc', { class: 'session', productionSecure: false }),
+    ).not.toThrow();
+  });
+
+  // M1: a `productionSecure:false` downgrade is expressible ONLY through the audited unsafeCookie
+  // escape, which records a downgrade fact for `kovo explain --cookies` (no silent suppression).
+  it('records an audited fact for a justified productionSecure:false downgrade (M1)', () => {
+    process.env.NODE_ENV = 'production';
+    drainCookieDowngradeFacts();
+    const cookie = serializeCookie('sid', 'abc', {
+      class: 'session',
+      productionSecure: false,
+      unsafe: unsafeCookie({
+        downgrade: { secure: false },
+        justification: 'TLS terminates at an internal LB; cookie stays on the private hop',
+      }),
+    });
+    expect(cookie).not.toContain('Secure');
+    expect(cookie.startsWith('sid=')).toBe(true);
+    const facts = drainCookieDowngradeFacts();
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({ class: 'session', name: 'sid' });
+  });
+
   it('defaults SameSite for app-data class but does not force HttpOnly/Secure', () => {
     process.env.NODE_ENV = 'production';
     const cookie = serializeCookie('theme', 'dark', { class: 'app-data' });
@@ -315,5 +383,52 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     expect(normalized).toContain('SameSite=None');
     expect(normalized).toContain('Secure');
     expect(normalized).toContain('Partitioned');
+  });
+});
+
+// L1 (SPEC §6.6/§9.1): the opaque-session manager — the primary session credential's cookie sink —
+// now threads a per-request HTTPS signal, so the session cookie is Secure + __Host- on an HTTPS
+// request regardless of NODE_ENV. BEFORE the fix `establish` took no request, so the most sensitive
+// cookie depended SOLELY on NODE_ENV (no Secure on a dev/staging/unset env even over HTTPS).
+describe('opaque-session credential cookie HTTPS floor (SPEC §6.6/§9.1, bugz-3 L1)', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
+  it('emits Secure + __Host- on an HTTPS establish request even when NODE_ENV is not production', async () => {
+    process.env.NODE_ENV = 'development';
+    const manager = createOpaqueSessionManager<{ user: { id: string } }>({
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    const established = await manager.establish(
+      { user: { id: 'u1' } },
+      { request: new Request('https://app.test/login', { method: 'POST' }) },
+    );
+    expect(established.setCookie).toContain('Secure');
+    expect(established.setCookie).toMatch(/^__Host-kovo_session=/);
+
+    // Control: no request (no HTTPS signal) keeps the dev carve-out — no Secure, bare name.
+    const devEstablished = await manager.establish({ user: { id: 'u1' } });
+    expect(devEstablished.setCookie).not.toContain('Secure');
+    expect(devEstablished.setCookie).toMatch(/^kovo_session=/);
+  });
+
+  it('clears with a matching Secure + __Host- cookie on an HTTPS revoke request', async () => {
+    process.env.NODE_ENV = 'development';
+    const manager = createOpaqueSessionManager<{ user: { id: string } }>({
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    const established = await manager.establish(
+      { user: { id: 'u1' } },
+      { request: new Request('https://app.test/login', { method: 'POST' }) },
+    );
+    const revoked = await manager.revoke(established.session.id, {
+      request: new Request('https://app.test/logout', { method: 'POST' }),
+    });
+    // The clearing cookie must carry the same __Host- prefix or the browser won't match/clear it.
+    expect(revoked.setCookie).toMatch(/^__Host-kovo_session=;/);
+    expect(revoked.setCookie).toContain('Secure');
+    expect(revoked.setCookie).toContain('Max-Age=0');
   });
 });

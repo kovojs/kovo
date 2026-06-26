@@ -139,10 +139,6 @@ export interface SheetCloseProps extends SheetStateProps {
   id?: string;
 }
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
 /**
  * Style definitions used by the sheet components.
  *
@@ -403,7 +399,7 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): Component
         disabled={triggerAttrs.disabled}
         type={triggerAttrs.type}
       >
-        {escapeHtml(props.trigger ?? 'Open')}
+        {props.trigger ?? 'Open'}
       </button>
       <dialog
         {...contentStyleAttrs}
@@ -419,13 +415,13 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): Component
       >
         <header {...headerStyleAttrs}>
           <h2 {...titleStyleAttrs} id={titleId}>
-            {escapeHtml(props.title)}
+            {props.title}
           </h2>
           {descriptionId === undefined ? (
             ''
           ) : (
             <p {...descriptionStyleAttrs} id={descriptionId}>
-              {escapeHtml(props.description ?? '')}
+              {props.description ?? ''}
             </p>
           )}
         </header>
@@ -433,7 +429,7 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): Component
         <button
           {...closeStyleAttrs}
           {...passThroughProps(props)}
-          aria-label={escapeHtml(props.closeLabel ?? 'Close')}
+          aria-label={props.closeLabel ?? 'Close'}
           command={closeAttrs.command}
           commandfor={closeAttrs.commandfor}
           data-disabled={closeAttrs['data-disabled']}

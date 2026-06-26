@@ -7,6 +7,7 @@ import { defer } from './deferred-region.js';
 import { guards } from './guards.js';
 import { renderedHtml } from './html.js';
 import { stylesheet } from './hints.js';
+import { respond } from './response.js';
 import { layout, notFound, route } from './route.js';
 import {
   computeRenderPlanFingerprint,
@@ -931,13 +932,16 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     expect(response.headers['Cache-Control']).toBe('no-store');
   });
 
-  it('an unguarded route with a plain-value session provider (no Set-Cookie) stays cacheable', async () => {
-    // Negative: no per-principal cookie emitted → no forced no-store. An unguarded, anonymous
-    // document remains shared-cacheable; we must not over-broadly disable caching.
+  it('an unguarded route with an ANONYMOUS session (null) stays cacheable', async () => {
+    // Negative: no per-principal session resolved and no per-principal cookie emitted → no forced
+    // no-store. An unguarded, anonymous document remains shared-cacheable; we must not over-broadly
+    // disable caching. (bugz-3 L2: an AUTHENTICATED unguarded route is now no-store even without a
+    // refresh cookie — see the positive L2 test below. This negative case must therefore be truly
+    // anonymous, not merely non-rolling.)
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
     const app = createApp({
       routes: [homeRoute],
-      sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+      sessionProvider: delegatedSessionProvider(() => null),
     });
 
     const response = await renderAppRouteDocumentResponse({
@@ -951,5 +955,109 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     expect(response.status).toBe(200);
     expect(response.headers['Set-Cookie']).toBeUndefined();
     expect(response.headers['Cache-Control']).toBeUndefined();
+    // No per-principal fingerprint is stamped on an anonymous document.
+    expect(response.body as string).not.toContain('name="kovo-session"');
+  });
+});
+
+// ─── bugz-3 L2/M2: non-rolling per-principal cache/bfcache posture ─────────────
+
+describe('bugz-3 L2/M2 — per-principal documents and downloads are no-store + Vary: Cookie', () => {
+  // SPEC §9.4:927 (caching contract) + §9.5:780 (bfcache posture).
+  it('L2: an authenticated UNGUARDED route under a NON-ROLLING provider is no-store + Vary: Cookie', async () => {
+    // A non-rolling provider (long-lived cookie / JWT, Better Auth without updateAge/cookieCache,
+    // the opaque-session manager that never rolls on GET) emits NO refresh Set-Cookie, yet it still
+    // resolves a per-principal session identity, so the document stamps the `kovo-session`
+    // fingerprint. Before the fix `noStore` keyed on `route.guard || refreshSetCookies.length` and
+    // MISSED this case → an authenticated unguarded page was shared-cacheable despite carrying
+    // per-principal state (cross-principal shared-cache / bfcache leak).
+    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    expect(homeRoute.guard).toBeUndefined();
+
+    const app = createApp({
+      routes: [homeRoute],
+      // Non-rolling: a plain value, NO `setCookies` → zero refresh Set-Cookie.
+      sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.status).toBe(200);
+    // No refresh cookie was emitted (the provider is non-rolling)…
+    expect(response.headers['Set-Cookie']).toBeUndefined();
+    // …but a per-principal fingerprint WAS stamped…
+    expect(response.body as string).toContain('name="kovo-session"');
+    // …so the document MUST now be no-store + Vary: Cookie (the L2 fix).
+    expect(response.headers['Cache-Control']).toBe('no-store');
+    expect(String(response.headers.Vary)).toContain('Cookie');
+  });
+
+  it('M2: a guarded respond.file outcome carries Cache-Control: no-store + Vary: Cookie', async () => {
+    // Before the fix `renderRouteDocumentResponse` returned the file outcome UNCHANGED, dropping the
+    // computed no-store floor → a per-principal download was shared-cache-storable + BREACH-compressible.
+    const fileRoute = route('/statement.txt', {
+      guard: guards.authed<Request & { session?: { user?: { id?: string } } }>(),
+      page: () =>
+        respond.file('PRIVATE STATEMENT\n', {
+          contentType: 'text/plain; charset=utf-8',
+          filename: 'statement.txt',
+        }),
+    });
+    const app = createApp({
+      routes: [fileRoute],
+      sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/statement.txt'),
+      route: fileRoute,
+      url: new URL('https://example.test/statement.txt'),
+    });
+
+    expect(response.status).toBe(200);
+    // The download body/disposition survive (not wrapped as HTML)…
+    expect(response.body).toBe('PRIVATE STATEMENT\n');
+    expect(response.headers['Content-Disposition']).toBe('attachment; filename="statement.txt"');
+    // …and now carry the per-principal cache/isolation floor.
+    expect(response.headers['Cache-Control']).toBe('no-store');
+    expect(String(response.headers.Vary)).toContain('Cookie');
+    expect(response.headers['X-Frame-Options']).toBe('DENY');
+  });
+
+  it('M2: a guarded respond.stream outcome carries Cache-Control: no-store + Vary: Cookie', async () => {
+    const streamRoute = route('/export.bin', {
+      guard: guards.authed<Request & { session?: { user?: { id?: string } } }>(),
+      page: () =>
+        respond.stream(new ReadableStream<Uint8Array>(), {
+          contentType: 'application/octet-stream',
+          filename: 'export.bin',
+        }),
+    });
+    const app = createApp({
+      routes: [streamRoute],
+      sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/export.bin'),
+      route: streamRoute,
+      url: new URL('https://example.test/export.bin'),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toBeInstanceOf(ReadableStream);
+    expect(response.headers['Content-Type']).toBe('application/octet-stream');
+    expect(response.headers['Cache-Control']).toBe('no-store');
+    expect(String(response.headers.Vary)).toContain('Cookie');
   });
 });

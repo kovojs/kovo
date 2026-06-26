@@ -18,6 +18,16 @@ export interface MutationTouchInput {
 
 /** @internal */
 export interface InferredMutationTouchSite {
+  /**
+   * The touched domain spans multiple tables (parent+child / relational), so its
+   * row keys live in distinct per-table identity spaces. A key-scoped change to
+   * one such table cannot be proven to address the canonical single-row identity a
+   * reader is instance-keyed by (the touched key is in the mutated table's space,
+   * the reader's instance key in the domain's anchor-table space). The runtime must
+   * over-invalidate (rerun) every reader of the domain rather than narrow by raw key
+   * equality — SPEC §10.1 (over-invalidate when row identity is uncertain); bugz-3 M9.
+   */
+  crossTable?: true;
   domain: string;
   keys: null | string;
 }
@@ -75,8 +85,19 @@ export function deriveInvalidationRegistry(input: {
 /** @internal */
 export function deriveMutationTouchRegistry(input: {
   mutations: readonly MutationTouchInput[];
+  /**
+   * The schema `table -> domain` registry (SPEC §10.1; see `serializeDomainRegistry`'s
+   * `tableDomains`). A domain that more than one table maps to is relational/multi-table:
+   * its row keys are split across tables with distinct identity spaces, so a key-scoped
+   * narrow against a single-row reader's instance key is unsound and each such touch is
+   * marked `crossTable` so the runtime over-invalidates the whole domain (bugz-3 M9).
+   * Optional for back-compat; when omitted the same relational signal is still recovered
+   * for any domain the touch graph itself shows touched/read via more than one table.
+   */
+  tableDomains?: Readonly<Record<string, string>>;
   touchGraph: TouchGraph;
 }): MutationTouchRegistry {
+  const multiTableDomains = relationalDomains(input.touchGraph, input.tableDomains);
   const registry: Record<string, InferredMutationTouchSite[]> = {};
 
   for (const mutation of input.mutations) {
@@ -87,12 +108,48 @@ export function deriveMutationTouchRegistry(input: {
       touchEntry.touches.map((touch) => ({
         domain: touch.domain,
         keys: touch.keys,
+        ...(multiTableDomains.has(touch.domain) ? { crossTable: true as const } : {}),
       })),
     );
     if (touches.length > 0) registry[mutation.mutation] = touches;
   }
 
   return registry;
+}
+
+/**
+ * @internal Domains whose row identity is split across more than one table
+ * (parent+child / relational). Computed from the authoritative schema `tableDomains`
+ * map when supplied, unioned with any domain the touch graph itself shows touched or
+ * read via more than one table. A key-scoped change to such a domain is NOT a provable
+ * single-row identity (the touched table's key space differs from a reader's
+ * instance-key space), so the runtime must over-invalidate it (SPEC §10.1; bugz-3 M9).
+ */
+function relationalDomains(
+  touchGraph: TouchGraph,
+  tableDomains: Readonly<Record<string, string>> | undefined,
+): ReadonlySet<string> {
+  const tablesByDomain = new Map<string, Set<string>>();
+  const note = (domain: string, table: string | undefined): void => {
+    if (table === undefined || table.length === 0) return;
+    const tables = tablesByDomain.get(domain) ?? new Set<string>();
+    tables.add(table);
+    tablesByDomain.set(domain, tables);
+  };
+
+  if (tableDomains) {
+    for (const [table, domain] of Object.entries(tableDomains)) note(domain, table);
+  }
+  for (const entry of Object.values(touchGraph)) {
+    for (const touch of entry.touches) note(touch.domain, touch.via);
+    for (const read of entry.reads ?? []) note(read.domain, read.via);
+  }
+
+  const relational = new Set<string>();
+  for (const [domain, tables] of tablesByDomain) {
+    if (tables.size > 1) relational.add(domain);
+  }
+  return relational;
 }
 
 /** @internal */
@@ -158,10 +215,13 @@ export function serializeMutationTouchRegistry(
   )) {
     lines.push(`  ${tsStringLiteral(mutation)}: [`);
     for (const touch of touches) {
+      // bugz-3 M9: emit `crossTable` so the runtime over-invalidates relational
+      // domains instead of narrowing by raw key equality (SPEC §10.1).
+      const crossTable = touch.crossTable ? ', crossTable: true' : '';
       lines.push(
         `    { domain: ${tsStringLiteral(touch.domain)}, keys: ${tsNullableStringLiteral(
           touch.keys,
-        )} },`,
+        )}${crossTable} },`,
       );
     }
     lines.push('  ],');

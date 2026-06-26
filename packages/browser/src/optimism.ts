@@ -1,7 +1,7 @@
 import type { Form, FormInput, InvalidationSets, QueryRegistry } from '@kovojs/core';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
-import { queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
+import { queryIdentityFromStoreKey, queryStoreKey, queryWireKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
 
 /** A pure optimistic predictor: mutate the cloned query draft for the mutation input. */
@@ -40,11 +40,13 @@ export interface OptimisticPlan<Input = unknown> {
 }
 
 /**
- * @internal The §10.2 instance-key derivation an authored keyed transform carries: derive
- * the canonical key VALUE (the `keyValue` of `name:keyValue`, §10.2:1040) for the keyed
- * query instance this transform predicts, from the same validated mutation `input` the
- * query's own `instanceKey` resolves against (§10.2 WHERE eq-predicate → `args.*`). Returns
- * the keyValue string directly, or the declared args object reduced to the keyValue.
+ * @internal The §10.2 instance-key derivation an authored keyed transform carries: name the keyed
+ * query INSTANCE this transform predicts (§10.2:1040) from the same validated mutation `input` the
+ * query's own `instanceKey` resolves against (§10.2 WHERE eq-predicate → `args.*`). A STRING result
+ * IS the full canonical `name:keyValue` instance key (symmetric with the query's own
+ * `instanceKey: (input) => string`, e.g. `product:p1`); an args OBJECT supplies only the `keyValue`
+ * half (its values joined in declared order), which {@link optimisticPlanFromAuthoredMap} prefixes
+ * with the query name to form the canonical instance key.
  */
 export type AuthoredOptimisticKeyDerivation<Input = unknown> = (
   input: Input,
@@ -579,11 +581,14 @@ function optimisticQueryKey<Input>(
 
 /**
  * Reduce an authored §10.2 instance-key derivation result to the canonical key VALUE — the
- * `keyValue` of the `name:keyValue` encoding (SPEC §10.2:1040). A string result IS the keyValue
- * (symmetric with a query's own `instanceKey: (input) => string`, §10.2). An args object is
- * reduced to its values joined in declared (insertion) order, so a single-arg keyed query
- * (`{ id }`) yields just the value (`q3`) and the prediction lands on the same store slot the
- * matching `<kovo-query name key>` server-truth chunk decodes to (§9.4/§13.2).
+ * `keyValue` HALF of the `name:keyValue` encoding (SPEC §10.2:1040). An args object is reduced to
+ * its values joined in declared (insertion) order, so a composite `{ org, id }` key yields
+ * `o1:q3`. This returns ONLY the `keyValue`: it does NOT by itself land on a store slot, because
+ * the store/wire/optimism share the FULL `name:keyValue` instance key (§10.2:1040 — "this one
+ * string keys the client store, the `<kovo-query name key>` wire chunk, kovo-deps, and live-push
+ * routing"). {@link optimisticPlanFromAuthoredMap} assembles that full key by prefixing the query
+ * name; keying a prediction by this bare `keyValue` alone would target an empty `name␞keyValue`
+ * slot while server-truth/hydration land in `name␞name:keyValue`, silently no-op'ing (KV313).
  */
 export function canonicalInstanceKeyValue(
   derived: string | Record<string, string | number | boolean>,
@@ -600,7 +605,7 @@ export function canonicalInstanceKeyValue(
  * {@link OptimisticPlan} (SPEC §10.4). This is the bridge between the keyed AUTHORING surface
  * (server `MutationOptimisticMap`, compiler-scanned per §5.2) and the instance-keyed runtime:
  * a keyed entry's `transform` flows into `plan.transforms`, and its `keys` derivation flows
- * into `plan.keys` as a `(change) => keyValue` function (§10.2), so the existing rebaser/apply
+ * into `plan.keys` as a `(change) => name:keyValue` function (§10.2), so the existing rebaser/apply
  * path predicts on, reconciles into, and rebases the correct query INSTANCE (§13.2). Unkeyed
  * transforms and `'await-fragment'` positions lower unchanged.
  */
@@ -616,12 +621,22 @@ export function optimisticPlanFromAuthoredMap<Input>(
       transforms[queryName] = entry;
       continue;
     }
-    // SPEC §10.2/§10.4: a keyed entry contributes its transform plus an instance-key
-    // derivation; resolve the author's `(input) => keyValue|args` to the canonical keyValue
-    // the runtime store/wire share, evaluated per change against the mutation input.
+    // SPEC §10.2:1040: a keyed entry contributes its transform plus an instance-key derivation,
+    // resolved to the FULL canonical `name:keyValue` — the single instance-key currency the store,
+    // the `<kovo-query name key>` wire chunk, and live-push routing all share, so the prediction
+    // lands on the SAME slot as server-truth/hydration instead of an orphaned bare-value slot
+    // (the L13/KV313 divergence). A STRING derivation IS that full instance key (symmetric with the
+    // query's own `instanceKey: (input) => string`, e.g. `product:p1`) and passes through; an args
+    // object yields only the `keyValue`, which we prefix with the query name via `queryWireKey`
+    // (idempotent — never double-prefixed) to form the canonical instance key.
     transforms[queryName] = entry.transform;
     const derive = entry.keys;
-    keys[queryName] = (change) => canonicalInstanceKeyValue(derive(change.input));
+    keys[queryName] = (change) => {
+      const derived = derive(change.input);
+      return typeof derived === 'string'
+        ? derived
+        : queryWireKey(queryName, canonicalInstanceKeyValue(derived));
+    };
   }
 
   return {

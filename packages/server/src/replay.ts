@@ -464,7 +464,34 @@ function mutationReplayKey(scope: string, idem: string): string {
   return `${scope}\0${idem}`;
 }
 
+/**
+ * Canonicalize a mutation request body into the stable fingerprint string used to detect
+ * idempotency-key reuse-with-different-input (SPEC §9.1 {@link MutationReplayConflictError}).
+ * Shared with the wire precompute in `mutation-wire.ts` so the precomputed
+ * `requestFingerprint` and any store-side recompute agree on the same value for the same body.
+ *
+ * L3 (bugz-3): a `FormData`/multipart body exposes no own-enumerable keys, so the naive
+ * `Object.keys()` walk below produced `canonicalJson(formData) === "{}"` for EVERY multipart
+ * submission — the enhanced JS client always submits FormData — collapsing all bodies to one
+ * fingerprint so the conflict defense never fired. Canonicalize FormData (and nested File/Blob
+ * uploads) to a record first, mirroring how the idem token and CSRF field are already read off
+ * FormData via {@link formLikeToRecord}, so distinct bodies fingerprint distinctly and identical
+ * bodies match.
+ */
+export function canonicalRequestFingerprint(value: unknown): string {
+  return canonicalJson(value);
+}
+
 function canonicalJson(value: unknown): string {
+  // L3 (SPEC §9.1): a FormData body has no own-enumerable keys — canonicalize its entries to
+  // a record (mirroring formLikeToRecord) before the structural walk so the fingerprint is
+  // body-sensitive instead of always "{}".
+  if (value instanceof FormData) return canonicalJson(formLikeToRecord(value));
+  // A File/Blob can only be hashed asynchronously, but the fingerprint is computed
+  // synchronously on the conflict path; reduce an upload to its stable descriptor so two
+  // different uploads under one idem still diverge (conflict) while a re-submit of the
+  // identical file matches (replay). This is strictly stronger than dropping file entries.
+  if (isUploadLike(value)) return canonicalJson(uploadFingerprint(value));
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
   return `{${Object.keys(value)
@@ -473,6 +500,29 @@ function canonicalJson(value: unknown): string {
       (key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`,
     )
     .join(',')}}`;
+}
+
+function isUploadLike(value: unknown): value is { name?: unknown; size?: unknown; type?: unknown } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { arrayBuffer?: unknown }).arrayBuffer === 'function' &&
+    typeof (value as { size?: unknown }).size === 'number'
+  );
+}
+
+function uploadFingerprint(value: { name?: unknown; size?: unknown; type?: unknown }): {
+  __kovoUpload: true;
+  name: string | null;
+  size: number | null;
+  type: string | null;
+} {
+  return {
+    __kovoUpload: true,
+    name: typeof value.name === 'string' ? value.name : null,
+    size: typeof value.size === 'number' ? value.size : null,
+    type: typeof value.type === 'string' ? value.type : null,
+  };
 }
 
 function fingerprintsMatch(left: string | undefined, right: string | undefined): boolean {

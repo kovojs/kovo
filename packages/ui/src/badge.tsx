@@ -83,10 +83,6 @@ export const badgeStyles = {
   variants,
 } as const;
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
 /**
  * Renders the styled badge primitive.
  *
@@ -98,6 +94,9 @@ export const Badge = component({
   render(props: BadgeProps) {
     const attrs = style.attrs(base.root, variants[props.variant ?? 'neutral'], props.style);
 
-    return <span {...attrs}>{props.children === undefined ? '' : escapeHtml(props.children)}</span>;
+    // SPEC.md §4.5/§5.2: the @kovojs/server JSX runtime escapes scalar text
+    // children exactly once, so pass the raw value — pre-escaping here would
+    // double-escape (`AT&T` → `AT&amp;amp;T`).
+    return <span {...attrs}>{props.children ?? ''}</span>;
   },
 });

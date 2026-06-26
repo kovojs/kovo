@@ -163,6 +163,101 @@ describe('server app matched dispatch boundary', () => {
     expect(handlerCalls).toBe(1);
   });
 
+  it('L15: accepts a JSON endpoint POST whose valid kovo-csrf token rides in the JSON body (SPEC §9.1)', async () => {
+    // bugz-3 L15: default endpoint CSRF read the token only via formData(), which throws on
+    // an application/json body, so a legitimate JSON endpoint POST (SPEC.md §9.1 routes
+    // ad-hoc JSON APIs through endpoint()) always 422'd even with a valid token + Origin.
+    let handlerCalls = 0;
+    let seenBody = '';
+    const updateEmail = endpoint('/account/email', {
+      async handler(request) {
+        handlerCalls += 1;
+        seenBody = await request.text();
+        return new Response('updated');
+      },
+      method: 'POST',
+      reason: 'account email update endpoint',
+      response: rawTextResponse,
+    });
+    const csrf = { secret: 'endpoint-secret', sessionId: () => 's1' };
+    const app = createApp({ csrf, endpoints: [updateEmail] });
+    const body = JSON.stringify({
+      email: 'ada@example.com',
+      'kovo-csrf': csrfToken({} as Request, csrf),
+    });
+    const request = new Request('https://shop.example.test/account/email', {
+      body,
+      headers: { 'Content-Type': 'application/json', Origin: 'https://shop.example.test' },
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('updated');
+    expect(handlerCalls).toBe(1);
+    // The raw handler still receives the original, unconsumed JSON body.
+    expect(seenBody).toBe(body);
+  });
+
+  it('L15: still fails closed (422) for a JSON endpoint POST missing the kovo-csrf token', async () => {
+    let handlerCalls = 0;
+    const updateEmail = endpoint('/account/email', {
+      handler() {
+        handlerCalls += 1;
+        return new Response('updated');
+      },
+      method: 'POST',
+      reason: 'account email update endpoint',
+      response: rawTextResponse,
+    });
+    const csrf = { secret: 'endpoint-secret', sessionId: () => 's1' };
+    const app = createApp({ csrf, endpoints: [updateEmail] });
+    const request = new Request('https://shop.example.test/account/email', {
+      body: JSON.stringify({ email: 'ada@example.com' }),
+      headers: { 'Content-Type': 'application/json', Origin: 'https://shop.example.test' },
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(422);
+    await expect(response.text()).resolves.toBe('CSRF');
+    expect(handlerCalls).toBe(0);
+  });
+
+  it('L16: neutralizes the inbound Cookie header for a csrf:false endpoint handler (SPEC §9.1)', async () => {
+    // bugz-3 L16: a csrf:false endpoint skips the synchronizer token AND the Origin floor;
+    // the exemption is sound only because "cookies are not interpreted" (SPEC.md §9.1).
+    let seenCookie: string | null = 'unset';
+    const signedWebhook = endpoint('/webhooks/signed', {
+      csrf: false,
+      csrfJustification: 'signed webhook validates raw body',
+      handler(request) {
+        seenCookie = request.headers.get('cookie');
+        return new Response('ok', { status: 202 });
+      },
+      method: 'POST',
+      reason: 'signed webhook raw body dispatch',
+      response: rawTextResponse,
+    });
+    const app = createApp({
+      csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },
+      endpoints: [signedWebhook],
+    });
+    const request = new Request('https://shop.example.test/webhooks/signed', {
+      body: '{"event":"ok"}',
+      headers: { Cookie: 'sid=victim-session-secret' },
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(202);
+    // The exempt handler can no longer ride the victim's ambient browser cookie.
+    expect(seenCookie).toBeNull();
+  });
+
   it('enforces executable endpoint auth before CSRF or handler dispatch', async () => {
     const verifier = hmacSignature({
       encoding: 'hex',

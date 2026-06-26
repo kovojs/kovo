@@ -133,15 +133,25 @@ export async function renderAppRouteDocumentResponse({
     routeResponse.lifecycleRequest instanceof Request ? routeResponse.lifecycleRequest : request,
   );
 
-  // part-4 G1 (SPEC §9.4:906 caching contract, §9.4:767 bfcache hygiene): a response that carries a
-  // per-principal `Set-Cookie` (a rolling/refresh session token forwarded by the sessionProvider via
-  // `onSessionSetCookie` — part-3 I2) varies by identity, so it MUST never be stored by a shared
-  // CDN/proxy cache; otherwise the cached document replays one user's session cookie to other
-  // visitors (cross-principal token leak / takeover). The sessionProvider runs on every route —
-  // guarded or not (route.ts) — so an authenticated user loading an UNGUARDED route (the public `/`)
-  // also gets a refresh cookie. Force `no-store` whenever any per-principal cookie was emitted,
-  // independent of `route.guard`. (We do NOT change the cookie forwarding itself.)
-  const noStore = route.guard !== undefined || refreshSetCookies.length > 0;
+  // part-4 G1 + bugz-3 L2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a document
+  // that varies by identity MUST never be stored by a shared CDN/proxy cache nor restored from
+  // bfcache across the guard; otherwise the cached page replays one principal's private content
+  // (and any per-principal `Set-Cookie`) to other visitors (cross-principal leak / takeover). Three
+  // independent signals make a document session-dependent:
+  //   1. `route.guard !== undefined` — a guarded route renders per-principal content (§9.5:780).
+  //   2. `refreshSetCookies.length > 0` — a rolling/refresh session token forwarded by the
+  //      sessionProvider via `onSessionSetCookie`/`onCsrfSetCookie` (part-3 I2) rides the response.
+  //   3. `sessionFingerprint !== undefined` — the route lifecycle resolved a per-principal session
+  //      identity and this document stamps the `kovo-session` fingerprint. bugz-3 L2: a NON-ROLLING
+  //      provider (long-lived cookie / JWT, Better Auth without `updateAge`/`cookieCache`, the
+  //      opaque-session manager that never rolls on GET) emits no refresh `Set-Cookie`, so signals
+  //      1–2 miss an authenticated UNGUARDED route even though it serves per-principal state. Gate
+  //      on the RESOLVED session identity, not on whether a refresh cookie happened to be emitted.
+  // (We do NOT change the cookie forwarding itself.)
+  const noStore =
+    route.guard !== undefined ||
+    refreshSetCookies.length > 0 ||
+    sessionFingerprint !== undefined;
   const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
     request.headers.get('accept'),
   );
@@ -175,6 +185,9 @@ export async function renderAppRouteDocumentResponse({
       // document no-store so a Back/bfcache restore can't show it after logout.
       // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
       // response on an unguarded route (cross-principal shared-cache leak).
+      // bugz-3 L2 (SPEC §9.5:780): also no-store when a per-principal session identity
+      // resolved (a stamped `kovo-session` fingerprint) even under a non-rolling provider.
+      // `renderRouteDocumentResponse` carries this floor onto file/stream outcomes too (M2).
       ...(noStore ? { noStore: true } : {}),
       // SPEC §4.4 / plans/better-js-loader.md: enhanced navigation has already
       // installed the inline loader, so its negotiated document variant omits the

@@ -9,6 +9,7 @@ import {
 } from './change-record.js';
 import { domain } from './domain.js';
 import { renderMutationResponse, runMutation } from './mutation.js';
+import { queriesToRerun } from './mutation/targets.js';
 import { query } from './query.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
@@ -119,6 +120,80 @@ describe('server change records', () => {
     expect(changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'cart:p1')).toBe(
       true,
     );
+  });
+
+  it('M9: a relational/multi-table domain over-invalidates a same-domain single-row reader (SPEC §10.1)', () => {
+    // Domain `cart` spans carts(id)+cart_items(id). A DELETE on cart_items carries a
+    // key in the CHILD identity space ('i9'); `cartDetail` is instance-keyed by the
+    // PARENT identity ('cart:c1'). The pre-fix raw compare (['i9'].includes('c1'))
+    // silently dropped the reader; a `crossTable` change must over-invalidate it.
+    expect(
+      changeRecordTouchesQueryInstance(
+        { crossTable: true, domain: 'cart', keys: ['i9'], via: 'cart_items' },
+        'cart:c1',
+      ),
+    ).toBe(true);
+    // Single-table domains keep the intended sibling narrowing: a product:p1 reader
+    // is NOT rerun by a product:p2 change (no crossTable marker).
+    expect(
+      changeRecordTouchesQueryInstance(
+        { domain: 'product', keys: ['p2'], via: 'products' },
+        'product:p1',
+      ),
+    ).toBe(false);
+  });
+
+  it('M9: inferred touches → change records → queriesToRerun reruns a same-domain child reader (SPEC §10.1)', () => {
+    const cart = domain('cart');
+    const product = domain('product');
+    // The `crossTable` marker is what the compiler/Drizzle `deriveMutationTouchRegistry`
+    // now emits for a relational domain (`cart` = carts(id)+cart_items(id)); the
+    // single-table `product` touch carries no marker. (The Drizzle derivation that
+    // produces these markers is proven in `packages/drizzle/src/invalidation.test.ts`;
+    // the server cannot import `@kovojs/drizzle`, so the two halves are tested per side.)
+    const cartChanges = mutationRegistryChangeRecords(
+      {
+        inferredTouches: [
+          { crossTable: true, domain: 'cart', keys: 'arg:itemId', via: 'cart_items' },
+        ],
+      },
+      { itemId: 'i9' },
+    );
+    expect(cartChanges).toEqual([
+      {
+        crossTable: true,
+        domain: 'cart',
+        input: { itemId: 'i9' },
+        keys: ['i9'],
+        via: 'cart_items',
+      },
+    ]);
+
+    const cartDetail = query('cartDetail', { instanceKey: 'cart:c1', reads: [cart] });
+    // KEY ASSERTION: the child-table DELETE now reruns the parent-keyed reader
+    // (pre-fix it was silently dropped from the rerun set — under-invalidation).
+    expect(queriesToRerun([cartDetail], cartChanges, { itemId: 'i9' })).toEqual([
+      { instanceKey: 'cart:c1', key: 'cartDetail', whole: true },
+    ]);
+    // The exact pre-fix shape (no crossTable) proves the divergence the fix closes:
+    // the reader is dropped because 'i9' (child key) !== 'c1' (parent instance key).
+    expect(
+      queriesToRerun([cartDetail], [{ domain: 'cart', keys: ['i9'], via: 'cart_items' }], {
+        itemId: 'i9',
+      }),
+    ).toEqual([]);
+
+    // Single-table narrowing must NOT regress: a product:p2 change does not rerun a
+    // product:p1 reader.
+    const productChanges = mutationRegistryChangeRecords(
+      { inferredTouches: [{ domain: 'product', keys: 'arg:productId', via: 'products' }] },
+      { productId: 'p2' },
+    );
+    expect(productChanges).toEqual([
+      { domain: 'product', input: { productId: 'p2' }, keys: ['p2'], via: 'products' },
+    ]);
+    const productDetail = query('product', { instanceKey: 'product:p1', reads: [product] });
+    expect(queriesToRerun([productDetail], productChanges, { productId: 'p2' })).toEqual([]);
   });
 
   it('narrows per-row instances and over-invalidates non-row readers of the same domain (canonical §10.2 keys)', async () => {

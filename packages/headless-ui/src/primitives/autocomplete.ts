@@ -1167,20 +1167,51 @@ function autocompleteOptionId(
 }
 
 function autocompleteFallbackOptionId(
-  state: AutocompleteState & { id?: string },
+  state: AutocompleteState & { id?: string; listId?: string },
   value: string,
 ): string | undefined {
-  // J1 (SPEC.md §4.6): index against the *filtered* render order so the
-  // synthesized id matches the rendered option's position after typing. If the
-  // value is not in the filtered set (e.g. an app that renders the unfiltered
-  // list), fall back to the full-list index so the IDREF still resolves.
-  const filteredIndex = autocompleteSuggestions(state).findIndex((item) => item.value === value);
-  const index =
-    filteredIndex >= 0
-      ? filteredIndex
-      : (state.items?.findIndex((item) => item.value === value) ?? -1);
+  // J1 (SPEC.md §4.6) + bugz-3 L17: use a SINGLE index space — always the
+  // *filtered* suggestion order (the options actually rendered). A value outside
+  // that order gets no synthesized id (returns undefined) instead of a full-list
+  // fallback; the old dual space let a non-matching full-index-0 item collide
+  // with a matching filtered-index-0 item on `…-option-0`. The input
+  // (aria-activedescendant) and every option resolve the same `state`, so the
+  // synthesized IDREF still matches.
+  const index = autocompleteSuggestions(state).findIndex((item) => item.value === value);
   if (index < 0) return undefined;
-  return `${state.listId ?? state.id ?? 'autocomplete'}-option-${index}`;
+  return `${autocompleteFallbackPrefix(state)}-option-${index}`;
+}
+
+// bugz-3 L17 (SPEC.md §4.6): derive a per-instance-unique id prefix. Prefer the
+// app-provided listId; otherwise fingerprint the option set so two id-less
+// autocompletes on one page do not both synthesize `autocomplete-option-0`. The
+// input and every option see the same `state.items`, so the fingerprint is
+// identical within an instance and the IDREF resolves. `state.id` is intentionally
+// NOT used: it is the *input* id on the active-descendant path but the *item* id
+// on the option path, which would diverge.
+function autocompleteFallbackPrefix(state: {
+  items?: readonly AutocompleteItem[];
+  listId?: string;
+}): string {
+  if (state.listId !== undefined) return state.listId;
+  return `autocomplete-${optionSetFingerprint(state.items)}`;
+}
+
+// Deterministic FNV-1a-32 fingerprint of the option set (value + label +
+// textValue), base36-encoded. Stable across calls within one render and distinct
+// for differing option sets, so synthesized ids are unique across instances.
+function optionSetFingerprint(
+  items: readonly { value: string; label?: string; textValue?: string }[] | undefined,
+): string {
+  let hash = 0x811c9dc5;
+  const seed = (items ?? [])
+    .map((item) => `${item.value} ${item.label ?? ''} ${item.textValue ?? ''}`)
+    .join('');
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 function autocompleteItemText(item: AutocompleteItem): string {

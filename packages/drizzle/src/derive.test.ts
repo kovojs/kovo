@@ -577,6 +577,168 @@ describe('deriveOptimistic — membership exit + sorted insert (in-grammar)', ()
   });
 });
 
+// ── M10 / M11 (SPEC.md §10.5 commuting diagram) optimistic soundness ──────────
+// bugz-3 M10/M11: wrong predictions are worse than none. An UPSERT cannot be
+// predicted insert-shaped (it may hit the conflict-UPDATE path), and a sorted
+// INSERT on a non-numeric orderBy column cannot be positioned numerically.
+
+describe('deriveOptimistic — M10: UPSERT (onConflictDoUpdate) punts, never insert-shaped', () => {
+  // The canonical SPEC §10.3 cart.addItem: insert(cart_items).onConflictDoUpdate(qty += n).
+  // On the conflict path the row is UPDATED (count unchanged, no new row), so an
+  // unconditional inc-by-1 / push-row over-predicts. The deriver must punt.
+  const upsert = (table: string): SymbolicEffect => ({
+    match: { eq: [{ column: 'cartId', value: { kind: 'param', path: 'cartId' } }], kind: 'keys' },
+    op: 'upsert',
+    sets: {
+      qty: {
+        kind: 'arith',
+        left: { kind: 'col', column: 'qty' },
+        op: '+',
+        right: { kind: 'param', path: 'qty' },
+      },
+    },
+    table,
+    values: {
+      cartId: { kind: 'param', path: 'cartId' },
+      productId: { kind: 'param', path: 'productId' },
+      qty: { kind: 'param', path: 'qty' },
+    },
+  });
+
+  it('punts an UPSERT over a COUNT (no phantom +1 on the conflict path)', () => {
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        count: { kind: 'count', rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' } },
+      },
+      query: 'cartCount',
+    };
+    expect(deriveOptimistic([upsert('cart_items')], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'unsupported', detail: 'UPSERT (onConflictDoUpdate) over cart_items' },
+    });
+  });
+
+  it('punts an UPSERT over an AGG list (no duplicate row on the conflict path)', () => {
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          columnTypes: { cartId: 'string', productId: 'string', qty: 'number' },
+          kind: 'agg',
+          projection: ['cartId', 'productId', 'qty'],
+          rowKey: 'cartId,productId',
+          rowset: { filters: [], key: 'cartId,productId', orderBy: [], table: 'cart_items' },
+        },
+      },
+      query: 'cartItems',
+    };
+    expect(deriveOptimistic([upsert('cart_items')], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'unsupported', detail: 'UPSERT (onConflictDoUpdate) over cart_items' },
+    });
+  });
+
+  it('punts an UPSERT over a SUM (no double-counted contribution on the conflict path)', () => {
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        total: {
+          arith: { kind: 'col', column: 'qty' },
+          kind: 'sum',
+          rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' },
+        },
+      },
+      query: 'cartTotal',
+    };
+    expect(deriveOptimistic([upsert('cart_items')], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'unsupported', detail: 'UPSERT (onConflictDoUpdate) over cart_items' },
+    });
+  });
+});
+
+describe('deriveOptimistic — M11: sorted INSERT on a non-numeric orderBy punts', () => {
+  const textOrderByShape = (
+    columnTypes: Record<string, 'boolean' | 'number' | 'string'>,
+  ): AlgebraicQueryShape => ({
+    fields: {
+      items: {
+        columnTypes,
+        kind: 'agg',
+        projection: ['id', 'title'],
+        rowKey: 'id',
+        rowset: {
+          filters: [],
+          key: 'id',
+          orderBy: [{ column: 'title', direction: 'asc' }],
+          table: 'todos',
+        },
+      },
+    },
+    query: 'todoList',
+  });
+  const insertTitle: SymbolicEffect = {
+    op: 'insert',
+    table: 'todos',
+    values: { id: { kind: 'param', path: 'id' }, title: { kind: 'param', path: 'title' } },
+  };
+
+  it('punts a text (string) orderBy column instead of an end-appended NaN-sorted push', () => {
+    // OLD behavior: emitted a derived push-row with position {column:'title'}; the
+    // interpreter/codegen compare via asNumber(title)=NaN ⇒ row appended to the END,
+    // diverging from the server's lexical ORDER BY title. The fix punts the pair.
+    expect(deriveOptimistic([insertTitle], textOrderByShape({ id: 'string', title: 'string' }))).toEqual({
+      kind: 'punt',
+      reason: { code: 'opaque-orderby', column: 'title' },
+    });
+  });
+
+  it('punts when the orderBy column type is unknown (cannot prove numeric)', () => {
+    expect(deriveOptimistic([insertTitle], textOrderByShape({ id: 'string' }))).toEqual({
+      kind: 'punt',
+      reason: { code: 'opaque-orderby', column: 'title' },
+    });
+  });
+
+  it('still derives a sorted INSERT for a PROVABLY numeric orderBy column', () => {
+    const numericShape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          columnTypes: { id: 'string', rank: 'number' },
+          kind: 'agg',
+          projection: ['id', 'rank'],
+          rowKey: 'id',
+          rowset: {
+            filters: [],
+            key: 'id',
+            orderBy: [{ column: 'rank', direction: 'asc' }],
+            table: 'feed',
+          },
+        },
+      },
+      query: 'feed',
+    };
+    const effect: SymbolicEffect = {
+      op: 'insert',
+      table: 'feed',
+      values: { id: { kind: 'param', path: 'id' }, rank: { kind: 'param', path: 'rank' } },
+    };
+    expect(deriveOptimistic([effect], numericShape)).toEqual({
+      kind: 'derived',
+      program: {
+        ops: [
+          {
+            op: 'push-row',
+            path: 'items',
+            placeholderColumns: [],
+            position: { column: 'rank', direction: 'asc' },
+            row: { id: { kind: 'param', path: 'id' }, rank: { kind: 'param', path: 'rank' } },
+          },
+        ],
+        query: 'feed',
+      },
+    });
+  });
+});
+
 // ── C4 / C5 / C6 correctness guards ──────────────────────────────────────────
 // SPEC.md §10.5 "soundly optimistic": wrong predictions are worse than none.
 

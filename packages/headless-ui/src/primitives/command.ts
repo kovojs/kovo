@@ -744,7 +744,12 @@ export function commandItemAttributes(
 ): CommandPrimitiveAttributes {
   const disabled = commandItemDisabled(options, options.itemValue);
   const highlighted = commandItemHighlighted(options);
-  const id = options.id ?? commandItemId(options, options.itemValue);
+  // bugz-3 M13 (SPEC.md §4.6): resolve a stable option id (explicit id → item id
+  // → synthesized fallback) so the id commandActiveDescendant references is
+  // actually carried by the rendered option. Previously only explicit ids were
+  // emitted, so the `aria-activedescendant` fallback dangled (getElementById →
+  // null). Mirrors comboboxOptionId/selectOptionId/autocompleteOptionId.
+  const id = commandOptionId(options, options.itemValue);
 
   return Object.freeze({
     ...commandItemDataAttributes(options),
@@ -1370,16 +1375,65 @@ function commandActiveDescendant(options: CommandInputAttributeOptions): string 
   const itemId = commandItemId(options, options.highlightedValue);
   if (itemId !== undefined) return itemId;
 
-  const index = commandFilteredItems(options).findIndex(
-    (item) => item.value === options.highlightedValue,
-  );
-  if (index < 0) return undefined;
-
-  return `${options.listboxId ?? options.id ?? 'command'}-item-${index}`;
+  return commandFallbackOptionId(options, options.highlightedValue);
 }
 
 function commandItemId(state: CommandState, value: string): string | undefined {
   return state.items?.find((item) => item.value === value)?.id;
+}
+
+function commandOptionId(
+  options: CommandItemAttributeOptions,
+  value: string,
+): string | undefined {
+  if (options.id !== undefined) return options.id;
+  const itemId = commandItemId(options, value);
+  if (itemId !== undefined) return itemId;
+  return commandFallbackOptionId(options, value);
+}
+
+function commandFallbackOptionId(
+  state: CommandState & { id?: string; listboxId?: string },
+  value: string,
+): string | undefined {
+  // bugz-3 M13/L17 (SPEC.md §4.6): use a SINGLE index space — the *filtered*
+  // render order (the items the listbox actually shows). A value outside that
+  // order gets no synthesized id (returns undefined) rather than a colliding one.
+  // Both commandActiveDescendant and commandItemAttributes resolve the same
+  // `state`, so the synthesized id the input references is the one the option
+  // carries (previously commandItemAttributes emitted no fallback id at all).
+  const index = commandFilteredItems(state).findIndex((item) => item.value === value);
+  if (index < 0) return undefined;
+  return `${commandFallbackPrefix(state)}-item-${index}`;
+}
+
+// bugz-3 L17 (SPEC.md §4.6): derive a per-instance-unique id prefix. Prefer the
+// app-provided listboxId; otherwise fingerprint the item set so two id-less
+// command palettes on one page do not both synthesize `command-item-0`. The input
+// (aria-activedescendant) and every item see the same `state.items`, so the
+// fingerprint is identical within an instance and the IDREF resolves. `state.id`
+// is intentionally NOT used: it is the *input* id on the active-descendant path
+// but the *item* id on the option path, which would diverge.
+function commandFallbackPrefix(state: { items?: readonly CommandItem[]; listboxId?: string }): string {
+  if (state.listboxId !== undefined) return state.listboxId;
+  return `command-${optionSetFingerprint(state.items)}`;
+}
+
+// Deterministic FNV-1a-32 fingerprint of the item set (value + label +
+// textValue), base36-encoded. Stable across calls within one render and distinct
+// for differing item sets, so synthesized ids are unique across instances.
+function optionSetFingerprint(
+  items: readonly { value: string; label?: string; textValue?: string }[] | undefined,
+): string {
+  let hash = 0x811c9dc5;
+  const seed = (items ?? [])
+    .map((item) => `${item.value} ${item.label ?? ''} ${item.textValue ?? ''}`)
+    .join('');
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 function commandItemMatches(item: CommandItem, query: string): boolean {

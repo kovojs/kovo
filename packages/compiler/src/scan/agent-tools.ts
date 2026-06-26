@@ -39,13 +39,20 @@ export interface AgentToolModuleSource {
  * that directly invokes each proven callback element, a static object wrapper around a proven or
  * inline const-literal callback array, or one additional static const object wrapper around such an
  * object wrapper, and one static const object wrapper around already-proven helper object aliases or
- * namespace imports. It does not inspect raw source text after parse and it skips non-invoked
- * nested function bodies, so ordinary callbacks, computed namespace access,
+ * namespace imports. The outbound-egress callee is recognized as a bare `fetch` (unless shadowed) or
+ * the `globalThis.fetch`/`window.fetch`/`self.fetch` member forms; a secret read is recognized as
+ * `process.env.NAME` or `process.env['NAME']` (string-literal key) — see SPEC.md §6.6.
+ *
+ * It does not inspect raw source text after parse. A callback handed to an unanalyzable callee (a
+ * built-in array/promise method such as `forEach`/`map`/`then`, or any non-helper function) cannot
+ * be proven invoked, so the sinks reachable through it are reported **audit-grade** (visible in
+ * `kovo explain --capabilities`, not `kovo check`-enforced) per SPEC.md §6.6 rule 3 rather than
+ * skipped — keeping the blast radius from being silently empty. Everything else stays outside the
+ * sound subset until a dedicated analyzer proves it: computed namespace access,
  * computed/spread/duplicate object/array aliases and exports, export-star namespaces, ambiguous
  * export-star names, reassigned callback aliases, mutated callback property/index aliases, mutable
  * frozen-existing aliases, mutable/defaulted/nested destructuring, mutating/dynamic array methods,
- * shadowed `Object.freeze`, and dynamic paths remain outside the SPEC.md §6.6 sound subset until a
- * dedicated analyzer proves them.
+ * shadowed `Object.freeze`, callbacks bundled inside object-literal arguments, and dynamic paths.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -1099,6 +1106,12 @@ function reachableSinkFacts(
   const facts: CoreGraph.AgentToolReachableSinkFact[] = [];
   const blockedNames = namesBlockedInFunctionBody(fn, moduleFacts.topLevelBindings);
 
+  // SPEC §6.6 rule 3: once a sink path runs through an unproven nested callback, every deeper sink
+  // it reaches is likewise only conditionally reachable, so the audit grade is sticky — a proven
+  // (inline/helper) sub-path inside an unproven callback must not be promoted back to sound.
+  const descendOrigin = (specific: AgentToolSinkOrigin): AgentToolSinkOrigin =>
+    origin === 'nested-callback' ? 'nested-callback' : specific;
+
   const visit = (node: ts.Node): void => {
     if (node !== body && ts.isFunctionLike(node)) return;
 
@@ -1111,18 +1124,26 @@ function reachableSinkFacts(
     const inlineCall = directlyInvokedInlineFunction(node);
     if (inlineCall !== undefined) {
       facts.push(
-        ...reachableSinkFacts(sourceFile, tool, inlineCall, moduleFacts, activeHelpers, 'inline'),
+        ...reachableSinkFacts(
+          sourceFile,
+          tool,
+          inlineCall,
+          moduleFacts,
+          activeHelpers,
+          descendOrigin('inline'),
+        ),
       );
     }
 
     const helper = calledHelper(node, moduleFacts, blockedNames);
     if (helper !== undefined && !activeHelpers.has(helper.id)) {
-      const helperOrigin =
+      const helperOrigin = descendOrigin(
         origin === 'imported-helper'
           ? 'imported-helper'
           : helper.moduleFacts.sourceFile === moduleFacts.sourceFile
             ? 'helper'
-            : 'imported-helper';
+            : 'imported-helper',
+      );
       facts.push(
         ...reachableSinkFacts(
           helper.moduleFacts.sourceFile,
@@ -1148,6 +1169,27 @@ function reachableSinkFacts(
       }
     }
 
+    // SPEC §6.6 (capability disclosure completeness): a callback handed to an unanalyzable callee
+    // — a built-in array/promise method such as `forEach`/`map`/`then`, or any non-helper function
+    // — escapes proven-invocation analysis, so the prior `tool()` analyzer skipped its body whole
+    // and under-reported the blast radius (`kovo explain --capabilities` was silently empty). We
+    // descend for sink visibility but mark sinks audit-grade: invocation is not proven, so this is
+    // defense-in-depth (visible in explain, not `kovo check`-enforced), not a by-construction bound.
+    if (helper === undefined && inlineCall === undefined && ts.isCallExpression(node)) {
+      for (const callback of unprovenCallbackArguments(node)) {
+        facts.push(
+          ...reachableSinkFacts(
+            sourceFile,
+            tool,
+            callback,
+            moduleFacts,
+            activeHelpers,
+            'nested-callback',
+          ),
+        );
+      }
+    }
+
     ts.forEachChild(node, visit);
   };
 
@@ -1155,7 +1197,12 @@ function reachableSinkFacts(
   return facts;
 }
 
-type AgentToolSinkOrigin = 'handler' | 'helper' | 'imported-helper' | 'inline';
+type AgentToolSinkOrigin =
+  | 'handler'
+  | 'helper'
+  | 'imported-helper'
+  | 'inline'
+  | 'nested-callback';
 
 type CallbackArrayElements = ReadonlyMap<string, string>;
 type CallbackArrayObjectWrapperProperties = ReadonlyMap<string, CallbackArrayElements>;
@@ -1173,6 +1220,24 @@ function directlyInvokedInlineFunction(node: ts.Node): ts.FunctionLikeDeclaratio
   }
 
   return undefined;
+}
+
+/**
+ * SPEC §6.6: the direct arrow/function arguments of a call whose callee Kovo cannot analyze (a
+ * built-in array/promise method such as `forEach`/`map`/`then`, or any non-helper function). Their
+ * invocation is not proven, so sinks inside them are reported audit-grade for blast-radius
+ * completeness rather than enforced. Only direct callback arguments are walked; deeper wrapping
+ * (object-literal-bundled callbacks) stays out of the analyzable subset.
+ */
+function unprovenCallbackArguments(node: ts.CallExpression): ts.FunctionLikeDeclaration[] {
+  const callbacks: ts.FunctionLikeDeclaration[] = [];
+  for (const argument of node.arguments) {
+    const expression = unwrapParentheses(argument);
+    if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
+      callbacks.push(expression);
+    }
+  }
+  return callbacks;
 }
 
 function directlyInvokedCallbackArguments(
@@ -2858,9 +2923,8 @@ function egressSinkFact(
   blockedNames: ReadonlySet<string>,
   origin: AgentToolSinkOrigin,
 ): CoreGraph.AgentToolReachableSinkFact | undefined {
-  if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return undefined;
-  if (blockedNames.has('fetch')) return undefined;
-  if (node.expression.text !== 'fetch') return undefined;
+  if (!ts.isCallExpression(node)) return undefined;
+  if (!isFetchCallee(staticCallTargetExpression(node), blockedNames)) return undefined;
 
   const [url] = node.arguments;
   if (!url || !ts.isStringLiteralLike(url)) return undefined;
@@ -2871,12 +2935,36 @@ function egressSinkFact(
   return {
     capability: `egress:${target}`,
     evidence: egressEvidence(origin),
-    grade: 'sound',
+    grade: sinkGrade(origin),
     kind: 'egress',
     site: siteForNode(sourceFile, node),
     target,
     tool,
   };
+}
+
+/** Global-object aliases whose `fetch` member reaches the same outbound-egress sink as bare `fetch`. */
+const globalThisAliasNames: ReadonlySet<string> = new Set(['globalThis', 'window', 'self']);
+
+/**
+ * SPEC §6.6: recognize the outbound-egress callee. A bare `fetch` (unless shadowed) and the
+ * `globalThis.fetch` / `window.fetch` / `self.fetch` member forms all reach the same sink. The
+ * `fetch` property of the global object is not shadowable by a local `fetch` binding, so only a
+ * shadowed global *base* (e.g. a local `globalThis`) disqualifies the member form.
+ */
+function isFetchCallee(expression: ts.Expression, blockedNames: ReadonlySet<string>): boolean {
+  if (ts.isIdentifier(expression)) {
+    return expression.text === 'fetch' && !blockedNames.has('fetch');
+  }
+
+  if (ts.isPropertyAccessExpression(expression) && expression.name.text === 'fetch') {
+    const base = staticAccessBaseExpression(expression.expression);
+    return (
+      ts.isIdentifier(base) && globalThisAliasNames.has(base.text) && !blockedNames.has(base.text)
+    );
+  }
+
+  return false;
 }
 
 function secretReadSinkFact(
@@ -2886,24 +2974,71 @@ function secretReadSinkFact(
   blockedNames: ReadonlySet<string>,
   origin: AgentToolSinkOrigin,
 ): CoreGraph.AgentToolReachableSinkFact | undefined {
-  if (!ts.isPropertyAccessExpression(node)) return undefined;
-  if (!ts.isIdentifier(node.name)) return undefined;
+  const name = processEnvSecretName(node, blockedNames);
+  if (name === undefined) return undefined;
 
-  const env = node.expression;
-  if (!ts.isPropertyAccessExpression(env) || env.name.text !== 'env') return undefined;
-  if (!ts.isIdentifier(env.expression) || env.expression.text !== 'process') return undefined;
-  if (blockedNames.has('process')) return undefined;
-
-  const target = `env.${node.name.text}`;
+  const target = `env.${name}`;
   return {
     capability: 'secrets.read',
     evidence: secretReadEvidence(origin),
-    grade: 'sound',
+    grade: sinkGrade(origin),
     kind: 'secret-read',
     site: siteForNode(sourceFile, node),
     target,
     tool,
   };
+}
+
+/**
+ * SPEC §6.6: name the secret read by a `process.env` access. Both the `process.env.NAME` property
+ * form and the `process.env['NAME']` element-access form (with a string-literal key) reach the same
+ * secret-read sink.
+ */
+function processEnvSecretName(
+  node: ts.Node,
+  blockedNames: ReadonlySet<string>,
+): string | undefined {
+  if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.name)) {
+    return isProcessEnvAccess(node.expression, blockedNames) ? node.name.text : undefined;
+  }
+
+  if (ts.isElementAccessExpression(node)) {
+    if (!isProcessEnvAccess(node.expression, blockedNames)) return undefined;
+    const key = unwrapParentheses(node.argumentExpression);
+    return ts.isStringLiteralLike(key) ? key.text : undefined;
+  }
+
+  return undefined;
+}
+
+/** True when `expression` is `process.env` (property or `process['env']` element access). */
+function isProcessEnvAccess(
+  expression: ts.Expression,
+  blockedNames: ReadonlySet<string>,
+): boolean {
+  const env = unwrapParentheses(expression);
+
+  let base: ts.Expression | undefined;
+  if (ts.isPropertyAccessExpression(env) && env.name.text === 'env') {
+    base = env.expression;
+  } else if (ts.isElementAccessExpression(env)) {
+    const key = unwrapParentheses(env.argumentExpression);
+    if (ts.isStringLiteralLike(key) && key.text === 'env') base = env.expression;
+  }
+  if (base === undefined) return false;
+
+  const root = unwrapParentheses(base);
+  return ts.isIdentifier(root) && root.text === 'process' && !blockedNames.has('process');
+}
+
+/**
+ * SPEC §6.6 rule 3: distinguish by-construction (sound, `kovo check`-enforced) from defense-in-depth
+ * (audit, visible in `kovo explain --capabilities` only). Sinks reached through a callback handed to
+ * an unanalyzable callee cannot be proven invoked, so they are audit-grade: the blast radius stays
+ * visible without claiming a by-construction reachability bound.
+ */
+function sinkGrade(origin: AgentToolSinkOrigin): 'audit' | 'sound' {
+  return origin === 'nested-callback' ? 'audit' : 'sound';
 }
 
 function egressEvidence(origin: AgentToolSinkOrigin): string {
@@ -2916,6 +3051,8 @@ function egressEvidence(origin: AgentToolSinkOrigin): string {
       return 'static-tool-imported-helper-fetch';
     case 'inline':
       return 'static-tool-inline-fetch';
+    case 'nested-callback':
+      return 'static-tool-nested-callback-fetch';
   }
 }
 
@@ -2929,6 +3066,8 @@ function secretReadEvidence(origin: AgentToolSinkOrigin): string {
       return 'static-tool-imported-helper-env';
     case 'inline':
       return 'static-tool-inline-env';
+    case 'nested-callback':
+      return 'static-tool-nested-callback-env';
   }
 }
 

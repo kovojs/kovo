@@ -101,6 +101,21 @@ function deriveFieldEffect(
   effect: SymbolicEffect,
   shape: AlgebraicQueryShape,
 ): FieldDerivation {
+  // M10 (SPEC.md §10.5 commuting diagram): an UPSERT (`insert().onConflictDoUpdate`,
+  // the canonical §10.3 `cart.addItem`) is INSERT-on-miss / UPDATE-on-conflict. Whether
+  // the conflict row already exists is server truth the client cannot decide, so an
+  // unconditional insert-shaped prediction (push-row / inc-by-1) over-predicts on the
+  // conflict path (phantom +1 COUNT, duplicate AGG row, double-counted SUM). Punt the
+  // pair to `await-fragment` (~1 RTT; the DB stays authoritative) rather than emit a
+  // prediction the server then contradicts — "wrong predictions are worse than none"
+  // (SPEC.md §10.5). Reached only for a field over the upserted table (deriveField
+  // filters by table), so a punt here punts exactly the affected pair.
+  if (effect.op === 'upsert') {
+    return fail({
+      code: 'unsupported',
+      detail: `UPSERT (onConflictDoUpdate) over ${effect.table}`,
+    });
+  }
   switch (field.kind) {
     case 'agg':
       return deriveAgg(path, field, effect);
@@ -124,7 +139,9 @@ function deriveAgg(
   field: Extract<AlgebraicField, { kind: 'agg' }>,
   effect: SymbolicEffect,
 ): FieldDerivation {
-  if (effect.op === 'insert' || effect.op === 'upsert') {
+  // UPSERT is punted upstream in deriveFieldEffect (M10), so only a pure INSERT
+  // reaches the insert-shaped prediction here.
+  if (effect.op === 'insert') {
     // C2 (SPEC.md §10.5 membership-entry rule): a filtered list must not receive an
     // INSERTed row that PROVABLY violates its rowset filters (the row would appear and
     // then vanish on reconcile — worse than no prediction).  Only a decidable const-eq
@@ -133,7 +150,7 @@ function deriveAgg(
     // mutation is assumed to write into the filtered scope and reconcile content-matches.
     if (insertSatisfiesAllFilters(field.rowset.filters, effect.values) === false) return ok();
 
-    const position = insertPosition(field.rowset);
+    const position = insertPosition(field.rowset, field.columnTypes);
     if (position.reason) return fail(position.reason);
     const built = buildInsertRow(field, effect.values);
     // A sorted insert needs the new row's orderBy value; if that column is a
@@ -275,7 +292,8 @@ function deriveSum(
       ? witness.rowsPath
       : undefined;
 
-  if (effect.op === 'insert' || effect.op === 'upsert') {
+  // UPSERT is punted upstream in deriveFieldEffect (M10); only a pure INSERT reaches here.
+  if (effect.op === 'insert') {
     // C1: no-op only when the inserted row provably violates a decidable filter.
     if (filtered && insertSatisfiesAllFilters(field.rowset.filters, effect.values) === false) {
       return ok();
@@ -324,7 +342,8 @@ function deriveCount(
       ? witness.rowsPath
       : undefined;
 
-  if (effect.op === 'insert' || effect.op === 'upsert') {
+  // UPSERT is punted upstream in deriveFieldEffect (M10); only a pure INSERT reaches here.
+  if (effect.op === 'insert') {
     // C3: evaluate the inserted row against the ENTIRE predicate set — keeping only the
     // first eq over-counts a row that PROVABLY violates a sibling predicate (no-op then).
     // An undecidable predicate keeps the §10.5:1164 inc-by-1 (assume member); the witness
@@ -441,11 +460,24 @@ function deriveCursor(rowset: Rowset, effect: SymbolicEffect): FieldDerivation {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function insertPosition(rowset: Rowset): { reason?: PuntReason; value: PushPosition } {
+function insertPosition(
+  rowset: Rowset,
+  columnTypes?: Readonly<Record<string, 'boolean' | 'number' | 'string'>>,
+): { reason?: PuntReason; value: PushPosition } {
   if (rowset.orderBy.length === 0) return { value: 'end' };
   const order = rowset.orderBy[0];
   if (rowset.orderBy.length === 1 && order) {
     if (order.opaque)
+      return { reason: { code: 'opaque-orderby', column: order.column }, value: 'end' };
+    // M11 (SPEC.md §10.5 commuting diagram): a sorted INSERT position is compared by the
+    // numeric `asNumber` coercion shared by the interpreter (core/derivation.ts `insertRow`)
+    // and the committed codegen (derive-codegen.ts `lowerPush`). For a NON-numeric orderBy
+    // column `Number('Mango')` is NaN, so every compare is false, the row lands at the list
+    // END, and the prediction diverges from the server's lexical `ORDER BY`. Only a column
+    // PROVABLY numeric keeps the sorted insert; otherwise punt to `await-fragment` (the
+    // server's ORDER BY is authoritative) — "wrong predictions are worse than none". An
+    // absent column type is unprovable, so it punts too (strongest sound default).
+    if (columnTypes?.[order.column] !== 'number')
       return { reason: { code: 'opaque-orderby', column: order.column }, value: 'end' };
     return { value: { column: order.column, direction: order.direction } };
   }

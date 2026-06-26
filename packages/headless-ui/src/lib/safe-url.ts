@@ -48,15 +48,18 @@ export function safeUrl(value: string | undefined, fallback = '#'): string {
   const stripped = value.replace(STRIP_PATTERN, '');
   if (stripped === '') return fallback;
 
-  // An HTML-entity-encoded colon (e.g. `javascript&#58;alert(1)`) would not be
-  // caught by the scheme regex but decodes to a colon in the browser. Any entity
-  // reference (`&`) that appears in the scheme position — before the first real
-  // `:` and before any `/`, `?`, or `#` that would otherwise begin a relative
-  // path/query/fragment — is treated as an obfuscated scheme separator and
-  // denied. A bare `&` in a query string (after a `?`) or in a path is allowed.
-  const schemeBoundary = stripped.search(/[:/?#]/);
-  const schemePosition = schemeBoundary < 0 ? stripped : stripped.slice(0, schemeBoundary);
-  if (schemePosition.includes('&')) return fallback;
+  // An HTML character reference that decodes to a colon (`&#58;`, `&#x3a;`,
+  // `&colon;`, with optional leading zeros and a possibly-missing terminating
+  // `;`) is not matched by SCHEME_PATTERN, yet the browser decodes it to the `:`
+  // that forms a scheme (e.g. `javascript&#58;alert(1)`). bugz-3 L9 (this module
+  // / SECURITY_FINDINGS H3): only treat `&` as an obfuscated scheme separator
+  // when it begins such a colon reference in the *scheme position* — before the
+  // first real `/` or `?` that starts a path/query. A bare `&` in a relative
+  // first path segment (e.g. `AT&T/products`) or a query string is NOT an entity
+  // reference and is kept verbatim (the previous check over-blocked it to `#`).
+  const pathBoundary = stripped.search(/[/?]/);
+  const schemePosition = pathBoundary < 0 ? stripped : stripped.slice(0, pathBoundary);
+  if (/&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/.test(schemePosition)) return fallback;
 
   const schemeMatch = SCHEME_PATTERN.exec(stripped);
   if (schemeMatch === null) {

@@ -58,10 +58,15 @@ export interface CookieOptions {
   // silently dropping an attribute Better Auth set (part-3 I1).
   priority?: 'high' | 'low' | 'medium';
   /**
-   * Force or suppress the production `Secure` gate. When omitted, `Secure` is derived from the
-   * runtime environment (`process.env.NODE_ENV === 'production'`) so localhost-http dev login keeps
-   * working while production always gets `Secure`. Set explicitly to override the gate (e.g. behind a
-   * TLS-terminating proxy that reports dev `NODE_ENV`).
+   * Force the credential `Secure` floor on, or request an audited downgrade off (SPEC §6.6/§9.1).
+   *
+   * `true` forces `Secure` regardless of `NODE_ENV` — e.g. behind a TLS-terminating proxy that
+   * reports a dev request URL. `false` requests suppression of the floor; on a `session`/`auth`
+   * cookie that is an insecure downgrade routed through the SAME KV432 gate as `secure: false`
+   * (bugz-3 M1), so it is rejected unless recorded via {@link unsafeCookie} — an un-audited insecure
+   * credential cookie is inexpressible. When omitted, `Secure` is engaged by a production runtime
+   * (`process.env.NODE_ENV === 'production'`) or by an HTTPS-request signal (`secure: true`), so the
+   * floor never depends solely on the env string (bugz-3 L1) while localhost-http dev still works.
    */
   productionSecure?: boolean;
   sameSite?: 'lax' | 'none' | 'strict';
@@ -147,12 +152,12 @@ export function validateRawSetCookie(value: string): string {
 }
 
 /**
- * Whether the runtime is in production, gating the `Secure` floor. Honors an explicit
- * `productionSecure` override so a TLS-terminating proxy reporting dev `NODE_ENV` can force `Secure`,
- * and so tests can assert both branches without mutating the environment.
+ * Whether the runtime reports a production environment via `NODE_ENV`. This is one — but no longer
+ * the SOLE — trigger for the credential `Secure` floor (SPEC §6.6/§9.1): an explicit force
+ * (`productionSecure: true`) or an HTTPS-request signal (`secure: true`) also engages it, so the
+ * floor never depends solely on a free-form env string (bugz-3 L1).
  */
-function resolveProductionSecure(options: CookieOptions): boolean {
-  if (options.productionSecure !== undefined) return options.productionSecure;
+function isProductionRuntime(): boolean {
   return typeof process !== 'undefined' && process.env?.NODE_ENV === 'production';
 }
 
@@ -190,15 +195,27 @@ function applyCookieFloor(
     };
   }
 
-  const productionSecure = resolveProductionSecure(options);
+  // The credential `Secure` floor is ENGAGED when any of: the runtime is production (`NODE_ENV`),
+  // the caller forces it (`productionSecure: true`), or the caller signals an HTTPS request
+  // (`secure: true`). SPEC §6.6/§9.1, bugz-3 L1: an HTTPS request forces `Secure` regardless of
+  // `NODE_ENV`, so the floor no longer depends SOLELY on a free-form env string. A dev-localhost
+  // carve-out remains: a plain-http request with no force engages no `Secure`, so localhost-http dev
+  // login keeps working (an unconditional `Secure` would also break non-localhost http dev).
+  const secureForced = options.secure === true || options.productionSecure === true;
+  const secureRequired = secureForced || isProductionRuntime();
 
   // Detect explicit insecure downgrades of the credential floor.
   const httpOnlyDowngrade = options.httpOnly === false;
   const sameSiteDowngrade = options.sameSite === 'none';
-  // `Secure=false` is only a downgrade where the floor would otherwise force it (production). In
-  // dev/localhost-http the floor does not set Secure at all, so `secure:false` there is not a
-  // downgrade — it is the dev default and must not trip KV432 (else dev login breaks).
-  const secureDowngrade = productionSecure && options.secure === false;
+  // bugz-3 M1: a `Secure` suppression is requested by EITHER `secure: false` OR
+  // `productionSecure: false`. Both route through the SAME KV432 throw + `unsafeCookie` audit path,
+  // so `productionSecure: false` can no longer silently dodge the floor (the prior code only treated
+  // `secure: false` as a downgrade). A suppression is only a *downgrade* where the floor would
+  // otherwise force `Secure` (`secureRequired`); in plain-http dev the floor sets no `Secure`, so
+  // suppressing it there is the dev default and must not trip KV432 (else dev login breaks).
+  const secureSuppressionRequested =
+    options.secure === false || options.productionSecure === false;
+  const secureDowngrade = secureRequired && secureSuppressionRequested;
 
   const hasDowngrade = httpOnlyDowngrade || sameSiteDowngrade || secureDowngrade;
 
@@ -218,9 +235,9 @@ function applyCookieFloor(
   // Resolve effective attributes: floor unless an audited downgrade explicitly weakens it.
   const httpOnly = httpOnlyDowngrade ? false : true;
   const sameSite: 'lax' | 'none' | 'strict' = options.sameSite ?? 'lax';
-  // Secure is prod-gated. An audited `secure:false` downgrade only takes effect in production (where
-  // Secure would otherwise be forced); in dev Secure is simply not applied.
-  const secure = productionSecure ? (secureDowngrade ? false : true) : (options.secure ?? false);
+  // `Secure` is on when the floor requires it and no audited downgrade turns it off; off otherwise
+  // (the dev-localhost carve-out, where `secureRequired` is false).
+  const secure = secureRequired && !secureDowngrade;
 
   return { httpOnly, sameSite, secure };
 }
@@ -389,7 +406,7 @@ export function normalizeForwardedSetCookie(
   // brought UP to the floor; we never downgrade a forwarded credential cookie, so no `unsafe` escape
   // is involved here. To preserve the upstream's intent where it set SameSite=None (a deliberate
   // cross-site embed), we keep it but pair it with Secure (browsers require Secure for SameSite=None).
-  const productionSecure = typeof process !== 'undefined' && process.env?.NODE_ENV === 'production';
+  const productionSecure = isProductionRuntime();
   const floorHttpOnly = isCredentialClass(cookieClass) ? true : upstreamHttpOnly;
   const floorSecure = isCredentialClass(cookieClass)
     ? upstreamSecure || productionSecure || sameSite === 'none'

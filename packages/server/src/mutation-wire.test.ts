@@ -44,6 +44,31 @@ describe('mutation wire headers', () => {
     });
   });
 
+  // L3 (SPEC §9.1): the precomputed `requestFingerprint` must be body-sensitive for a
+  // FormData/multipart body. Before the fix, canonicalJson(formData) === "{}" for EVERY
+  // multipart body here, so the conflict defense downstream never fired (the enhanced JS
+  // client always submits FormData).
+  it('precomputes a body-sensitive replay fingerprint for FormData wire requests', () => {
+    const fingerprintFor = (productId: string): string | undefined => {
+      const body = new FormData();
+      body.set('productId', productId);
+      return mutationWireRequestFromHeaders({
+        headers: {},
+        rawInput: body,
+        request: { sessionId: 's1' },
+      }).requestFingerprint;
+    };
+
+    const a = fingerprintFor('p1');
+    const b = fingerprintFor('p2');
+    const aAgain = fingerprintFor('p1');
+
+    expect(a).not.toBe('{}');
+    expect(a).not.toBe(b);
+    expect(a).toBe(aAgain);
+    expect(a).toBe('{"productId":"p1"}');
+  });
+
   it('builds mutation wire requests from iterable HTTP headers', () => {
     const replayStore = createMemoryMutationReplayStore();
 

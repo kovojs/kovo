@@ -131,10 +131,6 @@ export interface ContextMenuSeparatorProps {
   styles?: ContextMenuStyleOverrides;
 }
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
 /**
  * Style definitions used by the context menu components.
  *
@@ -414,7 +410,7 @@ export const ContextMenuItem = component({
         type="button"
         value={attrs.value}
       >
-        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}
+        {props.children ?? props.itemLabel ?? props.itemValue}
       </button>
     );
   },

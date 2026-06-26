@@ -1037,21 +1037,48 @@ function comboboxOptionId(
 }
 
 function comboboxFallbackOptionId(
-  state: ComboboxState & { id?: string },
+  state: ComboboxState & { id?: string; listboxId?: string },
   value: string,
 ): string | undefined {
-  // J2 (SPEC.md §4.6): index against the *filtered* render order so the synthesized
-  // id matches the rendered option's position after typing. Mirrors command.ts:649.
-  // If the value is not in the filtered set (e.g. an app that renders the unfiltered
-  // list), fall back to the full-list index so the IDREF still resolves to that
-  // option rather than vanishing.
-  const filteredIndex = comboboxFilteredItems(state).findIndex((item) => item.value === value);
-  const index =
-    filteredIndex >= 0
-      ? filteredIndex
-      : (state.items?.findIndex((item) => item.value === value) ?? -1);
+  // J2 (SPEC.md §4.6) + bugz-3 L17: use a SINGLE index space — always the
+  // *filtered* render order (the options the listbox actually renders). A value
+  // outside that order gets no synthesized id (returns undefined) instead of a
+  // full-list-index fallback; the old dual space let a non-matching full-index-0
+  // item collide with a matching filtered-index-0 item on `…-option-0` and made
+  // aria-activedescendant resolve to the wrong element. Both this option side and
+  // comboboxActiveDescendant resolve the same `state`, so the IDREF still matches.
+  const index = comboboxFilteredItems(state).findIndex((item) => item.value === value);
   if (index < 0) return undefined;
-  return `${state.listboxId ?? state.id ?? 'combobox'}-option-${index}`;
+  return `${comboboxFallbackPrefix(state)}-option-${index}`;
+}
+
+// bugz-3 L17 (SPEC.md §4.6): derive a per-instance-unique id prefix. Prefer the
+// app-provided listboxId; otherwise fingerprint the option set so two id-less
+// comboboxes on one page do not both synthesize `combobox-option-0`. The input
+// (aria-activedescendant) and every option see the same `state.items`, so the
+// fingerprint is identical within an instance and the IDREF always resolves.
+// `state.id` is intentionally NOT used: it is the *input* id on the active-
+// descendant path but the *item* id on the option path, which would diverge.
+function comboboxFallbackPrefix(state: { items?: readonly ComboboxItem[]; listboxId?: string }): string {
+  if (state.listboxId !== undefined) return state.listboxId;
+  return `combobox-${optionSetFingerprint(state.items)}`;
+}
+
+// Deterministic FNV-1a-32 fingerprint of the option set (value + label +
+// textValue), base36-encoded. Stable across calls within one render and distinct
+// for differing option sets, so synthesized ids are unique across instances.
+function optionSetFingerprint(
+  items: readonly { value: string; label?: string; textValue?: string }[] | undefined,
+): string {
+  let hash = 0x811c9dc5;
+  const seed = (items ?? [])
+    .map((item) => `${item.value} ${item.label ?? ''} ${item.textValue ?? ''}`)
+    .join('');
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 function comboboxDescribedBy(options: {

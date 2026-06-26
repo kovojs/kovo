@@ -325,6 +325,16 @@ export function renderRouteDocumentResponse(
     typeof response.body !== 'string' ||
     (contentType !== undefined && !contentType.toLowerCase().includes('text/html'))
   ) {
+    // bugz-3 M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a NON-HTML 200
+    // route outcome (`respond.file`/`respond.stream`/`respond.storedFile`) was previously
+    // returned UNCHANGED, so a guarded/per-principal download silently lost the `noStore`
+    // floor the HTML path computes — it was shared-cache-storable (cross-principal CDN leak),
+    // bfcache-restorable after logout, AND BREACH-compressible. A per-principal route outcome
+    // MUST get the same floor the HTML document path gets (no-store + Vary: Cookie + the §6.6
+    // isolation baseline). Non-200 outcomes (redirects/304/5xx) still pass through unchanged.
+    if (response.status === 200 && noStore) {
+      return stampPerPrincipalRouteOutcomeFloor(response);
+    }
     return response;
   }
 
@@ -360,61 +370,99 @@ export function renderRouteDocumentResponse(
       )
     : undefined;
 
+  let htmlHeaders: ResponseHeaders = {
+    ...mergeDocumentHeaders(response.headers, document.earlyHints),
+    'Content-Type': 'text/html; charset=utf-8',
+    // CSP-3 (bugs-part3): baseline security headers on every HTML document, matching
+    // the file/stream posture (response.ts routeOutcomeHeaders). `nosniff` stops
+    // content-type sniffing; `Referrer-Policy` limits cross-origin referrer leakage.
+    // Authors may override by setting these headers on the route response (preserved
+    // by `mergeDocumentHeaders` above, which keeps the existing header name).
+    ...(findHeaderRecordName(response.headers, 'X-Content-Type-Options') === undefined
+      ? { 'X-Content-Type-Options': 'nosniff' }
+      : {}),
+    // SPEC §6.6 (runtime defense-in-depth, NOT a by-construction proof): the
+    // conservative LOW-false-positive isolation/hardening baseline
+    // (`X-Frame-Options: DENY` clickjacking defense, COOP cross-window-scripting
+    // severance, `Permissions-Policy` ambient-capability deny-all, `Referrer-Policy`).
+    // Each is applied only when the route response didn't already set it, so an author
+    // opt-out is preserved. See `DOCUMENT_ISOLATION_HEADERS` for the per-header rationale.
+    ...documentIsolationHeaders(
+      response.headers,
+      reportingHeaders === undefined ? undefined : KOVO_CSP_REPORT_GROUP,
+    ),
+    // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): the STRICT CSP is
+    // auto-attached to every framework-rendered HTML document by default. Kovo is the
+    // sole DOM-writer and emits no inline app code, so the hash-locked `'self'` policy
+    // (plus the non-overridable `base-uri`/`object-src`/`form-action`/`frame-ancestors`
+    // hardening directives) fits its own output by construction. `cspConfig` carries
+    // the app-facing third-party allowlist that EXTENDS the per-fetch directives —
+    // there is no report-only ramp, so a third-party embed is denied until declared.
+    // Applied only when the route response did not already set a
+    // `Content-Security-Policy`, so an author who needs full control (or wants no CSP)
+    // can override on the route response — same opt-out posture as the isolation headers.
+    ...(shouldAttachFrameworkCsp
+      ? {
+          'Content-Security-Policy': renderDefaultDocumentCsp(document.csp, documentCspConfig),
+        }
+      : {}),
+    ...reportingHeaders,
+    // SPEC §6.6: HSTS is attached ONLY on a prod+HTTPS document so a non-HTTPS or
+    // dev/localhost request is never pinned to https. Gated by the call site's
+    // `secure` flag (SF-WIRE in DocumentResponseOptions) plus prod detection.
+    ...(secure !== undefined &&
+    shouldEmitDocumentHsts(secure) &&
+    findHeaderRecordName(response.headers, 'Strict-Transport-Security') === undefined
+      ? { 'Strict-Transport-Security': DOCUMENT_HSTS_VALUE }
+      : {}),
+    // bugs-1 F34: guarded/session-dependent documents are not bfcache-restorable.
+    ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
+  };
+  if (noStore) {
+    // bugz-3 L2/M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a guarded or
+    // per-principal document varies by identity, so it MUST carry `Vary: Cookie` alongside
+    // `no-store` — otherwise a shared cache could key it across principals, and the node
+    // adapter would BREACH-compress it (`isSensitiveResponse` keys on no-store/Vary:Cookie).
+    // `mergeVaryHeader` preserves any existing `Vary` (e.g. the enhanced-navigation `Accept`).
+    htmlHeaders = mergeVaryHeader(htmlHeaders, 'Cookie');
+  }
+
   return {
     body: document.html,
     // CSP-3 (bugs-part3): surface the assembled CSP so the dispatch path can attach a
     // `Content-Security-Policy` header when the app opts in (previously discarded).
     csp: document.csp,
-    headers: {
-      ...mergeDocumentHeaders(response.headers, document.earlyHints),
-      'Content-Type': 'text/html; charset=utf-8',
-      // CSP-3 (bugs-part3): baseline security headers on every HTML document, matching
-      // the file/stream posture (response.ts routeOutcomeHeaders). `nosniff` stops
-      // content-type sniffing; `Referrer-Policy` limits cross-origin referrer leakage.
-      // Authors may override by setting these headers on the route response (preserved
-      // by `mergeDocumentHeaders` above, which keeps the existing header name).
-      ...(findHeaderRecordName(response.headers, 'X-Content-Type-Options') === undefined
-        ? { 'X-Content-Type-Options': 'nosniff' }
-        : {}),
-      // SPEC §6.6 (runtime defense-in-depth, NOT a by-construction proof): the
-      // conservative LOW-false-positive isolation/hardening baseline
-      // (`X-Frame-Options: DENY` clickjacking defense, COOP cross-window-scripting
-      // severance, `Permissions-Policy` ambient-capability deny-all, `Referrer-Policy`).
-      // Each is applied only when the route response didn't already set it, so an author
-      // opt-out is preserved. See `DOCUMENT_ISOLATION_HEADERS` for the per-header rationale.
-      ...documentIsolationHeaders(
-        response.headers,
-        reportingHeaders === undefined ? undefined : KOVO_CSP_REPORT_GROUP,
-      ),
-      // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): the STRICT CSP is
-      // auto-attached to every framework-rendered HTML document by default. Kovo is the
-      // sole DOM-writer and emits no inline app code, so the hash-locked `'self'` policy
-      // (plus the non-overridable `base-uri`/`object-src`/`form-action`/`frame-ancestors`
-      // hardening directives) fits its own output by construction. `cspConfig` carries
-      // the app-facing third-party allowlist that EXTENDS the per-fetch directives —
-      // there is no report-only ramp, so a third-party embed is denied until declared.
-      // Applied only when the route response did not already set a
-      // `Content-Security-Policy`, so an author who needs full control (or wants no CSP)
-      // can override on the route response — same opt-out posture as the isolation headers.
-      ...(shouldAttachFrameworkCsp
-        ? {
-            'Content-Security-Policy': renderDefaultDocumentCsp(document.csp, documentCspConfig),
-          }
-        : {}),
-      ...reportingHeaders,
-      // SPEC §6.6: HSTS is attached ONLY on a prod+HTTPS document so a non-HTTPS or
-      // dev/localhost request is never pinned to https. Gated by the call site's
-      // `secure` flag (SF-WIRE in DocumentResponseOptions) plus prod detection.
-      ...(secure !== undefined &&
-      shouldEmitDocumentHsts(secure) &&
-      findHeaderRecordName(response.headers, 'Strict-Transport-Security') === undefined
-        ? { 'Strict-Transport-Security': DOCUMENT_HSTS_VALUE }
-        : {}),
-      // bugs-1 F34: guarded/session-dependent documents are not bfcache-restorable.
-      ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
-    },
+    headers: htmlHeaders,
     status: response.status,
   };
+}
+
+/**
+ * bugz-3 M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): stamp the
+ * per-principal cache + isolation floor onto a NON-HTML 200 route outcome
+ * (`respond.file`/`respond.stream`/`respond.storedFile`). These outcomes skip HTML document
+ * assembly, so without this a guarded/per-principal download would ship with no caching or
+ * isolation headers at all — shared-cache-storable across principals, bfcache-restorable
+ * after logout, and BREACH-compressible. The floor mirrors the HTML document path:
+ *   - `Cache-Control: no-store` — forced, matching the HTML path: a per-principal download
+ *     must never be stored, so an author `Cache-Control` cannot relax the security floor.
+ *   - `Vary: Cookie` — varies by identity; also trips the node adapter's `isSensitiveResponse`
+ *     BREACH/compression skip (the "sensitivity marker").
+ *   - the §6.6 `DOCUMENT_ISOLATION_HEADERS` baseline, each applied only when the route outcome
+ *     did not already set it (author opt-out preserved).
+ *
+ * @internal
+ */
+function stampPerPrincipalRouteOutcomeFloor(
+  response: DocumentRoutePageResponse,
+): DocumentRoutePageResponseWithCsp {
+  let headers: ResponseHeaders = {
+    ...response.headers,
+    ...documentIsolationHeaders(response.headers),
+    'Cache-Control': 'no-store',
+  };
+  headers = mergeVaryHeader(headers, 'Cookie');
+  return { ...response, headers };
 }
 
 /**
