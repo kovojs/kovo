@@ -19,12 +19,13 @@ export interface AgentToolModuleSource {
  * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
  * helpers reached through static named/default imports including static local re-export barrels,
- * static namespace-property calls into exported local helpers, default object exports whose
- * properties statically point at summarized local helpers, and handler properties that reference a
- * summarized local/imported helper function. It does not inspect raw source text after parse and it
- * skips non-invoked nested function bodies, so ordinary callbacks, computed namespace access,
- * computed/spread object exports, export-star namespaces, and dynamic paths remain outside the
- * SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
+ * default exports that alias a summarized local helper, static namespace-property calls into
+ * exported local helpers, default object exports whose properties statically point at summarized
+ * local helpers, and handler properties that reference a summarized local/imported helper
+ * function. It does not inspect raw source text after parse and it skips non-invoked nested
+ * function bodies, so ordinary callbacks, computed namespace access, computed/spread object
+ * exports, export-star namespaces, and dynamic paths remain outside the SPEC.md §6.6 sound subset
+ * until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -181,6 +182,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   }
 
   for (const statement of sourceFile.statements) {
+    collectDefaultHelperAlias(statement, moduleFacts);
     collectDefaultObjectHelperBindings(statement, moduleFacts);
   }
 
@@ -372,6 +374,21 @@ function collectDefaultObjectHelperBindings(
   for (const [propertyName, helper] of helperBindings) {
     defaultObjectHelpers.set(propertyName, helper);
   }
+}
+
+function collectDefaultHelperAlias(statement: ts.Statement, moduleFacts: ModuleFacts): void {
+  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return;
+
+  const expression = unwrapParentheses(statement.expression);
+  if (!ts.isIdentifier(expression)) return;
+
+  const helper = moduleFacts.helpers.get(expression.text);
+  if (!helper) return;
+
+  (moduleFacts.helpers as Map<string, HelperDefinition>).set(
+    'default',
+    exportedHelperAlias(helper),
+  );
 }
 
 function staticPropertyName(name: ts.PropertyName): string | undefined {

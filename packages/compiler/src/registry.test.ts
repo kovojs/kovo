@@ -1312,6 +1312,59 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from default export aliases to local helpers', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import sendMail from './mail';",
+            'export const notify = tool({',
+            "  name: 'orders.notifyDefaultAlias',",
+            '  handler() {',
+            '    return sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'export default sendMail;',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyDefaultAlias',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyDefaultAlias',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows through static named re-export barrels', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -1735,28 +1788,6 @@ export const ProductGrid = component({
   it('does not produce enforced agent-tool sink rows from unproven default helper shapes', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
-        {
-          fileName: 'src/tools/default-alias.ts',
-          source: [
-            "import { tool } from '@kovojs/server';",
-            "import sendMail from './default-alias-mail';",
-            'export const notify = tool({',
-            "  name: 'orders.defaultAlias',",
-            '  handler() {',
-            '    return sendMail();',
-            '  },',
-            '});',
-          ].join('\n'),
-        },
-        {
-          fileName: 'src/tools/default-alias-mail.ts',
-          source: [
-            'function sendMail() {',
-            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
-            '}',
-            'export default sendMail;',
-          ].join('\n'),
-        },
         {
           fileName: 'src/tools/default-computed.ts',
           source: [
