@@ -16,11 +16,12 @@ export interface AgentToolModuleSource {
  * @internal Produce sound, reachable sink rows from framework-owned `tool()` handlers.
  *
  * This scanner intentionally accepts a narrow subset: a named `tool` import from `@kovojs/server`,
- * a literal `name`, direct handler-body reads/calls, and direct calls to top-level same-module helper
- * functions that are visible in the parsed AST, plus directly-invoked inline function bodies. It
- * does not inspect raw source text after parse and it skips non-invoked nested function bodies, so
- * ordinary callbacks and dynamic paths remain outside the SPEC.md §6.6 sound subset until a
- * dedicated analyzer proves them.
+ * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
+ * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
+ * helpers reached through static named imports including static local re-export barrels. It does not
+ * inspect raw source text after parse and it skips non-invoked nested function bodies, so ordinary
+ * callbacks and dynamic paths remain outside the SPEC.md §6.6 sound subset until a dedicated
+ * analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -93,8 +94,12 @@ function summarizeModules(moduleSources: readonly AgentToolModuleSource[]): Modu
     facts.set(sourceFile, summarizeModule(sourceFile));
   }
 
-  for (const moduleFacts of facts.values()) {
-    linkImportedHelpers(moduleFacts, sourceFiles, facts);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const moduleFacts of facts.values()) {
+      changed = linkImportedHelpers(moduleFacts, sourceFiles, facts) || changed;
+    }
   }
 
   return { facts, sourceFiles };
@@ -153,13 +158,45 @@ function linkImportedHelpers(
   moduleFacts: ModuleFacts,
   sourceFiles: ReadonlyMap<string, ts.SourceFile>,
   facts: ReadonlyMap<ts.SourceFile, ModuleFacts>,
-): void {
+): boolean {
   const helpers = moduleFacts.helpers as Map<string, HelperDefinition>;
+  let changed = false;
 
   for (const statement of moduleFacts.sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
+    if (ts.isImportDeclaration(statement)) {
+      if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier))
+        continue;
+      if (statement.importClause?.isTypeOnly) continue;
+
+      const importedSourceFile = importedLocalSourceFile(
+        moduleFacts.sourceFile,
+        statement.moduleSpecifier.text,
+        sourceFiles,
+      );
+      if (!importedSourceFile) continue;
+
+      const importedFacts = facts.get(importedSourceFile);
+      if (!importedFacts) continue;
+
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) continue;
+
+      for (const element of bindings.elements) {
+        if (element.isTypeOnly) continue;
+
+        const importedName = element.propertyName?.text ?? element.name.text;
+        const localName = element.name.text;
+        if (linkHelperBinding(helpers, localName, importedFacts.helpers.get(importedName))) {
+          changed = true;
+        }
+      }
+
+      continue;
+    }
+
+    if (!ts.isExportDeclaration(statement)) continue;
     if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
-    if (statement.importClause?.isTypeOnly) continue;
+    if (statement.isTypeOnly) continue;
 
     const importedSourceFile = importedLocalSourceFile(
       moduleFacts.sourceFile,
@@ -171,21 +208,33 @@ function linkImportedHelpers(
     const importedFacts = facts.get(importedSourceFile);
     if (!importedFacts) continue;
 
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    const exportClause = statement.exportClause;
+    if (!exportClause || !ts.isNamedExports(exportClause)) continue;
 
-    for (const element of bindings.elements) {
+    for (const element of exportClause.elements) {
       if (element.isTypeOnly) continue;
 
       const importedName = element.propertyName?.text ?? element.name.text;
-      const localName = element.name.text;
-      const helper = importedFacts.helpers.get(importedName);
-      if (!helper?.exported) continue;
-      if (helpers.has(localName)) continue;
-
-      helpers.set(localName, helper);
+      const exportedName = element.name.text;
+      if (linkHelperBinding(helpers, exportedName, importedFacts.helpers.get(importedName))) {
+        changed = true;
+      }
     }
   }
+
+  return changed;
+}
+
+function linkHelperBinding(
+  helpers: Map<string, HelperDefinition>,
+  localName: string,
+  helper: HelperDefinition | undefined,
+): boolean {
+  if (!helper?.exported) return false;
+  if (helpers.has(localName)) return false;
+
+  helpers.set(localName, helper);
+  return true;
 }
 
 function importedLocalSourceFile(
