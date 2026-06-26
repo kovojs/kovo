@@ -27,6 +27,10 @@ export const defaultCommandExecutionSinkFiles = ['packages/server/src/command.ts
 
 export const defaultDynamicCodeExecutionSinkFiles = [];
 
+export const defaultLogChannelRoots = ['packages/server/src'];
+
+export const defaultLogChannelNeutralizerFiles = ['packages/server/src/logging.ts'];
+
 export const defaultResponseFragmentApplyPath = 'packages/browser/src/response-fragment-apply.ts';
 
 const responseFragmentHtmlSinkKind = 'browser:response-fragment-html';
@@ -80,11 +84,15 @@ export function checkSinkPolicyGate(options = {}) {
     options.commandExecutionSinkFiles ?? defaultCommandExecutionSinkFiles;
   const dynamicCodeExecutionSinkFiles =
     options.dynamicCodeExecutionSinkFiles ?? defaultDynamicCodeExecutionSinkFiles;
+  const logChannelRoots = options.logChannelRoots ?? defaultLogChannelRoots;
+  const logChannelNeutralizerFiles =
+    options.logChannelNeutralizerFiles ?? defaultLogChannelNeutralizerFiles;
   const responseFragmentApplyPath = Object.hasOwn(options, 'responseFragmentApplyPath')
     ? options.responseFragmentApplyPath
     : defaultResponseFragmentApplyPath;
   const commandExecutionFiles =
     options.commandExecutionFiles ?? collectSourceFiles(root, commandExecutionRoots);
+  const logChannelFiles = options.logChannelFiles ?? collectSourceFiles(root, logChannelRoots);
   const publicEntrypointFiles = options.publicEntrypointFiles ?? defaultPublicEntrypointFiles;
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
@@ -140,6 +148,7 @@ export function checkSinkPolicyGate(options = {}) {
 
   const commandExecutionSinkFileSet = new Set(commandExecutionSinkFiles);
   const dynamicCodeExecutionSinkFileSet = new Set(dynamicCodeExecutionSinkFiles);
+  const logChannelNeutralizerFileSet = new Set(logChannelNeutralizerFiles);
   for (const filePath of commandExecutionFiles) {
     if (!exists(filePath)) {
       findings.push(`${filePath}: command execution gate input is missing`);
@@ -158,6 +167,22 @@ export function checkSinkPolicyGate(options = {}) {
     );
     if (commandExecutionSinkFileSet.has(filePath)) {
       findings.push(...commandPrimitiveInvariantFindings(filePath, text));
+    }
+  }
+
+  for (const filePath of logChannelFiles) {
+    if (!exists(filePath)) {
+      findings.push(`${filePath}: log-channel gate input is missing`);
+      continue;
+    }
+    const text = readText(filePath);
+    findings.push(
+      ...logChannelSinkFindings(filePath, text, {
+        allowedNeutralizerFile: logChannelNeutralizerFileSet.has(filePath),
+      }),
+    );
+    if (logChannelNeutralizerFileSet.has(filePath)) {
+      findings.push(...logChannelNeutralizerInvariantFindings(filePath, text));
     }
   }
 
@@ -331,6 +356,59 @@ export function dynamicCodeExecutionSinkFindings(filePath, text, options = {}) {
   }
 
   return dedupe(findings);
+}
+
+export function logChannelSinkFindings(filePath, text, options = {}) {
+  const source = stripComments(text);
+  const findings = [];
+  const allowedNeutralizerFile = options.allowedNeutralizerFile === true;
+
+  for (const call of consoleLogCalls(source)) {
+    if (allowedNeutralizerFile && call.method !== 'log' && call.method !== 'warn') continue;
+    if (!containsRequestDerivedLogValue(call.argumentsText)) continue;
+    if (containsLogNeutralizer(call.argumentsText)) continue;
+    findings.push(
+      `${filePath}: raw console.${call.method} of request-derived values is a KV439 log sink; route values through neutralizeLogValue()/formatLogMessage() before logging`,
+    );
+  }
+
+  return dedupe(findings);
+}
+
+export function logChannelNeutralizerInvariantFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+
+  if (
+    !/\bexport\s+function\s+neutralizeLogValue\s*\(\s*value\s*:\s*unknown\s*\)\s*:\s*string/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: log-channel neutralizer must export neutralizeLogValue(value: unknown): string`,
+    );
+  }
+  if (
+    !/\bexport\s+function\s+formatLogMessage\s*\(\s*strings\s*:\s*TemplateStringsArray\s*,\s*\.\.\.\s*values\s*:\s*unknown\[\]\s*\)\s*:\s*string/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: log-channel neutralizer must export formatLogMessage() for tagged request log messages`,
+    );
+  }
+  if (!/\\u0000-\\u001f\\u007f-\\u009f/.test(source)) {
+    findings.push(
+      `${filePath}: log-channel neutralizer must cover ASCII and C1 control characters`,
+    );
+  }
+  if (!/\.replace\s*\(\s*CONTROL_CHARACTER_PATTERN\s*,\s*visibleControlEscape\s*\)/.test(source)) {
+    findings.push(
+      `${filePath}: neutralizeLogValue() must replace control characters with visible escapes`,
+    );
+  }
+
+  return findings;
 }
 
 export function commandPrimitiveInvariantFindings(filePath, text) {
@@ -522,6 +600,36 @@ const commandExecutionImportNames = new Set([
   'spawn',
   'spawnSync',
 ]);
+
+function consoleLogCalls(text) {
+  const calls = [];
+  const pattern = /\bconsole\s*\.\s*(log|warn|error|info|debug|trace)\s*\(([\s\S]*?)\)\s*;?/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    calls.push({ method: match[1], argumentsText: match[2] });
+  }
+  return calls;
+}
+
+function containsRequestDerivedLogValue(text) {
+  const requestIdentifiers = String.raw`(?:req|request)`;
+  const contextRequestProperties = String.raw`(?:ctx|context)\s*\.\s*(?:request|req)`;
+  const requestRoot = String.raw`(?:${requestIdentifiers}|${contextRequestProperties})`;
+  return new RegExp(
+    [
+      String.raw`\$\{[^}]*\b${requestRoot}\b[^}]*\}`,
+      String.raw`\b${requestRoot}\s*\.`,
+      String.raw`\b${requestRoot}\s*\[`,
+    ].join('|'),
+  ).test(text);
+}
+
+function containsLogNeutralizer(text) {
+  return (
+    /\bneutralizeLogValue\s*(?:<[^>()]*>)?\s*\(/.test(text) ||
+    /\bformatLogMessage\s*(?:<[^>()]*>)?\s*(?:\(|`)/.test(text)
+  );
+}
 
 function vmModuleImportPattern() {
   const vmModule = String.raw`(?:node:)?vm`;
