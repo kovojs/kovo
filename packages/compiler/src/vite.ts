@@ -256,6 +256,15 @@ export function createKovoVitePlugin(
     },
     transform(source: string, id: string) {
       const fileName = viteComponentFileName(id, root);
+      // SPEC §5.2 #3 (fixpoint / idempotency): a lowered live-region server module retains its
+      // `component(...)` shape plus compiler-injected ABI imports (`@kovojs/server/internal/escape`,
+      // `.../wire`). When two Kovo plugins are configured (e.g. an app's `kovo({ app })` plus an
+      // explicit compiler plugin), the second plugin's `transform` receives the FIRST plugin's
+      // emitted output; re-lowering it would re-flag those ABI imports as KV235 (app source importing
+      // a non-public subpath). The transform is its own fixpoint: an emitted output must never be
+      // re-lowered as app source. The registry is process-scoped, so it is shared across plugin
+      // instances and cannot be forged from authored source.
+      if (isKovoEmittedServerModuleReentry(fileName, source)) return null;
       if (!shouldTransformViteComponentSource(fileName, source, options)) return null;
 
       const result = compileCachedViteComponentModule(
@@ -293,6 +302,10 @@ export function createKovoVitePlugin(
     async handleHotUpdate(context) {
       const source = await context.read();
       const fileName = viteComponentFileName(context.file, root);
+      // SPEC §5.2 #3: the authored file changed, so drop its "cleanly compiled" mark — the edit must
+      // be compiled fresh (and any newly-added ABI import re-flagged as KV235), not skipped as a
+      // stale emitted-output re-entry.
+      forgetKovoCompiledComponent(fileName);
       if (!shouldTransformViteComponentSource(fileName, source, options))
         return context.modules ?? [];
 
@@ -330,6 +343,48 @@ export function createKovoVitePlugin(
   };
 }
 
+/**
+ * SPEC §5.2 #3 (fixpoint / idempotency): the Kovo transform must never re-lower its own output. A
+ * lowered live-region server module keeps its `component(...)` shape plus compiler-injected ABI
+ * imports (`@kovojs/server/internal/escape`, `.../wire`); when two Kovo plugins are configured (an
+ * app's `kovo({ app })` plus an explicit compiler plugin) the second plugin's `transform` receives
+ * the FIRST plugin's emitted output (already type-stripped by Vite/esbuild, so byte-matching it is
+ * not reliable). Re-lowering it would re-flag those ABI imports as KV235 (app source importing a
+ * non-public subpath).
+ *
+ * The guard is by-construction safe (it cannot be used to bypass KV235 on authored source): a file
+ * id is recorded as "cleanly compiled" ONLY after a successful authored compile, and a re-entry is
+ * skipped ONLY when (a) the id is already recorded AND (b) the incoming source carries a compiler
+ * ABI import — a combination that authored source cannot reach, because an authored ABI import makes
+ * the FIRST compile fail KV235 (so the id is never recorded) and HMR re-edits clear the id
+ * (`handleHotUpdate`) so an edit that adds an ABI import is compiled fresh and caught.
+ *
+ * The registry lives on `globalThis` (via `Symbol.for`) because the two Kovo plugins load this
+ * module through different specifiers (`@kovojs/compiler/vite` vs a workspace relative path) and so
+ * live in distinct ESM realms; only a globalThis singleton is shared across them.
+ */
+const KOVO_COMPILED_COMPONENT_IDS = Symbol.for('@kovojs/compiler:cleanlyCompiledComponentIds');
+
+function kovoCompiledComponentIds(): Set<string> {
+  const host = globalThis as { [KOVO_COMPILED_COMPONENT_IDS]?: Set<string> };
+  return (host[KOVO_COMPILED_COMPONENT_IDS] ??= new Set<string>());
+}
+
+function rememberKovoCompiledComponent(fileName: string): void {
+  kovoCompiledComponentIds().add(fileName);
+}
+
+function forgetKovoCompiledComponent(fileName: string): void {
+  kovoCompiledComponentIds().delete(fileName);
+}
+
+/** A non-public Kovo ABI import (`@kovojs/<pkg>/internal|generated/…`) only emitted lowering has. */
+const KOVO_ABI_IMPORT_PATTERN = /@kovojs\/[^"'\s/]+\/(?:internal|generated)\//;
+
+function isKovoEmittedServerModuleReentry(fileName: string, source: string): boolean {
+  return kovoCompiledComponentIds().has(fileName) && KOVO_ABI_IMPORT_PATTERN.test(source);
+}
+
 function transformViteCompileResult(
   clientModules: Map<string, string>,
   cssAssetsByFileName: Map<string, readonly ComponentCssAsset[]>,
@@ -343,6 +398,9 @@ function transformViteCompileResult(
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
   recordViteCompileResult(clientModules, cssAssetsByFileName, hmrImpacts, fileName, result);
 
+  // SPEC §5.2 #3: this authored component compiled cleanly, so a later transform of its emitted
+  // output (a second Kovo plugin instance) must be recognized as a re-entry and skipped.
+  rememberKovoCompiledComponent(fileName);
   return {
     code:
       executableViteServerSource(result.files.find((file) => file.kind === 'server')?.source) ??

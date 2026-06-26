@@ -39,6 +39,7 @@ import { validateLiteralHrefs } from './navigation.js';
 import { validateOutputContexts } from '../security/output-context.js';
 import { queryShapeFactDiagnostics } from '../types.js';
 import { validateClientHandlerSecretCapture } from './client-capture.js';
+import { validateTrustedHtmlProvenance } from './trusted-html-provenance.js';
 import { validateNonLiteralPattern } from './redos-pattern.js';
 import { validateSecretQueryWire } from './confidentiality.js';
 import {
@@ -172,6 +173,10 @@ const compilerValidators: readonly CompilerValidator[] = [
   originalValidator(({ diagnostics, model, styleOwnedSpans }) =>
     validateOutputContexts(diagnostics, model, styleOwnedSpans),
   ),
+  // SPEC §9.1/§5.2 #10/§4.8 (KV236/KV426 family): trustedHtml() branding provably request/query-
+  // derived data is a by-construction XSS sink. Runs on the authored source so the diagnostic site
+  // is the real trustedHtml(...) call (peer of the KV437 client-capture and KV435 query-wire gates).
+  originalValidator(({ diagnostics, model }) => validateTrustedHtmlProvenance(diagnostics, model)),
   loweredValidator(({ diagnostics, model }) => validateHtmlContentModel(diagnostics, model)),
   loweredValidator(({ diagnostics, model }) => validateEventTriggerNames(diagnostics, model)),
   originalValidator(({ diagnostics, model }) => validateDeferJsxChildren(diagnostics, model)),

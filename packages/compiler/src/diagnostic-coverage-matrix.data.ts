@@ -1202,6 +1202,40 @@ export const UserCard = component({
       }).diagnostics,
   },
   {
+    code: 'KV426',
+    spec: 'SPEC.md §9.1/§5.2 #10/§4.8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'trusted-html-provenance-ok.tsx',
+        source: `
+import { safeRichHtml, trustedHtml } from '@kovojs/browser';
+
+export const PostBody = component({
+  queries: { post: postQuery },
+  render: ({ post }) => (
+    <article>
+      {safeRichHtml(post.body)}
+      {trustedHtml('<hr/>')}
+      {trustedHtml(post.title, 'admin-curated title, sanitized upstream')}
+    </article>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'trusted-html-provenance-bad.tsx',
+        source: `
+import { trustedHtml } from '@kovojs/browser';
+
+export const PostBody = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{trustedHtml(post.body)}</article>,
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV437',
     spec: 'SPEC.md §6.2/§6.6',
     positive: () =>
@@ -1264,11 +1298,6 @@ export const outOfScopeCompilerDiagnostics = [
     code: 'KV425',
     reason:
       'Security-heavy, but source/sink drift detection is a repository audit/check path, not compiler component or registry graph output.',
-  },
-  {
-    code: 'KV426',
-    reason:
-      'Security-heavy, but trust-escape provenance is surfaced by kovo explain/check graph paths; component compilation only preserves facts when supplied.',
   },
   {
     code: 'KV428',
