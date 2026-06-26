@@ -19,14 +19,14 @@ export interface AgentToolModuleSource {
  * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
  * helpers reached through static named/default imports including static local re-export barrels,
- * default exports that alias a summarized local helper, static namespace-property calls into
- * exported local helpers, default object exports whose properties statically point at summarized
- * local helpers, handler properties that reference a summarized local/imported helper function,
- * and inline callbacks passed to a local/imported helper that directly invokes that callback
- * parameter. It does not inspect raw source text after parse and it skips non-invoked nested
- * function bodies, so ordinary callbacks, computed namespace access, computed/spread object
- * exports, export-star namespaces, and dynamic paths remain outside the SPEC.md §6.6 sound subset
- * until a dedicated analyzer proves them.
+ * unique local `export *` barrels for named imports, default exports that alias a summarized local
+ * helper, static namespace-property calls into exported local helpers, default object exports whose
+ * properties statically point at summarized local helpers, handler properties that reference a
+ * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
+ * that directly invokes that callback parameter. It does not inspect raw source text after parse and
+ * it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace access,
+ * computed/spread object exports, export-star namespaces, ambiguous export-star names, and dynamic
+ * paths remain outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -68,6 +68,7 @@ export function agentToolSinksFromSource(
 }
 
 interface ModuleFacts {
+  ambiguousExportStarHelpers: ReadonlySet<string>;
   defaultObjectHelpers: ReadonlyMap<string, HelperDefinition>;
   helpers: ReadonlyMap<string, HelperDefinition>;
   namespaceImports: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
@@ -80,6 +81,7 @@ interface HelperDefinition {
   id: string;
   moduleFacts: ModuleFacts;
   node: ts.FunctionLikeDeclaration;
+  reachedThroughExportStar?: true;
 }
 
 interface HandlerTarget {
@@ -119,11 +121,13 @@ function summarizeModules(moduleSources: readonly AgentToolModuleSource[]): Modu
 }
 
 function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
+  const ambiguousExportStarHelpers = new Set<string>();
   const defaultObjectHelpers = new Map<string, HelperDefinition>();
   const helpers = new Map<string, HelperDefinition>();
   const namespaceImports = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const topLevelBindings = new Set<string>();
   const moduleFacts: ModuleFacts = {
+    ambiguousExportStarHelpers,
     defaultObjectHelpers,
     helpers,
     namespaceImports,
@@ -273,7 +277,18 @@ function linkImportedHelpers(
     if (!importedFacts) continue;
 
     const exportClause = statement.exportClause;
-    if (!exportClause || !ts.isNamedExports(exportClause)) continue;
+    if (!exportClause) {
+      for (const [exportedName, helper] of exportedHelperBindings(importedFacts.helpers, {
+        includeExportStar: true,
+      })) {
+        if (linkExportStarHelperBinding(moduleFacts, exportedName, helper)) {
+          changed = true;
+        }
+      }
+      continue;
+    }
+
+    if (!ts.isNamedExports(exportClause)) continue;
 
     for (const element of exportClause.elements) {
       if (element.isTypeOnly) continue;
@@ -291,13 +306,42 @@ function linkImportedHelpers(
 
 function exportedHelperBindings(
   helpers: ReadonlyMap<string, HelperDefinition>,
+  options: { includeExportStar: boolean } = { includeExportStar: false },
 ): ReadonlyMap<string, HelperDefinition> {
   const exportedHelpers = new Map<string, HelperDefinition>();
   for (const [name, helper] of helpers) {
-    if (helper.exported) exportedHelpers.set(name, helper);
+    if (helper.exported && (options.includeExportStar || !helper.reachedThroughExportStar)) {
+      exportedHelpers.set(name, helper);
+    }
   }
 
   return exportedHelpers;
+}
+
+function linkExportStarHelperBinding(
+  moduleFacts: ModuleFacts,
+  localName: string,
+  helper: HelperDefinition,
+): boolean {
+  if (!helper.exported) return false;
+  if (moduleFacts.ambiguousExportStarHelpers.has(localName)) return false;
+
+  const helpers = moduleFacts.helpers as Map<string, HelperDefinition>;
+  const existing = helpers.get(localName);
+  if (existing) {
+    if (!existing.reachedThroughExportStar) return false;
+
+    if (existing.id !== helper.id) {
+      helpers.delete(localName);
+      (moduleFacts.ambiguousExportStarHelpers as Set<string>).add(localName);
+      return true;
+    }
+
+    return false;
+  }
+
+  helpers.set(localName, { ...helper, exported: true, reachedThroughExportStar: true });
+  return true;
 }
 
 function helperBindingMapsEqual(
