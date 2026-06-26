@@ -371,6 +371,40 @@ describe('agent tool capability primitive', () => {
     ).rejects.toThrow('cookie(header:cookie)');
   });
 
+  it('freezes declarations so ambient credential posture cannot be widened after review', async () => {
+    const updateOrder = declaredTool();
+
+    expect(Object.isFrozen(updateOrder)).toBe(true);
+    expect(() => {
+      (
+        updateOrder as ReturnType<typeof declaredTool> & {
+          ambientCredentials: unknown;
+        }
+      ).ambientCredentials = {
+        allow: true,
+        credentialKinds: ['cookie'],
+        justification: {
+          authorityBoundary: 'mutated after declaration',
+          reason: 'mutated after declaration',
+        },
+      };
+    }).toThrow(TypeError);
+
+    await expect(
+      runAgentTool(
+        updateOrder,
+        { id: 'ord_1' },
+        {
+          authority: principalAuthority,
+          request: new Request('https://example.test/tool', {
+            headers: { cookie: 'session=ambient' },
+          }),
+          value: {},
+        },
+      ),
+    ).rejects.toThrow('rejects ambient browser/session credentials by default');
+  });
+
   it('rejects undeclared ambient credential classes even when another class is justified', async () => {
     const ambientTool = tool({
       ambientCredentials: {

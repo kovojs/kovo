@@ -182,10 +182,10 @@ export function tool<const Input, Output, Context = unknown>(
   assertAmbientCredentials(definition.ambientCredentials);
   assertReachableSinks(definition.reachableSinks);
 
-  return {
+  return Object.freeze({
     ...definition,
     ambientCredentials: snapshotAmbientCredentials(definition.ambientCredentials),
-  };
+  });
 }
 
 /**
