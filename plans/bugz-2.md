@@ -63,11 +63,12 @@ ledger's H1-H9/M1-M4/L1-L5 list.
   - **Verified:** browser sub-agent throwaway simulation observed `{"hidden":"false","disabled":"false","checked":null}`; source contrast shows the full `BOOLEAN_PRESENCE_ATTRIBUTES` set exists only in `query-bindings.ts`.
   - **Fix:** share or inline the full boolean-presence attribute set in `inline-loader-build.ts`, regenerate `inline-loader.ts`, and pin parity tests for false/null/true.
 
-- [ ] **M3 - `create-kovo` starter CI calls `kovo` as a bare command.** `packages/create-kovo/templates/.github/workflows/ci.yml:14-20`, `rules/github-workflows.md:5-16`
+- [x] **M3 - `create-kovo` starter CI calls `kovo` as a bare command.** `packages/create-kovo/templates/.github/workflows/ci.yml:14-20`, `rules/github-workflows.md:5-16`
   - The generated workflow installs via `voidzero-dev/setup-vp` and `vp install`, then runs `kovo build ./src/app.tsx` directly. The workflow rules explicitly say setup actions should not assume underlying package binaries are available as bare commands in later steps.
   - **Impact:** a newly scaffolded app can fail GitHub Actions with `kovo: command not found` even though dependencies installed, making the starter's CI red out of the box.
   - **Verified:** build/CLI sub-agent inspected the template and rule; package template scripts already define `build:prod`, but the workflow bypasses them.
   - **Fix:** run through the installed toolchain/package manager, e.g. `vp exec pnpm run build:prod` or `vp exec pnpm exec kovo build ./src/app.tsx`.
+  - Evidence 2026-06-26: starter CI now runs `vp exec pnpm run build:prod`; `pnpm exec vitest --run packages/create-kovo/src/index.test.ts -t "declares the building-block dependencies"`, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **M4 - Inline dynamic-import guard is wider than the module guard.** `packages/browser/src/inline-loader-build.ts:197-213`, generated `packages/browser/src/inline-loader.ts:8`; contrast `packages/browser/src/dynamic-import-url.ts:29-50`
   - The inline guard allows any same-origin pathname starting `/c/` or merely ending with the two letters `ts`. The module guard allows local-dev TS/TSX only on localhost and otherwise restricts to `/c/` plus any available modulepreload manifest. On production origins, inline accepts paths like `/admin/upload.ts` and `/assets`.

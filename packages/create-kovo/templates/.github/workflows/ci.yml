@@ -17,4 +17,4 @@ jobs:
       - run: vp install
       - run: vp check
       - run: vp test
-      - run: kovo build ./src/app.tsx
+      - run: vp exec pnpm run build:prod
