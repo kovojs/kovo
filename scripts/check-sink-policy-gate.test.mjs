@@ -528,6 +528,24 @@ describe('sink-policy gate', () => {
     }
   });
 
+  it('rejects destructured real-global eval aliases in server source', () => {
+    const finding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink eval(); server source must not execute generated code';
+
+    for (const source of [
+      'const { eval: run } = globalThis; export const result = run(code);',
+      'const { eval } = globalThis; export const result = (eval)(code);',
+      'const { "eval": run } = globalThis; export const result = run(code);',
+      "const { ['eval']: run } = globalThis; export const result = run(code);",
+      'const { ["eval"]: run } = (globalThis); export const result = run.call(null, code);',
+      'const { eval: run } = globalThis; export const result = run.bind(globalThis)(code);',
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        finding,
+      ]);
+    }
+  });
+
   it('rejects eval dynamic code execution through call, apply, and bind laundering', () => {
     const finding =
       'packages/server/src/unsafe.ts: forbidden dynamic code execution sink eval(); server source must not execute generated code';
@@ -630,6 +648,35 @@ describe('sink-policy gate', () => {
     }
   });
 
+  it('rejects destructured real-global Function aliases in server source', () => {
+    const constructorFinding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink new Function(); server source must not execute generated code';
+    const callFinding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code';
+
+    for (const source of [
+      'const { Function: Make } = globalThis; export const made = new Make(code);',
+      'const { Function } = globalThis; export const made = new (Function)(code);',
+      'const { "Function": Make } = globalThis; export const made = new Make(code);',
+      "const { ['Function']: Make } = globalThis; export const made = new Make(code);",
+      'const { ["Function"]: Make } = (globalThis); export const made = new (Make)(code);',
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        constructorFinding,
+      ]);
+    }
+
+    for (const source of [
+      'const { Function: Make } = globalThis; export const call = Make(code);',
+      'const { "Function": Make } = globalThis; export const call = Make.apply(null, [code]);',
+      'const { ["Function"]: Make } = globalThis; export const call = Make.bind(null)(code);',
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        callFinding,
+      ]);
+    }
+  });
+
   it('rejects Function dynamic code execution through call, apply, and bind laundering', () => {
     const constructorFinding =
       'packages/server/src/unsafe.ts: forbidden dynamic code execution sink new Function(); server source must not execute generated code';
@@ -712,6 +759,30 @@ describe('sink-policy gate', () => {
               Function.bind(null)("value"),
               new (globalThis.Function.bind(null))("value"),
             ];
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('allows local and rebound destructured dynamic-code names', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/safe.ts',
+        `
+          export function safe(globalThis, code) {
+            const { eval: run } = globalThis;
+            const { "Function": Make } = globalThis;
+            return [run(code), new Make(code)];
+          }
+
+          const { eval: realRun } = globalThis;
+          const { Function: RealMake } = globalThis;
+          export function rebound(code) {
+            const realRun = (value) => value;
+            let RealMake = class SafeFunction {};
+            RealMake = class SaferFunction {};
+            return [realRun(code), new RealMake(code)];
           }
         `,
       ),

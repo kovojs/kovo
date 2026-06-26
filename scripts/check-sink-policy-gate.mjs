@@ -911,16 +911,25 @@ function hasForbiddenFunctionConstructorCall(source, options = {}) {
 function dynamicCodeSourceForSinkScanning(text) {
   const source = stripCommentsAndStringContents(text);
   const chars = source.split('');
-  const literalGlobalDynamicCodeMemberPattern = /\bglobalThis\s*\[\s*(['"])(eval|Function)\1\s*\]/g;
+  const preservedDynamicCodeLiteralPatterns = [
+    /\bglobalThis\s*\[\s*(['"])(eval|Function)\1\s*\]/g,
+    /(?:^|[{\[,])\s*(['"])(eval|Function)\1\s*:/g,
+    /(?:^|[{\[,])\s*\[\s*(['"])(eval|Function)\1\s*\]\s*:/g,
+  ];
   let match;
-  while ((match = literalGlobalDynamicCodeMemberPattern.exec(text)) !== null) {
-    if (source.slice(match.index, match.index + 'globalThis'.length) !== 'globalThis') {
-      continue;
-    }
-    const literal = `${match[1]}${match[2]}${match[1]}`;
-    const literalIndex = match.index + match[0].indexOf(literal);
-    for (let offset = 0; offset < literal.length; offset += 1) {
-      chars[literalIndex + offset] = text[literalIndex + offset];
+  for (const literalPattern of preservedDynamicCodeLiteralPatterns) {
+    while ((match = literalPattern.exec(text)) !== null) {
+      const literal = `${match[1]}${match[2]}${match[1]}`;
+      const literalIndex = match.index + match[0].indexOf(literal);
+      if (
+        source.slice(match.index, literalIndex).trim() !==
+        text.slice(match.index, literalIndex).trim()
+      ) {
+        continue;
+      }
+      for (let offset = 0; offset < literal.length; offset += 1) {
+        chars[literalIndex + offset] = text[literalIndex + offset];
+      }
     }
   }
   return chars.join('');
@@ -966,8 +975,43 @@ function dynamicCodeGlobalAliasNames(source, targetName) {
       aliases.set(declaration[1], declarationPattern.lastIndex);
     }
   }
+  for (const alias of destructuredGlobalDynamicCodeAliasDeclarations(source, targetName)) {
+    aliases.set(alias.name, alias.end);
+  }
 
   return aliases;
+}
+
+function destructuredGlobalDynamicCodeAliasDeclarations(source, targetName) {
+  const aliases = [];
+  const declarationPattern =
+    /\b(?:const|let|var)\s*\{([\s\S]*?)\}\s*(?::[^=;]+)?=\s*\(?\s*globalThis\s*\)?\s*(?=;|\n|$)/g;
+  let declaration;
+  while ((declaration = declarationPattern.exec(source)) !== null) {
+    if (hasLocalBindingBefore(source, 'globalThis', declaration.index)) {
+      continue;
+    }
+
+    for (const entry of splitTopLevelArguments(declaration[1])) {
+      const aliasName = destructuredDynamicCodeAliasName(entry, targetName);
+      if (aliasName === undefined) continue;
+      aliases.push({ name: aliasName, end: declarationPattern.lastIndex });
+    }
+  }
+  return aliases;
+}
+
+function destructuredDynamicCodeAliasName(entry, targetName) {
+  const trimmed = entry.trim();
+  if (trimmed === targetName) return targetName;
+  const key = String.raw`(?:${escapeRegExp(targetName)}|\[\s*(['"])${escapeRegExp(
+    targetName,
+  )}\1\s*\]|(['"])${escapeRegExp(targetName)}\2)`;
+  const alias = String.raw`([A-Za-z_$][\w$]*)`;
+  const renamedPattern = new RegExp(String.raw`^${key}\s*:\s*${alias}$`);
+  const renamed = renamedPattern.exec(trimmed);
+  if (renamed !== null) return renamed[3];
+  return undefined;
 }
 
 function dynamicCodeMemberHelperCallPatterns(targetName, globalExpression, aliases) {
