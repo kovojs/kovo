@@ -18,6 +18,20 @@ import {
 
 const documentConfigBrand: unique symbol = Symbol.for('kovo.document.config') as any;
 const documentNodeBrand: unique symbol = Symbol.for('kovo.document.node') as any;
+const invalidAttributeNamePattern = /[\s"'=<>/\u0000-\u001f\u007f]/u;
+const linkAttributeNames = new Set([
+  'as',
+  'crossorigin',
+  'fetchpriority',
+  'href',
+  'imagesizes',
+  'imagesrcset',
+  'integrity',
+  'media',
+  'referrerpolicy',
+  'rel',
+  'type',
+]);
 
 type DocumentPlacement = 'head' | 'body-start' | 'body-end' | 'html-attrs' | 'body-attrs';
 
@@ -163,7 +177,7 @@ export function Link(props: {
   type?: string;
 }): unknown {
   assertSafeUrl(props.href, '<Link href>');
-  return documentNode('head', `<link${renderAttributes('link', props)}>`);
+  return documentNode('head', `<link${renderAttributes('link', filterLinkAttrs(props))}>`);
 }
 
 /** Stylesheet link primitive. */
@@ -265,13 +279,12 @@ export function renderShellAttributes(attributes: DocumentShellAttributes): stri
       (entry): entry is [string, Exclude<DocumentShellAttributeValue, undefined>] =>
         entry[1] !== undefined,
     )
-    .map(([name, value]) =>
-      value === true
-        ? ` ${name}`
-        : value === false
-          ? ''
-          : ` ${name}="${escapeAttribute(String(value))}"`,
-    )
+    .map(([name, value]) => {
+      assertValidAttributeName(name, 'document shell attribute');
+      if (value === true) return ` ${name}`;
+      if (value === false) return '';
+      return ` ${name}="${escapeAttribute(String(value))}"`;
+    })
     .join('');
 }
 
@@ -370,6 +383,7 @@ function renderAttributes(tag: string, attributes: Record<string, unknown>): str
       return name !== 'children' && value !== undefined && value !== false && value !== null;
     })
     .map(([name, value]) => {
+      assertValidAttributeName(name, `<${tag}> attribute`);
       if (value === true) return ` ${name}`;
       return ` ${name}="${safeUrlAttribute(name, String(value))}"`;
     })
@@ -384,6 +398,7 @@ function filterShellAttrs(
   const attrs: DocumentShellAttributes = {};
   for (const [name, value] of Object.entries(props)) {
     if (name === 'children' || value === undefined || value === false) continue;
+    assertValidAttributeName(name, `<${element}> attribute`);
     if (!allowed.has(name) && !name.startsWith('data-')) {
       throw new TypeError(
         `<${element}> attribute "${name}" is not supported by structured document attributes (SPEC.md §9.5, KV424).`,
@@ -392,6 +407,22 @@ function filterShellAttrs(
     attrs[name] = value;
   }
   return attrs;
+}
+
+function filterLinkAttrs(attributes: Record<string, unknown>): Record<string, unknown> {
+  const attrs: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(attributes)) {
+    if (!linkAttributeNames.has(name)) continue;
+    attrs[name] = value;
+  }
+  return attrs;
+}
+
+function assertValidAttributeName(name: string, sink: string): void {
+  if (name !== '' && !invalidAttributeNamePattern.test(name)) return;
+  throw new TypeError(
+    `${sink} name "${name}" is not a valid HTML attribute token (SPEC.md §9.5, KV424).`,
+  );
 }
 
 function assertSafeUrl(value: string, sink: string): void {
