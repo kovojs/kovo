@@ -400,28 +400,60 @@ function assertCapabilities(capabilities: readonly AgentToolCapability[] | undef
 }
 
 function assertAmbientCredentials(ambient: AgentToolAmbientCredentials | undefined): void {
-  if (ambient !== undefined && ambient.allow !== true) {
-    const rejectedPosture = ambient as {
-      credentialKinds?: unknown;
-      justification?: unknown;
-    };
-    if (
-      rejectedPosture.credentialKinds !== undefined ||
-      rejectedPosture.justification !== undefined
-    ) {
+  if (ambient === undefined) return;
+
+  const allow = optionalOwnDataProperty(
+    ambient,
+    'allow',
+    'tool.ambientCredentials.allow',
+  ) as unknown;
+
+  if (allow !== true) {
+    if (hasOwnProperty(ambient, 'credentialKinds') || hasOwnProperty(ambient, 'justification')) {
       throw new AgentToolCapabilityError(
         'tool.ambientCredentials must not declare credentialKinds or justification unless allow is true.',
       );
     }
+    return;
   }
 
-  if (ambient?.allow === true) {
-    assertAmbientCredentialKinds(ambient.credentialKinds);
-    assertNonEmpty(ambient.justification?.reason, 'tool.ambientCredentials.justification.reason');
-    assertNonEmpty(
-      ambient.justification?.authorityBoundary,
+  const credentialKinds = requiredOwnDataProperty(
+    ambient,
+    'credentialKinds',
+    'tool.ambientCredentials.credentialKinds',
+  ) as readonly AgentToolAmbientCredentialKind[] | undefined;
+  const justification = requiredOwnDataProperty(
+    ambient,
+    'justification',
+    'tool.ambientCredentials.justification',
+  );
+
+  assertAmbientCredentialKinds(credentialKinds);
+  assertObject(justification, 'tool.ambientCredentials.justification');
+  assertNonEmpty(
+    requiredOwnDataProperty(
+      justification,
+      'reason',
+      'tool.ambientCredentials.justification.reason',
+    ) as string | undefined,
+    'tool.ambientCredentials.justification.reason',
+  );
+  assertNonEmpty(
+    requiredOwnDataProperty(
+      justification,
+      'authorityBoundary',
       'tool.ambientCredentials.justification.authorityBoundary',
-    );
+    ) as string | undefined,
+    'tool.ambientCredentials.justification.authorityBoundary',
+  );
+}
+
+function assertObject(
+  value: unknown,
+  field: string,
+): asserts value is Record<PropertyKey, unknown> {
+  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
+    throw new AgentToolCapabilityError(`${field} must be an object.`);
   }
 }
 
@@ -488,6 +520,30 @@ function assertNonEmpty(value: string | undefined, field: string): void {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new AgentToolCapabilityError(`${field} must be a non-empty string.`);
   }
+}
+
+function requiredOwnDataProperty(value: object, property: PropertyKey, field: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) {
+    throw new AgentToolCapabilityError(`${field} must be declared as an own data property.`);
+  }
+  if (!('value' in descriptor)) {
+    throw new AgentToolCapabilityError(`${field} must be declared as an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function optionalOwnDataProperty(value: object, property: PropertyKey, field: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new AgentToolCapabilityError(`${field} must be declared as an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function hasOwnProperty(value: object, property: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(value, property);
 }
 
 function describeAuthority(authority: AgentToolAuthority): string {

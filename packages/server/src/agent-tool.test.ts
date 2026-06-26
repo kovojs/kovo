@@ -102,6 +102,81 @@ describe('agent tool capability primitive', () => {
     ).toThrow('tool.reachableSinks[].evidence must be a non-empty string');
   });
 
+  it('requires ambient opt-in review fields to be own data properties', () => {
+    const base = {
+      audit: { owner: 'security' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: () => undefined,
+      name: 'profile.summary',
+      purpose: 'Read the current user profile summary for an agent response.',
+    };
+    let allowGetterRan = false;
+
+    const accessorAmbient = {
+      get allow() {
+        allowGetterRan = true;
+        return true;
+      },
+      credentialKinds: ['cookie'],
+      justification: {
+        authorityBoundary: 'handler re-checks the bound principal before every read',
+        reason: 'legacy browser-authenticated assistant action under review',
+      },
+    };
+
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: accessorAmbient as never,
+      }),
+    ).toThrow('tool.ambientCredentials.allow must be declared as an own data property');
+    expect(allowGetterRan).toBe(false);
+
+    const inheritedKinds = Object.create({
+      credentialKinds: ['cookie'],
+      justification: {
+        authorityBoundary: 'handler re-checks the bound principal before every read',
+        reason: 'legacy browser-authenticated assistant action under review',
+      },
+    }) as {
+      allow: true;
+      credentialKinds: ['cookie'];
+      justification: {
+        authorityBoundary: string;
+        reason: string;
+      };
+    };
+    inheritedKinds.allow = true;
+
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: inheritedKinds,
+      }),
+    ).toThrow('tool.ambientCredentials.credentialKinds must be declared as an own data property');
+
+    const accessorJustification = {
+      allow: true,
+      credentialKinds: ['cookie'],
+      justification: {
+        authorityBoundary: 'handler re-checks the bound principal before every read',
+        get reason() {
+          throw new Error('reason getter must not run');
+        },
+      },
+    };
+
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: accessorJustification as never,
+      }),
+    ).toThrow(
+      'tool.ambientCredentials.justification.reason must be declared as an own data property',
+    );
+  });
+
   it('rejects ambient browser/session credentials by default at the invocation boundary', async () => {
     const updateOrder = declaredTool();
 
