@@ -31,7 +31,7 @@ describe('kovo audit', () => {
         'MUTATION inventory/sync guards=- writes=product invalidates=- manual-invalidates=product',
         'MANUAL-INVALIDATES',
         'MUTATION inventory/sync domains=product',
-        'SUMMARY unguarded=2 manual-invalidates=1 agent-tool-coverage=0',
+        'SUMMARY unguarded=2 manual-invalidates=1',
         '',
       ].join('\n'),
     });
@@ -65,7 +65,7 @@ describe('kovo audit', () => {
         'kovo-audit/v1',
         'UNGUARDED',
         'ENDPOINT auth/callback method=GET path=/auth/callback mount=exact auth=none csrf=exempt:oauth callback',
-        'SUMMARY unguarded=1 manual-invalidates=0 agent-tool-coverage=0',
+        'SUMMARY unguarded=1 manual-invalidates=0',
         '',
       ].join('\n'),
     });
@@ -82,34 +82,6 @@ describe('kovo audit', () => {
     ).toEqual({
       exitCode: 0,
       output: 'kovo-audit/v1\nOK\n',
-    });
-  });
-
-  it('flags incomplete agent-tool capability coverage', () => {
-    expect(
-      kovoAudit(
-        {
-          capabilities: [
-            {
-              ambientBrowserCredentials: 'allowed',
-              authority: [],
-              kind: 'agentTool',
-              site: 'app/tools/orders.ts:12',
-              target: 'orders.updateStatus',
-            },
-          ],
-        },
-        { failOnFindings: true },
-      ),
-    ).toEqual({
-      exitCode: 1,
-      output: [
-        'kovo-audit/v1',
-        'AGENT-TOOLS',
-        'AGENT_TOOL orders.updateStatus site=app/tools/orders.ts:12 missing=owner,purpose,authority,capabilities,ambientJustification',
-        'SUMMARY unguarded=0 manual-invalidates=0 agent-tool-coverage=1',
-        '',
-      ].join('\n'),
     });
   });
 
@@ -130,7 +102,7 @@ describe('kovo audit', () => {
         'kovo-audit/v1',
         'UNGUARDED',
         'MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-',
-        'SUMMARY unguarded=1 manual-invalidates=0 agent-tool-coverage=0',
+        'SUMMARY unguarded=1 manual-invalidates=0',
         '',
       ].join('\n'),
     });
@@ -167,7 +139,7 @@ describe('kovo audit', () => {
         'kovo-audit/v1',
         'UNGUARDED',
         'MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-',
-        'SUMMARY unguarded=1 manual-invalidates=0 agent-tool-coverage=0',
+        'SUMMARY unguarded=1 manual-invalidates=0',
         '',
       ].join('\n'),
     );
@@ -204,7 +176,7 @@ describe('kovo audit', () => {
         'kovo-audit/v1',
         'UNGUARDED',
         'MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-',
-        'SUMMARY unguarded=1 manual-invalidates=0 agent-tool-coverage=0',
+        'SUMMARY unguarded=1 manual-invalidates=0',
         '',
       ].join('\n'),
     );

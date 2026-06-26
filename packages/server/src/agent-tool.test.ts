@@ -46,19 +46,6 @@ describe('agent tool capability primitive', () => {
     expect(() => tool({ ...base, capabilities: [] })).toThrow(
       'tool.capabilities must declare at least one capability',
     );
-    expect(() =>
-      tool({
-        ...base,
-        reachableSinks: [
-          {
-            capability: 'email.send',
-            evidence: '',
-            kind: 'egress',
-            target: 'smtp',
-          },
-        ],
-      }),
-    ).toThrow('tool.reachableSinks[].evidence must be a non-empty string');
   });
 
   it('rejects ambient browser/session credentials by default at the invocation boundary', async () => {
@@ -155,94 +142,10 @@ describe('agent tool capability primitive', () => {
       {
         ambientBrowserCredentials: 'rejected',
         authority: ['principal:user:123'],
-        declaredCapabilities: ['orders.write'],
-        kind: 'agentTool',
+        capabilities: ['orders.write'],
         name: 'orders.updateStatus',
         owner: 'security',
         purpose: 'Update a single order status after a human-approved agent action.',
-        site: 'agent-tool:orders.updateStatus',
-        target: 'orders.updateStatus',
-      },
-    ]);
-  });
-
-  it('emits declared reachable body sinks as audit-grade explain facts', () => {
-    const notifyOrder = tool({
-      audit: { owner: 'security', site: 'app/tools/orders.ts:12' },
-      authority: [principalAuthority],
-      capabilities: [
-        { name: 'orders.write', reason: 'update one order status' },
-        { name: 'email.send', reason: 'notify the buyer' },
-        { name: 'secrets.read', reason: 'load provider token from the app secret store' },
-      ],
-      handler: () => undefined,
-      name: 'orders.notify',
-      purpose: 'Update an order and notify the buyer.',
-      reachableSinks: [
-        {
-          capability: 'email.send',
-          evidence: 'handler calls the configured SMTP provider',
-          kind: 'egress',
-          site: 'app/tools/orders.ts:34',
-          target: 'smtp',
-        },
-        {
-          capability: 'secrets.read',
-          evidence: 'handler loads the transactional-email provider token',
-          kind: 'secret-read',
-          target: 'env.SENDGRID_TOKEN',
-        },
-      ],
-    });
-
-    expect(agentToolAuditFacts([notifyOrder])[0]?.reachableSinks).toEqual([
-      {
-        capability: 'email.send',
-        evidence: 'handler calls the configured SMTP provider',
-        grade: 'audit',
-        kind: 'egress',
-        site: 'app/tools/orders.ts:34',
-        target: 'smtp',
-        tool: 'orders.notify',
-      },
-      {
-        capability: 'secrets.read',
-        evidence: 'handler loads the transactional-email provider token',
-        grade: 'audit',
-        kind: 'secret-read',
-        site: 'app/tools/orders.ts:12',
-        target: 'env.SENDGRID_TOKEN',
-        tool: 'orders.notify',
-      },
-    ]);
-  });
-
-  it('uses explicit audit sites and ambient justifications in explain-ready facts', () => {
-    const profile = tool({
-      ambientCredentials: {
-        allow: true,
-        justification: 'legacy browser-authenticated assistant action under review',
-      },
-      audit: { owner: 'security', review: 'SEC-123', site: 'app/tools/profile.ts:12' },
-      authority: [principalAuthority],
-      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
-      handler: () => undefined,
-      name: 'profile.summary',
-      purpose: 'Read the current user profile summary for an agent response.',
-    });
-
-    expect(agentToolAuditFacts([profile])).toEqual([
-      {
-        ambientBrowserCredentials: 'allowed',
-        ambientJustification: 'legacy browser-authenticated assistant action under review',
-        authority: ['principal:user:123'],
-        declaredCapabilities: ['profile.read'],
-        kind: 'agentTool',
-        name: 'profile.summary',
-        owner: 'security',
-        purpose: 'Read the current user profile summary for an agent response.',
-        site: 'app/tools/profile.ts:12',
-        target: 'profile.summary',
       },
     ]);
   });

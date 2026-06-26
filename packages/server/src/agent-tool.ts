@@ -29,28 +29,12 @@ export interface AgentToolCapability {
   reason: string;
 }
 
-/** Reachable sink/capability row declared at the framework-owned tool boundary. */
-export interface AgentToolReachableSink {
-  /** Capability needed to exercise this sink, e.g. `email.send` or `secrets.read`. */
-  capability: string;
-  /** Why the handler body can reach this sink. Kept audit-grade, not proof. */
-  evidence: string;
-  /** Sink family reached by the handler body. */
-  kind: 'egress' | 'mutation' | 'secret-read' | 'write';
-  /** Optional source span for this sink; defaults to the tool audit site. */
-  site?: string;
-  /** Sink target, e.g. `smtp`, `stripe`, `env.STRIPE_SECRET_KEY`, or a write domain. */
-  target: string;
-}
-
 /** Audit owner and review notes for an agent tool declaration. */
 export interface AgentToolAuditMetadata {
   /** Human/team owner responsible for reviewing the tool's blast radius. */
   owner: string;
   /** Optional review note, ticket, or runbook reference. */
   review?: string;
-  /** Optional source span for explain/audit output; defaults to `agent-tool:<name>`. */
-  site?: string;
 }
 
 /** Ambient browser/session credential posture for an agent tool. */
@@ -95,12 +79,6 @@ export interface AgentToolDefinition<Input, Output, Context = unknown> {
   purpose: string;
   /** Principal/capability authority accepted by this tool. Empty lists are rejected. */
   authority: readonly AgentToolAuthority[];
-  /**
-   * Handler-body sinks the author or a static analyzer can identify at the tool boundary.
-   * Rows emitted by this public API are audit-grade only; sound enforcement comes from
-   * compiler/graph analyzer rows that can prove reachability.
-   */
-  reachableSinks?: readonly AgentToolReachableSink[];
 }
 
 /** First-class agent tool declaration returned by {@link tool}. */
@@ -112,30 +90,15 @@ export interface AgentToolDeclaration<
   ambientCredentials: AgentToolAmbientCredentials;
 }
 
-/** Audit fact suitable for `kovo explain --capabilities` rendering. */
+/** Audit fact suitable for future `kovo explain --capabilities` rendering. */
 export interface AgentToolAuditFact {
   readonly ambientBrowserCredentials: 'allowed' | 'rejected';
   readonly ambientJustification?: string;
   readonly authority: readonly string[];
-  readonly declaredCapabilities: readonly string[];
-  readonly kind: 'agentTool';
+  readonly capabilities: readonly string[];
   readonly name: string;
   readonly owner: string;
   readonly purpose: string;
-  readonly reachableSinks?: readonly AgentToolReachableSinkAuditFact[];
-  readonly site: string;
-  readonly target: string;
-}
-
-/** Audit-grade reachable sink fact emitted for `kovo explain --capabilities`. */
-export interface AgentToolReachableSinkAuditFact {
-  readonly capability: string;
-  readonly evidence?: string;
-  readonly grade: 'audit';
-  readonly kind: AgentToolReachableSink['kind'];
-  readonly site: string;
-  readonly target: string;
-  readonly tool: string;
 }
 
 /** Error thrown when an agent tool declaration or invocation violates the fail-closed boundary. */
@@ -156,12 +119,9 @@ export function tool<const Input, Output, Context = unknown>(
   assertNonEmpty(definition.name, 'tool.name');
   assertNonEmpty(definition.purpose, 'tool.purpose');
   assertNonEmpty(definition.audit?.owner, 'tool.audit.owner');
-  if (definition.audit?.site !== undefined)
-    assertNonEmpty(definition.audit.site, 'tool.audit.site');
   assertAuthority(definition.authority);
   assertCapabilities(definition.capabilities);
   assertAmbientCredentials(definition.ambientCredentials);
-  assertReachableSinks(definition.reachableSinks);
 
   return {
     ...definition,
@@ -205,20 +165,10 @@ export function agentToolAuditFacts(
       ambientBrowserCredentials: ambient.allow === true ? 'allowed' : 'rejected',
       ...(ambient.allow === true ? { ambientJustification: ambient.justification } : {}),
       authority: declaration.authority.map(describeAuthority),
-      declaredCapabilities: declaration.capabilities.map((capability) => capability.name),
-      kind: 'agentTool',
+      capabilities: declaration.capabilities.map((capability) => capability.name),
       name: declaration.name,
       owner: declaration.audit.owner,
       purpose: declaration.purpose,
-      ...(declaration.reachableSinks === undefined || declaration.reachableSinks.length === 0
-        ? {}
-        : {
-            reachableSinks: declaration.reachableSinks.map((sink) =>
-              reachableSinkAuditFact(declaration, sink),
-            ),
-          }),
-      site: declaration.audit.site ?? `agent-tool:${declaration.name}`,
-      target: declaration.name,
     };
   });
 }
@@ -299,40 +249,6 @@ function assertAmbientCredentials(ambient: AgentToolAmbientCredentials | undefin
   if (ambient?.allow === true) {
     assertNonEmpty(ambient.justification, 'tool.ambientCredentials.justification');
   }
-}
-
-function assertReachableSinks(sinks: readonly AgentToolReachableSink[] | undefined): void {
-  if (sinks === undefined) return;
-
-  for (const sink of sinks) {
-    if (
-      sink.kind !== 'egress' &&
-      sink.kind !== 'mutation' &&
-      sink.kind !== 'secret-read' &&
-      sink.kind !== 'write'
-    ) {
-      throw new AgentToolCapabilityError('tool.reachableSinks[].kind must be a known sink kind.');
-    }
-    assertNonEmpty(sink.capability, 'tool.reachableSinks[].capability');
-    assertNonEmpty(sink.evidence, 'tool.reachableSinks[].evidence');
-    assertNonEmpty(sink.target, 'tool.reachableSinks[].target');
-    if (sink.site !== undefined) assertNonEmpty(sink.site, 'tool.reachableSinks[].site');
-  }
-}
-
-function reachableSinkAuditFact(
-  declaration: AgentToolDeclaration<unknown, unknown, unknown>,
-  sink: AgentToolReachableSink,
-): AgentToolReachableSinkAuditFact {
-  return {
-    capability: sink.capability,
-    evidence: sink.evidence,
-    grade: 'audit',
-    kind: sink.kind,
-    site: sink.site ?? declaration.audit.site ?? `agent-tool:${declaration.name}`,
-    target: sink.target,
-    tool: declaration.name,
-  };
 }
 
 function assertNonEmpty(value: string | undefined, field: string): void {

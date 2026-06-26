@@ -21,8 +21,6 @@ export type {
   AgentToolDeclaration,
   AgentToolDefinition,
   AgentToolInvocationContext,
-  AgentToolReachableSink,
-  AgentToolReachableSinkAuditFact,
   AgentToolRequest,
 } from './agent-tool.js';
 export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';
