@@ -235,8 +235,10 @@ export {
   /**
    * Narrow OPP-28 Authorization-gates-DATA subset: owner-annotated domains whose
    * owner column is compared against the matching session/principal private symbol
-   * through `eq(...)` or the equality-equivalent `inArray(owner, [principal])` subset.
-   * This is stricter than `sessionAnchoredReads`, which may anchor any table column.
+   * through exact equality-equivalent shapes: `eq(...)` or the singleton
+   * `inArray(owner, [principal])` subset. Range predicates never prove exact
+   * `scope: session`. This is stricter than `sessionAnchoredReads`, which may
+   * anchor any table column.
    */
   ownerScopedSessionReads?: readonly string[];
   /** Exact private principal symbols for `ownerScopedSessionReads`, e.g. `guard:userId`. */
@@ -505,7 +507,9 @@ function ownerAuthorizationDataProofDetail(
   /**
    * Narrow OPP-28 Authorization-gates-DATA subset for writes: owner-annotated domains whose
    * owner column is compared against the matching session/principal private symbol through
-   * `eq(...)` or the equality-equivalent `inArray(owner, [principal])` subset.
+   * exact equality-equivalent shapes: `eq(...)` or the singleton
+   * `inArray(owner, [principal])` subset. Range predicates never prove exact
+   * `scope: session`.
    */
   ownerScopedSessionWrites?: readonly string[];
   /** Exact private principal symbols for `ownerScopedSessionWrites`, e.g. `guard:userId`. */

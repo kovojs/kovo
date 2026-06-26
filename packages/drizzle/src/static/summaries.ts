@@ -737,10 +737,11 @@ function eqOperandsAreTableColumnArgKeyed(
  * - `instanceKey`: top-level/`and(...)` conjuncts only — these may discharge a unique
  *   single-row instance key and a `session` scope.
  * - `argCandidates`: every direct comparison operand pair anywhere in the predicate
- *   tree, INCLUDING under `or(...)` (A2, fail-closed). An arg-keyed owner operand in
- *   any branch is an `args`-scope candidate that must surface KV414, but an
- *   `or`-branch or non-equality comparison does NOT pin a row, so these never
- *   discharge an instance key.
+ *   tree, INCLUDING under `or(...)` (A2, fail-closed) and range predicates such as
+ *   `gt/gte/lt/lte/between`. An arg-keyed owner operand in any branch is an
+ *   `args`-scope candidate that must surface KV414, but an `or`-branch or
+ *   non-equality comparison does NOT pin a row, so these never discharge an
+ *   instance key or owner/principal session proof.
  */
 /** @internal */ export function queryInstanceKeyComparisons(
   body: ObjectLiteralExpression,
@@ -773,8 +774,9 @@ function eqOperandsAreTableColumnArgKeyed(
     const conjuncts = eqPredicateConjuncts(predicate);
     if (conjuncts) instanceKey.push(...conjuncts.map(toComparison));
 
-    // A2 fail-closed: any `eq` operand anywhere (incl. `or(...)` branches) is an
-    // `args`/`session` scope candidate, never an instance-key.
+    // A2 fail-closed: any direct comparison operand anywhere (incl. `or(...)`
+    // branches and range predicates) is an `args`/`session` scope candidate, never
+    // an instance-key.
     argCandidates.push(...allEqOperandPairs(predicate).map(toComparison));
   }
 
@@ -789,8 +791,8 @@ function eqOperandsAreTableColumnArgKeyed(
 /**
  * Every direct comparison operand pair nested anywhere under a predicate node (SPEC
  * §11.1, KV414 fail-closed). Used only for `args` scope candidacy — `or(...)`
- * branches and non-equality comparisons are included here but must never discharge
- * an instance key or owner-principal session proof.
+ * branches and non-equality/range comparisons are included here but must never
+ * discharge an instance key or owner-principal session proof.
  */
 /** @internal */ export function allEqOperandPairs(predicate: Node): EqPredicateConjunct[] {
   return pnfAllEqOperandPairs(predicatePnf(predicate));
@@ -2241,7 +2243,7 @@ function localDestructuredInputKey(expression: Node): string | undefined {
  * Classify a write chain's `where()` predicate operands the same way as a query read
  * (SPEC §10.3, KV414 A1/A2/A3). Reuses `eqPredicateConjuncts` (`and()`/top-level →
  * instance-key/`session` candidates) and `allEqOperandPairs` (every direct
- * comparison operand, incl. `or()` branches and non-equality forms → fail-closed
+ * comparison operand, incl. `or()` branches and non-equality/range forms → fail-closed
  * `args` candidates), with the same
  * `input.*`/`req.session.*`/table-column operand classifier the read side uses — so a
  * write keyed by a client arg against an owner table emits a `kind:'write'` scope
@@ -2344,10 +2346,24 @@ function localDestructuredInputKey(expression: Node): string | undefined {
       : { expr: expression.getText(), kind: 'opaque' };
   }
 
-  if (name === 'ne') {
+  if (name === 'ne' || name === 'gt' || name === 'gte' || name === 'lt' || name === 'lte') {
     const [left, right] = expression.getArguments();
     return left && right
       ? { kind: 'non-eq-comparison', left, right }
+      : { expr: expression.getText(), kind: 'opaque' };
+  }
+
+  if (name === 'between') {
+    const [left, lower, upper] = expression.getArguments();
+    return left && lower && upper
+      ? {
+          expr: expression.getText(),
+          kind: 'and',
+          nodes: [
+            { kind: 'non-eq-comparison', left, right: lower },
+            { kind: 'non-eq-comparison', left, right: upper },
+          ],
+        }
       : { expr: expression.getText(), kind: 'opaque' };
   }
 

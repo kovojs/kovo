@@ -254,7 +254,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
           {
             fileName: 'order.mutations.ts',
             source: [
-              'import { ne, not, eq } from "drizzle-orm";',
+              'import { between, gt, gte, lt, lte, ne, not, eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
@@ -270,6 +270,30 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'export async function closeExceptMine(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
               '  await db.update(orders).set({ status: "closed" }).where(ne(orders.userId, req.session.userId));',
               '}',
+              '',
+              'export async function closeGtInput(db: PgAsyncDatabase<any, any>, input: { userId: string }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(gt(orders.userId, input.userId));',
+              '}',
+              '',
+              'export async function closeGteMine(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(gte(orders.userId, req.session.userId));',
+              '}',
+              '',
+              'export async function closeLtInput(db: PgAsyncDatabase<any, any>, input: { userId: string }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(lt(orders.userId, input.userId));',
+              '}',
+              '',
+              'export async function closeLteMine(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(lte(orders.userId, req.session.userId));',
+              '}',
+              '',
+              'export async function closeBetweenInput(db: PgAsyncDatabase<any, any>, input: { lowerUserId: string; upperUserId: string }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(between(orders.userId, input.lowerUserId, input.upperUserId));',
+              '}',
+              '',
+              'export async function closeBetweenMine(db: PgAsyncDatabase<any, any>, req: { session: { userId: string; otherUserId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(between(orders.userId, req.session.userId, req.session.otherUserId));',
+              '}',
             ].join('\n'),
           },
         ],
@@ -281,11 +305,21 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
         .map((a) => ({ name: a.name, scope: a.scope }))
         .sort((x, y) => x.name.localeCompare(y.name)),
     ).toEqual([
+      { name: 'closeBetweenInput', scope: 'args' },
+      { name: 'closeBetweenInput', scope: 'args' },
+      { name: 'closeBetweenMine', scope: 'unknown' },
       { name: 'closeExceptInput', scope: 'args' },
       { name: 'closeExceptMine', scope: 'unknown' },
+      { name: 'closeGteMine', scope: 'unknown' },
+      { name: 'closeGtInput', scope: 'args' },
+      { name: 'closeLteMine', scope: 'unknown' },
+      { name: 'closeLtInput', scope: 'args' },
       { name: 'closeNotInput', scope: 'args' },
     ]);
     expect(audit.scopeAudits.find((a) => a.name === 'closeExceptMine')?.detail).toContain(
+      'no owner-column session/principal predicate was proven',
+    );
+    expect(audit.scopeAudits.find((a) => a.name === 'closeGteMine')?.detail).toContain(
       'no owner-column session/principal predicate was proven',
     );
   });
@@ -3755,6 +3789,86 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
       { domain: 'order', scope: 'unknown' },
     ]);
+  });
+
+  it('OPP-28: treats range read predicates as args without proving session scope', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { between, gt, gte, lt, lte } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const ordersGtInput = query("ordersGtInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    return db.select({ id: orders.id }).from(orders).where(gt(orders.userId, input.userId));',
+              '  },',
+              '});',
+              '',
+              'export const ordersGteMine = query("ordersGteMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(gte(orders.userId, req.session.userId));',
+              '  },',
+              '});',
+              '',
+              'export const ordersLtInput = query("ordersLtInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    return db.select({ id: orders.id }).from(orders).where(lt(orders.userId, input.userId));',
+              '  },',
+              '});',
+              '',
+              'export const ordersLteMine = query("ordersLteMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(lte(orders.userId, req.session.userId));',
+              '  },',
+              '});',
+              '',
+              'export const ordersBetweenInput = query("ordersBetweenInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { lowerUserId: string; upperUserId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    return db.select({ id: orders.id }).from(orders).where(between(orders.userId, input.lowerUserId, input.upperUserId));',
+              '  },',
+              '});',
+              '',
+              'export const ordersBetweenMine = query("ordersBetweenMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string; otherUserId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(between(orders.userId, req.session.userId, req.session.otherUserId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'ordersBetweenInput', scope: 'args' },
+      { name: 'ordersBetweenInput', scope: 'args' },
+      { name: 'ordersBetweenMine', scope: 'unknown' },
+      { name: 'ordersGteMine', scope: 'unknown' },
+      { name: 'ordersGtInput', scope: 'args' },
+      { name: 'ordersLteMine', scope: 'unknown' },
+      { name: 'ordersLtInput', scope: 'args' },
+    ]);
+    expect(audit.scopeAudits.find((a) => a.name === 'ordersGteMine')?.detail).toContain(
+      'no owner-column session/principal predicate was proven',
+    );
   });
 
   it('flags a session predicate on a non-owner column as an unproven DATA authorization subset', () => {
