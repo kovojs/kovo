@@ -34,7 +34,7 @@ function shopRequest(db = createShopDb()): ShopRequest {
 }
 
 function formInput(request: ShopRequest, fields: Record<string, string>) {
-  return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf) };
+  return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf, { mutation: addToCart }) };
 }
 
 function submitAddToCart(

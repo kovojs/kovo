@@ -32,7 +32,7 @@ function shopRequest(db = createShopDb()): ShopRequest {
 // The browser would echo the stamped kovo-csrf hidden field back; tests build
 // the same submission explicitly (SPEC.md section 6.6).
 function formInput(request: ShopRequest, fields: Record<string, string>) {
-  return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf) };
+  return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf, { mutation: addToCart }) };
 }
 
 function submitAddToCartNoJs(rawInput: unknown, request: ShopRequest) {

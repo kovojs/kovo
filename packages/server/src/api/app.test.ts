@@ -757,6 +757,17 @@ describe('server app-shell public API barrels', () => {
       true,
     );
     expect(publicApi.isKovoApp(publicApi.createApp({ session: opaqueSession }))).toBe(true);
+    const markerlessOwnedSessionApp = publicApi.createApp({ session: opaqueSession });
+    for (const symbol of Object.getOwnPropertySymbols(markerlessOwnedSessionApp.sessionProvider!)) {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        markerlessOwnedSessionApp.sessionProvider!,
+        symbol,
+      );
+      if (descriptor?.configurable === true) {
+        delete (markerlessOwnedSessionApp.sessionProvider as { [key: symbol]: unknown })[symbol];
+      }
+    }
+    expect(publicApi.isKovoApp(markerlessOwnedSessionApp)).toBe(true);
     expect(() =>
       publicApi.createApp({ document: { template: () => '<html></html>' } as any }),
     ).toThrow('createApp({ document.template }) is not supported');
@@ -771,6 +782,14 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.isKovoApp({ ...app, renderRoute: '<main>compat</main>' })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, session: { provider: () => null } })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, sessionProvider: { session: null } })).toBe(false);
+    expect(
+      publicApi.isKovoApp({
+        ...app,
+        session: undefined,
+        sessionProvider: () => null,
+        sessionProviderBoundary: 'delegated',
+      }),
+    ).toBe(false);
     expect(
       publicApi.isKovoApp({
         ...app,

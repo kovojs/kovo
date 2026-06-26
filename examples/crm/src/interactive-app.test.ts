@@ -34,10 +34,7 @@ const unownedDealInputId = 'd-22222222-2222-4222-8222-222222222222';
 const invalidStageDealId = 'd-33333333-3333-4333-8333-333333333333';
 
 function withCsrf(fields: Record<string, string>): Record<string, string> {
-  return {
-    csrf: csrfToken(demoCsrfRequest, crmCsrf),
-    ...fields,
-  };
+  return fields;
 }
 
 function liveHeader(
@@ -65,8 +62,12 @@ async function postForm(
         'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
         'Kovo-Live-Targets': liveTargets,
         'Kovo-Targets': targets,
+        Origin: 'http://example.test',
       },
-      body: new URLSearchParams(fields),
+      body: new URLSearchParams({
+        ...fields,
+        csrf: csrfToken(demoCsrfRequest, crmCsrf, { mutation: key }),
+      }),
     }),
   );
   return { status: response.status, html: await response.text() };

@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import { csrfField } from '@kovojs/server';
 import * as style from '@kovojs/style';
@@ -63,7 +64,11 @@ export function renderAddToCartForm(
 ) {
   return (
     <form enhance mutation={addToCart} key={item.id}>
-      {request?.session?.id ? csrfField(request, shopCsrf) : ''}
+      {request?.session?.id
+        ? trustedHtml(csrfField(request, { ...shopCsrf, mutation: addToCart }), {
+            reason: 'framework-generated CSRF hidden field for the addToCart mutation',
+          })
+        : ''}
       <input type="hidden" name="productId" value={item.id} />
       <label>
         Qty

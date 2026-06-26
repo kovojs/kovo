@@ -1,6 +1,7 @@
 import type { KovoApp } from './app-types.js';
 import { isDocumentConfig } from './document-structured.js';
 import {
+  markNormalizedSessionProvider,
   sessionProviderBoundary,
   type SessionProviderBoundary,
 } from './session-provider-boundary.js';
@@ -30,15 +31,37 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isOptionalFunction(value.renderRoute) &&
     isAppRequestLimits(value.requestLimits) &&
     isOptionalOpaqueSessionManager(value.session) &&
-    isNormalizedSessionProviderForBoundary(value.sessionProvider, value.sessionProviderBoundary) &&
+    isNormalizedSessionProviderForBoundary(
+      value.sessionProvider,
+      value.sessionProviderBoundary,
+      value.session,
+    ) &&
     isStylesheets(value.stylesheets) &&
     isOptionalCsrfOptions(value.csrf)
   );
 }
 
-function isNormalizedSessionProviderForBoundary(provider: unknown, boundary: unknown): boolean {
+function isNormalizedSessionProviderForBoundary(
+  provider: unknown,
+  boundary: unknown,
+  session: unknown,
+): boolean {
   if (provider === undefined) return boundary === undefined;
   if (!isSessionProviderBoundary(boundary)) return false;
+  if (
+    (boundary === 'default-owned' || boundary === 'owned') &&
+    isOptionalOpaqueSessionManager(session) &&
+    session !== undefined
+  ) {
+    const normalizedProvider = session.provider;
+    if (normalizedProvider !== provider) return false;
+    // Static export/dev servers may load the app and server runtime through distinct Vite module
+    // instances. The app aggregate proves owned session lifecycle structurally by carrying the same
+    // provider on `session` and `sessionProvider`; stamp this module instance's private marker so
+    // lower-level lifecycle helpers still reject raw delegated functions without breaking replay.
+    markNormalizedSessionProvider(normalizedProvider, boundary);
+    return true;
+  }
   return sessionProviderBoundary(provider) === boundary;
 }
 
@@ -157,7 +180,7 @@ function isMutationResponseOptions(value: unknown): boolean {
   );
 }
 
-function isOptionalOpaqueSessionManager(value: unknown): boolean {
+function isOptionalOpaqueSessionManager(value: unknown): value is KovoApp['session'] {
   return (
     value === undefined ||
     (isRecord(value) &&
