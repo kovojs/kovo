@@ -59,6 +59,9 @@ describe('server static export output boundary', () => {
           status: 200,
         },
       ]);
+      // SPEC §6.6 / bugz M4: the plan must include a `header-sidecar` item for the `_headers`
+      // file because the artifact has non-empty headers (content-type). The sidecar materializes
+      // the per-document security-header floor into a host-consumable artifact.
       expect(plan).toEqual([
         {
           kind: 'route-document',
@@ -74,6 +77,11 @@ describe('server static export output boundary', () => {
           kind: 'static-asset',
           path: '/assets/app.css',
           targetPath: path.join(outDir, 'assets', 'app.css'),
+        },
+        {
+          kind: 'header-sidecar',
+          path: '_headers',
+          targetPath: path.join(outDir, '_headers'),
         },
       ]);
       await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
@@ -561,6 +569,102 @@ describe('server static export output boundary', () => {
     } finally {
       await rm(outDir, { force: true, recursive: true });
       await rm(outsideDir, { force: true, recursive: true });
+    }
+  });
+
+  // SPEC §6.6 / bugz M4: static export must materialize the captured per-document
+  // security-header floor (CSP, X-Frame-Options, COOP, Permissions-Policy, Referrer-Policy)
+  // into a host-consumable `_headers` sidecar. Without this, prerendered pages are weaker
+  // than dynamic dispatch — static files cannot carry HTTP response headers on their own.
+  it('emits a _headers sidecar with the captured per-document security-header floor (M4)', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-headers-'));
+    try {
+      const plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home</main>',
+            headers: {
+              'content-security-policy': "default-src 'self'; frame-ancestors 'none'",
+              'content-type': 'text/html; charset=utf-8',
+              'cross-origin-opener-policy': 'same-origin-allow-popups',
+              'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+              'referrer-policy': 'strict-origin-when-cross-origin',
+              'x-content-type-options': 'nosniff',
+              'x-frame-options': 'DENY',
+            },
+            path: '/index.html',
+            status: 200,
+          },
+          {
+            body: '<!doctype html><main>About</main>',
+            headers: {
+              'content-security-policy': "default-src 'self'; frame-ancestors 'none'",
+              'content-type': 'text/html; charset=utf-8',
+              'x-frame-options': 'DENY',
+            },
+            path: '/about/index.html',
+            status: 200,
+          },
+        ],
+        assets: [],
+        clientModules: [],
+        outDir,
+      });
+
+      await writeStaticExportOutput(plan);
+
+      const headersFile = await readFile(path.join(outDir, '_headers'), 'utf8');
+
+      // The sidecar must carry the security floor that dynamic dispatch emits (bugz M4).
+      expect(headersFile).toContain('content-security-policy:');
+      expect(headersFile).toContain('x-frame-options: DENY');
+      expect(headersFile).toContain('x-content-type-options: nosniff');
+      expect(headersFile).toContain('cross-origin-opener-policy:');
+      expect(headersFile).toContain('permissions-policy:');
+      expect(headersFile).toContain('referrer-policy:');
+
+      // Each route-document path gets its own stanza keyed by artifact path.
+      expect(headersFile).toContain('/index.html');
+      expect(headersFile).toContain('/about/index.html');
+
+      // The sidecar is at the root, not nested under a route directory.
+      await expect(lstat(path.join(outDir, '_headers'))).resolves.toSatisfy((stats) =>
+        stats.isFile(),
+      );
+
+      // The HTML bodies are written alongside the sidecar.
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain('Home');
+      await expect(readFile(path.join(outDir, 'about', 'index.html'), 'utf8')).resolves.toContain(
+        'About',
+      );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('omits the _headers sidecar when all artifact header maps are empty', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-no-headers-'));
+    try {
+      const plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home</main>',
+            headers: {},
+            path: '/index.html',
+            status: 200,
+          },
+        ],
+        assets: [],
+        clientModules: [],
+        outDir,
+      });
+
+      await writeStaticExportOutput(plan);
+
+      // No sidecar should be emitted when headers are empty.
+      await expect(readFile(path.join(outDir, '_headers'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
     }
   });
 });

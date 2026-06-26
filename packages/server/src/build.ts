@@ -391,9 +391,20 @@ function immutableStaticHeaders(): Record<string, string> {
   };
 }
 
+// SPEC §6.6 / bugz M4: Vercel/Cloudflare `config.json` route headers carry the full
+// security-header floor for every document path, matching the floor that dynamic dispatch
+// emits. These headers are host-config complements to the per-document `_headers` sidecar
+// (which Netlify/Cloudflare Pages read) and share the same invariants: no CSP nonce (static
+// exports do not use nonce-based CSP), clickjacking denied, cross-origin isolation, no
+// microphone/camera/payment/geolocation delegation, strict referrer.
 function documentStaticHeaders(): Record<string, string> {
   return {
+    'cross-origin-opener-policy': 'same-origin-allow-popups',
+    'permissions-policy':
+      'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    'referrer-policy': 'strict-origin-when-cross-origin',
     'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
   };
 }
 

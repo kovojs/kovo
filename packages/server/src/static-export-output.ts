@@ -255,11 +255,51 @@ function staticExportPlannedWrite(
     };
   }
 
+  // SPEC §6.6 / bugz M4: emit a Netlify-compatible `_headers` sidecar that materializes the
+  // per-document security-header floor (CSP, X-Frame-Options, COOP, Permissions-Policy,
+  // Referrer-Policy) captured during replay into a host-consumable artifact. Static hosts
+  // (Netlify, Cloudflare Pages) serve these headers alongside the prerendered HTML files,
+  // restoring the floor that dynamic dispatch emits but a bare static file cannot carry.
+  if (target.itemKind === 'header-sidecar') {
+    return {
+      ...target,
+      write: async (writePath) =>
+        writeTextStaticExportFile(buildNetlifyHeadersSidecar(plan.artifacts), writePath),
+    };
+  }
+
   const artifact = plan.assets[target.itemIndex]!;
   return {
     ...target,
     write: async (writePath) => copyStaticExportAsset(artifact.source, writePath),
   };
+}
+
+/**
+ * @internal Builds the content of a Netlify-style `_headers` file from the captured
+ * per-document security headers (SPEC §6.6 DiD floor; bugz M4). Each route-document path
+ * gets a stanza associating it with its full header set. Headers are already filtered by
+ * `staticExportHeaders()` at capture time (set-cookie and kovo-* are stripped).
+ *
+ * The `_headers` format is recognized by Netlify and Cloudflare Pages. Hosts that use
+ * `config.json` routes (Vercel) are handled separately via their platform preset.
+ */
+function buildNetlifyHeadersSidecar(artifacts: readonly StaticExportArtifact[]): string {
+  const lines: string[] = ['# Kovo static export security headers (SPEC §6.6)'];
+
+  for (const artifact of artifacts) {
+    const entries = Object.entries(artifact.headers);
+    if (entries.length === 0) continue;
+
+    lines.push('');
+    lines.push(artifact.path);
+    for (const [name, value] of entries) {
+      lines.push(`  ${name}: ${value}`);
+    }
+  }
+
+  lines.push('');
+  return lines.join('\n');
 }
 
 async function assertReadableStaticExportAssetSource(

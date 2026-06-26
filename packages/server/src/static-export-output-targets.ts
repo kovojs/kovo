@@ -10,8 +10,16 @@ import {
 /**
  * @internal Static export output planner internal (SPEC.md §9.5). Plan item kind used by
  * dry-run/write-output tooling, not app authors.
+ *
+ * `'header-sidecar'` is the per-export `_headers` file that materializes the full captured
+ * security-header floor (CSP, X-Frame-Options, COOP, Permissions-Policy, Referrer-Policy) for
+ * each route-document into a host-consumable sidecar (SPEC §6.6 DiD floor; bugz M4).
  */
-export type StaticExportOutputPlanItemKind = 'client-module' | 'route-document' | 'static-asset';
+export type StaticExportOutputPlanItemKind =
+  | 'client-module'
+  | 'header-sidecar'
+  | 'route-document'
+  | 'static-asset';
 
 /**
  * @internal Static export output planner internal (SPEC.md §9.5). Public dry-run shape
@@ -82,6 +90,23 @@ export function staticExportOutputTargets(
       targetPath: staticExportAssetTargetPath(root, artifact.path),
     });
   });
+
+  // Emit a Netlify-style `_headers` sidecar that materializes the captured per-document
+  // security-header floor (CSP, X-Frame-Options, COOP, Permissions-Policy, Referrer-Policy)
+  // into a host-consumable artifact (SPEC §6.6 DiD floor; bugz M4). The sidecar is only
+  // emitted when there are route-document artifacts with non-empty headers.
+  if (
+    plan.artifacts.length > 0 &&
+    plan.artifacts.some((a) => Object.keys(a.headers).length > 0)
+  ) {
+    targets.push({
+      diagnosticPath: '_headers',
+      itemIndex: 0,
+      itemKind: 'header-sidecar',
+      kind: 'header sidecar',
+      targetPath: path.join(root, '_headers'),
+    });
+  }
 
   assertNoStaticExportOutputConflicts(targets);
   return targets;

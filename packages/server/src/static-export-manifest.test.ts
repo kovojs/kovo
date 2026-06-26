@@ -147,6 +147,10 @@ describe('server static export', () => {
       const writeResult = await exportStaticApp(app, { assets, outDir });
       const writePlan = staticExportOutputPlan(writeResult, { outDir });
 
+      // SPEC §6.6 / bugz M4: the plan must include a `header-sidecar` item for the `_headers`
+      // file because the route-document artifacts carry the full security-header floor (CSP,
+      // X-Frame-Options, COOP, etc.) captured during replay. The sidecar is the last item in
+      // write order, after all content artifacts.
       expect(dryRunPlan).toEqual([
         {
           kind: 'route-document',
@@ -171,6 +175,11 @@ describe('server static export', () => {
           kind: 'static-asset',
           path: '/assets/app.css',
           targetPath: path.join(outDir, 'assets', 'app.css'),
+        },
+        {
+          kind: 'header-sidecar',
+          path: '_headers',
+          targetPath: path.join(outDir, '_headers'),
         },
       ]);
       expect(writePlan).toEqual(dryRunPlan);
