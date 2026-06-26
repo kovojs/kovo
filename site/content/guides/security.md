@@ -175,7 +175,7 @@ and a `sessionId` resolver:
 ```ts
 export const commerceCsrf = {
   field: 'csrf',
-  secret: process.env.CSRF_SECRET!,
+  secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET!,
   sessionId(request: CommerceRequest) {
     return request.session?.id;
   },

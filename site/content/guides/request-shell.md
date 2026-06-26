@@ -36,7 +36,7 @@ export default createApp({
   endpoints,
   db: () => db,
   sessionProvider,
-  csrf: { secret: process.env.CSRF_SECRET! },
+  csrf: { secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET! },
   document: appDocument,
   errors: {
     notFound: NotFoundShell,

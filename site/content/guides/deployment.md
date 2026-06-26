@@ -139,7 +139,7 @@ const app = createApp({
   queries,
   // Runs once before route/query/mutation guards; return null for anonymous (SPEC §6.5).
   sessionProvider,
-  csrf: { secret: process.env.CSRF_SECRET! },
+  csrf: { secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET! },
 });
 
 const handler = toNodeHandler(createRequestHandler(app), { earlyHints: true });
@@ -163,10 +163,25 @@ EXPOSE 3000
 CMD ["node", "dist/server.js"]
 ```
 
-The container needs three things from the environment: `DATABASE_URL` (your `db` provider's
-connection), `CSRF_SECRET` (the session-bound token secret behind §9.1 `kovo-csrf`), and whatever
-secret your `sessionProvider` validates against. None of these is instance-specific — the same image
-runs behind a load balancer unchanged.
+The container needs database and auth secrets from the environment. None of these is
+instance-specific — the same image runs behind a load balancer unchanged.
+
+| Variable                           | Owner              | Required when                                                                        |
+| ---------------------------------- | ------------------ | ------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                     | Your `db` provider | The app opens a remote database connection.                                          |
+| `KOVO_CSRF_SECRET`                 | Kovo CSRF          | Always set for deployed mutation forms.                                              |
+| `BETTER_AUTH_SECRET`               | Better Auth        | Set when using Better Auth; the scaffold also accepts it as the CSRF HMAC secret.    |
+| `BETTER_AUTH_URL`                  | Better Auth        | Set when the public origin is not `http://localhost:5173`.                           |
+| `PORT`                             | Node preset        | Optional; defaults to `3000`.                                                        |
+| `HOST`                             | Node preset        | Optional; defaults to `0.0.0.0` in emitted Node servers.                             |
+| `NODE_ENV`                         | Runtime posture    | Set to `production` for secure-cookie and boot-secret floors.                        |
+| `KOVO_PRESET`                      | `kovo build`       | Optional override: `node`, `vercel`, or `cloudflare`.                                |
+| `VERCEL`, `CLOUDFLARE`, `CF_PAGES` | Host detection     | Read by `kovo build` when no preset is configured.                                   |
+| `KOVO_SQL_GUARD`                   | Raw SQL migration  | Temporary fail-open escape for unmanaged raw SQL sinks; managed sinks still enforce. |
+
+`KOVO_CSRF_SECRET` is the scaffold's local-development name. The generated auth adapter reads
+`BETTER_AUTH_SECRET ?? KOVO_CSRF_SECRET`, so one strong deployment secret can back both Better Auth
+and Kovo's CSRF HMAC, or you can split them by wiring separate values in your app config.
 
 ## Liveness in the technical preview
 
