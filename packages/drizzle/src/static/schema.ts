@@ -944,10 +944,7 @@ function domainFactoryCallKey(expression: Node): string | undefined {
 
   const argument = expression.getArguments()[0];
   const argNode = argument ? unwrappedStaticExpressionNode(argument) : undefined;
-  if (
-    argNode &&
-    (Node.isStringLiteral(argNode) || Node.isNoSubstitutionTemplateLiteral(argNode))
-  ) {
+  if (argNode && (Node.isStringLiteral(argNode) || Node.isNoSubstitutionTemplateLiteral(argNode))) {
     return argNode.getLiteralText();
   }
   return undefined;

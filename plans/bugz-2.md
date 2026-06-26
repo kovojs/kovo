@@ -10,10 +10,10 @@ ledger's H1-H9/M1-M4/L1-L5 list.
 ## Severity summary
 
 | Severity | Count | Items |
-| --- | ---: | --- |
-| High | 4 | H1-H4 |
-| Medium | 4 | M1-M4 |
-| Low | 2 | L1-L2 |
+| -------- | ----: | ----- |
+| High     |     4 | H1-H4 |
+| Medium   |     4 | M1-M4 |
+| Low      |     2 | L1-L2 |
 
 ---
 
