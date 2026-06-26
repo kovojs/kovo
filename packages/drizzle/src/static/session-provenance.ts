@@ -407,17 +407,23 @@ function objectLiteralStaticPropertyValue(
   object: ObjectLiteralExpression,
   name: string,
 ): Node | undefined {
+  let value: Node | undefined;
   for (const property of object.getProperties()) {
+    if (Node.isSpreadAssignment(property)) return undefined;
+
     if (Node.isPropertyAssignment(property)) {
       if (propertyNameText(property.getNameNode()) !== name) continue;
-      return property.getInitializer();
+      if (value) return undefined;
+      value = property.getInitializer();
+      continue;
     }
     if (Node.isShorthandPropertyAssignment(property)) {
       if (propertyNameText(property.getNameNode()) !== name) continue;
-      return property.getNameNode();
+      if (value) return undefined;
+      value = property.getNameNode();
     }
   }
-  return undefined;
+  return value;
 }
 
 function helperSummaryForCallCallee(
