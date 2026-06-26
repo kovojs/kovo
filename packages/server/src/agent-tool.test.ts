@@ -221,6 +221,72 @@ describe('agent tool capability primitive', () => {
     );
   });
 
+  it('requires declaration metadata, authority, capabilities, and sinks to be own data properties', () => {
+    const base = {
+      audit: { owner: 'security' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'orders.write', reason: 'update one order status' }],
+      handler: () => undefined,
+      name: 'orders.updateStatus',
+      purpose: 'Update a single order status.',
+    };
+    let auditOwnerGetterRan = false;
+
+    expect(() =>
+      tool({
+        ...base,
+        audit: {
+          get owner() {
+            auditOwnerGetterRan = true;
+            return 'security';
+          },
+        } as never,
+      }),
+    ).toThrow('tool.audit.owner must be declared as an own data property');
+    expect(auditOwnerGetterRan).toBe(false);
+
+    const inheritedCapability = Object.create({
+      name: 'orders.write',
+      reason: 'update one order status',
+    }) as { name: string; reason: string };
+
+    expect(() =>
+      tool({
+        ...base,
+        capabilities: [inheritedCapability],
+      }),
+    ).toThrow('tool.capabilities[].name must be declared as an own data property');
+
+    const accessorSink = {
+      capability: 'email.send',
+      evidence: 'handler calls the configured SMTP provider',
+      get kind() {
+        throw new Error('sink kind getter must not run');
+      },
+      target: 'smtp',
+    };
+
+    expect(() =>
+      tool({
+        ...base,
+        reachableSinks: [accessorSink as never],
+      }),
+    ).toThrow('tool.reachableSinks[].kind must be declared as an own data property');
+
+    const inheritedAuthority = Object.create({
+      kind: 'principal',
+      principal: 'user:123',
+      requirement: 'agent runtime bound the user principal for this call',
+    }) as AgentToolAuthority;
+
+    expect(() =>
+      tool({
+        ...base,
+        authority: [inheritedAuthority],
+      }),
+    ).toThrow('tool.authority[].kind must be declared as an own data property');
+  });
+
   it('rejects ambient browser/session credentials by default at the invocation boundary', async () => {
     const updateOrder = declaredTool();
 
@@ -411,6 +477,78 @@ describe('agent tool capability primitive', () => {
         value: {},
       }),
     ).rejects.toThrow('cookie(header:cookie)');
+  });
+
+  it('snapshots authority, capability, audit, and reachable-sink rows before audit', () => {
+    const authority = [
+      {
+        kind: 'principal',
+        principal: 'user:123',
+        requirement: 'agent runtime bound the user principal for this call',
+      },
+    ] satisfies AgentToolAuthority[];
+    const capabilities = [
+      { name: 'email.send', reason: 'notify the buyer' },
+      { name: 'orders.write', reason: 'update one order status' },
+    ];
+    const audit = { owner: 'security', site: 'app/tools/orders.ts:12' };
+    const reachableSinks = [
+      {
+        capability: 'email.send',
+        evidence: 'handler calls the configured SMTP provider',
+        kind: 'egress',
+        site: 'app/tools/orders.ts:34',
+        target: 'smtp',
+      },
+    ] as const;
+
+    const notifyOrder = tool({
+      audit,
+      authority,
+      capabilities,
+      handler: () => undefined,
+      name: 'orders.notify',
+      purpose: 'Update an order and notify the buyer.',
+      reachableSinks,
+    });
+
+    authority[0]!.principal = 'user:mutated';
+    capabilities[0]!.name = 'secrets.read';
+    audit.owner = 'mutated-owner';
+    (
+      reachableSinks as unknown as [
+        {
+          capability: string;
+          evidence: string;
+          kind: 'egress';
+          site: string;
+          target: string;
+        },
+      ]
+    )[0]!.target = 'mutated-smtp';
+
+    expect(Object.isFrozen(notifyOrder.audit)).toBe(true);
+    expect(Object.isFrozen(notifyOrder.authority)).toBe(true);
+    expect(Object.isFrozen(notifyOrder.authority[0])).toBe(true);
+    expect(Object.isFrozen(notifyOrder.capabilities)).toBe(true);
+    expect(Object.isFrozen(notifyOrder.capabilities[0])).toBe(true);
+    expect(Object.isFrozen(notifyOrder.reachableSinks)).toBe(true);
+    expect(Object.isFrozen(notifyOrder.reachableSinks?.[0])).toBe(true);
+
+    expect(agentToolAuditFacts([notifyOrder])).toMatchObject([
+      {
+        authority: ['principal:user:123'],
+        declaredCapabilities: ['email.send', 'orders.write'],
+        owner: 'security',
+        reachableSinks: [
+          {
+            capability: 'email.send',
+            site: 'app/tools/orders.ts:34',
+            target: 'smtp',
+          },
+        ],
+      },
+    ]);
   });
 
   it('freezes declarations so ambient credential posture cannot be widened after review', async () => {
