@@ -488,6 +488,7 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
   const brandType = String.raw`(?:${brandNames})\b`;
   const anyOrUnknown = String.raw`(?:any|unknown)\b`;
   const sqlBrandAssertionType = String.raw`(?:[^;\n<>]*&\s*)?${brandType}(?:\s*&[^;\n<>]*)?`;
+  const brandFieldValue = String.raw`(?:parameterized|static|trusted|identifier|keyword)`;
 
   // Narrow KV440 floor: catch local TypeScript assertion/satisfies escape hatches that mint a
   // blessed SQL brand without flowing through sql-safety.ts stamp* constructors. This is not the
@@ -506,6 +507,43 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
       description: 'satisfies assertion',
     },
   ];
+  const brandFieldPatterns = [
+    {
+      pattern: new RegExp(
+        String.raw`(?:^|[,{]\s*)(?:['"])?__kovoSqlBrand(?:['"])?\s*:\s*['"](?:parameterized|static|trusted)['"]`,
+        'g',
+      ),
+      description: '__kovoSqlBrand object field',
+    },
+    {
+      pattern: new RegExp(
+        String.raw`(?:^|[,{]\s*)(?:['"])?__kovoSqlIdentifierBrand(?:['"])?\s*:\s*['"]identifier['"]`,
+        'g',
+      ),
+      description: '__kovoSqlIdentifierBrand object field',
+    },
+    {
+      pattern: new RegExp(
+        String.raw`(?:^|[,{]\s*)(?:['"])?__kovoSqlKeywordBrand(?:['"])?\s*:\s*['"]keyword['"]`,
+        'g',
+      ),
+      description: '__kovoSqlKeywordBrand object field',
+    },
+    {
+      pattern: new RegExp(
+        String.raw`\.\s*__kovoSql(?:Identifier|Keyword)?Brand\s*=\s*['"]${brandFieldValue}['"]`,
+        'g',
+      ),
+      description: 'SQL brand property assignment',
+    },
+    {
+      pattern: new RegExp(
+        String.raw`\[\s*['"]__kovoSql(?:Identifier|Keyword)?Brand['"]\s*\]\s*=\s*['"]${brandFieldValue}['"]`,
+        'g',
+      ),
+      description: 'SQL brand property assignment',
+    },
+  ];
 
   for (const { pattern, description } of patterns) {
     let match;
@@ -517,6 +555,14 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
       ) {
         continue;
       }
+      findings.push(
+        `${filePath}: KV440 SQL blessed-brand laundering via ${description}; use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor`,
+      );
+    }
+  }
+
+  for (const { pattern, description } of brandFieldPatterns) {
+    if (pattern.test(source)) {
       findings.push(
         `${filePath}: KV440 SQL blessed-brand laundering via ${description}; use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor`,
       );

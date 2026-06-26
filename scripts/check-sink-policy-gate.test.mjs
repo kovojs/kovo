@@ -719,6 +719,25 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects direct SQL blessed-brand field laundering outside the owning constructor module', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/server/src/unsafe-sql.ts',
+        `
+          const statement = { text: raw, __kovoSqlBrand: 'parameterized' };
+          const identifier = { "__kovoSqlIdentifierBrand": 'identifier', text: column };
+          const keyword = {};
+          keyword.__kovoSqlKeywordBrand = 'keyword';
+          statement['__kovoSqlBrand'] = 'trusted';
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand laundering via __kovoSqlBrand object field; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand laundering via __kovoSqlIdentifierBrand object field; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand laundering via SQL brand property assignment; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+  });
+
   it('does not treat generic type arguments or TSX tags as SQL blessed-brand assertions', () => {
     expect(
       sqlBlessedBrandLaunderingFindings(
@@ -737,6 +756,25 @@ describe('sink-policy gate', () => {
           import type { TrustedSql } from '@kovojs/core/internal/sql-safety';
           export function View() {
             return <TrustedSql>{label}</TrustedSql>;
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not treat SQL blessed-brand interface declarations as value laundering', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/runtime.ts',
+        `
+          export interface KovoParameterizedSql {
+            readonly __kovoSqlBrand?: 'parameterized';
+          }
+          export interface KovoSqlIdentifier {
+            readonly __kovoSqlIdentifierBrand?: 'identifier';
+          }
+          export interface KovoSqlKeyword {
+            readonly __kovoSqlKeywordBrand?: 'keyword';
           }
         `,
       ),
