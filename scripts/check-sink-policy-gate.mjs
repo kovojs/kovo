@@ -880,26 +880,37 @@ export function deserializationSinkFindings(filePath, text) {
   );
   const regExpAliases = regExpConstructorAliasNames(source);
   const regExpCallPatterns = [
-    { globalObject: undefined, pattern: /(^|[^\w$.])(?:new\s+)?RegExp\s*\(/g },
+    { globalObject: undefined, pattern: /(^|[^\w$.])(?:new\s+)?(?:RegExp|\(\s*RegExp\s*\))\s*\(/g },
     {
       globalObject: 'globalThis',
-      pattern: /(^|[^\w$])(?:new\s+)?globalThis\s*\.\s*RegExp\s*\(/g,
+      pattern:
+        /(^|[^\w$])(?:new\s+)?(?:globalThis\s*\.\s*RegExp|\(\s*globalThis\s*\.\s*RegExp\s*\))\s*\(/g,
     },
     {
       globalObject: 'globalThis',
-      pattern: /(^|[^\w$])(?:new\s+)?globalThis\s*\[\s*(['"])RegExp\2\s*\]\s*\(/g,
+      pattern:
+        /(^|[^\w$])(?:new\s+)?(?:globalThis\s*\[\s*(['"])RegExp\2\s*\]|\(\s*globalThis\s*\[\s*(['"])RegExp\3\s*\]\s*\))\s*\(/g,
     },
   ];
   for (const alias of regExpAliases.keys()) {
     regExpCallPatterns.push({
       globalObject: undefined,
-      pattern: new RegExp(String.raw`(^|[^\w$.])(?:new\s+)?${escapeRegExp(alias)}\s*\(`, 'g'),
+      pattern: new RegExp(
+        String.raw`(^|[^\w$.])(?:new\s+)?(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(
+          alias,
+        )}\s*\))\s*\(`,
+        'g',
+      ),
     });
   }
 
   for (const { globalObject, pattern: callPattern } of regExpCallPatterns) {
     for (const call of callArgumentLists(source, callPattern)) {
       if (globalObject !== undefined && hasLocalBindingBefore(source, globalObject, call.index)) {
+        continue;
+      }
+
+      if (call.name === 'RegExp' && hasLocalBindingBefore(source, 'RegExp', call.index)) {
         continue;
       }
 
@@ -954,17 +965,34 @@ export function deserializationSinkFindings(filePath, text) {
 
 function regExpConstructorAliasNames(text) {
   const aliases = new Map();
-  const declarationPattern =
-    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(RegExp|globalThis\s*\.\s*RegExp|globalThis\s*\[\s*(['"])RegExp\3\s*\])\s*(?=;|\n|$)/g;
-  let declaration;
-  while ((declaration = declarationPattern.exec(text)) !== null) {
-    if (
-      declaration[2].startsWith('globalThis') &&
-      hasLocalBindingBefore(text, 'globalThis', declaration.index)
-    ) {
-      continue;
+  const regExpConstructorExpression = String.raw`(?:RegExp|globalThis\s*\.\s*RegExp|globalThis\s*\[\s*['"]RegExp['"]\s*\])`;
+  const declarationPatterns = [
+    new RegExp(
+      String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(${regExpConstructorExpression})\s*(?=;|\n|$)`,
+      'g',
+    ),
+    new RegExp(
+      String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*\(\s*(${regExpConstructorExpression})\s*\)\s*(?=;|\n|$)`,
+      'g',
+    ),
+  ];
+  for (const declarationPattern of declarationPatterns) {
+    let declaration;
+    while ((declaration = declarationPattern.exec(text)) !== null) {
+      if (
+        declaration[2].trim() === 'RegExp' &&
+        hasLocalBindingBefore(text, 'RegExp', declaration.index)
+      ) {
+        continue;
+      }
+      if (
+        declaration[2].startsWith('globalThis') &&
+        hasLocalBindingBefore(text, 'globalThis', declaration.index)
+      ) {
+        continue;
+      }
+      aliases.set(declaration[1], declarationPattern.lastIndex);
     }
-    aliases.set(declaration[1], declarationPattern.lastIndex);
   }
   return aliases;
 }
@@ -1686,18 +1714,29 @@ function callArgumentLists(text, callPattern) {
   const calls = [];
   let match;
   while ((match = callPattern.exec(text)) !== null) {
-    const openParenIndex = text.indexOf('(', match.index);
+    const openParenIndex = text.lastIndexOf('(', match.index + match[0].length - 1);
     const closeParenIndex = matchingCloseParen(text, openParenIndex);
     if (closeParenIndex < 0) continue;
     const callPrefix = text.slice(match.index, openParenIndex);
     calls.push({
       argumentsText: text.slice(openParenIndex + 1, closeParenIndex),
       index: match.index,
-      name: callPrefix.match(/(?:new\s+)?([A-Za-z_$][\w$]*)\s*$/)?.[1] ?? '',
+      name: callCalleeName(callPrefix),
     });
     callPattern.lastIndex = closeParenIndex + 1;
   }
   return calls;
+}
+
+function callCalleeName(callPrefix) {
+  const normalized = callPrefix
+    .replace(/^([^\w$]*)/, '')
+    .replace(/^new\s+/, '')
+    .trim()
+    .replace(/^\(\s*/, '')
+    .replace(/\s*\)$/, '')
+    .trim();
+  return normalized.match(/([A-Za-z_$][\w$]*)\s*$/)?.[1] ?? '';
 }
 
 function matchingCloseParen(text, openParenIndex) {
