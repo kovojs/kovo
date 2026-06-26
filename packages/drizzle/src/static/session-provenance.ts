@@ -361,13 +361,7 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
 
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    if (Node.isIdentifier(callee)) {
-      const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
-      return (
-        (key ? context.helpers.get(key) : undefined) ??
-        context.helpers.get(`name:${callee.getText()}`)
-      );
-    }
+    return helperSummaryForCallCallee(callee, context.helpers);
   }
 
   return undefined;
@@ -424,6 +418,15 @@ function objectLiteralStaticPropertyValue(
     }
   }
   return undefined;
+}
+
+function helperSummaryForCallCallee(
+  callee: Node,
+  helpers: ReadonlyMap<string, PrivateScopeProvenance>,
+): PrivateScopeProvenance | undefined {
+  const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
+  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  return (key ? helpers.get(key) : undefined) ?? (name ? helpers.get(`name:${name}`) : undefined);
 }
 
 /** @internal */ export function opaqueAliasReasonForExpression(
