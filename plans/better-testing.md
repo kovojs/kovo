@@ -265,10 +265,16 @@ Median job durations across those runs:
     The logical selector currently covers 10 cross-tab, morph, optimistic, and streaming tests; local
     one-pass verification passed. The remaining checkbox evidence is a completed scheduled workflow run
     URL.
+  - Progress 2026-06-26: the exact workflow command passed locally:
+    `vp exec playwright test --config tests/integration/playwright.config.ts --project=chromium --grep
+@race-prone --repeat-each=3 --workers=1` ran 30 Chromium executions serially and passed.
   - Gap 2026-06-25: the race-repeat workflow has no completed runs, and manual dispatch fails with
     `HTTP 403: Resource not accessible by integration`. The available GitHub App installation auth can
     push and monitor CI but cannot dispatch this workflow, so the remaining evidence requires the
     scheduled run or a workflow-capable token.
+  - Gap 2026-06-26: `gh workflow run race-repeat.yml --ref main` still fails with
+    `HTTP 403: Resource not accessible by integration`; `gh run list --workflow race-repeat.yml`
+    still reports no runs.
 
 - [x] **Define assertion tiers for integration specs.**
   - Tier 1: semantic user-visible assertions through `@kovojs/test` page helpers.
@@ -376,7 +382,9 @@ tests/integration-import-boundary.meta.test.ts packages/test/src/headers.test.ts
 test --config tests/integration/playwright.config.ts --project=chromium
 tests/integration/specs/fragment-append.spec.ts` passed.
 - `vp exec playwright test --config tests/integration/playwright.config.ts --project=chromium --grep
-@race-prone --list` selected 10 tests in 7 files; the same selector with `--workers=1` passed once.
+@race-prone --list` selected 10 tests in 7 files. The exact workflow command
+  `vp exec playwright test --config tests/integration/playwright.config.ts --project=chromium --grep
+@race-prone --repeat-each=3 --workers=1` passed locally with 30 Chromium executions.
 - GitHub CI run [28187093080](https://github.com/kovojs/kovo/actions/runs/28187093080) completed green
   in 4m26s; GitHub Pages run
   [28187093052](https://github.com/kovojs/kovo/actions/runs/28187093052) completed green in 3m55s.
