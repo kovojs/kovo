@@ -1036,6 +1036,25 @@ function deserializationImportLocals(text) {
     if (moduleNameSuggestsDeserialization(namespaceRequire[3])) namespaces.add(namespaceRequire[1]);
   }
 
+  const destructuredDynamicImportPattern =
+    /\b(?:const|let|var)\s*\{([^}]+)\}\s*=\s*(?:await\s+)?import\s*\(\s*(['"])([^'"]+)\2\s*\)/g;
+  let destructuredDynamicImport;
+  while ((destructuredDynamicImport = destructuredDynamicImportPattern.exec(text)) !== null) {
+    if (!moduleNameSuggestsDeserialization(destructuredDynamicImport[3])) continue;
+    for (const specifier of parseObjectBindingSpecifiers(destructuredDynamicImport[1])) {
+      if (deserializationImportNames.has(specifier.imported)) named.push(specifier);
+    }
+  }
+
+  const namespaceDynamicImportPattern =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?import\s*\(\s*(['"])([^'"]+)\2\s*\)/g;
+  let namespaceDynamicImport;
+  while ((namespaceDynamicImport = namespaceDynamicImportPattern.exec(text)) !== null) {
+    if (moduleNameSuggestsDeserialization(namespaceDynamicImport[3])) {
+      namespaces.add(namespaceDynamicImport[1]);
+    }
+  }
+
   return { named, namespaces };
 }
 

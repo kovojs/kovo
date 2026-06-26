@@ -21,14 +21,15 @@ export interface AgentToolModuleSource {
  * helpers reached through static named/default imports including static local re-export barrels,
  * unique local `export *` barrels for named imports, default exports that alias a summarized local
  * helper, static namespace-property calls into exported local helpers, local `const` object aliases
- * whose properties statically point at summarized helpers, default object exports whose properties
+ * whose properties statically point at summarized helpers, local `const` array/tuple aliases whose
+ * literal indexes statically point at summarized helpers, default object exports whose properties
  * statically point at summarized local helpers, handler properties that reference a summarized
  * local/imported helper function, and inline callbacks passed to a local/imported helper that
  * directly invokes that callback parameter or a simple `const` alias of that parameter. It does not
  * inspect raw source text after parse and it skips non-invoked nested function bodies, so ordinary
- * callbacks, computed namespace access, computed/spread object aliases and exports, export-star
- * namespaces, ambiguous export-star names, reassigned callback aliases, and dynamic paths remain
- * outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
+ * callbacks, computed namespace access, computed/spread object/array aliases and exports,
+ * export-star namespaces, ambiguous export-star names, reassigned callback aliases, and dynamic paths
+ * remain outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -71,6 +72,7 @@ export function agentToolSinksFromSource(
 
 interface ModuleFacts {
   ambiguousExportStarHelpers: ReadonlySet<string>;
+  arrayAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   defaultObjectHelpers: ReadonlyMap<string, HelperDefinition>;
   helpers: ReadonlyMap<string, HelperDefinition>;
   objectAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
@@ -125,6 +127,7 @@ function summarizeModules(moduleSources: readonly AgentToolModuleSource[]): Modu
 
 function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   const ambiguousExportStarHelpers = new Set<string>();
+  const arrayAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const defaultObjectHelpers = new Map<string, HelperDefinition>();
   const helpers = new Map<string, HelperDefinition>();
   const objectAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
@@ -132,6 +135,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   const topLevelBindings = new Set<string>();
   const moduleFacts: ModuleFacts = {
     ambiguousExportStarHelpers,
+    arrayAliasHelpers,
     defaultObjectHelpers,
     helpers,
     objectAliasHelpers,
@@ -192,6 +196,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   }
 
   for (const statement of sourceFile.statements) {
+    collectArrayAliasHelperBindings(statement, moduleFacts);
     collectObjectAliasHelperBindings(statement, moduleFacts);
     collectDefaultHelperAlias(statement, moduleFacts);
     collectDefaultObjectHelperBindings(statement, moduleFacts);
@@ -308,6 +313,7 @@ function linkImportedHelpers(
   }
 
   for (const statement of moduleFacts.sourceFile.statements) {
+    changed = collectArrayAliasHelperBindings(statement, moduleFacts) || changed;
     changed = collectObjectAliasHelperBindings(statement, moduleFacts) || changed;
   }
 
@@ -391,6 +397,39 @@ function linkNamespaceBinding(
   return true;
 }
 
+function collectArrayAliasHelperBindings(
+  statement: ts.Statement,
+  moduleFacts: ModuleFacts,
+): boolean {
+  if (!ts.isVariableStatement(statement)) return false;
+  if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) return false;
+
+  let changed = false;
+
+  for (const declaration of statement.declarationList.declarations) {
+    if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+
+    const expression = unwrapParentheses(declaration.initializer);
+    if (!ts.isArrayLiteralExpression(expression)) continue;
+
+    const helperBindings = helperBindingsFromArrayLiteral(expression, moduleFacts);
+    if (!helperBindings) continue;
+
+    const arrayAliasHelpers = moduleFacts.arrayAliasHelpers as Map<
+      string,
+      ReadonlyMap<string, HelperDefinition>
+    >;
+    if (helperBindingMapsEqual(arrayAliasHelpers.get(declaration.name.text), helperBindings)) {
+      continue;
+    }
+
+    arrayAliasHelpers.set(declaration.name.text, helperBindings);
+    changed = true;
+  }
+
+  return changed;
+}
+
 function collectObjectAliasHelperBindings(
   statement: ts.Statement,
   moduleFacts: ModuleFacts,
@@ -440,6 +479,29 @@ function collectDefaultObjectHelperBindings(
   for (const [propertyName, helper] of helperBindings) {
     defaultObjectHelpers.set(propertyName, helper);
   }
+}
+
+function helperBindingsFromArrayLiteral(
+  expression: ts.ArrayLiteralExpression,
+  moduleFacts: ModuleFacts,
+): ReadonlyMap<string, HelperDefinition> | undefined {
+  const helperBindings = new Map<string, HelperDefinition>();
+  for (let index = 0; index < expression.elements.length; index += 1) {
+    const element = expression.elements[index];
+    if (!element || ts.isSpreadElement(element) || ts.isOmittedExpression(element)) {
+      return undefined;
+    }
+
+    const initializer = unwrapParentheses(element);
+    if (!ts.isIdentifier(initializer)) return undefined;
+
+    const helper = moduleFacts.helpers.get(initializer.text);
+    if (!helper) return undefined;
+
+    helperBindings.set(String(index), exportedHelperAlias(helper));
+  }
+
+  return helperBindings;
 }
 
 function helperBindingsFromObjectLiteral(
@@ -927,7 +989,15 @@ function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
 
 function unwrapParentheses(expression: ts.Expression): ts.Expression {
   let current = expression;
-  while (ts.isParenthesizedExpression(current)) current = current.expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  ) {
+    current = current.expression;
+  }
+
   return current;
 }
 
@@ -994,6 +1064,17 @@ function calledHelper(
 ): HelperDefinition | undefined {
   if (!ts.isCallExpression(node)) return undefined;
 
+  if (ts.isElementAccessExpression(node.expression)) {
+    const aliasName = node.expression.expression;
+    if (!ts.isIdentifier(aliasName)) return undefined;
+    if (blockedNames.has(aliasName.text)) return undefined;
+
+    const index = staticElementIndex(node.expression.argumentExpression);
+    if (index === undefined) return undefined;
+
+    return moduleFacts.arrayAliasHelpers.get(aliasName.text)?.get(index);
+  }
+
   if (ts.isPropertyAccessExpression(node.expression)) {
     const namespaceName = node.expression.expression;
     if (!ts.isIdentifier(namespaceName)) return undefined;
@@ -1010,6 +1091,17 @@ function calledHelper(
   const name = node.expression.text;
   if (blockedNames.has(name)) return undefined;
   return moduleFacts.helpers.get(name);
+}
+
+function staticElementIndex(expression: ts.Expression): string | undefined {
+  if (!ts.isNumericLiteral(expression)) return undefined;
+
+  const index = Number(expression.text);
+  if (!Number.isSafeInteger(index) || index < 0 || String(index) !== expression.text) {
+    return undefined;
+  }
+
+  return expression.text;
 }
 
 function egressSinkFact(

@@ -372,6 +372,24 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects dynamic imports of known deserializer module APIs', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-deserialize.ts',
+        `
+          const v8 = await import("node:v8");
+          const { unserialize: thaw } = await import("php-serialize");
+          v8.deserialize(bytes);
+          thaw(payload);
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization import unserialize; avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation',
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization call thaw(); avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation',
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization call v8.deserialize(); avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation',
+    ]);
+  });
+
   it('allows reviver-free JSON decode before schema/body validation', () => {
     expect(
       deserializationSinkFindings(
@@ -381,6 +399,7 @@ describe('sink-policy gate', () => {
           export async function decodeBody(schema, request) {
             const raw = await request.text();
             const parsed = JSON.parse(raw);
+            const safeSchema = await import("./schema.js");
             return parseSchemaAsync(schema, parsed);
           }
         `,

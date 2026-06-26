@@ -7,7 +7,8 @@ security platform, supply-chain SOTA (SLSA/Sigstore/pnpm), and the OWASP Top 10 
 
 **Latest local verification (2026-06-25 PDT):** after the latest OPP-07/08, OPP-11, OPP-28, and sink-token
 worker batches, focused registry/check, scope-audit, sink-policy/SQL/deserialization, and server session Vitest
-suites passed; `git diff --check` and `pnpm run check:vp` passed on the integrated branch.
+suites passed; latest integration reran the sink-policy gate test, Drizzle scope-audit test, `git diff --check`,
+and `pnpm run check:vp` on the integration branch.
 
 This plan is the forward roadmap; it does **not** restate shipped work. Prior security ledgers:
 `secure-by-construction.md`, `secure-framework.md`, `secure-framework-2.md`, `secure-framework-3.md`,
@@ -176,6 +177,8 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `git diff --check`, and file-level `vp check` passed. SINK-08 now has a conservative source-audit gate for
       unowned unsafe deserialization (`JSON.parse` revivers and static `deserialize`/`unserialize` imports/calls)
       while preserving reviver-free JSON plus schema validation; focused sink-policy gate tests,
+      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. The same gate now also
+      rejects straightforward dynamic imports of known deserializer APIs/modules; focused sink-policy gate tests,
       `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3
       candidates and full static by-construction value-path analyzer integration are not complete.
 
@@ -238,7 +241,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       egress/secret analyzer reachability. Static top-level `const` object helper aliases such as
       `const mail = { sendMail }; mail.sendMail()` now preserve enforced imported-helper egress/secret-read
       rows, while computed, spread, and non-`const` aliases stay outside the proof; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed.
+      `git diff --check`, and `pnpm run check:vp` passed. Static top-level `const` array/tuple helper aliases now
+      preserve enforced helper egress/secret-read reachability through literal numeric indexes such as
+      `helpers[0]()`, while mutable arrays, spreads, holes, non-helper elements, and dynamic indexes stay outside
+      the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -598,6 +604,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       `vp check` passed. Nested readonly wrappers around explicitly summarized guard objects now prove exact
       owner-column predicates, while spread-overwritten, duplicate-property, and mutable wrapper variants stay
       `scope: unknown`; the focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
+      Dominated optional-chain guard principals such as `ctx.guard?.userId` now have positive coverage, while
+      unguarded optional-chain predicates stay `scope: unknown`; `pnpm exec vitest --run
+      packages/drizzle/src/index.scope-audits.test.ts --reporter=verbose --testTimeout=15000 --hookTimeout=15000`,
+      `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
