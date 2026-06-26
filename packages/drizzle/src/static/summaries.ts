@@ -10,10 +10,12 @@ import {
   Node,
   SyntaxKind,
   type ArrowFunction,
+  type BindingElement,
   type CallExpression,
   type FunctionExpression,
   type ObjectLiteralExpression,
   type SourceFile,
+  type VariableDeclaration,
 } from 'ts-morph';
 import {
   isQueryReceiverIdentifier,
@@ -962,27 +964,53 @@ function localConstObjectBindingPrivateScope(
   if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
   if (declaration.getInitializer()) return undefined;
 
-  const pattern = declaration.getParent();
-  if (!Node.isObjectBindingPattern(pattern)) return undefined;
-  const variable = pattern.getParent();
-  if (!Node.isVariableDeclaration(variable)) return undefined;
+  const binding = objectBindingPathAndVariable(declaration);
+  if (!binding) return undefined;
+  const { path, variable } = binding;
   const declarationList = variable.getParent();
   if (!Node.isVariableDeclarationList(declarationList)) return undefined;
   if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
 
   const initializer = variable.getInitializer();
-  const object = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  const baseScope =
+    initializer &&
+    (privateScopeForExpression(initializer, sessionContext) ??
+      summarizedStaticCallPrivateScope(initializer, sessionContext));
+  if (baseScope) {
+    return {
+      ...baseScope,
+      path: appendPrivateScopePath(baseScope.path, path.join('.')),
+    };
+  }
+
+  const object = initializer ? localConstLiteralRootValue(initializer) : undefined;
   if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
 
-  const propertyName = objectBindingPropertyName(declaration);
-  if (!propertyName) return undefined;
+  return objectLiteralStaticPathPrivateScope(object, path, sessionContext);
+}
 
-  const value = objectLiteralSingleStaticPropertyValue(object, propertyName);
-  if (!value) return undefined;
-  return (
-    privateScopeForExpression(value, sessionContext) ??
-    summarizedStaticCallPrivateScope(value, sessionContext)
-  );
+function objectBindingPathAndVariable(
+  declaration: Node & { getNameNode(): Node },
+): { path: string[]; variable: VariableDeclaration } | undefined {
+  if (!Node.isBindingElement(declaration)) return undefined;
+  const path: string[] = [];
+  let element: BindingElement | undefined = declaration;
+
+  while (element) {
+    if (isRestBindingElement(element) || element.getInitializer()) return undefined;
+    const propertyName = objectBindingPropertyName(element);
+    if (!propertyName) return undefined;
+    path.unshift(propertyName);
+
+    const pattern = element.getParent();
+    if (!Node.isObjectBindingPattern(pattern)) return undefined;
+    const parent = pattern.getParent();
+    if (Node.isVariableDeclaration(parent)) return { path, variable: parent };
+    if (!Node.isBindingElement(parent)) return undefined;
+    element = parent;
+  }
+
+  return undefined;
 }
 
 function localConstLiteralAccessPrivateScope(
@@ -1077,6 +1105,55 @@ function localConstLiteralStaticAccessBaseValue(expression: Node, depth: number)
   const initializer = declaration.getInitializer();
   const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
   return literalStaticWrapperValue(value);
+}
+
+function localConstLiteralRootValue(expression: Node): Node | undefined {
+  const value = unwrappedStaticExpressionNode(expression);
+  const literal = literalStaticWrapperValue(value);
+  if (literal) return literal;
+  if (!Node.isIdentifier(value)) return undefined;
+
+  const symbol = symbolForIdentifierReference(value) ?? value.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  return initializer
+    ? literalStaticWrapperValue(unwrappedStaticExpressionNode(initializer))
+    : undefined;
+}
+
+function objectLiteralStaticPathPrivateScope(
+  object: ObjectLiteralExpression,
+  path: readonly string[],
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  let value: Node | undefined = object;
+  for (const [index, segment] of path.entries()) {
+    const current = unwrappedStaticExpressionNode(value);
+    if (!Node.isObjectLiteralExpression(current)) {
+      const provenance =
+        privateScopeForExpression(current, sessionContext) ??
+        summarizedStaticCallPrivateScope(current, sessionContext);
+      return provenance
+        ? {
+            ...provenance,
+            path: appendPrivateScopePath(provenance.path, path.slice(index).join('.')),
+          }
+        : undefined;
+    }
+    value = objectLiteralSingleStaticPropertyValue(current, segment);
+    if (!value) return undefined;
+  }
+  return (
+    privateScopeForExpression(value, sessionContext) ??
+    summarizedStaticCallPrivateScope(value, sessionContext)
+  );
 }
 
 function literalStaticWrapperValue(value: Node | undefined): Node | undefined {
