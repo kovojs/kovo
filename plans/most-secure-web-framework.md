@@ -6,9 +6,10 @@ meta-frameworks (SvelteKit/Remix/Astro), Spring Security / ASP.NET Core / Phoeni
 security platform, supply-chain SOTA (SLSA/Sigstore/pnpm), and the OWASP Top 10 / API Top 10 / LLM Top 10.
 
 **Latest local verification (2026-06-26 PDT):** after the latest OPP-07/08, OPP-11, OPP-28, and sink-token
-worker batches, focused registry, scope-audit, sink-policy, and server session Vitest suites passed; latest
-integration reran the sink-policy gate, Drizzle scope-audit, registry, agent-tool, and opaque-session focused
-tests before the batch gates.
+worker batches, `pnpm exec vitest run scripts/check-sink-policy-gate.test.mjs packages/server/src/opaque-session.test.ts
+packages/server/src/app.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
+packages/drizzle/src/index.scope-audits.test.ts --run` passed 438 tests; `pnpm run check:sink-policy`,
+`git diff --check origin/main..HEAD`, and `pnpm run check:vp` passed.
 
 This plan is the forward roadmap; it does **not** restate shipped work. Prior security ledgers:
 `secure-by-construction.md`, `secure-framework.md`, `secure-framework-2.md`, `secure-framework-3.md`,
@@ -156,7 +157,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `pnpm run check:vp` passed. The sink-policy gate now hard-bans unowned server-side dynamic code sinks
       (`eval`, `Function`, and `node:vm`/`vm`) because SINK-07 has no safe value to bless; it also catches
       indirect/member/literal-bracket/one-hop alias `eval` and `Function` forms while preserving local shadowing. Focused gate
-      tests, `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. The browser
+      tests, `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. It now also
+      catches `.call()`/`.apply()` laundering and bound-alias `eval`/`Function` forms; focused gate tests plus
+      the latest batch gates passed. The browser
       response-fragment raw HTML route is now centrally registered as `browser:response-fragment-html`, and
       `scripts/check-sink-policy-gate.mjs` pins it to the `trustedHtml()`/`kovo` Trusted Types/template
       sanitizer path; focused sink-policy/browser gate tests, `pnpm run check:sink-policy`, `git diff --check`,
@@ -337,7 +340,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `pnpm run check:vp` passed. Parenthesized, type-only wrapped, and static optional helper call targets now
       preserve enforced egress/secret-read reachability for proven helpers, namespace/object helpers, and literal
       tuple helpers, while computed object access remains outside the proof; focused registry/check tests and
-      `git diff --check` passed.
+      `git diff --check` passed. Static default nested object helper exports now preserve enforced helper
+      reachability through shapes like `const providers = { mail }; export default providers`, while computed,
+      spread, and mutated default nested objects remain outside the proof; focused registry/check tests plus the
+      latest batch gates passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -542,7 +548,9 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed. Owned opaque-session cookie
       credentials must now be presented exactly as Kovo emits them, with percent-encoded or quoted cookie values
       failing closed instead of normalizing across the credential boundary; focused opaque-session/app tests and
-      `git diff --check` passed.
+      `git diff --check` passed. Cookie-value leading/trailing whitespace now also fails closed before custom
+      store validation, while exact emitted ids still validate; focused opaque-session/app tests plus the latest
+      batch gates passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
@@ -820,7 +828,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       scope-audit test and `git diff --check` passed. Nonliteral membership predicates such as
       `inArray(ownerColumn, input.userIds)` and `notInArray(ownerColumn, input.userIds)` now feed the fail-closed
       arg-candidate path while dynamic session/guard arrays remain excluded from exact `scope: session` proof;
-      the focused scope-audit test and `git diff --check` passed.
+      the focused scope-audit test and `git diff --check` passed. Const readonly tuple aliases such as
+      `const principals = [req.session.userId] as const` now preserve exact `inArray(ownerColumn, principals)`
+      proof for read/write audits, while wrong-column and mutated tuple aliases stay `scope: unknown`; focused
+      scope-audit tests plus the latest batch gates passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
