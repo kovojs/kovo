@@ -106,6 +106,10 @@ describe('commands manifest', () => {
     expect(EXPLAIN_USAGE_LINE).toContain(
       'kovo explain component|mutation|query|page|context <target>',
     );
+    expect(EXPLAIN_USAGE).toContain('       kovo explain --capabilities [graph.json]');
+    expect(EXPLAIN_USAGE).toContain('       kovo explain --cookies [graph.json]');
+    expect(EXPLAIN_USAGE_LINE).toContain('kovo explain --capabilities [graph.json]');
+    expect(EXPLAIN_USAGE_LINE).toContain('kovo explain --cookies [graph.json]');
   });
 
   it('each manifest usage is consistent with the bin imports', () => {
