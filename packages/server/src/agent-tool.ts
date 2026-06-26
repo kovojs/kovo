@@ -424,13 +424,8 @@ function describeAmbientCredentialFindings(findings: readonly AmbientCredentialF
 
 function requestWithoutSession(request: Request): AgentToolRequest {
   if (!('session' in request)) return request as AgentToolRequest;
-  const scrubbedRequest = requestWithPrototypeWithoutSession(request);
 
-  return new Proxy(scrubbedRequest, {
-    getOwnPropertyDescriptor(target, property) {
-      if (property === 'session') return undefined;
-      return Reflect.getOwnPropertyDescriptor(target, property);
-    },
+  return new Proxy(request, {
     get(target, property) {
       if (property === 'session') return undefined;
 
@@ -441,45 +436,7 @@ function requestWithoutSession(request: Request): AgentToolRequest {
       if (property === 'session') return false;
       return property in target;
     },
-    ownKeys(target) {
-      return Reflect.ownKeys(target).filter((property) => property !== 'session');
-    },
   }) as AgentToolRequest;
-}
-
-const prototypesWithoutSession = new WeakMap<object, object>();
-
-function requestWithPrototypeWithoutSession<RequestType extends Request>(
-  request: RequestType,
-): RequestType {
-  const prototype = Reflect.getPrototypeOf(request);
-  if (!prototypeChainHasSession(prototype)) return request;
-
-  Reflect.setPrototypeOf(request, prototypeWithoutSession(prototype));
-  return request;
-}
-
-function prototypeChainHasSession(prototype: object | null): boolean {
-  for (let current = prototype; current !== null; current = Reflect.getPrototypeOf(current)) {
-    if (hasOwnProperty(current, 'session')) return true;
-  }
-  return false;
-}
-
-function prototypeWithoutSession(prototype: object | null): object | null {
-  if (prototype === null) return null;
-  const parent = Reflect.getPrototypeOf(prototype);
-  if (!hasOwnProperty(prototype, 'session') && !prototypeChainHasSession(parent)) return prototype;
-
-  const cached = prototypesWithoutSession.get(prototype);
-  if (cached !== undefined) return cached;
-
-  const descriptors = Object.getOwnPropertyDescriptors(prototype);
-  delete descriptors.session;
-  const scrubbed = Object.create(prototypeWithoutSession(parent));
-  Object.defineProperties(scrubbed, descriptors);
-  prototypesWithoutSession.set(prototype, scrubbed);
-  return scrubbed;
 }
 
 function snapshotAgentToolDefinition<Input, Output, Context = unknown>(

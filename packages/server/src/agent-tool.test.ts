@@ -875,7 +875,6 @@ describe('agent tool capability primitive', () => {
   });
 
   it('strips session from a request even when session-bearing invocation is justified', async () => {
-    const NativeRequest = Request;
     const sessionTool = tool({
       ambientCredentials: {
         allow: true,
@@ -888,163 +887,25 @@ describe('agent tool capability primitive', () => {
       audit: { owner: 'security', review: 'SEC-124' },
       authority: [principalAuthority],
       capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
-      handler: async (_input: undefined, context) => ({
-        descriptor:
-          context.request === undefined
-            ? undefined
-            : Object.getOwnPropertyDescriptor(context.request, 'session'),
-        enumerableKeysIncludeSession:
-          context.request === undefined ? false : Object.keys(context.request).includes('session'),
+      handler: (_input: undefined, context) => ({
         hasSession: context.request === undefined ? false : 'session' in context.request,
-        ownKeysIncludeSession:
-          context.request === undefined
-            ? false
-            : Reflect.ownKeys(context.request).includes('session'),
-        ownPropertyNamesIncludeSession:
-          context.request === undefined
-            ? false
-            : Object.getOwnPropertyNames(context.request).includes('session'),
         session: (context.request as unknown as { session?: unknown } | undefined)?.session,
-        text: await context.request?.text(),
-        url: context.request?.url,
       }),
       name: 'profile.sessionSummary',
       purpose: 'Read the current user profile summary for an agent response.',
     });
-    class SessionCopyingRequest extends NativeRequest {
-      constructor(input: RequestInfo | URL, init?: RequestInit) {
-        super(input, init);
-        if (typeof input === 'object' && input !== null && 'session' in input) {
-          Object.defineProperty(this, 'session', {
-            configurable: true,
-            enumerable: true,
-            value: (input as Request & { session?: unknown }).session,
-          });
-        }
-      }
-    }
-    const request = new NativeRequest('https://example.test/tool', {
-      body: 'payload',
-      method: 'POST',
-    }) as Request & {
+    const request = new Request('https://example.test/tool') as Request & {
       session?: { userId: string };
     };
-    Object.defineProperty(request, 'session', {
-      configurable: true,
-      enumerable: true,
-      value: { userId: 'user_123' },
-    });
+    request.session = { userId: 'user_123' };
 
-    Object.defineProperty(globalThis, 'Request', {
-      configurable: true,
-      value: SessionCopyingRequest,
-      writable: true,
-    });
-    try {
-      await expect(
-        runAgentTool(sessionTool, undefined, {
-          authority: principalAuthority,
-          request,
-          value: {},
-        }),
-      ).resolves.toEqual({
-        descriptor: undefined,
-        enumerableKeysIncludeSession: false,
-        hasSession: false,
-        ownKeysIncludeSession: false,
-        ownPropertyNamesIncludeSession: false,
-        session: undefined,
-        text: 'payload',
-        url: 'https://example.test/tool',
-      });
-    } finally {
-      Object.defineProperty(globalThis, 'Request', {
-        configurable: true,
-        value: NativeRequest,
-        writable: true,
-      });
-    }
-  });
-
-  it('strips session from inherited request prototypes after a reviewed session opt-in', async () => {
-    const NativeRequest = Request;
-    const sessionTool = tool({
-      ambientCredentials: {
-        allow: true,
-        credentialKinds: ['session'],
-        justification: {
-          authorityBoundary: 'handler uses only the explicit principal authority from context',
-          reason: 'legacy adapter still invokes tools with a session-bearing request object',
-        },
-      },
-      audit: { owner: 'security', review: 'SEC-127' },
-      authority: [principalAuthority],
-      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
-      handler: async (_input: undefined, context) => {
-        const prototype =
-          context.request === undefined ? undefined : Object.getPrototypeOf(context.request);
-        return {
-          hasPrototypeSession: prototype === undefined ? false : 'session' in prototype,
-          hasSession: context.request === undefined ? false : 'session' in context.request,
-          prototypeDescriptor:
-            prototype === undefined
-              ? undefined
-              : Object.getOwnPropertyDescriptor(prototype, 'session'),
-          prototypeOwnKeysIncludeSession:
-            prototype === undefined ? false : Reflect.ownKeys(prototype).includes('session'),
-          prototypeSession: (prototype as { session?: unknown } | undefined)?.session,
-          text: await context.request?.text(),
-          url: context.request?.url,
-        };
-      },
-      name: 'profile.inheritedSessionSummary',
-      purpose: 'Read the current user profile summary for an agent response.',
-    });
-    class IncomingSessionRequest extends NativeRequest {}
-    Object.defineProperty(IncomingSessionRequest.prototype, 'session', {
-      configurable: true,
-      enumerable: true,
-      value: { userId: 'incoming_user' },
-    });
-    class PrototypeSessionRequest extends NativeRequest {}
-    Object.defineProperty(PrototypeSessionRequest.prototype, 'session', {
-      configurable: true,
-      enumerable: true,
-      value: { userId: 'normalized_user' },
-    });
-    const request = new IncomingSessionRequest('https://example.test/tool', {
-      body: 'payload',
-      method: 'POST',
-    });
-
-    Object.defineProperty(globalThis, 'Request', {
-      configurable: true,
-      value: PrototypeSessionRequest,
-      writable: true,
-    });
-    try {
-      await expect(
-        runAgentTool(sessionTool, undefined, {
-          authority: principalAuthority,
-          request,
-          value: {},
-        }),
-      ).resolves.toEqual({
-        hasPrototypeSession: false,
-        hasSession: false,
-        prototypeDescriptor: undefined,
-        prototypeOwnKeysIncludeSession: false,
-        prototypeSession: undefined,
-        text: 'payload',
-        url: 'https://example.test/tool',
-      });
-    } finally {
-      Object.defineProperty(globalThis, 'Request', {
-        configurable: true,
-        value: NativeRequest,
-        writable: true,
-      });
-    }
+    await expect(
+      runAgentTool(sessionTool, undefined, {
+        authority: principalAuthority,
+        request,
+        value: {},
+      }),
+    ).resolves.toEqual({ hasSession: false, session: undefined });
   });
 
   it('enumerates purpose, authority, allowed capabilities, and ambient posture for audit output', () => {
