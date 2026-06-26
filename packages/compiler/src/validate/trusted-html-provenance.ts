@@ -118,6 +118,11 @@ const REQUEST_ACCESSORS = new Set([
   'text',
   'url',
 ]);
+const AUDITED_REASON_PROPERTY = 'reason';
+const COMPONENT_FACTORY_NAME = 'component';
+const CORE_MODULE_SPECIFIER = '@kovojs/core';
+const QUERIES_PROPERTY = 'queries';
+const RENDER_PROPERTY = 'render';
 
 /**
  * Classify an expression's data provenance from typed AST facts. Returns `'request'`/`'query'` when
@@ -225,7 +230,7 @@ function hasAuditedReason(call: ts.CallExpression): boolean {
       if (
         ts.isPropertyAssignment(property) &&
         ts.isIdentifier(property.name) &&
-        property.name.text === 'reason' &&
+        identifierName(property.name) === AUDITED_REASON_PROPERTY &&
         ts.isStringLiteralLike(property.initializer)
       ) {
         return property.initializer.text.trim().length > 0;
@@ -285,14 +290,18 @@ function collectRenderQueryBindings(
 
   for (const property of options.properties) {
     if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) continue;
-    if (property.name.text === 'queries' && ts.isObjectLiteralExpression(property.initializer)) {
+    if (
+      identifierName(property.name) === QUERIES_PROPERTY &&
+      ts.isObjectLiteralExpression(property.initializer)
+    ) {
       for (const entry of property.initializer.properties) {
         const key = entry.name;
-        if (key && (ts.isIdentifier(key) || ts.isStringLiteralLike(key))) queryKeys.add(key.text);
+        const name = key === undefined ? null : propertyNameText(key);
+        if (name !== null) queryKeys.add(name);
       }
     }
     if (
-      property.name.text === 'render' &&
+      identifierName(property.name) === RENDER_PROPERTY &&
       (ts.isArrowFunction(property.initializer) || ts.isFunctionExpression(property.initializer))
     ) {
       render = property.initializer;
@@ -327,21 +336,43 @@ function collectRenderQueryBindings(
  * `@kovojs/core` alias (`import { component as c }`) is additionally resolved by symbol identity.
  */
 function componentFactoryLocalNames(sourceFile: ts.SourceFile): ReadonlySet<string> {
-  const names = new Set<string>(['component']);
+  const names = new Set<string>([COMPONENT_FACTORY_NAME]);
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement)) continue;
     if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
-    if (statement.moduleSpecifier.text !== '@kovojs/core') continue;
+    if (literalText(statement.moduleSpecifier) !== CORE_MODULE_SPECIFIER) continue;
     const named = statement.importClause?.namedBindings;
     if (named && ts.isNamedImports(named)) {
       for (const element of named.elements) {
-        if ((element.propertyName?.text ?? element.name.text) === 'component') {
-          names.add(element.name.text);
+        const importedName = element.propertyName
+          ? moduleExportNameText(element.propertyName)
+          : identifierName(element.name);
+        if (importedName === COMPONENT_FACTORY_NAME) {
+          names.add(identifierName(element.name));
         }
       }
     }
   }
   return names;
+}
+
+function identifierName(name: ts.Identifier): string {
+  return String(name.escapedText);
+}
+
+function literalText(node: ts.StringLiteralLike): string {
+  return node.text;
+}
+
+function propertyNameText(name: ts.PropertyName): string | null {
+  if (ts.isIdentifier(name)) return identifierName(name);
+  if (ts.isStringLiteralLike(name)) return literalText(name);
+  return null;
+}
+
+function moduleExportNameText(name: ts.ModuleExportName): string {
+  if (ts.isIdentifier(name)) return identifierName(name);
+  return literalText(name);
 }
 
 function enclosingRenderQueryBindings(
