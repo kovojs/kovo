@@ -786,6 +786,16 @@ function eqOperandsAreTableColumnArgKeyed(
       };
     }
 
+    const destructuredTupleElement = localConstArrayBindingPrivateScope(expression, sessionContext);
+    if (destructuredTupleElement) {
+      return {
+        privateKey: privateScopeKey(destructuredTupleElement),
+        ...(destructuredTupleElement.kind === 'session'
+          ? { sessionKey: destructuredTupleElement.path }
+          : {}),
+      };
+    }
+
     // SPEC §11.1 / KV414 (minimal session-via-local tracing): recognize a session
     // value bound to a local const and then used in the scoping predicate, e.g.
     // `const uid = req.session.userId; …where(eq(orders.userId, uid))`. The shared
@@ -830,6 +840,43 @@ function localConstTupleElementPrivateScope(
   if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
 
   const initializer = declaration.getInitializer();
+  const tuple = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  if (!tuple || !Node.isArrayLiteralExpression(tuple)) return undefined;
+
+  const value = tuple.getElements()[index];
+  if (!value || Node.isSpreadElement(value)) return undefined;
+  return (
+    privateScopeForExpression(value, sessionContext) ??
+    summarizedStaticCallPrivateScope(value, sessionContext)
+  );
+}
+
+function localConstArrayBindingPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isBindingElement(declaration)) return undefined;
+  if (isRestBindingElement(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+  if (declaration.getInitializer()) return undefined;
+
+  const pattern = declaration.getParent();
+  if (!Node.isArrayBindingPattern(pattern)) return undefined;
+  const variable = pattern.getParent();
+  if (!Node.isVariableDeclaration(variable)) return undefined;
+  const declarationList = variable.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const index = pattern.getElements().findIndex((element) => element === declaration);
+  if (index < 0) return undefined;
+
+  const initializer = variable.getInitializer();
   const tuple = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
   if (!tuple || !Node.isArrayLiteralExpression(tuple)) return undefined;
 
