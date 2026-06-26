@@ -19,11 +19,12 @@ export interface AgentToolModuleSource {
  * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
  * helpers reached through static named/default imports including static local re-export barrels,
- * unique local `export *` barrels for named imports, default exports that alias a summarized local
- * helper, static namespace-property calls into exported local helpers, local `const` object aliases
- * whose properties statically point at summarized helpers, `Object.freeze(...)` wrappers around
- * those same static object aliases or already-proven object/nested-object aliases that are not
- * assigned or mutated, local `const` array/tuple aliases and default array/tuple exports whose
+ * unique local `export *` barrels for named imports, static local default re-export barrels for
+ * already-proven default helper/object/array summaries, default exports that alias a summarized
+ * local helper, static namespace-property calls into exported local helpers, local `const` object
+ * aliases whose properties statically point at summarized helpers, `Object.freeze(...)` wrappers
+ * around those same static object aliases or already-proven object/nested-object aliases that are
+ * not assigned or mutated, local `const` array/tuple aliases and default array/tuple exports whose
  * literal indexes statically point at summarized helpers, `Object.freeze(...)` wrappers around
  * those same static array/tuple aliases or already-proven array aliases that are not assigned or
  * mutated, default object exports whose properties statically point at summarized helpers or freeze
@@ -89,6 +90,8 @@ interface ModuleFacts {
   arrayAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   defaultArrayHelpers: ReadonlyMap<string, HelperDefinition>;
   defaultObjectHelpers: ReadonlyMap<string, HelperDefinition>;
+  exportedArrayAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
+  exportedObjectAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   helpers: ReadonlyMap<string, HelperDefinition>;
   nestedObjectAliasHelpers: ReadonlyMap<
     string,
@@ -149,6 +152,8 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   const arrayAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const defaultArrayHelpers = new Map<string, HelperDefinition>();
   const defaultObjectHelpers = new Map<string, HelperDefinition>();
+  const exportedArrayAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
+  const exportedObjectAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const helpers = new Map<string, HelperDefinition>();
   const nestedObjectAliasHelpers = new Map<
     string,
@@ -162,6 +167,8 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
     arrayAliasHelpers,
     defaultArrayHelpers,
     defaultObjectHelpers,
+    exportedArrayAliasHelpers,
+    exportedObjectAliasHelpers,
     helpers,
     nestedObjectAliasHelpers,
     objectAliasHelpers,
@@ -238,6 +245,20 @@ function linkImportedHelpers(
   facts: ReadonlyMap<ts.SourceFile, ModuleFacts>,
 ): boolean {
   const helpers = moduleFacts.helpers as Map<string, HelperDefinition>;
+  const arrayAliasHelpers = moduleFacts.arrayAliasHelpers as Map<
+    string,
+    ReadonlyMap<string, HelperDefinition>
+  >;
+  const defaultArrayHelpers = moduleFacts.defaultArrayHelpers as Map<string, HelperDefinition>;
+  const defaultObjectHelpers = moduleFacts.defaultObjectHelpers as Map<string, HelperDefinition>;
+  const exportedArrayAliasHelpers = moduleFacts.exportedArrayAliasHelpers as Map<
+    string,
+    ReadonlyMap<string, HelperDefinition>
+  >;
+  const exportedObjectAliasHelpers = moduleFacts.exportedObjectAliasHelpers as Map<
+    string,
+    ReadonlyMap<string, HelperDefinition>
+  >;
   const objectAliasHelpers = moduleFacts.objectAliasHelpers as Map<
     string,
     ReadonlyMap<string, HelperDefinition>
@@ -269,7 +290,7 @@ function linkImportedHelpers(
         defaultBinding &&
         (linkHelperBinding(helpers, defaultBinding.text, importedFacts.helpers.get('default')) ||
           linkNamespaceBinding(
-            moduleFacts.arrayAliasHelpers as Map<string, ReadonlyMap<string, HelperDefinition>>,
+            arrayAliasHelpers,
             defaultBinding.text,
             importedFacts.defaultArrayHelpers,
           ) ||
@@ -301,7 +322,19 @@ function linkImportedHelpers(
 
         const importedName = element.propertyName?.text ?? element.name.text;
         const localName = element.name.text;
-        if (linkHelperBinding(helpers, localName, importedFacts.helpers.get(importedName))) {
+        if (
+          linkHelperBinding(helpers, localName, importedFacts.helpers.get(importedName)) ||
+          linkOptionalNamespaceBinding(
+            arrayAliasHelpers,
+            localName,
+            importedFacts.exportedArrayAliasHelpers.get(importedName),
+          ) ||
+          linkOptionalNamespaceBinding(
+            objectAliasHelpers,
+            localName,
+            importedFacts.exportedObjectAliasHelpers.get(importedName),
+          )
+        ) {
           changed = true;
         }
       }
@@ -342,7 +375,25 @@ function linkImportedHelpers(
 
       const importedName = element.propertyName?.text ?? element.name.text;
       const exportedName = element.name.text;
-      if (linkHelperBinding(helpers, exportedName, importedFacts.helpers.get(importedName))) {
+      if (
+        linkHelperBinding(helpers, exportedName, importedFacts.helpers.get(importedName)) ||
+        (importedName === 'default' &&
+          (exportedName === 'default'
+            ? linkDefaultNamespaceBinding(defaultArrayHelpers, importedFacts.defaultArrayHelpers) ||
+              linkDefaultNamespaceBinding(defaultObjectHelpers, importedFacts.defaultObjectHelpers)
+            : linkExportedNamespaceBinding(
+                arrayAliasHelpers,
+                exportedArrayAliasHelpers,
+                exportedName,
+                importedFacts.defaultArrayHelpers,
+              ) ||
+              linkExportedNamespaceBinding(
+                objectAliasHelpers,
+                exportedObjectAliasHelpers,
+                exportedName,
+                importedFacts.defaultObjectHelpers,
+              )))
+      ) {
         changed = true;
       }
     }
@@ -434,6 +485,40 @@ function linkNamespaceBinding(
   if (namespaceImports.has(localName)) return false;
 
   namespaceImports.set(localName, helpers);
+  return true;
+}
+
+function linkOptionalNamespaceBinding(
+  namespaceImports: Map<string, ReadonlyMap<string, HelperDefinition>>,
+  localName: string,
+  helpers: ReadonlyMap<string, HelperDefinition> | undefined,
+): boolean {
+  return helpers ? linkNamespaceBinding(namespaceImports, localName, helpers) : false;
+}
+
+function linkExportedNamespaceBinding(
+  namespaceImports: Map<string, ReadonlyMap<string, HelperDefinition>>,
+  exportedNamespaceImports: Map<string, ReadonlyMap<string, HelperDefinition>>,
+  localName: string,
+  helpers: ReadonlyMap<string, HelperDefinition>,
+): boolean {
+  if (!linkNamespaceBinding(namespaceImports, localName, helpers)) return false;
+
+  exportedNamespaceImports.set(localName, helpers);
+  return true;
+}
+
+function linkDefaultNamespaceBinding(
+  namespaceHelpers: Map<string, HelperDefinition>,
+  helpers: ReadonlyMap<string, HelperDefinition>,
+): boolean {
+  if (helpers.size === 0) return false;
+  if (helperBindingMapsEqual(namespaceHelpers, helpers)) return false;
+
+  namespaceHelpers.clear();
+  for (const [name, helper] of helpers) {
+    namespaceHelpers.set(name, helper);
+  }
   return true;
 }
 

@@ -1439,6 +1439,191 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows through static default re-export barrels', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import { deliverMail } from './mail/default-helper';",
+            "import mailObject from './mail/default-object';",
+            "import { mailArray } from './mail/named-array';",
+            'export const notifyHelper = tool({',
+            "  name: 'orders.defaultHelperBarrel',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+            '  async handler() {',
+            '    await deliverMail();',
+            '  },',
+            '});',
+            'export const notifyObject = tool({',
+            "  name: 'orders.defaultObjectBarrel',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+            '  async handler() {',
+            '    await mailObject.sendMail();',
+            '  },',
+            '});',
+            'export const notifyArray = tool({',
+            "  name: 'orders.defaultArrayBarrel',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+            '  async handler() {',
+            '    await mailArray[0]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail/default-helper.ts',
+          source: "export { default as deliverMail } from './send-default';",
+        },
+        {
+          fileName: 'src/tools/mail/default-object.ts',
+          source: "export { default } from './send-object';",
+        },
+        {
+          fileName: 'src/tools/mail/named-array.ts',
+          source: "export { default as mailArray } from './send-array';",
+        },
+        {
+          fileName: 'src/tools/mail/send-default.ts',
+          source: [
+            'export default function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail/send-object.ts',
+          source: [
+            'function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'export default { sendMail };',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail/send-array.ts',
+          source: [
+            'function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'const mail = [sendMail] as const;',
+            'export default mail;',
+          ].join('\n'),
+        },
+      ],
+      graph: {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'src/tools/orders.ts:24',
+            target: 'orders.defaultArrayBarrel',
+          },
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'src/tools/orders.ts:5',
+            target: 'orders.defaultHelperBarrel',
+          },
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'src/tools/orders.ts:14',
+            target: 'orders.defaultObjectBarrel',
+          },
+        ],
+      },
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail/send-array.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.defaultArrayBarrel',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail/send-array.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.defaultArrayBarrel',
+      },
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail/send-default.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.defaultHelperBarrel',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail/send-default.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.defaultHelperBarrel',
+      },
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail/send-object.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.defaultObjectBarrel',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail/send-object.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.defaultObjectBarrel',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows through unique static export-star barrels for named imports', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -4378,6 +4563,23 @@ export const ProductGrid = component({
             '}',
             "export default { ['sendMail']: sendMail };",
           ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-reexport-computed.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-reexport-computed-barrel';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultReexportComputed',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-reexport-computed-barrel.ts',
+          source: "export { default } from './default-computed-mail';",
         },
         {
           fileName: 'src/tools/default-spread.ts',
