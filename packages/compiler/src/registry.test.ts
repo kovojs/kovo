@@ -1714,6 +1714,55 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from directly-invoked same-module helper callback aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function withToolBody(callback: () => unknown) {',
+            '  const run = callback;',
+            '  return run();',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.notifyCallbackAliasHelper',",
+            '  handler() {',
+            '    return withToolBody(() => {',
+            '      const token = process.env.SENDGRID_TOKEN;',
+            "      return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '        headers: { authorization: token },',
+            '      });',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:11:14',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyCallbackAliasHelper',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:10:21',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyCallbackAliasHelper',
+      },
+    ]);
+  });
+
   it('does not produce enforced agent-tool sink rows from type-only or nested tool identifiers', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -1777,7 +1826,7 @@ export const ProductGrid = component({
     expect(derived.graph.agentToolSinks).toBeUndefined();
   });
 
-  it('does not produce enforced agent-tool sink rows from dynamically invoked imported helper callbacks', () => {
+  it('produces sound agent-tool sink rows from directly-invoked imported helper callback aliases', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
         {
@@ -1786,7 +1835,7 @@ export const ProductGrid = component({
             "import { tool } from '@kovojs/server';",
             "import { withToolBody } from './callbacks';",
             'export const notify = tool({',
-            "  name: 'orders.dynamicImportedCallbackHelper',",
+            "  name: 'orders.notifyImportedCallbackAliasHelper',",
             '  handler() {',
             '    return withToolBody(() => {',
             '      const token = process.env.SENDGRID_TOKEN;',
@@ -1810,10 +1859,29 @@ export const ProductGrid = component({
       ],
     });
 
-    expect(derived.graph.agentToolSinks).toBeUndefined();
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:8:14',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyImportedCallbackAliasHelper',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:7:21',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyImportedCallbackAliasHelper',
+      },
+    ]);
   });
 
-  it('does not produce enforced agent-tool sink rows from dynamically invoked helper callbacks', () => {
+  it('does not produce enforced agent-tool sink rows from dynamically assigned helper callback aliases', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
         {
@@ -1821,7 +1889,7 @@ export const ProductGrid = component({
           source: [
             "import { tool } from '@kovojs/server';",
             'function withToolBody(callback: () => unknown) {',
-            '  const run = callback;',
+            '  let run = callback;',
             '  return run();',
             '}',
             'export const notify = tool({',
