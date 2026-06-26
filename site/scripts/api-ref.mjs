@@ -246,8 +246,9 @@ function parseJsDoc(doc) {
     const paramMatch = /^@param\s+(\S+)\s*-?\s*(.*)$/.exec(line);
     const returnsMatch = /^@returns?\s*(.*)$/.exec(line);
     const exampleMatch = /^@example\b\s*(.*)$/.exec(line);
+    const blockTagMatch = /^@[A-Za-z][\w-]*(?:\s+.*)?$/.exec(line);
 
-    if (paramMatch || returnsMatch || exampleMatch) {
+    if (paramMatch || returnsMatch || exampleMatch || blockTagMatch) {
       flushExample();
       if (paramMatch) {
         mode = 'param';
@@ -255,9 +256,11 @@ function parseJsDoc(doc) {
       } else if (returnsMatch) {
         mode = 'returns';
         returns = returnsMatch[1].trim();
-      } else {
+      } else if (exampleMatch) {
         mode = 'example';
         buffer = exampleMatch[1].trim() ? [exampleMatch[1]] : [];
+      } else {
+        mode = 'ignore';
       }
       continue;
     }

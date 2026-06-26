@@ -83,12 +83,14 @@ describe('api-ref generator', () => {
   let result;
   let corePage;
   let drizzlePage;
+  let headlessUiPage;
 
   beforeAll(async () => {
     outDir = await mkdtemp(path.join(tmpdir(), 'kovo-api-ref-'));
     result = await generateApiReference({ outDir });
     corePage = await readFile(path.join(outDir, 'core.md'), 'utf8');
     drizzlePage = await readFile(path.join(outDir, 'drizzle.md'), 'utf8');
+    headlessUiPage = await readFile(path.join(outDir, 'headless-ui.md'), 'utf8');
   }, 60_000);
 
   afterAll(async () => {
@@ -238,7 +240,9 @@ describe('api-ref generator', () => {
 
   it('normalizes fenced @example blocks so later symbol headings stay headings', () => {
     expect(drizzlePage).toContain('#### `staticSql` {#staticsql}');
+    expect(headlessUiPage).toContain('#### `accordionKeyDown` {#accordionkeydown}');
     expect(drizzlePage).not.toContain('```ts\n```ts');
+    expect(headlessUiPage).not.toContain('```ts\n```ts');
   });
 
   it('emits a per-package sidebar manifest grouped by subpath, with anchors and source links', async () => {
