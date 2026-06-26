@@ -1318,7 +1318,13 @@ function isObjectFreezeCall(value: Node): value is CallExpression {
   if (!Node.isPropertyAccessExpression(expression)) return false;
   if (expression.getName() !== 'freeze') return false;
   const receiver = unwrappedStaticExpressionNode(expression.getExpression());
-  return Node.isIdentifier(receiver) && receiver.getText() === 'Object';
+  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'Object') return false;
+
+  const symbol = symbolForIdentifierReference(receiver) ?? receiver.getSymbol();
+  return !(symbol?.getDeclarations() ?? []).some(
+    (declaration) =>
+      declaration.getSourceFile().getFilePath() === receiver.getSourceFile().getFilePath(),
+  );
 }
 
 function singleObjectFreezeArgument(value: CallExpression): Node | undefined {
@@ -2448,7 +2454,7 @@ function singleLiteralArrayElement(node: Node): Node | undefined {
 }
 
 function literalArrayElements(node: Node): readonly Node[] | undefined {
-  const expression = localConstReadonlyTupleAliasValue(node) ?? unwrappedStaticExpressionNode(node);
+  const expression = readonlyTupleLiteralValue(node);
   if (!Node.isArrayLiteralExpression(expression)) return undefined;
 
   const elements = expression.getElements();
@@ -2456,7 +2462,19 @@ function literalArrayElements(node: Node): readonly Node[] | undefined {
   return elements;
 }
 
-function localConstReadonlyTupleAliasValue(node: Node): Node | undefined {
+function readonlyTupleLiteralValue(node: Node, depth = 0): Node | undefined {
+  if (depth > 4) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isArrayLiteralExpression(expression)) return expression;
+  if (isObjectFreezeCall(expression)) {
+    const argument = singleObjectFreezeArgument(expression);
+    return argument ? readonlyTupleLiteralValue(argument, depth + 1) : undefined;
+  }
+  return localConstReadonlyTupleAliasValue(expression, depth + 1);
+}
+
+function localConstReadonlyTupleAliasValue(node: Node, depth = 0): Node | undefined {
+  if (depth > 4) return undefined;
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isIdentifier(expression)) return undefined;
 
@@ -2479,8 +2497,7 @@ function localConstReadonlyTupleAliasValue(node: Node): Node | undefined {
   }
 
   const initializer = declaration.getInitializer();
-  const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  return value && Node.isArrayLiteralExpression(value) ? value : undefined;
+  return initializer ? readonlyTupleLiteralValue(initializer, depth + 1) : undefined;
 }
 
 function isStaticBindingMutatedAfterDeclaration(
