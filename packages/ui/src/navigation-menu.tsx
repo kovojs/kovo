@@ -151,10 +151,6 @@ export interface NavigationMenuPartProps extends NavigationMenuStateProps {
   styles?: NavigationMenuStyleOverrides;
 }
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
 /**
  * Style definitions used by the navigation menu components.
  *
@@ -488,11 +484,11 @@ export const NavigationMenuTrigger = component({
         type={attrs.type}
         value={attrs.value}
       >
-        {/* SECURITY_FINDINGS.md C1: the @kovojs/server JSX runtime renders text children
-            UNESCAPED. props.children is the composition slot (raw, may be pre-rendered
-            markup); itemLabel/itemValue are scalar text data props a caller fills from
-            data, so escape only that fallback to neutralize injected `<img onerror=...>`. */}
-        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}
+        {/* SPEC.md §4.5/§5.2: the @kovojs/server JSX runtime escapes scalar text
+            children exactly once, so pass itemLabel/itemValue raw — pre-escaping here
+            would double-escape (`AT&T` → `AT&amp;amp;T`). props.children is the
+            composition slot and may carry framework-rendered HTML, so leave it raw. */}
+        {props.children ?? props.itemLabel ?? props.itemValue}
         {/* shadcn-style chevron: a real (decorative) icon child carrying the trigger's
             [data-state] so triggerIcon can rotate it 180deg when the menu is open. */}
         <ChevronDown style={navigationMenuStyles.triggerIcon} data-state={attrs['data-state']} />
@@ -569,11 +565,11 @@ export const NavigationMenuLink = component({
         value={attrs.value}
       >
         {/*
-          SECURITY_FINDINGS.md C1: escape only the scalar itemLabel/itemValue
-          text data fallback (rendered unescaped by the JSX runtime); leave
-          props.children — the composition slot — raw.
+          SPEC.md §4.5/§5.2: the JSX runtime escapes the scalar itemLabel/itemValue
+          text fallback exactly once, so pass it raw (pre-escaping would
+          double-escape); leave props.children — the composition slot — raw.
         */}
-        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}
+        {props.children ?? props.itemLabel ?? props.itemValue}
       </a>
     );
   },

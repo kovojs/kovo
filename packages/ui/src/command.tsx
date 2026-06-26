@@ -186,10 +186,6 @@ export interface CommandValueProps extends CommandStateProps {
   styles?: CommandStyleOverrides;
 }
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
 /**
  * Style definitions used by the command components.
  *
@@ -644,7 +640,7 @@ export const CommandItem = component({
         type="button"
         value={attrs.value}
       >
-        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue ?? '')}
+        {props.children ?? props.itemLabel ?? props.itemValue ?? ''}
       </button>
     );
   },
@@ -724,7 +720,7 @@ export const CommandValue = component({
 
     return (
       <span {...styleAttrs} {...passThroughProps(props)} id={props.id}>
-        {escapeHtml(commandValueText(props))}
+        {commandValueText(props)}
       </span>
     );
   },

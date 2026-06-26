@@ -139,10 +139,6 @@ export interface DrawerCloseProps extends DrawerStateProps {
   id?: string;
 }
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
 /**
  * Style definitions used by the drawer components.
  *
@@ -399,7 +395,7 @@ export const Drawer = component({
           disabled={triggerAttrs.disabled}
           type={triggerAttrs.type}
         >
-          {escapeHtml(props.trigger ?? 'Open')}
+          {props.trigger ?? 'Open'}
         </button>
         <dialog
           {...contentStyleAttrs}
@@ -416,13 +412,13 @@ export const Drawer = component({
           <div {...handleStyleAttrs} aria-hidden="true" />
           <header {...headerStyleAttrs}>
             <h2 {...titleStyleAttrs} id={titleId}>
-              {escapeHtml(props.title)}
+              {props.title}
             </h2>
             {descriptionId === undefined ? (
               ''
             ) : (
               <p {...descriptionStyleAttrs} id={descriptionId}>
-                {escapeHtml(props.description ?? '')}
+                {props.description ?? ''}
               </p>
             )}
           </header>
@@ -437,7 +433,7 @@ export const Drawer = component({
             disabled={closeAttrs.disabled}
             type={closeAttrs.type}
           >
-            {escapeHtml(props.closeLabel ?? 'Close')}
+            {props.closeLabel ?? 'Close'}
           </button>
         </dialog>
       </div>

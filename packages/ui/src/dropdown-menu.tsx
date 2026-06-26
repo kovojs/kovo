@@ -129,10 +129,6 @@ export interface DropdownMenuSeparatorProps {
   styles?: DropdownMenuStyleOverrides;
 }
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
 /**
  * Style definitions used by the dropdown menu components.
  *
@@ -404,7 +400,7 @@ export const DropdownMenuItem = component({
         type="button"
         value={attrs.value}
       >
-        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}
+        {props.children ?? props.itemLabel ?? props.itemValue}
       </button>
     );
   },
