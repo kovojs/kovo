@@ -141,8 +141,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       shell-free `cmd(program, argv)`/`runCommand()` server primitive that mints a `server:command-exec-file`
       witness, re-checks it before `execFile(..., { shell: false })`, rejects forged command objects and unsafe
       command text, and is covered by focused command, sink-policy, API-surface, `git diff --check`, and
-      `pnpm run check:vp` gates. Remaining gap: other §3 candidates and static by-construction analyzer
-      integration are not complete.
+      `pnpm run check:vp` gates. The sink-policy gate now rejects aliased, wildcard, and imported public
+      re-export escape hatches from the internal witness substrate, and copied redirect response objects fail
+      closed at the web response boundary; focused sink-policy/response tests, `pnpm run check:sink-policy`,
+      `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3 candidates and static
+      by-construction analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
