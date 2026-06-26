@@ -17,6 +17,7 @@ import {
   type GuardParamsRequest,
 } from './guards.js';
 import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
+import { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
 import { query, runQuery } from './query.js';
 import { route, runRoutePage } from './route.js';
 import { s } from './schema.js';
@@ -84,6 +85,38 @@ describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
 });
 
 describe('server guard and session primitives', () => {
+  it('rejects raw session providers passed directly to lower-level lifecycle helpers', async () => {
+    await expect(
+      resolveLifecycleRequest(new Request('https://app.test/account'), {
+        sessionProvider: () => ({ user: { id: 'raw' } }),
+      }),
+    ).rejects.toThrow('Plain session provider functions cannot be passed directly');
+  });
+
+  it('accepts explicitly wrapped session providers in lower-level lifecycle helpers', async () => {
+    const appSession = session(s.object({ user: s.object({ id: s.string() }) }));
+    const request = await resolveLifecycleRequest(new Request('https://app.test/account'), {
+      sessionProvider: appSession.provider(() => ({ user: { id: 'wrapped' } })),
+    });
+
+    expect(request.session).toEqual({ user: { id: 'wrapped' } });
+  });
+
+  it('accepts Kovo-owned opaque session providers in lower-level lifecycle helpers', async () => {
+    const manager = createOpaqueSessionManager({
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    const established = await manager.establish({ user: { id: 'opaque' } });
+    const request = await resolveLifecycleRequest(
+      new Request('https://app.test/account', {
+        headers: { cookie: established.setCookie.split(';')[0]! },
+      }),
+      { sessionProvider: manager.provider },
+    );
+
+    expect(request.session).toEqual({ user: { id: 'opaque' } });
+  });
+
   it('guards managed DB handles from unbranded raw SQL strings before driver execution', async () => {
     const calls: unknown[] = [];
     const request = await resolveLifecycleRequest(
@@ -172,9 +205,9 @@ describe('server guard and session primitives', () => {
     expect(() => request.db.$client.prepare('select * from products')).toThrow(/KV422/);
     expect(calls).toEqual([]);
 
-    expect(request.db.pglite.query({ text: 'select * from products', values: [] })).toBe(
-      'pglite-ok',
-    );
+    expect(
+      request.db.pglite.query({ text: 'select * from products where id = $1', values: ['p1'] }),
+    ).toBe('pglite-ok');
     expect(request.db.sqlite.exec(stampParameterizedSql({}))).toBe('sqlite-ok');
     expect(
       request.db.client.execute({ sql: 'select * from products where id = ?', args: ['p1'] }),
@@ -820,7 +853,10 @@ describe('server guard and session primitives', () => {
 describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
   // GuardArgsRequest types the framework-merged `req.args` so `keyOf` reads it without a cast
   // (SPEC §10.3:1155-1157, §9.4).
-  type Req = GuardArgsRequest<{ session?: { user?: { id: string } | null } | null }, { id: string }>;
+  type Req = GuardArgsRequest<
+    { session?: { user?: { id: string } | null } | null },
+    { id: string }
+  >;
   const ownsRow = (req: Req, key: string) => req.session?.user?.id === `owner-of-${key}`;
 
   it('passes when the authenticated principal owns the row', async () => {
@@ -929,7 +965,11 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
 
   it('runRoutePage allows the owner of the resolved route-param key', async () => {
     await expect(
-      runRoutePage(orderRoute, { params: { id: 'r1' } }, { session: { user: { id: 'owner-of-r1' } } }),
+      runRoutePage(
+        orderRoute,
+        { params: { id: 'r1' } },
+        { session: { user: { id: 'owner-of-r1' } } },
+      ),
     ).resolves.toMatchObject({ ok: true });
   });
 

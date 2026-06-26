@@ -778,6 +778,14 @@ function eqOperandsAreTableColumnArgKeyed(
     privateScopeForExpression(expression, sessionContext) ??
     summarizedStaticCallPrivateScope(expression, sessionContext);
   if (!provenance) {
+    const tupleElement = localConstTupleElementPrivateScope(expression, sessionContext);
+    if (tupleElement) {
+      return {
+        privateKey: privateScopeKey(tupleElement),
+        ...(tupleElement.kind === 'session' ? { sessionKey: tupleElement.path } : {}),
+      };
+    }
+
     // SPEC §11.1 / KV414 (minimal session-via-local tracing): recognize a session
     // value bound to a local const and then used in the scoping predicate, e.g.
     // `const uid = req.session.userId; …where(eq(orders.userId, uid))`. The shared
@@ -795,6 +803,42 @@ function eqOperandsAreTableColumnArgKeyed(
     privateKey: privateScopeKey(provenance),
     ...(provenance.kind === 'session' ? { sessionKey: provenance.path } : {}),
   };
+}
+
+function localConstTupleElementPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isElementAccessExpression(node)) return undefined;
+
+  const argument = node.getArgumentExpression();
+  if (!Node.isNumericLiteral(argument)) return undefined;
+  const index = Number(argument.getText());
+  if (!Number.isInteger(index) || index < 0) return undefined;
+
+  const base = unwrappedStaticExpressionNode(node.getExpression());
+  if (!Node.isIdentifier(base)) return undefined;
+
+  const symbol = symbolForIdentifierReference(base) ?? base.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  const tuple = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  if (!tuple || !Node.isArrayLiteralExpression(tuple)) return undefined;
+
+  const value = tuple.getElements()[index];
+  if (!value || Node.isSpreadElement(value)) return undefined;
+  return (
+    privateScopeForExpression(value, sessionContext) ??
+    summarizedStaticCallPrivateScope(value, sessionContext)
+  );
 }
 
 function summarizedStaticCallPrivateScope(

@@ -246,11 +246,11 @@ function isTrustedSql(value: object): boolean {
 
 function isSeparatedSqlCarrier(value: object): boolean {
   const record = value as Record<PropertyKey, unknown>;
-  const hasText = typeof record.text === 'string';
-  const hasSql = typeof record.sql === 'string';
-  if (!hasText && !hasSql) return false;
+  const sqlText = sqlCarrierText(record);
+  if (sqlText === undefined) return false;
 
-  return Array.isArray(record.values) || Array.isArray(record.params) || Array.isArray(record.args);
+  const parameters = separatedSqlParameters(record);
+  return parameters !== undefined && parameters.length > 0 && hasSqlBindMarker(sqlText);
 }
 
 // True when the object exposes a `.text`/`.sql` *string* (assembled SQL text). Callers reach this
@@ -260,6 +260,95 @@ function isSeparatedSqlCarrier(value: object): boolean {
 function carriesUnseparatedSqlText(value: object): boolean {
   const record = value as Record<PropertyKey, unknown>;
   return typeof record.text === 'string' || typeof record.sql === 'string';
+}
+
+function sqlCarrierText(record: Record<PropertyKey, unknown>): string | undefined {
+  if (typeof record.text === 'string') return record.text;
+  if (typeof record.sql === 'string') return record.sql;
+  return undefined;
+}
+
+function separatedSqlParameters(
+  record: Record<PropertyKey, unknown>,
+): readonly unknown[] | undefined {
+  if (Array.isArray(record.values)) return record.values;
+  if (Array.isArray(record.params)) return record.params;
+  if (Array.isArray(record.args)) return record.args;
+  return undefined;
+}
+
+function hasSqlBindMarker(sqlText: string): boolean {
+  for (let index = 0; index < sqlText.length; index += 1) {
+    const char = sqlText[index];
+    const next = sqlText[index + 1];
+
+    if (char === "'") {
+      index = skipSqlSingleQuotedString(sqlText, index);
+      continue;
+    }
+    if (char === '"') {
+      index = skipSqlDoubleQuotedIdentifier(sqlText, index);
+      continue;
+    }
+    if (char === '-' && next === '-') {
+      index = skipSqlLineComment(sqlText, index);
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      index = skipSqlBlockComment(sqlText, index);
+      continue;
+    }
+
+    if (char === '?') return true;
+    if (char === '$' && isSqlParameterNameStart(next)) return true;
+    if (
+      (char === ':' || char === '@') &&
+      isSqlParameterNameStart(next) &&
+      sqlText[index - 1] !== ':'
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function skipSqlSingleQuotedString(sqlText: string, start: number): number {
+  for (let index = start + 1; index < sqlText.length; index += 1) {
+    if (sqlText[index] !== "'") continue;
+    if (sqlText[index + 1] === "'") {
+      index += 1;
+      continue;
+    }
+    return index;
+  }
+  return sqlText.length;
+}
+
+function skipSqlDoubleQuotedIdentifier(sqlText: string, start: number): number {
+  for (let index = start + 1; index < sqlText.length; index += 1) {
+    if (sqlText[index] !== '"') continue;
+    if (sqlText[index + 1] === '"') {
+      index += 1;
+      continue;
+    }
+    return index;
+  }
+  return sqlText.length;
+}
+
+function skipSqlLineComment(sqlText: string, start: number): number {
+  const newline = sqlText.indexOf('\n', start + 2);
+  return newline === -1 ? sqlText.length : newline;
+}
+
+function skipSqlBlockComment(sqlText: string, start: number): number {
+  const end = sqlText.indexOf('*/', start + 2);
+  return end === -1 ? sqlText.length : end + 1;
+}
+
+function isSqlParameterNameStart(char: string | undefined): boolean {
+  return char !== undefined && /[A-Za-z0-9_]/.test(char);
 }
 
 function stampSqlSafetyMetadata(value: object, metadata: SqlSafetyMetadata): void {

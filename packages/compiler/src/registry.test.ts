@@ -1312,6 +1312,59 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from default export aliases to local helpers', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import sendMail from './mail';",
+            'export const notify = tool({',
+            "  name: 'orders.notifyDefaultAlias',",
+            '  handler() {',
+            '    return sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'export default sendMail;',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyDefaultAlias',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyDefaultAlias',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows through static named re-export barrels', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -1386,6 +1439,80 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows through unique static export-star barrels for named imports', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import { sendMail } from './mail';",
+            'export const notify = tool({',
+            "  name: 'orders.notifyStarBarrelNamedImport',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+            '  async handler() {',
+            '    await sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: "export * from './mail/send';",
+        },
+        {
+          fileName: 'src/tools/mail/send.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+      graph: {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'src/tools/orders.ts:3',
+            target: 'orders.notifyStarBarrelNamedImport',
+          },
+        ],
+      },
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail/send.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyStarBarrelNamedImport',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail/send.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyStarBarrelNamedImport',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from directly-invoked inline function bodies', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -1449,6 +1576,144 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from directly-invoked same-module helper callbacks', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function withToolBody(callback: () => unknown) {',
+            '  return callback();',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.notifyCallbackHelper',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+            '  handler() {',
+            '    return withToolBody(() => {',
+            '      const token = process.env.SENDGRID_TOKEN;',
+            "      return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '        headers: { authorization: token },',
+            '      });',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+      graph: {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'src/tools/orders.ts:5',
+            target: 'orders.notifyCallbackHelper',
+          },
+        ],
+      },
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:14:14',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyCallbackHelper',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:13:21',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyCallbackHelper',
+      },
+    ]);
+  });
+
+  it('produces sound agent-tool sink rows from directly-invoked imported helper callbacks', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import { withToolBody } from './callbacks';",
+            'export const notify = tool({',
+            "  name: 'orders.notifyImportedCallbackHelper',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+            '  handler() {',
+            '    return withToolBody(() => {',
+            '      const token = process.env.SENDGRID_TOKEN;',
+            "      return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '        headers: { authorization: token },',
+            '      });',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/callbacks.ts',
+          source: [
+            'export function withToolBody(callback: () => unknown) {',
+            '  return callback();',
+            '}',
+          ].join('\n'),
+        },
+      ],
+      graph: {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'src/tools/orders.ts:3',
+            target: 'orders.notifyImportedCallbackHelper',
+          },
+        ],
+      },
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:12:14',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyImportedCallbackHelper',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:11:21',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyImportedCallbackHelper',
+      },
+    ]);
+  });
+
   it('does not produce enforced agent-tool sink rows from type-only or nested tool identifiers', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -1497,6 +1762,72 @@ export const ProductGrid = component({
             "  name: 'orders.callback',",
             '  handler() {',
             '    maybeInvoke(async () => {',
+            '      const token = process.env.SENDGRID_TOKEN;',
+            "      return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '        headers: { authorization: token },',
+            '      });',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
+  it('does not produce enforced agent-tool sink rows from dynamically invoked imported helper callbacks', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import { withToolBody } from './callbacks';",
+            'export const notify = tool({',
+            "  name: 'orders.dynamicImportedCallbackHelper',",
+            '  handler() {',
+            '    return withToolBody(() => {',
+            '      const token = process.env.SENDGRID_TOKEN;',
+            "      return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '        headers: { authorization: token },',
+            '      });',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/callbacks.ts',
+          source: [
+            'export function withToolBody(callback: () => unknown) {',
+            '  const run = callback;',
+            '  return run();',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
+  it('does not produce enforced agent-tool sink rows from dynamically invoked helper callbacks', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/callback-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function withToolBody(callback: () => unknown) {',
+            '  const run = callback;',
+            '  return run();',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.dynamicCallbackHelper',",
+            '  handler() {',
+            '    return withToolBody(() => {',
             '      const token = process.env.SENDGRID_TOKEN;',
             "      return fetch('https://api.sendgrid.com/v3/mail/send', {",
             '        headers: { authorization: token },',
@@ -1732,16 +2063,16 @@ export const ProductGrid = component({
     expect(derived.graph.agentToolSinks).toBeUndefined();
   });
 
-  it('does not produce enforced agent-tool sink rows from unproven default helper shapes', () => {
+  it('does not produce enforced agent-tool sink rows from ambiguous export-star named imports', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
         {
-          fileName: 'src/tools/default-alias.ts',
+          fileName: 'src/tools/orders.ts',
           source: [
             "import { tool } from '@kovojs/server';",
-            "import sendMail from './default-alias-mail';",
+            "import { sendMail } from './ambiguous-barrel';",
             'export const notify = tool({',
-            "  name: 'orders.defaultAlias',",
+            "  name: 'orders.ambiguousStarBarrel',",
             '  handler() {',
             '    return sendMail();',
             '  },',
@@ -1749,14 +2080,34 @@ export const ProductGrid = component({
           ].join('\n'),
         },
         {
-          fileName: 'src/tools/default-alias-mail.ts',
+          fileName: 'src/tools/ambiguous-barrel.ts',
+          source: ["export * from './mail-a';", "export * from './mail-b';"].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail-a.ts',
           source: [
-            'function sendMail() {',
-            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
+            'export function sendMail() {',
+            "  return fetch('https://a.example.test/mail');",
             '}',
-            'export default sendMail;',
           ].join('\n'),
         },
+        {
+          fileName: 'src/tools/mail-b.ts',
+          source: [
+            'export function sendMail() {',
+            "  return fetch('https://b.example.test/mail');",
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven default helper shapes', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
         {
           fileName: 'src/tools/default-computed.ts',
           source: [

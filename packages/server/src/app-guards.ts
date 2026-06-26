@@ -1,5 +1,9 @@
 import type { KovoApp } from './app-types.js';
 import { isDocumentConfig } from './document-structured.js';
+import {
+  sessionProviderBoundary,
+  type SessionProviderBoundary,
+} from './session-provider-boundary.js';
 
 /**
  * Return whether a dynamically loaded value is a closed Kovo app aggregate.
@@ -26,17 +30,20 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isOptionalFunction(value.renderRoute) &&
     isAppRequestLimits(value.requestLimits) &&
     isOptionalOpaqueSessionManager(value.session) &&
-    isOptionalSessionProviderBoundary(value.sessionProviderBoundary) &&
-    isOptionalFunction(value.sessionProvider) &&
+    isNormalizedSessionProviderForBoundary(value.sessionProvider, value.sessionProviderBoundary) &&
     isStylesheets(value.stylesheets) &&
     isOptionalCsrfOptions(value.csrf)
   );
 }
 
-function isOptionalSessionProviderBoundary(value: unknown): boolean {
-  return (
-    value === undefined || value === 'default-owned' || value === 'delegated' || value === 'owned'
-  );
+function isNormalizedSessionProviderForBoundary(provider: unknown, boundary: unknown): boolean {
+  if (provider === undefined) return boundary === undefined;
+  if (!isSessionProviderBoundary(boundary)) return false;
+  return sessionProviderBoundary(provider) === boundary;
+}
+
+function isSessionProviderBoundary(value: unknown): value is SessionProviderBoundary {
+  return value === 'default-owned' || value === 'delegated' || value === 'owned';
 }
 
 function isAppDiagnostics(value: unknown): value is KovoApp['diagnostics'] {

@@ -19,12 +19,14 @@ export interface AgentToolModuleSource {
  * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
  * helpers reached through static named/default imports including static local re-export barrels,
- * static namespace-property calls into exported local helpers, default object exports whose
- * properties statically point at summarized local helpers, and handler properties that reference a
- * summarized local/imported helper function. It does not inspect raw source text after parse and it
- * skips non-invoked nested function bodies, so ordinary callbacks, computed namespace access,
- * computed/spread object exports, export-star namespaces, and dynamic paths remain outside the
- * SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
+ * unique local `export *` barrels for named imports, default exports that alias a summarized local
+ * helper, static namespace-property calls into exported local helpers, default object exports whose
+ * properties statically point at summarized local helpers, handler properties that reference a
+ * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
+ * that directly invokes that callback parameter. It does not inspect raw source text after parse and
+ * it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace access,
+ * computed/spread object exports, export-star namespaces, ambiguous export-star names, and dynamic
+ * paths remain outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -66,6 +68,7 @@ export function agentToolSinksFromSource(
 }
 
 interface ModuleFacts {
+  ambiguousExportStarHelpers: ReadonlySet<string>;
   defaultObjectHelpers: ReadonlyMap<string, HelperDefinition>;
   helpers: ReadonlyMap<string, HelperDefinition>;
   namespaceImports: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
@@ -78,6 +81,7 @@ interface HelperDefinition {
   id: string;
   moduleFacts: ModuleFacts;
   node: ts.FunctionLikeDeclaration;
+  reachedThroughExportStar?: true;
 }
 
 interface HandlerTarget {
@@ -117,11 +121,13 @@ function summarizeModules(moduleSources: readonly AgentToolModuleSource[]): Modu
 }
 
 function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
+  const ambiguousExportStarHelpers = new Set<string>();
   const defaultObjectHelpers = new Map<string, HelperDefinition>();
   const helpers = new Map<string, HelperDefinition>();
   const namespaceImports = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const topLevelBindings = new Set<string>();
   const moduleFacts: ModuleFacts = {
+    ambiguousExportStarHelpers,
     defaultObjectHelpers,
     helpers,
     namespaceImports,
@@ -181,6 +187,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   }
 
   for (const statement of sourceFile.statements) {
+    collectDefaultHelperAlias(statement, moduleFacts);
     collectDefaultObjectHelperBindings(statement, moduleFacts);
   }
 
@@ -270,7 +277,18 @@ function linkImportedHelpers(
     if (!importedFacts) continue;
 
     const exportClause = statement.exportClause;
-    if (!exportClause || !ts.isNamedExports(exportClause)) continue;
+    if (!exportClause) {
+      for (const [exportedName, helper] of exportedHelperBindings(importedFacts.helpers, {
+        includeExportStar: true,
+      })) {
+        if (linkExportStarHelperBinding(moduleFacts, exportedName, helper)) {
+          changed = true;
+        }
+      }
+      continue;
+    }
+
+    if (!ts.isNamedExports(exportClause)) continue;
 
     for (const element of exportClause.elements) {
       if (element.isTypeOnly) continue;
@@ -288,13 +306,42 @@ function linkImportedHelpers(
 
 function exportedHelperBindings(
   helpers: ReadonlyMap<string, HelperDefinition>,
+  options: { includeExportStar: boolean } = { includeExportStar: false },
 ): ReadonlyMap<string, HelperDefinition> {
   const exportedHelpers = new Map<string, HelperDefinition>();
   for (const [name, helper] of helpers) {
-    if (helper.exported) exportedHelpers.set(name, helper);
+    if (helper.exported && (options.includeExportStar || !helper.reachedThroughExportStar)) {
+      exportedHelpers.set(name, helper);
+    }
   }
 
   return exportedHelpers;
+}
+
+function linkExportStarHelperBinding(
+  moduleFacts: ModuleFacts,
+  localName: string,
+  helper: HelperDefinition,
+): boolean {
+  if (!helper.exported) return false;
+  if (moduleFacts.ambiguousExportStarHelpers.has(localName)) return false;
+
+  const helpers = moduleFacts.helpers as Map<string, HelperDefinition>;
+  const existing = helpers.get(localName);
+  if (existing) {
+    if (!existing.reachedThroughExportStar) return false;
+
+    if (existing.id !== helper.id) {
+      helpers.delete(localName);
+      (moduleFacts.ambiguousExportStarHelpers as Set<string>).add(localName);
+      return true;
+    }
+
+    return false;
+  }
+
+  helpers.set(localName, { ...helper, exported: true, reachedThroughExportStar: true });
+  return true;
 }
 
 function helperBindingMapsEqual(
@@ -372,6 +419,21 @@ function collectDefaultObjectHelperBindings(
   for (const [propertyName, helper] of helperBindings) {
     defaultObjectHelpers.set(propertyName, helper);
   }
+}
+
+function collectDefaultHelperAlias(statement: ts.Statement, moduleFacts: ModuleFacts): void {
+  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return;
+
+  const expression = unwrapParentheses(statement.expression);
+  if (!ts.isIdentifier(expression)) return;
+
+  const helper = moduleFacts.helpers.get(expression.text);
+  if (!helper) return;
+
+  (moduleFacts.helpers as Map<string, HelperDefinition>).set(
+    'default',
+    exportedHelperAlias(helper),
+  );
 }
 
 function staticPropertyName(name: ts.PropertyName): string | undefined {
@@ -561,6 +623,19 @@ function reachableSinkFacts(
           helperOrigin,
         ),
       );
+
+      for (const callback of directlyInvokedCallbackArguments(node, helper)) {
+        facts.push(
+          ...reachableSinkFacts(
+            sourceFile,
+            tool,
+            callback,
+            moduleFacts,
+            new Set([...activeHelpers, helper.id]),
+            helperOrigin,
+          ),
+        );
+      }
     }
 
     ts.forEachChild(node, visit);
@@ -581,6 +656,117 @@ function directlyInvokedInlineFunction(node: ts.Node): ts.FunctionLikeDeclaratio
   }
 
   return undefined;
+}
+
+function directlyInvokedCallbackArguments(
+  node: ts.Node,
+  helper: HelperDefinition,
+): ts.FunctionLikeDeclaration[] {
+  if (!ts.isCallExpression(node)) return [];
+
+  const invokedParameters = directlyInvokedCallbackParameters(helper.node);
+  if (invokedParameters.size === 0) return [];
+
+  const callbacks: ts.FunctionLikeDeclaration[] = [];
+  helper.node.parameters.forEach((parameter, index) => {
+    if (!ts.isIdentifier(parameter.name)) return;
+    if (!invokedParameters.has(parameter.name.text)) return;
+
+    const argument = node.arguments[index];
+    if (!argument) return;
+
+    const expression = unwrapParentheses(argument);
+    if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
+      callbacks.push(expression);
+    }
+  });
+
+  return callbacks;
+}
+
+function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): ReadonlySet<string> {
+  const body = fn.body;
+  if (!body) return new Set();
+
+  const candidateNames = new Set<string>();
+  for (const parameter of fn.parameters) {
+    if (ts.isIdentifier(parameter.name)) candidateNames.add(parameter.name.text);
+  }
+  if (candidateNames.size === 0) return new Set();
+
+  const invokedNames = new Set<string>();
+  const reassignedNames = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (node !== body && ts.isFunctionLike(node)) return;
+
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      candidateNames.has(node.expression.text)
+    ) {
+      invokedNames.add(node.expression.text);
+    }
+
+    const assignedName = assignedIdentifierName(node);
+    if (assignedName !== undefined && candidateNames.has(assignedName)) {
+      reassignedNames.add(assignedName);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(body);
+
+  for (const reassignedName of reassignedNames) {
+    invokedNames.delete(reassignedName);
+  }
+
+  return invokedNames;
+}
+
+function assignedIdentifierName(node: ts.Node): string | undefined {
+  if (
+    ts.isBinaryExpression(node) &&
+    isAssignmentOperator(node.operatorToken.kind) &&
+    ts.isIdentifier(node.left)
+  ) {
+    return node.left.text;
+  }
+
+  if (
+    (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+    (node.operator === ts.SyntaxKind.PlusPlusToken ||
+      node.operator === ts.SyntaxKind.MinusMinusToken) &&
+    ts.isIdentifier(node.operand)
+  ) {
+    return node.operand.text;
+  }
+
+  return undefined;
+}
+
+function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
+  switch (kind) {
+    case ts.SyntaxKind.FirstAssignment:
+    case ts.SyntaxKind.PlusEqualsToken:
+    case ts.SyntaxKind.MinusEqualsToken:
+    case ts.SyntaxKind.AsteriskEqualsToken:
+    case ts.SyntaxKind.AsteriskAsteriskEqualsToken:
+    case ts.SyntaxKind.SlashEqualsToken:
+    case ts.SyntaxKind.PercentEqualsToken:
+    case ts.SyntaxKind.LessThanLessThanEqualsToken:
+    case ts.SyntaxKind.GreaterThanGreaterThanEqualsToken:
+    case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken:
+    case ts.SyntaxKind.AmpersandEqualsToken:
+    case ts.SyntaxKind.BarEqualsToken:
+    case ts.SyntaxKind.CaretEqualsToken:
+    case ts.SyntaxKind.AmpersandAmpersandEqualsToken:
+    case ts.SyntaxKind.BarBarEqualsToken:
+    case ts.SyntaxKind.QuestionQuestionEqualsToken:
+      return true;
+    default:
+      return false;
+  }
 }
 
 function unwrapParentheses(expression: ts.Expression): ts.Expression {

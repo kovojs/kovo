@@ -198,6 +198,70 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     ).resolves.toEqual({ user: { id: 'u1' } });
   });
 
+  it('fails closed when a custom store validates a different opaque id than the one presented', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        validate: async () => ({
+          ok: true,
+          session: await baseStore.create({ user: { id: 'u2' } }),
+        }),
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+    await expect(
+      manager.provider(new Request('https://app.test/account', { headers: { cookie } })),
+    ).resolves.toBeNull();
+  });
+
+  it('fails closed when a custom store returns an incoherent validated lifecycle', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        async validate(id: string) {
+          const result = await baseStore.validate(id);
+          if (!result.ok) return result;
+          return {
+            ok: true,
+            session: { ...result.session, expiresAt: result.session.createdAt },
+          };
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+  });
+
+  it('refuses to set a browser cookie when a custom store creates a malformed session record', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const malformedStore: OpaqueSessionStore<{ user: { id: string } }> = {
+      ...baseStore,
+      create: async () => ({
+        id: 'header.payload.signature',
+        createdAt: 1,
+        expiresAt: 2,
+        value: { user: { id: 'u1' } },
+      }),
+    };
+    const manager = createOpaqueSessionManager({ store: malformedStore });
+
+    await expect(manager.establish({ user: { id: 'u1' } })).rejects.toThrow(
+      'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
+    );
+  });
+
   it('binds Kovo-owned opaque sessions to one validated request lifecycle', async () => {
     type Session = { user: { id: string } | null };
     type SessionRequest = RequestWithSession<Request, Session>;

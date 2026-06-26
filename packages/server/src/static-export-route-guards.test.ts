@@ -13,6 +13,14 @@ import { exportStaticApp } from './static-export.js';
 import { StaticExportError } from './static-export-diagnostics.js';
 import { renderedHtml } from './html.js';
 
+function delegatedSessionProvider(provider: (request: Request) => unknown) {
+  return {
+    justification: 'test delegates session lifecycle to an app-owned provider',
+    lifecycle: 'delegated' as const,
+    provider,
+  };
+}
+
 describe('server static export', () => {
   it('rejects raw request handlers before static export replay or writes', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
@@ -213,7 +221,7 @@ describe('server static export', () => {
 
     const sessionApp = createApp({
       routes: [route('/profile', { page: () => trustedHtml('<main>Profile</main>') })],
-      sessionProvider: () => ({ user: { id: 'u1' } }),
+      sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
     });
 
     await expect(exportStaticApp(sessionApp)).rejects.toMatchObject({

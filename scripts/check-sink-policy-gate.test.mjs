@@ -12,6 +12,7 @@ import {
   logChannelSinkFindings,
   publicSinkPolicyEscapeFindings,
   responseFragmentApplyInvariantFindings,
+  sqlBlessedBrandLaunderingFindings,
 } from './check-sink-policy-gate.mjs';
 
 const validPolicy = `
@@ -35,6 +36,7 @@ function runFixture(files) {
     readText: (file) => files[file],
     responseFragmentApplyPath: undefined,
     sinkPolicyPath: 'sink-policy.ts',
+    sqlBlessedBrandFiles: [],
   });
 }
 
@@ -230,6 +232,7 @@ describe('sink-policy gate', () => {
             : 'import { execSync } from "node:child_process";',
         responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: forbidden child_process.execSync import; use cmd()/runCommand() so command execution stays shell-free and witnessed',
@@ -313,6 +316,7 @@ describe('sink-policy gate', () => {
               : 'export const ok = 1;',
         responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code',
@@ -365,6 +369,7 @@ describe('sink-policy gate', () => {
             : 'export function handle(request) { console.info(request.url); }',
         responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: raw console.info of request-derived values is a KV439 log sink; route values through neutralizeLogValue()/formatLogMessage() before logging',
@@ -407,10 +412,91 @@ describe('sink-policy gate', () => {
         `,
         responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
       }),
     ).toEqual([
       'sink-policy.ts: FRAMEWORK_BLESSED_SINK_KINDS must register "browser:response-fragment-html" for the browser response-fragment raw HTML sink',
     ]);
+  });
+
+  it('rejects SQL blessed-brand laundering through any/unknown assertion chains', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/server/src/sql-safe-handle.ts',
+        `
+          import type { ParameterizedSql, TrustedSql } from '@kovojs/core/internal/sql-safety';
+          const one = request.url as unknown as ParameterizedSql;
+          const two = raw as any as TrustedSql;
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/sql-safe-handle.ts: KV440 SQL blessed-brand laundering via any/unknown assertion chain; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+  });
+
+  it('rejects direct SQL blessed-brand assertions outside the owning constructor module', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/unsafe.ts',
+        `
+          import type { KovoSqlIdentifier, KovoTrustedSql } from './runtime.js';
+          const column = value as KovoSqlIdentifier;
+          const clause = value satisfies KovoTrustedSql;
+        `,
+      ),
+    ).toEqual([
+      'packages/drizzle/src/unsafe.ts: KV440 SQL blessed-brand laundering via direct type assertion; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+      'packages/drizzle/src/unsafe.ts: KV440 SQL blessed-brand laundering via satisfies assertion; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+  });
+
+  it('rejects TS-only angle-bracket SQL blessed-brand assertions outside the owning constructor module', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/unsafe.ts',
+        `
+          import type { KovoStaticSql, KovoTrustedSql } from './runtime.js';
+          const statement = <KovoTrustedSql>raw;
+          return <KovoStaticSql & { readonly text: string }>raw;
+        `,
+      ),
+    ).toEqual([
+      'packages/drizzle/src/unsafe.ts: KV440 SQL blessed-brand laundering via angle-bracket type assertion; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+  });
+
+  it('does not treat generic type arguments or TSX tags as SQL blessed-brand assertions', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/generic.ts',
+        `
+          import type { KovoTrustedSql } from './runtime.js';
+          const statement = identity<KovoTrustedSql>(raw);
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/server/src/component.tsx',
+        `
+          import type { TrustedSql } from '@kovojs/core/internal/sql-safety';
+          export function View() {
+            return <TrustedSql>{label}</TrustedSql>;
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('allows SQL blessed-brand assertions only in the owning constructor module', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/core/src/internal/sql-safety.ts',
+        'return value as T & ParameterizedSql;',
+        { allowedConstructorFile: true },
+      ),
+    ).toEqual([]);
   });
 
   it('pins response-fragment raw HTML writes to the Trusted Types and sanitizer path', () => {

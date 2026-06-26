@@ -509,6 +509,86 @@ describe('kovo check', () => {
     });
   });
 
+  it('enforces imported callback-helper AST-produced agent-tool sink rows and passes when declared', () => {
+    const agentToolModules = [
+      {
+        fileName: 'src/tools/orders.ts',
+        source: [
+          "import { tool } from '@kovojs/server';",
+          "import { withToolBody } from './callbacks';",
+          'export const notify = tool({',
+          "  name: 'orders.notifyImportedCallbackHelper',",
+          "  purpose: 'Notify the buyer.',",
+          "  audit: { owner: 'security' },",
+          "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+          "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+          '  async handler() {',
+          '    await withToolBody(() => {',
+          '      const token = process.env.SENDGRID_TOKEN;',
+          "      return fetch('https://api.sendgrid.com/v3/mail/send', {",
+          '        headers: { authorization: token },',
+          '      });',
+          '    });',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+      {
+        fileName: 'src/tools/callbacks.ts',
+        source: [
+          'export function withToolBody(callback: () => unknown) {',
+          '  return callback();',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const capability = {
+      ambientBrowserCredentials: 'rejected' as const,
+      authority: ['principal:user:123'],
+      kind: 'agentTool' as const,
+      owner: 'security',
+      purpose: 'Notify the buyer.',
+      site: 'src/tools/orders.ts:3',
+      target: 'orders.notifyImportedCallbackHelper',
+    };
+    const missingSecret = deriveAppGraph({
+      agentToolModules,
+      graph: {
+        capabilities: [
+          {
+            ...capability,
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+          },
+        ],
+      },
+    }).graph;
+    const declared = deriveAppGraph({
+      agentToolModules,
+      graph: {
+        capabilities: [
+          {
+            ...capability,
+            declaredCapabilities: ['egress:api.sendgrid.com', 'secrets.read'],
+          },
+        ],
+      },
+    }).graph;
+
+    expect(kovoCheck(missingSecret)).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR AGENT_TOOL_CAPABILITY orders.notifyImportedCallbackHelper sink=secret-read:env.SENDGRID_TOKEN required=secrets.read site=src/tools/orders.ts:11:21 Declared tool capabilities do not cover statically reachable sink.',
+        '',
+      ].join('\n'),
+    });
+    expect(kovoCheck(declared)).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
   it('enforces default imported-helper AST-produced agent-tool sink rows and passes when declared', () => {
     const agentToolModules = [
       {
@@ -578,6 +658,85 @@ describe('kovo check', () => {
       output: [
         'kovo-check/v1',
         'ERROR AGENT_TOOL_CAPABILITY orders.notifyDefaultImported sink=secret-read:env.SENDGRID_TOKEN required=secrets.read site=src/tools/mail.ts:2:17 Declared tool capabilities do not cover statically reachable sink.',
+        '',
+      ].join('\n'),
+    });
+    expect(kovoCheck(declared)).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
+  it('enforces default export alias agent-tool sink rows and passes when declared', () => {
+    const agentToolModules = [
+      {
+        fileName: 'src/tools/orders.ts',
+        source: [
+          "import { tool } from '@kovojs/server';",
+          "import sendMail from './mail';",
+          'export const notify = tool({',
+          "  name: 'orders.notifyDefaultAlias',",
+          "  purpose: 'Notify the buyer.',",
+          "  audit: { owner: 'security' },",
+          "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+          "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+          '  async handler() {',
+          '    await sendMail();',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+      {
+        fileName: 'src/tools/mail.ts',
+        source: [
+          'function sendMail() {',
+          '  const token = process.env.SENDGRID_TOKEN;',
+          "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+          '    headers: { authorization: token },',
+          '  });',
+          '}',
+          'export default sendMail;',
+        ].join('\n'),
+      },
+    ];
+
+    const capability = {
+      ambientBrowserCredentials: 'rejected' as const,
+      authority: ['principal:user:123'],
+      kind: 'agentTool' as const,
+      owner: 'security',
+      purpose: 'Notify the buyer.',
+      site: 'src/tools/orders.ts:3',
+      target: 'orders.notifyDefaultAlias',
+    };
+    const missingSecret = deriveAppGraph({
+      agentToolModules,
+      graph: {
+        capabilities: [
+          {
+            ...capability,
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+          },
+        ],
+      },
+    }).graph;
+    const declared = deriveAppGraph({
+      agentToolModules,
+      graph: {
+        capabilities: [
+          {
+            ...capability,
+            declaredCapabilities: ['egress:api.sendgrid.com', 'secrets.read'],
+          },
+        ],
+      },
+    }).graph;
+
+    expect(kovoCheck(missingSecret)).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR AGENT_TOOL_CAPABILITY orders.notifyDefaultAlias sink=secret-read:env.SENDGRID_TOKEN required=secrets.read site=src/tools/mail.ts:2:17 Declared tool capabilities do not cover statically reachable sink.',
         '',
       ].join('\n'),
     });
