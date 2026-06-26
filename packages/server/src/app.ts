@@ -11,6 +11,7 @@ import { mutation } from './mutation.js';
 import {
   createMemoryOpaqueSessionStore,
   createOpaqueSessionManager,
+  isOpaqueSessionProvider,
   type OpaqueSessionManager,
 } from './opaque-session.js';
 import { query } from './query.js';
@@ -190,7 +191,17 @@ function resolveAppSession<
         '`sessionProvider` only for an explicit delegated session boundary.',
     );
   }
-  if (options.sessionProvider !== undefined) return undefined;
+  if (options.sessionProvider !== undefined) {
+    if (isOpaqueSessionProvider(options.sessionProvider)) {
+      throw new Error(
+        'createApp() received a Kovo-owned opaque session provider through `sessionProvider`. ' +
+          'Pass the manager as `session` so the request shell records an owned opaque session ' +
+          'boundary; reserve `sessionProvider` for explicit delegated session ownership ' +
+          '(SPEC §6.5 / OPP-11).',
+      );
+    }
+    return undefined;
+  }
   if (options.session !== undefined) return options.session;
 
   // OPP-11 default posture: when the app does not explicitly delegate session provenance,
