@@ -12,13 +12,15 @@ pnpm add @kovojs/drizzle drizzle-orm
 import { kovo } from '@kovojs/drizzle';
 import { integer, pgTable, text } from 'drizzle-orm/pg-core';
 
-export const carts = pgTable('carts', {
-  id: text('id').primaryKey(),
-  userId: text('user_id').notNull(),
-  version: integer('version').notNull(),
-}, (table) => [
-  kovo(table).domain('cart').key(table.id).owner(table.userId).version(table.version),
-]);
+export const carts = pgTable(
+  'carts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    version: integer('version').notNull(),
+  },
+  (table) => [kovo(table).domain('cart').key(table.id).owner(table.userId).version(table.version)],
+);
 ```
 
 ## Reference

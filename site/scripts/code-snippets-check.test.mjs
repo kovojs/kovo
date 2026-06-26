@@ -48,7 +48,9 @@ describe('authored code snippet extractor', () => {
   });
 
   it('ignores non-TypeScript fences', () => {
-    const markdown = ['```sh', 'pnpm run check', '```', '', '```json', '{"ok":true}', '```'].join('\n');
+    const markdown = ['```sh', 'pnpm run check', '```', '', '```json', '{"ok":true}', '```'].join(
+      '\n',
+    );
     expect(extractCodeSnippets(markdown, 'page.md')).toHaveLength(0);
   });
 
@@ -56,7 +58,11 @@ describe('authored code snippet extractor', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'kovo-code-snippets-'));
     try {
       await writeFile(path.join(root, 'b.md'), ['```ts', 'const b = 1;', '```'].join('\n'), 'utf8');
-      await writeFile(path.join(root, 'a.md'), ['```tsx', 'const a = <div />;', '```'].join('\n'), 'utf8');
+      await writeFile(
+        path.join(root, 'a.md'),
+        ['```tsx', 'const a = <div />;', '```'].join('\n'),
+        'utf8',
+      );
 
       const snippets = await collectCodeSnippets(root);
       expect(snippets.map((snippet) => snippet.id)).toEqual(['a__L1', 'b__L1']);

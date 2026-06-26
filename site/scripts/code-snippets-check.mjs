@@ -99,13 +99,21 @@ export async function checkAuthoredCodeSnippets({
     extends: path.relative(outDir, stepsTsconfig),
     include: ['*.ts', '*.tsx', 'stubs/**/*.ts', 'snippet-prelude.d.ts'],
   };
-  await writeFile(path.join(outDir, 'tsconfig.json'), `${JSON.stringify(tsconfig, null, 2)}\n`, 'utf8');
+  await writeFile(
+    path.join(outDir, 'tsconfig.json'),
+    `${JSON.stringify(tsconfig, null, 2)}\n`,
+    'utf8',
+  );
 
   try {
-    execFileSync(path.join(repoRoot, 'node_modules/.bin/tsgo'), ['-p', path.join(outDir, 'tsconfig.json')], {
-      cwd: repoRoot,
-      stdio: 'inherit',
-    });
+    execFileSync(
+      path.join(repoRoot, 'node_modules/.bin/tsgo'),
+      ['-p', path.join(outDir, 'tsconfig.json')],
+      {
+        cwd: repoRoot,
+        stdio: 'inherit',
+      },
+    );
   } catch {
     process.stdout.write(
       `\ncode-snippets/v1 snippets=${snippets.length} FAILED — see diagnostics above; scratch in ${path.relative(
@@ -207,7 +215,10 @@ async function writePackage(outDir, packageName, entries) {
   await mkdir(packageDir, { recursive: true });
   const exports = {};
   for (const [subpath, source] of Object.entries(entries)) {
-    const file = subpath === '.' ? 'index.d.ts' : `${subpath.replace(/^\.\//, '').replace(/[^\w-]+/g, '-')}.d.ts`;
+    const file =
+      subpath === '.'
+        ? 'index.d.ts'
+        : `${subpath.replace(/^\.\//, '').replace(/[^\w-]+/g, '-')}.d.ts`;
     exports[subpath] = { types: `./${file}`, default: `./${file}` };
     await writeFile(path.join(packageDir, file), `${source}\n`, 'utf8');
   }

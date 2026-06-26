@@ -9,10 +9,7 @@ pnpm add @kovojs/headless-ui
 ```
 
 ```ts
-import {
-  dialogContentAttributes,
-  dialogTriggerAttributes,
-} from '@kovojs/headless-ui/dialog';
+import { dialogContentAttributes, dialogTriggerAttributes } from '@kovojs/headless-ui/dialog';
 
 const state = {
   contentId: 'settings-panel',

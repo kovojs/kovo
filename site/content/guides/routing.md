@@ -271,7 +271,9 @@ single edit whose every stale consumer surfaces as a type error:
 
 ```tsx
 // rename the route…
-export const dealDetailRoute = route('/deals/:dealId', { /* … */ });
+export const dealDetailRoute = route('/deals/:dealId', {
+  /* … */
+});
 
 // …and every one of these goes red under `vp check` until updated:
 // <Link to="/deals/:id" params={{ id }}>…</Link>  // literal no longer in RouteRegistry
