@@ -66,6 +66,7 @@ function analyzerHelperSummariesForSourceFile(
     const helperName = summaryHelperName(helper);
     if (helperName) summaries.set(`name:${helperName}`, provenance);
   }
+  addLocalHelperSummaryAliases(sourceFile, summaries);
   return summaries;
 }
 
@@ -80,6 +81,42 @@ function helperSymbolKeyForSummary(node: Node): string | undefined {
 function summaryHelperName(node: Node): string | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   return Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+}
+
+function addLocalHelperSummaryAliases(
+  sourceFile: SourceFile,
+  summaries: Map<string, PrivateScopeProvenance>,
+): void {
+  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const name = declaration.getNameNode();
+    if (!Node.isIdentifier(name)) continue;
+
+    const declarationList = declaration.getParent();
+    if (!Node.isVariableDeclarationList(declarationList)) continue;
+    if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') continue;
+
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+
+    const provenance = helperSummaryForStaticReference(initializer, summaries);
+    if (!provenance) continue;
+
+    const key = resolvedSymbolKey(symbolForIdentifierReference(name) ?? name.getSymbol());
+    if (key) summaries.set(key, provenance);
+    summaries.set(`name:${name.getText()}`, provenance);
+  }
+}
+
+function helperSummaryForStaticReference(
+  node: Node,
+  summaries: ReadonlyMap<string, PrivateScopeProvenance>,
+): PrivateScopeProvenance | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
+  const name = Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+  return (
+    (key ? summaries.get(key) : undefined) ?? (name ? summaries.get(`name:${name}`) : undefined)
+  );
 }
 
 function analyzerSummaryReturnProvenance(node: Node): PrivateScopeProvenance | undefined {
@@ -312,6 +349,9 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
   }
 
   if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    const objectProperty = localObjectPropertyPrivateScope(expression, context, depth);
+    if (objectProperty) return objectProperty;
+
     const base = privateScopeForExpression(expression.getExpression(), context, depth + 1);
     const name = staticAccessName(expression);
     return base && name
@@ -321,16 +361,72 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
 
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    if (Node.isIdentifier(callee)) {
-      const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
-      return (
-        (key ? context.helpers.get(key) : undefined) ??
-        context.helpers.get(`name:${callee.getText()}`)
-      );
-    }
+    return helperSummaryForCallCallee(callee, context.helpers);
   }
 
   return undefined;
+}
+
+function localObjectPropertyPrivateScope(
+  node: Node,
+  context: SessionProvenanceContext,
+  depth: number,
+): PrivateScopeProvenance | undefined {
+  if (depth > 4) return undefined;
+  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
+    return undefined;
+  }
+
+  const property = staticAccessName(node);
+  if (!property) return undefined;
+
+  const base = unwrappedStaticExpressionNode(node.getExpression());
+  if (!Node.isIdentifier(base)) return undefined;
+
+  const symbol = symbolForIdentifierReference(base) ?? base.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  const object = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
+
+  const value = objectLiteralStaticPropertyValue(object, property);
+  if (!value) return undefined;
+  return (
+    privateScopeForExpression(value, context, depth + 1) ?? directPrivateScopeForExpression(value)
+  );
+}
+
+function objectLiteralStaticPropertyValue(
+  object: ObjectLiteralExpression,
+  name: string,
+): Node | undefined {
+  for (const property of object.getProperties()) {
+    if (Node.isPropertyAssignment(property)) {
+      if (propertyNameText(property.getNameNode()) !== name) continue;
+      return property.getInitializer();
+    }
+    if (Node.isShorthandPropertyAssignment(property)) {
+      if (propertyNameText(property.getNameNode()) !== name) continue;
+      return property.getNameNode();
+    }
+  }
+  return undefined;
+}
+
+function helperSummaryForCallCallee(
+  callee: Node,
+  helpers: ReadonlyMap<string, PrivateScopeProvenance>,
+): PrivateScopeProvenance | undefined {
+  const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
+  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  return (key ? helpers.get(key) : undefined) ?? (name ? helpers.get(`name:${name}`) : undefined);
 }
 
 /** @internal */ export function opaqueAliasReasonForExpression(

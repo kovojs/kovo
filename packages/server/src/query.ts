@@ -11,7 +11,12 @@ import {
   type RequestLifecycleOptions,
   type ResolvedGuardFailure,
 } from './guards.js';
-import { retryAfterHeaders, type ServerResponseBase } from './response.js';
+import {
+  blessRedirectResponse,
+  isBlessedRedirectResponse,
+  retryAfterHeaders,
+  type ServerResponseBase,
+} from './response.js';
 import {
   entriesToRecord,
   isSchemaValidationError,
@@ -881,13 +886,14 @@ function withQueryBuildHeaders<Request>(
   response: QueryEndpointResponse,
   endpointRequest: QueryEndpointRequest<Request>,
 ): QueryEndpointResponse {
-  return {
+  const next = {
     ...response,
     headers: {
       ...response.headers,
       ...queryBuildHeaders(endpointRequest),
     },
   };
+  return isBlessedRedirectResponse(response) ? blessRedirectResponse(next) : next;
 }
 
 /**
@@ -897,7 +903,7 @@ function withQueryBuildHeaders<Request>(
  * to another.
  */
 function withQueryCacheHeaders(response: QueryEndpointResponse): QueryEndpointResponse {
-  return {
+  const next = {
     ...response,
     headers: {
       'Cache-Control': 'private, no-store',
@@ -905,4 +911,5 @@ function withQueryCacheHeaders(response: QueryEndpointResponse): QueryEndpointRe
       ...response.headers,
     },
   };
+  return isBlessedRedirectResponse(response) ? blessRedirectResponse(next) : next;
 }

@@ -53,6 +53,7 @@ import {
   type QueryInstanceKeyOperand,
   type QueryReceiverReferences,
   type QueryShape,
+  type PrivateScopeProvenance,
   type SessionProvenanceContext,
   type SourceFileInput,
   type UnmodeledRelationFact,
@@ -60,8 +61,10 @@ import {
   UNRESOLVED_READ_SOURCE_EXPRESSION,
   isDomainExtractedTableAnnotation,
   isExemptExtractedTableAnnotation,
+  isRestBindingElement,
   isUnmappedTableAnnotation,
   lineForIndex,
+  propertyNameText,
   resolvedSymbolKey,
   unmodeledRelationFromExpression,
 } from '../static.js';
@@ -771,7 +774,9 @@ function eqOperandsAreTableColumnArgKeyed(
   expression: Node,
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
-  const provenance = privateScopeForExpression(expression, sessionContext);
+  const provenance =
+    privateScopeForExpression(expression, sessionContext) ??
+    summarizedStaticCallPrivateScope(expression, sessionContext);
   if (!provenance) {
     // SPEC §11.1 / KV414 (minimal session-via-local tracing): recognize a session
     // value bound to a local const and then used in the scoping predicate, e.g.
@@ -790,6 +795,22 @@ function eqOperandsAreTableColumnArgKeyed(
     privateKey: privateScopeKey(provenance),
     ...(provenance.kind === 'session' ? { sessionKey: provenance.path } : {}),
   };
+}
+
+function summarizedStaticCallPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isCallExpression(node)) return undefined;
+
+  const callee = unwrappedStaticExpressionNode(node.getExpression());
+  const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
+  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  return (
+    (key ? sessionContext.helpers.get(key) : undefined) ??
+    (name ? sessionContext.helpers.get(`name:${name}`) : undefined)
+  );
 }
 
 /**
@@ -879,10 +900,41 @@ function sessionSegmentExpression(node: Node): Node | undefined {
   expression: Node,
 ): Pick<QueryInstanceKeyOperand, 'inputKey'> {
   const node = staticAccessExpression(expression);
-  if (!Node.isIdentifier(node) || node.getText() !== 'input') return {};
+  if (Node.isIdentifier(node) && node.getText() === 'input') {
+    const key = staticAccessName(expression);
+    if (key) return { inputKey: `arg:${key}` };
+  }
 
-  const key = staticAccessName(expression);
-  return key ? { inputKey: `arg:${key}` } : {};
+  const destructuredKey = localDestructuredInputKey(expression);
+  return destructuredKey ? { inputKey: `arg:${destructuredKey}` } : {};
+}
+
+function localDestructuredInputKey(expression: Node): string | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isBindingElement(declaration)) return undefined;
+  if (isRestBindingElement(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const pattern = declaration.getParent();
+  if (!Node.isObjectBindingPattern(pattern)) return undefined;
+
+  const variable = pattern.getParent();
+  if (!Node.isVariableDeclaration(variable)) return undefined;
+  const declarationList = variable.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = variable.getInitializer();
+  const source = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  if (!source || !Node.isIdentifier(source) || source.getText() !== 'input') return undefined;
+
+  const property = declaration.getPropertyNameNode();
+  const key = property ? propertyNameText(property) : declaration.getNameNode().getText();
+  return key && !key.includes('.') ? key : undefined;
 }
 
 /** @internal */ export function compositeQueryInstanceKey(

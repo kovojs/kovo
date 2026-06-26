@@ -19,12 +19,14 @@ import * as writeGovernanceApi from '../write-governance.js';
 import * as confidentialAtRestApi from '../confidential-at-rest.js';
 import * as capabilityUrlApi from '../capability-url.js';
 import * as capabilityRouteApi from '../capability-route.js';
+import * as commandApi from '../command.js';
 import * as egressApi from '../egress.js';
 import * as egressBootstrapApi from '../egress-bootstrap.js';
 import * as egressCredentialsApi from '../egress-credentials.js';
 import * as envApi from '../env.js';
 import * as fileApi from '../file.js';
 import * as keyringApi from '../keyring.js';
+import * as opaqueSessionApi from '../opaque-session.js';
 import * as passwordApi from '../password.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
@@ -428,12 +430,20 @@ describe('server app-shell public API barrels', () => {
       drainCapabilityMintFacts: capabilityRouteApi.drainCapabilityMintFacts,
       // SPEC §6.6 / §9.1: rooted file serving is the public local-file sink capability.
       rootedFiles: fileApi.rootedFiles,
+      // SPEC §6.6 / plans/most-secure-web-framework.md §3: shell-free command
+      // execution is available only through this minted command sink primitive.
+      cmd: commandApi.cmd,
+      runCommand: commandApi.runCommand,
       // SPEC §6.6 / plans/most-secure-web-framework.md OPP-10: argon2id-only password sink.
       PASSWORD_ARGON2ID_DEFAULTS: passwordApi.PASSWORD_ARGON2ID_DEFAULTS,
       hashPassword: passwordApi.hashPassword,
       isArgon2idPasswordDigest: passwordApi.isArgon2idPasswordDigest,
       verifyCredential: passwordApi.verifyCredential,
       verifyPassword: passwordApi.verifyPassword,
+      // SPEC §6.5 / plans/most-secure-web-framework.md OPP-11: Kovo-owned opaque session
+      // primitive for store-backed validation, rotation, expiry, and immediate revocation.
+      createMemoryOpaqueSessionStore: opaqueSessionApi.createMemoryOpaqueSessionStore,
+      createOpaqueSessionManager: opaqueSessionApi.createOpaqueSessionManager,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
       // create-kovo starter template's vite.config.ts.
       createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,
@@ -738,11 +748,15 @@ describe('server app-shell public API barrels', () => {
 
   it('validates dynamically loaded app-shell aggregates through the shared core guard', () => {
     const app = publicApi.createApp();
+    const opaqueSession = publicApi.createOpaqueSessionManager({
+      store: publicApi.createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
 
     expect(publicApi.isKovoApp(app)).toBe(true);
     expect(publicApi.isKovoApp(publicApi.createApp({ document: publicApi.Document({}) }))).toBe(
       true,
     );
+    expect(publicApi.isKovoApp(publicApi.createApp({ session: opaqueSession }))).toBe(true);
     expect(() =>
       publicApi.createApp({ document: { template: () => '<html></html>' } as any }),
     ).toThrow('createApp({ document.template }) is not supported');
@@ -755,6 +769,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(publicApi.isKovoApp({ ...app, clientModules: {} })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, renderRoute: '<main>compat</main>' })).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, session: { provider: () => null } })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, sessionProvider: { session: null } })).toBe(false);
     expect(
       publicApi.isKovoApp({

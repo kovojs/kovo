@@ -8,6 +8,12 @@ import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { mutation } from './mutation.js';
+import {
+  createMemoryOpaqueSessionStore,
+  createOpaqueSessionManager,
+  isOpaqueSessionProvider,
+  type OpaqueSessionManager,
+} from './opaque-session.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
 import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
@@ -119,6 +125,10 @@ export function createApp<
   );
   const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
   ensureKovoLoaderRuntimeClientModule(clientModules);
+  const session = resolveAppSession(options);
+  const sessionProvider =
+    session === undefined ? options.sessionProvider : resolveAppSessionProvider(session);
+  const sessionProviderBoundary = appSessionProviderBoundary(options, sessionProvider);
 
   return {
     clientModules,
@@ -140,8 +150,82 @@ export function createApp<
       : { mutationReplayStore: options.mutationReplayStore }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
-    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
+    ...(session === undefined ? {} : { session }),
+    ...(sessionProviderBoundary === undefined ? {} : { sessionProviderBoundary }),
+    ...(sessionProvider === undefined ? {} : { sessionProvider }),
   };
+}
+
+function appSessionProviderBoundary<
+  SessionValue,
+  DbValue,
+  RawRequest extends globalThis.Request,
+  AppRequest,
+>(
+  options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>,
+  sessionProvider: CreateAppOptions<
+    SessionValue,
+    DbValue,
+    RawRequest,
+    AppRequest
+  >['sessionProvider'],
+): 'default-owned' | 'delegated' | 'owned' | undefined {
+  if (sessionProvider === undefined) return undefined;
+  if (options.sessionProvider !== undefined) return 'delegated';
+  if (options.session !== undefined) return 'owned';
+  return 'default-owned';
+}
+
+function resolveAppSession<
+  SessionValue,
+  DbValue,
+  RawRequest extends globalThis.Request,
+  AppRequest,
+>(
+  options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>,
+): OpaqueSessionManager<SessionValue> | undefined {
+  if (options.session !== undefined && options.sessionProvider !== undefined) {
+    throw new Error(
+      'createApp() received both `session` and `sessionProvider`. `session` gives the request ' +
+        'shell Kovo-owned opaque session lifecycle control (SPEC §6.5 / OPP-11); use ' +
+        '`sessionProvider` only for an explicit delegated session boundary.',
+    );
+  }
+  if (options.sessionProvider !== undefined) {
+    if (isOpaqueSessionProvider(options.sessionProvider)) {
+      throw new Error(
+        'createApp() received a Kovo-owned opaque session provider through `sessionProvider`. ' +
+          'Pass the manager as `session` so the request shell records an owned opaque session ' +
+          'boundary; reserve `sessionProvider` for explicit delegated session ownership ' +
+          '(SPEC §6.5 / OPP-11).',
+      );
+    }
+    return undefined;
+  }
+  if (options.session !== undefined) return options.session;
+
+  // OPP-11 default posture: when the app does not explicitly delegate session provenance,
+  // the request shell owns an opaque, store-validated lifecycle instead of having no
+  // session boundary at all. SPEC §6.5 still permits explicit delegated providers.
+  return createOpaqueSessionManager<SessionValue>({
+    store: createMemoryOpaqueSessionStore<SessionValue>(),
+  });
+}
+
+function resolveAppSessionProvider<
+  SessionValue,
+  DbValue,
+  RawRequest extends globalThis.Request,
+  AppRequest,
+>(
+  session: OpaqueSessionManager<SessionValue>,
+): CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>['sessionProvider'] {
+  return session.provider as CreateAppOptions<
+    SessionValue,
+    DbValue,
+    RawRequest,
+    AppRequest
+  >['sessionProvider'];
 }
 
 function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {

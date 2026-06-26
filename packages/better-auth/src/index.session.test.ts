@@ -61,6 +61,18 @@ describe('betterAuthSession', () => {
     await expect(provider({ headers: new Headers() })).resolves.toBeNull();
   });
 
+  it('does not forward session-refresh cookies for a payload without a browser credential', async () => {
+    const auth = new FakeBetterAuth();
+    auth.forceAuthenticated = true;
+    auth.refreshSetCookie =
+      'better-auth.session_token=minted-by-get-session; Path=/; HttpOnly; SameSite=Lax';
+    const provider = betterAuthSession(auth, () => {
+      throw new Error('delegated non-cookie payloads must not be mapped');
+    });
+
+    await expect(provider({ headers: new Headers() })).resolves.toBeNull();
+  });
+
   it('treats a missing Better Auth session as anonymous', async () => {
     const auth = new FakeBetterAuth();
     const provider = betterAuthSession(auth, mapSession);
@@ -131,6 +143,20 @@ describe('betterAuthSession', () => {
     expect(forwarded).toEqual([
       'better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
     ]);
+  });
+
+  it('still forwards session-clearing cookies when no credential was accepted', async () => {
+    const auth = new FakeBetterAuth();
+    auth.forceAuthenticated = true;
+    auth.refreshSetCookie = 'better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax';
+    const provider = betterAuthSession(auth, () => {
+      throw new Error('revoked sessions must not be mapped');
+    });
+
+    await expect(provider({ headers: new Headers() })).resolves.toEqual({
+      setCookies: ['better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'],
+      value: null,
+    });
   });
 
   it('recognizes prefixed Better Auth session-token clearing cookies as revoked', async () => {

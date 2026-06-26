@@ -15,6 +15,7 @@ import {
   type ComponentModuleModel,
   type ObjectLiteralEntry,
 } from './scan/parse.js';
+import { agentToolSinksFromSource } from './scan/agent-tools.js';
 import { queryBindingFromExpression } from './scan/query-binding.js';
 import type {
   CompileAppGraphOptions,
@@ -59,6 +60,9 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.capabilities ?? []),
     ...publishToClientCapabilities,
   ].sort(compareCapabilityFacts);
+  const analyzedAgentToolSinks = (options.agentToolModules ?? []).flatMap((moduleSource) =>
+    agentToolSinksFromSource(moduleSource, options.agentToolModules),
+  );
   const derivedRoutePages = derivedPageFactsFromRoutePages(routePages, components);
   const mergedPages =
     derivedRoutePages.length > 0 || (options.graph?.pages?.length ?? 0) > 0
@@ -77,9 +81,11 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
   });
   const agentToolSinks = deriveAgentToolReachableSinkFacts({
-    ...(options.graph?.agentToolSinks === undefined
+    ...((options.graph?.agentToolSinks?.length ?? 0) === 0 && analyzedAgentToolSinks.length === 0
       ? {}
-      : { agentToolSinks: options.graph.agentToolSinks }),
+      : {
+          agentToolSinks: [...(options.graph?.agentToolSinks ?? []), ...analyzedAgentToolSinks],
+        }),
     ...(capabilities.length === 0 ? {} : { capabilities }),
     ...(options.graph?.mutations === undefined ? {} : { mutations: options.graph.mutations }),
     ...(options.graph?.touchGraph === undefined ? {} : { touchGraph: options.graph.touchGraph }),
@@ -149,6 +155,9 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
   return factHash({
     components: componentHashes,
     graph: options.graph ?? null,
+    agentToolModules: (options.agentToolModules ?? [])
+      .map((moduleSource) => factHash(moduleSource))
+      .sort(),
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
     registryTypes: options.registryTypes ?? null,
     routes: routeHashes,

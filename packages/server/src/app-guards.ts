@@ -25,9 +25,17 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isOptionalFunction(value.onError) &&
     isOptionalFunction(value.renderRoute) &&
     isAppRequestLimits(value.requestLimits) &&
+    isOptionalOpaqueSessionManager(value.session) &&
+    isOptionalSessionProviderBoundary(value.sessionProviderBoundary) &&
     isOptionalFunction(value.sessionProvider) &&
     isStylesheets(value.stylesheets) &&
     isOptionalCsrfOptions(value.csrf)
+  );
+}
+
+function isOptionalSessionProviderBoundary(value: unknown): boolean {
+  return (
+    value === undefined || value === 'default-owned' || value === 'delegated' || value === 'owned'
   );
 }
 
@@ -139,6 +147,19 @@ function isMutationResponseOptions(value: unknown): boolean {
     (value.failureStylesheets === undefined || Array.isArray(value.failureStylesheets)) &&
     (value.fragmentRenderers === undefined || Array.isArray(value.fragmentRenderers)) &&
     (value.csrf === undefined || isOptionalCsrfOptions(value.csrf))
+  );
+}
+
+function isOptionalOpaqueSessionManager(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (isRecord(value) &&
+      typeof value.cookieName === 'string' &&
+      typeof value.validate === 'function' &&
+      typeof value.validateRequest === 'function' &&
+      typeof value.provider === 'function' &&
+      typeof value.establish === 'function' &&
+      typeof value.revoke === 'function')
   );
 }
 

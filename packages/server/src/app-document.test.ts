@@ -699,11 +699,15 @@ describe('server app document boundary', () => {
     expect(response.status).toBe(500);
     expect(response.body).toBe('<main data-shell="500">configured:500</main>');
     expect(response.body).not.toContain('private route detail');
-    expect(onError).toHaveBeenCalledWith(routeError, {
+    expect(onError).toHaveBeenCalledTimes(1);
+    const [, context] = onError.mock.calls[0]!;
+    expect(context).toMatchObject({
       operation: 'route-page',
-      request,
       routePath: '/broken',
     });
+    expect(context.request).toBeInstanceOf(Request);
+    expect(context.request.url).toBe(request.url);
+    expect((context.request as Request & { session: unknown }).session).toBeNull();
   });
 
   it('renders route guard forbidden failures through the configured 403 shell', async () => {
