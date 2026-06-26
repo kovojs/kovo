@@ -6,9 +6,8 @@ meta-frameworks (SvelteKit/Remix/Astro), Spring Security / ASP.NET Core / Phoeni
 security platform, supply-chain SOTA (SLSA/Sigstore/pnpm), and the OWASP Top 10 / API Top 10 / LLM Top 10.
 
 **Latest local verification (2026-06-25 PDT):** after the latest OPP-07/08, OPP-11, OPP-28, and sink-token
-worker batches, focused registry/check, scope-audit, sink-policy/SQL, server session, and Better Auth Vitest
-suites passed; `git diff --check`, `pnpm run check`, `pnpm run check:api-surface` (baseline unchanged:
-1338/1804), `pnpm run check:build`, and `pnpm run check:kovo` passed.
+worker batches, focused registry/check, scope-audit, sink-policy/SQL/deserialization, and server session Vitest
+suites passed; `git diff --check` and `pnpm run check:vp` passed on the integrated branch.
 
 This plan is the forward roadmap; it does **not** restate shipped work. Prior security ledgers:
 `secure-by-construction.md`, `secure-framework.md`, `secure-framework-2.md`, `secure-framework-3.md`,
@@ -174,8 +173,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `git diff --check`, and `pnpm run check:vp` passed. The sink-policy gate now rejects production fail-open
       SQL safety drift (`KOVO_SQL_GUARD`, warn/off modes, and warn/off config shapes) while pinning KV422 severity
       and managed-handle throw behavior; focused sink-policy/SQL tests, `pnpm run check:sink-policy`, staged
-      `git diff --check`, and file-level `vp check` passed. Remaining gap: other §3 candidates and full static
-      by-construction value-path analyzer integration are not complete.
+      `git diff --check`, and file-level `vp check` passed. SINK-08 now has a conservative source-audit gate for
+      unowned unsafe deserialization (`JSON.parse` revivers and static `deserialize`/`unserialize` imports/calls)
+      while preserving reviver-free JSON plus schema validation; focused sink-policy gate tests,
+      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3
+      candidates and full static by-construction value-path analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
@@ -233,7 +235,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `pnpm exec vitest run packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts --run`,
       `git diff --cached --check`, and file-level `vp check` passed. Remaining gap: nonliteral/dynamic calls,
       mutable callback aliases, computed/export-star namespace shapes, unresolved imports, and broader
-      egress/secret analyzer reachability.
+      egress/secret analyzer reachability. Static top-level `const` object helper aliases such as
+      `const mail = { sendMail }; mail.sendMail()` now preserve enforced imported-helper egress/secret-read
+      rows, while computed, spread, and non-`const` aliases stay outside the proof; focused registry/check tests,
+      `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -364,7 +369,10 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       validation, rotation, expiry, and revocation ownership; focused server/Better Auth tests,
       `pnpm run check:api-surface`, staged `git diff --check`, and file-level `vp check` passed. Remaining gap:
       explicitly justified Better Auth/delegated providers remain supported boundaries, so opaque sessions are
-      not yet the only framework-wide lifecycle.
+      not yet the only framework-wide lifecycle. Session lifecycle provider witnesses now use module-private
+      symbols instead of global `Symbol.for()` keys, so app code cannot forge normalized or opaque-provider
+      markers for lower-level request-shell helpers; focused server session tests, `git diff --check`, and
+      `pnpm run check:vp` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
@@ -587,7 +595,9 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       summarized guard/session provenance for proven properties, while defaulted and spread-backed object
       destructuring remain `scope: unknown`; `pnpm exec vitest run
       packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --cached --check`, and file-level
-      `vp check` passed.
+      `vp check` passed. Nested readonly wrappers around explicitly summarized guard objects now prove exact
+      owner-column predicates, while spread-overwritten, duplicate-property, and mutable wrapper variants stay
+      `scope: unknown`; the focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
