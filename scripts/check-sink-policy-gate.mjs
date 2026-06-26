@@ -878,19 +878,36 @@ export function deserializationSinkFindings(filePath, text) {
     source,
     staticRegExpBindings,
   );
-  for (const call of callArgumentLists(source, /(^|[^\w$.])(?:new\s+)?RegExp\s*\(/g)) {
-    const args = splitTopLevelArguments(call.argumentsText);
-    const sourceArg = args[0]?.trim() ?? '';
-    if (
-      !containsRequestInputDerivedExpression(sourceArg, requestDerivedRegExpBindings, {
-        staticNames: staticRegExpBindings,
-      })
-    ) {
-      continue;
-    }
-    findings.push(
-      `${filePath}: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation`,
+  const regExpAliases = regExpConstructorAliasNames(source);
+  const regExpCallPatterns = [/(^|[^\w$.])(?:new\s+)?RegExp\s*\(/g];
+  for (const alias of regExpAliases.keys()) {
+    regExpCallPatterns.push(
+      new RegExp(String.raw`(^|[^\w$.])(?:new\s+)?${escapeRegExp(alias)}\s*\(`, 'g'),
     );
+  }
+
+  for (const callPattern of regExpCallPatterns) {
+    for (const call of callArgumentLists(source, callPattern)) {
+      if (
+        call.name !== 'RegExp' &&
+        isLocallyShadowedRegExpAlias(source, call.name, regExpAliases, call.index)
+      ) {
+        continue;
+      }
+
+      const args = splitTopLevelArguments(call.argumentsText);
+      const sourceArg = args[0]?.trim() ?? '';
+      if (
+        !containsRequestInputDerivedExpression(sourceArg, requestDerivedRegExpBindings, {
+          staticNames: staticRegExpBindings,
+        })
+      ) {
+        continue;
+      }
+      findings.push(
+        `${filePath}: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation`,
+      );
+    }
   }
 
   const importedDeserializers = deserializationImportLocals(source);
@@ -918,6 +935,29 @@ export function deserializationSinkFindings(filePath, text) {
   }
 
   return dedupe(findings);
+}
+
+function regExpConstructorAliasNames(text) {
+  const aliases = new Map();
+  const declarationPattern =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*RegExp\s*(?=;|\n|$)/g;
+  let declaration;
+  while ((declaration = declarationPattern.exec(text)) !== null) {
+    aliases.set(declaration[1], declarationPattern.lastIndex);
+  }
+  return aliases;
+}
+
+function isLocallyShadowedRegExpAlias(text, name, aliases, callIndex) {
+  const declarationEnd = aliases.get(name);
+  if (declarationEnd === undefined || callIndex <= declarationEnd) return false;
+
+  const betweenDeclarationAndCall = text.slice(declarationEnd, callIndex);
+  return new RegExp(
+    String.raw`\b(?:function|class)\s+${escapeRegExp(name)}\b|\b(?:const|let|var)\s+${escapeRegExp(
+      name,
+    )}\s*=`,
+  ).test(betweenDeclarationAndCall);
 }
 
 export function logChannelSinkFindings(filePath, text, options = {}) {
@@ -1616,7 +1656,12 @@ function callArgumentLists(text, callPattern) {
     const openParenIndex = text.indexOf('(', match.index);
     const closeParenIndex = matchingCloseParen(text, openParenIndex);
     if (closeParenIndex < 0) continue;
-    calls.push({ argumentsText: text.slice(openParenIndex + 1, closeParenIndex) });
+    const callPrefix = text.slice(match.index, openParenIndex);
+    calls.push({
+      argumentsText: text.slice(openParenIndex + 1, closeParenIndex),
+      index: match.index,
+      name: callPrefix.match(/(?:new\s+)?([A-Za-z_$][\w$]*)\s*$/)?.[1] ?? '',
+    });
     callPattern.lastIndex = closeParenIndex + 1;
   }
   return calls;

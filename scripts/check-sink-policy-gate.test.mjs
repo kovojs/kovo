@@ -631,6 +631,22 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects request-derived dynamic RegExp construction through a local constructor alias', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-match.ts',
+        `
+          const Pattern = RegExp;
+          export function matchesRequest(request) {
+            return [Pattern(request.url), new Pattern(request.headers.get("x-pattern") ?? "")];
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-match.ts: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation',
+    ]);
+  });
+
   it('allows static RegExp construction and reviver-free JSON decode', () => {
     expect(
       deserializationSinkFindings(
@@ -650,6 +666,30 @@ describe('sink-policy gate', () => {
               new RegExp(input),
               RegExp("^[a-z]+$", "i"),
               RegExp(STATIC_PATTERN),
+            ];
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('allows safe and shadowed RegExp-like aliases outside request-derived dynamic construction', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/safe-match.ts',
+        `
+          const Pattern = RegExp;
+          const StaticPattern = RegExp;
+          const Parser = URLPattern;
+          export function decodeAndMatch(request) {
+            function Pattern(value) {
+              return value;
+            }
+            return [
+              Pattern(request.url),
+              StaticPattern("^[a-z]+$"),
+              Parser(request.url),
+              new RegExp("^[a-z]+$", "i"),
             ];
           }
         `,
