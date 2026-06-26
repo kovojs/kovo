@@ -826,6 +826,12 @@ export function rootedFileServeRawSinkFindings(filePath, text, options = {}) {
     );
   }
 
+  for (const exportedModule of fsImports.wildcardReExports) {
+    findings.push(
+      `${filePath}: KV424 raw filesystem wildcard re-export from ${exportedModule} is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed`,
+    );
+  }
+
   return dedupe(findings);
 }
 
@@ -1270,6 +1276,7 @@ function fsImportLocals(text) {
   const named = [];
   const namespaces = new Set();
   const reExports = [];
+  const wildcardReExports = [];
   const fsModule = String.raw`(?:node:)?fs(?:\/promises)?`;
 
   const defaultImportPattern = new RegExp(
@@ -1342,7 +1349,17 @@ function fsImportLocals(text) {
     reExports.push(...parseNamedSpecifiers(directExport[1]));
   }
 
-  return { named, namespaces, reExports };
+  const wildcardExportPattern = new RegExp(
+    String.raw`\bexport\s*\*\s*(?:as\s+[A-Za-z_$][\w$]*\s*)?from\s*(['"])(${fsModule})\1`,
+    'g',
+  );
+  let wildcardExport;
+  while ((wildcardExport = wildcardExportPattern.exec(text)) !== null) {
+    if (isInsideStringOrComment(text, wildcardExport.index)) continue;
+    wildcardReExports.push(wildcardExport[2]);
+  }
+
+  return { named, namespaces, reExports, wildcardReExports };
 }
 
 function deserializationImportLocals(text) {

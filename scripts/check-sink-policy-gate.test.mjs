@@ -347,6 +347,8 @@ describe('sink-policy gate', () => {
           import fs from "fs";
           import * as fsPromises from "node:fs/promises";
           export { open as rawOpenPromise } from "node:fs/promises";
+          export * from "fs";
+          export * as fsPromisesRaw from "node:fs/promises";
           const stream = createReadStream(requestedPath);
           fs.createWriteStream(requestedPath);
           rawOpen(requestedPath, "r", () => {});
@@ -360,7 +362,23 @@ describe('sink-policy gate', () => {
       'packages/server/src/unsafe-file.ts: KV424 raw filesystem open call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
       'packages/server/src/unsafe-file.ts: KV424 raw filesystem createWriteStream call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
       'packages/server/src/unsafe-file.ts: KV424 raw filesystem open re-export is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem wildcard re-export from fs is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem wildcard re-export from node:fs/promises is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
     ]);
+  });
+
+  it('allows non-sink wildcard exports beside quiet filesystem use', () => {
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/server/src/safe-file.ts',
+        `
+          export * from "./safe-paths.js";
+          export * as helpers from "./helpers.js";
+          import { stat } from "node:fs/promises";
+          const meta = await stat(root);
+        `,
+      ),
+    ).toEqual([]);
   });
 
   it('rejects static dynamic-import raw filesystem file-serve sinks', () => {
