@@ -41,6 +41,81 @@ class BoundTriggerElement {
 
 describe('inline loader output security', () => {
   for (const [label, installSource] of inlineSourceInstallCases) {
+    it(`${label}: applies boolean-presence data-bind false/null/true parity`, async () => {
+      for (const name of ['hidden', 'disabled', 'checked'] as const) {
+        for (const value of [false, null, true]) {
+          const element = new BoundTriggerElement({
+            [name]: '',
+            [`data-bind:${name}`]: 'state.value',
+            'kovo-state': JSON.stringify({ value }),
+            'on:click': '/c/client.js#setPresence',
+          }) as BoundTriggerElement & { checked?: boolean };
+          element.checked = true;
+
+          await dispatchInlineDelegatedClick(
+            element,
+            async () => ({
+              setPresence() {},
+            }),
+            installSource,
+          );
+
+          expect(element.getAttribute(name)).toBe(value === true ? '' : null);
+          if (name === 'checked') expect(element.checked).toBe(value === true);
+        }
+      }
+    });
+
+    it(`${label}: keeps dynamic import guard parity for dev, /c/, and manifest paths`, async () => {
+      const productionUpload = await dispatchInlineGuardPath({
+        href: 'https://kovo.test/admin/upload.ts#noop',
+        installSource,
+        origin: 'https://kovo.test',
+      });
+      expect(productionUpload.error).toEqual(
+        new Error('Disallowed Kovo dynamic import URL: https://kovo.test/admin/upload.ts'),
+      );
+      expect(productionUpload.importCalls).toEqual([]);
+
+      const productionAsset = await dispatchInlineGuardPath({
+        href: 'https://kovo.test/assets#noop',
+        installSource,
+        origin: 'https://kovo.test',
+      });
+      expect(productionAsset.error).toEqual(
+        new Error('Disallowed Kovo dynamic import URL: https://kovo.test/assets'),
+      );
+      expect(productionAsset.importCalls).toEqual([]);
+
+      const localhostTsx = await dispatchInlineGuardPath({
+        href: '/admin/upload.tsx#noop',
+        installSource,
+        origin: 'http://localhost:5173',
+      });
+      expect(localhostTsx.error).toBeUndefined();
+      expect(localhostTsx.importCalls).toEqual(['/admin/upload.tsx']);
+
+      const manifestAllowed = await dispatchInlineGuardPath({
+        href: '/c/allowed.js?v=1#noop',
+        installSource,
+        manifestHrefs: ['/c/allowed.js?v=1'],
+        origin: 'https://kovo.test',
+      });
+      expect(manifestAllowed.error).toBeUndefined();
+      expect(manifestAllowed.importCalls).toEqual(['/c/allowed.js?v=1']);
+
+      const manifestRejected = await dispatchInlineGuardPath({
+        href: '/c/other.js#noop',
+        installSource,
+        manifestHrefs: ['/c/allowed.js?v=1'],
+        origin: 'https://kovo.test',
+      });
+      expect(manifestRejected.error).toEqual(
+        new Error('Disallowed Kovo dynamic import URL: /c/other.js'),
+      );
+      expect(manifestRejected.importCalls).toEqual([]);
+    });
+
     it(`${label}: neutralizes unsafe data-bind URL attribute writes`, async () => {
       const element = new BoundTriggerElement({
         'data-bind:action': 'state.url',
@@ -153,3 +228,65 @@ describe('inline loader output security', () => {
     });
   }
 });
+
+async function dispatchInlineGuardPath(options: {
+  href: string;
+  installSource: (typeof inlineSourceInstallCases)[number][1];
+  manifestHrefs?: readonly string[];
+  origin: string;
+}): Promise<{ error?: unknown; importCalls: string[] }> {
+  const globalRecord = globalThis as unknown as Record<string, unknown>;
+  const originals = {
+    addEventListener: globalRecord.addEventListener,
+    document: globalRecord.document,
+    importModule: globalRecord.__kovoInlineImport,
+    location: globalRecord.location,
+  };
+  const listeners = new Map<string, (event: unknown) => Promise<void>>();
+  const element = new BoundTriggerElement({
+    'kovo-state': '{}',
+    'on:click': options.href,
+  });
+  const importCalls: string[] = [];
+
+  try {
+    globalRecord.addEventListener = (type: string, listener: (event: unknown) => Promise<void>) => {
+      listeners.set(type, listener);
+    };
+    globalRecord.document = {
+      querySelectorAll(selector: string) {
+        if (selector !== 'link[rel~="modulepreload"][href]') return [];
+        return (options.manifestHrefs ?? []).map((href) => ({
+          getAttribute(name: string) {
+            return name === 'href' ? href : null;
+          },
+        }));
+      },
+    };
+    globalRecord.location = {
+      href: `${options.origin}/current`,
+      origin: options.origin,
+    };
+
+    options.installSource(async (url: string) => {
+      importCalls.push(url);
+      return { noop() {} };
+    }, globalRecord);
+
+    await listeners.get('click')?.({ target: element, type: 'click' });
+    return { importCalls };
+  } catch (error) {
+    return { error, importCalls };
+  } finally {
+    Object.assign(globalRecord, {
+      addEventListener: originals.addEventListener,
+      document: originals.document,
+      location: originals.location,
+    });
+    if (originals.importModule === undefined) {
+      delete globalRecord.__kovoInlineImport;
+    } else {
+      globalRecord.__kovoInlineImport = originals.importModule;
+    }
+  }
+}

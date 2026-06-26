@@ -11,6 +11,7 @@ import {
   preDispatchLoadShedResponse,
   requestWithBodyLimit,
   RequestBodyLimitExceededError,
+  requestWithVerifiedBodyLimit,
   type LoadShedSurface,
 } from './app-load-shed.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
@@ -49,8 +50,13 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     return kovoSecurityReportResponse(app, request);
   }
 
-  const limitedRequest = requestWithBodyLimit(request, app.requestLimits.maxBodyBytes);
+  let limitedRequest = request;
   try {
+    const dispatchRequest =
+      match.kind === 'endpoint'
+        ? await requestWithVerifiedBodyLimit(request, app.requestLimits.maxBodyBytes)
+        : request;
+    limitedRequest = requestWithBodyLimit(dispatchRequest, app.requestLimits.maxBodyBytes);
     return await dispatchMatchedAppRequest({ app, match, request: limitedRequest, url });
   } catch (error) {
     if (error instanceof RequestBodyLimitExceededError) {

@@ -173,6 +173,10 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.scripts).not.toHaveProperty('emit-graph');
       expect(packageJson.scripts).not.toHaveProperty('static');
       expect(packageJson.scripts).not.toHaveProperty('serve:dev');
+
+      const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+      expect(ciWorkflow).toContain('vp exec pnpm run build:prod');
+      expect(ciWorkflow).not.toContain('run: kovo build');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

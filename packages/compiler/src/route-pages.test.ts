@@ -147,6 +147,92 @@ export const home = route('/', {
     );
   });
 
+  it('extracts aliased and namespace route/layout declarations', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { layout as makeLayout, route as makeRoute } from '@kovojs/server';
+import * as kovo from '@kovojs/server';
+import { AliasPage } from './components/alias-page.js';
+import { NamespacePage } from './components/namespace-page.js';
+
+const AliasLayout = makeLayout({
+  queries: { viewer: viewerQuery },
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+
+const NamespaceLayout = kovo.layout({
+  parent: AliasLayout,
+  queries: { cart: cartQuery },
+  render: (_queries, _state, { children }) => <section>{children}</section>,
+});
+
+export const alias = makeRoute('/alias', {
+  layout: AliasLayout,
+  page: () => <AliasPage />,
+});
+
+export const namespace = kovo.route('/namespace', {
+  layout: NamespaceLayout,
+  page: () => <NamespacePage />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.routePageFacts).toEqual([
+      expect.objectContaining({
+        components: [expect.objectContaining({ localName: 'AliasPage' })],
+        css: { sourceFileNames: ['src/components/alias-page.css'] },
+        layouts: [{ localName: 'AliasLayout', queries: ['viewer'] }],
+        navigationSegments: [
+          {
+            id: 'layout:AliasLayout',
+            kind: 'layout',
+            localName: 'AliasLayout',
+            queries: ['viewer'],
+          },
+          {
+            components: ['AliasPage'],
+            id: 'page:/alias',
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
+        route: '/alias',
+      }),
+      expect.objectContaining({
+        components: [expect.objectContaining({ localName: 'NamespacePage' })],
+        css: { sourceFileNames: ['src/components/namespace-page.css'] },
+        layouts: [
+          { localName: 'AliasLayout', queries: ['viewer'] },
+          { localName: 'NamespaceLayout', queries: ['cart'] },
+        ],
+        navigationSegments: [
+          {
+            id: 'layout:AliasLayout',
+            kind: 'layout',
+            localName: 'AliasLayout',
+            queries: ['viewer'],
+          },
+          {
+            id: 'layout:NamespaceLayout',
+            kind: 'layout',
+            localName: 'NamespaceLayout',
+            queries: ['cart'],
+          },
+          {
+            components: ['NamespacePage'],
+            id: 'page:/namespace',
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
+        route: '/namespace',
+      }),
+    ]);
+  });
+
   it('threads route and layout access posture through JSX-authored route page facts', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',

@@ -21,6 +21,7 @@ import {
   HtmlAttrs,
   InlineScript,
   InlineStyle,
+  Link,
   Stylesheet,
 } from './document-structured.js';
 
@@ -213,6 +214,73 @@ describe('server app shell document assembly', () => {
     expect(() => Document({ children: '<html></html>' })).toThrow(
       '<Document> only accepts structured document primitives',
     );
+  });
+
+  it('rejects shell attribute names that are not HTML attribute tokens', () => {
+    const invalidNames = [
+      'data bad',
+      'data"bad',
+      "data'bad",
+      'data=bad',
+      'data<bad',
+      'data>bad',
+      'data/bad',
+      'data\nbad',
+      'data\u0000bad',
+    ];
+
+    for (const name of invalidNames) {
+      expect(() => HtmlAttrs({ [name]: true })).toThrow('is not a valid HTML attribute token');
+      expect(() => BodyAttrs({ [name]: 'x' })).toThrow('is not a valid HTML attribute token');
+    }
+  });
+
+  it('renders valid shell attrs and escapes values without admitting name injection', () => {
+    const document = renderDocument({
+      body: '<main>Home</main>',
+      document: Document({
+        children: [
+          HtmlAttrs({
+            dir: 'ltr',
+            lang: 'en',
+            'data-theme': 'dark" onclick="alert(1)',
+          }),
+          BodyAttrs({
+            class: 'app" onclick="alert(1)',
+            'data-shell': true,
+          }),
+        ],
+      }),
+    });
+
+    expect(document.html).toContain(
+      '<html lang="en" dir="ltr" data-theme="dark&quot; onclick=&quot;alert(1)">',
+    );
+    expect(document.html).toContain('<body class="app&quot; onclick=&quot;alert(1)" data-shell>');
+    expect(document.html).not.toContain('onclick="alert(1)"');
+  });
+
+  it('drops extra Link props while escaping known Link values', () => {
+    const link = Link({
+      href: '/app.css?label=<main>',
+      rel: 'preload" onload="alert(1)',
+      as: 'style',
+      'data-extra': 'drop-me',
+      'bad name': true,
+      onclick: 'alert(1)',
+    } as Parameters<typeof Link>[0] & Record<string, unknown>);
+    const document = renderDocument({
+      body: '<main>Home</main>',
+      document: Document({ children: Head({ children: link }) }),
+    });
+
+    expect(document.html).toContain(
+      '<link href="/app.css?label=&lt;main&gt;" rel="preload&quot; onload=&quot;alert(1)" as="style">',
+    );
+    expect(document.html).not.toContain('data-extra');
+    expect(document.html).not.toContain('bad name');
+    expect(document.html).not.toContain('onclick=');
+    expect(document.html).not.toContain('drop-me');
   });
 
   it('wraps successful html route responses and preserves non-html outcomes', () => {

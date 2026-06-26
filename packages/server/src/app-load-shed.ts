@@ -330,6 +330,21 @@ export function requestWithBodyLimit(request: Request, maxBodyBytes: number | fa
   }) as Request;
 }
 
+/** @internal */
+export async function requestWithVerifiedBodyLimit(
+  request: Request,
+  maxBodyBytes: number | false,
+): Promise<Request> {
+  if (maxBodyBytes === false || request.body === null) return request;
+  const body = await readLimitedArrayBuffer(request, maxBodyBytes);
+  return new Request(request.url, {
+    body,
+    headers: request.headers,
+    method: request.method,
+    signal: request.signal,
+  });
+}
+
 async function readLimitedArrayBuffer(
   request: Request,
   maxBodyBytes: number,
