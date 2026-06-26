@@ -59,6 +59,33 @@ request before the layout renders, just like route and mutation guards. Layout q
 queries: they appear in `kovo explain page`, carry update plans, and observe the same cache and guard
 rules as page queries.
 
+## Render segment failures
+
+Use `boundaries` when a route segment needs its own 404, 403, or error body instead of the app-level
+shell:
+
+```tsx
+const AccountLayout = layout({
+  boundaries: {
+    unauthorized: ({ status }) => <AccountDenied status={status} />,
+  },
+  render: (_queries, _state, { children }) => <AccountShell>{children}</AccountShell>,
+});
+
+export const invoiceRoute = route('/account/invoices/:id', {
+  layout: AccountLayout,
+  boundaries: {
+    notFound: ({ request }) => <MissingInvoice user={request.session.user.id} />,
+    error: ({ error }) => <InvoiceError error={error} />,
+  },
+  page: ({ params }) => <InvoicePage id={params.id} />,
+});
+```
+
+Resolution is nearest-first: the route boundary wins, then the route's layout, then each parent
+layout, then the app shell. Boundary renderers receive `{ error, request, status }`; `error` is only
+present for the `error` boundary.
+
 ## Add parallel regions
 
 Use route-level `regions` when a layout needs sibling areas such as a docs page plus a sidebar rail.

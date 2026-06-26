@@ -41,25 +41,27 @@ The CSS defines Material reference palette variables such as
 `--kovo-theme-sys-color-primary`, and dark overrides under `:root[data-theme="dark"]`. Apps can
 select a theme by setting document attributes or classes; Kovo does not add a runtime theme store.
 
-When a theme needs precise overrides, compose from the generated base rather than using callbacks:
+When a theme needs precise control, keep it in the public seed form. Add named colors, choose a
+scheme variant, tune contrast, and override shape tokens in the same `defineTheme({ seed, ... })`
+call:
 
 ```ts
 import { defineTheme } from '@kovojs/style';
 
-const base = defineTheme({ seed: '#6750A4' });
-
 export const theme = defineTheme({
-  base,
-  sys: {
-    color: {
-      outline: base.sys.color.primary,
-    },
+  seed: '#6750A4',
+  colors: {
+    accent: { value: '#0ea5e9', blend: true },
   },
+  contrast: 0.25,
   shape: {
     cornerSmall: '2px',
   },
+  variant: 'vibrant',
 });
 ```
+
+`base`/`sys` theme derivation is an internal maintenance form, not an app-facing API.
 
 ## Component styles
 

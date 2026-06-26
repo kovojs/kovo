@@ -224,6 +224,17 @@ Arguments arrive as search params through the query's `args` schema, and the que
 every read. The response's `name` is the canonical instance key (`product:p1`), the same currency
 used by `kovo-deps`, optimistic transforms, live subscriptions, and graph output.
 
+Refetch-on-focus is on by default. Turn it off only for a query whose value is intentionally
+fixed for the document lifetime:
+
+```ts
+export const buildInfoQuery = query('build-info', {
+  refetchOnFocus: false,
+  load: () => ({ version: process.env.KOVO_VERSION ?? 'dev' }),
+  reads: [],
+});
+```
+
 ### Cache and version headers
 
 Every `/_q/` response carries the build's render-plan version token. If a stale document asks for a
