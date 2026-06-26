@@ -206,11 +206,7 @@ function rateLimitFailure(
 ): RateLimitDecision | undefined {
   const state = appRateState(app);
   const limits = app.requestLimits;
-  const ip = (
-    limits.clientIp?.(request) ??
-    requestClientIp(request, { trustedProxy: limits.trustedProxy }) ??
-    'unknown'
-  ).trim();
+  const ip = resolveRequestClientIp(app, request) ?? 'unknown';
   const scoped = surfaceRateLimits(limits, surface);
   const checks: Array<{
     id: string;
@@ -382,6 +378,22 @@ function countedBody(
       },
     }),
   );
+}
+
+/**
+ * @internal Resolve the trustworthy client IP for a request using the SAME source the coarse
+ * pre-dispatch limiter uses (SPEC §9.5): the app-configured `createApp({ requestLimits: { clientIp }
+ * })` extractor, else `X-Forwarded-For`/`X-Real-IP`/`Forwarded` ONLY when `trustedProxy` is set.
+ * The request shell threads this onto `req.clientIp` (via `resolveLifecycleRequest`'s `clientIp`
+ * resolver) so `guards.rateLimit({ per: 'ip' })` keys on a trusted value rather than an arbitrary
+ * client-supplied header. Returns `undefined` (never an empty string) when no trusted IP is found.
+ */
+export function resolveRequestClientIp(app: KovoApp, request: Request): string | undefined {
+  const limits = app.requestLimits;
+  const ip =
+    limits.clientIp?.(request) ?? requestClientIp(request, { trustedProxy: limits.trustedProxy });
+  const trimmed = ip?.trim();
+  return trimmed === undefined || trimmed === '' ? undefined : trimmed;
 }
 
 function requestClientIp(request: Request, options: { trustedProxy: boolean }): string | undefined {

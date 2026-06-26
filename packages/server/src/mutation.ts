@@ -1,3 +1,4 @@
+import type { Redirect } from '@kovojs/core';
 import { serializeCookie, type CookieOptions } from './cookies.js';
 import { mutationCsrfOptions, validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
 import {
@@ -1036,10 +1037,14 @@ function isMutationFail(value: unknown): value is MutationFail {
 }
 
 function mutationRedirectLocation<Value>(
-  redirectTo: string | ((result: MutationSuccess<Value>) => string),
+  redirectTo: string | Redirect | ((result: MutationSuccess<Value>) => string | Redirect),
   result: MutationSuccess<Value>,
 ): string {
-  return redirectLocationHeader(typeof redirectTo === 'function' ? redirectTo(result) : redirectTo);
+  const target = typeof redirectTo === 'function' ? redirectTo(result) : redirectTo;
+  // SPEC §6.4/§9.1 (PRG): a typed `redirect()` value carries its path-typed `location`; a plain
+  // string is the location itself. Either way the framework Location sink re-sanitizes (SPEC §6.6),
+  // so an app-derived `redirect()` location and a legacy string path converge on the same emission.
+  return redirectLocationHeader(typeof target === 'string' ? target : target.location);
 }
 
 function noJsMutationServerErrorResponse(): NoJsMutationResponse {

@@ -1,4 +1,4 @@
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity, Redirect } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { EgressOptions } from './egress.js';
 import type { CsrfValidationOptions } from './csrf.js';
@@ -361,7 +361,11 @@ export interface AppMutationResponseOptions {
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragmentRenderers?: readonly FragmentRenderer[];
-  redirectTo?: string | ((result: MutationSuccess<unknown>) => string);
+  /**
+   * POST-redirect-GET success target (SPEC §9.1). Accepts a plain `string`, a typed `redirect()`
+   * {@link Redirect} value (SPEC §6.4), or a function of the result returning either form.
+   */
+  redirectTo?: string | Redirect | ((result: MutationSuccess<unknown>) => string | Redirect);
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
 }
