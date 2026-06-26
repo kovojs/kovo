@@ -181,9 +181,13 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       imported-helper egress/secret-read rows for exported helper functions; focused registry/check tests,
       `git diff --check`, and `pnpm run check:vp` passed. Static local named re-export barrels now preserve
       enforced imported-helper egress/secret-read reachability, while export-star barrels remain outside the
-      sound subset; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
-      Remaining gap: callbacks, nonliteral/dynamic calls, namespace/unresolved imports, and broader egress/secret analyzer
-      reachability.
+      sound subset; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed. Static
+      namespace imports such as `import * as mail from './mail'` now preserve enforced helper egress/secret-read
+      reachability for exported local helper calls, while computed namespace access and export-star namespaces
+      remain outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp`
+      passed.
+      Remaining gap: callbacks, nonliteral/dynamic calls, computed/export-star namespace shapes, unresolved
+      imports, and broader egress/secret analyzer reachability.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -197,9 +201,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       graph subset now enforces declared write capabilities for matching framework-owned tool rows and renders
       declared audit-grade reachable sinks; direct AST-produced `process.env` reads plus literal `fetch()` egress
       from framework-owned tool handlers, same-module helper calls, directly invoked inline functions, and simple
-      imported helper calls, including static local named re-export barrels, are enforced when declared
-      capabilities do not cover them. Remaining gap: broader analyzer integration beyond the framework-owned
-      `tool()` boundary.
+      imported helper calls, including static local named re-export barrels and static namespace imports, are
+      enforced when declared capabilities do not cover them. Remaining gap: broader analyzer integration beyond
+      the framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
@@ -284,7 +288,10 @@ packages/server/src/opaque-session.test.ts`, `git diff --check`, and `pnpm run c
       Better Auth delegated session refresh/cookie-cache `Set-Cookie` forwarding now requires an accepted
       incoming browser credential, while revocation cookies still forward when a missing/unaccepted credential
       must be cleared; `pnpm exec vitest --run packages/better-auth/src/index.session.test.ts`,
-      `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
+      `git diff --check`, and `pnpm run check:vp` passed. `createApp()` now rejects Kovo-owned opaque manager
+      providers routed through the delegated `sessionProvider` boundary, requiring `session: manager` so the
+      request shell records owned opaque lifecycle posture; focused app/session/API tests, `git diff --check`,
+      `pnpm run check:api-surface`, and `pnpm run check:vp` passed. Remaining gap:
       Better Auth delegation and explicit `sessionProvider` remain supported boundaries, so opaque sessions are
       not yet the only framework-wide default lifecycle.
 
@@ -482,7 +489,10 @@ packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm 
 packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Readonly
       object wrappers around summarized property-call guard helpers now preserve exact owner-column predicates,
       while mismatched wrapped helpers remain `scope: unknown`; the same focused scope-audit test,
-      `git diff --check`, and `pnpm run check:vp` passed.
+      `git diff --check`, and `pnpm run check:vp` passed. Explicitly summarized guard-object helpers with
+      `path: ""` now have positive/negative coverage proving `principal.userId` scopes while mismatched
+      `principal.actorId` stays `scope: unknown`; focused scope-audit tests, `git diff --check`, and
+      `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
