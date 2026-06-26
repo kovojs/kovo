@@ -53,13 +53,31 @@ export interface AgentToolAuditMetadata {
   site?: string;
 }
 
+/** Ambient credential carrier classes a reviewed agent tool may accept at invocation time. */
+export type AgentToolAmbientCredentialKind =
+  | 'auth-proxy'
+  | 'authorization'
+  | 'cookie'
+  | 'proxy-authorization'
+  | 'session';
+
+/** Structured review record for the rare case where an agent tool accepts ambient credentials. */
+export interface AgentToolAmbientCredentialJustification {
+  /** Why this tool cannot be expressed through explicit agent authority alone. */
+  reason: string;
+  /** How the ambient browser/session authority is constrained to the intended end user. */
+  authorityBoundary: string;
+}
+
 /** Ambient browser/session credential posture for an agent tool. */
 export type AgentToolAmbientCredentials =
   | {
-      /** Explicitly permit browser credential headers to reach the handler. */
+      /** Explicitly permit reviewed ambient browser/session credentials at the invocation boundary. */
       allow: true;
-      /** Why broad ambient browser credentials are acceptable for this tool. */
-      justification: string;
+      /** Exact ambient credential classes this tool may receive. */
+      credentialKinds: readonly AgentToolAmbientCredentialKind[];
+      /** Structured review rationale for this confused-deputy exception. */
+      justification: AgentToolAmbientCredentialJustification;
     }
   | {
       /** Default and recommended posture: reject ambient browser/session credentials. */
@@ -115,7 +133,8 @@ export interface AgentToolDeclaration<
 /** Audit fact suitable for `kovo explain --capabilities` rendering. */
 export interface AgentToolAuditFact {
   readonly ambientBrowserCredentials: 'allowed' | 'rejected';
-  readonly ambientJustification?: string;
+  readonly ambientCredentialKinds?: readonly AgentToolAmbientCredentialKind[];
+  readonly ambientJustification?: AgentToolAmbientCredentialJustification;
   readonly authority: readonly string[];
   readonly declaredCapabilities: readonly string[];
   readonly kind: 'agentTool';
@@ -184,13 +203,14 @@ export async function runAgentTool<Input, Output, Context = unknown>(
   },
 ): Promise<Output> {
   assertAuthorityAllowed(declaration, context.authority);
-  if (context.request !== undefined) {
-    assertNoAmbientCredentials(declaration, context.request);
-  }
+  const request =
+    context.request === undefined
+      ? undefined
+      : normalizeAgentToolRequest(declaration, context.request);
 
   return declaration.handler(input, {
     authority: context.authority,
-    ...(context.request === undefined ? {} : { request: requestWithoutSession(context.request) }),
+    ...(request === undefined ? {} : { request }),
     value: context.value,
   });
 }
@@ -203,7 +223,12 @@ export function agentToolAuditFacts(
     const ambient = declaration.ambientCredentials;
     return {
       ambientBrowserCredentials: ambient.allow === true ? 'allowed' : 'rejected',
-      ...(ambient.allow === true ? { ambientJustification: ambient.justification } : {}),
+      ...(ambient.allow === true
+        ? {
+            ambientCredentialKinds: [...ambient.credentialKinds],
+            ambientJustification: ambient.justification,
+          }
+        : {}),
       authority: declaration.authority.map(describeAuthority),
       declaredCapabilities: declaration.capabilities.map((capability) => capability.name),
       kind: 'agentTool',
@@ -235,21 +260,94 @@ function assertAuthorityAllowed(
   }
 }
 
-function assertNoAmbientCredentials(
+type AmbientCredentialHeader = {
+  readonly header: string;
+  readonly kind: AgentToolAmbientCredentialKind;
+};
+
+type AmbientCredentialFinding = {
+  readonly kind: AgentToolAmbientCredentialKind;
+  readonly source: string;
+};
+
+const ambientCredentialHeaders = [
+  { header: 'authorization', kind: 'authorization' },
+  { header: 'cookie', kind: 'cookie' },
+  { header: 'cf-access-authenticated-user-email', kind: 'auth-proxy' },
+  { header: 'cf-access-jwt-assertion', kind: 'auth-proxy' },
+  { header: 'proxy-authorization', kind: 'proxy-authorization' },
+  { header: 'x-amzn-oidc-accesstoken', kind: 'auth-proxy' },
+  { header: 'x-amzn-oidc-data', kind: 'auth-proxy' },
+  { header: 'x-amzn-oidc-identity', kind: 'auth-proxy' },
+  { header: 'x-auth-request-access-token', kind: 'auth-proxy' },
+  { header: 'x-auth-request-email', kind: 'auth-proxy' },
+  { header: 'x-auth-request-user', kind: 'auth-proxy' },
+  { header: 'x-forwarded-access-token', kind: 'auth-proxy' },
+  { header: 'x-forwarded-authorization', kind: 'authorization' },
+  { header: 'x-goog-authenticated-user-email', kind: 'auth-proxy' },
+  { header: 'x-goog-authenticated-user-id', kind: 'auth-proxy' },
+  { header: 'x-ms-client-principal', kind: 'auth-proxy' },
+  { header: 'x-ms-client-principal-id', kind: 'auth-proxy' },
+  { header: 'x-ms-client-principal-name', kind: 'auth-proxy' },
+] as const satisfies readonly AmbientCredentialHeader[];
+
+const ambientCredentialKinds = [
+  'auth-proxy',
+  'authorization',
+  'cookie',
+  'proxy-authorization',
+  'session',
+] as const satisfies readonly AgentToolAmbientCredentialKind[];
+
+function normalizeAgentToolRequest(
   declaration: AgentToolDeclaration<unknown, unknown, unknown>,
   request: Request,
-): void {
-  if (declaration.ambientCredentials.allow === true) return;
+): AgentToolRequest {
+  const findings = ambientCredentialFindings(request);
+  const allowedKinds =
+    declaration.ambientCredentials.allow === true
+      ? new Set(declaration.ambientCredentials.credentialKinds)
+      : new Set<AgentToolAmbientCredentialKind>();
 
-  if (
-    request.headers.has('cookie') ||
-    request.headers.has('authorization') ||
-    'session' in request
-  ) {
+  if (declaration.ambientCredentials.allow !== true && findings.length > 0) {
     throw new AgentToolCapabilityError(
-      `Agent tool "${declaration.name}" rejects ambient browser/session credentials by default.`,
+      `Agent tool "${declaration.name}" rejects ambient browser/session credentials by default: ${describeAmbientCredentialFindings(
+        findings,
+      )}.`,
     );
   }
+
+  const disallowed = findings.filter((finding) => !allowedKinds.has(finding.kind));
+  if (disallowed.length > 0) {
+    throw new AgentToolCapabilityError(
+      `Agent tool "${declaration.name}" received undeclared ambient credential kinds: ${describeAmbientCredentialFindings(
+        disallowed,
+      )}.`,
+    );
+  }
+
+  const headers = new Headers(request.headers);
+  for (const { header, kind } of ambientCredentialHeaders) {
+    if (!allowedKinds.has(kind)) headers.delete(header);
+  }
+
+  return requestWithoutSession(new Request(request, { credentials: 'omit', headers }));
+}
+
+function ambientCredentialFindings(request: Request): AmbientCredentialFinding[] {
+  const findings: AmbientCredentialFinding[] = [];
+
+  for (const { header, kind } of ambientCredentialHeaders) {
+    if (request.headers.has(header)) findings.push({ kind, source: `header:${header}` });
+  }
+
+  if ('session' in request) findings.push({ kind: 'session', source: 'property:session' });
+
+  return findings;
+}
+
+function describeAmbientCredentialFindings(findings: readonly AmbientCredentialFinding[]): string {
+  return findings.map((finding) => `${finding.kind}(${finding.source})`).join(', ');
 }
 
 function requestWithoutSession(request: Request): AgentToolRequest {
@@ -297,7 +395,37 @@ function assertCapabilities(capabilities: readonly AgentToolCapability[] | undef
 
 function assertAmbientCredentials(ambient: AgentToolAmbientCredentials | undefined): void {
   if (ambient?.allow === true) {
-    assertNonEmpty(ambient.justification, 'tool.ambientCredentials.justification');
+    assertAmbientCredentialKinds(ambient.credentialKinds);
+    assertNonEmpty(ambient.justification?.reason, 'tool.ambientCredentials.justification.reason');
+    assertNonEmpty(
+      ambient.justification?.authorityBoundary,
+      'tool.ambientCredentials.justification.authorityBoundary',
+    );
+  }
+}
+
+function assertAmbientCredentialKinds(
+  kinds: readonly AgentToolAmbientCredentialKind[] | undefined,
+): void {
+  if (kinds === undefined || kinds.length === 0) {
+    throw new AgentToolCapabilityError(
+      'tool.ambientCredentials.credentialKinds must declare at least one credential kind.',
+    );
+  }
+
+  const seen = new Set<AgentToolAmbientCredentialKind>();
+  for (const kind of kinds) {
+    if (!ambientCredentialKinds.includes(kind)) {
+      throw new AgentToolCapabilityError(
+        'tool.ambientCredentials.credentialKinds[] must be a known credential kind.',
+      );
+    }
+    if (seen.has(kind)) {
+      throw new AgentToolCapabilityError(
+        'tool.ambientCredentials.credentialKinds must not contain duplicate credential kinds.',
+      );
+    }
+    seen.add(kind);
   }
 }
 
