@@ -201,6 +201,40 @@ SSE live queries are roadmap, not part of the technical preview. Do not deploy `
 `<kovo-live>`, `createApp({ live })`, or live emitters in preview apps. See
 [Live queries](/guides/live-queries/) for the shipped paths and the roadmap caveat.
 
+## Observe the request shell
+
+The app server gives operators two stable handles before you add product-specific metrics:
+name-shaped framework paths and the `onError` hook.
+
+Access logs can group by endpoint without parsing a framework envelope:
+
+- `POST /_m/<mutation-key>` — mutation submissions, including no-JS form posts.
+- `GET /_q/<query-key>` — typed reads, refetch-on-focus, and stale-tab recovery.
+- `/c/__v/<version>/<module>` — immutable client modules.
+- Declared `endpoint()` and `webhook()` paths — raw machine ingress.
+
+Use `createApp({ onError })` for runtime exceptions from the request shell. It receives the thrown
+error plus a `ServerErrorDiagnosticContext` with the failing operation and any known route,
+mutation, query, target, status, URL, or request identity. The hook is diagnostic only: errors thrown
+inside it are swallowed, and it cannot change Kovo's stable 403/404/500 responses.
+
+```ts
+import { createApp } from '@kovojs/server';
+
+export default createApp({
+  routes,
+  mutations,
+  queries,
+  onError(error, context) {
+    console.error('kovo request failed', { error, ...context });
+  },
+});
+```
+
+Keep build-time and runtime signals separate. `vp check`, `kovo check`, `kovo explain`, and the
+source/sink audits answer "what can this app do?" before deploy. `onError`, access logs, and rate
+limit counters answer "what happened in production?" after deploy.
+
 ## Pre-deploy gates
 
 The verification surface is browser-free by design, so the full behavioral gate runs in ordinary CI
@@ -248,6 +282,8 @@ module URLs, prior-token typed reads, the 24-hour retention floor, and deploy-sk
 SPEC §6.6 and §14. Static export through the request shell: SPEC §9.5; see
 [Static export](/guides/static-export/) for exportability diagnostics. Schema-validated old-form
 recovery via the 422 path: SPEC §9.2. The request lifecycle: SPEC §10.3. Browser-free pre-deploy
-gates: SPEC §11.4. KV417 reports a serving layer that cannot meet the skew-retention floor.
+gates: SPEC §11.4. `createApp({ onError })` and `ServerErrorDiagnosticContext` report
+request-shell runtime failures without changing stable error responses: SPEC §9.2. KV417 reports a
+serving layer that cannot meet the skew-retention floor.
 
 </details>
