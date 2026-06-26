@@ -145,6 +145,7 @@ const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_ENTRIES = 10_000;
 const OPAQUE_ID_BYTES = 32;
 const OPAQUE_ID_PATTERN = /^kos_[A-Za-z0-9_-]{43}$/;
+const AMBIGUOUS_OPAQUE_SESSION_ID = '__kovo_ambiguous_opaque_session__';
 
 /** Create a bounded in-memory opaque session store for tests, local dev, or single-process apps. */
 export function createMemoryOpaqueSessionStore<SessionValue>(
@@ -322,29 +323,34 @@ function extractOpaqueSessionId(
 ): string | null {
   const cookie = request.headers.get('cookie');
   const cookieId = cookie === null ? null : readCookie(cookie, cookieName);
-  if (cookieId !== null) return cookieId;
 
-  if (!acceptAuthorizationHeader) return null;
+  if (!acceptAuthorizationHeader) return cookieId;
   const authorization = request.headers.get('authorization');
-  if (authorization === null) return null;
+  if (authorization === null) return cookieId;
   const match = /^Bearer\s+([^\s]+)$/i.exec(authorization);
-  return match?.[1] ?? null;
+  const headerId = match?.[1] ?? null;
+  if (cookieId !== null && headerId !== null) return AMBIGUOUS_OPAQUE_SESSION_ID;
+  return cookieId ?? headerId;
 }
 
 function readCookie(header: string, cookieName: string): string | null {
   const names = new Set([cookieName, `__Host-${cookieName}`, `__Secure-${cookieName}`]);
+  let value: string | null = null;
   for (const part of header.split(';')) {
     const index = part.indexOf('=');
     if (index === -1) continue;
     const name = part.slice(0, index).trim();
     if (!names.has(name)) continue;
+    // SPEC §6.5 / OPP-11: owned sessions fail closed on ambiguous credentials instead of
+    // choosing a cookie alias by header order and silently changing session provenance.
+    if (value !== null) return AMBIGUOUS_OPAQUE_SESSION_ID;
     try {
-      return decodeURIComponent(part.slice(index + 1).trim());
+      value = decodeURIComponent(part.slice(index + 1).trim());
     } catch {
-      return part.slice(index + 1).trim();
+      value = part.slice(index + 1).trim();
     }
   }
-  return null;
+  return value;
 }
 
 function base64url(bytes: Uint8Array): string {

@@ -117,6 +117,45 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     ).resolves.toEqual({ user: { id: 'u1' } });
   });
 
+  it('fails closed instead of choosing among ambiguous owned-session credentials', async () => {
+    const manager = createOpaqueSessionManager({
+      acceptAuthorizationHeader: true,
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    const first = await manager.establish({ user: { id: 'u1' } });
+    const second = await manager.establish({ user: { id: 'u2' } });
+
+    await expect(
+      manager.validateRequest(
+        new Request('https://app.test/account', {
+          headers: {
+            cookie: `kovo_session=${first.session.id}; __Host-kovo_session=${second.session.id}`,
+          },
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: {
+            cookie: `kovo_session=${first.session.id}; __Host-kovo_session=${second.session.id}`,
+          },
+        }),
+      ),
+    ).resolves.toBeNull();
+
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: {
+            authorization: `Bearer ${second.session.id}`,
+            cookie: `kovo_session=${first.session.id}`,
+          },
+        }),
+      ),
+    ).resolves.toBeNull();
+  });
+
   it('binds Kovo-owned opaque sessions to one validated request lifecycle', async () => {
     type Session = { user: { id: string } | null };
     type SessionRequest = RequestWithSession<Request, Session>;
