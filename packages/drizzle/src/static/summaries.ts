@@ -2448,12 +2448,30 @@ function singleLiteralArrayElement(node: Node): Node | undefined {
 }
 
 function literalArrayElements(node: Node): readonly Node[] | undefined {
-  const expression = unwrappedStaticExpressionNode(node);
+  const expression = localConstReadonlyTupleAliasValue(node) ?? unwrappedStaticExpressionNode(node);
   if (!Node.isArrayLiteralExpression(expression)) return undefined;
 
   const elements = expression.getElements();
   if (elements.some(Node.isSpreadElement)) return undefined;
   return elements;
+}
+
+function localConstReadonlyTupleAliasValue(node: Node): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isIdentifier(expression)) return undefined;
+
+  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  return value && Node.isArrayLiteralExpression(value) ? value : undefined;
 }
 
 /** @internal */ export function pnfExactConjuncts(
