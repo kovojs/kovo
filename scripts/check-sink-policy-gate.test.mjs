@@ -9,10 +9,12 @@ import {
   exportedNames,
   extractRegisteredBlessedSinkKinds,
   publicSinkPolicyEscapeFindings,
+  responseFragmentApplyInvariantFindings,
 } from './check-sink-policy-gate.mjs';
 
 const validPolicy = `
 export const FRAMEWORK_BLESSED_SINK_KINDS = [
+  'browser:response-fragment-html',
   'core:route-redirect',
   'parameterized-sql',
 ] as const;
@@ -28,6 +30,7 @@ function runFixture(files) {
     exists: (file) => Object.hasOwn(files, file),
     publicEntrypointFiles: Object.hasOwn(files, 'public.ts') ? ['public.ts'] : [],
     readText: (file) => files[file],
+    responseFragmentApplyPath: undefined,
     sinkPolicyPath: 'sink-policy.ts',
   });
 }
@@ -35,6 +38,7 @@ function runFixture(files) {
 describe('sink-policy gate', () => {
   it('extracts the central blessed sink registry', () => {
     expect([...extractRegisteredBlessedSinkKinds(validPolicy)]).toEqual([
+      'browser:response-fragment-html',
       'core:route-redirect',
       'parameterized-sql',
     ]);
@@ -220,6 +224,7 @@ describe('sink-policy gate', () => {
           file === 'sink-policy.ts'
             ? validPolicy
             : 'import { execSync } from "node:child_process";',
+        responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
       }),
     ).toEqual([
@@ -301,10 +306,84 @@ describe('sink-policy gate', () => {
             : file === 'packages/server/src/unsafe.ts'
               ? 'export const run = Function("return 1");'
               : 'export const ok = 1;',
+        responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code',
+    ]);
+  });
+
+  it('requires the browser response-fragment HTML sink kind to be centrally registered', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: [],
+        exists: (file) => file === 'sink-policy.ts',
+        publicEntrypointFiles: [],
+        readText: () => `
+          export const FRAMEWORK_BLESSED_SINK_KINDS = ['parameterized-sql'] as const;
+          export type Blessed<Sink extends string> = { readonly __brand?: Sink };
+          export function blessSink(sink, value) { return value; }
+          export function isBlessedSink(sink, value) { return true; }
+        `,
+        responseFragmentApplyPath: undefined,
+        sinkPolicyPath: 'sink-policy.ts',
+      }),
+    ).toEqual([
+      'sink-policy.ts: FRAMEWORK_BLESSED_SINK_KINDS must register "browser:response-fragment-html" for the browser response-fragment raw HTML sink',
+    ]);
+  });
+
+  it('pins response-fragment raw HTML writes to the Trusted Types and sanitizer path', () => {
+    const validResponseApply = `
+      function trustedHtml(h: string): string {
+        const t = (globalThis as any).trustedTypes;
+        return t ? t.createPolicy('kovo', { createHTML: (s: string) => s }).createHTML(h) : h;
+      }
+      export function p(fs, f) {
+        for (const x of fs) {
+          const e = f(x.target);
+          const t = document.createElement('template');
+          t.innerHTML = trustedHtml(x.html);
+          for (const n of t.content.children) g(n);
+          e.append(...t.content.childNodes);
+        }
+      }
+      function d(e, h) {
+        const t = document.createElement('template');
+        t.innerHTML = trustedHtml(h);
+        const n = firstMorphElement(t.content);
+        if (n) m(e, g(n));
+      }
+      function r(n: string): boolean {
+        return /^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/.test(n);
+      }
+    `;
+
+    expect(
+      responseFragmentApplyInvariantFindings('response-fragment-apply.ts', validResponseApply),
+    ).toEqual([]);
+
+    const findings = responseFragmentApplyInvariantFindings(
+      'response-fragment-apply.ts',
+      validResponseApply
+        .replace('t.innerHTML = trustedHtml(x.html);', 't.innerHTML = x.html;')
+        .replace('for (const n of t.content.children) g(n);', '')
+        .replace('if (n) m(e, g(n));', 'if (n) m(e, n);')
+        .replace(
+          'return /^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/.test(n);',
+          'return /^on[^:]|^(srcdoc)$/.test(n);',
+        )
+        .concat('\ne.insertAdjacentHTML("beforeend", html);'),
+    );
+
+    expect(findings).toEqual([
+      'response-fragment-apply.ts: response-fragment HTML sink must not use insertAdjacentHTML; parse through the template sanitizer path',
+      'response-fragment-apply.ts: response-fragment HTML sink must route exactly two template.innerHTML writes through trustedHtml(); found 1',
+      'response-fragment-apply.ts: append-mode response fragments must sanitize parsed children before DOM insertion',
+      'response-fragment-apply.ts: replace-mode response fragments must sanitize the parsed morph root before DOM insertion',
+      'response-fragment-apply.ts: response-fragment sanitizer denylist must keep event, srcdoc, and raw HTML attributes blocked',
     ]);
   });
 });
