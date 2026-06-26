@@ -52,6 +52,7 @@ interface PriceUpdateRegistryMutation {
 declare module './index.js' {
   interface QueryRegistry {
     cart: { count: number };
+    ticker: { price: number };
   }
 
   interface MutationRegistry {
@@ -253,6 +254,24 @@ describe('core authoring APIs', () => {
     };
     expect(assertUnknownQuery).toBeTypeOf('function');
     expect(assertUnknownMutation).toBeTypeOf('function');
+  });
+
+  it('declares per-query refetch-on-focus opt-out on the query handle (SPEC §9.3/§9.4)', () => {
+    // SPEC §9.3/§9.4: refetch-on-focus is a per-query loader behavior with a per-query opt-out.
+    // The opt-out is declarable at the query site; refetch-on-focus is on by default otherwise.
+    const ticker = query<'ticker', { price: number }>('ticker', { refetchOnFocus: false });
+    const cart = query<'cart', { count: number }>('cart');
+
+    expect(ticker.refetchOnFocus).toBe(false);
+    expect(ticker.key).toBe('ticker');
+    expect(cart.refetchOnFocus).toBeUndefined();
+
+    const assertNoOptInField = () => {
+      // @ts-expect-error SPEC §9.3/§9.4: refetch-on-focus is on by default, so `true` would be a
+      // no-op field; only `refetchOnFocus: false` (the opt-out) is accepted.
+      query<'cart', { count: number }>('cart', { refetchOnFocus: true });
+    };
+    expect(assertNoOptInField).toBeTypeOf('function');
   });
 
   it('preserves typed form input and failure facts', () => {

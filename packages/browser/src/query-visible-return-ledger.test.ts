@@ -19,6 +19,16 @@ describe('query visible-return refetch ledger', () => {
     expect(ledger.eligible(['inventory', 'recommendations'])).toEqual(['cart', 'reviews']);
   });
 
+  it('excludes every instance key when a keyed query name is opted out (SPEC §9.3/§9.4)', () => {
+    // SPEC §9.4: typed reads dispatch `/_q/` by NAME, so a declared `refetchOnFocus: false`
+    // opt-out is keyed by query name and must exclude every instance key of that query.
+    const ledger = createRefetchQueryLedger(['cart', 'product:p1', 'product:p2', 'reviews']);
+
+    expect(ledger.eligible(['product'])).toEqual(['cart', 'reviews']);
+    // An exact instance-key opt-out still matches only that one instance.
+    expect(ledger.eligible(['product:p1'])).toEqual(['cart', 'product:p2', 'reviews']);
+  });
+
   it('reads only kovo-query hydration scripts from the visible-return root', () => {
     const root = new FakeRoot();
     root.scripts = [

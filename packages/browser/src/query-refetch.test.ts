@@ -3,8 +3,38 @@ import { describe, expect, it, vi } from 'vitest';
 import { createQueryStore } from './query-store.js';
 import { rebaserApplyQueryInterposition } from './query-apply.js';
 import { OptimisticRebaser } from './optimism.js';
-import { createDeltaMissRefetcher, refetchQueries } from './query-refetch.js';
+import {
+  createDeltaMissRefetcher,
+  deriveRefetchOnFocusOptOut,
+  refetchQueries,
+} from './query-refetch.js';
 import { FakeMorphRoot, FakeQueryBindingElement } from './runtime-test-fakes.js';
+
+describe('refetch-on-focus opt-out derivation', () => {
+  it('derives the opt-out name set from declared refetchOnFocus:false queries (SPEC §9.3/§9.4)', () => {
+    // SPEC §9.3/§9.4: a query declared with `refetchOnFocus: false` is excluded from focus
+    // refetch; queries without the field stay eligible. The declared value drives the runtime
+    // opt-out, so the field is not dead metadata.
+    expect(
+      deriveRefetchOnFocusOptOut([
+        { key: 'ticker', refetchOnFocus: false },
+        { key: 'cart' },
+        { key: 'product', refetchOnFocus: false },
+      ]),
+    ).toEqual(['ticker', 'product']);
+
+    // No declared opt-outs → empty set → nothing excluded (refetch-on-focus stays on by default).
+    expect(deriveRefetchOnFocusOptOut([{ key: 'cart' }, { key: 'reviews' }])).toEqual([]);
+
+    // Duplicate declarations of the same opted-out query collapse to one entry.
+    expect(
+      deriveRefetchOnFocusOptOut([
+        { key: 'ticker', refetchOnFocus: false },
+        { key: 'ticker', refetchOnFocus: false },
+      ]),
+    ).toEqual(['ticker']);
+  });
+});
 
 describe('query refetch', () => {
   it('applies successful typed read chunks and reports names for the loader ledger', async () => {
