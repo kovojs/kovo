@@ -2490,21 +2490,22 @@ export const ProductGrid = component({
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',
       source: `
-import { guards, publicAccess, route } from '@kovojs/server';
+import { guards, publicAccess, route as defineRoute } from '@kovojs/server';
+import * as kovo from '@kovojs/server';
 
 const authed = guards.authed();
 
-export const publicDocs = route('/docs', {
+export const publicDocs = defineRoute('/docs', {
   access: publicAccess('public documentation'),
   page: () => <DocsPage />,
 });
 
-export const account = route('/account', {
+export const account = defineRoute('/account', {
   guard: authed,
   page: () => <AccountPage />,
 });
 
-export const missing = route('/missing', {
+export const missing = kovo.route('/missing', {
   page: () => <MissingPage />,
 });
 `,

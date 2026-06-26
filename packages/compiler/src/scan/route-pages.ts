@@ -54,6 +54,12 @@ interface RouteComponentImportModel {
   sourceFileName: string;
 }
 
+interface RouteFrameworkBindings {
+  readonly layoutNames: ReadonlySet<string>;
+  readonly namespaceNames: ReadonlySet<string>;
+  readonly routeNames: ReadonlySet<string>;
+}
+
 const navigationSegmentStampAttributes = new Set([
   'kovo-nav-components',
   'kovo-nav-kind',
@@ -72,7 +78,8 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
     ts.ScriptKind.TSX,
   );
   const routePages: CompiledRoutePage[] = [];
-  const layouts = routeLayoutModels(sourceFile);
+  const frameworkBindings = routeFrameworkBindings(sourceFile);
+  const layouts = routeLayoutModels(sourceFile, frameworkBindings);
   const componentImports = componentImportModels(options.fileName, sourceFile);
   const diagnostics: CompilerDiagnostic[] = [];
 
@@ -83,6 +90,7 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
       sourceFile,
       node,
       layouts,
+      frameworkBindings,
       componentImports,
       diagnostics,
     );
@@ -126,11 +134,12 @@ function routePageFromCall(
   sourceFile: ts.SourceFile,
   node: ts.Node,
   layouts: ReadonlyMap<string, RouteLayoutModel>,
+  frameworkBindings: RouteFrameworkBindings,
   componentImports: ReadonlyMap<string, RouteComponentImportModel>,
   diagnostics: CompilerDiagnostic[],
 ): CompiledRoutePage | null {
   if (!ts.isCallExpression(node)) return null;
-  if (!ts.isIdentifier(node.expression) || node.expression.text !== 'route') return null;
+  if (!isFrameworkRouteCall(node, frameworkBindings)) return null;
 
   const [pathArg, definitionArg] = node.arguments;
   if (!pathArg || !ts.isStringLiteralLike(pathArg)) return null;
@@ -358,7 +367,10 @@ function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, RouteLayoutModel> {
+function routeLayoutModels(
+  sourceFile: ts.SourceFile,
+  frameworkBindings: RouteFrameworkBindings,
+): ReadonlyMap<string, RouteLayoutModel> {
   const layouts = new Map<string, RouteLayoutModel>();
 
   const visit = (node: ts.Node): void => {
@@ -367,8 +379,7 @@ function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, Route
       ts.isIdentifier(node.name) &&
       node.initializer &&
       ts.isCallExpression(node.initializer) &&
-      ts.isIdentifier(node.initializer.expression) &&
-      node.initializer.expression.text === 'layout'
+      isFrameworkLayoutCall(node.initializer, frameworkBindings)
     ) {
       const [definition] = node.initializer.arguments;
       if (definition && ts.isObjectLiteralExpression(definition)) {
@@ -393,6 +404,56 @@ function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, Route
 
   visit(sourceFile);
   return layouts;
+}
+
+function routeFrameworkBindings(sourceFile: ts.SourceFile): RouteFrameworkBindings {
+  const layoutNames = new Set<string>();
+  const namespaceNames = new Set<string>();
+  const routeNames = new Set<string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+    if (statement.moduleSpecifier.text !== '@kovojs/server') continue;
+
+    const namedBindings = statement.importClause?.namedBindings;
+    if (!namedBindings) continue;
+    if (ts.isNamespaceImport(namedBindings)) {
+      namespaceNames.add(namedBindings.name.text);
+      continue;
+    }
+    if (!ts.isNamedImports(namedBindings)) continue;
+    for (const element of namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      if (importedName === 'route') routeNames.add(element.name.text);
+      if (importedName === 'layout') layoutNames.add(element.name.text);
+    }
+  }
+
+  return { layoutNames, namespaceNames, routeNames };
+}
+
+function isFrameworkRouteCall(call: ts.CallExpression, bindings: RouteFrameworkBindings): boolean {
+  return isFrameworkCall(call.expression, 'route', bindings.routeNames, bindings.namespaceNames);
+}
+
+function isFrameworkLayoutCall(call: ts.CallExpression, bindings: RouteFrameworkBindings): boolean {
+  return isFrameworkCall(call.expression, 'layout', bindings.layoutNames, bindings.namespaceNames);
+}
+
+function isFrameworkCall(
+  expression: ts.Expression,
+  propertyName: 'layout' | 'route',
+  localNames: ReadonlySet<string>,
+  namespaceNames: ReadonlySet<string>,
+): boolean {
+  if (ts.isIdentifier(expression)) return localNames.has(expression.text);
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === propertyName &&
+    ts.isIdentifier(expression.expression) &&
+    namespaceNames.has(expression.expression.text)
+  );
 }
 
 function routeAccessFact(

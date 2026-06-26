@@ -131,7 +131,7 @@ export function extractAppRouteCssTargets(
     } catch {
       continue;
     }
-    if (!source.includes('route(')) continue;
+    if (!source.includes('route(') && !source.includes('@kovojs/server')) continue;
 
     routePageFacts.push(
       ...compileRouteModule({
