@@ -5,6 +5,7 @@ import {
   checkSinkPolicyGate,
   commandExecutionSinkFindings,
   commandPrimitiveInvariantFindings,
+  dynamicCodeExecutionSinkFindings,
   exportedNames,
   extractRegisteredBlessedSinkKinds,
   publicSinkPolicyEscapeFindings,
@@ -223,6 +224,87 @@ describe('sink-policy gate', () => {
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: forbidden child_process.execSync import; use cmd()/runCommand() so command execution stays shell-free and witnessed',
+    ]);
+  });
+
+  it('rejects direct eval dynamic code execution in server source', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/unsafe.ts',
+        `
+          // eval("ignored comment");
+          export function run(source) {
+            return eval(source);
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink eval(); server source must not execute generated code',
+    ]);
+  });
+
+  it('rejects Function constructor and call dynamic code execution in server source', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/unsafe.ts',
+        `
+          export const make = new Function("return 1");
+          export const call = Function("return 2");
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink new Function(); server source must not execute generated code',
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code',
+    ]);
+  });
+
+  it('rejects vm imports and requires in server source', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/unsafe-import.ts',
+        `
+          import { Script } from "node:vm";
+          const vm = require("vm");
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-import.ts: forbidden dynamic code execution sink node:vm/vm import or require; server source must not execute generated code',
+    ]);
+  });
+
+  it('allows benign server source without dynamic code sinks', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/safe.ts',
+        `
+          export function render(value) {
+            return String(value);
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('runs the dynamic code execution gate over configured server source files', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: ['packages/server/src/unsafe.ts', 'packages/server/src/safe.ts'],
+        exists: (file) =>
+          file === 'packages/server/src/unsafe.ts' ||
+          file === 'packages/server/src/safe.ts' ||
+          file === 'sink-policy.ts',
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : file === 'packages/server/src/unsafe.ts'
+              ? 'export const run = Function("return 1");'
+              : 'export const ok = 1;',
+        sinkPolicyPath: 'sink-policy.ts',
+      }),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code',
     ]);
   });
 });

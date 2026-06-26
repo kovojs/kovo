@@ -25,6 +25,8 @@ export const defaultCommandExecutionRoots = ['packages/server/src'];
 
 export const defaultCommandExecutionSinkFiles = ['packages/server/src/command.ts'];
 
+export const defaultDynamicCodeExecutionSinkFiles = [];
+
 const allowedSinkPolicyExports = new Set([
   'Blessed',
   'FRAMEWORK_BLESSED_SINK_KINDS',
@@ -72,6 +74,8 @@ export function checkSinkPolicyGate(options = {}) {
   const commandExecutionRoots = options.commandExecutionRoots ?? defaultCommandExecutionRoots;
   const commandExecutionSinkFiles =
     options.commandExecutionSinkFiles ?? defaultCommandExecutionSinkFiles;
+  const dynamicCodeExecutionSinkFiles =
+    options.dynamicCodeExecutionSinkFiles ?? defaultDynamicCodeExecutionSinkFiles;
   const commandExecutionFiles =
     options.commandExecutionFiles ?? collectSourceFiles(root, commandExecutionRoots);
   const publicEntrypointFiles = options.publicEntrypointFiles ?? defaultPublicEntrypointFiles;
@@ -120,6 +124,7 @@ export function checkSinkPolicyGate(options = {}) {
   }
 
   const commandExecutionSinkFileSet = new Set(commandExecutionSinkFiles);
+  const dynamicCodeExecutionSinkFileSet = new Set(dynamicCodeExecutionSinkFiles);
   for (const filePath of commandExecutionFiles) {
     if (!exists(filePath)) {
       findings.push(`${filePath}: command execution gate input is missing`);
@@ -129,6 +134,11 @@ export function checkSinkPolicyGate(options = {}) {
     findings.push(
       ...commandExecutionSinkFindings(filePath, text, {
         allowedExecutionSink: commandExecutionSinkFileSet.has(filePath),
+      }),
+    );
+    findings.push(
+      ...dynamicCodeExecutionSinkFindings(filePath, text, {
+        allowedExecutionSink: dynamicCodeExecutionSinkFileSet.has(filePath),
       }),
     );
     if (commandExecutionSinkFileSet.has(filePath)) {
@@ -196,6 +206,40 @@ export function commandExecutionSinkFindings(filePath, text, options = {}) {
         `${filePath}: raw child_process.${imported.imported} call is outside the command primitive; use cmd()/runCommand()`,
       );
     }
+  }
+
+  return dedupe(findings);
+}
+
+export function dynamicCodeExecutionSinkFindings(filePath, text, options = {}) {
+  if (options.allowedExecutionSink === true) return [];
+
+  const source = stripComments(text);
+  const findings = [];
+
+  if (/(^|[^\w$.])eval\s*\(/.test(source)) {
+    findings.push(
+      `${filePath}: forbidden dynamic code execution sink eval(); server source must not execute generated code`,
+    );
+  }
+
+  if (/\bnew\s+Function\s*\(/.test(source)) {
+    findings.push(
+      `${filePath}: forbidden dynamic code execution sink new Function(); server source must not execute generated code`,
+    );
+  }
+
+  const sourceWithoutNewFunction = source.replace(/\bnew\s+Function\s*\(/g, '');
+  if (/(^|[^\w$.])Function\s*\(/.test(sourceWithoutNewFunction)) {
+    findings.push(
+      `${filePath}: forbidden dynamic code execution sink Function(); server source must not execute generated code`,
+    );
+  }
+
+  if (vmModuleImportPattern().test(source)) {
+    findings.push(
+      `${filePath}: forbidden dynamic code execution sink node:vm/vm import or require; server source must not execute generated code`,
+    );
   }
 
   return dedupe(findings);
@@ -390,6 +434,18 @@ const commandExecutionImportNames = new Set([
   'spawn',
   'spawnSync',
 ]);
+
+function vmModuleImportPattern() {
+  const vmModule = String.raw`(?:node:)?vm`;
+  return new RegExp(
+    [
+      String.raw`\bimport\s+(?:type\s+)?(?:[^'";]+?\s+from\s*)?(['"])${vmModule}\1`,
+      String.raw`\bimport\s*\(\s*(['"])${vmModule}\2\s*\)`,
+      String.raw`\brequire\s*\(\s*(['"])${vmModule}\3\s*\)`,
+    ].join('|'),
+    'g',
+  );
+}
 
 function childProcessImportLocals(text) {
   const named = [];
