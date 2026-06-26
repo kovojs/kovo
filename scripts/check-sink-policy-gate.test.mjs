@@ -5,6 +5,7 @@ import {
   checkSinkPolicyGate,
   exportedNames,
   extractRegisteredBlessedSinkKinds,
+  publicSinkPolicyEscapeFindings,
 } from './check-sink-policy-gate.mjs';
 
 const validPolicy = `
@@ -80,6 +81,36 @@ describe('sink-policy gate', () => {
     ).toEqual([
       'sink-policy.ts: unexpected sink-policy export trustSink; avoid generic trust/bless escape hatches',
       'public.ts: public export blessSink would create a generic blessed-sink escape hatch',
+    ]);
+  });
+
+  it('rejects aliased and wildcard public re-exports from the sink-policy module', () => {
+    expect(
+      publicSinkPolicyEscapeFindings(
+        'public.ts',
+        `
+          export { blessSink as unsafeBless } from "./internal/sink-policy.js";
+          export * as sinkPolicy from "./internal/sink-policy.js";
+        `,
+      ),
+    ).toEqual([
+      'public.ts: public re-export blessSink from internal sink-policy would create a generic blessed-sink escape hatch',
+      'public.ts: public wildcard re-export from internal sink-policy would create a generic blessed-sink escape hatch',
+    ]);
+  });
+
+  it('rejects public aliases of imported sink-policy escape hatches', () => {
+    expect(
+      publicSinkPolicyEscapeFindings(
+        'public.ts',
+        `
+          import { blessSink as mintSink, isBlessedSink } from "./internal/sink-policy.js";
+          export { mintSink as reviewedSinkFactory, isBlessedSink as checkedSink };
+        `,
+      ),
+    ).toEqual([
+      'public.ts: public export reviewedSinkFactory aliases internal sink-policy blessSink and would create a generic blessed-sink escape hatch',
+      'public.ts: public export checkedSink aliases internal sink-policy isBlessedSink and would create a generic blessed-sink escape hatch',
     ]);
   });
 });

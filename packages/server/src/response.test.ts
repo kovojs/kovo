@@ -111,6 +111,34 @@ describe('server response adapters', () => {
     expect(response.headers.get('location')).toBe('/account?tab=orders#paid');
   });
 
+  it('does not accept structurally copied redirect responses as blessed witnesses', () => {
+    const events: unknown[] = [];
+    const blessed = blessRedirectResponse({
+      body: '',
+      headers: { Location: redirectLocationHeader('/account') },
+      status: 303,
+    });
+    const copied = { ...blessed, headers: { ...blessed.headers } };
+    const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
+
+    try {
+      const response = serverResponseToWebResponse(copied, { method: 'GET' });
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('/');
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        action: 'neutralize',
+        code: 'KV236',
+        family: 'header',
+        reason: '3xx Location headers must be minted by the framework redirect-location sink',
+        sink: 'Location',
+      });
+    } finally {
+      restore();
+    }
+  });
+
   it('neutralizes unsafe blessed redirect Location targets before the web boundary', () => {
     for (const target of [
       'https://evil.example/phish',
