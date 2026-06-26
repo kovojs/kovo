@@ -191,6 +191,8 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. The same gate now rejects
       raw filesystem serving/open stream sinks (`createReadStream`, `createWriteStream`, `open`, `openSync`)
       outside the rooted file-serve primitive owner; focused sink-policy tests, `pnpm run check:sink-policy`, and
+      `git diff --check` passed. Default `fs` imports and direct raw filesystem sink re-exports are now covered
+      by the same rooted-file gate; focused sink-policy tests, `pnpm run check:sink-policy`, and
       `git diff --check` passed. Remaining gap: other §3 candidates and full static by-construction value-path
       analyzer integration are not complete.
 
@@ -270,6 +272,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `pnpm run check:vp` passed. Readonly callback array wrapper methods (`callbacks.forEach((run) => run())`
       / `map`) now preserve enforced callback-body reachability for proven const arrays, while mutating and
       dynamic method shapes remain outside the proof; focused registry tests, `git diff --check`, and
+      `pnpm run check:vp` passed. Static object wrappers around proven callback arrays such as
+      `wrapper.callbacks[0]()` now preserve enforced callback-body reachability, while computed, spread, mutable,
+      dynamic, and escaped wrappers remain outside the proof; focused registry tests, `git diff --check`, and
       `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
@@ -298,6 +303,8 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       so accessor-backed or prototype-inherited review claims fail closed without invoking getters; focused
       agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. `tool()` now snapshots and freezes the
       validated ambient credential posture so caller mutation after declaration cannot widen the runtime allowlist;
+      focused agent-tool tests and `git diff --check` passed. `agentToolAuditFacts()` now returns frozen audit
+      fact snapshots, including nested ambient justification, authority, capability, and reachable-sink data;
       focused agent-tool tests and `git diff --check` passed. Remaining gap: broader analyzer integration beyond
       the framework-owned `tool()` boundary.
 
@@ -423,6 +430,9 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       tests, `git diff --check`, and `pnpm run check:vp` passed. Kovo-owned opaque session records are now
       snapshotted after validation/establishment/rotation, so custom-store post-validation mutation cannot change
       the request session or cookie expiry; focused opaque-session/app tests and `git diff --check` passed.
+      Browser session cookies now derive `Max-Age` and `Expires` from the store-backed absolute expiry and refuse
+      already-expired custom-store records before setting a cookie; focused opaque-session tests and
+      `git diff --check` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
@@ -664,7 +674,9 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       the focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed. Const aliases through
       static readonly object wrappers now preserve exact owner-principal provenance (for example
       `wrapper.principal.userId`), while mismatched, unsummarized, mutable, and computed-access variants remain
-      `scope: unknown`; the focused scope-audit test and `git diff --check` passed.
+      `scope: unknown`; the focused scope-audit test and `git diff --check` passed. Const scalar/object aliases
+      placed inside static readonly object wrappers now preserve exact owner-principal provenance, while mutable
+      alias variants stay `scope: unknown`; the focused scope-audit test and `git diff --check` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
