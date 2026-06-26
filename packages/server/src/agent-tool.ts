@@ -53,9 +53,21 @@ export interface AgentToolAuditMetadata {
   site?: string;
 }
 
-/** Ambient credential carrier classes a reviewed agent tool may accept at invocation time. */
+/**
+ * Ambient credential carrier classes a reviewed agent tool may accept at invocation time.
+ *
+ * SPEC §6.6 (default-deny over default-allow): identity-aware reverse proxies forward two
+ * distinct things — an *assertion* of who the end user is, and a *live OAuth bearer access
+ * token* the upstream IdP minted for that user. These are separate authority classes:
+ * `auth-proxy-identity` carries only the asserted principal (e.g. `x-forwarded-user`,
+ * `x-forwarded-email`), while `auth-proxy-token` carries an exfiltratable upstream access
+ * token (`x-forwarded-access-token`, `x-amzn-oidc-accesstoken`, `x-auth-request-access-token`).
+ * Splitting them lets a reviewer grant a tool the asserted identity without unavoidably
+ * also handing it live bearer tokens (bugz-3 L12).
+ */
 export type AgentToolAmbientCredentialKind =
-  | 'auth-proxy'
+  | 'auth-proxy-identity'
+  | 'auth-proxy-token'
   | 'authorization'
   | 'cookie'
   | 'proxy-authorization'
@@ -219,6 +231,9 @@ export function agentToolAuditFacts(
       assertAgentToolDeclaration(declaration);
       const ambient = declaration.ambientCredentials;
       return Object.freeze({
+        // bugz-3 M8: 'rejected' is truthful by construction — under allow:false the
+        // handler request is rebuilt from an allowlist (rebuildAgentToolHeaders), so
+        // no inbound ambient identity/authz header survives to the handler.
         ambientBrowserCredentials: ambient.allow === true ? 'allowed' : 'rejected',
         ...(ambient.allow === true
           ? {
@@ -336,52 +351,77 @@ type AmbientCredentialFinding = {
   readonly source: string;
 };
 
+// bugz-3 L12 (SPEC §6.6): live OAuth bearer access tokens are classified as
+// `auth-proxy-token`; every other reverse-proxy header is a pure identity
+// assertion (`auth-proxy-identity`). Keeping the array order stable keeps the
+// fail-closed finding messages deterministic. NOTE: this denylist is the
+// reviewer-facing *classification* for the allow:true opt-in and the loud
+// fail-closed throw; it is NOT what removes ambient authority under the default
+// allow:false posture — that is done by construction in rebuildAgentToolHeaders.
 const ambientCredentialHeaders = [
   { header: 'authorization', kind: 'authorization' },
   { header: 'cookie', kind: 'cookie' },
-  { header: 'cf-access-authenticated-user-email', kind: 'auth-proxy' },
-  { header: 'cf-access-jwt-assertion', kind: 'auth-proxy' },
+  { header: 'cf-access-authenticated-user-email', kind: 'auth-proxy-identity' },
+  { header: 'cf-access-jwt-assertion', kind: 'auth-proxy-identity' },
   { header: 'proxy-authorization', kind: 'proxy-authorization' },
-  { header: 'remote-email', kind: 'auth-proxy' },
-  { header: 'remote-user', kind: 'auth-proxy' },
-  { header: 'x-amzn-oidc-accesstoken', kind: 'auth-proxy' },
-  { header: 'x-amzn-oidc-data', kind: 'auth-proxy' },
-  { header: 'x-amzn-oidc-identity', kind: 'auth-proxy' },
-  { header: 'x-auth-request-access-token', kind: 'auth-proxy' },
-  { header: 'x-auth-request-email', kind: 'auth-proxy' },
-  { header: 'x-auth-request-user', kind: 'auth-proxy' },
-  { header: 'x-forwarded-access-token', kind: 'auth-proxy' },
+  { header: 'remote-email', kind: 'auth-proxy-identity' },
+  { header: 'remote-user', kind: 'auth-proxy-identity' },
+  { header: 'x-amzn-oidc-accesstoken', kind: 'auth-proxy-token' },
+  { header: 'x-amzn-oidc-data', kind: 'auth-proxy-identity' },
+  { header: 'x-amzn-oidc-identity', kind: 'auth-proxy-identity' },
+  { header: 'x-auth-request-access-token', kind: 'auth-proxy-token' },
+  { header: 'x-auth-request-email', kind: 'auth-proxy-identity' },
+  { header: 'x-auth-request-user', kind: 'auth-proxy-identity' },
+  { header: 'x-forwarded-access-token', kind: 'auth-proxy-token' },
   { header: 'x-forwarded-authorization', kind: 'authorization' },
-  { header: 'x-forwarded-email', kind: 'auth-proxy' },
-  { header: 'x-forwarded-user', kind: 'auth-proxy' },
-  { header: 'x-goog-authenticated-user-email', kind: 'auth-proxy' },
-  { header: 'x-goog-authenticated-user-id', kind: 'auth-proxy' },
-  { header: 'x-ms-client-principal', kind: 'auth-proxy' },
-  { header: 'x-ms-client-principal-id', kind: 'auth-proxy' },
-  { header: 'x-ms-client-principal-name', kind: 'auth-proxy' },
-  { header: 'x-remote-email', kind: 'auth-proxy' },
-  { header: 'x-remote-user', kind: 'auth-proxy' },
+  { header: 'x-forwarded-email', kind: 'auth-proxy-identity' },
+  { header: 'x-forwarded-user', kind: 'auth-proxy-identity' },
+  { header: 'x-goog-authenticated-user-email', kind: 'auth-proxy-identity' },
+  { header: 'x-goog-authenticated-user-id', kind: 'auth-proxy-identity' },
+  { header: 'x-ms-client-principal', kind: 'auth-proxy-identity' },
+  { header: 'x-ms-client-principal-id', kind: 'auth-proxy-identity' },
+  { header: 'x-ms-client-principal-name', kind: 'auth-proxy-identity' },
+  { header: 'x-remote-email', kind: 'auth-proxy-identity' },
+  { header: 'x-remote-user', kind: 'auth-proxy-identity' },
 ] as const satisfies readonly AmbientCredentialHeader[];
 
 const ambientCredentialKinds = [
-  'auth-proxy',
+  'auth-proxy-identity',
+  'auth-proxy-token',
   'authorization',
   'cookie',
   'proxy-authorization',
   'session',
 ] as const satisfies readonly AgentToolAmbientCredentialKind[];
 
+/**
+ * Transport / content-negotiation request headers that carry no ambient identity
+ * or authority. Under the default-deny (allow:false) posture the handler request
+ * is rebuilt to retain ONLY these (bugz-3 M8 / SPEC §6.6). Lowercased to match
+ * the `Headers` iteration order.
+ */
+const ambientFreeRequestHeaders: ReadonlySet<string> = new Set([
+  'accept',
+  'accept-language',
+  'content-language',
+  'content-length',
+  'content-type',
+]);
+
 function normalizeAgentToolRequest(
   declaration: AgentToolDeclaration<unknown, unknown, unknown>,
   request: Request,
 ): AgentToolRequest {
   const findings = ambientCredentialFindings(request);
+  const allowAmbient = declaration.ambientCredentials.allow === true;
+  // Narrow on the property directly (not the `allowAmbient` alias) so TypeScript
+  // resolves `credentialKinds` against the allow:true variant of the union.
   const allowedKinds =
     declaration.ambientCredentials.allow === true
-      ? new Set(declaration.ambientCredentials.credentialKinds)
+      ? new Set<AgentToolAmbientCredentialKind>(declaration.ambientCredentials.credentialKinds)
       : new Set<AgentToolAmbientCredentialKind>();
 
-  if (declaration.ambientCredentials.allow !== true && findings.length > 0) {
+  if (!allowAmbient && findings.length > 0) {
     throw new AgentToolCapabilityError(
       `Agent tool "${declaration.name}" rejects ambient browser/session credentials by default: ${describeAmbientCredentialFindings(
         findings,
@@ -398,12 +438,50 @@ function normalizeAgentToolRequest(
     );
   }
 
+  const headers = rebuildAgentToolHeaders(request, allowAmbient, allowedKinds);
+
+  return requestWithoutSession(new Request(request, { credentials: 'omit', headers }));
+}
+
+/**
+ * Rebuild the headers for the request handed to a tool handler.
+ *
+ * bugz-3 M8 (SPEC §6.6, default-deny over default-allow): under the default
+ * fail-closed posture (`allow:false`) the rebuilt request retains ONLY an
+ * ALLOWLIST of transport/content-negotiation headers that carry no ambient
+ * identity or authority. Every other inbound header is dropped BY CONSTRUCTION —
+ * including the open, unbounded set of reverse-proxy identity/authz carriers a
+ * denylist can never fully enumerate (`X-Forwarded-Groups`, `X-Auth-Request-Groups`,
+ * `Remote-Groups`, `Remote-Name`, `Tailscale-User-Login`, `X-Pomerium-Claim-*`,
+ * `X-Vouch-User`, ...). This makes the `ambientBrowserCredentials: 'rejected'`
+ * audit fact true rather than aspirational: a confused-deputy handler doing
+ * group/role authz off such a header now reads `null`, not the victim's claims.
+ * The known credential carriers (cookie/authorization/proxy-auth/auth-proxy*)
+ * still trip the loud fail-closed throw in normalizeAgentToolRequest first.
+ *
+ * Under a reviewed `allow:true` opt-in, the request is copied and only the
+ * declared credential-carrier headers whose `kind` was NOT granted by
+ * `credentialKinds` are dropped (the throw above already rejects an invocation
+ * that carries an undeclared credential kind, so this is defense-in-depth).
+ */
+function rebuildAgentToolHeaders(
+  request: Request,
+  allowAmbient: boolean,
+  allowedKinds: ReadonlySet<AgentToolAmbientCredentialKind>,
+): Headers {
+  if (!allowAmbient) {
+    const safe = new Headers();
+    for (const [name, value] of request.headers) {
+      if (ambientFreeRequestHeaders.has(name)) safe.set(name, value);
+    }
+    return safe;
+  }
+
   const headers = new Headers(request.headers);
   for (const { header, kind } of ambientCredentialHeaders) {
     if (!allowedKinds.has(kind)) headers.delete(header);
   }
-
-  return requestWithoutSession(new Request(request, { credentials: 'omit', headers }));
+  return headers;
 }
 
 function ambientCredentialFindings(request: Request): AmbientCredentialFinding[] {
