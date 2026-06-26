@@ -1322,6 +1322,16 @@ function fsImportLocals(text) {
     namespaces.add(namespaceRequire[1]);
   }
 
+  const namespaceDynamicImportPattern = new RegExp(
+    String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?import\s*\(\s*(['"])${fsModule}\2\s*\)`,
+    'g',
+  );
+  let namespaceDynamicImport;
+  while ((namespaceDynamicImport = namespaceDynamicImportPattern.exec(text)) !== null) {
+    if (isInsideStringOrComment(text, namespaceDynamicImport.index)) continue;
+    namespaces.add(namespaceDynamicImport[1]);
+  }
+
   const directExportPattern = new RegExp(
     String.raw`\bexport\s*\{([^}]+)\}\s*from\s*(['"])${fsModule}\2`,
     'g',

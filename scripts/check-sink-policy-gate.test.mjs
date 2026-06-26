@@ -363,6 +363,37 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects static dynamic-import raw filesystem file-serve sinks', () => {
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/server/src/unsafe-file.ts',
+        `
+          const fs = await import("node:fs");
+          const fsPromises = await import("node:fs/promises");
+          fs.createReadStream(requestedPath);
+          await fsPromises.open(requestedPath);
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createReadStream call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem open call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+    ]);
+  });
+
+  it('allows non-sink static dynamic filesystem imports', () => {
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/server/src/read-file.ts',
+        `
+          const fs = await import("node:fs/promises");
+          const childProcess = await import("node:child_process");
+          const bytes = await fs.readFile(manifestPath);
+          childProcess.spawn("git", ["status"]);
+        `,
+      ),
+    ).toEqual([]);
+  });
+
   it('allows raw filesystem file-serve sinks only in the rooted file primitive owner', () => {
     expect(
       rootedFileServeRawSinkFindings(
