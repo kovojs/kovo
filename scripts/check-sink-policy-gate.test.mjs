@@ -14,6 +14,7 @@ import {
   publicSinkPolicyEscapeFindings,
   responseFragmentApplyInvariantFindings,
   sqlBlessedBrandLaunderingFindings,
+  sqlBlessedBrandStampFindings,
   sqlGuardDowngradeFindings,
   sqlSafetyInvariantFindings,
 } from './check-sink-policy-gate.mjs';
@@ -789,6 +790,95 @@ describe('sink-policy gate', () => {
         { allowedConstructorFile: true },
       ),
     ).toEqual([]);
+  });
+
+  it('allows SQL stamp helpers only in owned constructor modules', () => {
+    expect(
+      sqlBlessedBrandStampFindings(
+        'packages/core/src/internal/sql-safety.ts',
+        'export function stampParameterizedSql(value) { return value; }',
+        { allowedStampFile: true },
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlBlessedBrandStampFindings(
+        'packages/drizzle/src/runtime.ts',
+        `
+          import { stampParameterizedSql, stampStaticSql } from '@kovojs/core/internal/sql-safety';
+          export function sql(strings) {
+            return stampParameterizedSql({ strings });
+          }
+          export function staticSql(value) {
+            return stampStaticSql({ value });
+          }
+        `,
+        { allowedStampFile: true },
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects SQL stamp helper import and call drift outside owned constructor modules', () => {
+    expect(
+      sqlBlessedBrandStampFindings(
+        'packages/server/src/unsafe-sql.ts',
+        `
+          import { stampParameterizedSql as stampQuery, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
+          export function launder(value) {
+            stampTrustedSql(value, 'runtime');
+            return stampQuery(value);
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand constructor ownership drift via stampParameterizedSql import; keep SQL stamp helpers confined to core sql-safety.ts and the reviewed Drizzle runtime adapter',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand constructor ownership drift via stampQuery(); use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) instead of minting stamps outside owned constructors',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand constructor ownership drift via stampTrustedSql import; keep SQL stamp helpers confined to core sql-safety.ts and the reviewed Drizzle runtime adapter',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand constructor ownership drift via stampTrustedSql(); use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) instead of minting stamps outside owned constructors',
+    ]);
+  });
+
+  it('rejects SQL stamp helper namespace calls and re-exports outside owned constructor modules', () => {
+    expect(
+      sqlBlessedBrandStampFindings(
+        'packages/core/src/unsafe.ts',
+        `
+          import * as sqlSafety from './internal/sql-safety.js';
+          export { stampStaticSql } from './internal/sql-safety.js';
+          export * as unsafeSqlSafety from './internal/sql-safety.js';
+          const statement = sqlSafety.stampStaticSql({});
+        `,
+      ),
+    ).toEqual([
+      'packages/core/src/unsafe.ts: KV440 SQL blessed-brand constructor ownership drift via sqlSafety.stampStaticSql(); use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) instead of minting stamps outside owned constructors',
+      'packages/core/src/unsafe.ts: KV440 SQL blessed-brand constructor ownership drift via stampStaticSql re-export; do not expose SQL stamp helpers outside owned constructors',
+      'packages/core/src/unsafe.ts: KV440 SQL blessed-brand constructor ownership drift via sql-safety wildcard re-export; do not expose SQL stamp helpers outside owned constructors',
+    ]);
+  });
+
+  it('runs the SQL stamp ownership gate over configured source files', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: [],
+        deserializationFiles: [],
+        exists: (file) => file === 'sink-policy.ts' || file === 'packages/server/src/unsafe.ts',
+        logChannelFiles: [],
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'import { stampStaticSql } from "@kovojs/core/internal/sql-safety";',
+        responseFragmentApplyPath: undefined,
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: ['packages/server/src/unsafe.ts'],
+        sqlBlessedBrandStampFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: KV440 SQL blessed-brand constructor ownership drift via stampStaticSql import; keep SQL stamp helpers confined to core sql-safety.ts and the reviewed Drizzle runtime adapter',
+    ]);
   });
 
   it('pins response-fragment raw HTML writes to the Trusted Types and sanitizer path', () => {

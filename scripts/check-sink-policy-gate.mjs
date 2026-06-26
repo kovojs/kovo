@@ -58,6 +58,10 @@ const defaultSqlBlessedBrandRoots = [
   'packages/server/src',
 ];
 const defaultSqlBlessedBrandConstructorFiles = ['packages/core/src/internal/sql-safety.ts'];
+const defaultSqlBlessedBrandStampFiles = [
+  'packages/core/src/internal/sql-safety.ts',
+  'packages/drizzle/src/runtime.ts',
+];
 const sqlBlessedBrandTypeNames = new Set([
   'KovoParameterizedSql',
   'KovoSqlIdentifier',
@@ -69,6 +73,14 @@ const sqlBlessedBrandTypeNames = new Set([
   'SqlKeyword',
   'StaticSqlText',
   'TrustedSql',
+]);
+const sqlBlessedBrandStampNames = new Set([
+  'stampParameterizedSql',
+  'stampRawSqlChunk',
+  'stampSqlIdentifier',
+  'stampSqlKeyword',
+  'stampStaticSql',
+  'stampTrustedSql',
 ]);
 
 const allowedSinkPolicyExports = new Set([
@@ -136,6 +148,9 @@ export function checkSinkPolicyGate(options = {}) {
   const sqlBlessedBrandConstructorFileSet = new Set(
     options.sqlBlessedBrandConstructorFiles ?? defaultSqlBlessedBrandConstructorFiles,
   );
+  const sqlBlessedBrandStampFileSet = new Set(
+    options.sqlBlessedBrandStampFiles ?? defaultSqlBlessedBrandStampFiles,
+  );
   const commandExecutionFiles =
     options.commandExecutionFiles ?? collectSourceFiles(root, commandExecutionRoots);
   const logChannelFiles = options.logChannelFiles ?? collectSourceFiles(root, logChannelRoots);
@@ -200,6 +215,11 @@ export function checkSinkPolicyGate(options = {}) {
     findings.push(
       ...sqlBlessedBrandLaunderingFindings(filePath, readText(filePath), {
         allowedConstructorFile: sqlBlessedBrandConstructorFileSet.has(filePath),
+      }),
+    );
+    findings.push(
+      ...sqlBlessedBrandStampFindings(filePath, readText(filePath), {
+        allowedStampFile: sqlBlessedBrandStampFileSet.has(filePath),
       }),
     );
   }
@@ -582,6 +602,74 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
         `${filePath}: KV440 SQL blessed-brand laundering via angle-bracket type assertion; use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor`,
       );
     }
+  }
+
+  return dedupe(findings);
+}
+
+export function sqlBlessedBrandStampFindings(filePath, text, options = {}) {
+  if (options.allowedStampFile === true) return [];
+  if (!isProductionSourceFile(filePath)) return [];
+
+  const source = stripComments(text);
+  const findings = [];
+  const importedStampLocals = sqlSafetyStampImports(source);
+
+  for (const imported of importedStampLocals.named) {
+    findings.push(
+      `${filePath}: KV440 SQL blessed-brand constructor ownership drift via ${imported.imported} import; keep SQL stamp helpers confined to core sql-safety.ts and the reviewed Drizzle runtime adapter`,
+    );
+
+    const pattern = new RegExp(`\\b${escapeRegExp(imported.local)}\\s*\\(`);
+    if (pattern.test(source)) {
+      findings.push(
+        `${filePath}: KV440 SQL blessed-brand constructor ownership drift via ${imported.local}(); use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) instead of minting stamps outside owned constructors`,
+      );
+    }
+  }
+
+  for (const local of importedStampLocals.namespaces) {
+    for (const stampName of sqlBlessedBrandStampNames) {
+      const pattern = new RegExp(`\\b${escapeRegExp(local)}\\s*\\.\\s*${stampName}\\s*\\(`);
+      if (pattern.test(source)) {
+        findings.push(
+          `${filePath}: KV440 SQL blessed-brand constructor ownership drift via ${local}.${stampName}(); use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) instead of minting stamps outside owned constructors`,
+        );
+      }
+    }
+  }
+
+  const stampNamePattern = [...sqlBlessedBrandStampNames].map(escapeRegExp).join('|');
+  const directExportPattern = new RegExp(
+    String.raw`\bexport\s*(?:type\s*)?\{([^}]+)\}\s*from\s*(['"])([^'"]*sql-safety(?:\.js)?)\2`,
+    'g',
+  );
+  let directExport;
+  while ((directExport = directExportPattern.exec(source)) !== null) {
+    for (const specifier of parseNamedSpecifiers(directExport[1])) {
+      if (!sqlBlessedBrandStampNames.has(specifier.imported)) continue;
+      findings.push(
+        `${filePath}: KV440 SQL blessed-brand constructor ownership drift via ${specifier.imported} re-export; do not expose SQL stamp helpers outside owned constructors`,
+      );
+    }
+  }
+
+  const wildcardExportPattern =
+    /\bexport\s+(?:type\s+)?\*\s*(?:as\s+[A-Za-z_$][\w$]*\s*)?from\s*(['"])([^'"]*sql-safety(?:\.js)?)\1/g;
+  if (wildcardExportPattern.test(source)) {
+    findings.push(
+      `${filePath}: KV440 SQL blessed-brand constructor ownership drift via sql-safety wildcard re-export; do not expose SQL stamp helpers outside owned constructors`,
+    );
+  }
+
+  const directCallPattern = new RegExp(String.raw`(^|[^\w$.])(${stampNamePattern})\s*\(`, 'g');
+  let directCall;
+  while ((directCall = directCallPattern.exec(source)) !== null) {
+    const local = directCall[2];
+    if ([...importedStampLocals.named].some((imported) => imported.local === local)) continue;
+    findings.push(
+      `${filePath}: KV440 SQL blessed-brand constructor ownership drift via ${local}(); use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) instead of minting stamps outside owned constructors`,
+    );
   }
 
   return dedupe(findings);
@@ -1099,6 +1187,54 @@ function deserializationImportLocals(text) {
     if (moduleNameSuggestsDeserialization(namespaceDynamicImport[3])) {
       namespaces.add(namespaceDynamicImport[1]);
     }
+  }
+
+  return { named, namespaces };
+}
+
+function sqlSafetyStampImports(text) {
+  const named = [];
+  const namespaces = new Set();
+  const sqlSafetyModule = String.raw`[^'"]*sql-safety(?:\.js)?`;
+
+  const namedImportPattern = new RegExp(
+    String.raw`\bimport\s*\{([^}]+)\}\s*from\s*(['"])${sqlSafetyModule}\2`,
+    'g',
+  );
+  let namedImport;
+  while ((namedImport = namedImportPattern.exec(text)) !== null) {
+    for (const specifier of parseNamedSpecifiers(namedImport[1])) {
+      if (sqlBlessedBrandStampNames.has(specifier.imported)) named.push(specifier);
+    }
+  }
+
+  const namespaceImportPattern = new RegExp(
+    String.raw`\bimport\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*(['"])${sqlSafetyModule}\2`,
+    'g',
+  );
+  let namespaceImport;
+  while ((namespaceImport = namespaceImportPattern.exec(text)) !== null) {
+    namespaces.add(namespaceImport[1]);
+  }
+
+  const destructuredRequirePattern = new RegExp(
+    String.raw`\b(?:const|let|var)\s*\{([^}]+)\}\s*=\s*require\s*\(\s*(['"])${sqlSafetyModule}\2\s*\)`,
+    'g',
+  );
+  let destructuredRequire;
+  while ((destructuredRequire = destructuredRequirePattern.exec(text)) !== null) {
+    for (const specifier of parseObjectBindingSpecifiers(destructuredRequire[1])) {
+      if (sqlBlessedBrandStampNames.has(specifier.imported)) named.push(specifier);
+    }
+  }
+
+  const namespaceRequirePattern = new RegExp(
+    String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*require\s*\(\s*(['"])${sqlSafetyModule}\2\s*\)`,
+    'g',
+  );
+  let namespaceRequire;
+  while ((namespaceRequire = namespaceRequirePattern.exec(text)) !== null) {
+    namespaces.add(namespaceRequire[1]);
   }
 
   return { named, namespaces };
