@@ -246,6 +246,50 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
   });
 
+  it('OPP-28: treats non-equality write predicates as args without proving session scope', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { ne, not, eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export async function closeExceptInput(db: PgAsyncDatabase<any, any>, input: { userId: string }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(ne(orders.userId, input.userId));',
+              '}',
+              '',
+              'export async function closeNotInput(db: PgAsyncDatabase<any, any>, input: { userId: string }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(not(eq(orders.userId, input.userId)));',
+              '}',
+              '',
+              'export async function closeExceptMine(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(ne(orders.userId, req.session.userId));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'closeExceptInput', scope: 'args' },
+      { name: 'closeExceptMine', scope: 'unknown' },
+      { name: 'closeNotInput', scope: 'args' },
+    ]);
+    expect(audit.scopeAudits.find((a) => a.name === 'closeExceptMine')?.detail).toContain(
+      'no owner-column session/principal predicate was proven',
+    );
+  });
+
   // H5 (SPEC §6.5/§10.3, KV414 IDOR): a NESTED client-input value whose field name happens
   // to be `session`/`guard` (`input.session.userId`) is byte-identical in shape/type to the
   // trusted `req.session.userId` above — but it is client-controlled, so the owner predicate
@@ -628,6 +672,61 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
     expect(audit.scopeAudits.find((a) => a.name === 'ordersMine')?.detail).toContain(
       'owner column compared to session:userId',
+    );
+  });
+
+  it('OPP-28: treats non-equality read predicates as args without proving session scope', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { ne, not, eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const ordersExceptInput = query("ordersExceptInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    return db.select({ id: orders.id }).from(orders).where(ne(orders.userId, input.userId));',
+              '  },',
+              '});',
+              '',
+              'export const ordersNotInput = query("ordersNotInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    return db.select({ id: orders.id }).from(orders).where(not(eq(orders.userId, input.userId)));',
+              '  },',
+              '});',
+              '',
+              'export const ordersExceptMine = query("ordersExceptMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(ne(orders.userId, req.session.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'ordersExceptInput', scope: 'args' },
+      { name: 'ordersExceptMine', scope: 'unknown' },
+      { name: 'ordersNotInput', scope: 'args' },
+    ]);
+    expect(audit.scopeAudits.find((a) => a.name === 'ordersExceptMine')?.detail).toContain(
+      'no owner-column session/principal predicate was proven',
     );
   });
 

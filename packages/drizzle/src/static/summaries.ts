@@ -736,10 +736,11 @@ function eqOperandsAreTableColumnArgKeyed(
  * Two tiers, both reusing the write side's `eqPredicateConjuncts` (~:9736):
  * - `instanceKey`: top-level/`and(...)` conjuncts only — these may discharge a unique
  *   single-row instance key and a `session` scope.
- * - `argCandidates`: every `eq(...)` operand pair anywhere in the predicate tree,
- *   INCLUDING under `or(...)` (A2, fail-closed). An arg-keyed owner operand in any
- *   branch is an `args`-scope candidate that must surface KV414, but an `or`-branch
- *   does NOT pin a row, so these never discharge an instance key.
+ * - `argCandidates`: every direct comparison operand pair anywhere in the predicate
+ *   tree, INCLUDING under `or(...)` (A2, fail-closed). An arg-keyed owner operand in
+ *   any branch is an `args`-scope candidate that must surface KV414, but an
+ *   `or`-branch or non-equality comparison does NOT pin a row, so these never
+ *   discharge an instance key.
  */
 /** @internal */ export function queryInstanceKeyComparisons(
   body: ObjectLiteralExpression,
@@ -786,9 +787,10 @@ function eqOperandsAreTableColumnArgKeyed(
 }
 
 /**
- * Every `eq(...)` operand pair nested anywhere under a predicate node (SPEC §11.1,
- * KV414 fail-closed). Used only for `args`/`session` scope candidacy — `or(...)`
- * branches are included here but must never discharge an instance key.
+ * Every direct comparison operand pair nested anywhere under a predicate node (SPEC
+ * §11.1, KV414 fail-closed). Used only for `args` scope candidacy — `or(...)`
+ * branches and non-equality comparisons are included here but must never discharge
+ * an instance key or owner-principal session proof.
  */
 /** @internal */ export function allEqOperandPairs(predicate: Node): EqPredicateConjunct[] {
   return pnfAllEqOperandPairs(predicatePnf(predicate));
@@ -2238,8 +2240,9 @@ function localDestructuredInputKey(expression: Node): string | undefined {
 /**
  * Classify a write chain's `where()` predicate operands the same way as a query read
  * (SPEC §10.3, KV414 A1/A2/A3). Reuses `eqPredicateConjuncts` (`and()`/top-level →
- * instance-key/`session` candidates) and `allEqOperandPairs` (every `eq` operand,
- * incl. `or()` branches → fail-closed `args` candidates), with the same
+ * instance-key/`session` candidates) and `allEqOperandPairs` (every direct
+ * comparison operand, incl. `or()` branches and non-equality forms → fail-closed
+ * `args` candidates), with the same
  * `input.*`/`req.session.*`/table-column operand classifier the read side uses — so a
  * write keyed by a client arg against an owner table emits a `kind:'write'` scope
  * audit (the write half of KV414 the framework previously never produced).
@@ -2313,6 +2316,7 @@ function localDestructuredInputKey(expression: Node): string | undefined {
 /** @internal */ export type PredicatePnf =
   | { expr: string; kind: 'and'; nodes: readonly PredicatePnf[] }
   | { kind: 'eq'; left: Node; right: Node }
+  | { kind: 'non-eq-comparison'; left: Node; right: Node }
   | { expr: string; kind: 'opaque' }
   | { expr: string; kind: 'or'; nodes: readonly PredicatePnf[] };
 
@@ -2337,6 +2341,21 @@ function localDestructuredInputKey(expression: Node): string | undefined {
     const onlyElement = right ? singleLiteralArrayElement(right) : undefined;
     return left && onlyElement
       ? { kind: 'eq', left, right: onlyElement }
+      : { expr: expression.getText(), kind: 'opaque' };
+  }
+
+  if (name === 'ne') {
+    const [left, right] = expression.getArguments();
+    return left && right
+      ? { kind: 'non-eq-comparison', left, right }
+      : { expr: expression.getText(), kind: 'opaque' };
+  }
+
+  if (name === 'not') {
+    const [argument] = expression.getArguments();
+    const pnf = argument ? predicatePnf(argument) : undefined;
+    return pnf?.kind === 'eq'
+      ? { kind: 'non-eq-comparison', left: pnf.left, right: pnf.right }
       : { expr: expression.getText(), kind: 'opaque' };
   }
 
@@ -2376,7 +2395,9 @@ function singleLiteralArrayElement(node: Node): Node | undefined {
 }
 
 /** @internal */ export function pnfAllEqOperandPairs(pnf: PredicatePnf): EqPredicateConjunct[] {
-  if (pnf.kind === 'eq') return [{ left: pnf.left, right: pnf.right }];
+  if (pnf.kind === 'eq' || pnf.kind === 'non-eq-comparison') {
+    return [{ left: pnf.left, right: pnf.right }];
+  }
   if (pnf.kind === 'and' || pnf.kind === 'or') return pnf.nodes.flatMap(pnfAllEqOperandPairs);
   return [];
 }
