@@ -207,6 +207,7 @@ export function webhook<
   name: Name,
   definition: WebhookDefinition<InputSchema, Value, Tx> & { path: Path },
 ): WebhookDeclaration<Name, Path, InputSchema, Value, Tx> {
+  assertWebhookWritePosture(name, definition);
   let declaration: WebhookDeclaration<Name, Path, InputSchema, Value, Tx>;
   const handler = async (request: EndpointRequest): Promise<Response> =>
     (await runWebhook(declaration, request)).response;
@@ -305,6 +306,22 @@ export async function runWebhook<
     };
   }
 
+  // H8 (SPEC §9.1:875 / §10.3:1151): defense-in-depth dispatch floor mirroring the
+  // declaration-time `assertWebhookWritePosture` gate in webhook(). A webhook that exposes
+  // a writable transaction MUST carry idempotency()+replayStore. Fail closed BEFORE opening
+  // the transaction (not at the old post-commit posture check) so a misconfigured or
+  // hand-built declaration can never commit a write a provider retry would re-execute.
+  if (
+    declaration.webhookDefinition.transaction !== undefined &&
+    !webhookReplayPostureSatisfied(declaration.webhookDefinition)
+  ) {
+    return {
+      changes: [],
+      replayed: false,
+      response: webhookResponse(500, 'Internal Server Error'),
+    };
+  }
+
   const input = inputResult.value;
   const idem = declaration.webhookDefinition.idempotency?.(input);
   // L10-3 (SPEC §9.1:860): use ONE truthiness predicate for the whole replay
@@ -325,19 +342,33 @@ export async function runWebhook<
     };
   }
 
-  const reservation = idemActive
-    ? declaration.webhookDefinition.replayStore?.reserve(replayScope, idem)
-    : undefined;
-  if (idemActive && !reservation) {
-    const pending = await declaration.webhookDefinition.replayStore?.get(replayScope, idem);
-    if (pending) {
-      return {
-        changes: [],
-        replayed: true,
-        response: responseFromWire(pending),
-      };
-    }
+  // H9 (SPEC §10.3:1151): obtain the atomic idempotency reservation BEFORE running the
+  // handler, mirroring the hardened mutation path (replay.ts reserveMutationReplayBeforeRun).
+  // A single non-blocking reserve()→get() attempt is unsound on a durable cross-instance
+  // store (Postgres `INSERT ... ON CONFLICT DO NOTHING` + `SELECT`): get() legitimately
+  // returns undefined for a reserved-but-uncommitted row, so falling through to execute
+  // double-runs the handler. Re-reserve, and if a reservation still cannot be obtained and
+  // no committed response exists, FAIL CLOSED so the provider retries instead of executing.
+  const reserveOutcome = await reserveWebhookReplayBeforeRun(
+    declaration.webhookDefinition.replayStore,
+    replayScope,
+    idem,
+  );
+  if (reserveOutcome.kind === 'replayed') {
+    return {
+      changes: [],
+      replayed: true,
+      response: responseFromWire(reserveOutcome.response),
+    };
   }
+  if (reserveOutcome.kind === 'unavailable') {
+    return {
+      changes: [],
+      replayed: false,
+      response: webhookRetryResponse(),
+    };
+  }
+  const reservation = reserveOutcome.kind === 'reserved' ? reserveOutcome.reservation : undefined;
 
   const changes: ChangeRecord<string, WebhookInputFor<InputSchema>>[] = [];
   const context = webhookHandlerContext(input, endpointRequest, rawBody, changes);
@@ -404,20 +435,99 @@ export async function runWebhook<
   }
 }
 
+/**
+ * Post-handler backstop (SPEC §9.1:875 / §10.3:1151) for the *no-transaction* path: a
+ * webhook with no framework `transaction` wrapper exposes no writable tx, so the
+ * declaration/dispatch write-posture floor (`assertWebhookWritePosture`) does not require
+ * idempotency posture for it — yet if such a handler still records a domain change (via
+ * `recordChange`, its only positive write signal absent a framework commit boundary), that
+ * change MUST be idempotency-protected too. This is NOT the primary write gate (bugz H8:
+ * keying solely on `changes.length` let a tx-direct write that never recorded a change
+ * double-execute); tx-exposing webhooks are gated *before* commit. This assertion only
+ * covers the recordChange-without-posture developer error the runtime can still observe.
+ */
 function assertWebhookReplayPosture(
   declaration: WebhookDeclaration<string, string, any, any, any>,
   changes: readonly ChangeRecord[],
 ): void {
   if (changes.length === 0) return;
-  if (
-    declaration.webhookDefinition.idempotency !== undefined &&
-    declaration.webhookDefinition.replayStore !== undefined
-  ) {
-    return;
-  }
+  if (webhookReplayPostureSatisfied(declaration.webhookDefinition)) return;
   throw new Error(
     `Webhook "${declaration.name}" recorded write changes without idempotency and replayStore posture.`,
   );
+}
+
+/**
+ * H8 (SPEC §9.1:875 / §10.3:1151): a webhook that exposes a writable transaction CAN write
+ * Kovo-owned data, and the runtime cannot prove whether the handler did. The atomic-reservation
+ * replay floor ("a redelivered event id ... must not re-execute the handler") is therefore
+ * mandatory *by construction* for any tx-exposing webhook — not conditional on whether the
+ * handler later calls `recordChange()`. Keying the floor on the post-commit recordChange count
+ * let a tx-direct / outbox write that never recorded a change double-execute on provider retry.
+ * Fail closed at declaration so a write-capable webhook without idempotency()+replayStore cannot
+ * exist (technical-preview stronger default: no opt-out, no compatibility mode).
+ */
+function assertWebhookWritePosture(
+  name: string,
+  definition: { idempotency?: unknown; replayStore?: unknown; transaction?: unknown },
+): void {
+  if (definition.transaction === undefined) return;
+  if (webhookReplayPostureSatisfied(definition)) return;
+  throw new Error(
+    `Webhook "${name}" exposes a writable transaction but does not declare both idempotency() ` +
+      `and replayStore. SPEC §10.3 requires an atomic idempotency reservation for any webhook ` +
+      `handler that can write, so a redelivered event never re-executes it.`,
+  );
+}
+
+function webhookReplayPostureSatisfied(definition: {
+  idempotency?: unknown;
+  replayStore?: unknown;
+}): boolean {
+  return definition.idempotency !== undefined && definition.replayStore !== undefined;
+}
+
+/**
+ * H9 (SPEC §10.3:1151): acquire the atomic idempotency reservation BEFORE running the webhook
+ * handler, mirroring `reserveMutationReplayBeforeRun` (replay.ts). `reserve()` returning
+ * undefined means a concurrent delivery of the same provider event id already holds the slot.
+ * On a durable cross-instance store, `get()` is non-blocking and returns undefined for that
+ * reserved-but-uncommitted row, so a single attempt is NOT a miss — re-reserve, re-read, and if
+ * neither a fresh reservation nor a committed response can be obtained, return `unavailable` so
+ * the caller fails closed (429 Retry-After) and the provider retries, never double-executing.
+ */
+async function reserveWebhookReplayBeforeRun(
+  store: WebhookReplayStore | undefined,
+  scope: string,
+  idem: string | undefined,
+): Promise<
+  | { kind: 'disabled' }
+  | { kind: 'replayed'; response: WebhookWireResponse }
+  | { kind: 'reserved'; reservation: WebhookReplayReservation }
+  | { kind: 'unavailable' }
+> {
+  // Replay dedup is active only when this event yields an idem token AND a store is present.
+  // (For tx-exposing webhooks both are guaranteed by the write-posture floor; idem may still be
+  // undefined if the app's idempotency() deliberately opts a specific event out of dedup.)
+  if (idem === undefined || store === undefined) return { kind: 'disabled' };
+
+  let reservation = store.reserve(scope, idem);
+  if (reservation) return { kind: 'reserved', reservation };
+
+  let committed = await store.get(scope, idem);
+  if (committed) return { kind: 'replayed', response: committed };
+
+  // reserve() lost and get() saw no committed response: a concurrent delivery holds a
+  // reserved-but-uncommitted slot on a durable non-blocking store. Re-reserve rather than
+  // fall through to execute (the bugz H9 double-execute window).
+  reservation = store.reserve(scope, idem);
+  if (reservation) return { kind: 'reserved', reservation };
+
+  committed = await store.get(scope, idem);
+  if (committed) return { kind: 'replayed', response: committed };
+
+  // Still neither reservable nor a committed response — fail closed so the provider retries.
+  return { kind: 'unavailable' };
 }
 
 type WebhookVerificationFields = WebhookVerifiedDefinition | WebhookNoneDefinition;
@@ -596,6 +706,26 @@ function webhookResponse(status: 400 | 401 | 500, body: string): Response {
   return new Response(body, {
     headers: { 'Cache-Control': 'private, no-store', 'Content-Type': 'text/plain; charset=utf-8' },
     status,
+  });
+}
+
+/** Seconds hinted to the provider when an idempotency reservation is momentarily unobtainable. */
+const WEBHOOK_REPLAY_RETRY_AFTER_SECONDS = 1;
+
+/**
+ * H9 (SPEC §10.3:1151): the fail-closed answer when an atomic idempotency reservation cannot be
+ * obtained and no committed response exists (a concurrent in-flight delivery on a durable store).
+ * A 429 with `Retry-After` drives provider redelivery so the handler runs exactly once, instead
+ * of executing here without the reservation the spec requires.
+ */
+function webhookRetryResponse(): Response {
+  return new Response('Webhook processing in progress; retry shortly.', {
+    headers: {
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Retry-After': String(WEBHOOK_REPLAY_RETRY_AFTER_SECONDS),
+    },
+    status: 429,
   });
 }
 

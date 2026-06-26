@@ -8,6 +8,7 @@ import { s, SchemaValidationError } from './schema.js';
 import {
   runWebhook,
   webhook,
+  type WebhookReplayReservation,
   type WebhookReplayStore,
   type WebhookWireResponse,
 } from './webhook.js';
@@ -280,6 +281,136 @@ describe('server webhook primitive', () => {
 
     expect(result.response.status).toBe(500);
     expect(result.replayed).toBe(false);
+  });
+
+  // H8 (SPEC §9.1:875 / §10.3:1151): the idempotency floor must key on whether the webhook
+  // can WRITE, not on whether the handler called recordChange(). A handler that writes via
+  // its `transaction`-provided `tx` (or an outbox table) but never records a change yields
+  // changes.length===0, which the old post-commit posture check waved through — so a provider
+  // retry double-executes (double charge). Require idempotency()+replayStore unconditionally
+  // for any webhook that exposes a writable tx, failing closed BEFORE the transaction commits.
+  it('H8: a tx-writing webhook without idempotency+replayStore cannot be declared', () => {
+    const ledger = domain('ledger-h8');
+    let writes = 0;
+    expect(() =>
+      webhook('charge-no-posture', {
+        handler(input, context) {
+          (context.tx as { insert(): void }).insert();
+          context.recordChange(ledger, { keys: [input.id] });
+          return { ok: true };
+        },
+        input: s.object({ id: s.string() }),
+        path: '/webhooks/charge-no-posture',
+        // Exposes a writable tx, but declares neither idempotency() nor replayStore.
+        async transaction(_context, run) {
+          return run({ insert: () => (writes += 1) });
+        },
+        verify: 'none',
+        verifyJustification: 'fixture-only webhook test',
+      }),
+    ).toThrow(/idempotency\(\) and replayStore/);
+    // The handler/transaction never ran: the declaration itself is rejected.
+    expect(writes).toBe(0);
+  });
+
+  it('H8: a tx-writing webhook whose posture was stripped fails closed at dispatch before commit', async () => {
+    let writes = 0;
+    const wh = webhook('charge-dispatch', {
+      handler(input, context) {
+        (context.tx as { insert(): void }).insert();
+        return { received: input.id };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      path: '/webhooks/charge-dispatch',
+      replayStore: createDurableWebhookReplayStore(),
+      async transaction(_context, run) {
+        return run({ insert: () => (writes += 1) });
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+    // Simulate a declaration that bypassed the builder (e.g. hand-constructed): strip posture.
+    delete (wh.webhookDefinition as { idempotency?: unknown }).idempotency;
+    delete (wh.webhookDefinition as { replayStore?: unknown }).replayStore;
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/charge-dispatch', {
+        body: JSON.stringify({ id: 'evt_1' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(result.replayed).toBe(false);
+    // The transaction was never opened, so the write never executed even once.
+    expect(writes).toBe(0);
+  });
+
+  // H9 (SPEC §10.3:1151): the reserve path did a single non-blocking attempt and, on
+  // reserve()===undefined + get()===undefined, fell through to execute. A contract-compliant
+  // durable cross-instance store (Postgres `INSERT ... ON CONFLICT DO NOTHING` + `SELECT`)
+  // returns undefined from get() for a reserved-but-uncommitted row, so two concurrent
+  // deliveries of the same event id both ran the handler. Re-reserve, and if still unobtainable
+  // with no committed response, fail closed (429) so the provider retries — never double-execute.
+  it('H9: concurrent same-event delivery on a durable store does not double-execute', async () => {
+    const durable = createDurableWebhookReplayStore();
+    const ledger = domain('ledger-h9');
+    let enteredTotal = 0;
+    let sideEffects = 0;
+    let resolveAEntered = (): void => undefined;
+    const aEntered = new Promise<void>((resolve) => (resolveAEntered = resolve));
+    let releaseA = (): void => undefined;
+    const aReleased = new Promise<void>((resolve) => (releaseA = resolve));
+
+    const wh = webhook('durable-charge', {
+      async handler(input, context) {
+        enteredTotal += 1;
+        (context.tx as { write(): void }).write();
+        context.recordChange(ledger, { keys: [input.id] });
+        if (enteredTotal === 1) {
+          resolveAEntered();
+          await aReleased; // park the first (winning) delivery inside the handler
+        }
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      path: '/webhooks/durable-charge',
+      replayStore: durable,
+      async transaction(_context, run) {
+        return run({ write: () => (sideEffects += 1) });
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+
+    const body = JSON.stringify({ id: 'evt_dup' });
+    const makeRequest = () =>
+      new Request('https://example.test/webhooks/durable-charge', { body, method: 'POST' });
+
+    const pendingA = runWebhook(wh, makeRequest());
+    await aEntered; // A has reserved and entered the handler, parked at the barrier
+    const resultB = await runWebhook(wh, makeRequest()); // B now runs to completion
+    releaseA();
+    const resultA = await pendingA;
+
+    // Exactly one delivery executed the write; the loser failed closed.
+    expect(enteredTotal).toBe(1);
+    expect(sideEffects).toBe(1);
+    expect(resultA.response.status).toBe(200);
+    expect(resultA.replayed).toBe(false);
+    expect(resultB.response.status).toBe(429);
+    expect(resultB.replayed).toBe(false);
+    expect(resultB.response.headers.get('retry-after')).toBe('1');
+
+    // A redelivery after A committed replays the stored response (no third execution).
+    const resultC = await runWebhook(wh, makeRequest());
+    expect(resultC.replayed).toBe(true);
+    expect(resultC.response.status).toBe(200);
+    expect(enteredTotal).toBe(1);
+    expect(sideEffects).toBe(1);
   });
 
   // A4 (SPEC §9.1:850): an unexpected handler exception must abort the reservation so
@@ -603,4 +734,34 @@ function createMemoryWebhookReplayStore(): WebhookReplayStore {
 
 function webhookReplayKey(scope: string, idem: string): string {
   return `${scope}\0${idem}`;
+}
+
+// A contract-compliant durable cross-instance store analogue (SPEC §10.3:1151):
+// `reserve` claims the row only when absent (Postgres `INSERT ... ON CONFLICT DO NOTHING`),
+// and `get` is NON-BLOCKING — it returns undefined for a reserved-but-uncommitted row,
+// the realistic shape that exposed the H9 fall-through double-execute.
+function createDurableWebhookReplayStore(): WebhookReplayStore {
+  const rows = new Map<string, { committed?: WebhookWireResponse }>();
+  return {
+    get(scope, idem) {
+      return rows.get(webhookReplayKey(scope, idem))?.committed;
+    },
+    reserve(scope, idem): WebhookReplayReservation | undefined {
+      const key = webhookReplayKey(scope, idem);
+      if (rows.has(key)) return undefined;
+      const row: { committed?: WebhookWireResponse } = {};
+      rows.set(key, row);
+      return {
+        abort() {
+          if (rows.get(key) === row) rows.delete(key);
+        },
+        commit(response) {
+          row.committed = response;
+        },
+      };
+    },
+    set(scope, idem, response) {
+      rows.set(webhookReplayKey(scope, idem), { committed: response });
+    },
+  };
 }
