@@ -276,6 +276,8 @@ const ambientCredentialHeaders = [
   { header: 'cf-access-authenticated-user-email', kind: 'auth-proxy' },
   { header: 'cf-access-jwt-assertion', kind: 'auth-proxy' },
   { header: 'proxy-authorization', kind: 'proxy-authorization' },
+  { header: 'remote-email', kind: 'auth-proxy' },
+  { header: 'remote-user', kind: 'auth-proxy' },
   { header: 'x-amzn-oidc-accesstoken', kind: 'auth-proxy' },
   { header: 'x-amzn-oidc-data', kind: 'auth-proxy' },
   { header: 'x-amzn-oidc-identity', kind: 'auth-proxy' },
@@ -284,11 +286,15 @@ const ambientCredentialHeaders = [
   { header: 'x-auth-request-user', kind: 'auth-proxy' },
   { header: 'x-forwarded-access-token', kind: 'auth-proxy' },
   { header: 'x-forwarded-authorization', kind: 'authorization' },
+  { header: 'x-forwarded-email', kind: 'auth-proxy' },
+  { header: 'x-forwarded-user', kind: 'auth-proxy' },
   { header: 'x-goog-authenticated-user-email', kind: 'auth-proxy' },
   { header: 'x-goog-authenticated-user-id', kind: 'auth-proxy' },
   { header: 'x-ms-client-principal', kind: 'auth-proxy' },
   { header: 'x-ms-client-principal-id', kind: 'auth-proxy' },
   { header: 'x-ms-client-principal-name', kind: 'auth-proxy' },
+  { header: 'x-remote-email', kind: 'auth-proxy' },
+  { header: 'x-remote-user', kind: 'auth-proxy' },
 ] as const satisfies readonly AmbientCredentialHeader[];
 
 const ambientCredentialKinds = [
@@ -394,6 +400,21 @@ function assertCapabilities(capabilities: readonly AgentToolCapability[] | undef
 }
 
 function assertAmbientCredentials(ambient: AgentToolAmbientCredentials | undefined): void {
+  if (ambient !== undefined && ambient.allow !== true) {
+    const rejectedPosture = ambient as {
+      credentialKinds?: unknown;
+      justification?: unknown;
+    };
+    if (
+      rejectedPosture.credentialKinds !== undefined ||
+      rejectedPosture.justification !== undefined
+    ) {
+      throw new AgentToolCapabilityError(
+        'tool.ambientCredentials must not declare credentialKinds or justification unless allow is true.',
+      );
+    }
+  }
+
   if (ambient?.allow === true) {
     assertAmbientCredentialKinds(ambient.credentialKinds);
     assertNonEmpty(ambient.justification?.reason, 'tool.ambientCredentials.justification.reason');

@@ -75,6 +75,21 @@ describe('agent tool capability primitive', () => {
     expect(() =>
       tool({
         ...base,
+        ambientCredentials: {
+          allow: false,
+          credentialKinds: ['cookie'],
+          justification: {
+            authorityBoundary: 'handler re-checks the bound principal before every read',
+            reason: 'legacy browser-authenticated assistant action under review',
+          },
+        } as never,
+      }),
+    ).toThrow(
+      'tool.ambientCredentials must not declare credentialKinds or justification unless allow is true',
+    );
+    expect(() =>
+      tool({
+        ...base,
         reachableSinks: [
           {
             capability: 'email.send',
@@ -121,6 +136,27 @@ describe('agent tool capability primitive', () => {
         },
       ),
     ).rejects.toThrow('auth-proxy(header:x-auth-request-user)');
+
+    await expect(
+      runAgentTool(
+        updateOrder,
+        { id: 'ord_1' },
+        {
+          authority: principalAuthority,
+          request: new Request('https://example.test/tool', {
+            headers: {
+              'remote-user': 'user_123',
+              'x-forwarded-email': 'user@example.test',
+              'x-forwarded-user': 'user_123',
+              'x-remote-user': 'user_123',
+            },
+          }),
+          value: {},
+        },
+      ),
+    ).rejects.toThrow(
+      'auth-proxy(header:remote-user), auth-proxy(header:x-forwarded-email), auth-proxy(header:x-forwarded-user), auth-proxy(header:x-remote-user)',
+    );
 
     const request = new Request('https://example.test/tool') as Request & {
       session?: { userId: string };
@@ -238,12 +274,13 @@ describe('agent tool capability primitive', () => {
             authorization: 'Bearer ambient',
             cookie: 'session=ambient',
             'x-auth-request-user': 'user_123',
+            'x-forwarded-user': 'user_123',
           },
         }),
         value: {},
       }),
     ).rejects.toThrow(
-      'authorization(header:authorization), auth-proxy(header:x-auth-request-user)',
+      'authorization(header:authorization), auth-proxy(header:x-auth-request-user), auth-proxy(header:x-forwarded-user)',
     );
   });
 
