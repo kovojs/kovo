@@ -781,7 +781,7 @@ export function commandExecutionSinkFindings(filePath, text, options = {}) {
 export function dynamicCodeExecutionSinkFindings(filePath, text, options = {}) {
   if (options.allowedExecutionSink === true) return [];
 
-  const source = stripCommentsAndStringContents(text);
+  const source = dynamicCodeSourceForSinkScanning(text);
   const findings = [];
 
   if (hasForbiddenEvalCall(source)) {
@@ -812,12 +812,17 @@ export function dynamicCodeExecutionSinkFindings(filePath, text, options = {}) {
 }
 
 function hasForbiddenEvalCall(source) {
+  const aliases = dynamicCodeGlobalAliasNames(source, 'eval');
+  const globalEvalExpression = String.raw`globalThis\s*(?:\.\s*eval|\[\s*['"]eval['"]\s*\])`;
   const patterns = [
     /(^|[^\w$.])(?:eval|\(\s*eval\s*\))\s*\(/g,
     /(^|[^\w$])\(\s*0\s*,\s*eval\s*\)\s*\(/g,
-    /(^|[^\w$])(?:globalThis\s*\.\s*eval|\(\s*globalThis\s*\.\s*eval\s*\))\s*\(/g,
+    new RegExp(
+      String.raw`(^|[^\w$])(?:${globalEvalExpression}|\(\s*${globalEvalExpression}\s*\))\s*\(`,
+      'g',
+    ),
   ];
-  for (const alias of dynamicCodeGlobalAliasNames(source, 'eval').keys()) {
+  for (const alias of aliases.keys()) {
     patterns.push(
       new RegExp(
         String.raw`(^|[^\w$.])(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(alias)}\s*\))\s*\(`,
@@ -828,7 +833,7 @@ function hasForbiddenEvalCall(source) {
 
   for (const pattern of patterns) {
     for (const call of callArgumentLists(source, pattern)) {
-      if (isShadowedDynamicCodeCall(source, call, 'eval')) continue;
+      if (isShadowedDynamicCodeCall(source, call, 'eval', aliases)) continue;
       return true;
     }
   }
@@ -837,12 +842,16 @@ function hasForbiddenEvalCall(source) {
 
 function hasForbiddenFunctionConstructorCall(source, options = {}) {
   const aliases = dynamicCodeGlobalAliasNames(source, 'Function');
+  const globalFunctionExpression = String.raw`globalThis\s*(?:\.\s*Function|\[\s*['"]Function['"]\s*\])`;
   const patterns = [];
 
   if (options.newOnly !== true) {
     patterns.push(
       /(^|[^\w$.])(?:Function|\(\s*Function\s*\))\s*\(/g,
-      /(^|[^\w$])(?:globalThis\s*\.\s*Function|\(\s*globalThis\s*\.\s*Function\s*\))\s*\(/g,
+      new RegExp(
+        String.raw`(^|[^\w$])(?:${globalFunctionExpression}|\(\s*${globalFunctionExpression}\s*\))\s*\(`,
+        'g',
+      ),
     );
     for (const alias of aliases.keys()) {
       patterns.push(
@@ -857,7 +866,10 @@ function hasForbiddenFunctionConstructorCall(source, options = {}) {
   if (options.callOnly !== true) {
     patterns.push(
       /(^|[^\w$.])new\s+(?:Function|\(\s*Function\s*\))\s*\(/g,
-      /(^|[^\w$])new\s+(?:globalThis\s*\.\s*Function|\(\s*globalThis\s*\.\s*Function\s*\))\s*\(/g,
+      new RegExp(
+        String.raw`(^|[^\w$])new\s+(?:${globalFunctionExpression}|\(\s*${globalFunctionExpression}\s*\))\s*\(`,
+        'g',
+      ),
     );
     for (const alias of aliases.keys()) {
       patterns.push(
@@ -879,6 +891,24 @@ function hasForbiddenFunctionConstructorCall(source, options = {}) {
     }
   }
   return false;
+}
+
+function dynamicCodeSourceForSinkScanning(text) {
+  const source = stripCommentsAndStringContents(text);
+  const chars = source.split('');
+  const literalGlobalDynamicCodeMemberPattern = /\bglobalThis\s*\[\s*(['"])(eval|Function)\1\s*\]/g;
+  let match;
+  while ((match = literalGlobalDynamicCodeMemberPattern.exec(text)) !== null) {
+    if (source.slice(match.index, match.index + 'globalThis'.length) !== 'globalThis') {
+      continue;
+    }
+    const literal = `${match[1]}${match[2]}${match[1]}`;
+    const literalIndex = match.index + match[0].indexOf(literal);
+    for (let offset = 0; offset < literal.length; offset += 1) {
+      chars[literalIndex + offset] = text[literalIndex + offset];
+    }
+  }
+  return chars.join('');
 }
 
 function dynamicCodeGlobalAliasNames(source, targetName) {

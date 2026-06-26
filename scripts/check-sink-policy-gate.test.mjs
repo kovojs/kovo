@@ -512,6 +512,22 @@ describe('sink-policy gate', () => {
     }
   });
 
+  it('rejects literal bracket global eval dynamic code execution in server source', () => {
+    const finding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink eval(); server source must not execute generated code';
+
+    for (const source of [
+      'export const run = globalThis["eval"](code);',
+      "export const run = (globalThis['eval'])(code);",
+      'const run = globalThis["eval"]; export const result = run(code);',
+      "const run = (globalThis['eval']); export const result = (run)(code);",
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        finding,
+      ]);
+    }
+  });
+
   it('rejects Function constructor and call dynamic code execution in server source', () => {
     expect(
       dynamicCodeExecutionSinkFindings(
@@ -562,6 +578,35 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects literal bracket global Function dynamic code execution in server source', () => {
+    const constructorFinding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink new Function(); server source must not execute generated code';
+    const callFinding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code';
+
+    for (const source of [
+      'export const made = new globalThis["Function"](code);',
+      "export const made = new (globalThis['Function'])(code);",
+      'const Make = globalThis["Function"]; export const made = new Make(code);',
+      "const Make = (globalThis['Function']); export const made = new (Make)(code);",
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        constructorFinding,
+      ]);
+    }
+
+    for (const source of [
+      'export const call = globalThis["Function"](code);',
+      "export const call = (globalThis['Function'])(code);",
+      'const Make = globalThis["Function"]; export const call = Make(code);',
+      "const Make = (globalThis['Function']); export const call = (Make)(code);",
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        callFinding,
+      ]);
+    }
+  });
+
   it('rejects vm imports and requires in server source', () => {
     expect(
       dynamicCodeExecutionSinkFindings(
@@ -581,15 +626,42 @@ describe('sink-policy gate', () => {
       dynamicCodeExecutionSinkFindings(
         'packages/server/src/safe.ts',
         `
-          // (0, eval)(code); globalThis.Function(code);
-          const note = "eval(code); new Function(code); globalThis.eval(code)";
+          // (0, eval)(code); globalThis.Function(code); globalThis["eval"](code);
+          const note =
+            "eval(code); new Function(code); globalThis.eval(code); globalThis['Function'](code)";
           export function safe(eval, globalThis) {
             const run = eval;
             function Function(value) {
               return value;
             }
             const Make = Function;
-            return [run("value"), new Make("value"), globalThis.eval("value")];
+            const bracketRun = globalThis["eval"];
+            const bracketMake = globalThis["Function"];
+            return [
+              run("value"),
+              new Make("value"),
+              globalThis.eval("value"),
+              bracketRun("value"),
+              new bracketMake("value"),
+            ];
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('allows locally rebound aliases from literal bracket dynamic-code globals', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/safe.ts',
+        `
+          const run = globalThis["eval"];
+          const Make = globalThis["Function"];
+          export function safe(code) {
+            const run = (value) => value;
+            let Make = class SafeFunction {};
+            Make = class SaferFunction {};
+            return [run(code), new Make(code)];
           }
         `,
       ),
