@@ -225,15 +225,18 @@ export function safeUrlValue(value: string): string {
  * safe-by-default; it is a no-op for values without HTML metacharacters. Exported only
  * for compiler-emitted code, not app authors.
  *
- * The result is returned as branded {@link RenderedHtml} (SPEC.md §4.5, §5.2): the
- * compiler emits `{escapeText(expr)}` as a JSX child, and that child is rendered by
- * `renderServerRenderable`, whose string branch would escape a *second* time
- * (`&` → `&amp;amp;`). Branding the already-escaped text makes that second pass a
- * pass-through (`isRenderedHtml` → returns `.html`), so output stays single-escaped
- * while the `escapeText(` presence the §5.2 equivalence gate keys on is preserved.
+ * NOTE (bugz M2, deferred): this returns a plain escaped string, so a compiler-injected
+ * `{escapeText(expr)}` child is HTML-escaped a *second* time by `renderServerRenderable`
+ * (`&` → `&amp;amp;`) — a known, fail-safe over-escape (never under-escapes, so no XSS).
+ * The attempted fix (branding the result as {@link RenderedHtml} so the second pass is a
+ * pass-through) leaked unresolved coerced-rendered-html markers into the list-stamp /
+ * live-component server-render boundary, which does not run the marker resolver. The
+ * correct fix is to resolve coerced-rendered-html at that emit boundary (or drop the
+ * compiler `escapeText(` injection and update the §5.2 equivalence gate); tracked in
+ * plans/bugz.md M2.
  */
-export function escapeText(value: unknown): RenderedHtml {
-  return renderedHtml(escapeTextWithRenderedHtml(value));
+export function escapeText(value: unknown): string {
+  return escapeTextWithRenderedHtml(value);
 }
 
 /**
