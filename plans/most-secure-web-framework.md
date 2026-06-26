@@ -5,11 +5,11 @@ the most secure web framework, benchmarked against Rails, Laravel, Django, Next.
 meta-frameworks (SvelteKit/Remix/Astro), Spring Security / ASP.NET Core / Phoenix, the modern browser
 security platform, supply-chain SOTA (SLSA/Sigstore/pnpm), and the OWASP Top 10 / API Top 10 / LLM Top 10.
 
-**Latest local verification (2026-06-26 PDT):** after the latest OPP-07/08, OPP-11, OPP-28, and sink-token
-worker batches, `pnpm exec vitest run scripts/check-sink-policy-gate.test.mjs packages/server/src/opaque-session.test.ts
-packages/server/src/app.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
-packages/drizzle/src/index.scope-audits.test.ts --run` passed 439 tests; `pnpm run check:sink-policy`,
-`git diff --check origin/main..HEAD`, and `pnpm run check:vp` passed.
+**Latest local verification (2026-06-26 PDT):** after deferring and backing out OPP-07/08,
+`pnpm exec vitest run packages/server/src/api/app.test.ts packages/cli/src/index.kovo-audit.test.ts
+packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts
+packages/compiler/src/registry.test.ts packages/core/src/graph.test.ts --run` passed 156 tests;
+`git diff --check origin/main..HEAD`, `pnpm run check:api-surface`, and `pnpm run check:vp` passed.
 
 This plan is the forward roadmap; it does **not** restate shipped work. Prior security ledgers:
 `secure-by-construction.md`, `secure-framework.md`, `secure-framework-2.md`, `secure-framework-3.md`,
@@ -230,178 +230,23 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       Remaining gap: other §3 candidates and full
       static by-construction value-path analyzer integration are not complete.
 
-- [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
-      (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
-      audience is AI-agent builders, yet there is **no** by-construction least-privilege layer for agent tools —
-      the single biggest unclaimed opportunity. Define `tool()` as a first-class declaration whose body's
-      reachable **sinks** are classified by the existing analyzers (write verbs via `domain-writes.ts`, egress
-      via the SSRF classification, secret reads via confidentiality); a granted capability set that doesn't cover
-      a reachable sink is a KV436-pattern build error. _Trade-off:_ sound capability **bounding**, but it does
-      **not** eliminate Excessive Agency (a prompt-injected arg into a _granted_ money-move tool is still a call);
-      needs a net-new primitive + governed-sink annotations. Pair with OPP-25's honest blast-radius framing.
-      Progress: `packages/server/src/agent-tool.ts` adds the public `tool()`/`runAgentTool()` runtime substrate
-      with required purpose, authority, capabilities, audit owner, and ambient-credential posture;
-      `packages/cli/src/graph-output.ts` surfaces declared agent-tool coverage in `kovo explain`/`kovo audit`.
-      `packages/core/src/graph.ts` and `packages/cli/src/graph-output.ts` now derive/enforce the first sound
-      write-domain subset for framework-owned tool rows and keep audit-grade sink rows visible.
-      `tool({ reachableSinks })` also emits audit-grade egress/secret-read/mutation/write rows for arbitrary
-      declared tool-body sinks without making them enforced. Analyzer-produced top-level `agentToolSinks` rows
-      for egress and secret-read can now remain sound and be enforced; `packages/compiler/src/scan/agent-tools.ts`
-      derives direct framework-owned `tool()` handler `fetch("https://host/...")` and `process.env.NAME` sinks
-      from parsed AST while ignoring type-only imports, nested declarations, and public/manual rows as audit-grade;
-      direct same-module helper calls now contribute enforced helper egress/secret-read sink rows, and directly
-      invoked inline function bodies now contribute enforced inline egress/secret-read rows while ordinary
-      callbacks, shadowed, imported, and dynamic paths stay outside the proof. Focused graph/check/explain/registry/agent-tool
-      tests plus `pnpm exec vitest run
-packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts --run`,
-      `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Latest helper-scan
-      and inline-IIFE extensions verified the same focused Vitest command plus `git diff --check` and
-      `pnpm run check:vp`. Simple statically resolvable relative named imports now contribute enforced
-      imported-helper egress/secret-read rows for exported helper functions; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed. Static local named re-export barrels and unique
-      static `export *` barrels now preserve enforced imported-helper egress/secret-read reachability, while
-      ambiguous export-star names remain outside the sound subset; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed. Static namespace imports such as
-      `import * as mail from './mail'` now preserve enforced helper egress/secret-read
-      reachability for exported local helper calls, while computed namespace access and export-star namespaces
-      remain outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp`
-      passed. Static default imports now preserve enforced helper egress/secret-read reachability for local
-      default-exported function helpers. Default exports that alias a summarized local helper, such as
-      `export default sendMail`, now preserve enforced egress/secret-read reachability. Static default object
-      helper exports such as `export default { sendMail }` also preserve enforced reachability, while computed/
-      spread object shapes remain outside the proof; focused registry/check tests, `git diff --check`, and
-      `pnpm run check:vp` passed.
-      Static `tool({ handler: fn })` and shorthand `tool({ handler })` references now preserve reachable
-      egress/secret-read sinks when `fn` is a summarized local/imported helper, while factory/member/computed
-      handler references remain outside the proof; focused registry/check tests, `git diff --check`, and
-      `pnpm run check:vp` passed. Same-module helpers that directly invoke an inline callback parameter now
-      preserve egress/secret-read reachability for that callback body, while callback aliasing and dynamic
-      invocation stay outside the proof; `pnpm exec vitest run packages/compiler/src/registry.test.ts
-      packages/cli/src/index.kovo-check.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed.
-      Statically resolved imported helpers that directly invoke an inline callback parameter now preserve the
-      same enforced callback egress/secret-read rows, with imported callback alias/dynamic invocation still
-      outside the proof; the same focused registry/check command, `git diff --check`, and `pnpm run check:vp`
-      passed. Const callback-parameter aliases in same-module and imported helpers now preserve enforced callback
-      egress/secret-read rows, while mutable or dynamic callback aliasing remains outside the proof;
-      `pnpm exec vitest run packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts --run`,
-      `git diff --cached --check`, and file-level `vp check` passed. Remaining gap: nonliteral/dynamic calls,
-      mutable callback aliases, computed/export-star namespace shapes, unresolved imports, and broader
-      egress/secret analyzer reachability. Static top-level `const` object helper aliases such as
-      `const mail = { sendMail }; mail.sendMail()` now preserve enforced imported-helper egress/secret-read
-      rows, while computed, spread, and non-`const` aliases stay outside the proof; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed. Static top-level `const` array/tuple helper aliases now
-      preserve enforced helper egress/secret-read reachability through literal numeric indexes such as
-      `helpers[0]()`, while mutable arrays, spreads, holes, non-helper elements, and dynamic indexes stay outside
-      the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed. Static
-      top-level `const` destructuring from already-proven helper namespaces, object aliases, and array aliases now
-      preserves enforced helper egress/secret-read reachability, while defaulted, computed, nested, mutable, and
-      ambiguous destructuring remains outside the proof; `pnpm exec vitest run
-      packages/compiler/src/registry.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed. Static
-      helper callback wrappers such as `const callbacks = { run: callback }; callbacks.run()` now preserve
-      enforced callback-body reachability, while computed, spread, element-access, mutated, and escaped object
-      aliases remain outside the proof; focused registry tests, `git diff --check`, and `pnpm run check:vp`
-      passed. Static callback array aliases such as `const callbacks = [callback] as const; callbacks[0]()`
-      now preserve enforced callback-body reachability, while spread arrays, mutated entries, escaped aliases,
-      and nonliteral indexes remain outside the proof; focused registry tests, `git diff --check`, and
-      `pnpm run check:vp` passed. Readonly callback array wrapper methods (`callbacks.forEach((run) => run())`
-      / `map`) now preserve enforced callback-body reachability for proven const arrays, while mutating and
-      dynamic method shapes remain outside the proof; focused registry tests, `git diff --check`, and
-      `pnpm run check:vp` passed. Static object wrappers around proven callback arrays such as
-      `wrapper.callbacks[0]()` now preserve enforced callback-body reachability, while computed, spread, mutable,
-      dynamic, and escaped wrappers remain outside the proof; focused registry tests, `git diff --check`, and
-      `pnpm run check:vp` passed. Inline const-literal callback array wrappers such as
-      `{ callbacks: [callback] as const }` now preserve enforced callback-body reachability for static wrapper
-      methods, while inline spread, dynamic method, and escaped variants remain outside the proof; focused registry
-      tests, `git diff --check`, and `pnpm run check:vp` passed. One additional static const object wrapper around
-      a proven callback-array object wrapper now preserves enforced callback-body reachability, while computed,
-      spread, mutated, and escaped variants remain outside the proof; focused registry tests, `git diff --check`,
-      and `pnpm run check:vp` passed. One static const object wrapper around already-proven helper object aliases
-      or namespace imports now preserves enforced egress/secret-read reachability, while computed, spread,
-      property-mutated, and non-const wrapper shapes remain outside the proof; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed. Global `Object.freeze(...)` static helper wrappers now
-      preserve enforced reachability for proven object, array/tuple, nested-object, and default-object literal
-      shapes, while computed, spread, mutable, duplicate, unresolved, and shadowed-`Object.freeze` shapes remain
-      outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
-      `Object.freeze(existingAlias)` now preserves enforced reachability when the existing alias is already a
-      proven static object, array, or nested-object helper alias and is not mutated, while unresolved, computed,
-      spread, mutated, shadowed-`Object`, non-alias, and ambiguous shapes remain outside the proof; focused
-      registry/check tests, `git diff --check`, and `pnpm run check:vp` passed. Frozen default-object helper
-      exports such as `const mail = { sendMail }; export default Object.freeze(mail)` now preserve enforced
-      reachability for already-proven static aliases, while computed, spread, mutable, shadowed, unresolved, and
-      ambiguous default-object shapes remain outside the proof; focused registry/check tests, `git diff --check`,
-      and `pnpm run check:vp` passed. Static default array/tuple helper exports such as
-      `const helpers = [sendMail] as const; export default helpers` now preserve enforced reachability through
-      literal numeric default-import calls, including frozen proven aliases, while spread, hole, non-helper,
-      dynamic-index, and mutated shapes remain outside the proof; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed. Static destructuring from proven default object/array
-      helper imports now preserves enforced reachability (`const { sendMail } = mail` / `const [sendMail] =
-      mail`), while default values, computed/nested/rest destructuring, mutable declarations, and unproven
-      shapes remain outside the proof; focused registry/check tests, `git diff --check`, and
-      `pnpm run check:vp` passed. Static local default re-export barrels now forward already-proven default
-      helper, default-object, and default-array summaries, including named `default as ...` re-exports, while
-      unproven default shapes remain outside the proof; focused registry/check tests, `git diff --check`, and
-      `pnpm run check:vp` passed. Parenthesized, type-only wrapped, and static optional helper call targets now
-      preserve enforced egress/secret-read reachability for proven helpers, namespace/object helpers, and literal
-      tuple helpers, while computed object access remains outside the proof; focused registry/check tests and
-      `git diff --check` passed. Static default nested object helper exports now preserve enforced helper
-      reachability through shapes like `const providers = { mail }; export default providers`, while computed,
-      spread, and mutated default nested objects remain outside the proof; focused registry/check tests plus the
-      latest batch gates passed. Frozen default nested object exports such as `export default Object.freeze(providers)`
-      now preserve the same reachability, while computed, spread, mutable, shadowed, unresolved, and ambiguous
-      variants remain outside the proof; focused registry/check tests plus the latest batch gates passed.
+- [ ] **OPP-07 — DEFER: Agent tool-capability least-privilege by construction (LLM06).**
+      by-construction (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking.
+      Goal: first-class `tool()` declarations where compiler/analyzer facts determine reachable sinks such as
+      egress, secret reads, and writes, then fail closed when declared capabilities do not cover them.
+      Decision: deferred from the current implementation wave. The previously landed `tool()` primitive,
+      compiler reachability scanner, graph/explain rows, and focused agent-tool tests were backed out because the
+      core API/analyzer boundary is not settled and broader analyzer integration/dynamic-unresolved cases would
+      make the claim easy to overstate. Revisit as a separate design proposal before reintroducing code.
 
-- [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
-      narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
-      lev 3 · XL · breaking. Generalize KV418 ("a `csrf:false` handler may not read ambient session") to the
-      agent-tool boundary so a tool acts under the **end-user's** authority, not server-wide ambient credentials.
-      _Trade-off:_ reusing KV418's _symbol-identity_ pattern is sound, but generalized to arbitrary "ambient
-      credentials" it degrades to author-assertion/audit-only. **Defer** behind OPP-07.
-      Progress: `runAgentTool()` rejects `Cookie`/`Authorization`/session-bearing requests by default and requires
-      explicit justification for ambient credential opt-in; `kovo explain --capabilities` renders ambient posture
-      and `kovo audit --fail-on-findings` flags missing justification for ambient-credential opt-in. The OPP-07
-      graph subset now enforces declared write capabilities for matching framework-owned tool rows and renders
-      declared audit-grade reachable sinks; direct AST-produced `process.env` reads plus literal `fetch()` egress
-      from framework-owned tool handlers, same-module helper calls, directly invoked inline functions, and simple
-      imported helper calls, including static local named re-export barrels, static namespace imports, and
-      static default imports/default aliases/default-object helper exports, static handler references, and
-      directly invoked inline callback parameters for local/imported helpers are enforced when declared
-      capabilities do not cover them. Ambient opt-in now requires structured justification plus explicit credential
-      classes, detects cookies, authorization/proxy-authorization, auth-proxy identity headers, and request
-      sessions, and normalizes handler requests with `credentials: "omit"`; focused `agent-tool.test.ts` Vitest,
-      `git diff --cached --check`, file-level `vp check`, and `pnpm run check:api-surface` passed. Additional
-      reverse-proxy identity headers (`remote-*`, `x-forwarded-*`, `x-remote-*`) are now treated as ambient
-      `auth-proxy` credentials, and partial ambient declarations fail closed unless `allow: true` is explicit;
-      focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Ambient opt-in declarations
-      now require `allow`, `credentialKinds`, `justification`, and nested review fields to be own data properties,
-      so accessor-backed or prototype-inherited review claims fail closed without invoking getters; focused
-      agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. `tool()` now snapshots and freezes the
-      validated ambient credential posture so caller mutation after declaration cannot widen the runtime allowlist;
-      focused agent-tool tests and `git diff --check` passed. `agentToolAuditFacts()` now returns frozen audit
-      fact snapshots, including nested ambient justification, authority, capability, and reachable-sink data;
-      focused agent-tool tests and `git diff --check` passed. `tool()` now freezes the returned declaration so
-      post-review assignment cannot replace default-reject ambient posture with an opt-in posture; focused
-      agent-tool tests and `git diff --check` passed. Focused coverage now pins duplicate and unknown
-      `credentialKinds` as rejected while preserving valid multi-kind opt-ins; focused agent-tool tests,
-      `git diff --check`, and `pnpm run check:vp` passed. Runtime invocation and audit now reject structurally
-      forged declarations that did not originate from `tool()`, so a forged object cannot widen ambient posture;
-      focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. `tool()` now reads declaration
-      metadata, authority, capabilities, ambient posture, and reachable sinks only from own data properties, then
-      snapshots and freezes the rows before runtime/audit consumption so inherited/accessor-backed or
-      post-declaration mutation cannot widen audit facts; focused agent-tool tests, `git diff --check`, and
-      `pnpm run check:vp` passed. `kovo explain --capabilities` now emits explicit `AGENT_TOOL_SINK` rows for
-      audit-grade and sound reachable agent-tool sinks, including grade, kind, target, required capability, site,
-      and evidence; focused explain tests, `git diff --check`, and `pnpm run check:vp` passed. Declaration arrays
-      for authority, capabilities, reachable sinks, and ambient credential kinds now require dense own data
-      elements before snapshotting, avoiding sparse/accessor-backed array slots and post-declaration slot
-      mutation; focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Runtime invocation
-      contexts now snapshot `authority`, `request`, and `value` through own data property checks, snapshot
-      invocation authority fields before matching, and pass handlers a frozen normalized context, preventing
-      inherited/accessor-backed invocation metadata from widening authority or ambient posture; focused
-      agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Normalized agent-tool requests now
-      hide `session` from property access, `in`, descriptor lookup, and own-key reflection even when a tool has
-      a reviewed ambient-session opt-in; they also scrub inherited/prototype `session` material before handler
-      dispatch. Focused agent-tool tests and `git diff --check` passed. Remaining gap: broader analyzer integration beyond the
-      framework-owned `tool()` boundary.
+- [ ] **OPP-08 — DEFER: Confused-deputy floor for agent tools (forbid ambient credentials).**
+      audit-only, with a narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential
+      symbols exist · lev 3 · XL · breaking. Goal: prevent tool execution from accidentally carrying ambient
+      user/server credentials such as cookies, auth headers, sessions, and proxy identity headers.
+      Decision: deferred with OPP-07. The previously landed runtime default-deny, ambient-credential opt-in,
+      audit/explain, and request-scrubbing support were backed out because the broader tool boundary is deferred;
+      keeping a runtime floor without the governed `tool()` surface would create a partial feature with unclear
+      public posture.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
