@@ -26,22 +26,156 @@ Lead with the user's job. Show the smallest useful working path. Explain why it
 is safe, inspectable, and compiler-checked only after the reader can see what
 they are doing.
 
-## Page structure
+## Voice
 
-Every guide or tutorial page should generally follow this order:
+Write the way Simon Willison blogs: simple, direct, easy to understand. You are
+explaining something you just got working to a competent colleague — not writing
+a spec, a sales page, or a lecture.
 
-1. What you will build, fix, or decide on this page.
-2. The smallest real code path.
-3. How to run or verify it.
-4. The common production shape.
-5. Failure modes and edge cases.
-6. Deeper mechanics, audits, diagnostics, and SPEC links.
-7. The next useful action.
+- Short sentences, one idea each. If a sentence joins two clauses with "which
+  means" or "in order to", split it.
+- Say "you" and "I". "You declare the query once" beats "the query is declared
+  once."
+- Lead with the concrete thing. "Here's the mutation that adds to the cart:" then
+  the code — not three sentences of preamble.
+- Show it working. Paste the command, the output, the View Source, the wire
+  bytes. Real artifacts beat description.
+- Name things exactly. `vp check`, `kovo-csrf`, the `/cart` route — never "the
+  relevant command" or "the framework".
+- Be honest about rough edges. "The catch is…" and "this part is fiddly…" read as
+  trustworthy. Pretending everything is smooth does not.
+- Cut throat-clearing. Delete "It's worth noting that", "As you can see",
+  "Simply", "In order to". Just say the thing.
+- Plain words over jargon — until you're in a reference section where the precise
+  term is the point. "The page goes stale" beats "the view diverges from server
+  truth" on a guide.
+- Earn enthusiasm. One genuine "what's nice here is…" lands; a paragraph of
+  adjectives doesn't.
 
-Reference pages may enumerate behavior earlier, but they should still start with
-when the surface is used.
+Before and after:
+
+> ✗ "Kovo's mutation system provides a declarative mechanism whereby form
+> submissions are validated against a schema and subsequently dispatched to a
+> handler in a manner that preserves type safety end-to-end."
+>
+> ✓ "A mutation is a named form post with a typed input. You write the input
+> schema once; Kovo checks the form fields against it and hands your handler a
+> typed object. Here's one:"
+
+## Page skeletons (by mode)
+
+Pick the skeleton for the page's mode. Headings are verbs the reader performs.
+Every page collapses its SPEC/KV pointers into a `Spec & diagnostics` `<details>`
+at the end — except reference pages, where that density is the point and may sit
+inline. Do not let reference density leak into guide or tutorial pages.
+
+### Guide — solves one task (reader already has an app)
+
+A guide is skimmable. The arc is: job → smallest code → run it → production shape
+→ failure → next, with deeper mechanics collapsed at the end.
+
+```markdown
+---
+title: <The task, in plain words — e.g. "Mutations & forms">
+description: <One sentence: what you can do after reading this.>
+---
+
+# <The task>
+
+<One or two sentences: the job in app terms (add to cart, sign in, deploy), and
+when to reach for this — and when another feature is the better path.>
+
+## <Verb the smallest path>   <!-- e.g. "Add the mutation" -->
+
+<!-- Smallest runnable code: <=8 lines, one new idea, no forward-referenced
+     identifiers. Do not open with the full production object. -->
+
+## Run it
+
+<How to see it work: a command, a View Source, or a click and what changes.>
+
+## <Verb the production shape>   <!-- e.g. "Add CSRF, a guard, and optimism" -->
+
+<Layer one new idea per sub-section. Name anything you leave out.>
+
+## Handle failure
+
+<The typed error, the edge case, what the user actually sees.>
+
+## Next
+
+- [<The next task>](/guides/<slug>/) — <why you'd go there>
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+<SPEC §… and KV codes — pointers only. Everything spec/KV lives here, not above.>
+
+</details>
+```
+
+### Tutorial — teaches by building (one chapter)
+
+A tutorial reveals concepts in the order the app needs them. Show the change
+working before you explain it.
+
+```markdown
+# <Chapter N — the thing you'll build>
+
+<One or two sentences: where we are in the app, and what this chapter adds.>
+
+## <Verb the next slice>   <!-- e.g. "Add the cart query" -->
+
+<The next small step, building on the previous chapter. One idea.>
+
+## Run it
+
+<Run the app and see the change — the payoff comes before the explanation.>
+
+## What just happened
+
+<Now that it works, the one concept it taught — in plain words.>
+
+## Next
+
+<One sentence handing off to the next chapter.>
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+<Pointers only.>
+
+</details>
+```
+
+### Reference — enumerates behavior (density is fine)
+
+A reference page can be dense, but it still opens with when you reach for the
+surface and shows a minimal example before the full enumeration.
+
+```markdown
+# <The surface — e.g. "The kovo() Vite plugin">
+
+<One sentence: when you reach for this surface.>
+
+## <Verb a minimal use>   <!-- e.g. "Add the plugin" -->
+
+<The smallest real example.>
+
+## <What it does>
+
+<Enumerate the behavior: options table, signatures, return shapes. Dense is fine.>
+
+## Examples
+
+<A couple of real, copy-paste uses.>
+
+<!-- Reference is the dense layer: SPEC § and KV codes may appear inline here. -->
+```
 
 ## Writing rules
+
+Voice (above) is the register. These are the structural and content choices:
 
 - Open with the user's job. The first paragraph should answer "what can I do
   after reading this?"
@@ -61,9 +195,6 @@ when the surface is used.
 - Introduce one new idea at a time. If the first code block needs guards, CSRF,
   queueing, optimistic transforms, transactions, typed errors, and graph
   metadata, it is too large for the first code block.
-- Keep bluntness, lose scolding. "Do not put per-user data behind an unguarded
-  query" is useful. Making every paragraph sound like a conformance ruling is
-  not.
 - Add a "when to use this" sentence for major guides. Also say when another Kovo
   feature is the better path.
 - Keep practical checklists near the point of use, not buried after long
@@ -87,16 +218,6 @@ it appears.
   freely.
 - Collapsed details: keep "Spec & diagnostics" sections concise. They should
   point to authority, not re-state every proof.
-
-## Tutorial, guide, and reference modes
-
-- Tutorial teaches by building. It should reveal concepts in the order the app
-  needs them.
-- Guide solves a task. It should be skimmable by someone who already has an app.
-- Reference enumerates behavior. It can be dense, but it still needs a short
-  orientation sentence and examples.
-
-Do not let reference density leak into tutorial and guide pages.
 
 ## Before and after checks
 
