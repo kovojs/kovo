@@ -5,11 +5,13 @@ the most secure web framework, benchmarked against Rails, Laravel, Django, Next.
 meta-frameworks (SvelteKit/Remix/Astro), Spring Security / ASP.NET Core / Phoenix, the modern browser
 security platform, supply-chain SOTA (SLSA/Sigstore/pnpm), and the OWASP Top 10 / API Top 10 / LLM Top 10.
 
-**Latest local verification (2026-06-26 PDT):** after deferring and backing out OPP-07/08,
-`pnpm exec vitest run packages/server/src/api/app.test.ts packages/cli/src/index.kovo-audit.test.ts
-packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts
-packages/compiler/src/registry.test.ts packages/core/src/graph.test.ts --run` passed 156 tests;
-`git diff --check origin/main..HEAD`, `pnpm run check:api-surface`, and `pnpm run check:vp` passed.
+**Latest local verification (2026-06-26 PDT):** after deferring and backing out OPP-07/08, then
+integrating the sink dynamic-code alias, opaque-session lifecycle snapshot, and owner tuple-property proof
+batch, focused Vitest passed 275 tests across
+`scripts/check-sink-policy-gate.test.mjs`, `packages/server/src/opaque-session.test.ts`,
+`packages/server/src/app.test.ts`, and `packages/drizzle/src/index.scope-audits.test.ts`; `git diff --check
+origin/main..HEAD`, `pnpm run check:sink-policy`, `pnpm run check:api-surface`, and `pnpm run check:vp`
+passed.
 
 This plan is the forward roadmap; it does **not** restate shipped work. Prior security ledgers:
 `secure-by-construction.md`, `secure-framework.md`, `secure-framework-2.md`, `secure-framework-3.md`,
@@ -226,7 +228,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       sink-policy tests, `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed.
       Renamed and unrenamed destructured aliases from the real global `RegExp` constructor now hit KV442 for
       request-derived patterns, while static patterns and local `globalThis`/alias shadowing stay quiet; focused
-      sink-policy tests, `pnpm run check:sink-policy`, and `git diff --check` passed.
+      sink-policy tests, `pnpm run check:sink-policy`, and `git diff --check` passed. Destructured real-global
+      `eval`/`Function` aliases now hit the dynamic-code hard ban, including string-literal/computed keys and
+      `.call()`/`.bind()` laundering, while local/rebound destructured names stay quiet; focused
+      `scripts/check-sink-policy-gate.test.mjs`, `pnpm run check:sink-policy`, `git diff --check`, and
+      `pnpm run check:vp` passed.
       Remaining gap: other §3 candidates and full
       static by-construction value-path analyzer integration are not complete.
 
@@ -402,7 +408,10 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       store validation, while exact emitted ids still validate; focused opaque-session/app tests plus the latest
       batch gates passed. Bearer session material now accepts only the exact Kovo opaque credential shape, so
       comma-joined, padded, tabbed, folded, or control-character Bearer values fail closed before custom store
-      validation; focused opaque-session/app tests plus the latest batch gates passed.
+      validation; focused opaque-session/app tests plus the latest batch gates passed. Custom-store validation
+      results and session records now require own data properties, so inherited/accessor-backed lifecycle fields
+      fail closed without invoking attacker-controlled getters; focused opaque-session/app tests,
+      `git diff --check`, and `pnpm run check:vp` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
@@ -686,7 +695,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       scope-audit tests plus the latest batch gates passed. `Object.freeze([principal] as const)` and
       `Object.freeze(provenTupleAlias)` now preserve exact owner-principal tuple proof, while shadowed
       `Object.freeze`, spread, mutable, mutated, computed, and wrong-column cases remain `scope: unknown`;
-      focused scope-audit tests plus the latest batch gates passed.
+      focused scope-audit tests plus the latest batch gates passed. Static readonly object properties containing
+      singleton owner-principal tuples now preserve exact `inArray(ownerColumn, wrapper.userIds)` proof, while
+      mutable, mutated, spread, computed, and wrong-column wrappers remain `scope: unknown`; focused
+      scope-audit tests, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
