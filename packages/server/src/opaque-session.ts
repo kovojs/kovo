@@ -251,14 +251,15 @@ export function createOpaqueSessionManager<SessionValue>(
   options: OpaqueSessionManagerOptions<SessionValue>,
 ): OpaqueSessionManager<SessionValue> {
   assertOpaqueSessionManagerOptions(options);
-  const cookieName = options.cookieName ?? 'kovo_session';
+  const cookieName = snapshotOpaqueSessionCookieName(options);
   const store = snapshotOpaqueSessionStore(options.store);
-  const cookieOptions: CookieOptions = {
-    ...options.cookie,
+  const cookieOptions = snapshotOpaqueSessionCookieOptions(options);
+  const emittedCookieOptions: CookieOptions = {
+    ...cookieOptions,
     class: 'session',
-    path: options.cookie?.path ?? '/',
+    path: cookieOptions.path ?? '/',
   };
-  const acceptAuthorizationHeader = options.acceptAuthorizationHeader === true;
+  const acceptAuthorizationHeader = snapshotOpaqueSessionAcceptAuthorizationHeader(options);
 
   const validate = async (
     id: string | null | undefined,
@@ -313,7 +314,7 @@ export function createOpaqueSessionManager<SessionValue>(
       return {
         session,
         setCookie: serializeCookie(cookieName, session.id, {
-          ...cookieOptions,
+          ...emittedCookieOptions,
           // SPEC §6.5 / OPP-11: the browser credential must not outlive the store-backed
           // lifecycle. Derive cookie expiry from the store's absolute expiry at emission time,
           // not from a store-supplied createdAt delta.
@@ -331,7 +332,7 @@ export function createOpaqueSessionManager<SessionValue>(
       }
       return {
         setCookie: serializeCookie(cookieName, '', {
-          ...cookieOptions,
+          ...emittedCookieOptions,
           expires: new Date(0),
           maxAge: 0,
         }),
@@ -524,7 +525,90 @@ function assertOpaqueSessionManagerOptions<SessionValue>(
       'createOpaqueSessionManager requires an opaque session store with create, validate, rotate, and revoke methods',
     );
   }
-  if (options.cookieName !== undefined) assertOpaqueSessionCookieName(options.cookieName);
+  snapshotOpaqueSessionCookieName(options);
+  snapshotOpaqueSessionCookieOptions(options);
+  snapshotOpaqueSessionAcceptAuthorizationHeader(options);
+}
+
+type DataPropertyDescriptorWithValue = PropertyDescriptor & {
+  value: unknown;
+};
+
+function getOwnDataPropertyDescriptor(
+  value: object,
+  property: PropertyKey,
+  label: string,
+): DataPropertyDescriptorWithValue | undefined {
+  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new Error(`${label} must be an own data property`);
+  }
+  return descriptor as DataPropertyDescriptorWithValue;
+}
+
+function getOwnDataPropertyValue(value: object, property: PropertyKey, label: string): unknown {
+  return getOwnDataPropertyDescriptor(value, property, label)?.value;
+}
+
+function snapshotOpaqueSessionCookieName<SessionValue>(
+  options: OpaqueSessionManagerOptions<SessionValue>,
+): string {
+  // SPEC §6.5 / OPP-11: manager construction accepts session knobs once through own data
+  // properties. Prototype or accessor-backed options must not validate under one value and later
+  // influence credential extraction under another.
+  const cookieName = getOwnDataPropertyValue(options, 'cookieName', 'Opaque session cookieName');
+  if (cookieName === undefined) return 'kovo_session';
+  if (typeof cookieName !== 'string') {
+    throw new Error('Opaque session cookieName must be an HTTP token');
+  }
+  assertOpaqueSessionCookieName(cookieName);
+  return cookieName;
+}
+
+function snapshotOpaqueSessionAcceptAuthorizationHeader<SessionValue>(
+  options: OpaqueSessionManagerOptions<SessionValue>,
+): boolean {
+  const acceptAuthorizationHeader = getOwnDataPropertyValue(
+    options,
+    'acceptAuthorizationHeader',
+    'Opaque session acceptAuthorizationHeader',
+  );
+  return acceptAuthorizationHeader === true;
+}
+
+function snapshotOpaqueSessionCookieOptions<SessionValue>(
+  options: OpaqueSessionManagerOptions<SessionValue>,
+): Omit<CookieOptions, 'class' | 'maxAge'> {
+  const cookie = getOwnDataPropertyValue(options, 'cookie', 'Opaque session cookie');
+  if (cookie === undefined) return {};
+  if (cookie === null || typeof cookie !== 'object') {
+    throw new Error('Opaque session cookie must be an object');
+  }
+
+  const snapshot: Omit<CookieOptions, 'class' | 'maxAge'> = {};
+  snapshotCookieOptionField(cookie, snapshot, 'domain');
+  snapshotCookieOptionField(cookie, snapshot, 'expires');
+  snapshotCookieOptionField(cookie, snapshot, 'httpOnly');
+  snapshotCookieOptionField(cookie, snapshot, 'partitioned');
+  snapshotCookieOptionField(cookie, snapshot, 'path');
+  snapshotCookieOptionField(cookie, snapshot, 'priority');
+  snapshotCookieOptionField(cookie, snapshot, 'productionSecure');
+  snapshotCookieOptionField(cookie, snapshot, 'sameSite');
+  snapshotCookieOptionField(cookie, snapshot, 'secure');
+  snapshotCookieOptionField(cookie, snapshot, 'unsafe');
+  return snapshot;
+}
+
+function snapshotCookieOptionField<Key extends keyof Omit<CookieOptions, 'class' | 'maxAge'>>(
+  source: object,
+  target: Omit<CookieOptions, 'class' | 'maxAge'>,
+  key: Key,
+): void {
+  const descriptor = getOwnDataPropertyDescriptor(source, key, `Opaque session cookie.${key}`);
+  if (descriptor !== undefined) {
+    target[key] = descriptor.value as Omit<CookieOptions, 'class' | 'maxAge'>[Key];
+  }
 }
 
 function snapshotOpaqueSessionStore<SessionValue>(

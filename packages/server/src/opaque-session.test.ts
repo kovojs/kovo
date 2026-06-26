@@ -7,6 +7,7 @@ import { renderedHtml } from './html.js';
 import {
   createMemoryOpaqueSessionStore,
   createOpaqueSessionManager,
+  type OpaqueSessionManagerOptions,
   type OpaqueSessionStore,
 } from './opaque-session.js';
 import { route } from './route.js';
@@ -490,15 +491,19 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     const options = {
       acceptAuthorizationHeader: false,
       cookie,
+      cookieName: 'accepted_session',
       store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
     };
     const manager = createOpaqueSessionManager(options);
 
     options.acceptAuthorizationHeader = true;
+    options.cookieName = 'mutated_session';
     cookie.path = '/mutated';
 
     const established = await manager.establish({ user: { id: 'u1' } });
+    const acceptedCookie = established.setCookie.split(';')[0]!;
 
+    expect(acceptedCookie).toMatch(/^accepted_session=/);
     expect(established.setCookie).toContain('Path=/accepted');
     expect(established.setCookie).not.toContain('Path=/mutated');
     await expect(
@@ -508,6 +513,109 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
         }),
       ),
     ).resolves.toBeNull();
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: { cookie: acceptedCookie },
+        }),
+      ),
+    ).resolves.toEqual({ user: { id: 'u1' } });
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: { cookie: `mutated_session=${established.session.id}` },
+        }),
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it('ignores inherited manager construction knobs and cookie option fields', async () => {
+    const store = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const inheritedCookie = Object.create({
+      path: '/inherited',
+      productionSecure: true,
+    }) as { path?: string; productionSecure?: boolean };
+    const options = Object.assign(
+      Object.create({
+        acceptAuthorizationHeader: true,
+        cookie: { path: '/prototype-cookie' },
+        cookieName: 'prototype_session',
+      }),
+      {
+        cookie: inheritedCookie,
+        store,
+      },
+    );
+    const manager = createOpaqueSessionManager(options);
+
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    expect(established.setCookie).toMatch(/^kovo_session=/);
+    expect(established.setCookie).toContain('Path=/');
+    expect(established.setCookie).not.toContain('Path=/inherited');
+    expect(established.setCookie).not.toContain('Secure');
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: { authorization: `Bearer ${established.session.id}` },
+        }),
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it('rejects accessor-backed manager construction knobs without invoking them', () => {
+    const store = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    let getterCalls = 0;
+    const options = {
+      store,
+    } as OpaqueSessionManagerOptions<{ user: { id: string } }>;
+    Object.defineProperty(options, 'cookieName', {
+      get() {
+        getterCalls += 1;
+        return 'accessor_session';
+      },
+    });
+
+    expect(() => createOpaqueSessionManager(options)).toThrow(
+      'Opaque session cookieName must be an own data property',
+    );
+    expect(getterCalls).toBe(0);
+  });
+
+  it('rejects accessor-backed cookie option fields without invoking them', () => {
+    const store = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    let getterCalls = 0;
+    const cookie = {};
+    Object.defineProperty(cookie, 'path', {
+      get() {
+        getterCalls += 1;
+        return '/accessor';
+      },
+    });
+
+    expect(() => createOpaqueSessionManager({ cookie, store })).toThrow(
+      'Opaque session cookie.path must be an own data property',
+    );
+    expect(getterCalls).toBe(0);
+  });
+
+  it('rejects accessor-backed authorization toggles without invoking them', () => {
+    const store = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    let getterCalls = 0;
+    const options = {
+      store,
+    } as OpaqueSessionManagerOptions<{ user: { id: string } }>;
+    Object.defineProperty(options, 'acceptAuthorizationHeader', {
+      get() {
+        getterCalls += 1;
+        return true;
+      },
+    });
+
+    expect(() => createOpaqueSessionManager(options)).toThrow(
+      'Opaque session acceptAuthorizationHeader must be an own data property',
+    );
+    expect(getterCalls).toBe(0);
   });
 
   it('accepts Kovo-managed secure cookie aliases for a valid custom base name', async () => {
