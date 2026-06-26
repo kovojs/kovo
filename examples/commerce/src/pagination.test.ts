@@ -47,7 +47,9 @@ describe('commerce read-side pagination accumulation', () => {
 
     // The client merges the page into the held page-1 value (deep-merge keyed, §9.1.1).
     const held: JsonValue = { items: firstPage.items as unknown as JsonValue[] };
-    const accumulated = applyQueryDelta(held, decodeDeltaChunk(wire)) as { items: { id: string }[] };
+    const accumulated = applyQueryDelta(held, decodeDeltaChunk(wire)) as {
+      items: { id: string }[];
+    };
 
     expect(accumulated.items.map((item) => item.id)).toEqual(['p1', 'p2', 'p3']);
   });
@@ -68,7 +70,9 @@ describe('commerce read-side pagination accumulation', () => {
     expect(wire).toContain('"prepend":true');
 
     const held: JsonValue = { items: firstPage.items as unknown as JsonValue[] };
-    const accumulated = applyQueryDelta(held, decodeDeltaChunk(wire)) as { items: { id: string }[] };
+    const accumulated = applyQueryDelta(held, decodeDeltaChunk(wire)) as {
+      items: { id: string }[];
+    };
 
     // Older page (p3) lands at the FRONT, ahead of the held p1/p2.
     expect(accumulated.items.map((item) => item.id)).toEqual(['p3', 'p1', 'p2']);

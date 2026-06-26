@@ -58,7 +58,11 @@ describe('instance-keyed optimistic bridge', () => {
     // Only the keyed query carries a derivation; the unkeyed ones are absent from `keys`.
     expect(Object.keys(plan.keys ?? {})).toEqual(['questionDetail']);
     const derive = plan.keys?.questionDetail;
-    expect(typeof derive === 'function' ? derive({ domain: 'mutation', input: { id: 'v1', targetId: 'q3' } }) : derive).toBe('q3');
+    expect(
+      typeof derive === 'function'
+        ? derive({ domain: 'mutation', input: { id: 'v1', targetId: 'q3' } })
+        : derive,
+    ).toBe('q3');
   });
 
   it('predicts on the targeted instance only, never a sibling instance', () => {
