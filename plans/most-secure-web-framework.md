@@ -178,10 +178,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       unowned unsafe deserialization (`JSON.parse` revivers and static `deserialize`/`unserialize` imports/calls)
       while preserving reviver-free JSON plus schema validation; focused sink-policy gate tests,
       `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. The same gate now also
-      rejects straightforward dynamic imports of known deserializer APIs/modules; `pnpm exec vitest --run
-      scripts/check-sink-policy-gate.test.mjs`, `pnpm run check:sink-policy`, `git diff --check`, and
-      `pnpm run check:vp` passed. Remaining gap: other §3 candidates and full static by-construction value-path
-      analyzer integration are not complete.
+      rejects straightforward dynamic imports of known deserializer APIs/modules; focused sink-policy gate tests,
+      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3
+      candidates and full static by-construction value-path analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
@@ -242,7 +241,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       egress/secret analyzer reachability. Static top-level `const` object helper aliases such as
       `const mail = { sendMail }; mail.sendMail()` now preserve enforced imported-helper egress/secret-read
       rows, while computed, spread, and non-`const` aliases stay outside the proof; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed.
+      `git diff --check`, and `pnpm run check:vp` passed. Static top-level `const` array/tuple helper aliases now
+      preserve enforced helper egress/secret-read reachability through literal numeric indexes such as
+      `helpers[0]()`, while mutable arrays, spreads, holes, non-helper elements, and dynamic indexes stay outside
+      the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
