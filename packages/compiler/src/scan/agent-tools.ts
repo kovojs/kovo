@@ -29,7 +29,8 @@ export interface AgentToolModuleSource {
  * indexes statically point at summarized helpers, `Object.freeze(...)` wrappers around those same
  * static array/tuple aliases or already-proven array aliases that are not assigned or mutated,
  * default object exports whose properties statically point at summarized helpers or freeze an
- * already-proven object alias,
+ * already-proven object alias, default nested object exports whose static properties point at
+ * already-proven helper object aliases or namespace imports,
  * top-level `const` destructuring from
  * already-proven helper object/array aliases or namespaces, handler properties that reference a
  * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
@@ -90,6 +91,7 @@ interface ModuleFacts {
   ambiguousExportStarHelpers: ReadonlySet<string>;
   arrayAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   defaultArrayHelpers: ReadonlyMap<string, HelperDefinition>;
+  defaultNestedObjectHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   defaultObjectHelpers: ReadonlyMap<string, HelperDefinition>;
   exportedArrayAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   exportedObjectAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
@@ -152,6 +154,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   const ambiguousExportStarHelpers = new Set<string>();
   const arrayAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const defaultArrayHelpers = new Map<string, HelperDefinition>();
+  const defaultNestedObjectHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const defaultObjectHelpers = new Map<string, HelperDefinition>();
   const exportedArrayAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const exportedObjectAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
@@ -167,6 +170,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
     ambiguousExportStarHelpers,
     arrayAliasHelpers,
     defaultArrayHelpers,
+    defaultNestedObjectHelpers,
     defaultObjectHelpers,
     exportedArrayAliasHelpers,
     exportedObjectAliasHelpers,
@@ -235,6 +239,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
     collectDefaultHelperAlias(statement, moduleFacts);
     collectDefaultArrayHelperBindings(statement, moduleFacts);
     collectDefaultObjectHelperBindings(statement, moduleFacts);
+    collectDefaultNestedObjectHelperBindings(statement, moduleFacts);
   }
 
   return moduleFacts;
@@ -263,6 +268,10 @@ function linkImportedHelpers(
   const objectAliasHelpers = moduleFacts.objectAliasHelpers as Map<
     string,
     ReadonlyMap<string, HelperDefinition>
+  >;
+  const nestedObjectAliasHelpers = moduleFacts.nestedObjectAliasHelpers as Map<
+    string,
+    ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>
   >;
   const namespaceImports = moduleFacts.namespaceImports as Map<
     string,
@@ -299,6 +308,11 @@ function linkImportedHelpers(
             objectAliasHelpers,
             defaultBinding.text,
             importedFacts.defaultObjectHelpers,
+          ) ||
+          linkNestedNamespaceBinding(
+            nestedObjectAliasHelpers,
+            defaultBinding.text,
+            importedFacts.defaultNestedObjectHelpers,
           ))
       ) {
         changed = true;
@@ -406,6 +420,7 @@ function linkImportedHelpers(
     changed = collectNestedObjectAliasHelperBindings(statement, moduleFacts) || changed;
     changed = collectDefaultArrayHelperBindings(statement, moduleFacts) || changed;
     changed = collectDefaultObjectHelperBindings(statement, moduleFacts) || changed;
+    changed = collectDefaultNestedObjectHelperBindings(statement, moduleFacts) || changed;
     changed = collectDestructuredHelperBindings(statement, moduleFacts) || changed;
   }
 
@@ -495,6 +510,18 @@ function linkOptionalNamespaceBinding(
   helpers: ReadonlyMap<string, HelperDefinition> | undefined,
 ): boolean {
   return helpers ? linkNamespaceBinding(namespaceImports, localName, helpers) : false;
+}
+
+function linkNestedNamespaceBinding(
+  namespaceImports: Map<string, ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>>,
+  localName: string,
+  helpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>,
+): boolean {
+  if (helpers.size === 0) return false;
+  if (namespaceImports.has(localName)) return false;
+
+  namespaceImports.set(localName, helpers);
+  return true;
 }
 
 function linkExportedNamespaceBinding(
@@ -748,6 +775,45 @@ function collectDefaultObjectHelperBindings(
     defaultObjectHelpers.set(propertyName, helper);
   }
   return true;
+}
+
+function collectDefaultNestedObjectHelperBindings(
+  statement: ts.Statement,
+  moduleFacts: ModuleFacts,
+): boolean {
+  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return false;
+
+  const helperBindings = defaultNestedObjectHelperBindingsFromExpression(
+    statement.expression,
+    moduleFacts,
+  );
+  if (!helperBindings) return false;
+
+  const defaultNestedObjectHelpers = moduleFacts.defaultNestedObjectHelpers as Map<
+    string,
+    ReadonlyMap<string, HelperDefinition>
+  >;
+  if (nestedHelperBindingMapsEqual(defaultNestedObjectHelpers, helperBindings)) return false;
+
+  defaultNestedObjectHelpers.clear();
+  for (const [propertyName, helpers] of helperBindings) {
+    defaultNestedObjectHelpers.set(propertyName, helpers);
+  }
+  return true;
+}
+
+function defaultNestedObjectHelperBindingsFromExpression(
+  expression: ts.Expression,
+  moduleFacts: ModuleFacts,
+): ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>> | undefined {
+  const helperBindings = nestedObjectHelperBindingsFromInitializer(expression, moduleFacts);
+  if (helperBindings) return helperBindings;
+
+  const alias = unwrapParentheses(expression);
+  if (!ts.isIdentifier(alias)) return undefined;
+  if (isAssignedBinding(moduleFacts.sourceFile, alias.text)) return undefined;
+
+  return moduleFacts.nestedObjectAliasHelpers.get(alias.text);
 }
 
 function collectDefaultArrayHelperBindings(

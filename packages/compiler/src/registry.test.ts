@@ -4059,6 +4059,61 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from static default nested object helper exports', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/default-nested-object.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import providers from './default-nested-object-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultNestedObject',",
+            '  handler() {',
+            '    return providers.mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-nested-object-mail.ts',
+          source: [
+            'function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'const mail = { sendMail };',
+            'const providers = { mail };',
+            'export default providers;',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/default-nested-object-mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.defaultNestedObject',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/default-nested-object-mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.defaultNestedObject',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from static destructuring of default helper imports', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -4403,6 +4458,88 @@ export const ProductGrid = component({
             '    return providers.mail.sendMail();',
             '  },',
             '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven default nested object exports', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/default-nested-computed.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import providers from './default-nested-computed-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultNestedComputed',",
+            '  handler() {',
+            '    return providers.mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-nested-computed-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-nested-computed.example.test/mail');",
+            '}',
+            'const mail = { sendMail };',
+            "const providers = { ['mail']: mail };",
+            'export default providers;',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-nested-spread.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import providers from './default-nested-spread-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultNestedSpread',",
+            '  handler() {',
+            '    return providers.mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-nested-spread-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-nested-spread.example.test/mail');",
+            '}',
+            'const mail = { sendMail };',
+            'const providers = { ...{ mail } };',
+            'export default providers;',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-nested-mutated.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import providers from './default-nested-mutated-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultNestedMutated',",
+            '  handler() {',
+            '    return providers.mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-nested-mutated-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-nested-mutated.example.test/mail');",
+            '}',
+            'const mail = { sendMail };',
+            'const providers = { mail };',
+            'providers.mail = { sendMail };',
+            'export default providers;',
           ].join('\n'),
         },
       ],
