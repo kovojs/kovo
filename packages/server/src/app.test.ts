@@ -288,6 +288,7 @@ describe('server createApp request shell', () => {
 
     expect(app.session).toBe(manager);
     expect(app.sessionProvider).toBe(manager.provider);
+    expect(app.sessionProviderBoundary).toBe('owned');
     await expect(app.session!.validate(anonymous.session.id)).resolves.toEqual({
       ok: false,
       reason: 'revoked',
@@ -317,6 +318,7 @@ describe('server createApp request shell', () => {
 
     expect(app.session).toBeDefined();
     expect(app.sessionProvider).toBe(app.session!.provider);
+    expect(app.sessionProviderBoundary).toBe('default-owned');
     expect(app.session!.cookieName).toBe('kovo_session');
     expect(established.session.id).toMatch(/^kos_[A-Za-z0-9_-]+$/);
     expect(established.session.id).not.toContain('.');
@@ -343,6 +345,7 @@ describe('server createApp request shell', () => {
 
     expect(app.session).toBeUndefined();
     expect(app.sessionProvider).toBe(sessionProvider);
+    expect(app.sessionProviderBoundary).toBe('delegated');
   });
 
   it('rejects ambiguous owned and delegated session lifecycles', () => {

@@ -21,7 +21,9 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
   const targetPaths = new Map<string, StaticExportRouteTarget>();
 
   for (const route of app.routes) {
-    if (app.sessionProvider) {
+    // OPP-11 default-owned opaque sessions are request-shell posture, not proof that a public
+    // static route reads session state. Explicit owned/delegated session boundaries stay dynamic.
+    if (app.sessionProvider && app.sessionProviderBoundary !== 'default-owned') {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,

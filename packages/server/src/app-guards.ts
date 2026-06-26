@@ -26,9 +26,16 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isOptionalFunction(value.renderRoute) &&
     isAppRequestLimits(value.requestLimits) &&
     isOptionalOpaqueSessionManager(value.session) &&
+    isOptionalSessionProviderBoundary(value.sessionProviderBoundary) &&
     isOptionalFunction(value.sessionProvider) &&
     isStylesheets(value.stylesheets) &&
     isOptionalCsrfOptions(value.csrf)
+  );
+}
+
+function isOptionalSessionProviderBoundary(value: unknown): boolean {
+  return (
+    value === undefined || value === 'default-owned' || value === 'delegated' || value === 'owned'
   );
 }
 

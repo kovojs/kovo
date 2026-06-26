@@ -127,6 +127,7 @@ export function createApp<
   const session = resolveAppSession(options);
   const sessionProvider =
     session === undefined ? options.sessionProvider : resolveAppSessionProvider(session);
+  const sessionProviderBoundary = appSessionProviderBoundary(options, sessionProvider);
 
   return {
     clientModules,
@@ -149,8 +150,29 @@ export function createApp<
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(session === undefined ? {} : { session }),
+    ...(sessionProviderBoundary === undefined ? {} : { sessionProviderBoundary }),
     ...(sessionProvider === undefined ? {} : { sessionProvider }),
   };
+}
+
+function appSessionProviderBoundary<
+  SessionValue,
+  DbValue,
+  RawRequest extends globalThis.Request,
+  AppRequest,
+>(
+  options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>,
+  sessionProvider: CreateAppOptions<
+    SessionValue,
+    DbValue,
+    RawRequest,
+    AppRequest
+  >['sessionProvider'],
+): 'default-owned' | 'delegated' | 'owned' | undefined {
+  if (sessionProvider === undefined) return undefined;
+  if (options.sessionProvider !== undefined) return 'delegated';
+  if (options.session !== undefined) return 'owned';
+  return 'default-owned';
 }
 
 function resolveAppSession<

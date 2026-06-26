@@ -292,6 +292,7 @@ export interface KovoApp<
   requestLimits: ResolvedAppRequestLimitOptions;
   routes: readonly AppRouteDeclaration<any>[];
   session?: OpaqueSessionManager<any>;
+  sessionProviderBoundary?: 'default-owned' | 'delegated' | 'owned';
   sessionProvider?: SessionProvider<any, any>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
   stylesheets: readonly (string | StylesheetAsset)[];
