@@ -19,16 +19,23 @@ the slow region behind `render`:
 ```tsx
 import { Defer } from '@kovojs/server';
 
+const products = (
+  <Defer
+    target="product-list"
+    fallback={<section aria-busy="true">Loading products...</section>}
+    render={() => <ProductList />}
+  />
+);
+```
+
+Then place that boundary in the page shell:
+
+```tsx
 export function ShopPage() {
   return (
     <main>
       <CartBadge />
-      <Defer
-        target="product-list"
-        priority="after-paint"
-        fallback={<section aria-busy="true">Loading products...</section>}
-        render={() => <ProductList />}
-      />
+      {products}
     </main>
   );
 }
@@ -62,7 +69,7 @@ not hold yet:
 
 `<Defer>` is the relief valve for expensive subtrees, and it's the only lazy-content
 mechanism — projected children otherwise ship in the initial HTML, which is the MPA model, not an
-oversight (SPEC §4.5). Reach for it when a fragment's render cost would delay first paint; skip it
+oversight. Reach for it when a fragment's render cost would delay first paint; skip it
 when the data is cheap, because a placeholder that flashes for 10ms is worse than content.
 
 ## Multiple defers in one response
@@ -73,7 +80,7 @@ immediately. Split them when their costs differ, so a 50ms fragment isn't held b
 each chunk arrives and morphs in as its own work finishes. Don't over-split, though. Every defer
 adds a placeholder that flashes, so group content that resolves together behind one boundary rather
 than scattering a dozen tiny defers across the page. Priority — which late region the server should
-flush first — is declared on the route/component surface that owns it, not inferred (SPEC §13.3).
+flush first — is declared on the route/component surface that owns it, not inferred.
 
 ## The HTTP/1.1 head-of-line caveat
 
@@ -101,7 +108,7 @@ time the mutation's response comes back. The one ordering rule that protects thi
 you assert above: a deferred query's JSON arrives **before or with** the fragment that binds to it,
 so the document never holds a binding whose data hasn't landed. A mutation that fires while a defer
 is still streaming sees a coherent document either way: it refreshes whatever query values are
-present, and the deferred chunk, when it arrives, carries the freshest server value (SPEC §8).
+present, and the deferred chunk, when it arrives, carries the freshest server value.
 
 The app now paints fast, updates instantly, and degrades gracefully. What remains is the
 framework's biggest claim: proving all of this behavior, mechanically, without a browser.

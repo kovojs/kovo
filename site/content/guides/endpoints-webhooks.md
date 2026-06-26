@@ -27,19 +27,15 @@ export const oauthCallback = endpoint('/auth/callback', {
   csrf: false,
   csrfJustification: 'OAuth provider callback is not a browser form submission',
   response: { appOwnedSafety: true, body: 'redirect', cache: 'no-store' },
-  async handler(request) {
-    const url = new URL(request.url);
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    return finishOAuth({ code, state });
-  },
+  handler: finishOAuth,
 });
 ```
 
 Exact and prefix mounts are declared. Cookies are not interpreted into ambient `req.session`, and an
 endpoint does not get the mutation lifecycle unless you build it deliberately. A CSRF exemption is
 sound here because auth does not ride browser ambient authority; verifier tokens, signatures, OAuth
-state, or another explicit scheme authenticate the request.
+state, or another explicit scheme authenticate the request. The handler can still parse the raw
+request when the protocol needs it.
 
 ## `webhook()` for provider POSTs
 
@@ -86,7 +82,7 @@ as `Set-Cookie`, `Cache-Control`, `Vary`, `ETag`, `Last-Modified`, `Content-Disp
 declared redirect `Location`; app code cannot write reserved `Kovo-*` framework headers.
 
 Every header name and value is rejected if it contains CR, LF, NUL, or other forbidden controls.
-That is **KV415**. `Set-Cookie` must use the typed cookie builder, which validates the name,
+That is a cookie-sink error. `Set-Cookie` must use the typed cookie builder, which validates the name,
 percent-encodes values, and serializes attributes structurally.
 
 ```ts
@@ -114,7 +110,7 @@ SUMMARY total=3
 ```
 
 Each row shows method, path, mount mode, auth scheme, CSRF posture, and the write-to-domain chain
-where one exists. A `csrf: false` mutation appears here too, and **KV418** guarantees that it does
+where one exists. A `csrf: false` mutation appears here too, and the CSRF/session gate guarantees that it does
 not read ambient session authority.
 
 ## Next

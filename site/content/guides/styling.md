@@ -6,13 +6,30 @@ order: 4
 
 # Styling with StyleX
 
-Kovo's default component styling path is `@kovojs/style`, the Kovo-owned StyleX fork. Components
-author typed style objects in TSX, the compiler extracts deterministic atomic CSS, and rendered HTML
-keeps readable `kv-*` classes plus `data-style-src` provenance for `kovo explain`.
+Your product card, checkout button, and low-stock warning should stay styled after full-page renders,
+mutation fragments, and deferred streams. Kovo's default component styling path is `@kovojs/style`,
+the Kovo-owned StyleX fork: components author typed style objects in TSX, the compiler extracts
+deterministic atomic CSS, and rendered HTML keeps readable `kv-*` classes plus `data-style-src`
+provenance for `kovo explain`.
 
 Use plain document CSS for global page chrome, resets, fonts, and document-level theme tokens.
 Because Kovo renders light DOM, tokens are ordinary CSS custom properties and theming does not cross
-shadow boundaries.
+shadow boundaries. Use StyleX when a component owns the style; use plain CSS when the document owns
+the surface.
+
+## Style a component
+
+Import the style package as `style`, define style groups near the component, and compose them through
+the `style={...}` JSX prop:
+
+```tsx
+import * as style from '@kovojs/style';
+
+const cardStyles = style.create({
+  root: { padding: 16, color: style.tokens.sys.color.onSurface },
+  lowStock: { color: style.tokens.customColor('warning').color },
+});
+```
 
 ## Seed themes
 
@@ -63,10 +80,9 @@ export const theme = defineTheme({
 
 `base`/`sys` theme derivation is an internal maintenance form, not an app-facing API.
 
-## Component styles
+## Compose component states
 
-Import the style package as `style`, define style groups near the component, and compose them through
-the `style={...}` JSX prop:
+Style objects can be selected with normal TypeScript conditionals:
 
 ```tsx
 /** @jsxImportSource @kovojs/server */
@@ -107,10 +123,10 @@ you declared under `defineTheme({ colors: { warning } })`; it returns a group (`
 `.colorContainer`, …) for palette entries that aren't part of the system role set. Reach for `sys.*` for
 ordinary surfaces and text, and `customColor(name)` for app-specific accents like a low-stock warning.
 
-Style objects can be selected with normal TypeScript conditionals. The compiler sees every referenced
-object and compiler-known token, extracts the CSS at build time, and routes state/query-driven style
-toggles through the same attribute update plan as other Kovo bindings. That means late mutation
-fragments and deferred chunks can only reference classes already present in the app stylesheet.
+The compiler sees every referenced object and compiler-known token, extracts the CSS at build time,
+and routes state/query-driven style toggles through the same attribute update plan as other Kovo
+bindings. That means late mutation fragments and deferred chunks can only reference classes already
+present in the app stylesheet.
 
 Static `style.keyframes(...)` constants resolve to deterministic animation names. The extractor
 binds each `animationName` reference to the literal emitted name and writes the matching

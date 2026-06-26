@@ -6,11 +6,25 @@ order: 4.7
 
 # Request shell
 
-The request shell is the server-owned composition point. Your app exports a closed `createApp()`
-aggregate; the shell turns it into a Web-standard `Request -> Response` handler, assembles documents,
-serves framework endpoints, and runs guards before route/query/mutation code.
+Your app needs one exported server value that knows its routes, mutations, queries, document shell,
+database, and session provider. `createApp()` is that value; the request shell turns it into a
+Web-standard `Request -> Response` handler, assembles documents, serves framework endpoints, and
+runs guards before route/query/mutation code.
 
-## The app aggregate
+## Create the app aggregate
+
+Start with the surfaces the app serves:
+
+```ts
+export default createApp({
+  routes,
+  mutations,
+  queries,
+  db: () => db,
+});
+```
+
+Then add the document, session, error, and limit policy around that core:
 
 ```ts
 import { BodyEnd, Document, FontPreload, Head, InlineScript } from '@kovojs/server';

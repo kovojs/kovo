@@ -23,18 +23,16 @@ A guard is a function from a request to `true` or a denial. The same `guards` co
 mutations, routes, and queries, so authorization is one vocabulary across the app.
 
 ```ts
-import { guards, mutation, route } from '@kovojs/server';
+import { guards, route } from '@kovojs/server';
 
-export const adminPage = route('/admin', {
-  guard: guards.role<AdminRequest>('admin'),
-  page: () => <AdminDashboard />,
-});
-
-export const refundOrder = mutation('refund/order', {
-  guard: guards.all(guards.role('admin'), guards.rateLimit({ max: 20, per: 'ip' })),
-  // …
+export const accountPage = route('/account', {
+  guard: guards.authed(),
+  page: () => <AccountOverviewPage />,
 });
 ```
+
+Layer role checks, rate limits, and mutation-specific authorization after the first protected page
+works.
 
 The combinators (verified against `@kovojs/server`'s `guards`):
 
@@ -194,7 +192,8 @@ const csrf = csrfField(request, commerceCsrf); // → <input type="hidden" name=
 
 CSRF stays on for server-rendered mutation endpoints. The only opt-out is `csrf: false` on an
 individual mutation, reserved for non-browser or externally authenticated endpoints. A `csrf: false`
-mutation must not read `req.session` or run a session/cookie-derived guard; doing so is **KV418**
+mutation must not read `req.session` or run a session/cookie-derived guard; doing so is a
+CSRF/session diagnostic
 because the mutation would skip CSRF while still using ambient browser authority. Route non-browser
 writes through [endpoints and webhooks](/guides/endpoints-webhooks/), where cookies are not
 interpreted and verifier auth is explicit. Every opt-out shows up in the `--endpoints` audit with
@@ -331,7 +330,8 @@ import { trustedReveal } from '@kovojs/core';
 trustedReveal(maskedEmail, { justification: 'support staff can see masked email on open tickets' });
 ```
 
-An unresolved projection from a table with secret columns is **KV435**. Remove the secret field,
+An unresolved projection from a table with secret columns is reported as a confidential-data
+diagnostic. Remove the secret field,
 rewrite the projection so it is statically visible, or use `trustedReveal(...)` with a concrete
 justification and review `kovo explain --revealed`.
 
@@ -361,7 +361,7 @@ This is the bad shape:
 await db.update(accounts).set({ displayName: input.displayName, role: input.role });
 ```
 
-`role` came from the request, so Kovo reports **KV438**. Use a server-derived value or an explicit
+`role` came from the request, so Kovo reports a governed-write diagnostic. Use a server-derived value or an explicit
 admin assignment instead:
 
 ```ts
@@ -418,14 +418,14 @@ database, model, generated DOM stamp, static-export path, or environment boundar
 Kovo parser, schema, guard, or trust API narrows it. Treat every output that can execute, navigate,
 select, cache, download, store, or authorize as a sink.
 
-| Source                                                      | Safe Kovo path                                                                                   | Dangerous sink                                                           | Escape hatch                                                 |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| Request params, search, forms, query args, headers, cookies | Route/query/mutation schemas, CSRF, guards, typed redirects                                      | HTML text/attributes, URL attrs, redirects, selectors                    | `trustedHtml` / `trustedUrl` with provenance                 |
-| Session and provider state                                  | `session(s.object(...))`, `sessionProvider`, `guards.authed`, `owner:` predicates                | Owner-table reads/writes, auth redirects, cacheable private reads        | Public-read or custom guard justification                    |
-| Raw endpoint or webhook body                                | `endpoint()` audit metadata, executable verifier auth, `webhook()` verify-before-parse lifecycle | Raw `Response`, `Location`, headers, cookies, file/stream output         | Raw endpoint purpose plus verifier/custom/none justification |
-| Database, model, or streamed text                           | Query output schemas, `<kovo-query>`, `<kovo-text>`, contextual escaping                         | SQL text, raw HTML insertion, script/JSON islands, stream renderers      | `trustedSql` / `trustedHtml` from reviewed renderer code     |
+| Source                                                      | Safe Kovo path                                                                                                                   | Dangerous sink                                                           | Escape hatch                                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| Request params, search, forms, query args, headers, cookies | Route/query/mutation schemas, CSRF, guards, typed redirects                                                                      | HTML text/attributes, URL attrs, redirects, selectors                    | `trustedHtml` / `trustedUrl` with provenance                 |
+| Session and provider state                                  | `session(s.object(...))`, `sessionProvider`, `guards.authed`, `owner:` predicates                                                | Owner-table reads/writes, auth redirects, cacheable private reads        | Public-read or custom guard justification                    |
+| Raw endpoint or webhook body                                | `endpoint()` audit metadata, executable verifier auth, `webhook()` verify-before-parse lifecycle                                 | Raw `Response`, `Location`, headers, cookies, file/stream output         | Raw endpoint purpose plus verifier/custom/none justification |
+| Database, model, or streamed text                           | Query output schemas, `<kovo-query>`, `<kovo-text>`, contextual escaping                                                         | SQL text, raw HTML insertion, script/JSON islands, stream renderers      | `trustedSql` / `trustedHtml` from reviewed renderer code     |
 | Files, storage keys, manifests, static export paths         | Capability URLs, `createStorageDownloadEndpoint`, `respond.file`, `respond.stream`, containment checks, static-export validation | Filesystem/S3 paths, `Content-Disposition`, inline HTML/SVG/MIME         | `ctx.signUrl` / `signCapability` with per-object scope       |
-| Framework code paths and generated artifacts                | Shared source/sink registry plus drift detection                                                 | `innerHTML`, `Headers`, `querySelector`, dynamic import, eval/process/fs | Narrow repo-internal exclusion with evidence                 |
+| Framework code paths and generated artifacts                | Shared source/sink registry plus drift detection                                                                                 | `innerHTML`, `Headers`, `querySelector`, dynamic import, eval/process/fs | Narrow repo-internal exclusion with evidence                 |
 
 Common app code rules are intentionally blunt:
 

@@ -14,9 +14,16 @@ your app.
 import { component } from '@kovojs/core';
 import { parseComponentXml, renderRegistry, renderTree, s } from '@kovojs/server';
 
-const Callout = component({ render: ({ tone = 'info' }, _state, { children }) => <aside data-tone={tone}>{children}</aside> });
-const registry = renderRegistry({ 'kovo-callout': { component: Callout, props: s.object({ tone: s.string().optional() }) } });
-export const html = await renderTree(registry, parseComponentXml('Check <kovo-callout tone="warn">stock</kovo-callout>.'));
+const Callout = component({
+  render: ({ tone = 'info' }, _state, { children }) => <aside data-tone={tone}>{children}</aside>,
+});
+const registry = renderRegistry({
+  'kovo-callout': { component: Callout, props: s.object({ tone: s.string().optional() }) },
+});
+export const html = await renderTree(
+  registry,
+  parseComponentXml('Check <kovo-callout tone="warn">stock</kovo-callout>.'),
+);
 ```
 
 The registry is the boundary. A tag that is not in `renderRegistry(...)` can never dispatch to a
@@ -63,7 +70,8 @@ export function parsePublishedBody(source: string): ComponentNode[] {
   try {
     return parseComponentXml(source);
   } catch (error) {
-    if (error instanceof ComponentXmlError) throw new Error(`Body is not well-formed XML: ${error.message}`);
+    if (error instanceof ComponentXmlError)
+      throw new Error(`Body is not well-formed XML: ${error.message}`);
     throw error;
   }
 }
@@ -77,14 +85,25 @@ malformed markup is rejected before it becomes a page-rendering surprise.
 Render the parsed tree where you would otherwise render rich text:
 
 ```tsx
-import { renderTree, safeRichHtml, type ComponentNode, type ComponentRegistry } from '@kovojs/server';
+import {
+  renderTree,
+  safeRichHtml,
+  type ComponentNode,
+  type ComponentRegistry,
+} from '@kovojs/server';
 
 declare const marketingRegistry: ComponentRegistry;
 declare function parsePublishedBody(body: string): ComponentNode[];
 
 export async function ProductDescription({ body }: { body: string }) {
-  const html = await renderTree(marketingRegistry, parsePublishedBody(body), { unknownTag: 'text' });
-  return <section>{safeRichHtml(html, { reason: 'renderTree escapes text and owns component dispatch' })}</section>;
+  const html = await renderTree(marketingRegistry, parsePublishedBody(body), {
+    unknownTag: 'text',
+  });
+  return (
+    <section>
+      {safeRichHtml(html, { reason: 'renderTree escapes text and owns component dispatch' })}
+    </section>
+  );
 }
 ```
 

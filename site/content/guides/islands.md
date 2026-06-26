@@ -36,7 +36,19 @@ toggle, a checked-vs-indeterminate checkbox, a selected tab.
 
 A component declares its private, client-owned state with `state: () => ({...})`. The return value
 must satisfy `JsonValue` — no `Date`, `Map`, functions, or class instances — so serializability is a
-compile error, not a runtime surprise. Here is the gallery's toggle island, authored TSX verbatim:
+compile error, not a runtime surprise. The smallest island is a state value plus a button that
+changes it:
+
+```tsx
+export const Toggle = component({
+  state: () => ({ pressed: false }),
+  render: (_queries, state) => (
+    <button aria-pressed={String(state.pressed)} onClick={() => (state.pressed = !state.pressed)} />
+  ),
+});
+```
+
+Here is the gallery's toggle island, authored TSX verbatim:
 
 ```tsx
 import { component } from '@kovojs/core';

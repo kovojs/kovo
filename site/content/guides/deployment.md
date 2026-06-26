@@ -60,7 +60,7 @@ So the rule for your serving layer:
   a server-controlled choice), so `Cache-Control: public, max-age=31536000, immutable` is correct.
 - **Keep the required skew window.** Retain prior immutable modules and prior-token `/_q/` reads for
   the supported deploy-skew window, with a required minimum of 24 hours. Configuring less, or using a
-  platform that cannot retain both artifact classes for that window, is **KV417**.
+  platform that cannot retain both artifact classes for that window, is a deploy-skew error.
 
 A CDN or object store in front of `/c/*` makes this nearly free: deploys upload new versions and
 touch nothing else.
@@ -115,11 +115,23 @@ documents should not assume server refetches will exist later; the no-JS HTML do
 artifact. The detailed static-export constraints and diagnostic ownership live in
 [Static export](/guides/static-export/).
 
-### A node-server entrypoint
+### Run a Node server entrypoint
 
-The server is the `createApp()` aggregate (SPEC §9.3): your routes, mutations, queries, the `db`
-provider, and the §6.5 `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request ->
-Response` handler to a `node:http` listener, so the entrypoint is small:
+The server is the `createApp()` aggregate: your routes, mutations, queries, the `db` provider, and
+the `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request -> Response` handler to a
+`node:http` listener. Start with the adapter shape:
+
+```ts
+import { createServer } from 'node:http';
+import { createApp, createRequestHandler, toNodeHandler } from '@kovojs/server';
+
+const app = createApp({ routes, mutations, queries });
+const handler = toNodeHandler(createRequestHandler(app));
+createServer(handler).listen(Number(process.env.PORT ?? 3000));
+```
+
+The production entrypoint usually adds database setup, session resolution, CSRF secrets, and early
+hints:
 
 ```ts
 // server.ts — production entrypoint
@@ -137,7 +149,7 @@ const app = createApp({
   routes,
   mutations,
   queries,
-  // Runs once before route/query/mutation guards; return null for anonymous (SPEC §6.5).
+  // Runs once before route/query/mutation guards; return null for anonymous.
   sessionProvider,
   csrf: { secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET! },
 });

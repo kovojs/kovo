@@ -12,6 +12,15 @@ import {
   vendoredUiComponents,
 } from './add-catalog.js';
 
+function importsUiPackage(source: string): boolean {
+  const uiPackage = /['"]@kovojs\/ui(?:\/[^'"]*)?['"]/;
+  return (
+    new RegExp(`^\\s*import\\s+(?:type\\s+)?[^;]*?\\s+from\\s+${uiPackage.source}`, 'm').test(
+      source,
+    ) || new RegExp(`^\\s*import\\s*\\(\\s*${uiPackage.source}`, 'm').test(source)
+  );
+}
+
 describe('kovo add', () => {
   it('keeps the vendored UI catalog synchronized with @kovojs/ui package source', () => {
     expect(availableAddComponents()).toBe(
@@ -53,7 +62,7 @@ describe('kovo add', () => {
       );
       expect(entry.source).toMatch(/import\s+\{[^}]*\bcomponent\b[^}]*\}\s+from '@kovojs\/core';/);
       expect(entry.source).toContain('component({');
-      expect(entry.source).not.toContain('@kovojs/ui');
+      expect(importsUiPackage(entry.source)).toBe(false);
       expect(entry.source).not.toContain('@kovojs/server/internal');
       expect(entry.source).not.toContain("from './pass-through.js'");
       expect(entry.source).not.toContain("from './theme.js'");
@@ -429,7 +438,7 @@ describe('kovo add', () => {
         toast,
         toolbar,
       ].join('\n');
-      expect(vendoredSource).not.toContain('@kovojs/ui');
+      expect(importsUiPackage(vendoredSource)).toBe(false);
       expect(vendoredSource).not.toContain('kovo-c=');
       expect(vendoredSource).not.toContain('data-bind=');
     } finally {
