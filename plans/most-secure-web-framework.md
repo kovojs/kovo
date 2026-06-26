@@ -388,7 +388,8 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       inherited/accessor-backed invocation metadata from widening authority or ambient posture; focused
       agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Normalized agent-tool requests now
       hide `session` from property access, `in`, descriptor lookup, and own-key reflection even when a tool has
-      a reviewed ambient-session opt-in; focused agent-tool tests and `git diff --check` passed. Remaining gap: broader analyzer integration beyond the
+      a reviewed ambient-session opt-in; they also scrub inherited/prototype `session` material before handler
+      dispatch. Focused agent-tool tests and `git diff --check` passed. Remaining gap: broader analyzer integration beyond the
       framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
