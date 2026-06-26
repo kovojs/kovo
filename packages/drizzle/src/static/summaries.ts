@@ -1116,10 +1116,19 @@ function sessionSegmentExpression(node: Node): Node | undefined {
 /** @internal */ export function queryInputKeyOperand(
   expression: Node,
 ): Pick<QueryInstanceKeyOperand, 'inputKey'> {
-  const node = staticAccessExpression(expression);
-  if (Node.isIdentifier(node) && node.getText() === 'input') {
-    const key = staticAccessName(expression);
-    if (key) return { inputKey: `arg:${key}` };
+  // SPEC §10.3 (KV414 IDOR): recognize the validated-input bag at ANY depth — `input.id`,
+  // `input.session.userId`, `input.a.b.c` — so a NESTED input value whose field name
+  // happens to be `session`/`guard`/`tenant` is still classified as a client arg (the
+  // args/IDOR branch) instead of being mistaken for trusted session scope (H5). The
+  // depth-1 `input.x` case keys identically to before (`arg:x`).
+  const segments = staticAccessSegments(expression);
+  if (
+    segments &&
+    segments.path.length > 0 &&
+    Node.isIdentifier(segments.root) &&
+    segments.root.getText() === 'input'
+  ) {
+    return { inputKey: `arg:${segments.path.join('.')}` };
   }
 
   const destructuredKey = localDestructuredInputKey(expression);

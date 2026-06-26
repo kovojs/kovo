@@ -156,6 +156,37 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ).toEqual([]);
   });
 
+  // SPEC §6.5/§10.3 (KV438, H3): only the request carrier `req.session.*`/`.guard.*`/
+  // `.tenant.*` is trusted server scope. A CLIENT-INPUT field that merely happens to be
+  // named `tenant`/`session`/`guard` is byte-identical in shape and type to that carrier
+  // access, so the private-scope match must anchor on the carrier root — otherwise the
+  // input field launders client data onto a governed column with no KV438 (cross-tenant
+  // write / privilege escalation). `request.session.userId` above stays safe.
+  it('rejects a client-input field named tenant/session/guard on a governed column (H3)', () => {
+    const signature =
+      'db: PgAsyncDatabase<any, any>, input: { id: string; tenant: string; session: { userId: string }; guard: { userId: string } }, request: { session: { userId: string } }';
+    for (const value of ['input.tenant', 'input.session.userId', 'input.guard.userId']) {
+      expect(
+        facts(
+          handler(
+            `  await db.update(accounts).set({ role: ${value} }).where(eq(accounts.id, input.id));`,
+            signature,
+          ),
+        ),
+      ).toEqual([
+        {
+          column: 'role',
+          detail: value.slice('input.'.length),
+          domain: 'account',
+          name: 'updateAccount',
+          provenance: 'input',
+          site: 'account.domain.ts:7',
+          via: 'set',
+        },
+      ]);
+    }
+  });
+
   it('passes serverValue(non-input) but rejects serverValue(input.x)', () => {
     expect(
       facts(

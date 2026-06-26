@@ -723,6 +723,7 @@ function sqlSafetyDiagnosticsForSourceFile(
   const diagnostics: TouchGraphDiagnostic[] = [];
   const scopes = new Map<Node, Map<string, SqlTextSafety>>();
   const nativeDrizzleSqlReceivers = nativeDrizzleSqlReceiverTexts(sourceFile);
+  const kovoSqlReceivers = kovoSqlReceiverTextsForSourceFile(sourceFile);
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
   // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
   // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
@@ -752,6 +753,7 @@ function sqlSafetyDiagnosticsForSourceFile(
       call,
       scopes,
       nativeDrizzleSqlReceivers,
+      kovoSqlReceivers,
     );
     if (rawHelperDiagnostic) diagnostics.push(rawHelperDiagnostic);
 
@@ -778,6 +780,7 @@ function sqlRawHelperDiagnostic(
   call: CallExpression,
   scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
   nativeDrizzleSqlReceivers: ReadonlySet<string>,
+  kovoSqlReceivers: ReadonlySet<string>,
 ): TouchGraphDiagnostic | null {
   const expression = call.getExpression();
   if (!Node.isPropertyAccessExpression(expression)) return null;
@@ -795,7 +798,11 @@ function sqlRawHelperDiagnostic(
     };
   }
 
-  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'sql') return null;
+  // SPEC §10.2/§6.6 (KV422): recognize Kovo's raw-SQL helper through its resolved
+  // `@kovojs/drizzle` binding — bare `sql`, an `import { sql as s }` alias, or a
+  // namespace `<ns>.sql` accessor — so `s.raw(...)` / `k.sql.raw(...)` cannot slip a
+  // raw chunk past the gate the way a literal `receiver === 'sql'` check did.
+  if (!kovoSqlReceivers.has(receiver.getText())) return null;
   if (method === 'identifier' && sqlAllowlistSafety(second, scopes) === 'literal') return null;
 
   const safety = sqlTextSafety(first, scopes);
@@ -819,6 +826,36 @@ function nativeDrizzleSqlReceiverTexts(sourceFile: SourceFile): Set<string> {
     const namespace = declaration.getNamespaceImport();
     if (namespace) receivers.add(`${namespace.getText()}.sql`);
   }
+  return receivers;
+}
+
+const kovoSqlReceiverTextsCache = new WeakMap<SourceFile, Set<string>>();
+
+/**
+ * SPEC §10.2/§6.6 (KV422): the receiver texts that resolve to Kovo's auditable raw-SQL
+ * helper `sql` from `@kovojs/drizzle`. Mirrors {@link nativeDrizzleSqlReceiverTexts} but
+ * for Kovo's own `sql`: a local alias (`import { sql as s }` → `s`) or a namespace
+ * accessor (`import * as k` → `k.sql`). Bare `sql` is always seeded because the analyzer
+ * treats an unqualified `sql.raw(...)` as Kovo's helper even without an explicit import
+ * in a fixture. Anchoring KV422 to this resolved set keeps `sql.raw`/`sql.identifier`
+ * detection sound under aliasing/namespace imports that a literal `receiver === 'sql'`
+ * compare silently missed. Memoized per source file (read once per analysis pass).
+ */
+function kovoSqlReceiverTextsForSourceFile(sourceFile: SourceFile): Set<string> {
+  const cached = kovoSqlReceiverTextsCache.get(sourceFile);
+  if (cached) return cached;
+
+  const receivers = new Set<string>(['sql']);
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== '@kovojs/drizzle') continue;
+    for (const named of declaration.getNamedImports()) {
+      if (named.getName() === 'sql') receivers.add(named.getAliasNode()?.getText() ?? 'sql');
+    }
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) receivers.add(`${namespace.getText()}.sql`);
+  }
+
+  kovoSqlReceiverTextsCache.set(sourceFile, receivers);
   return receivers;
 }
 
@@ -879,7 +916,11 @@ function sqlTextSafety(
       return 'safe';
     if (Node.isPropertyAccessExpression(callExpression)) {
       const receiver = callExpression.getExpression();
-      if (Node.isIdentifier(receiver) && receiver.getText() === 'sql') {
+      // SPEC §10.2/§6.6 (KV422): resolve Kovo `sql` through its aliased/namespace
+      // `@kovojs/drizzle` binding so `s.raw(...)` / `k.sql.identifier(...)` are
+      // classified identically to bare `sql.*` — matching the sink-side fix above.
+      const kovoSqlReceivers = kovoSqlReceiverTextsForSourceFile(expression.getSourceFile());
+      if (kovoSqlReceivers.has(receiver.getText())) {
         const method = callExpression.getName();
         if (method === 'identifier') {
           return sqlAllowlistSafety(expression.getArguments()[1], scopes) === 'literal'

@@ -165,6 +165,37 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'session' }]);
   });
 
+  // H5 (SPEC §6.5/§10.3, KV414 IDOR): a NESTED client-input value whose field name happens
+  // to be `session`/`guard` (`input.session.userId`) is byte-identical in shape/type to the
+  // trusted `req.session.userId` above — but it is client-controlled, so the owner predicate
+  // must surface scope:args (KV414), never be laundered into the safe scope:session branch.
+  it('A1: flags an owner-table mutation keyed by a nested input.session/guard value scope:args (H5)', () => {
+    for (const value of ['input.session.userId', 'input.guard.userId']) {
+      const audit = extractOwnerAuditFromProject(
+        withPgDatabaseTypes({
+          files: [
+            pgDatabaseTypes(WRITE_DB_METHODS),
+            {
+              fileName: 'order.mutations.ts',
+              source: [
+                'import { eq } from "drizzle-orm";',
+                'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+                '',
+                'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+                '',
+                'export async function delMine(db: PgAsyncDatabase<any, any>, input: { session: { userId: string }; guard: { userId: string } }) {',
+                `  await db.delete(orders).where(eq(orders.userId, ${value}));`,
+                '}',
+              ].join('\n'),
+            },
+          ],
+        }),
+      );
+
+      expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'args' }]);
+    }
+  });
+
   it('accepts a write guarded by a summarized principal on the owner-column predicate', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({

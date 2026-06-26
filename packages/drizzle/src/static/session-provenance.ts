@@ -204,15 +204,25 @@ function addSessionAliasesForVariableDeclaration(
   if (!Node.isObjectBindingPattern(nameNode)) return;
   const base =
     privateScopeForExpression(initializer, context) ?? directPrivateScopeForExpression(initializer);
-  addPrivateScopeAliasesForObjectBindingPattern(nameNode, base, aliases);
+  // A base-less `const { session } = X` destructuring only resolves to private scope when
+  // the destructured source `X` is itself a proven carrier (SPEC §6.5); `const { session }
+  // = input` must NOT mint a session alias from a client-input field name (H3/H5 sibling).
+  const sourceIsCarrier = base !== undefined || isPrivateScopeCarrierExpression(initializer);
+  addPrivateScopeAliasesForObjectBindingPattern(nameNode, base, aliases, sourceIsCarrier);
+}
+
+function isPrivateScopeCarrierExpression(node: Node): boolean {
+  const segments = staticAccessSegments(node);
+  return segments !== undefined && isPrivateScopeCarrierRoot(segments.root);
 }
 
 function addPrivateScopeAliasesForObjectBindingPattern(
   pattern: ObjectBindingPattern,
   base: PrivateScopeProvenance | undefined,
   aliases: Map<string, SessionAlias>,
+  sourceIsCarrier: boolean,
 ): void {
-  for (const binding of privateScopeBindingsFromObjectBindingPattern(pattern, base)) {
+  for (const binding of privateScopeBindingsFromObjectBindingPattern(pattern, base, sourceIsCarrier)) {
     const key = resolvedSymbolKey(
       symbolForIdentifierReference(binding.identifier) ?? binding.identifier.getSymbol(),
     );
@@ -245,15 +255,24 @@ interface PrivateScopeBinding {
 function privateScopeBindingsFromObjectBindingPattern(
   pattern: ObjectBindingPattern,
   base: PrivateScopeProvenance | undefined,
+  sourceIsCarrier: boolean,
 ): PrivateScopeBinding[] {
   const bindings: PrivateScopeBinding[] = [];
-  collectPrivateScopeBindingsFromObjectBindingPattern(pattern, base, [], [], bindings);
+  collectPrivateScopeBindingsFromObjectBindingPattern(
+    pattern,
+    base,
+    sourceIsCarrier,
+    [],
+    [],
+    bindings,
+  );
   return bindings;
 }
 
 function collectPrivateScopeBindingsFromObjectBindingPattern(
   pattern: ObjectBindingPattern,
   base: PrivateScopeProvenance | undefined,
+  sourceIsCarrier: boolean,
   segments: readonly string[],
   segmentElements: readonly BindingElement[],
   bindings: PrivateScopeBinding[],
@@ -270,6 +289,7 @@ function collectPrivateScopeBindingsFromObjectBindingPattern(
       collectPrivateScopeBindingsFromObjectBindingPattern(
         binding,
         base,
+        sourceIsCarrier,
         nextSegments,
         nextSegmentElements,
         bindings,
@@ -278,7 +298,12 @@ function collectPrivateScopeBindingsFromObjectBindingPattern(
     }
     if (!Node.isIdentifier(binding)) continue;
 
-    const provenance = objectBindingPrivateScopeProvenance(base, nextSegments, nextSegmentElements);
+    const provenance = objectBindingPrivateScopeProvenance(
+      base,
+      sourceIsCarrier,
+      nextSegments,
+      nextSegmentElements,
+    );
     if (!provenance) continue;
     bindings.push({ declaration: element, identifier: binding, provenance });
   }
@@ -286,6 +311,7 @@ function collectPrivateScopeBindingsFromObjectBindingPattern(
 
 function objectBindingPrivateScopeProvenance(
   base: PrivateScopeProvenance | undefined,
+  sourceIsCarrier: boolean,
   segments: readonly string[],
   segmentElements: readonly BindingElement[],
 ): PrivateScopeProvenance | undefined {
@@ -297,6 +323,10 @@ function objectBindingPrivateScopeProvenance(
     if (base.requiresGuard !== undefined) provenance.requiresGuard = base.requiresGuard;
     return provenance;
   }
+
+  // Without a base scope, the `session`/`guard`/`tenant` name match only holds when the
+  // destructured source is a proven carrier (SPEC §6.5) — never a client-input bag.
+  if (!sourceIsCarrier) return undefined;
 
   const privateIndex = segments.findIndex(isPrivateScopeKind);
   if (privateIndex < 0) return undefined;
@@ -453,10 +483,44 @@ function unsummarizedHelperReasonForExpression(node: Node): string | undefined {
   return Node.isCallExpression(expression) ? unsummarizedHelperReason(expression) : undefined;
 }
 
+/**
+ * SPEC §6.5/§10.3 (KV414 IDOR + KV438 mass-assignment): the request-context carrier
+ * roots the framework exposes `session`/`guard`/`tenant` on. A `session`/`guard`/`tenant`
+ * member is trusted *server* private scope ONLY when it hangs off one of these — the
+ * value SPEC §6.5 surfaces as `req.session.*`. Mirrors the compiler's request-accessor
+ * recognition (`validate/trusted-html-provenance.ts` `{req,request}` and
+ * `validate/component-contracts.ts` `{ctx,context}`), unified here.
+ */
+const PRIVATE_SCOPE_CARRIER_ROOT_NAMES: ReadonlySet<string> = new Set([
+  'req',
+  'request',
+  'ctx',
+  'context',
+]);
+
+/**
+ * True when the access root is a proven request/session/context carrier (or `this`).
+ * Fail-closed: any other root — notably a validated-input binding like `input`/`args`,
+ * whose static type and shape are byte-identical to a request carrier — is NOT a
+ * carrier, so a `session`/`guard`/`tenant`-named *input field* (e.g.
+ * `input.session.userId`, `input.tenant`) falls through to the symbol-provenance
+ * input/args reject instead of laundering client data into server private scope (H3/H5).
+ * Over-rejecting an unconventionally-named carrier is the safe SPEC §6.6 direction.
+ */
+function isPrivateScopeCarrierRoot(root: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(root);
+  if (Node.isThisExpression(expression)) return true;
+  if (!Node.isIdentifier(expression)) return false;
+  return PRIVATE_SCOPE_CARRIER_ROOT_NAMES.has(expression.getText());
+}
+
 function directPrivateScopeForExpression(node: Node): PrivateScopeProvenance | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   const segments = staticAccessSegments(node);
   if (!segments) return undefined;
+  // Anchor the session/guard/tenant name match to a proven carrier root (SPEC §6.5):
+  // an input-rooted `.session.`/`.guard.`/`.tenant.` access is client data, not server scope.
+  if (!isPrivateScopeCarrierRoot(segments.root)) return undefined;
   for (const kind of ['guard', 'session', 'tenant'] as const) {
     const index = segments.path.indexOf(kind);
     if (index < 0) continue;

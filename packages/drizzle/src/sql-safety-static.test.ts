@@ -202,4 +202,46 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
       ]),
     );
   });
+
+  // SPEC §10.2/§6.6 (KV422): the Kovo raw-SQL helper must be recognized through its
+  // RESOLVED `@kovojs/drizzle` binding, not a literal `receiver === 'sql'` compare, so an
+  // aliased `import { sql as s }` or a namespace `import * as k` cannot smuggle a raw chunk
+  // through the query builder (orderBy/where) past the gate — the inner `s.raw(...)` /
+  // `k.sql.raw(...)` call is flagged wherever it appears, before it can reach the builder.
+  it('flags aliased and namespace-imported Kovo sql.raw through the query builder (KV422)', () => {
+    const aliased = diagnosticsFor(`
+      import { sql as s } from '@kovojs/drizzle';
+      export async function loadProducts(input: { sort: string }, db: any) {
+        return db.select().from(products).orderBy(s.raw(input.sort));
+      }
+    `);
+    expect(aliased.map(({ code }) => code)).toEqual(['KV422']);
+    expect(aliased[0]?.message).toContain('sql.raw(...) receives request-derived text');
+
+    const namespace = diagnosticsFor(`
+      import * as k from '@kovojs/drizzle';
+      export async function loadProducts(input: { sort: string }, db: any) {
+        return db.select().from(products).orderBy(k.sql.raw(input.sort));
+      }
+    `);
+    expect(namespace.map(({ code }) => code)).toEqual(['KV422']);
+
+    // Baseline: bare `sql.raw` of a request value is still flagged.
+    const bare = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function loadProducts(input: { sort: string }, db: any) {
+        return db.select().from(products).orderBy(sql.raw(input.sort));
+      }
+    `);
+    expect(bare.map(({ code }) => code)).toEqual(['KV422']);
+
+    // No false positive: an aliased raw chunk of a static literal stays accepted.
+    const aliasedLiteral = diagnosticsFor(`
+      import { sql as s } from '@kovojs/drizzle';
+      export async function loadProducts(db: any) {
+        return db.select().from(products).orderBy(s.raw("created_at desc"));
+      }
+    `);
+    expect(aliasedLiteral).toEqual([]);
+  });
 });
