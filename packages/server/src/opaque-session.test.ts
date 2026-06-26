@@ -117,7 +117,7 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     ).resolves.toEqual({ user: { id: 'u1' } });
   });
 
-  it('binds default-owned opaque sessions to one validated request lifecycle', async () => {
+  it('binds Kovo-owned opaque sessions to one validated request lifecycle', async () => {
     type Session = { user: { id: string } | null };
     type SessionRequest = RequestWithSession<Request, Session>;
     const baseStore = createMemoryOpaqueSessionStore<Session>();
@@ -152,7 +152,7 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
     const app = createApp({
       routes: [account],
-      sessionProvider: manager.provider,
+      session: manager,
     });
     const renderAccount = (cookie: string) =>
       renderAppRouteDocumentResponse({
