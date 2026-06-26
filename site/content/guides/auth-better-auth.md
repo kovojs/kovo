@@ -32,6 +32,19 @@ The integration path is:
 That keeps `request.session` typed in routes and mutations without making page components call the
 auth library directly.
 
+The smallest Kovo-facing piece is the session adapter:
+
+```ts
+import { betterAuthSession } from '@kovojs/better-auth';
+
+export const appSessionProvider = commerceSession.provider(
+  betterAuthSession(auth, ({ session, user }) => ({
+    id: session.id,
+    user: { id: user.id, email: user.email, name: user.name },
+  })),
+);
+```
+
 Use one shared auth module so the session shape, Better Auth adapter, and CSRF binding stay in one
 place:
 

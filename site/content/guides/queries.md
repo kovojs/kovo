@@ -95,8 +95,8 @@ invalidated queries →  components           (every element that declared that 
 ```
 
 The write body at the top of that chain is a `write()` — a named operation plus the exact domains it
-touches. Mutations call writes instead of touching `db` directly (direct db access in a handler is
-**KV330**), which is what makes the touch set auditable:
+touches. Mutations call writes instead of touching `db` directly, which is what makes the touch set
+auditable:
 
 ```ts
 import { domain, write } from '@kovojs/server';
@@ -159,7 +159,8 @@ export const touchGraph = {
 Because the join _is_ the declaration, the classic staleness bug — forgetting that a query also
 reads a joined table — can't happen here. The read set comes from the query expression, not from
 memory. When the analyzer genuinely can't see through a write (raw SQL, a helper buried in
-`node_modules`), you declare the touches by hand at the write site as a checked KV406 escape hatch.
+`node_modules`), you declare the touches by hand at the write site as a checked opaque-write escape
+hatch.
 The verifier confirms observed reads/writes are covered by the static graph plus those declared
 opaque sites.
 

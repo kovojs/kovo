@@ -118,7 +118,7 @@ compiler-stamped layout segments as an optimization, but app authors do not auth
 policy and should not put route-lifetime assumptions in layout-local state. If chrome state must
 survive reloads and links, put it in the URL or in server query truth. If it is purely local, treat it
 like any other island state and keep server-refreshable boundaries in mind; a stateful island inside
-a refreshable target is **KV420**.
+a refreshable target is rejected by the boundary checker.
 
 ## Explain the resolved chain
 

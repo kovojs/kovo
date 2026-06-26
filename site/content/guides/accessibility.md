@@ -47,9 +47,19 @@ You do not need to re-prove primitive accessibility. Your job is the part only t
 meaningful labels and copy, correct heading order in your own layouts, and the semantics around the
 primitive.
 
-That part is plain HTML. A primitive can be flawless and the surrounding region still fail an audit
-if the labels are missing or the heading levels skip. Concretely — give the form region an
-accessible name, wire each control to a real `<label>`, and nest headings without gaps:
+That part is plain HTML. Start with the label the user hears:
+
+```tsx
+<section aria-labelledby="shipping-heading">
+  <h2 id="shipping-heading">Shipping</h2>
+  <label for="zip">ZIP code</label>
+  <input id="zip" name="zip" autocomplete="postal-code" />
+</section>
+```
+
+A primitive can be flawless and the surrounding region still fail an audit if the labels are missing
+or the heading levels skip. Concretely — give the form region an accessible name, wire each control
+to a real `<label>`, and nest headings without gaps:
 
 ```tsx
 /** @jsxImportSource @kovojs/server */
