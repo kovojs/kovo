@@ -10,6 +10,7 @@ export const defaultBlessedSinkFiles = [
   defaultSinkPolicyPath,
   'packages/core/src/internal/sql-safety.ts',
   'packages/core/src/index.ts',
+  'packages/server/src/command.ts',
   'packages/server/src/file.ts',
   'packages/server/src/response.ts',
   'packages/server/src/route.ts',
