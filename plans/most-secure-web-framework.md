@@ -255,8 +255,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       Auth/keyring/capability/env tests plus `pnpm exec vitest run packages/server/src/opaque-session.test.ts
 --run`, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. `createApp({
 session: manager })` now wires the Kovo-owned opaque manager into the request shell and rejects ambiguous
-      `session` plus delegated `sessionProvider`; `pnpm exec vitest run packages/server/src/app.test.ts
-packages/server/src/opaque-session.test.ts packages/server/src/api/app.test.ts` passed. Remaining gap:
+      `session` plus delegated `sessionProvider`; `createApp()` now auto-provisions a Kovo-owned opaque manager
+      when no session boundary is supplied and keeps explicit `sessionProvider` as a fenced delegated boundary.
+      `pnpm exec vitest run packages/server/src/app.test.ts packages/server/src/opaque-session.test.ts
+packages/server/src/api/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
       Better Auth delegation and explicit `sessionProvider` remain supported boundaries, so opaque sessions are
       not yet the only framework-wide default lifecycle.
 
