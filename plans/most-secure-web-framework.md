@@ -375,7 +375,11 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       and evidence; focused explain tests, `git diff --check`, and `pnpm run check:vp` passed. Declaration arrays
       for authority, capabilities, reachable sinks, and ambient credential kinds now require dense own data
       elements before snapshotting, avoiding sparse/accessor-backed array slots and post-declaration slot
-      mutation; focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
+      mutation; focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Runtime invocation
+      contexts now snapshot `authority`, `request`, and `value` through own data property checks, snapshot
+      invocation authority fields before matching, and pass handlers a frozen normalized context, preventing
+      inherited/accessor-backed invocation metadata from widening authority or ambient posture; focused
+      agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
       framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
