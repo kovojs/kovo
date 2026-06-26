@@ -400,6 +400,54 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     ).resolves.toBeNull();
   });
 
+  it('requires opaque session cookies to be presented exactly as emitted', async () => {
+    const manager = createOpaqueSessionManager({
+      acceptAuthorizationHeader: true,
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const validBearer = `Bearer ${established.session.id}`;
+
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: { cookie: `kovo_session=${established.session.id}` },
+        }),
+      ),
+    ).resolves.toEqual({ user: { id: 'u1' } });
+    await expect(
+      manager.validateRequest(
+        new Request('https://app.test/account', {
+          headers: { cookie: `kovo_session=${established.session.id.replace('_', '%5F')}` },
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    await expect(
+      manager.validateRequest(
+        new Request('https://app.test/account', {
+          headers: { cookie: `kovo_session=${established.session.id}%XY` },
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    await expect(
+      manager.validateRequest(
+        new Request('https://app.test/account', {
+          headers: { cookie: `kovo_session="${established.session.id}"` },
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: {
+            authorization: validBearer,
+            cookie: `kovo_session=${established.session.id.replace('_', '%5F')}`,
+          },
+        }),
+      ),
+    ).resolves.toBeNull();
+  });
+
   it('does not treat unrelated authorization schemes as opaque session credentials', async () => {
     const manager = createOpaqueSessionManager({
       acceptAuthorizationHeader: true,

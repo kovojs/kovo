@@ -688,11 +688,17 @@ function readCookie(header: string, cookieName: string): string | null {
     // SPEC §6.5 / OPP-11: owned sessions fail closed on ambiguous credentials instead of
     // choosing a cookie alias by header order and silently changing session provenance.
     if (value !== null) return AMBIGUOUS_OPAQUE_SESSION_ID;
-    try {
-      value = decodeURIComponent(part.slice(index + 1).trim());
-    } catch {
-      value = part.slice(index + 1).trim();
-    }
+    value = readOpaqueSessionCookieValue(part.slice(index + 1));
+  }
+  return value;
+}
+
+function readOpaqueSessionCookieValue(rawValue: string): string {
+  const value = rawValue.trim();
+  // SPEC §6.5 / OPP-11: Kovo emits opaque ids with only cookie-safe token characters. Do not
+  // percent-decode, unquote, or otherwise normalize browser credentials across this boundary.
+  if (value.includes('%') || value.startsWith('"') || value.endsWith('"')) {
+    return AMBIGUOUS_OPAQUE_SESSION_ID;
   }
   return value;
 }
