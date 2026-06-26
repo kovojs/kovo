@@ -288,7 +288,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       tests, `git diff --check`, and `pnpm run check:vp` passed. One additional static const object wrapper around
       a proven callback-array object wrapper now preserves enforced callback-body reachability, while computed,
       spread, mutated, and escaped variants remain outside the proof; focused registry tests, `git diff --check`,
-      and `pnpm run check:vp` passed.
+      and `pnpm run check:vp` passed. One static const object wrapper around already-proven helper object aliases
+      or namespace imports now preserves enforced egress/secret-read reachability, while computed, spread,
+      property-mutated, and non-const wrapper shapes remain outside the proof; focused registry/check tests,
+      `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -709,7 +712,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       scope-audit test and `git diff --check` passed. Focused coverage now pins `Object.freeze({ userId:
       guardUserId })` wrappers around summarized guard scalar aliases as exact owner predicates, with
       unsummarized, mismatched, mutable, spread, and computed-access cases staying `scope: unknown`; the focused
-      scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
+      scope-audit test, `git diff --check`, and `pnpm run check:vp` passed. Conditional owner-principal
+      expressions now prove scope only when both branches resolve to the same exact private key, with mismatched
+      branches and mutable aliases staying `scope: unknown`; the focused scope-audit test, `git diff --check`,
+      and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
