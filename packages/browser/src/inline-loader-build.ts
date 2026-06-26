@@ -55,16 +55,10 @@ const inlineHelperSpecs = {
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
-// SPEC.md §4.4 always-loaded inline loader gzip ceiling. Combines: (1) the concurrent
-// loader-hardening raise to 9472; (2) the Trusted Types `trustedHtml` shim that routes the
-// always-on `p`/`d` raw-HTML write sinks (response-fragment-apply.ts) through the framework
-// `kovo` policy -- what lets Trusted Types ship DEFAULT-ON without bricking Kovo's own hydration
-// on Chromium; (3) the extracted fragment sanitizer byte-tracking the shared KV236 sink policy for
-// imagesrcset, comma-aware srcset, CSS text, and raw-HTML sink names; (4) the inline dynamic-import
-// wall matching the modular runtime's localhost-only TS/TSX dev exception plus production `/c/`
-// allowlist manifest; and (5) the SPEC §9.3 `mode="prepend"` wire capability -- the `p` closure
-// gained a keyed-dedup insert-at-START branch with the scroll-anchor guarantee for "load older"
-// feeds. Future increases require comparable security-boundary or first-class-wire evidence.
+// SPEC.md §4.4 always-loaded bootstrap gzip ceiling. This budget applies only to
+// the document-shell bootstrap that captures first interactions and imports the
+// deferred runtime. The deferred runtime module is versioned and cacheable, but
+// intentionally not capped by this inline-byte budget.
 export const inlineKovoLoaderGzipByteBudget = 10500;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
@@ -1257,7 +1251,6 @@ export function buildInlineKovoLoaderModuleSource(
     .update(runtimeModuleSource)
     .digest('hex')
     .slice(0, 12);
-  assertInlineKovoLoaderGzipBudget(installerSource, 'Generated inline Kovo loader module');
   assertInlineKovoLoaderBootstrapGzipBudget(
     stubInstallerSource,
     'Generated inline Kovo loader bootstrap',
@@ -1268,8 +1261,8 @@ export function buildInlineKovoLoaderModuleSource(
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
     '',
-    '// SPEC.md §4.4 keeps the always-loaded loader under the checked gzip budget; this',
-    '// literal is the pre-minified bootstrap shipped in document shells.',
+    '// SPEC.md §4.4 caps the always-loaded document bootstrap, not this deferred',
+    '// runtime installer source. This literal seeds the versioned runtime module.',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
       installerSource,
@@ -1358,18 +1351,6 @@ function buildKovoDeferredRuntimeModuleSource(installerSource: string): string {
     'export function installKovoDeferredRuntime(importModule=(url)=>import(url)){install(importModule);}',
     '',
   ].join('\n');
-}
-
-export function assertInlineKovoLoaderGzipBudget(
-  installerSource: string,
-  label = 'Inline Kovo loader',
-): void {
-  const bytes = gzipSync(createFullInlineKovoLoaderBootstrapSource(installerSource)).byteLength;
-  if (bytes <= inlineKovoLoaderGzipByteBudget) return;
-
-  throw new Error(
-    `${label} exceeds SPEC.md §4.4 gzip budget: ${bytes} bytes > ${inlineKovoLoaderGzipByteBudget} bytes.`,
-  );
 }
 
 export function assertInlineKovoLoaderBootstrapGzipBudget(
@@ -1696,7 +1677,7 @@ function assertMinifiedInlineKovoLoaderInstallerHelperParity(
 }
 
 function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
-  // SPEC.md §4.4: the generated bootstrap has a hard 8KB gzip ceiling. Keep
+  // SPEC.md §4.4: the always-loaded bootstrap has a hard gzip ceiling. Keep
   // source modules readable, then compact only closure-local helper names before
   // the parse-checked minifier runs.
   const replacements = new Map([
@@ -1739,7 +1720,7 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['response', 'res'],
     // Installer-local helper names (not referenced by the parity-checked helper
     // closures); compacting them reclaims gzip headroom for the M10 selector
-    // guard within the SPEC.md §4.4 8KB ceiling.
+    // guard within the SPEC.md §4.4 bootstrap ceiling.
     ['dispatch', 'dp'],
     ['targetIdentity', 't'],
     ['liveTargetIdentity', 'lti'],
@@ -2147,7 +2128,6 @@ export function assertInlineKovoLoaderModuleArtifactParity(
       `${label} embedded installer artifacts drifted: inlineKovoLoaderInstallerSource does not match inlineKovoLoaderInstaller.`,
     );
   }
-  assertInlineKovoLoaderGzipBudget(installerLiteralSource, label);
 }
 
 function parseInlineKovoLoaderModuleSource(moduleSource: string, label: string): ts.SourceFile {
@@ -2229,13 +2209,6 @@ function createInlineKovoLoaderBootstrapSource(
   runtimeImportExpression = '(url)=>import(url)',
 ): string {
   return `(${installerSource})(${runtimeModuleExpression},${runtimeImportExpression});`;
-}
-
-function createFullInlineKovoLoaderBootstrapSource(
-  installerSource: string,
-  importModuleExpression = '(url)=>import(url)',
-): string {
-  return `(${installerSource})(${importModuleExpression});`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

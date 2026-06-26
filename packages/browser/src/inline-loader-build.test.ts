@@ -8,6 +8,7 @@ import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/do
 
 import {
   assertInlineKovoLoaderModuleArtifactParity,
+  assertInlineKovoLoaderBootstrapGzipBudget,
   buildInlineKovoLoaderModuleSource,
   buildInlineKovoLoaderInstallerReadableSource,
   buildInlineKovoLoaderInstallerSource,
@@ -178,16 +179,18 @@ describe('inline loader build source', () => {
     );
   });
 
-  it('rejects generated inline loader modules that exceed the gzip budget', () => {
-    // SPEC.md §4.4: the package build/check path enforces the always-loaded 8KB bootstrap budget.
+  it('rejects only generated inline bootstraps that exceed the gzip budget', () => {
+    // SPEC.md §4.4: the package build/check path enforces the always-loaded
+    // bootstrap budget, while the deferred runtime module has no inline-byte cap.
     const source = createOversizedInlineLoaderSource();
     const minifiedSource = buildInlineKovoLoaderInstallerSource(source);
     const bootstrapSource = `(${minifiedSource})((url)=>import(url));`;
 
     expect(gzipSync(bootstrapSource).byteLength).toBeGreaterThan(inlineKovoLoaderGzipByteBudget);
-    expect(() => buildInlineKovoLoaderModuleSource(source)).toThrow(
+    expect(() => assertInlineKovoLoaderBootstrapGzipBudget(minifiedSource)).toThrow(
       'exceeds SPEC.md §4.4 gzip budget',
     );
+    expect(() => buildInlineKovoLoaderModuleSource(source)).not.toThrow();
   });
 
   it('trims custom import expressions in generated public bootstrap source', () => {
