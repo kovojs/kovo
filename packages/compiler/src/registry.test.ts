@@ -2165,6 +2165,171 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from static destructured helper aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/destructured.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import * as mail from './mail';",
+            "import { postmarkMail } from './postmark';",
+            'const { sendMail: deliverSendgrid } = mail;',
+            'const helpers = [postmarkMail] as const;',
+            'const [deliverPostmark] = helpers;',
+            'export const notifySendgrid = tool({',
+            "  name: 'orders.destructuredNamespace',",
+            '  handler() {',
+            '    return deliverSendgrid();',
+            '  },',
+            '});',
+            'export const notifyPostmark = tool({',
+            "  name: 'orders.destructuredArray',",
+            '  handler() {',
+            '    return deliverPostmark();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/postmark.ts',
+          source: [
+            'export function postmarkMail() {',
+            '  const token = process.env.POSTMARK_TOKEN;',
+            "  return fetch('https://api.postmarkapp.com/email', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.postmarkapp.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/postmark.ts:3:10',
+        target: 'api.postmarkapp.com',
+        tool: 'orders.destructuredArray',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/postmark.ts:2:17',
+        target: 'env.POSTMARK_TOKEN',
+        tool: 'orders.destructuredArray',
+      },
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.destructuredNamespace',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.destructuredNamespace',
+      },
+    ]);
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven destructured helper shapes', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/default-destructure.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import * as mail from './mail';",
+            "function fallback() { return fetch('https://fallback.example.test/mail'); }",
+            'const { sendMail = fallback } = mail;',
+            'export const notify = tool({',
+            "  name: 'orders.defaultDestructure',",
+            '  handler() {',
+            '    return sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/computed-destructure.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import * as mail from './mail';",
+            "const { ['sendMail']: deliverMail } = mail;",
+            'export const notify = tool({',
+            "  name: 'orders.computedDestructure',",
+            '  handler() {',
+            '    return deliverMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/nested-destructure.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import * as mail from './mail';",
+            'const { nested: { sendMail } } = mail;',
+            'export const notify = tool({',
+            "  name: 'orders.nestedDestructure',",
+            '  handler() {',
+            '    return sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mutable-destructure.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import * as mail from './mail';",
+            'let { sendMail } = mail;',
+            'export const notify = tool({',
+            "  name: 'orders.mutableDestructure',",
+            '  handler() {',
+            '    return sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
   it('produces sound agent-tool sink rows from static default object helper exports', () => {
     const derived = deriveAppGraph({
       agentToolModules: [

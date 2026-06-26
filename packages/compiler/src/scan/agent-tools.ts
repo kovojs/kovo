@@ -23,13 +23,15 @@ export interface AgentToolModuleSource {
  * helper, static namespace-property calls into exported local helpers, local `const` object aliases
  * whose properties statically point at summarized helpers, local `const` array/tuple aliases whose
  * literal indexes statically point at summarized helpers, default object exports whose properties
- * statically point at summarized local helpers, handler properties that reference a summarized
- * local/imported helper function, and inline callbacks passed to a local/imported helper that
- * directly invokes that callback parameter or a simple `const` alias of that parameter. It does not
- * inspect raw source text after parse and it skips non-invoked nested function bodies, so ordinary
- * callbacks, computed namespace access, computed/spread object/array aliases and exports,
- * export-star namespaces, ambiguous export-star names, reassigned callback aliases, and dynamic paths
- * remain outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
+ * statically point at summarized local helpers, top-level `const` destructuring from already-proven
+ * helper object/array aliases or namespaces, handler properties that reference a summarized local/
+ * imported helper function, and inline callbacks passed to a local/imported helper that directly
+ * invokes that callback parameter or a simple `const` alias of that parameter. It does not inspect
+ * raw source text after parse and it skips non-invoked nested function bodies, so ordinary callbacks,
+ * computed namespace access, computed/spread object/array aliases and exports, export-star
+ * namespaces, ambiguous export-star names, reassigned callback aliases, mutable/defaulted/nested
+ * destructuring, and dynamic paths remain outside the SPEC.md §6.6 sound subset until a dedicated
+ * analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -315,6 +317,7 @@ function linkImportedHelpers(
   for (const statement of moduleFacts.sourceFile.statements) {
     changed = collectArrayAliasHelperBindings(statement, moduleFacts) || changed;
     changed = collectObjectAliasHelperBindings(statement, moduleFacts) || changed;
+    changed = collectDestructuredHelperBindings(statement, moduleFacts) || changed;
   }
 
   return changed;
@@ -460,6 +463,112 @@ function collectObjectAliasHelperBindings(
     changed = true;
   }
 
+  return changed;
+}
+
+function collectDestructuredHelperBindings(
+  statement: ts.Statement,
+  moduleFacts: ModuleFacts,
+): boolean {
+  if (!ts.isVariableStatement(statement)) return false;
+  if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) return false;
+
+  let changed = false;
+
+  for (const declaration of statement.declarationList.declarations) {
+    if (!declaration.initializer) continue;
+
+    const initializer = unwrapParentheses(declaration.initializer);
+    if (!ts.isIdentifier(initializer)) continue;
+
+    if (ts.isObjectBindingPattern(declaration.name)) {
+      const sourceHelpers =
+        moduleFacts.objectAliasHelpers.get(initializer.text) ??
+        moduleFacts.namespaceImports.get(initializer.text);
+      if (!sourceHelpers) continue;
+
+      changed =
+        linkDestructuredObjectHelperBindings(declaration.name, sourceHelpers, moduleFacts) ||
+        changed;
+      continue;
+    }
+
+    if (ts.isArrayBindingPattern(declaration.name)) {
+      const sourceHelpers = moduleFacts.arrayAliasHelpers.get(initializer.text);
+      if (!sourceHelpers) continue;
+
+      changed =
+        linkDestructuredArrayHelperBindings(declaration.name, sourceHelpers, moduleFacts) ||
+        changed;
+    }
+  }
+
+  return changed;
+}
+
+function linkDestructuredObjectHelperBindings(
+  pattern: ts.ObjectBindingPattern,
+  sourceHelpers: ReadonlyMap<string, HelperDefinition>,
+  moduleFacts: ModuleFacts,
+): boolean {
+  const bindings = new Map<string, HelperDefinition>();
+
+  for (const element of pattern.elements) {
+    if (element.dotDotDotToken || element.initializer) return false;
+    if (!ts.isIdentifier(element.name)) return false;
+    if (element.propertyName && ts.isComputedPropertyName(element.propertyName)) return false;
+
+    const sourceName =
+      element.propertyName === undefined
+        ? element.name.text
+        : staticPropertyName(element.propertyName);
+    if (sourceName === undefined) return false;
+
+    const helper = sourceHelpers.get(sourceName);
+    if (!helper) return false;
+    bindings.set(element.name.text, helper);
+  }
+
+  return linkDestructuredHelperBindings(
+    moduleFacts.helpers as Map<string, HelperDefinition>,
+    bindings,
+  );
+}
+
+function linkDestructuredArrayHelperBindings(
+  pattern: ts.ArrayBindingPattern,
+  sourceHelpers: ReadonlyMap<string, HelperDefinition>,
+  moduleFacts: ModuleFacts,
+): boolean {
+  const bindings = new Map<string, HelperDefinition>();
+
+  for (let index = 0; index < pattern.elements.length; index += 1) {
+    const element = pattern.elements[index];
+    if (!element) return false;
+    if (ts.isOmittedExpression(element)) continue;
+    if (!ts.isBindingElement(element)) return false;
+    if (element.dotDotDotToken || element.initializer) return false;
+    if (!ts.isIdentifier(element.name)) return false;
+
+    const helper = sourceHelpers.get(String(index));
+    if (!helper) return false;
+    bindings.set(element.name.text, helper);
+  }
+
+  return linkDestructuredHelperBindings(
+    moduleFacts.helpers as Map<string, HelperDefinition>,
+    bindings,
+  );
+}
+
+function linkDestructuredHelperBindings(
+  helpers: Map<string, HelperDefinition>,
+  bindings: ReadonlyMap<string, HelperDefinition>,
+): boolean {
+  let changed = false;
+  for (const [localName, helper] of bindings) {
+    changed = linkHelperBinding(helpers, localName, helper) || changed;
+  }
   return changed;
 }
 
