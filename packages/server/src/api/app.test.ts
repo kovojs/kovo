@@ -14,7 +14,6 @@ import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
-import * as agentToolApi from '../agent-tool.js';
 import * as writeGovernanceApi from '../write-governance.js';
 import * as confidentialAtRestApi from '../confidential-at-rest.js';
 import * as capabilityUrlApi from '../capability-url.js';
@@ -381,13 +380,6 @@ describe('server app-shell public API barrels', () => {
     const renderingSubpathOnlyValues = new Set<string>();
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
-      // SPEC §6.6: agent tool-capability runtime substrate. Public at the root
-      // barrel so app-authored tool adapters declare purpose, authority,
-      // capabilities, audit owner, and ambient credential posture explicitly.
-      AgentToolCapabilityError: agentToolApi.AgentToolCapabilityError,
-      agentToolAuditFacts: agentToolApi.agentToolAuditFacts,
-      runAgentTool: agentToolApi.runAgentTool,
-      tool: agentToolApi.tool,
       // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
       // env/secret validation surface — the typed boot error, its guard, and the
       // committed-secret waiver are public at the root barrel.
