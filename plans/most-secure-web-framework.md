@@ -150,7 +150,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       focused sink-policy/command tests, `pnpm run check:sink-policy`, `git diff --check`, and
       `pnpm run check:vp` passed. The sink-policy gate now hard-bans unowned server-side dynamic code sinks
       (`eval`, `Function`, and `node:vm`/`vm`) because SINK-07 has no safe value to bless; focused gate tests,
-      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other
+      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. The browser
+      response-fragment raw HTML route is now centrally registered as `browser:response-fragment-html`, and
+      `scripts/check-sink-policy-gate.mjs` pins it to the `trustedHtml()`/`kovo` Trusted Types/template
+      sanitizer path; focused sink-policy/browser gate tests, `pnpm run check:sink-policy`, `git diff --check`,
+      and `pnpm run check:vp` passed. Remaining gap: other
       §3 candidates and static by-construction analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
