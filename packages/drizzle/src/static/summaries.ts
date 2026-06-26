@@ -817,7 +817,8 @@ function eqOperandsAreTableColumnArgKeyed(
 ): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
   const provenance =
     privateScopeForExpression(expression, sessionContext) ??
-    summarizedStaticCallPrivateScope(expression, sessionContext);
+    summarizedStaticCallPrivateScope(expression, sessionContext) ??
+    conditionalExpressionPrivateScope(expression, sessionContext);
   if (!provenance) {
     const tupleElement = localConstTupleElementPrivateScope(expression, sessionContext);
     if (tupleElement) {
@@ -863,6 +864,14 @@ function eqOperandsAreTableColumnArgKeyed(
       return {
         privateKey: privateScopeKey(frozenScalar),
         ...(frozenScalar.kind === 'session' ? { sessionKey: frozenScalar.path } : {}),
+      };
+    }
+
+    const staticScalar = localConstStaticScalarPrivateScope(expression, sessionContext);
+    if (staticScalar) {
+      return {
+        privateKey: privateScopeKey(staticScalar),
+        ...(staticScalar.kind === 'session' ? { sessionKey: staticScalar.path } : {}),
       };
     }
 
@@ -1104,6 +1113,26 @@ function localConstFrozenScalarPrivateScope(
   return argument ? staticWrapperValuePrivateScope(argument, sessionContext) : undefined;
 }
 
+function localConstStaticScalarPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  return initializer ? staticWrapperValuePrivateScope(initializer, sessionContext) : undefined;
+}
+
 function localConstLiteralStaticAccessBaseValue(expression: Node, depth: number): Node | undefined {
   if (depth > 4) return undefined;
   const node = unwrappedStaticExpressionNode(expression);
@@ -1192,6 +1221,8 @@ function staticWrapperValuePrivateScope(
       ? staticWrapperValuePrivateScope(argument, sessionContext, depth + 1)
       : undefined;
   }
+  const conditional = conditionalExpressionPrivateScope(node, sessionContext, depth + 1);
+  if (conditional) return conditional;
   if (!Node.isIdentifier(node)) {
     if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
       const provenance = staticWrapperAccessPrivateScope(node, sessionContext, depth + 1);
@@ -1339,6 +1370,22 @@ function summarizedStaticCallPrivateScope(
     (key ? sessionContext.helpers.get(key) : undefined) ??
     (name ? sessionContext.helpers.get(`name:${name}`) : undefined)
   );
+}
+
+function conditionalExpressionPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+  depth = 0,
+): PrivateScopeProvenance | undefined {
+  if (depth > 4) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isConditionalExpression(node)) return undefined;
+
+  const whenTrue = staticWrapperValuePrivateScope(node.getWhenTrue(), sessionContext, depth + 1);
+  const whenFalse = staticWrapperValuePrivateScope(node.getWhenFalse(), sessionContext, depth + 1);
+  if (!whenTrue || !whenFalse) return undefined;
+  if (privateScopeKey(whenTrue) !== privateScopeKey(whenFalse)) return undefined;
+  return whenTrue;
 }
 
 /**
