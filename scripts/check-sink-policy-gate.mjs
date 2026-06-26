@@ -120,6 +120,7 @@ export function checkSinkPolicyGate(options = {}) {
         );
       }
     }
+    findings.push(...publicSinkPolicyEscapeFindings(filePath, text));
   }
 
   return findings;
@@ -186,6 +187,62 @@ export function exportedNames(text) {
   return names;
 }
 
+export function publicSinkPolicyEscapeFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+  const sinkPolicyLocals = new Map();
+
+  const directExportPattern =
+    /\bexport\s*(?:type\s*)?\{([^}]+)\}\s*from\s*(['"])([^'"]*sink-policy(?:\.js)?)\2/g;
+  let directExport;
+  while ((directExport = directExportPattern.exec(source)) !== null) {
+    for (const specifier of parseNamedSpecifiers(directExport[1])) {
+      if (
+        forbiddenPublicEscapeNames.has(specifier.imported) &&
+        specifier.local !== specifier.imported
+      ) {
+        findings.push(
+          `${filePath}: public re-export ${specifier.imported} from internal sink-policy would create a generic blessed-sink escape hatch`,
+        );
+      }
+    }
+  }
+
+  const namespaceExportPattern =
+    /\bexport\s+(?:type\s+)?\*\s*(?:as\s+[A-Za-z_$][\w$]*\s*)?from\s*(['"])([^'"]*sink-policy(?:\.js)?)\1/g;
+  if (namespaceExportPattern.test(source)) {
+    findings.push(
+      `${filePath}: public wildcard re-export from internal sink-policy would create a generic blessed-sink escape hatch`,
+    );
+  }
+
+  const importPattern =
+    /\bimport\s+(?:type\s+)?\{([^}]+)\}\s*from\s*(['"])([^'"]*sink-policy(?:\.js)?)\2/g;
+  let imported;
+  while ((imported = importPattern.exec(source)) !== null) {
+    for (const specifier of parseNamedSpecifiers(imported[1])) {
+      if (forbiddenPublicEscapeNames.has(specifier.imported)) {
+        sinkPolicyLocals.set(specifier.local, specifier.imported);
+      }
+    }
+  }
+
+  const namedExportPattern = /\bexport\s*\{([^}]+)\}/g;
+  let namedExport;
+  while ((namedExport = namedExportPattern.exec(source)) !== null) {
+    for (const specifier of parseNamedSpecifiers(namedExport[1])) {
+      const sinkPolicyName = sinkPolicyLocals.get(specifier.imported);
+      if (sinkPolicyName !== undefined) {
+        findings.push(
+          `${filePath}: public export ${specifier.local} aliases internal sink-policy ${sinkPolicyName} and would create a generic blessed-sink escape hatch`,
+        );
+      }
+    }
+  }
+
+  return findings;
+}
+
 function stringLiteralConstants(text) {
   const constants = new Map();
   const pattern = /\bconst\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(['"])(.*?)\2/g;
@@ -194,6 +251,21 @@ function stringLiteralConstants(text) {
     constants.set(match[1], match[3]);
   }
   return constants;
+}
+
+function parseNamedSpecifiers(text) {
+  return text
+    .split(',')
+    .map((specifier) => {
+      const cleaned = specifier.trim();
+      if (!cleaned) return undefined;
+      const [imported, local = imported] = cleaned.split(/\s+as\s+/);
+      return {
+        imported: imported.trim(),
+        local: local.trim(),
+      };
+    })
+    .filter((specifier) => specifier !== undefined);
 }
 
 function stringLiteralUnionTypeMembers(text, namePattern) {
