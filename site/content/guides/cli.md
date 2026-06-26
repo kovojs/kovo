@@ -80,7 +80,7 @@ kovo check coverage graph.json  # against a pre-emitted graph artifact
 ### `kovo explain` — print the decision tree
 
 `kovo explain` is the compiler's decision tree on demand. It has two shapes: explain a single subject,
-or run a stable machine-ingress/auth audit.
+or run a stable security review mode over the graph.
 
 **Explain a subject** — `kovo explain <kind> <target> [graph.json]`, where `<kind>` is one of
 `component`, `mutation`, `query`, `page`, `context`:
@@ -99,13 +99,17 @@ kovo explain mutation cart/add --optimistic   # transform coverage per query; de
 kovo explain page /products/:id --layouts     # the page's resolved layout chain
 ```
 
-**Run an audit** — these are mutually-exclusive modes that scan the whole app, each accepting an
-optional `--fail-on-findings` to make CI block on results:
+**Run a review mode** — these are mutually-exclusive modes that scan the whole app. The blocking
+access modes accept `--fail-on-findings` so CI can fail on results:
 
 ```sh
 kovo explain --unguarded [--fail-on-findings] [graph.json]   # everything reachable without authentication
 kovo explain --unscoped  [--fail-on-findings] [graph.json]   # rows not tied to a principal via the owner: annotation
 kovo explain --endpoints [graph.json]                        # the machine-ingress audit (see below)
+kovo explain --revealed [graph.json]                         # confidential fields intentionally revealed
+kovo explain --access [--fail-on-findings] [graph.json]      # explicit access decisions
+kovo explain --capabilities [graph.json]                     # held dangerous capabilities and capability URLs
+kovo explain --cookies [graph.json]                          # cookie downgrade and posture audit
 ```
 
 - **`--unguarded`** lists every mutation, route, and query reachable without auth — the audit guards
@@ -115,6 +119,12 @@ kovo explain --endpoints [graph.json]                        # the machine-ingre
 - **`--endpoints`** is the stable security-review surface: a diffable table of every declared
   `endpoint()` and `webhook()`, plus every route returning `respond.file()`/`respond.stream()`, with
   name, method, path, mount mode, auth scheme, and CSRF posture (`checked` or `exempt:<justification>`).
+- **`--revealed`** lists confidentiality reveals, including `trustedReveal(...)` rows that need human
+  review.
+- **`--access`** lists explicit public/authenticated/machine access decisions.
+- **`--capabilities`** lists held dangerous capabilities: agent tools, audit-grade reveals, and
+  signed download/capability URL mints.
+- **`--cookies`** lists cookie posture and downgrade findings.
 
 ### `kovo add` — vendor a UI component
 

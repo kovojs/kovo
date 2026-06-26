@@ -20,12 +20,14 @@ the touch graph (the derived map of which writes refresh which queries). When yo
 graph for CI or tooling, the commands read the graph file:
 
 ```sh
-kovo check graph.json                               # semantic gates (KV310, KV311, audits)
+kovo check graph.json                               # semantic gates (KV310, KV311, review modes)
 kovo explain query cart graph.json                  # read one node of the graph
 kovo explain mutation cart/add --optimistic graph.json
 kovo explain page /cart graph.json
 kovo explain component CartBadge graph.json
 kovo explain --unguarded graph.json
+kovo explain --revealed graph.json
+kovo explain --capabilities graph.json
 ```
 
 Prefer deriving or constructing the graph in tests instead of committing generated graph artifacts;
@@ -125,7 +127,7 @@ attribute points at, its capture channels (`ctx`, `element-params`), and any pla
 `SUBSTITUTION` lines record where the compiler swapped an author event for a native platform behavior
 (here, `show-modal` on a `<dialog>`); `DERIVE` lines are the computed bindings and their DOM targets.
 This is how `on:*` refs, captures, and substitutions become inspectable without reading the lowered IR
-(SPEC §5.3, §4.x).
+or generated modules.
 
 The grammar is consistent: `key: value` lines, `-` for empty, comma-separated sets, `;`-separated
 `a->b` edges. You parse it with `grep` and `awk`; that's the intent.
@@ -187,14 +189,17 @@ assertion differs in kind from a rendering test: it states intent ("cart consume
 these") and holds as the app grows — a new component that reads cart data either joins the consumer
 set correctly or turns CI red.
 
-## The audits
+## The security review modes
 
-Three explain modes answer security review's first questions from the same artifact:
+Six explain modes answer security review's first questions from the same artifact:
 
 ```sh
 kovo explain --unguarded graph.json   # every mutation, route, and query reachable without authed
 kovo explain --unscoped graph.json    # owner-annotated tables whose key predicate isn't session-traceable (IDOR)
 kovo explain --endpoints graph.json   # machine ingress: endpoints, webhooks, file/stream routes + auth/CSRF posture
+kovo explain --revealed graph.json    # confidential fields intentionally revealed
+kovo explain --access graph.json      # explicit public/authenticated/machine access decisions
+kovo explain --capabilities graph.json # held dangerous capabilities and capability URLs
 ```
 
 ```txt
@@ -203,8 +208,9 @@ UNGUARDED
 SUMMARY total=0
 ```
 
-The commerce app's audits are clean (`total=0`). A finding adds a line per item above its summary; in
-CI you run the audits with fail-on-findings so a guard removed in a refactor can't land quietly.
+The commerce app's review output is clean (`total=0`). A finding adds a line per item above its
+summary; in CI you run the blocking modes with fail-on-findings so a guard removed in a refactor
+can't land quietly.
 
 - `--unguarded` lists everything reachable without an `authed` guard — the first question of any
   security review.
@@ -214,6 +220,12 @@ CI you run the audits with fail-on-findings so a guard removed in a refactor can
 - `--endpoints` is the machine-ingress table — name, path, auth scheme, CSRF posture, and for webhooks
   the write→domain chain — so "what can reach this app and what can it touch?" is answerable without
   executing anything.
+- `--revealed` lists confidential data reveals, including `trustedReveal(...)` rows that need human
+  review.
+- `--access` lists explicit public/authenticated/machine access decisions, including missing
+  decisions that block under `kovo check`.
+- `--capabilities` lists held dangerous capabilities: agent tools, audit-grade reveals, and signed
+  download/capability URL mints.
 
 ## Debug from the Network panel
 
@@ -244,11 +256,12 @@ framework internals.
 <details>
 <summary>Spec & diagnostics</summary>
 
-The `kovo explain` / `kovo check` artifact formats: SPEC §5.3, §11.4. The committed graph and its diffs:
-SPEC §11.1. Optimistic exhaustiveness is **KV310** (SPEC §10.6); update coverage is **KV311**
-(SPEC §4.9). The "agent answers from `kovo explain` alone" acceptance criterion: `rules/v1-acceptance.md`. The audits
-and guard reachability: SPEC §10.3, §11.4; `owner:` annotations behind `--unscoped`: SPEC §10.1. The
-wire vocabulary behind Network-panel debugging: SPEC §9.1. Debugging downward into plainer artifacts:
-SPEC §1.
+The `kovo explain` / `kovo check` artifact formats: SPEC §5.3, §11.4. The committed graph and its
+diffs: SPEC §11.1. Optimistic exhaustiveness is **KV310** (SPEC §10.6); update coverage is **KV311**
+(SPEC §4.9). The "agent answers from `kovo explain` alone" acceptance criterion:
+`rules/v1-acceptance.md`. Security review modes and guard reachability: SPEC §10.3, §11.4;
+`owner:` annotations behind `--unscoped`: SPEC §10.1. Confidential reveal review: SPEC §6.6, KV435.
+Capability review: SPEC §6.6. The wire vocabulary behind Network-panel debugging: SPEC §9.1.
+Debugging downward into plainer artifacts: SPEC §1.
 
 </details>

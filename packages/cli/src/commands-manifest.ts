@@ -32,6 +32,8 @@ export const EXPLAIN_USAGE = [
   '       kovo explain --endpoints [graph.json]',
   '       kovo explain --revealed [graph.json]',
   '       kovo explain --trust [graph.json]',
+  '       kovo explain --capabilities [graph.json]',
+  '       kovo explain --cookies [graph.json]',
   '       kovo explain --access [--fail-on-findings] [graph.json]',
   '       kovo explain --unguarded [--fail-on-findings] [graph.json]',
   '       kovo explain --unscoped [--fail-on-findings] [graph.json]',
@@ -140,8 +142,7 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   },
   {
     name: 'explain',
-    summary:
-      'Print the stable graph view for a single subject, or run the access/endpoints/trust audits.',
+    summary: 'Print the stable graph view for a single subject, or run the security review modes.',
     usage: EXPLAIN_USAGE,
     flags: [
       { flag: '--optimistic', description: 'Include optimistic-update detail for the subject.' },
@@ -164,6 +165,15 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
         description: 'List explicit trust escape hatches and their provenance.',
       },
       {
+        flag: '--capabilities',
+        description:
+          'List held dangerous capabilities, including agent tools, audit-grade reveals, and signed URL mints.',
+      },
+      {
+        flag: '--cookies',
+        description: 'List cookie posture and downgrade findings.',
+      },
+      {
         flag: '--access',
         description: 'Review explicit access decisions and missing-access facts.',
       },
@@ -181,6 +191,8 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
       'kovo explain --endpoints',
       'kovo explain --revealed',
       'kovo explain --trust',
+      'kovo explain --capabilities',
+      'kovo explain --cookies',
       'kovo explain --access --fail-on-findings',
       'kovo explain --unguarded --fail-on-findings',
     ],
