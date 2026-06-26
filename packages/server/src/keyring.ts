@@ -176,7 +176,7 @@ interface NormalizedSigningKey {
 function normalizeSigningKey(key: SigningKey): NormalizedSigningKey {
   if (!isSafeKeyId(key.id))
     throw new Error('SigningKeyRing key id must be non-empty base64url-safe text');
-  const type = key.type ?? HMAC_SHA256_SIGNING_KEY_TYPE;
+  const type = (key.type ?? HMAC_SHA256_SIGNING_KEY_TYPE) as string;
   if (type !== HMAC_SHA256_SIGNING_KEY_TYPE) {
     throw new Error(
       `SigningKeyRing key "${key.id}" has unsupported key type "${String(type)}"; expected ${HMAC_SHA256_SIGNING_KEY_TYPE}`,
@@ -188,7 +188,7 @@ function normalizeSigningKey(key: SigningKey): NormalizedSigningKey {
   const secret = normalizeSecret(key.secret);
   if (secret.byteLength === 0)
     throw new Error(`SigningKeyRing key "${key.id}" has empty signing material`);
-  return { id: key.id, secret, state: key.state, type };
+  return { id: key.id, secret, state: key.state, type: HMAC_SHA256_SIGNING_KEY_TYPE };
 }
 
 function normalizeSecret(secret: string | Uint8Array): Buffer {

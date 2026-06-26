@@ -150,7 +150,7 @@ export function p(
           if (ck !== null) ex.add(ck);
         }
         const ins: Element[] = [];
-        for (const n of [...t.content.children]) {
+        for (const n of Array.from(t.content.children)) {
           const nk = k(n);
           if (nk !== null && ex.has(nk)) continue;
           ins.push(n);

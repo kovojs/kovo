@@ -18,7 +18,7 @@ import {
 
 const documentConfigBrand: unique symbol = Symbol.for('kovo.document.config') as any;
 const documentNodeBrand: unique symbol = Symbol.for('kovo.document.node') as any;
-const invalidAttributeNamePattern = /[\s"'=<>/\u0000-\u001f\u007f]/u;
+const invalidAttributeNamePattern = new RegExp(String.raw`[\s"'=<>/\u0000-\u001f\u007f]`, 'u');
 const linkAttributeNames = new Set([
   'as',
   'crossorigin',

@@ -1,5 +1,4 @@
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
-import type { TrustedHtml } from '@kovojs/browser';
 
 import { reportServerError } from '../diagnostics.js';
 import type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
