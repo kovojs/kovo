@@ -522,8 +522,9 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       unverifiable; focused opaque-session/app tests, `git diff --check`, and
       `pnpm run check:vp` passed. Opaque session managers now snapshot accepted store lifecycle methods and
       option-derived knobs at construction, so later mutation of the original store object or cookie/header
-      options cannot change validation, rotation, revocation, or credential extraction behavior; focused
-      opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed. `manager.revoke(id)` now
+      options cannot change validation, rotation, revocation, or credential extraction behavior; manager and
+      cookie option fields are read from own data properties so inherited fields are ignored and accessors fail
+      closed; focused opaque-session/app tests and `git diff --check` passed. `manager.revoke(id)` now
       clears browser cookies without passing malformed, empty, null, or undefined ids into custom stores, while
       valid opaque ids still run the verified revocation path; focused opaque-session/app tests,
       `git diff --check`, and `pnpm run check:vp` passed. Rotation now rejects malformed non-empty `priorId`
