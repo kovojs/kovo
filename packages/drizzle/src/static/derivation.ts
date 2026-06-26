@@ -666,7 +666,27 @@ function unsummarizedHelperReason(call: CallExpression): string {
   return name ? `unsummarized-helper:${name}` : 'unsummarized-helper';
 }
 
-/** Parse `sql`${A} <op> ${B}`` (a two-interpolation binary template) into an Arith value. */
+/**
+ * Parse a single binary `sql`` `` template into an Arith value. SPEC §10.3/§11.1 (KV429).
+ *
+ * A self-referential SET (`stock = stock - 1`) is the way real drizzle expresses column
+ * arithmetic, and a constant operand can be spelled two effect-identical ways:
+ *
+ *   sql`${col} - ${qty}` / sql`${col} - ${1}`   operand INTERPOLATED (`${…}`)
+ *   sql`${col} - 1`       / sql`1 + ${col}`      operand a BARE literal in template text
+ *
+ * A bare numeric literal has NO AST node of its own — the value lives in the
+ * TemplateHead/Tail literal text next to the operator — so the original lowering (which
+ * required two interpolations) silently dropped `${col} - 1` to Opaque and let it ESCAPE
+ * the KV429 lost-update gate, while `${col} - ${1}` tripped it. Two effect-identical
+ * statements got different safety verdicts purely on interpolation style (audit trap #5).
+ *
+ * This reads the bare operand from the SAME typed literal-text fact the operator extraction
+ * already uses and normalizes it to the SAME `const` SymbolicValue the interpolated `${1}`
+ * spelling produces, so both spellings lower identically. ONLY plain numeric constants are
+ * recognized in bare position — a non-numeric bare token (a SQL identifier/keyword/column)
+ * stays Opaque, so column refs and request values are never mistaken for constants.
+ */
 function sqlTemplateArith(
   node: Node,
   paramSymbolKeys: ReadonlySet<string>,
@@ -679,32 +699,96 @@ function sqlTemplateArith(
   if (!Node.isIdentifier(tag) || tag.getText() !== 'sql') return undefined;
   const template = node.getTemplate();
   if (!Node.isTemplateExpression(template)) return undefined;
-  if (template.getHead().getLiteralText().trim() !== '') return undefined;
 
+  const headText = template.getHead().getLiteralText();
   const spans = template.getTemplateSpans();
-  if (spans.length !== 2) return undefined;
-  const [first, second] = spans;
-  if (!first || !second) return undefined;
-  if (second.getLiteral().getLiteralText().trim() !== '') return undefined;
 
-  const op = arithOperator(first.getLiteral().getLiteralText().trim());
+  const lower = (operand: Node): SymbolicValue =>
+    symbolicValueFromExpression(operand, paramSymbolKeys, sessionContext, selfColumn, symbolContext);
+  const arith = (
+    left: SymbolicValue,
+    op: ArithOp,
+    right: SymbolicValue,
+  ): SymbolicValue | undefined =>
+    left.kind === 'opaque' || right.kind === 'opaque' ? undefined : { kind: 'arith', left, op, right };
+
+  // Both operands interpolated: `sql`${A} <op> ${B}`` (incl. `${1}` as a const operand).
+  if (spans.length === 2) {
+    if (headText.trim() !== '') return undefined;
+    const [first, second] = spans;
+    if (!first || !second) return undefined;
+    if (second.getLiteral().getLiteralText().trim() !== '') return undefined;
+    const op = arithOperator(first.getLiteral().getLiteralText().trim());
+    if (!op) return undefined;
+    return arith(lower(first.getExpression()), op, lower(second.getExpression()));
+  }
+
+  // One operand interpolated, the other a BARE numeric literal carried in the template text.
+  if (spans.length === 1) {
+    const [span] = spans;
+    if (!span) return undefined;
+    const tailText = span.getLiteral().getLiteralText();
+
+    // Right-bare: `sql`${A} <op> <const>`` — head empty, `<op> <const>` in the tail text.
+    if (headText.trim() === '') {
+      const bare = bareLiteralOperand(tailText, 'suffix');
+      if (!bare) return undefined;
+      return arith(lower(span.getExpression()), bare.op, bare.operand);
+    }
+
+    // Left-bare: `sql`<const> <op> ${B}`` — `<const> <op>` in the head text, tail empty.
+    if (tailText.trim() === '') {
+      const bare = bareLiteralOperand(headText, 'prefix');
+      if (!bare) return undefined;
+      return arith(bare.operand, bare.op, lower(span.getExpression()));
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * SPEC §10.3/§11.1 (KV429, audit trap #5). Extract a bare `<op> <numeric>` (suffix, the
+ * tail of `${col} - 1`) or `<numeric> <op>` (prefix, the head of `1 + ${col}`) from a
+ * `sql`` `` template literal-text fragment, normalizing the numeric to the SAME `const`
+ * SymbolicValue the interpolated `${1}` spelling lowers to. Returns `undefined` (→ Opaque)
+ * for anything but a single operator followed/preceded by a plain numeric literal, so only
+ * constants — never columns or request values — are recognized in bare position.
+ */
+function bareLiteralOperand(
+  text: string,
+  position: 'prefix' | 'suffix',
+): { op: ArithOp; operand: SymbolicValue } | undefined {
+  const trimmed = text.trim();
+  if (trimmed === '') return undefined;
+  // The operator is the leading char (suffix `- 1`) or trailing char (prefix `1 +`).
+  const opChar = position === 'suffix' ? trimmed[0] : trimmed[trimmed.length - 1];
+  const op = opChar === undefined ? undefined : arithOperator(opChar);
   if (!op) return undefined;
-  const left = symbolicValueFromExpression(
-    first.getExpression(),
-    paramSymbolKeys,
-    sessionContext,
-    selfColumn,
-    symbolContext,
-  );
-  const right = symbolicValueFromExpression(
-    second.getExpression(),
-    paramSymbolKeys,
-    sessionContext,
-    selfColumn,
-    symbolContext,
-  );
-  if (left.kind === 'opaque' || right.kind === 'opaque') return undefined;
-  return { kind: 'arith', left, op, right };
+  const numericText = position === 'suffix' ? trimmed.slice(1) : trimmed.slice(0, -1);
+  const value = numericLiteralTextValue(numericText);
+  if (value === undefined) return undefined;
+  return { op, operand: { kind: 'const', value } };
+}
+
+/**
+ * Strictly parse a plain numeric literal token (the bare-literal twin of a `${1}` operand,
+ * which lowers via `literalJsonValue` to `{ kind: 'const' }`). Validates the token shape
+ * BEFORE coercing so non-numeric text (a SQL identifier, an empty fragment) is never
+ * coerced to `0`/`NaN` and mistaken for a constant. SPEC §10.3/§11.1 (KV429).
+ */
+function numericLiteralTextValue(text: string): number | undefined {
+  const trimmed = text.trim();
+  if (trimmed === '') return undefined;
+  if (
+    !/^[+-]?(?:0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$/.test(
+      trimmed,
+    )
+  ) {
+    return undefined;
+  }
+  const value = Number(trimmed);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 /** Trace an identifier/property-access to a handler param and return its dot-path, else undefined. */

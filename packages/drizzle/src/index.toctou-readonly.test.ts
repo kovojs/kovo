@@ -117,6 +117,87 @@ describe('KV429 TOCTOU lost-update gate', () => {
   });
 });
 
+// Audit trap #5 (SPEC §10.3/§11.1, KV429): `set({ stock: sql`${col} + 1` })` (a BARE numeric
+// literal inside the sql`` template) and `set({ stock: sql`${col} + ${1}` })` (the constant
+// INTERPOLATED) are effect-identical self-referential writes and MUST get the same KV429
+// verdict. The bare spelling formerly lowered to Opaque and SILENTLY ESCAPED the gate, so two
+// statements with identical effects received different safety verdicts purely on interpolation
+// style. These assert both spellings (and `1 + col` operand order) behave identically.
+describe('KV429 bare-literal vs interpolated constant operand (audit trap #5)', () => {
+  const FLAGGED = [
+    { column: 'stock', name: 'buy', site: 'inventory.domain.ts:5', table: 'products' },
+  ];
+
+  // Self-referential atomic arithmetic spelled with a bare constant vs an interpolated one.
+  // Every entry is the SAME runtime SQL effect (`stock = stock ± const`) — they must agree.
+  const SELF_REF_ARITH: ReadonlyArray<{ label: string; set: string }> = [
+    { label: 'decrement bare `- 1`', set: 'sql`${products.stock} - 1`' },
+    { label: 'decrement interpolated `- ${1}`', set: 'sql`${products.stock} - ${1}`' },
+    { label: 'increment bare `+ 1`', set: 'sql`${products.stock} + 1`' },
+    { label: 'increment interpolated `+ ${1}`', set: 'sql`${products.stock} + ${1}`' },
+    { label: 'operand-order bare `1 + col`', set: 'sql`1 + ${products.stock}`' },
+    { label: 'decimal bare `- 1.5`', set: 'sql`${products.stock} - 1.5`' },
+  ];
+
+  it.each(SELF_REF_ARITH)('flags an unguarded self-referential $label', ({ set }) => {
+    const result = toctou(
+      ATOMIC_SCHEMA,
+      buy(`  await db.update(products).set({ stock: ${set} }).where(eq(products.id, input.id));`),
+    );
+    expect(result).toEqual(FLAGGED);
+  });
+
+  it.each(SELF_REF_ARITH)('discharges $label with a compare-and-set guard', ({ set }) => {
+    const result = toctou(
+      ATOMIC_SCHEMA,
+      buy(
+        `  await db.update(products).set({ stock: ${set} }).where(and(eq(products.id, input.id), eq(products.stock, input.prevStock)));`,
+      ),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it.each(SELF_REF_ARITH)('discharges $label with a version-column guard', ({ set }) => {
+    const result = toctou(
+      ATOMIC_SCHEMA,
+      buy(
+        `  await db.update(products).set({ stock: ${set}, ver: sql\`\${products.ver} + 1\` }).where(and(eq(products.id, input.id), eq(products.ver, input.prevVer)));`,
+      ),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('gives `+ 1` and `+ ${1}` identical verdicts (no interpolation-style divergence)', () => {
+    const bare = toctou(
+      ATOMIC_SCHEMA,
+      buy(
+        '  await db.update(products).set({ stock: sql`${products.stock} + 1` }).where(eq(products.id, input.id));',
+      ),
+    );
+    const interpolated = toctou(
+      ATOMIC_SCHEMA,
+      buy(
+        '  await db.update(products).set({ stock: sql`${products.stock} + ${1}` }).where(eq(products.id, input.id));',
+      ),
+    );
+    expect(bare).toEqual(interpolated);
+    expect(bare).toEqual(FLAGGED);
+  });
+
+  it('does not normalize a bare NON-numeric token to a constant (stays opaque)', () => {
+    // Only NUMERIC constants normalize; a bare SQL expression (`now()`) is not a recognized
+    // constant operand, so the arith stays opaque and the write is not flagged — column refs
+    // and request values must never be mistaken for constants (SPEC §10.3/§11.1 KV429).
+    const result = toctou(
+      ATOMIC_SCHEMA,
+      buy(
+        '  await db.update(products).set({ stock: sql`${products.stock} - now()` }).where(eq(products.id, input.id));',
+      ),
+    );
+    expect(result).toEqual([]);
+  });
+});
+
 describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', () => {
   function reach(loaderSource: string) {
     return extractQueryWriteReachabilityFromProject({
