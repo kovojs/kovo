@@ -257,7 +257,14 @@ export function createOpaqueSessionManager<SessionValue>(
   ): Promise<OpaqueSessionValidation<SessionValue>> => {
     if (id === null || id === undefined || id === '') return { ok: false, reason: 'missing' };
     if (!isOpaqueSessionId(id)) return { ok: false, reason: 'malformed' };
-    return normalizeOpaqueSessionValidation(id, await options.store.validate(id));
+    try {
+      return normalizeOpaqueSessionValidation(id, await options.store.validate(id));
+    } catch {
+      // SPEC §6.5 / OPP-11: the request shell treats absent or invalid owned-session material as
+      // anonymous. A store outage or adapter bug must not turn browser credentials into a request
+      // lifecycle exception.
+      return { ok: false, reason: 'malformed' };
+    }
   };
   const provider: SessionProvider<Request, SessionValue> = async (
     request: Request,
