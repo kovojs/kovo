@@ -569,7 +569,7 @@ describe('kovo build', () => {
       try {
         mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
         symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
-      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+        symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
         writeFileSync(appPath, appModuleSource(), 'utf8');
         writeClientEntry(root);
         writeRetentionProofConfig(root);

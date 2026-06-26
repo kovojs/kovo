@@ -1093,9 +1093,7 @@ function noJsReplayScopeFor<Request>(
     }
   }
 
-  return sessionScope !== null
-    ? `nojs:${mutationKey}\0${sessionScope}`
-    : `nojs:${mutationKey}`;
+  return sessionScope !== null ? `nojs:${mutationKey}\0${sessionScope}` : `nojs:${mutationKey}`;
 }
 
 function isMutationFail(value: unknown): value is MutationFail {

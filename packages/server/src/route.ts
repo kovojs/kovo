@@ -690,7 +690,7 @@ async function loadLayoutQueries<Request>(
       queryDefinition as QueryDefinition<string, unknown, unknown, Request>,
       undefined,
       request,
-      { ...(maxListItems === undefined ? {} : { maxListItems }) },
+      maxListItems === undefined ? {} : { maxListItems },
     );
     if (!result.ok) {
       throw new Error(`Layout query '${name}' failed with ${result.error.code}.`);

@@ -85,7 +85,7 @@ description: <One sentence: what you can do after reading this.>
 <One or two sentences: the job in app terms (add to cart, sign in, deploy), and
 when to reach for this — and when another feature is the better path.>
 
-## <Verb the smallest path>   <!-- e.g. "Add the mutation" -->
+## <Verb the smallest path> <!-- e.g. "Add the mutation" -->
 
 <!-- Smallest runnable code: <=8 lines, one new idea, no forward-referenced
      identifiers. Do not open with the full production object. -->
@@ -94,7 +94,7 @@ when to reach for this — and when another feature is the better path.>
 
 <How to see it work: a command, a View Source, or a click and what changes.>
 
-## <Verb the production shape>   <!-- e.g. "Add CSRF, a guard, and optimism" -->
+## <Verb the production shape> <!-- e.g. "Add CSRF, a guard, and optimism" -->
 
 <Layer one new idea per sub-section. Name anything you leave out.>
 
@@ -124,7 +124,7 @@ working before you explain it.
 
 <One or two sentences: where we are in the app, and what this chapter adds.>
 
-## <Verb the next slice>   <!-- e.g. "Add the cart query" -->
+## <Verb the next slice> <!-- e.g. "Add the cart query" -->
 
 <The next small step, building on the previous chapter. One idea.>
 
@@ -158,7 +158,7 @@ surface and shows a minimal example before the full enumeration.
 
 <One sentence: when you reach for this surface.>
 
-## <Verb a minimal use>   <!-- e.g. "Add the plugin" -->
+## <Verb a minimal use> <!-- e.g. "Add the plugin" -->
 
 <The smallest real example.>
 

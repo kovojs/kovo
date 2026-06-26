@@ -95,10 +95,7 @@ export function staticExportOutputTargets(
   // security-header floor (CSP, X-Frame-Options, COOP, Permissions-Policy, Referrer-Policy)
   // into a host-consumable artifact (SPEC §6.6 DiD floor; bugz M4). The sidecar is only
   // emitted when there are route-document artifacts with non-empty headers.
-  if (
-    plan.artifacts.length > 0 &&
-    plan.artifacts.some((a) => Object.keys(a.headers).length > 0)
-  ) {
+  if (plan.artifacts.length > 0 && plan.artifacts.some((a) => Object.keys(a.headers).length > 0)) {
     targets.push({
       diagnosticPath: '_headers',
       itemIndex: 0,

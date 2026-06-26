@@ -222,7 +222,11 @@ function addPrivateScopeAliasesForObjectBindingPattern(
   aliases: Map<string, SessionAlias>,
   sourceIsCarrier: boolean,
 ): void {
-  for (const binding of privateScopeBindingsFromObjectBindingPattern(pattern, base, sourceIsCarrier)) {
+  for (const binding of privateScopeBindingsFromObjectBindingPattern(
+    pattern,
+    base,
+    sourceIsCarrier,
+  )) {
     const key = resolvedSymbolKey(
       symbolForIdentifierReference(binding.identifier) ?? binding.identifier.getSymbol(),
     );

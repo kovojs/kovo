@@ -400,8 +400,7 @@ function immutableStaticHeaders(): Record<string, string> {
 function documentStaticHeaders(): Record<string, string> {
   return {
     'cross-origin-opener-policy': 'same-origin-allow-popups',
-    'permissions-policy':
-      'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
     'referrer-policy': 'strict-origin-when-cross-origin',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',

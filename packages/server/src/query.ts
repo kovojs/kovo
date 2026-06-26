@@ -542,11 +542,14 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   let lifecycleRequest: Request = endpointRequest.request;
   try {
     lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, endpointRequest);
-    result = await runQuery(definition, rawInput, lifecycleRequest, {
-      ...(endpointRequest.maxListItems === undefined
+    result = await runQuery(
+      definition,
+      rawInput,
+      lifecycleRequest,
+      endpointRequest.maxListItems === undefined
         ? {}
-        : { maxListItems: endpointRequest.maxListItems }),
-    });
+        : { maxListItems: endpointRequest.maxListItems },
+    );
   } catch (error) {
     reportServerError(endpointRequest.onError, error, {
       operation: 'query-endpoint',

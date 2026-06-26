@@ -723,9 +723,12 @@ async function loadComponentQueries(
     }
 
     const maxListItems = currentJsxFrameworkContext()?.maxListItems;
-    const result = await runQuery(resolved.query, resolved.input, request, {
-      ...(maxListItems === undefined ? {} : { maxListItems }),
-    });
+    const result = await runQuery(
+      resolved.query,
+      resolved.input,
+      request,
+      maxListItems === undefined ? {} : { maxListItems },
+    );
     if (!result.ok) {
       throw new Error(`Route JSX component query failed: ${resolved.query.key}`);
     }
