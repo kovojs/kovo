@@ -1,6 +1,11 @@
 import type { Redirect } from '@kovojs/core';
 import { serializeCookie, type CookieOptions } from './cookies.js';
-import { mutationCsrfOptions, validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
+import {
+  KOVO_IDEM_FIELD_NAME,
+  mutationCsrfOptions,
+  validateCsrfToken,
+  type CsrfValidationOptions,
+} from './csrf.js';
 import {
   invalidate,
   mutationRegistryChangeRecords,
@@ -38,6 +43,7 @@ import {
   type MutationEndpointResponse,
   type MutationWireRequest,
   type MutationWireResponse,
+  type NoJsMutationReplayStore,
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from './mutation-wire.js';
@@ -47,8 +53,10 @@ import {
   mutationReplayContext,
   readMutationReplay,
   reserveMutationReplayBeforeRun,
+  type MutationReplayStore,
 } from './replay.js';
 import {
+  formLikeToRecord,
   isSchemaValidationError,
   parseSchemaAsync,
   type InferSchema,
@@ -694,6 +702,14 @@ export async function renderMutationEndpointResponse<
     ...(endpointRequest.currentUrl === undefined ? {} : { currentUrl: endpointRequest.currentUrl }),
     rawInput: endpointRequest.rawInput,
     redirectTo: endpointRequest.redirectTo,
+    // SPEC §10.3:1151 ("atomic reservation … for all mutation paths — the enhanced and no-JS
+    // mutation() lifecycle"): thread the same injected replay store into the no-JS POST-redirect-GET
+    // branch as the enhanced wire branch so duplicate/concurrent no-JS submits dedup onto one handler
+    // run. The store is adapted to the 303-capable NoJsMutationReplayStore shape (records are
+    // namespaced by `noJsReplayScopeFor` so no-JS 303s never collide with enhanced 200s).
+    ...(endpointRequest.replayStore === undefined
+      ? {}
+      : { replayStore: noJsReplayStoreFromMutationStore(endpointRequest.replayStore) }),
     ...(endpointRequest.renderFailurePage === undefined
       ? {}
       : { renderFailurePage: endpointRequest.renderFailurePage }),
@@ -704,6 +720,38 @@ export async function renderMutationEndpointResponse<
       ? {}
       : { sessionProvider: endpointRequest.sessionProvider }),
   });
+}
+
+/**
+ * Adapt the app's enhanced {@link MutationReplayStore} (200/4xx/5xx wire responses, used by the
+ * `Kovo-Fragment` path) into a {@link NoJsMutationReplayStore} (303 redirect responses) so the
+ * no-JS POST-redirect-GET path shares the same injected idempotency store. SPEC §10.3:1151 requires
+ * the atomic-reservation replay floor for ALL mutation paths, including the no-JS `mutation()`
+ * lifecycle. Only `get`/`reserve` are used (the no-JS path never calls `set`); the redirect body is
+ * a plain string the store treats opaquely, and no-JS records are namespaced (`nojs:` scope, see
+ * {@link noJsReplayScopeFor}) so they can never replay across the enhanced/no-JS status boundary.
+ */
+function noJsReplayStoreFromMutationStore(
+  store: MutationReplayStore<BufferedMutationWireResponse>,
+): NoJsMutationReplayStore {
+  return {
+    get(scope, idem) {
+      return store.get(scope, idem) as unknown as
+        | Promise<NoJsMutationResponse | undefined>
+        | NoJsMutationResponse
+        | undefined;
+    },
+    reserve(scope, idem) {
+      const reservation = store.reserve(scope, idem);
+      if (!reservation) return undefined;
+      return {
+        ...(reservation.abort === undefined ? {} : { abort: () => reservation.abort?.() }),
+        commit(response) {
+          reservation.commit(response as unknown as BufferedMutationWireResponse);
+        },
+      };
+    },
+  };
 }
 
 function mutationWithGeneratedRegistryFacts<
@@ -812,13 +860,12 @@ export async function renderNoJsMutationResponse<
     };
   }
 
-  const idem =
-    noJsRequest.idem ??
-    (typeof noJsRequest.rawInput === 'object' &&
-    noJsRequest.rawInput !== null &&
-    'Kovo-Idem' in noJsRequest.rawInput
-      ? String((noJsRequest.rawInput as Record<string, unknown>)['Kovo-Idem'])
-      : undefined);
+  // A2 (SPEC §10.3:1063/1151): derive the idem from the hidden `Kovo-Idem` form field. A real no-JS
+  // POST arrives as `FormData` (or a pre-parsed record), so the field must be READ via
+  // `formLikeToRecord` (which materializes FormData entries) — the `in` operator never sees FormData
+  // entries and silently disabled this floor for every real submit. The explicit `idem` option wins
+  // for callers that supply it directly (tests / pre-resolved tokens).
+  const idem = noJsRequest.idem ?? readNoJsIdemField(noJsRequest.rawInput);
 
   // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §10.3 lifecycle (parse → guard):
   // parse+coerce the input BEFORE the guard chain so the pre-replay arg-aware guard (`guards.owns`)
@@ -991,11 +1038,34 @@ export async function renderNoJsMutationResponse<
 }
 
 /**
- * Derive the replay scope for the no-JS form path (A2 + GAP4-2, SPEC §10.3:1062-1066).
+ * Read the per-submit `Kovo-Idem` token from a no-JS form body (A2, SPEC §10.3:1063/1151).
+ *
+ * A real no-JS POST arrives as `FormData`; `formLikeToRecord` materializes its entries (and
+ * passes a pre-parsed record through unchanged), so the hidden `Kovo-Idem` field is actually
+ * read rather than missed by an `in`-operator probe that FormData entries never satisfy. Returns
+ * `undefined` for a non-object body or an absent/empty field so the caller falls through to the
+ * unprotected path only when there is genuinely no idem token.
+ */
+function readNoJsIdemField(rawInput: unknown): string | undefined {
+  if (typeof rawInput !== 'object' || rawInput === null) return undefined;
+  let record: Record<string, unknown>;
+  try {
+    record = formLikeToRecord(rawInput);
+  } catch {
+    return undefined;
+  }
+  const value = record[KOVO_IDEM_FIELD_NAME];
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
+
+/**
+ * Derive the replay scope for the no-JS form path (A2 + GAP4-2, SPEC §10.3:1062-1066/1151).
  *
  * Scopes by (mutation-key, session-id) when a session is available; for `csrf:false`
  * or sessionless mutations, falls back to a mutation-key namespace so a stable
- * `Kovo-Idem` still dedups duplicate external POSTs.
+ * `Kovo-Idem` still dedups duplicate external POSTs. Every scope carries a `nojs:` prefix so
+ * no-JS 303 records share a key space with no enhanced 200-wire record when one injected
+ * {@link MutationReplayStore} backs both mutation paths (see `noJsReplayStoreFromMutationStore`).
  */
 function noJsReplayScopeFor<Request>(
   csrf: CsrfValidationOptions<Request> | false | undefined,
@@ -1023,7 +1093,9 @@ function noJsReplayScopeFor<Request>(
     }
   }
 
-  return sessionScope !== null ? `${mutationKey}\0${sessionScope}` : `nojs:${mutationKey}`;
+  return sessionScope !== null
+    ? `nojs:${mutationKey}\0${sessionScope}`
+    : `nojs:${mutationKey}`;
 }
 
 function isMutationFail(value: unknown): value is MutationFail {

@@ -3,8 +3,10 @@ import { trustedHtml } from '@kovojs/browser';
 import { component, form } from '@kovojs/core';
 
 import { renderComponentMutationFailure } from './component-render.js';
+import { KOVO_IDEM_FIELD_NAME } from './csrf.js';
 import { renderedHtml } from './html.js';
-import { renderNoJsMutationResponse } from './mutation.js';
+import { renderMutationEndpointResponse, renderNoJsMutationResponse } from './mutation.js';
+import { createMemoryMutationReplayStore } from './replay.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
@@ -293,5 +295,55 @@ describe('no-JS mutation responses', () => {
     expect(response.status).toBe(429);
     expect(response.headers['Retry-After']).toBe('1');
     expect(response.body).toContain('data-error-code="RATE_LIMITED"');
+  });
+
+  // M1 (SPEC §10.3:1151): the atomic-reservation replay floor MUST hold for ALL mutation paths,
+  // "the enhanced and no-JS mutation() lifecycle". This drives the UNIFIED endpoint
+  // (`renderMutationEndpointResponse`) — not the isolated `renderNoJsMutationResponse` — with a real
+  // `FormData` POST carrying the hidden `Kovo-Idem` field and the app-injected replay store, exactly
+  // as the request shell does. Before the fix the store was never threaded into the no-JS branch AND
+  // the idem was probed with `'Kovo-Idem' in rawInput` (always false for FormData), so two concurrent
+  // submits double-executed the handler. This regression test would have observed `handlerCalls === 2`.
+  it('M1: dedups concurrent no-JS submits through renderMutationEndpointResponse (FormData Kovo-Idem, handler once)', async () => {
+    let handlerCalls = 0;
+    const extWrite = mutation('ext/transfer', {
+      input: s.object({ amount: s.string() }),
+      async handler(input) {
+        handlerCalls += 1;
+        // Keep the first submit in-flight so the second concurrent submit must block on the
+        // pending reservation and then replay it, rather than racing past it.
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return input;
+      },
+    });
+
+    const store = createMemoryMutationReplayStore();
+    const submit = () => {
+      const form = new FormData();
+      form.set('amount', '100');
+      // The per-submit idem the no-JS form stamps in its hidden field (SPEC §10.3:1063/1065).
+      form.set(KOVO_IDEM_FIELD_NAME, 'idem_nojs_endpoint_01');
+      return renderMutationEndpointResponse(extWrite, {
+        headers: new Headers(), // no Kovo-Fragment header -> no-JS POST-redirect-GET branch
+        rawInput: form,
+        redirectTo: '/done',
+        replayStore: store,
+        request: { sessionId: 's1' },
+      });
+    };
+
+    const [first, second] = await Promise.all([submit(), submit()]);
+
+    // Handler ran exactly once; the duplicate replayed the settled 303.
+    expect(handlerCalls).toBe(1);
+    expect(first.status).toBe(303);
+    expect(second.status).toBe(303);
+    expect(first.headers['Location']).toBe('/done');
+    expect(second.headers['Location']).toBe('/done');
+
+    // A sequential resubmit of the same idem also replays without re-running the handler.
+    const third = await submit();
+    expect(handlerCalls).toBe(1);
+    expect(third.status).toBe(303);
   });
 });
