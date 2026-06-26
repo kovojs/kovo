@@ -316,7 +316,11 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `const helpers = [sendMail] as const; export default helpers` now preserve enforced reachability through
       literal numeric default-import calls, including frozen proven aliases, while spread, hole, non-helper,
       dynamic-index, and mutated shapes remain outside the proof; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed.
+      `git diff --check`, and `pnpm run check:vp` passed. Static destructuring from proven default object/array
+      helper imports now preserves enforced reachability (`const { sendMail } = mail` / `const [sendMail] =
+      mail`), while default values, computed/nested/rest destructuring, mutable declarations, and unproven
+      shapes remain outside the proof; focused registry/check tests, `git diff --check`, and
+      `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
