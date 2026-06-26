@@ -238,6 +238,10 @@ function linkImportedHelpers(
   facts: ReadonlyMap<ts.SourceFile, ModuleFacts>,
 ): boolean {
   const helpers = moduleFacts.helpers as Map<string, HelperDefinition>;
+  const objectAliasHelpers = moduleFacts.objectAliasHelpers as Map<
+    string,
+    ReadonlyMap<string, HelperDefinition>
+  >;
   const namespaceImports = moduleFacts.namespaceImports as Map<
     string,
     ReadonlyMap<string, HelperDefinition>
@@ -270,7 +274,7 @@ function linkImportedHelpers(
             importedFacts.defaultArrayHelpers,
           ) ||
           linkNamespaceBinding(
-            namespaceImports,
+            objectAliasHelpers,
             defaultBinding.text,
             importedFacts.defaultObjectHelpers,
           ))
