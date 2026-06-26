@@ -217,6 +217,9 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `globalThis.RegExp?.(...)`, bracket-member variants, and constructor aliases called with `?.(...)`) now hit
       KV442 for request-derived patterns while static patterns and local shadowing stay quiet; focused
       sink-policy tests, `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed.
+      Destructured aliases from the real global `RegExp` constructor now hit KV442 for request-derived patterns,
+      while static patterns and local `globalThis`/alias shadowing stay quiet; focused sink-policy tests,
+      `pnpm run check:sink-policy`, and `git diff --check` passed.
       Remaining gap: other §3 candidates and full
       static by-construction value-path analyzer integration are not complete.
 
