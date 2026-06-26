@@ -42,9 +42,18 @@ export async function handleAppMutationRequest(
     );
   }
 
+  // SPEC §6.6/§9.1 (defense-in-depth for KV418): a `csrf: false` mutation skips the synchronizer
+  // token, so it MUST be served with no ambient session — cookies are not interpreted, mirroring
+  // the §9.1 endpoint() guarantee (endpoints likewise never resolve `sessionProvider`, see
+  // app-dispatch.ts). The static KV418 gate already makes a session-referencing `csrf: false`
+  // mutation a compile error; this runtime floor makes the exemption sound even if a graph fact
+  // is stale or missing, so `req.session` is genuinely absent rather than the victim's cookie.
+  const csrfExempt = !mutationRequiresPreBodyCsrf(mutation, app);
   const mutationRequest = await resolveLifecycleRequest(request, {
     ...(app.db === undefined ? {} : { db: app.db }),
-    ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
+    ...(app.sessionProvider === undefined || csrfExempt
+      ? {}
+      : { sessionProvider: app.sessionProvider }),
   });
   const currentUrl = appRequestUrl(url);
   const sourceUrl = mutationSourceUrl(request, url);

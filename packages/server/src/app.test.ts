@@ -7,6 +7,7 @@ import { createApp, createRequestHandler } from './app.js';
 import { appRateLimitKeyCounts } from './app-load-shed.js';
 import { versionedClientModuleHref } from './client-modules.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
+import { csrfToken } from './csrf.js';
 import { kovoSecurityReportSnapshot, resetKovoSecurityReportsForTest } from './reporting.js';
 import { domain } from './domain.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
@@ -26,8 +27,14 @@ function attestedLiveTargetHeader(
   target: string,
   component: string,
   props: Record<string, unknown> = {},
+  csrf?: { secret: string; sessionId: (request: unknown) => string | undefined },
 ): string {
-  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  // SPEC §9.3: the live-target attestation is bound to the CSRF secret + session principal, so an
+  // app configured with `csrf` must mint the test attestation under the same keyring/principal.
+  const token = createLiveTargetAttestation(
+    { component, props, target },
+    { ...(csrf === undefined ? {} : { csrf }), request: {} },
+  );
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 
@@ -1160,6 +1167,10 @@ describe('server createApp request shell', () => {
 
     const db: AppDb = { count: 1, reads: [], writes: [] };
     const cart = domain('cart');
+    // SPEC §6.6/§9.1: a session-authenticated mutation must stay CSRF-checked (KV418 forbids the
+    // `csrf: false` + session combination), so the cart mutation is protected by a synchronizer
+    // token bound to the app session id.
+    const csrf = { secret: 'provision-db-session-secret-key-0123456789', sessionId: () => 's1' };
     const cartQuery = query('cart', {
       load(_input, context?: { request: AppRequest }) {
         context?.request.db.reads.push(context.request.session?.user.id ?? 'anonymous');
@@ -1168,7 +1179,6 @@ describe('server createApp request shell', () => {
       reads: [cart],
     });
     const addToCart = mutation('cart/add', {
-      csrf: false,
       input: s.object({ quantity: s.number().int().min(1).default(1) }),
       registry: {
         queries: [cartQuery],
@@ -1182,6 +1192,7 @@ describe('server createApp request shell', () => {
     });
     const handler = createRequestHandler(
       createApp({
+        csrf,
         db: () => db,
         endpoints: [
           endpoint('/webhook', {
@@ -1232,13 +1243,15 @@ describe('server createApp request shell', () => {
 
     const form = new FormData();
     form.set('quantity', '2');
+    form.set('kovo-csrf', csrfToken({}, csrf, { audience: 'cart/add' }));
     const mutationResponse = await handler(
       new Request('https://example.test/_m/cart/add', {
         body: form,
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge')}`,
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge', {}, csrf)}`,
           'Kovo-Targets': 'cart=cart',
+          origin: 'https://example.test',
         },
         method: 'POST',
       }),
