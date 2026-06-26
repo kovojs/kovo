@@ -308,7 +308,10 @@ packages/server/src/opaque-session.test.ts`, `git diff --check`, and `pnpm run c
       `pnpm run check:api-surface`, and `pnpm run check:vp` passed. Owned opaque credential extraction now
       fails closed on duplicate cookie aliases or cookie-plus-bearer ambiguity instead of choosing by header
       precedence; `pnpm exec vitest --run packages/server/src/opaque-session.test.ts
-packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
+packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed.
+      `createOpaqueSessionManager()` now rejects malformed cookie names, caller-supplied secure-prefix aliases,
+      and incomplete stores at construction so Kovo owns the credential alias set and lifecycle methods; focused
+      opaque-session/app/API tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
       Better Auth delegation and explicit `sessionProvider` remain supported boundaries, so opaque sessions are
       not yet the only framework-wide default lifecycle.
 
