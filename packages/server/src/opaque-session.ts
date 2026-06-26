@@ -3,6 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { serializeCookie, type CookieOptions } from './cookies.js';
 import type { SessionProvider } from './guards.js';
 
+const OPAQUE_SESSION_PROVIDER = Symbol('kovo.opaqueSessionProvider');
+
 /** Stable rejection code for an opaque session lookup that did not produce a live session. */
 export type OpaqueSessionRejectReason = 'missing' | 'malformed' | 'expired' | 'revoked';
 
@@ -125,6 +127,20 @@ export interface OpaqueSessionManager<SessionValue> {
   revoke(id: string | null | undefined): Promise<OpaqueSessionRevokeResult>;
 }
 
+/**
+ * @internal Runtime marker for Kovo-owned opaque-session providers. The request shell uses this
+ * to reject `createApp({ sessionProvider: manager.provider })`, which would otherwise make a
+ * Kovo-owned lifecycle look like an explicit delegated boundary without exposing the manager.
+ */
+export function isOpaqueSessionProvider(
+  value: unknown,
+): value is SessionProvider<Request, unknown> {
+  return (
+    typeof value === 'function' &&
+    (value as { [OPAQUE_SESSION_PROVIDER]?: true })[OPAQUE_SESSION_PROVIDER] === true
+  );
+}
+
 const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_ENTRIES = 10_000;
 const OPAQUE_ID_BYTES = 32;
@@ -240,6 +256,17 @@ export function createOpaqueSessionManager<SessionValue>(
     if (!isOpaqueSessionId(id)) return { ok: false, reason: 'malformed' };
     return options.store.validate(id);
   };
+  const provider: SessionProvider<Request, SessionValue> = async (
+    request: Request,
+  ): Promise<SessionValue | null> => {
+    const result = await validate(
+      extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
+    );
+    return result.ok ? result.session.value : null;
+  };
+  Object.defineProperty(provider, OPAQUE_SESSION_PROVIDER, {
+    value: true,
+  });
 
   return {
     cookieName,
@@ -249,12 +276,7 @@ export function createOpaqueSessionManager<SessionValue>(
         extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
       );
     },
-    async provider(request: Request): Promise<SessionValue | null> {
-      const result = await validate(
-        extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
-      );
-      return result.ok ? result.session.value : null;
-    },
+    provider,
     async establish(
       value: SessionValue,
       establishOptions: OpaqueSessionEstablishOptions & {

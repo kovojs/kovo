@@ -348,6 +348,16 @@ describe('server createApp request shell', () => {
     expect(app.sessionProviderBoundary).toBe('delegated');
   });
 
+  it('rejects Kovo-owned opaque providers routed through the delegated boundary', () => {
+    const manager = createOpaqueSessionManager({
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+
+    expect(() => createApp({ sessionProvider: manager.provider })).toThrow(
+      'createApp() received a Kovo-owned opaque session provider through `sessionProvider`. Pass the manager as `session`',
+    );
+  });
+
   it('rejects ambiguous owned and delegated session lifecycles', () => {
     const manager = createOpaqueSessionManager({
       store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
