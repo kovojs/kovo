@@ -227,11 +227,36 @@ export interface Query<Key extends string, Result> {
     mapper: (props: Props) => Args,
   ): QueryArgsBinding<Key, Result, Props, Args>;
   key: Key;
+  /**
+   * Declarative per-query opt-out from refetch-on-focus (SPEC §9.3/§9.4). Refetch-on-focus
+   * is on by default; set `refetchOnFocus: false` on the {@link query} handle to exclude this
+   * query from the visible-return/bfcache typed-read refetch (§9.4). Only `false` is accepted:
+   * `true` would be the default and a no-op field, so it is not part of the type. Present only
+   * when the query was declared with `query(key, { refetchOnFocus: false })`.
+   */
+  refetchOnFocus?: false;
   refresh<Spec extends QueryRefreshSpec<Result>>(
     spec: Spec,
   ): QueryRefreshBinding<Key, Result, Spec>;
   refreshSpec?: undefined;
   result?: Result;
+}
+
+/**
+ * Declaration-site config for {@link query} (SPEC §9.3/§9.4).
+ *
+ * `refetchOnFocus: false` opts the query out of refetch-on-focus — the per-query loader
+ * behavior that re-runs queries over the typed read endpoint (`/_q/`, §9.4) when a stale tab
+ * returns. Refetch-on-focus is on by default, so this is an opt-out, not an opt-in; `true` is
+ * not accepted because it would be a no-op field.
+ *
+ * Note: `live: true` (SPEC §9.3:905/§9.4) is intentionally NOT part of this config. The
+ * `<kovo-live>` SSE subscriber is unimplemented (roadmap; no `text/event-stream` transport
+ * ships today), and a field that silently does nothing would violate the no-op-field contract.
+ * It can be added once the SSE transport lands and a declared `live: true` has an observable effect.
+ */
+export interface QueryConfig {
+  refetchOnFocus?: false;
 }
 
 /**
@@ -471,17 +496,25 @@ function searchValueToString(value: JsonValue): string {
  * loader and read set is `query` from `@kovojs/server` (SPEC §10.2).
  *
  * @param key - A registered query key.
+ * @param config - Optional declaration-site config (SPEC §9.3/§9.4); e.g.
+ *   `{ refetchOnFocus: false }` to opt this query out of refetch-on-focus.
  * @returns A typed `Query` handle whose `result` reflects the registry entry.
  * @example
  * import { query } from '@kovojs/core';
  *
  * export const cart = query('cart');
+ * // SPEC §9.3/§9.4: opt a query out of refetch-on-focus at the declaration site.
+ * export const ticker = query('ticker', { refetchOnFocus: false });
  */
 export function query<
   const Key extends RegistryKey<QueryRegistry>,
   Result = Key extends keyof QueryRegistry ? QueryRegistry[Key] : unknown,
->(key: Key): Query<Key, Result> {
-  return queryBinding<Key, Result>(key);
+>(key: Key, config?: QueryConfig): Query<Key, Result> {
+  const handle = queryBinding<Key, Result>(key);
+  // SPEC §9.3/§9.4: record the declared refetch-on-focus opt-out on the handle so the runtime
+  // refetch machinery can derive its opt-out set from declarations instead of an install-only
+  // option. Default (no field) keeps refetch-on-focus on; only `false` is meaningful.
+  return config?.refetchOnFocus === false ? { ...handle, refetchOnFocus: false } : handle;
 }
 
 function queryBinding<Key extends string, Result>(key: Key): Query<Key, Result>;

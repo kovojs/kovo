@@ -1,3 +1,4 @@
+import { query } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DelegatedEvent } from './events.js';
@@ -469,5 +470,54 @@ describe('query visible-return refetch', () => {
     expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
     expect(fetch).not.toHaveBeenCalled();
     expect(store.get('cart')).toEqual({ count: 1 });
+  });
+
+  it('excludes a declared refetchOnFocus:false query from focus refetch while others still refetch (SPEC §9.3/§9.4)', async () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
+    const cartBinding = new FakeQueryBindingElement('cart.count', '');
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+      {
+        getAttribute: (name) => (name === 'kovo-query' ? 'productGrid' : null),
+        textContent: '{"products":[]}',
+      },
+    ];
+    root.bindings = [cartBinding];
+
+    // SPEC §9.3/§9.4: the declarative opt-out lives on the `@kovojs/core` query handle, and the
+    // runtime derives its focus-refetch exclusion from those declarations — a `query(key,
+    // { refetchOnFocus: false })` declaration drives the runtime, an unmarked query still refetches.
+    installQueryVisibleReturnRefetch({
+      declaredQueries: [query('productGrid', { refetchOnFocus: false }), query('cart')],
+      queryPlans: { cart: { bindings: true } },
+      queryRefetch: { fetch },
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+
+    await root.listeners.get('visibilitychange')?.(visibleReturnEvent());
+
+    // `productGrid` was declared `refetchOnFocus: false`, so it is excluded; `cart` still refetches.
+    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith('/_q/cart', {
+      cache: 'no-store',
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+    // The opted-out query keeps its hydrated value and is never re-read on focus.
+    expect(store.get('productGrid')).toEqual({ products: [] });
   });
 });
