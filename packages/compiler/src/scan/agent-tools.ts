@@ -15,9 +15,10 @@ export interface AgentToolModuleSource {
  *
  * This scanner intentionally accepts a narrow subset: a named `tool` import from `@kovojs/server`,
  * a literal `name`, direct handler-body reads/calls, and direct calls to top-level same-module helper
- * functions that are visible in the parsed AST. It does not inspect raw source text after parse and
- * it skips nested function bodies, so callbacks and dynamic paths remain outside the enforced subset
- * until a dedicated analyzer proves them.
+ * functions that are visible in the parsed AST, plus directly-invoked inline function bodies. It
+ * does not inspect raw source text after parse and it skips non-invoked nested function bodies, so
+ * ordinary callbacks and dynamic paths remain outside the SPEC.md §6.6 sound subset until a
+ * dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -151,7 +152,7 @@ function reachableSinkFacts(
   fn: ts.FunctionLikeDeclaration,
   moduleFacts: ModuleFacts,
   activeHelpers: ReadonlySet<string>,
-  origin: 'handler' | 'helper',
+  origin: AgentToolSinkOrigin,
 ): CoreGraph.AgentToolReachableSinkFact[] {
   const body = fn.body;
   if (!body) return [];
@@ -167,6 +168,13 @@ function reachableSinkFacts(
 
     const secret = secretReadSinkFact(sourceFile, tool, node, blockedNames, origin);
     if (secret) facts.push(secret);
+
+    const inlineCall = directlyInvokedInlineFunction(node);
+    if (inlineCall !== undefined) {
+      facts.push(
+        ...reachableSinkFacts(sourceFile, tool, inlineCall, moduleFacts, activeHelpers, 'inline'),
+      );
+    }
 
     const helperName = calledHelperName(node, moduleFacts.helpers, blockedNames);
     if (helperName !== undefined && !activeHelpers.has(helperName)) {
@@ -187,6 +195,25 @@ function reachableSinkFacts(
 
   visit(body);
   return facts;
+}
+
+type AgentToolSinkOrigin = 'handler' | 'helper' | 'inline';
+
+function directlyInvokedInlineFunction(node: ts.Node): ts.FunctionLikeDeclaration | undefined {
+  if (!ts.isCallExpression(node)) return undefined;
+
+  const expression = unwrapParentheses(node.expression);
+  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
+    return expression;
+  }
+
+  return undefined;
+}
+
+function unwrapParentheses(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current)) current = current.expression;
+  return current;
 }
 
 function namesBlockedInFunctionBody(
@@ -262,7 +289,7 @@ function egressSinkFact(
   tool: string,
   node: ts.Node,
   blockedNames: ReadonlySet<string>,
-  origin: 'handler' | 'helper',
+  origin: AgentToolSinkOrigin,
 ): CoreGraph.AgentToolReachableSinkFact | undefined {
   if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return undefined;
   if (blockedNames.has('fetch')) return undefined;
@@ -276,7 +303,7 @@ function egressSinkFact(
 
   return {
     capability: `egress:${target}`,
-    evidence: origin === 'handler' ? 'static-tool-body-fetch' : 'static-tool-helper-fetch',
+    evidence: egressEvidence(origin),
     grade: 'sound',
     kind: 'egress',
     site: siteForNode(sourceFile, node),
@@ -290,7 +317,7 @@ function secretReadSinkFact(
   tool: string,
   node: ts.Node,
   blockedNames: ReadonlySet<string>,
-  origin: 'handler' | 'helper',
+  origin: AgentToolSinkOrigin,
 ): CoreGraph.AgentToolReachableSinkFact | undefined {
   if (!ts.isPropertyAccessExpression(node)) return undefined;
   if (!ts.isIdentifier(node.name)) return undefined;
@@ -303,13 +330,35 @@ function secretReadSinkFact(
   const target = `env.${node.name.text}`;
   return {
     capability: 'secrets.read',
-    evidence: origin === 'handler' ? 'static-tool-body-env' : 'static-tool-helper-env',
+    evidence: secretReadEvidence(origin),
     grade: 'sound',
     kind: 'secret-read',
     site: siteForNode(sourceFile, node),
     target,
     tool,
   };
+}
+
+function egressEvidence(origin: AgentToolSinkOrigin): string {
+  switch (origin) {
+    case 'handler':
+      return 'static-tool-body-fetch';
+    case 'helper':
+      return 'static-tool-helper-fetch';
+    case 'inline':
+      return 'static-tool-inline-fetch';
+  }
+}
+
+function secretReadEvidence(origin: AgentToolSinkOrigin): string {
+  switch (origin) {
+    case 'handler':
+      return 'static-tool-body-env';
+    case 'helper':
+      return 'static-tool-helper-env';
+    case 'inline':
+      return 'static-tool-inline-env';
+  }
 }
 
 function handlerBody(
