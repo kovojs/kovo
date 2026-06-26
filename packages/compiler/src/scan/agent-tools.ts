@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import * as ts from 'typescript';
 
 import type * as CoreGraph from '@kovojs/core/internal/graph';
@@ -22,12 +24,18 @@ export interface AgentToolModuleSource {
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
+  moduleSources: readonly AgentToolModuleSource[] = [moduleSource],
 ): CoreGraph.AgentToolReachableSinkFact[] {
-  const sourceFile = parseSourceFile(moduleSource.fileName, moduleSource.source);
+  const modules = summarizeModules(moduleSources);
+  const sourceFile = modules.sourceFiles.get(normalizeModuleFileName(moduleSource.fileName));
+  if (!sourceFile) return [];
+
   const toolLocalNames = frameworkToolImportNames(sourceFile);
   if (toolLocalNames.size === 0) return [];
 
-  const moduleFacts = summarizeModule(sourceFile);
+  const moduleFacts = modules.facts.get(sourceFile);
+  if (!moduleFacts) return [];
+
   const facts: CoreGraph.AgentToolReachableSinkFact[] = [];
   const visit = (node: ts.Node): void => {
     if (node !== sourceFile && ts.isFunctionLike(node)) return;
@@ -54,13 +62,48 @@ export function agentToolSinksFromSource(
 }
 
 interface ModuleFacts {
-  helpers: ReadonlyMap<string, ts.FunctionLikeDeclaration>;
+  helpers: ReadonlyMap<string, HelperDefinition>;
+  sourceFile: ts.SourceFile;
   topLevelBindings: ReadonlySet<string>;
 }
 
+interface HelperDefinition {
+  exported: boolean;
+  id: string;
+  moduleFacts: ModuleFacts;
+  node: ts.FunctionLikeDeclaration;
+}
+
+interface ModuleSummaries {
+  facts: ReadonlyMap<ts.SourceFile, ModuleFacts>;
+  sourceFiles: ReadonlyMap<string, ts.SourceFile>;
+}
+
+function summarizeModules(moduleSources: readonly AgentToolModuleSource[]): ModuleSummaries {
+  const sourceFiles = new Map<string, ts.SourceFile>();
+  for (const moduleSource of moduleSources) {
+    const fileName = normalizeModuleFileName(moduleSource.fileName);
+    if (!sourceFiles.has(fileName)) {
+      sourceFiles.set(fileName, parseSourceFile(moduleSource.fileName, moduleSource.source));
+    }
+  }
+
+  const facts = new Map<ts.SourceFile, ModuleFacts>();
+  for (const sourceFile of sourceFiles.values()) {
+    facts.set(sourceFile, summarizeModule(sourceFile));
+  }
+
+  for (const moduleFacts of facts.values()) {
+    linkImportedHelpers(moduleFacts, sourceFiles, facts);
+  }
+
+  return { facts, sourceFiles };
+}
+
 function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
-  const helpers = new Map<string, ts.FunctionLikeDeclaration>();
+  const helpers = new Map<string, HelperDefinition>();
   const topLevelBindings = new Set<string>();
+  const moduleFacts: ModuleFacts = { helpers, sourceFile, topLevelBindings };
 
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement)) {
@@ -70,7 +113,12 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
 
     if (ts.isFunctionDeclaration(statement) && statement.name) {
       topLevelBindings.add(statement.name.text);
-      helpers.set(statement.name.text, statement);
+      helpers.set(statement.name.text, {
+        exported: hasExportModifier(statement),
+        id: helperId(sourceFile, statement.name.text),
+        moduleFacts,
+        node: statement,
+      });
       continue;
     }
 
@@ -88,12 +136,100 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
         (ts.isArrowFunction(declaration.initializer) ||
           ts.isFunctionExpression(declaration.initializer))
       ) {
-        helpers.set(declaration.name.text, declaration.initializer);
+        helpers.set(declaration.name.text, {
+          exported: hasExportModifier(statement),
+          id: helperId(sourceFile, declaration.name.text),
+          moduleFacts,
+          node: declaration.initializer,
+        });
       }
     }
   }
 
-  return { helpers, topLevelBindings };
+  return moduleFacts;
+}
+
+function linkImportedHelpers(
+  moduleFacts: ModuleFacts,
+  sourceFiles: ReadonlyMap<string, ts.SourceFile>,
+  facts: ReadonlyMap<ts.SourceFile, ModuleFacts>,
+): void {
+  const helpers = moduleFacts.helpers as Map<string, HelperDefinition>;
+
+  for (const statement of moduleFacts.sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+    if (statement.importClause?.isTypeOnly) continue;
+
+    const importedSourceFile = importedLocalSourceFile(
+      moduleFacts.sourceFile,
+      statement.moduleSpecifier.text,
+      sourceFiles,
+    );
+    if (!importedSourceFile) continue;
+
+    const importedFacts = facts.get(importedSourceFile);
+    if (!importedFacts) continue;
+
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+
+    for (const element of bindings.elements) {
+      if (element.isTypeOnly) continue;
+
+      const importedName = element.propertyName?.text ?? element.name.text;
+      const localName = element.name.text;
+      const helper = importedFacts.helpers.get(importedName);
+      if (!helper?.exported) continue;
+      if (helpers.has(localName)) continue;
+
+      helpers.set(localName, helper);
+    }
+  }
+}
+
+function importedLocalSourceFile(
+  sourceFile: ts.SourceFile,
+  moduleSpecifier: string,
+  sourceFiles: ReadonlyMap<string, ts.SourceFile>,
+): ts.SourceFile | undefined {
+  if (!moduleSpecifier.startsWith('.')) return undefined;
+
+  const fromDirectory = path.posix.dirname(normalizeModuleFileName(sourceFile.fileName));
+  const resolved = path.posix.normalize(path.posix.join(fromDirectory, moduleSpecifier));
+  const candidates = [
+    resolved,
+    `${resolved}.ts`,
+    `${resolved}.tsx`,
+    `${resolved}.js`,
+    `${resolved}.jsx`,
+    path.posix.join(resolved, 'index.ts'),
+    path.posix.join(resolved, 'index.tsx'),
+    path.posix.join(resolved, 'index.js'),
+    path.posix.join(resolved, 'index.jsx'),
+  ];
+
+  for (const candidate of candidates) {
+    const sourceFile = sourceFiles.get(candidate);
+    if (sourceFile) return sourceFile;
+  }
+
+  return undefined;
+}
+
+function normalizeModuleFileName(fileName: string): string {
+  return path.posix.normalize(fileName.replaceAll('\\', '/'));
+}
+
+function helperId(sourceFile: ts.SourceFile, name: string): string {
+  return `${normalizeModuleFileName(sourceFile.fileName)}\0${name}`;
+}
+
+function hasExportModifier(node: ts.Node): boolean {
+  return ts.canHaveModifiers(node)
+    ? (ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
+        false)
+    : false;
 }
 
 function collectImportBindingNames(statement: ts.ImportDeclaration, names: Set<string>): void {
@@ -176,16 +312,22 @@ function reachableSinkFacts(
       );
     }
 
-    const helperName = calledHelperName(node, moduleFacts.helpers, blockedNames);
-    if (helperName !== undefined && !activeHelpers.has(helperName)) {
+    const helper = calledHelper(node, moduleFacts.helpers, blockedNames);
+    if (helper !== undefined && !activeHelpers.has(helper.id)) {
+      const helperOrigin =
+        origin === 'imported-helper'
+          ? 'imported-helper'
+          : helper.moduleFacts.sourceFile === moduleFacts.sourceFile
+            ? 'helper'
+            : 'imported-helper';
       facts.push(
         ...reachableSinkFacts(
-          sourceFile,
+          helper.moduleFacts.sourceFile,
           tool,
-          moduleFacts.helpers.get(helperName)!,
-          moduleFacts,
-          new Set([...activeHelpers, helperName]),
-          'helper',
+          helper.node,
+          helper.moduleFacts,
+          new Set([...activeHelpers, helper.id]),
+          helperOrigin,
         ),
       );
     }
@@ -197,7 +339,7 @@ function reachableSinkFacts(
   return facts;
 }
 
-type AgentToolSinkOrigin = 'handler' | 'helper' | 'inline';
+type AgentToolSinkOrigin = 'handler' | 'helper' | 'imported-helper' | 'inline';
 
 function directlyInvokedInlineFunction(node: ts.Node): ts.FunctionLikeDeclaration | undefined {
   if (!ts.isCallExpression(node)) return undefined;
@@ -272,16 +414,16 @@ function collectBindingNames(name: ts.BindingName, names: Set<string>): void {
   }
 }
 
-function calledHelperName(
+function calledHelper(
   node: ts.Node,
-  helpers: ReadonlyMap<string, ts.FunctionLikeDeclaration>,
+  helpers: ReadonlyMap<string, HelperDefinition>,
   blockedNames: ReadonlySet<string>,
-): string | undefined {
+): HelperDefinition | undefined {
   if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return undefined;
 
   const name = node.expression.text;
   if (blockedNames.has(name)) return undefined;
-  return helpers.has(name) ? name : undefined;
+  return helpers.get(name);
 }
 
 function egressSinkFact(
@@ -345,6 +487,8 @@ function egressEvidence(origin: AgentToolSinkOrigin): string {
       return 'static-tool-body-fetch';
     case 'helper':
       return 'static-tool-helper-fetch';
+    case 'imported-helper':
+      return 'static-tool-imported-helper-fetch';
     case 'inline':
       return 'static-tool-inline-fetch';
   }
@@ -356,6 +500,8 @@ function secretReadEvidence(origin: AgentToolSinkOrigin): string {
       return 'static-tool-body-env';
     case 'helper':
       return 'static-tool-helper-env';
+    case 'imported-helper':
+      return 'static-tool-imported-helper-env';
     case 'inline':
       return 'static-tool-inline-env';
   }

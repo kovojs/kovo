@@ -1125,6 +1125,76 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from simple imported local helper calls', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import { sendMail as deliverMail } from './mail';",
+            'export const notify = tool({',
+            "  name: 'orders.notifyImported',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            "  capabilities: [{ name: 'egress:api.sendgrid.com', reason: 'send mail' }],",
+            '  async handler() {',
+            '    await deliverMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+      graph: {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'src/tools/orders.ts:3',
+            target: 'orders.notifyImported',
+          },
+        ],
+      },
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyImported',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyImported',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from directly-invoked inline function bodies', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -1268,6 +1338,50 @@ export const ProductGrid = component({
             '    return sendMail();',
             '  },',
             '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven imported helper shapes', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/namespace.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import * as mail from './mail';",
+            'export const notify = tool({',
+            "  name: 'orders.namespaceImport',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/local-only.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import { sendMail } from './mail';",
+            'export const notify = tool({',
+            "  name: 'orders.localOnlyImport',",
+            '  handler() {',
+            '    return sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '}',
+            'export const otherHelper = () => undefined;',
           ].join('\n'),
         },
       ],
