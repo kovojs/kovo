@@ -27,6 +27,7 @@
 - For GitHub Actions workflow edits, follow `rules/github-workflows.md`.
 - For compiler behavior edits, follow `rules/compiler-hard-rules.md`.
 - For public API surface edits, follow `rules/api-surface.md`.
+- For authored public docs under `site/content/**/*.md`, follow `rules/docs-style.md`.
 - For accessibility conformance claims, follow `rules/accessibility-conformance.md`.
 - For v1 acceptance or launch-readiness claims, follow `rules/v1-acceptance.md` and
   `rules/prelaunch-checklist.md`.
@@ -77,5 +78,8 @@
   (senior engineers / framework evaluators, plus AI-agent builders), brand personality
   (sharp, candid, technical), anti-references, the five design principles, and the WCAG 2.2 AA
   accessibility target. Consult it before changing the site's visual design or marketing copy.
+- Authored docs content under `site/content/` should be task-first, proof-backed, and progressively
+  disclosed per [`rules/docs-style.md`](rules/docs-style.md): help the reader build or decide first,
+  then expose Kovo's proof model, diagnostics, and SPEC links as supporting detail.
 - The site's visual system is captured in `site/DESIGN.md` (tokens, typography, components). Treat
   `PRODUCT.md` as the strategic "who/what/why" and `DESIGN.md` as the visual "how it looks".
