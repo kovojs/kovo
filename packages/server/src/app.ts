@@ -119,6 +119,7 @@ export function createApp<
   );
   const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
   ensureKovoLoaderRuntimeClientModule(clientModules);
+  const sessionProvider = resolveAppSessionProvider(options);
 
   return {
     clientModules,
@@ -140,8 +141,33 @@ export function createApp<
       : { mutationReplayStore: options.mutationReplayStore }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
-    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
+    ...(options.session === undefined ? {} : { session: options.session }),
+    ...(sessionProvider === undefined ? {} : { sessionProvider }),
   };
+}
+
+function resolveAppSessionProvider<
+  SessionValue,
+  DbValue,
+  RawRequest extends globalThis.Request,
+  AppRequest,
+>(
+  options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>,
+): CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>['sessionProvider'] {
+  if (options.session !== undefined && options.sessionProvider !== undefined) {
+    throw new Error(
+      'createApp() received both `session` and `sessionProvider`. `session` gives the request ' +
+        'shell Kovo-owned opaque session lifecycle control (SPEC §6.5 / OPP-11); use ' +
+        '`sessionProvider` only for an explicit delegated session boundary.',
+    );
+  }
+  if (options.session === undefined) return options.sessionProvider;
+  return options.session.provider as CreateAppOptions<
+    SessionValue,
+    DbValue,
+    RawRequest,
+    AppRequest
+  >['sessionProvider'];
 }
 
 function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {
