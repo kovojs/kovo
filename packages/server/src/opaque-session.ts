@@ -373,6 +373,11 @@ async function rotateOpaqueSession<SessionValue>(
       'Opaque session rotation requires a live prior session; validation rejected it as missing',
     );
   }
+  if (!isOpaqueSessionId(priorId)) {
+    throw new Error(
+      'Opaque session rotation requires a live prior session; validation rejected it as malformed',
+    );
+  }
   const prior = normalizeOpaqueSessionValidation(priorId, await store.validate(priorId));
   if (!prior.ok) {
     throw new Error(

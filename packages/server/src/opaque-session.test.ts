@@ -76,6 +76,32 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     );
   });
 
+  it('refuses malformed rotation input without calling custom stores', async () => {
+    const calls = { validate: 0, rotate: 0 };
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        validate(id: string) {
+          calls.validate += 1;
+          return baseStore.validate(id);
+        },
+        rotate(priorId, value, options) {
+          calls.rotate += 1;
+          return baseStore.rotate(priorId, value, options);
+        },
+      },
+    });
+
+    await expect(
+      manager.establish({ user: { id: 'u2' } }, { priorId: 'header.payload.signature' }),
+    ).rejects.toThrow(
+      'Opaque session rotation requires a live prior session; validation rejected it as malformed',
+    );
+
+    expect(calls).toEqual({ validate: 0, rotate: 0 });
+  });
+
   it('refuses to set a rotated browser cookie when a custom store leaves the prior id live', async () => {
     const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
     const manager = createOpaqueSessionManager({
