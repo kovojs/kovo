@@ -297,6 +297,9 @@ Mark confidential fields at the data boundary. A `secret` field is not eligible 
 wire or a client module. That keeps readable HTML and query frames from becoming a data leak.
 
 ```ts
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
+
 export const users = pgTable(
   'users',
   {
@@ -323,6 +326,8 @@ If a reviewed admin or support tool must reveal something the analyzer cannot pr
 decision visible:
 
 ```ts
+import { trustedReveal } from '@kovojs/core';
+
 trustedReveal(maskedEmail, { justification: 'support staff can see masked email on open tickets' });
 ```
 
@@ -336,6 +341,9 @@ Do not let request input choose server-owned columns. Mark those columns `govern
 through explicit server provenance.
 
 ```ts
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
+
 export const accounts = pgTable(
   'accounts',
   {
@@ -357,6 +365,8 @@ await db.update(accounts).set({ displayName: input.displayName, role: input.role
 admin assignment instead:
 
 ```ts
+import { adminAssign, serverValue } from '@kovojs/server';
+
 await db.update(accounts).set({
   displayName: input.displayName,
   role: serverValue('member'),
@@ -376,6 +386,8 @@ Do not hand-build storage URLs or raw download endpoints. Use a framework downlo
 short-lived signed URL from the request context.
 
 ```ts
+import { createStorageDownloadEndpoint, guards, mutation } from '@kovojs/server';
+
 export const downloads = createStorageDownloadEndpoint({
   path: '/downloads',
   storage: invoicesBucket,
@@ -412,7 +424,7 @@ select, cache, download, store, or authorize as a sink.
 | Session and provider state                                  | `session(s.object(...))`, `sessionProvider`, `guards.authed`, `owner:` predicates                | Owner-table reads/writes, auth redirects, cacheable private reads        | Public-read or custom guard justification                    |
 | Raw endpoint or webhook body                                | `endpoint()` audit metadata, executable verifier auth, `webhook()` verify-before-parse lifecycle | Raw `Response`, `Location`, headers, cookies, file/stream output         | Raw endpoint purpose plus verifier/custom/none justification |
 | Database, model, or streamed text                           | Query output schemas, `<kovo-query>`, `<kovo-text>`, contextual escaping                         | SQL text, raw HTML insertion, script/JSON islands, stream renderers      | `trustedSql` / `trustedHtml` from reviewed renderer code     |
-| Files, storage keys, manifests, static export paths         | `respond.file`, `respond.stream`, containment checks, static-export validation                   | Filesystem/S3 paths, `Content-Disposition`, inline HTML/SVG/MIME         | App-owned raw download endpoint with review                  |
+| Files, storage keys, manifests, static export paths         | Capability URLs, `createStorageDownloadEndpoint`, `respond.file`, `respond.stream`, containment checks, static-export validation | Filesystem/S3 paths, `Content-Disposition`, inline HTML/SVG/MIME         | `ctx.signUrl` / `signCapability` with per-object scope       |
 | Framework code paths and generated artifacts                | Shared source/sink registry plus drift detection                                                 | `innerHTML`, `Headers`, `querySelector`, dynamic import, eval/process/fs | Narrow repo-internal exclusion with evidence                 |
 
 Common app code rules are intentionally blunt:
@@ -423,9 +435,9 @@ Common app code rules are intentionally blunt:
 - Do not present CSV, TSV, spreadsheet, or formula hardening as a Kovo-supported safe-by-default
   lane. If an app exports spreadsheet-readable data, it is app-owned raw endpoint/download code
   behind its own security review.
-- Prefer typed `mutation()`, `query()`, `route()`, `respond.file()`, `respond.stream()`, cookies, and
-  verifier helpers over hand-built response strings. When you need an escape hatch, make it show up
-  in `kovo explain`.
+- Prefer typed `mutation()`, `query()`, `route()`, capability downloads, cookies, and verifier
+  helpers over hand-built response strings. When you need an escape hatch, make it show up in
+  `kovo explain`.
 
 For agentic or LLM-backed features, treat model output like any other untrusted source until a Kovo
 schema, guard, or sink-specific trust API narrows it. Prompt injection is about confused instructions;
