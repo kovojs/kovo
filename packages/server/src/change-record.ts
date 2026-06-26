@@ -4,6 +4,14 @@ const ARGUMENT_TOUCH_KEY_PREFIX = 'arg:';
 
 /** A record of one domain a mutation touched, optionally scoped to specific keys. */
 export interface ChangeRecord<DomainKey extends string = string, Input = unknown> {
+  /**
+   * The touched domain spans multiple tables (parent+child / relational), so `keys`
+   * are in the mutated table's identity space — NOT necessarily the canonical
+   * single-row identity space a reader is instance-keyed by. When set, a key-scoped
+   * change is NOT proof of single-row identity, so every reader of the domain reruns
+   * (SPEC §10.1: over-invalidate when row identity is uncertain; bugz-3 M9).
+   */
+  crossTable?: true;
   domain: DomainKey;
   keys?: readonly string[];
   input?: Input;
@@ -24,6 +32,8 @@ export interface InvalidateOptions<Input = unknown> {
  * @internal
  */
 export interface MutationTouchSite {
+  /** The touched domain spans multiple tables; over-invalidate it (bugz-3 M9, SPEC §10.1). */
+  crossTable?: true;
   domain: string;
   keys: null | string;
   via?: string;
@@ -65,6 +75,7 @@ export function mutationRegistryChangeRecords<Input>(
   const inferredTouches = dedupeTouchSites(registry?.inferredTouches ?? []);
   if (inferredTouches.length > 0) {
     return inferredTouches.map((touch) => ({
+      ...(touch.crossTable ? { crossTable: true as const } : {}),
       domain: touch.domain,
       input,
       ...touchKeyRecord(touch.keys, input),
@@ -95,12 +106,23 @@ export function mutationRegistryChangeRecords<Input>(
  * domain, so it always reruns (SPEC §10.1: the domain is the cache currency;
  * over-invalidate when row identity is uncertain rather than silently leave a
  * same-domain reader stale, the canonical SPEC §1.1:19 bug).
+ *
+ * The `<domain>:<segment>` shape is NOT proof of single-row identity when the
+ * domain spans multiple tables (`change.crossTable`): the touched-row key lives in
+ * the mutated child/related table's identity space, while the reader's instance key
+ * lives in the domain's anchor-table space — raw string equality would silently drop
+ * a same-domain child reader. A `crossTable` change therefore over-invalidates every
+ * reader of its domain (SPEC §10.1; bugz-3 M9).
  */
 export function changeRecordTouchesQueryInstance(
   change: ChangeRecord,
   instanceKey: string,
 ): boolean {
   if ((change.keys?.length ?? 0) === 0) return true;
+
+  // bugz-3 M9: a relational/multi-table domain's keys are not a provable single-row
+  // identity across its tables, so do not narrow — rerun every reader (SPEC §10.1).
+  if (change.crossTable) return true;
 
   const rowValue = canonicalSingleRowValue(change.domain, instanceKey);
   if (rowValue === undefined) {

@@ -62,6 +62,11 @@ function queryChangeInvalidatesWholeQueryInstance(
   if (!(queryDefinition.reads ?? []).some((read) => read.key === change.domain)) return false;
   if ((change.keys?.length ?? 0) === 0) return true;
 
+  // bugz-3 M9: a relational/multi-table domain change cannot be narrowed to a row
+  // delta against a single-row reader's instance key (its keys are in a different
+  // table's identity space), so rerun the whole instance — SPEC §10.1.
+  if (change.crossTable) return true;
+
   const instanceKey = readQueryInstanceKey(queryDefinition, input);
   if (instanceKey === undefined) return true;
 
