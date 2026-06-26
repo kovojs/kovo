@@ -323,7 +323,10 @@ export function createOpaqueSessionManager<SessionValue>(
       };
     },
     async revoke(id: string | null | undefined): Promise<OpaqueSessionRevokeResult> {
-      if (id !== null && id !== undefined && id !== '') {
+      // SPEC §6.5 / OPP-11: revocation accepts browser-sourced credential material, but custom
+      // stores only receive ids that satisfy Kovo's opaque-id grammar. A malformed logout input
+      // still clears the browser cookie without delegating untrusted strings into store code.
+      if (id !== null && id !== undefined && id !== '' && isOpaqueSessionId(id)) {
         await revokeOpaqueSession(store, id);
       }
       return {

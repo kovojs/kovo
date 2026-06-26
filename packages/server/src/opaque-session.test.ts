@@ -135,6 +135,35 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
   });
 
+  it('clears browser cookies for malformed revoke input without calling custom stores', async () => {
+    const revokedIds: string[] = [];
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        revoke(id: string) {
+          revokedIds.push(id);
+          return baseStore.revoke(id);
+        },
+      },
+    });
+
+    const malformed = await manager.revoke('header.payload.signature');
+
+    expect(revokedIds).toEqual([]);
+    expect(malformed.setCookie).toMatch(/^kovo_session=;/);
+    expect(malformed.setCookie).toContain('Max-Age=0');
+
+    const established = await manager.establish({ user: { id: 'u1' } });
+    await manager.revoke(established.session.id);
+
+    expect(revokedIds).toEqual([established.session.id]);
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'revoked',
+    });
+  });
+
   it('refuses to emit a clearing cookie when a custom store leaves a revoked id live', async () => {
     const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
     const manager = createOpaqueSessionManager({
