@@ -748,6 +748,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       Singleton `inArray(ownerColumn, [principal])` predicates now reuse the exact owner-principal proof path,
       while non-singleton, client-input, mismatched, mutable, computed, and mixed arrays remain outside the
       `scope: session` subset; the focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
+      Write-path `inArray(ownerColumn, [principal])` coverage now pins singleton session/guard principals as
+      exact owner scopes, while client, multi-element, mixed, wrong-column, mutable, and computed arrays fail
+      closed; `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`,
+      and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
