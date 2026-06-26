@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { trustedHtml } from '@kovojs/browser';
+import { safeRichHtml, trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import { Defer } from '@kovojs/server';
 import * as style from '@kovojs/style';
@@ -228,13 +228,22 @@ function renderQuestionPost(question: QuestionDetailResult): string {
   const tags = parseTags(question.tags);
   return (
     <div style={detailStyles.post}>
-      <div style={detailStyles.gutter}>{trustedHtml(voteButton(question.id, question.score))}</div>
+      <div style={detailStyles.gutter}>
+        {trustedHtml(
+          voteButton(question.id, question.score),
+          'server-rendered vote control (JSX-escaped chrome markup)',
+        )}
+      </div>
       <div style={detailStyles.postMain}>
-        <p style={detailStyles.body}>{question.body}</p>
+        {/* SPEC §9.1/§4.8: the post body is user-authored content, so it is sanitized through the
+            safeRichHtml rich-HTML floor (NOT branded raw with trustedHtml) before reaching the
+            raw-HTML sink — KV426 by-construction safe path for query/request-derived markup. */}
+        <p style={detailStyles.body}>{safeRichHtml(question.body)}</p>
         <div style={detailStyles.postFooter}>
-          {trustedHtml(renderTags(tags))}
+          {trustedHtml(renderTags(tags), 'server-rendered tag pills (JSX-escaped chrome markup)')}
           {trustedHtml(
             renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked'),
+            'server-rendered user card (JSX-escaped chrome markup)',
           )}
         </div>
       </div>
@@ -269,11 +278,13 @@ function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
         ) : (
           ''
         )}
-        <p style={detailStyles.body}>{answer.body}</p>
+        {/* SPEC §9.1/§4.8: user-authored answer body sanitized via safeRichHtml (KV426 safe path). */}
+        <p style={detailStyles.body}>{safeRichHtml(answer.body)}</p>
         <div style={detailStyles.postFooter}>
           <span />
           {trustedHtml(
             renderUserCard(answer.authorId, answer.authorName, answer.createdAt, 'answered'),
+            'server-rendered user card (JSX-escaped chrome markup)',
           )}
         </div>
       </div>
@@ -295,7 +306,12 @@ function renderQuestionDetailSecondary(
         <span style={detailStyles.sortControl}>Sorted by: Highest score</span>
       </div>
       <ul style={detailStyles.answerList}>
-        {ordered.map((answer) => trustedHtml(renderAnswerPost(answer)))}
+        {ordered.map((answer) =>
+          trustedHtml(
+            renderAnswerPost(answer),
+            'server-rendered answer post (body sanitized via safeRichHtml; chrome JSX-escaped)',
+          ),
+        )}
       </ul>
 
       {/* Native form; enhanced submissions refresh this whole region. */}
@@ -388,7 +404,10 @@ export const QuestionDetailRegion = component({
           </div>
         </div>
 
-        {trustedHtml(renderQuestionPost(question))}
+        {trustedHtml(
+          renderQuestionPost(question),
+          'server-rendered question post (body sanitized via safeRichHtml; chrome JSX-escaped)',
+        )}
 
         <Defer
           fallback={
