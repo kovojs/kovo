@@ -165,6 +165,87 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'session' }]);
   });
 
+  // OPP-28 write-side DATA proof: the shared predicate normalizer treats only
+  // `inArray(ownerColumn, [same session/principal])` as equality-equivalent for
+  // writes too. Non-singleton, mutable, computed, client, or wrong-column forms
+  // stay outside the proof subset and fail closed.
+  it('OPP-28: proves only singleton inArray owner-column principal write predicates', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { inArray } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+              '',
+              'export async function closeByInput(db: PgAsyncDatabase<any, any>, input: { userId: string }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, [input.userId]));',
+              '}',
+              '',
+              'export async function closeMine(db: PgAsyncDatabase<any, any>, req: { session: { userId: string; otherUserId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, [req.session.userId]));',
+              '}',
+              '',
+              'export async function closeGuardMine(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, [currentGuardUser(ctx)]));',
+              '}',
+              '',
+              'export async function closeMineMulti(db: PgAsyncDatabase<any, any>, req: { session: { userId: string; otherUserId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, [req.session.userId, req.session.otherUserId]));',
+              '}',
+              '',
+              'export async function closeMineMixed(db: PgAsyncDatabase<any, any>, input: { userId: string }, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, [req.session.userId, input.userId]));',
+              '}',
+              '',
+              'export async function closeBySessionId(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.id, [req.session.userId]));',
+              '}',
+              '',
+              'export async function closeMineMutable(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  let principals = [req.session.userId];',
+              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, principals));',
+              '}',
+              '',
+              'export async function closeMineComputed(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, Array.of(req.session.userId)));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'closeByInput', scope: 'args' },
+      { name: 'closeBySessionId', scope: 'unknown' },
+      { name: 'closeGuardMine', scope: 'session' },
+      { name: 'closeMine', scope: 'session' },
+      { name: 'closeMineComputed', scope: 'unknown' },
+      { name: 'closeMineMixed', scope: 'unknown' },
+      { name: 'closeMineMulti', scope: 'unknown' },
+      { name: 'closeMineMutable', scope: 'unknown' },
+    ]);
+    expect(audit.scopeAudits.find((a) => a.name === 'closeMine')?.detail).toContain(
+      'owner column compared to session:userId',
+    );
+    expect(audit.scopeAudits.find((a) => a.name === 'closeGuardMine')?.detail).toContain(
+      'owner column compared to guard:userId',
+    );
+  });
+
   // H5 (SPEC §6.5/§10.3, KV414 IDOR): a NESTED client-input value whose field name happens
   // to be `session`/`guard` (`input.session.userId`) is byte-identical in shape/type to the
   // trusted `req.session.userId` above — but it is client-controlled, so the owner predicate
