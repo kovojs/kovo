@@ -321,6 +321,75 @@ describe('server app shell document assembly', () => {
     expect(renderRouteDocumentResponse(binary)).toBe(binary);
   });
 
+  // bugz-3 M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a guarded /
+  // per-principal NON-HTML 200 route outcome (respond.file/stream/storedFile) must get the same
+  // cache + isolation floor the HTML path gets. Before the fix it was returned UNCHANGED, so a
+  // per-principal download shipped with NO Cache-Control / Vary / isolation headers — shared-cache-
+  // storable across principals, bfcache-restorable after logout, and BREACH-compressible.
+  describe('per-principal non-HTML route outcome cache/isolation floor (bugz-3 M2)', () => {
+    it('stamps no-store + Vary: Cookie + the isolation baseline when noStore is set', () => {
+      const fileOutcome = {
+        body: 'PRIVATE STATEMENT\n',
+        headers: {
+          'Content-Disposition': 'attachment; filename="statement.txt"',
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+        },
+        status: 200 as const,
+      };
+      const wrapped = renderRouteDocumentResponse(fileOutcome, { noStore: true });
+      // The exploit (a cacheable / BREACH-compressible per-principal download) is gone:
+      expect(wrapped.headers['Cache-Control']).toBe('no-store');
+      expect(wrapped.headers.Vary).toBe('Cookie');
+      // …and the §6.6 isolation baseline rides the download too (same floor as the HTML path).
+      expect(wrapped.headers['X-Frame-Options']).toBe('DENY');
+      expect(wrapped.headers['Referrer-Policy']).toBe('strict-origin-when-cross-origin');
+      // The download body/type/disposition are preserved verbatim (not wrapped in an HTML doc).
+      expect(wrapped.body).toBe('PRIVATE STATEMENT\n');
+      expect(wrapped.headers['Content-Type']).toBe('text/plain; charset=utf-8');
+      expect(wrapped.headers['Content-Disposition']).toBe('attachment; filename="statement.txt"');
+    });
+
+    it('leaves an anonymous (no-noStore) non-HTML outcome untouched so public downloads stay cacheable', () => {
+      const fileOutcome = {
+        body: '%PDF-1.7\n',
+        headers: { 'Content-Type': 'application/pdf' },
+        status: 200 as const,
+      };
+      expect(renderRouteDocumentResponse(fileOutcome)).toBe(fileOutcome);
+    });
+
+    it('preserves an author-set Vary on the per-principal outcome (merges Cookie, no clobber)', () => {
+      const wrapped = renderRouteDocumentResponse(
+        {
+          body: 'data',
+          headers: { 'Content-Type': 'application/octet-stream', Vary: 'Accept-Encoding' },
+          status: 200,
+        },
+        { noStore: true },
+      );
+      const vary = String(wrapped.headers.Vary);
+      expect(vary).toContain('Accept-Encoding');
+      expect(vary).toContain('Cookie');
+    });
+  });
+
+  // bugz-3 L2/M2 (SPEC §9.4:927): a per-principal HTML document must carry Vary: Cookie alongside
+  // no-store so a shared cache can never key it across principals (and the node adapter's
+  // isSensitiveResponse BREACH skip engages).
+  it('adds Vary: Cookie alongside no-store on a per-principal HTML document (bugz-3 L2/M2)', () => {
+    const wrapped = renderRouteDocumentResponse(
+      {
+        body: '<main>Dashboard</main>',
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 200,
+      },
+      { noStore: true },
+    );
+    expect(wrapped.headers['Cache-Control']).toBe('no-store');
+    expect(String(wrapped.headers.Vary)).toContain('Cookie');
+  });
+
   // CSP-3 (bugs-part3): HTML document responses carry baseline security headers and
   // surface the assembled CSP so the dispatch path can emit a Content-Security-Policy.
   it('attaches baseline security headers and plumbs document.csp on HTML responses (CSP-3)', () => {
