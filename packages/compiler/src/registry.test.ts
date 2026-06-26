@@ -3363,6 +3363,110 @@ export const ProductGrid = component({
     expect(derived.graph.agentToolSinks).toBeUndefined();
   });
 
+  it('produces sound agent-tool sink rows from static default array helper exports', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/default-array.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-array-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultArray',",
+            '  handler() {',
+            '    return mail[0]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-mail.ts',
+          source: [
+            'function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'const helpers = [sendMail] as const;',
+            'export default helpers;',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-existing-array.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-frozen-existing-array-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultFrozenExistingArray',",
+            '  handler() {',
+            '    return mail[0]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-existing-array-mail.ts',
+          source: [
+            "import { sendMail } from './mail';",
+            'const helpers = [sendMail] as const;',
+            'export default Object.freeze(helpers);',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.POSTMARK_TOKEN;',
+            "  return fetch('https://api.postmarkapp.com/email', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/default-array-mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.defaultArray',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/default-array-mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.defaultArray',
+      },
+      {
+        capability: 'egress:api.postmarkapp.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.postmarkapp.com',
+        tool: 'orders.defaultFrozenExistingArray',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.POSTMARK_TOKEN',
+        tool: 'orders.defaultFrozenExistingArray',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from static default object helper exports', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -4207,6 +4311,119 @@ export const ProductGrid = component({
             '}',
             'const mail = { sendMail: firstMail, sendMail: secondMail };',
             'export default Object.freeze(mail);',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-spread.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-array-spread-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultArraySpread',",
+            '  handler() {',
+            '    return mail[0]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-spread-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-array-spread.example.test/mail');",
+            '}',
+            'const helpers = [sendMail] as const;',
+            'export default [...helpers] as const;',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-hole.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-array-hole-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultArrayHole',",
+            '  handler() {',
+            '    return mail[1]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-hole-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-array-hole.example.test/mail');",
+            '}',
+            'export default [, sendMail] as const;',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-non-helper.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-array-non-helper-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultArrayNonHelper',",
+            '  handler() {',
+            '    return mail[0]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-non-helper-mail.ts',
+          source: ['const sendMail = 1;', 'export default [sendMail] as const;'].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-dynamic-index.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-array-dynamic-index-mail';",
+            'const index = 0;',
+            'export const notify = tool({',
+            "  name: 'orders.defaultArrayDynamicIndex',",
+            '  handler() {',
+            '    return mail[index]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-dynamic-index-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-array-dynamic-index.example.test/mail');",
+            '}',
+            'const helpers = [sendMail] as const;',
+            'export default helpers;',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-mutated.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-array-mutated-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultArrayMutated',",
+            '  handler() {',
+            '    return mail[0]();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-array-mutated-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-array-mutated.example.test/mail');",
+            '}',
+            'function fallbackMail() {',
+            "  return fetch('https://default-array-fallback.example.test/mail');",
+            '}',
+            'const helpers = [sendMail] as const;',
+            'helpers[0] = fallbackMail;',
+            'export default helpers;',
           ].join('\n'),
         },
       ],

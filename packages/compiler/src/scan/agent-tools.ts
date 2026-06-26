@@ -23,10 +23,11 @@ export interface AgentToolModuleSource {
  * helper, static namespace-property calls into exported local helpers, local `const` object aliases
  * whose properties statically point at summarized helpers, `Object.freeze(...)` wrappers around
  * those same static object aliases or already-proven object/nested-object aliases that are not
- * assigned or mutated, local `const` array/tuple aliases whose literal indexes statically point at
- * summarized helpers, `Object.freeze(...)` wrappers around those same static array/tuple aliases
- * or already-proven array aliases that are not assigned or mutated, default object exports whose
- * properties statically point at summarized helpers or freeze an already-proven object alias,
+ * assigned or mutated, local `const` array/tuple aliases and default array/tuple exports whose
+ * literal indexes statically point at summarized helpers, `Object.freeze(...)` wrappers around
+ * those same static array/tuple aliases or already-proven array aliases that are not assigned or
+ * mutated, default object exports whose properties statically point at summarized helpers or freeze
+ * an already-proven object alias,
  * top-level `const` destructuring from
  * already-proven helper object/array aliases or namespaces, handler properties that reference a
  * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
@@ -86,6 +87,7 @@ export function agentToolSinksFromSource(
 interface ModuleFacts {
   ambiguousExportStarHelpers: ReadonlySet<string>;
   arrayAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
+  defaultArrayHelpers: ReadonlyMap<string, HelperDefinition>;
   defaultObjectHelpers: ReadonlyMap<string, HelperDefinition>;
   helpers: ReadonlyMap<string, HelperDefinition>;
   nestedObjectAliasHelpers: ReadonlyMap<
@@ -145,6 +147,7 @@ function summarizeModules(moduleSources: readonly AgentToolModuleSource[]): Modu
 function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   const ambiguousExportStarHelpers = new Set<string>();
   const arrayAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
+  const defaultArrayHelpers = new Map<string, HelperDefinition>();
   const defaultObjectHelpers = new Map<string, HelperDefinition>();
   const helpers = new Map<string, HelperDefinition>();
   const nestedObjectAliasHelpers = new Map<
@@ -157,6 +160,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   const moduleFacts: ModuleFacts = {
     ambiguousExportStarHelpers,
     arrayAliasHelpers,
+    defaultArrayHelpers,
     defaultObjectHelpers,
     helpers,
     nestedObjectAliasHelpers,
@@ -221,6 +225,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
     collectArrayAliasHelperBindings(statement, moduleFacts);
     collectObjectAliasHelperBindings(statement, moduleFacts);
     collectDefaultHelperAlias(statement, moduleFacts);
+    collectDefaultArrayHelperBindings(statement, moduleFacts);
     collectDefaultObjectHelperBindings(statement, moduleFacts);
   }
 
@@ -259,6 +264,11 @@ function linkImportedHelpers(
       if (
         defaultBinding &&
         (linkHelperBinding(helpers, defaultBinding.text, importedFacts.helpers.get('default')) ||
+          linkNamespaceBinding(
+            moduleFacts.arrayAliasHelpers as Map<string, ReadonlyMap<string, HelperDefinition>>,
+            defaultBinding.text,
+            importedFacts.defaultArrayHelpers,
+          ) ||
           linkNamespaceBinding(
             namespaceImports,
             defaultBinding.text,
@@ -338,6 +348,7 @@ function linkImportedHelpers(
     changed = collectArrayAliasHelperBindings(statement, moduleFacts) || changed;
     changed = collectObjectAliasHelperBindings(statement, moduleFacts) || changed;
     changed = collectNestedObjectAliasHelperBindings(statement, moduleFacts) || changed;
+    changed = collectDefaultArrayHelperBindings(statement, moduleFacts) || changed;
     changed = collectDefaultObjectHelperBindings(statement, moduleFacts) || changed;
     changed = collectDestructuredHelperBindings(statement, moduleFacts) || changed;
   }
@@ -647,6 +658,42 @@ function collectDefaultObjectHelperBindings(
     defaultObjectHelpers.set(propertyName, helper);
   }
   return true;
+}
+
+function collectDefaultArrayHelperBindings(
+  statement: ts.Statement,
+  moduleFacts: ModuleFacts,
+): boolean {
+  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return false;
+
+  const helperBindings = defaultArrayHelperBindingsFromExpression(
+    statement.expression,
+    moduleFacts,
+  );
+  if (!helperBindings) return false;
+
+  const defaultArrayHelpers = moduleFacts.defaultArrayHelpers as Map<string, HelperDefinition>;
+  if (helperBindingMapsEqual(defaultArrayHelpers, helperBindings)) return false;
+
+  defaultArrayHelpers.clear();
+  for (const [index, helper] of helperBindings) {
+    defaultArrayHelpers.set(index, helper);
+  }
+  return true;
+}
+
+function defaultArrayHelperBindingsFromExpression(
+  expression: ts.Expression,
+  moduleFacts: ModuleFacts,
+): ReadonlyMap<string, HelperDefinition> | undefined {
+  const helperBindings = arrayHelperBindingsFromInitializer(expression, moduleFacts);
+  if (helperBindings) return helperBindings;
+
+  const alias = unwrapParentheses(expression);
+  if (!ts.isIdentifier(alias)) return undefined;
+  if (isAssignedBinding(moduleFacts.sourceFile, alias.text)) return undefined;
+
+  return moduleFacts.arrayAliasHelpers.get(alias.text);
 }
 
 function arrayHelperBindingsFromInitializer(
