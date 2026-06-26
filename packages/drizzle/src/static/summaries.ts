@@ -858,6 +858,14 @@ function eqOperandsAreTableColumnArgKeyed(
       };
     }
 
+    const frozenScalar = localConstFrozenScalarPrivateScope(expression, sessionContext);
+    if (frozenScalar) {
+      return {
+        privateKey: privateScopeKey(frozenScalar),
+        ...(frozenScalar.kind === 'session' ? { sessionKey: frozenScalar.path } : {}),
+      };
+    }
+
     // SPEC §11.1 / KV414 (minimal session-via-local tracing): recognize a session
     // value bound to a local const and then used in the scoping predicate, e.g.
     // `const uid = req.session.userId; …where(eq(orders.userId, uid))`. The shared
@@ -1072,6 +1080,30 @@ function localConstLiteralStaticAccessValue(expression: Node, depth = 0): Node |
   return value && !Node.isSpreadElement(value) ? value : undefined;
 }
 
+function localConstFrozenScalarPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  if (!value || !isObjectFreezeCall(value)) return undefined;
+
+  const argument = singleObjectFreezeArgument(value);
+  return argument ? staticWrapperValuePrivateScope(argument, sessionContext) : undefined;
+}
+
 function localConstLiteralStaticAccessBaseValue(expression: Node, depth: number): Node | undefined {
   if (depth > 4) return undefined;
   const node = unwrappedStaticExpressionNode(expression);
@@ -1154,6 +1186,12 @@ function staticWrapperValuePrivateScope(
 ): PrivateScopeProvenance | undefined {
   if (!value || depth > 4) return undefined;
   const node = unwrappedStaticExpressionNode(value);
+  if (isObjectFreezeCall(node)) {
+    const argument = singleObjectFreezeArgument(node);
+    return argument
+      ? staticWrapperValuePrivateScope(argument, sessionContext, depth + 1)
+      : undefined;
+  }
   if (!Node.isIdentifier(node)) {
     if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
       const provenance = staticWrapperAccessPrivateScope(node, sessionContext, depth + 1);
@@ -1227,21 +1265,27 @@ function literalStaticWrapperValue(value: Node | undefined): Node | undefined {
   if (!value) return undefined;
   if (Node.isObjectLiteralExpression(value) || Node.isArrayLiteralExpression(value)) return value;
 
-  if (!Node.isCallExpression(value)) return undefined;
-  const expression = unwrappedStaticExpressionNode(value.getExpression());
-  if (!Node.isPropertyAccessExpression(expression)) return undefined;
-  if (expression.getName() !== 'freeze') return undefined;
-  const receiver = unwrappedStaticExpressionNode(expression.getExpression());
-  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'Object') return undefined;
-
-  const args = value.getArguments();
-  if (args.length !== 1) return undefined;
-  const argument = args[0];
+  if (!isObjectFreezeCall(value)) return undefined;
+  const argument = singleObjectFreezeArgument(value);
   if (!argument) return undefined;
   const frozen = unwrappedStaticExpressionNode(argument);
   return frozen && (Node.isObjectLiteralExpression(frozen) || Node.isArrayLiteralExpression(frozen))
     ? frozen
     : undefined;
+}
+
+function isObjectFreezeCall(value: Node): value is CallExpression {
+  if (!Node.isCallExpression(value)) return false;
+  const expression = unwrappedStaticExpressionNode(value.getExpression());
+  if (!Node.isPropertyAccessExpression(expression)) return false;
+  if (expression.getName() !== 'freeze') return false;
+  const receiver = unwrappedStaticExpressionNode(expression.getExpression());
+  return Node.isIdentifier(receiver) && receiver.getText() === 'Object';
+}
+
+function singleObjectFreezeArgument(value: CallExpression): Node | undefined {
+  const args = value.getArguments();
+  return args.length === 1 ? args[0] : undefined;
 }
 
 function objectBindingPropertyName(
