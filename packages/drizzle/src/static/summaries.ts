@@ -737,9 +737,9 @@ function eqOperandsAreTableColumnArgKeyed(
  * - `instanceKey`: top-level/`and(...)` conjuncts only — these may discharge a unique
  *   single-row instance key and a `session` scope.
  * - `argCandidates`: every direct comparison operand pair anywhere in the predicate
- *   tree, INCLUDING under `or(...)` (A2, fail-closed) and range predicates such as
- *   `gt/gte/lt/lte/between`. An arg-keyed owner operand in any branch is an
- *   `args`-scope candidate that must surface KV414, but an `or`-branch or
+ *   tree, INCLUDING under `or(...)` (A2, fail-closed), range predicates such as
+ *   `gt/gte/lt/lte/between`, and negated membership. An arg-keyed owner operand in
+ *   any branch is an `args`-scope candidate that must surface KV414, but an `or`-branch or
  *   non-equality comparison does NOT pin a row, so these never discharge an
  *   instance key or owner/principal session proof.
  */
@@ -774,9 +774,9 @@ function eqOperandsAreTableColumnArgKeyed(
     const conjuncts = eqPredicateConjuncts(predicate);
     if (conjuncts) instanceKey.push(...conjuncts.map(toComparison));
 
-    // A2 fail-closed: any direct comparison operand anywhere (incl. `or(...)`
-    // branches and range predicates) is an `args`/`session` scope candidate, never
-    // an instance-key.
+    // A2 fail-closed: any direct comparison operand anywhere (incl. `or(...)`,
+    // range predicates, and negated membership) is an `args`/`session` scope
+    // candidate, never an instance-key.
     argCandidates.push(...allEqOperandPairs(predicate).map(toComparison));
   }
 
@@ -791,8 +791,8 @@ function eqOperandsAreTableColumnArgKeyed(
 /**
  * Every direct comparison operand pair nested anywhere under a predicate node (SPEC
  * §11.1, KV414 fail-closed). Used only for `args` scope candidacy — `or(...)`
- * branches and non-equality/range comparisons are included here but must never
- * discharge an instance key or owner-principal session proof.
+ * branches, non-equality/range comparisons, and negated membership are included
+ * here but must never discharge an instance key or owner-principal session proof.
  */
 /** @internal */ export function allEqOperandPairs(predicate: Node): EqPredicateConjunct[] {
   return pnfAllEqOperandPairs(predicatePnf(predicate));
@@ -2243,8 +2243,8 @@ function localDestructuredInputKey(expression: Node): string | undefined {
  * Classify a write chain's `where()` predicate operands the same way as a query read
  * (SPEC §10.3, KV414 A1/A2/A3). Reuses `eqPredicateConjuncts` (`and()`/top-level →
  * instance-key/`session` candidates) and `allEqOperandPairs` (every direct
- * comparison operand, incl. `or()` branches and non-equality/range forms → fail-closed
- * `args` candidates), with the same
+ * comparison operand, incl. `or()` branches, non-equality/range forms, and
+ * negated membership → fail-closed `args` candidates), with the same
  * `input.*`/`req.session.*`/table-column operand classifier the read side uses — so a
  * write keyed by a client arg against an owner table emits a `kind:'write'` scope
  * audit (the write half of KV414 the framework previously never produced).
@@ -2319,6 +2319,7 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   | { expr: string; kind: 'and'; nodes: readonly PredicatePnf[] }
   | { kind: 'eq'; left: Node; right: Node }
   | { kind: 'non-eq-comparison'; left: Node; right: Node }
+  | { kind: 'non-eq-membership'; left: Node; rights: readonly Node[] }
   | { expr: string; kind: 'opaque' }
   | { expr: string; kind: 'or'; nodes: readonly PredicatePnf[] };
 
@@ -2367,8 +2368,15 @@ function localDestructuredInputKey(expression: Node): string | undefined {
       : { expr: expression.getText(), kind: 'opaque' };
   }
 
+  if (name === 'notInArray') {
+    return nonEqMembershipPnf(expression) ?? { expr: expression.getText(), kind: 'opaque' };
+  }
+
   if (name === 'not') {
     const [argument] = expression.getArguments();
+    const negatedMembership = argument ? nonEqMembershipPnf(argument, 'inArray') : undefined;
+    if (negatedMembership) return negatedMembership;
+
     const pnf = argument ? predicatePnf(argument) : undefined;
     return pnf?.kind === 'eq'
       ? { kind: 'non-eq-comparison', left: pnf.left, right: pnf.right }
@@ -2382,12 +2390,36 @@ function localDestructuredInputKey(expression: Node): string | undefined {
     : { expr: expression.getText(), kind: 'opaque' };
 }
 
+function nonEqMembershipPnf(
+  node: Node,
+  expectedName?: 'inArray' | 'notInArray',
+): PredicatePnf | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression)) return undefined;
+
+  const callee = expression.getExpression();
+  if (!Node.isIdentifier(callee)) return undefined;
+  const name = callee.getText();
+  if (expectedName ? name !== expectedName : name !== 'notInArray') return undefined;
+
+  const [left, right] = expression.getArguments();
+  const elements = right ? literalArrayElements(right) : undefined;
+  if (!left || !elements || elements.length === 0) return undefined;
+  return { kind: 'non-eq-membership', left, rights: elements };
+}
+
 function singleLiteralArrayElement(node: Node): Node | undefined {
+  const elements = literalArrayElements(node);
+  return elements?.length === 1 ? elements[0] : undefined;
+}
+
+function literalArrayElements(node: Node): readonly Node[] | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isArrayLiteralExpression(expression)) return undefined;
 
   const elements = expression.getElements();
-  return elements.length === 1 ? elements[0] : undefined;
+  if (elements.some(Node.isSpreadElement)) return undefined;
+  return elements;
 }
 
 /** @internal */ export function pnfExactConjuncts(
@@ -2413,6 +2445,9 @@ function singleLiteralArrayElement(node: Node): Node | undefined {
 /** @internal */ export function pnfAllEqOperandPairs(pnf: PredicatePnf): EqPredicateConjunct[] {
   if (pnf.kind === 'eq' || pnf.kind === 'non-eq-comparison') {
     return [{ left: pnf.left, right: pnf.right }];
+  }
+  if (pnf.kind === 'non-eq-membership') {
+    return pnf.rights.map((right) => ({ left: pnf.left, right }));
   }
   if (pnf.kind === 'and' || pnf.kind === 'or') return pnf.nodes.flatMap(pnfAllEqOperandPairs);
   return [];
