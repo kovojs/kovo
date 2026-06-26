@@ -181,8 +181,13 @@ function installInlineKovoLoader(im) {
   const fb = (val) =>
     val == null ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
   const uu = (v) => {
+    // SPEC.md §4.5/§4.8 KV236: scheme check must match the canonical regex in
+    // core/internal/security-url.ts (/^([a-z][a-z0-9+.-]*):/) and the sibling
+    // copy w in the deferred runtime (inline-loader.ts). The old /^[a-z][^:]*:/
+    // wrongly treated relative URLs containing a colon after a slash (e.g.
+    // "archive/2024:summary", "a/b:c") as scheme-bearing and rewrote them to '#'.
     const s = v.replace(/[\x00-\x20]/g, '').toLowerCase();
-    return /^[a-z][^:]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
+    return /^[a-z][a-z0-9+.-]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
   };
   const ia = (name) =>
     /^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/i.test(name);

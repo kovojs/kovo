@@ -79,6 +79,55 @@ describe('inline loader output security', () => {
       expect(element.getAttribute('xlink:href')).toBe('#');
     });
 
+    it(`${label}: preserves relative URLs with a colon in a path segment (bugz L4 uu regex parity)`, async () => {
+      // SPEC.md §4.5/§4.8 KV236: the inline uu() scheme check must use the same
+      // canonical regex as core/internal/security-url.ts — /^[a-z][a-z0-9+.-]*:/ —
+      // so that relative URLs like "archive/2024:summary" or "a/b:c" (colon after
+      // a slash, not a valid scheme) are NOT mistaken for dangerous schemes and NOT
+      // rewritten to '#'.  Dangerous schemes (javascript:, vbscript:, data:) must
+      // still be neutralized.
+      const element = new BoundTriggerElement({
+        'data-bind:href': 'state.url',
+        'kovo-state': '{"url":"/safe"}',
+        'on:click': '/c/client.js#setRelativeColonUrl',
+      });
+
+      await dispatchInlineDelegatedClick(
+        element,
+        async () => ({
+          setRelativeColonUrl(_event: unknown, context: { state: { url: string } }) {
+            context.state.url = 'archive/2024:summary';
+          },
+        }),
+        installSource,
+      );
+
+      // A relative URL with a colon in a path segment must NOT be neutralized.
+      expect(element.getAttribute('href')).toBe('archive/2024:summary');
+    });
+
+    it(`${label}: still neutralizes javascript: even after uu regex fix (bugz L4 parity)`, async () => {
+      // Regression guard: the tightened uu regex must not loosen the dangerous-scheme block.
+      const element = new BoundTriggerElement({
+        'data-bind:href': 'state.url',
+        'kovo-state': '{"url":"/safe"}',
+        'on:click': '/c/client.js#setJavaScriptUrl',
+      });
+
+      await dispatchInlineDelegatedClick(
+        element,
+        async () => ({
+          setJavaScriptUrl(_event: unknown, context: { state: { url: string } }) {
+            context.state.url = 'javascript:alert(1)';
+          },
+        }),
+        installSource,
+      );
+
+      // javascript: is a real scheme (matches /^[a-z][a-z0-9+.-]*:/) and not in the allowlist.
+      expect(element.getAttribute('href')).toBe('#');
+    });
+
     it(`${label}: suppresses unsafe on*, srcdoc, and raw HTML data-bind attribute writes`, async () => {
       const element = new BoundTriggerElement({
         'data-bind:innerHTML': 'state.html',
