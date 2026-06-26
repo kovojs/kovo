@@ -13,6 +13,7 @@ import {
  * validator/escaper; scripts/check-sink-policy-gate.mjs rejects unregistered drift.
  */
 export const FRAMEWORK_BLESSED_SINK_KINDS = [
+  'browser:response-fragment-html',
   'core:route-redirect',
   'parameterized-sql',
   'rooted-file-serve',

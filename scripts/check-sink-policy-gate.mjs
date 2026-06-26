@@ -27,6 +27,10 @@ export const defaultCommandExecutionSinkFiles = ['packages/server/src/command.ts
 
 export const defaultDynamicCodeExecutionSinkFiles = [];
 
+export const defaultResponseFragmentApplyPath = 'packages/browser/src/response-fragment-apply.ts';
+
+const responseFragmentHtmlSinkKind = 'browser:response-fragment-html';
+
 const allowedSinkPolicyExports = new Set([
   'Blessed',
   'FRAMEWORK_BLESSED_SINK_KINDS',
@@ -76,6 +80,9 @@ export function checkSinkPolicyGate(options = {}) {
     options.commandExecutionSinkFiles ?? defaultCommandExecutionSinkFiles;
   const dynamicCodeExecutionSinkFiles =
     options.dynamicCodeExecutionSinkFiles ?? defaultDynamicCodeExecutionSinkFiles;
+  const responseFragmentApplyPath = Object.hasOwn(options, 'responseFragmentApplyPath')
+    ? options.responseFragmentApplyPath
+    : defaultResponseFragmentApplyPath;
   const commandExecutionFiles =
     options.commandExecutionFiles ?? collectSourceFiles(root, commandExecutionRoots);
   const publicEntrypointFiles = options.publicEntrypointFiles ?? defaultPublicEntrypointFiles;
@@ -89,6 +96,14 @@ export function checkSinkPolicyGate(options = {}) {
 
   if (registeredKinds.size === 0) {
     findings.push(`${sinkPolicyPath}: FRAMEWORK_BLESSED_SINK_KINDS registry is missing or empty`);
+  }
+
+  if (!registeredKinds.has(responseFragmentHtmlSinkKind)) {
+    findings.push(
+      `${sinkPolicyPath}: FRAMEWORK_BLESSED_SINK_KINDS must register ${JSON.stringify(
+        responseFragmentHtmlSinkKind,
+      )} for the browser response-fragment raw HTML sink`,
+    );
   }
 
   if (/\bSymbol\.for\s*\(/.test(sinkPolicyText)) {
@@ -157,6 +172,79 @@ export function checkSinkPolicyGate(options = {}) {
       }
     }
     findings.push(...publicSinkPolicyEscapeFindings(filePath, text));
+  }
+
+  if (responseFragmentApplyPath) {
+    if (!exists(responseFragmentApplyPath)) {
+      findings.push(
+        `${responseFragmentApplyPath}: response-fragment HTML sink gate input is missing`,
+      );
+    } else {
+      findings.push(
+        ...responseFragmentApplyInvariantFindings(
+          responseFragmentApplyPath,
+          readText(responseFragmentApplyPath),
+        ),
+      );
+    }
+  }
+
+  return findings;
+}
+
+export function responseFragmentApplyInvariantFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+
+  if (/\binsertAdjacentHTML\s*\(/.test(source)) {
+    findings.push(
+      `${filePath}: response-fragment HTML sink must not use insertAdjacentHTML; parse through the template sanitizer path`,
+    );
+  }
+
+  const trustedHtmlSinkRoutes = source.match(/\binnerHTML\s*=\s*trustedHtml\s*\(/g) ?? [];
+  if (trustedHtmlSinkRoutes.length !== 2) {
+    findings.push(
+      `${filePath}: response-fragment HTML sink must route exactly two template.innerHTML writes through trustedHtml(); found ${trustedHtmlSinkRoutes.length}`,
+    );
+  }
+
+  if (!/\bfunction\s+trustedHtml\s*\(\s*h\s*:\s*string\s*\)/.test(source)) {
+    findings.push(
+      `${filePath}: response-fragment HTML sink must keep the self-contained trustedHtml() shim for inline-loader extraction`,
+    );
+  }
+
+  if (!/\bcreatePolicy\s*\(\s*['"]kovo['"]\s*,\s*\{\s*createHTML\s*:/.test(source)) {
+    findings.push(
+      `${filePath}: response-fragment HTML sink must mint TrustedHTML through the kovo policy`,
+    );
+  }
+
+  if (
+    !/\bfor\s*\(\s*const\s+n\s+of\s+t\s*\.\s*content\s*\.\s*children\s*\)\s*g\s*\(\s*n\s*\)\s*;/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: append-mode response fragments must sanitize parsed children before DOM insertion`,
+    );
+  }
+
+  if (!/\bm\s*\(\s*e\s*,\s*g\s*\(\s*n\s*\)\s*\)\s*;/.test(source)) {
+    findings.push(
+      `${filePath}: replace-mode response fragments must sanitize the parsed morph root before DOM insertion`,
+    );
+  }
+
+  if (
+    !/\^on\[\^:\]\|\^\(srcdoc\|dangerouslysetinnerhtml\|innerhtml\|outerhtml\|inserthtml\|insertadjacenthtml\)\$/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: response-fragment sanitizer denylist must keep event, srcdoc, and raw HTML attributes blocked`,
+    );
   }
 
   return findings;
