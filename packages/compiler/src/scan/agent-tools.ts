@@ -21,23 +21,25 @@ export interface AgentToolModuleSource {
  * helpers reached through static named/default imports including static local re-export barrels,
  * unique local `export *` barrels for named imports, default exports that alias a summarized local
  * helper, static namespace-property calls into exported local helpers, local `const` object aliases
- * whose properties statically point at summarized helpers, local `const` array/tuple aliases whose
- * literal indexes statically point at summarized helpers, default object exports whose properties
- * statically point at summarized local helpers, top-level `const` destructuring from already-proven
- * helper object/array aliases or namespaces, handler properties that reference a summarized local/
- * imported helper function, and inline callbacks passed to a local/imported helper that directly
- * invokes that callback parameter, a simple `const` alias of that parameter, a static `const`
- * object property alias of that parameter, a static `const` array index alias of that parameter,
- * a readonly array wrapper method that directly invokes each proven callback element, a static
- * object wrapper around a proven or inline const-literal callback array, or one additional static
- * const object wrapper around such an object wrapper, and one static const object wrapper around
- * already-proven helper object aliases or namespace imports. It does not inspect raw source text
- * after parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed
- * namespace access,
- * computed/spread object/array aliases and exports, export-star namespaces, ambiguous export-star
- * names, reassigned callback aliases, mutated callback property/index aliases, mutable/defaulted/
- * nested destructuring, mutating/dynamic array methods, and dynamic paths remain outside the
- * SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
+ * whose properties statically point at summarized helpers, `Object.freeze(...)` wrappers around
+ * those same static object aliases, local `const` array/tuple aliases whose literal indexes
+ * statically point at summarized helpers, `Object.freeze(...)` wrappers around those same static
+ * array/tuple aliases, default object exports whose properties statically point at summarized
+ * local helpers, top-level `const` destructuring from already-proven helper object/array aliases or
+ * namespaces, handler properties that reference a summarized local/imported helper function, and
+ * inline callbacks passed to a local/imported helper that directly invokes that callback parameter,
+ * a simple `const` alias of that parameter, a static `const` object property alias of that
+ * parameter, a static `const` array index alias of that parameter, a readonly array wrapper method
+ * that directly invokes each proven callback element, a static object wrapper around a proven or
+ * inline const-literal callback array, or one additional static const object wrapper around such an
+ * object wrapper, and one static const object wrapper around already-proven helper object aliases or
+ * namespace imports. It does not inspect raw source text after parse and it skips non-invoked
+ * nested function bodies, so ordinary callbacks, computed namespace access,
+ * computed/spread/duplicate object/array aliases and exports, export-star namespaces, ambiguous
+ * export-star names, reassigned callback aliases, mutated callback property/index aliases,
+ * mutable/defaulted/nested destructuring, mutating/dynamic array methods, shadowed `Object.freeze`,
+ * and dynamic paths remain outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves
+ * them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -428,7 +430,7 @@ function collectArrayAliasHelperBindings(
   for (const declaration of statement.declarationList.declarations) {
     if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
 
-    const expression = unwrapParentheses(declaration.initializer);
+    const expression = staticHelperAliasInitializer(declaration.initializer, moduleFacts);
     if (!ts.isArrayLiteralExpression(expression)) continue;
 
     const helperBindings = helperBindingsFromArrayLiteral(expression, moduleFacts);
@@ -461,7 +463,7 @@ function collectObjectAliasHelperBindings(
   for (const declaration of statement.declarationList.declarations) {
     if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
 
-    const expression = unwrapParentheses(declaration.initializer);
+    const expression = staticHelperAliasInitializer(declaration.initializer, moduleFacts);
     if (!ts.isObjectLiteralExpression(expression)) continue;
 
     const helperBindings = helperBindingsFromObjectLiteral(expression, moduleFacts);
@@ -495,7 +497,7 @@ function collectNestedObjectAliasHelperBindings(
     if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
     if (isAssignedBinding(moduleFacts.sourceFile, declaration.name.text)) continue;
 
-    const expression = unwrapParentheses(declaration.initializer);
+    const expression = staticHelperAliasInitializer(declaration.initializer, moduleFacts);
     if (!ts.isObjectLiteralExpression(expression)) continue;
 
     const helperBindings = nestedHelperBindingsFromObjectLiteral(expression, moduleFacts);
@@ -633,7 +635,7 @@ function collectDefaultObjectHelperBindings(
 ): void {
   if (!ts.isExportAssignment(statement) || statement.isExportEquals) return;
 
-  const expression = unwrapParentheses(statement.expression);
+  const expression = staticHelperAliasInitializer(statement.expression, moduleFacts);
   if (!ts.isObjectLiteralExpression(expression)) return;
 
   const helperBindings = helperBindingsFromObjectLiteral(expression, moduleFacts);
@@ -686,7 +688,7 @@ function helperBindingsFromObjectLiteral(
     if (property.name === undefined || ts.isComputedPropertyName(property.name)) return undefined;
 
     const propertyName = staticPropertyName(property.name);
-    if (propertyName === undefined) return undefined;
+    if (propertyName === undefined || helperBindings.has(propertyName)) return undefined;
 
     const initializer = unwrapParentheses(property.initializer);
     if (!ts.isIdentifier(initializer)) return undefined;
@@ -2489,6 +2491,26 @@ function unwrapParentheses(expression: ts.Expression): ts.Expression {
   }
 
   return current;
+}
+
+function staticHelperAliasInitializer(
+  expression: ts.Expression,
+  moduleFacts: ModuleFacts,
+): ts.Expression {
+  const initializer = unwrapParentheses(expression);
+  if (!ts.isCallExpression(initializer)) return initializer;
+  if (initializer.arguments.length !== 1) return initializer;
+
+  const callee = initializer.expression;
+  if (!ts.isPropertyAccessExpression(callee)) return initializer;
+  if (!ts.isIdentifier(callee.expression) || callee.expression.text !== 'Object') {
+    return initializer;
+  }
+  if (callee.name.text !== 'freeze') return initializer;
+  if (moduleFacts.topLevelBindings.has('Object')) return initializer;
+
+  const [argument] = initializer.arguments;
+  return argument ? unwrapParentheses(argument) : initializer;
 }
 
 function namesBlockedInFunctionBody(

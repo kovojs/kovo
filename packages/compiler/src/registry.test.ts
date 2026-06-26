@@ -2958,6 +2958,133 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from frozen static helper aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/frozen-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import { sendMail } from './mail';",
+            "import defaultSendMail from './default-mail';",
+            "import defaultMail from './default-object-mail';",
+            'const mail = Object.freeze({ sendMail });',
+            'const providers = Object.freeze([defaultSendMail] as const);',
+            'export const notifyObject = tool({',
+            "  name: 'orders.frozenObjectAlias',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+            'export const notifyArray = tool({',
+            "  name: 'orders.frozenArrayAlias',",
+            '  handler() {',
+            '    return providers[0]();',
+            '  },',
+            '});',
+            'export const notifyDefaultObject = tool({',
+            "  name: 'orders.frozenDefaultObject',",
+            '  handler() {',
+            '    return defaultMail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-mail.ts',
+          source: [
+            'export default function sendMail() {',
+            '  const token = process.env.POSTMARK_TOKEN;',
+            "  return fetch('https://api.postmarkapp.com/email', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-object-mail.ts',
+          source: [
+            'function sendMail() {',
+            '  const token = process.env.MAILGUN_TOKEN;',
+            "  return fetch('https://api.mailgun.net/v3/messages', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'export default Object.freeze({ sendMail });',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.postmarkapp.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/default-mail.ts:3:10',
+        target: 'api.postmarkapp.com',
+        tool: 'orders.frozenArrayAlias',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/default-mail.ts:2:17',
+        target: 'env.POSTMARK_TOKEN',
+        tool: 'orders.frozenArrayAlias',
+      },
+      {
+        capability: 'egress:api.mailgun.net',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/default-object-mail.ts:3:10',
+        target: 'api.mailgun.net',
+        tool: 'orders.frozenDefaultObject',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/default-object-mail.ts:2:17',
+        target: 'env.MAILGUN_TOKEN',
+        tool: 'orders.frozenDefaultObject',
+      },
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.frozenObjectAlias',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.frozenObjectAlias',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from static destructured helper aliases', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -3331,6 +3458,131 @@ export const ProductGrid = component({
             "  name: 'orders.mutableNestedObjectAlias',",
             '  handler() {',
             '    return providers.mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven frozen helper aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/frozen-computed-object.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://computed-freeze.example.test/mail');",
+            '}',
+            "const mail = Object.freeze({ ['sendMail']: sendMail });",
+            'export const notify = tool({',
+            "  name: 'orders.frozenComputedObject',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/frozen-spread-object.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://spread-freeze.example.test/mail');",
+            '}',
+            'const helpers = { sendMail };',
+            'const mail = Object.freeze({ ...helpers });',
+            'export const notify = tool({',
+            "  name: 'orders.frozenSpreadObject',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/frozen-duplicate-object.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function firstMail() {',
+            "  return fetch('https://first-freeze.example.test/mail');",
+            '}',
+            'function secondMail() {',
+            "  return fetch('https://second-freeze.example.test/mail');",
+            '}',
+            'const mail = Object.freeze({ sendMail: firstMail, sendMail: secondMail });',
+            'export const notify = tool({',
+            "  name: 'orders.frozenDuplicateObject',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/frozen-mutable-object.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://mutable-freeze.example.test/mail');",
+            '}',
+            'let mail = Object.freeze({ sendMail });',
+            'export const notify = tool({',
+            "  name: 'orders.frozenMutableObject',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/frozen-unresolved-object.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'const sendMail = 1;',
+            'const mail = Object.freeze({ sendMail });',
+            'export const notify = tool({',
+            "  name: 'orders.frozenUnresolvedObject',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/frozen-shadowed-object.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://shadowed-freeze.example.test/mail');",
+            '}',
+            'const Object = { freeze<T>(value: T): T { return value; } };',
+            'const mail = Object.freeze({ sendMail });',
+            'export const notify = tool({',
+            "  name: 'orders.frozenShadowedObject',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/frozen-spread-array.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://array-spread-freeze.example.test/mail');",
+            '}',
+            'const helpers = [sendMail] as const;',
+            'const mail = Object.freeze([...helpers] as const);',
+            'export const notify = tool({',
+            "  name: 'orders.frozenSpreadArray',",
+            '  handler() {',
+            '    return mail[0]();',
             '  },',
             '});',
           ].join('\n'),
