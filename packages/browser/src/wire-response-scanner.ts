@@ -2,7 +2,9 @@ import { readAttribute, tagClose } from './wire-html.js';
 
 export interface FragmentChunk {
   html: string;
-  mode?: 'append' | 'replace';
+  // SPEC §9.3: append (END) and prepend (START, load-older) are the explicit
+  // ordered-insert vocabularies; absent ⇒ replace (DOM-morph the target whole).
+  mode?: 'append' | 'prepend' | 'replace';
   target: string;
 }
 
@@ -101,9 +103,12 @@ function readFragmentElementChunk(
   const target = readAttribute(chunk.attrs, 'target');
   if (!target) return undefined;
 
+  // SPEC §9.3: carry only the explicit ordered-insert modes; any other value is
+  // the default replace path.
+  const mode = readAttribute(chunk.attrs, 'mode');
   return {
     html: chunk.content,
-    ...(readAttribute(chunk.attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
+    ...(mode === 'append' || mode === 'prepend' ? { mode: mode as 'append' | 'prepend' } : {}),
     target,
   };
 }

@@ -14,6 +14,14 @@ export interface QueryListDelta {
   upsert?: readonly JsonValue[];
   /** Key values to drop from the base collection. */
   remove?: readonly string[];
+  /**
+   * Read-side pagination position (SPEC §9.1.1/§9.3). When `true`, unmatched
+   * upsert rows insert at the FRONT of the base collection in wire order instead
+   * of appending — the data-side companion to `<kovo-fragment mode="prepend">`
+   * for "load older" feeds. Matched rows still reconcile in place by `key`
+   * (§13.2). Absent/false ⇒ append (the default; mutation deltas never set it).
+   */
+  prepend?: boolean;
 }
 
 /**
@@ -252,25 +260,29 @@ function reconcileList(
     upsertByKey.set(key, row);
   }
 
-  const result: JsonValue[] = [];
+  const kept: JsonValue[] = [];
   for (const row of baseList) {
     const key = rowKey(row, listDelta.key);
     if (key !== undefined && removeSet.has(key)) continue;
     if (key !== undefined && upsertByKey.has(key)) {
-      result.push(upsertByKey.get(key) as JsonValue);
+      kept.push(upsertByKey.get(key) as JsonValue);
       upsertByKey.delete(key);
       continue;
     }
-    result.push(row);
+    kept.push(row);
   }
-  // New rows (upserts whose key was not already present) append in wire order.
+  // New rows (upserts whose key was not already present), in wire order.
+  const added: JsonValue[] = [];
   for (const row of listDelta.upsert ?? []) {
     const key = rowKey(row, listDelta.key);
     if (key !== undefined && upsertByKey.has(key)) {
-      result.push(row);
+      added.push(row);
       upsertByKey.delete(key);
     }
   }
 
-  return result;
+  // SPEC §9.1.1/§9.3 read-side pagination: a `prepend` delta inserts the new page
+  // at the FRONT of the held list (load older), otherwise new rows append (load
+  // more). Matched rows already reconciled in place above either way.
+  return listDelta.prepend ? [...added, ...kept] : [...kept, ...added];
 }

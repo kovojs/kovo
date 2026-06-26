@@ -55,15 +55,17 @@ const inlineHelperSpecs = {
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
-// SPEC.md §4.4 always-loaded inline loader gzip ceiling. Combines two 2026-06-24 changes:
-// (1) the concurrent loader-hardening raise to 9472, and (2) the Trusted Types `trustedHtml`
-// shim that routes the always-on `p`/`d` raw-HTML write sinks (response-fragment-apply.ts)
-// through the framework `kovo` policy — what lets Trusted Types ship DEFAULT-ON without bricking
-// Kovo's own hydration on Chromium; (3) the extracted fragment sanitizer now byte-tracks the shared
-// KV236 sink policy for imagesrcset, comma-aware srcset, CSS text, and raw-HTML sink names. The TT API
-// tokens (`trustedTypes`/`createPolicy`/`createHTML`) and sanitizer grammar are irreducible over the
-// hardened loader; future increases require comparable XSS-sink evidence.
-export const inlineKovoLoaderGzipByteBudget = 10000;
+// SPEC.md §4.4 always-loaded inline loader gzip ceiling. Combines: (1) the concurrent
+// loader-hardening raise to 9472; (2) the Trusted Types `trustedHtml` shim that routes the
+// always-on `p`/`d` raw-HTML write sinks (response-fragment-apply.ts) through the framework
+// `kovo` policy — what lets Trusted Types ship DEFAULT-ON without bricking Kovo's own hydration
+// on Chromium; (3) the extracted fragment sanitizer byte-tracking the shared KV236 sink policy for
+// imagesrcset, comma-aware srcset, CSS text, and raw-HTML sink names; and (4) the §9.3
+// `mode="prepend"` wire capability — the `p` closure gained a keyed-dedup insert-at-START branch
+// with the scroll-anchor guarantee for "load older" feeds, raising the ceiling 10000 → 10500. The
+// TT API tokens and sanitizer grammar remain irreducible; future increases require comparable
+// XSS-sink or first-class-wire-capability evidence.
+export const inlineKovoLoaderGzipByteBudget = 10500;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();

@@ -39,6 +39,35 @@ export interface OptimisticPlan<Input = unknown> {
   transforms: Record<string, OptimisticEntry<Input>>;
 }
 
+/**
+ * @internal The §10.2 instance-key derivation an authored keyed transform carries: derive
+ * the canonical key VALUE (the `keyValue` of `name:keyValue`, §10.2:1040) for the keyed
+ * query instance this transform predicts, from the same validated mutation `input` the
+ * query's own `instanceKey` resolves against (§10.2 WHERE eq-predicate → `args.*`). Returns
+ * the keyValue string directly, or the declared args object reduced to the keyValue.
+ */
+export type AuthoredOptimisticKeyDerivation<Input = unknown> = (
+  input: Input,
+) => string | Record<string, string | number | boolean>;
+
+/**
+ * @internal An authored keyed optimistic entry — the runtime mirror of the server
+ * `MutationOptimisticKeyedEntry` authoring shape (SPEC §10.4): a pure `transform` plus the
+ * `keys` derivation naming the keyed query INSTANCE it predicts (§10.2). Lowered by
+ * {@link optimisticPlanFromAuthoredMap} into an {@link OptimisticPlan} whose `keys` map
+ * routes the prediction (and its rebase) to that instance's store slot.
+ */
+export interface KeyedOptimisticEntry<Input = unknown, Value = unknown> {
+  keys: AuthoredOptimisticKeyDerivation<Input>;
+  transform: OptimisticTransform<Input, Value>;
+}
+
+/** @internal One authored entry in an inline `mutation({ optimistic })` map (SPEC §10.4): an
+ * unkeyed transform, a {@link KeyedOptimisticEntry} keyed pair, or `'await-fragment'`. */
+export type AuthoredOptimisticEntry<Input = unknown, Value = unknown> =
+  | OptimisticEntry<Input, Value>
+  | KeyedOptimisticEntry<Input, Value>;
+
 type MutationKey<Definition> = Definition extends Form<infer Key, any, any> ? Key : never;
 
 type InvalidatedQueryNames<Definition> =
@@ -546,4 +575,58 @@ function optimisticQueryKey<Input>(
 ): string | undefined {
   const key = plan.keys?.[queryName];
   return typeof key === 'function' ? key(change) : key;
+}
+
+/**
+ * Reduce an authored §10.2 instance-key derivation result to the canonical key VALUE — the
+ * `keyValue` of the `name:keyValue` encoding (SPEC §10.2:1040). A string result IS the keyValue
+ * (symmetric with a query's own `instanceKey: (input) => string`, §10.2). An args object is
+ * reduced to its values joined in declared (insertion) order, so a single-arg keyed query
+ * (`{ id }`) yields just the value (`q3`) and the prediction lands on the same store slot the
+ * matching `<kovo-query name key>` server-truth chunk decodes to (§9.4/§13.2).
+ */
+export function canonicalInstanceKeyValue(
+  derived: string | Record<string, string | number | boolean>,
+): string {
+  if (typeof derived === 'string') return derived;
+  return Object.values(derived)
+    .map((value) => String(value))
+    .join(':');
+}
+
+/**
+ * @internal Lower an authored inline `mutation({ optimistic })` map (keyed by query NAME,
+ * possibly carrying {@link KeyedOptimisticEntry} keyed pairs) into the runtime
+ * {@link OptimisticPlan} (SPEC §10.4). This is the bridge between the keyed AUTHORING surface
+ * (server `MutationOptimisticMap`, compiler-scanned per §5.2) and the instance-keyed runtime:
+ * a keyed entry's `transform` flows into `plan.transforms`, and its `keys` derivation flows
+ * into `plan.keys` as a `(change) => keyValue` function (§10.2), so the existing rebaser/apply
+ * path predicts on, reconciles into, and rebases the correct query INSTANCE (§13.2). Unkeyed
+ * transforms and `'await-fragment'` positions lower unchanged.
+ */
+export function optimisticPlanFromAuthoredMap<Input>(
+  map: Readonly<Record<string, AuthoredOptimisticEntry<Input>>>,
+  queue?: string,
+): OptimisticPlan<Input> {
+  const transforms: Record<string, OptimisticEntry<Input>> = {};
+  const keys: Record<string, OptimisticQueryKey<Input>> = {};
+
+  for (const [queryName, entry] of Object.entries(map)) {
+    if (entry === 'await-fragment' || typeof entry === 'function') {
+      transforms[queryName] = entry;
+      continue;
+    }
+    // SPEC §10.2/§10.4: a keyed entry contributes its transform plus an instance-key
+    // derivation; resolve the author's `(input) => keyValue|args` to the canonical keyValue
+    // the runtime store/wire share, evaluated per change against the mutation input.
+    transforms[queryName] = entry.transform;
+    const derive = entry.keys;
+    keys[queryName] = (change) => canonicalInstanceKeyValue(derive(change.input));
+  }
+
+  return {
+    transforms,
+    ...(Object.keys(keys).length === 0 ? {} : { keys }),
+    ...(queue === undefined ? {} : { queue }),
+  };
 }

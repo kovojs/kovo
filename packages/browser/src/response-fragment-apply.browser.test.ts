@@ -258,3 +258,81 @@ describe('browser response fragment apply', () => {
     }
   });
 });
+
+// SPEC §9.3/§13.2: prepend ("load older") inserts keyed rows at the START of the target,
+// dedupes by kovo-key, and carries a scroll-anchor guarantee — the target is the scroll
+// container, and its scrollTop shifts by the inserted height so existing content does not
+// jump. Real Chromium layout exercises the actual scrollHeight/scrollTop math.
+describe('browser prepend (load-older) fragment apply', () => {
+  const ROW = 40;
+
+  function scrollContainer(keys: readonly string[]): HTMLElement {
+    const container = document.createElement('ul');
+    container.setAttribute('kovo-fragment-target', 'chat-log');
+    container.style.cssText = 'height:120px;overflow:auto;margin:0;padding:0;box-sizing:border-box';
+    for (const key of keys) {
+      const row = document.createElement('li');
+      row.setAttribute('kovo-key', key);
+      row.textContent = key;
+      row.style.cssText = `height:${ROW}px;list-style:none`;
+      container.append(row);
+    }
+    document.body.append(container);
+    return container;
+  }
+
+  function olderRows(...keys: string[]): string {
+    return keys
+      .map((key) => `<li kovo-key="${key}" style="height:${ROW}px;list-style:none">${key}</li>`)
+      .join('');
+  }
+
+  it('p() inserts at the START, dedupes by kovo-key, and holds the scroll anchor', () => {
+    const container = scrollContainer(['m5', 'm6', 'm7', 'm8']); // 160px content, 120px viewport
+    container.scrollTop = container.scrollHeight; // scrolled to the newest row (bottom)
+    const beforeHeight = container.scrollHeight;
+    const beforeTop = container.scrollTop;
+    const anchor = container.querySelector('[kovo-key="m8"]') as HTMLElement;
+    const anchorTopBefore = anchor.getBoundingClientRect().top;
+
+    // Older page includes a duplicate (m6) plus genuinely older rows (m3, m4).
+    applyHtmlResponseFragments(
+      [{ html: olderRows('m6', 'm3', 'm4'), mode: 'prepend', target: 'chat-log' }],
+      (name) => document.querySelector(`[kovo-fragment-target="${name}"]`),
+    );
+
+    expect([...container.children].map((c) => c.getAttribute('kovo-key'))).toEqual([
+      'm3',
+      'm4',
+      'm5',
+      'm6',
+      'm7',
+      'm8',
+    ]);
+    // Two new rows (m3,m4) of 40px each; scrollTop shifts by exactly that inserted height.
+    expect(container.scrollHeight - beforeHeight).toBe(2 * ROW);
+    expect(container.scrollTop - beforeTop).toBe(2 * ROW);
+    // The previously-visible anchor row keeps its viewport position (no jump).
+    expect(Math.abs(anchor.getBoundingClientRect().top - anchorTopBefore)).toBeLessThanOrEqual(1);
+  });
+
+  it('DomMorphTarget.prependHtml mirrors the keyed-dedup insert-at-START + scroll anchor', () => {
+    const container = scrollContainer(['m5', 'm6', 'm7', 'm8']);
+    container.scrollTop = container.scrollHeight;
+    const beforeHeight = container.scrollHeight;
+    const beforeTop = container.scrollTop;
+
+    new DomMorphTarget(container).prependHtml(olderRows('m6', 'm3', 'm4'));
+
+    expect([...container.children].map((c) => c.getAttribute('kovo-key'))).toEqual([
+      'm3',
+      'm4',
+      'm5',
+      'm6',
+      'm7',
+      'm8',
+    ]);
+    expect(container.scrollHeight - beforeHeight).toBe(2 * ROW);
+    expect(container.scrollTop - beforeTop).toBe(2 * ROW);
+  });
+});
