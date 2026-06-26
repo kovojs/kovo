@@ -161,7 +161,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       and `pnpm run check:vp` passed. KV439 now has an internal `neutralizeLogValue()`/`formatLogMessage()`
       control-character neutralizer plus a sink-policy gate for raw request-derived `console.*` logging in
       server source; focused log/gate tests, `pnpm run check:sink-policy`, `git diff --check`, and
-      `pnpm run check:vp` passed. Remaining gap: other
+      `pnpm run check:vp` passed. Unbranded separated SQL carriers now require a non-empty parameter array plus
+      a real bind marker outside strings/comments, closing empty/dummy-array assembled SQL fall-through while
+      preserving `$1`/`?`/`:name`/`@name` carriers; focused SQL/sink-policy tests, `pnpm run check:sink-policy`,
+      `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other
       §3 candidates and static by-construction analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
