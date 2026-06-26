@@ -369,6 +369,56 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     ).resolves.toBeNull();
   });
 
+  it('fails closed on malformed Bearer session material even when a valid cookie is present', async () => {
+    const manager = createOpaqueSessionManager({
+      acceptAuthorizationHeader: true,
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    await expect(
+      manager.validateRequest(
+        new Request('https://app.test/account', {
+          headers: {
+            authorization: `Bearer ${established.session.id} trailing`,
+            cookie,
+          },
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: {
+            authorization: 'Bearer',
+            cookie,
+          },
+        }),
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it('does not treat unrelated authorization schemes as opaque session credentials', async () => {
+    const manager = createOpaqueSessionManager({
+      acceptAuthorizationHeader: true,
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: {
+            authorization: 'Basic dXNlcjpwYXNz',
+            cookie,
+          },
+        }),
+      ),
+    ).resolves.toEqual({ user: { id: 'u1' } });
+  });
+
   it('rejects malformed or prefix-ambiguous owned-session configuration at manager creation', () => {
     const store = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
 

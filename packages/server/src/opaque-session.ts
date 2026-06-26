@@ -579,10 +579,18 @@ function extractOpaqueSessionId(
   if (!acceptAuthorizationHeader) return cookieId;
   const authorization = request.headers.get('authorization');
   if (authorization === null) return cookieId;
-  const match = /^Bearer\s+([^\s]+)$/i.exec(authorization);
-  const headerId = match?.[1] ?? null;
+  const headerId = readAuthorizationBearer(authorization);
   if (cookieId !== null && headerId !== null) return AMBIGUOUS_OPAQUE_SESSION_ID;
   return cookieId ?? headerId;
+}
+
+function readAuthorizationBearer(header: string): string | null {
+  if (!/^Bearer(?:\s|$)/i.test(header)) return null;
+  const match = /^Bearer\s+([^\s]+)$/i.exec(header);
+  // SPEC §6.5 / OPP-11: a malformed Bearer session credential must not be ignored in favor of a
+  // simultaneously presented cookie, because that would accept ambiguous browser credential state.
+  if (match === null) return AMBIGUOUS_OPAQUE_SESSION_ID;
+  return match[1] ?? AMBIGUOUS_OPAQUE_SESSION_ID;
 }
 
 function readCookie(header: string, cookieName: string): string | null {
