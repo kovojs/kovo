@@ -18,7 +18,7 @@ my-app/
 |-- package.json
 |-- vite.config.ts          # Vite+ plus the Kovo plugin
 |-- src/
-|   |-- app.tsx             # createApp(), routes, layout, request handler
+|   |-- app.tsx             # createApp(), routes, layout, request shell
 |   |-- app.test.ts         # focused app smoke test
 |   |-- auth.ts             # Better Auth + Kovo session/mutation adapters
 |   |-- db.ts               # Drizzle database setup and seed data
@@ -30,7 +30,7 @@ my-app/
 |   `-- components/
 |       |-- auth-forms.tsx  # sign-in/sign-out forms
 |       `-- contacts.tsx    # query-backed contact region and add form
-`-- tsconfig.json           # when your package manager/template writes one
+`-- tsconfig.json           # TypeScript config written by the scaffold
 ```
 
 The SQLite dialect swaps in `package.sqlite.json`, `src/db.sqlite.ts`, `src/schema.sqlite.ts`,
@@ -44,10 +44,22 @@ queries, route components, theme, and stylesheet, then creates the app:
 
 ```tsx
 createApp({
+  clientModules: createMemoryVersionedClientModuleRegistry(),
   db: () => appDb,
+  endpoints: [healthEndpoint],
   mutations: [addContact, appSignIn, appSignOut],
   queries: [contactsQuery],
-  sessionProvider: (request) => appSessionProvider(request),
+  sessionProvider: {
+    justification: 'Better Auth owns the starter session lifecycle.',
+    lifecycle: 'delegated',
+    lifecycleAssertions: {
+      expiry: 'Better Auth enforces starter session expiry.',
+      revocation: 'Better Auth revokes starter sessions on sign-out.',
+      rotation: 'Better Auth owns token rotation and reissue.',
+      validation: 'Better Auth validates the session cookie before Kovo sees request.session.',
+    },
+    provider: appSessionProvider,
+  },
   routes: [homeRoute, loginRoute],
 });
 ```
@@ -88,11 +100,16 @@ When adding product data, keep the same separation:
 That path keeps the compiler's query/write extraction readable and gives tests one clear place to
 assert each behavior.
 
+## Local repo files you can ignore
+
+The Kovo repo itself includes `AGENTS.md`, `CLAUDE.md`, and `.kovo/` for contributor and agent
+workflows. Those files are not part of a generated app, and the scaffold does not mirror them into
+your project.
+
 ## The graph workflow
 
-The starter no longer asks you to hand-maintain or commit a root `graph.json`. The app facts live in
-the authored modules above; derive or construct the graph in tests when a product rule needs CI
-coverage:
+The starter does not write or commit a root `graph.json`. The app facts live in the authored
+modules above; derive or construct the graph in tests when a product rule needs CI coverage:
 
 ```sh
 pnpm --filter @kovojs/example-commerce run build:demo
@@ -118,3 +135,18 @@ the server keeps no record of what's on screen. `kovo build ./src/app.tsx` emits
 The [deployment guide](/guides/deployment/) covers the two real obligations: keeping versioned
 `/c/*` client modules published across deploys, and not breaking the stateless-server guarantee.
 SPEC section 9.5
+
+## Next
+
+- [Quickstart](/getting-started/quickstart/) - make the first schema/query/mutation change.
+- [Troubleshooting & upgrading](/getting-started/troubleshooting/) - fix the common onboarding
+  snags and keep a starter current.
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+Starter auth/session shape and delegated session providers: SPEC §6.6. Graph and explain audit
+surfaces: SPEC §11.4. Styling contract and stylesheet hints: SPEC §13.1. Deploy-time client module
+retention and stateless server rules: SPEC §9.5.
+
+</details>

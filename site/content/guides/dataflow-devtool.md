@@ -8,9 +8,9 @@ order: 6.2
 
 `@kovojs/devtool` turns a Kovo graph into two surfaces: a visual dataflow app and an MCP tool named
 `kovo_explain`. Both render the same graph cards, so the page a developer reads and the artifact an
-agent consumes stay aligned. SPEC section 5.3
+agent consumes stay aligned.
 
-## Provide Graphs
+## Build or capture a graph first
 
 The devtool consumes graph JSON but does not require generated files to live under `src/generated`.
 Example apps keep graph assertions in tests:
@@ -24,7 +24,7 @@ pnpm --filter @kovojs/example-stackoverflow test -- src/interactive-app.test.ts
 For a visual devtool host, pass the graph object or a build-produced graph file into
 `buildBundle()`.
 
-## Mount under an app prefix
+## Mount it under your app
 
 Use the Vite plugin when the devtool should live under an existing dev server path such as
 `/__kovo`:
@@ -43,7 +43,7 @@ Set `KOVO_DEVTOOL_BASE=/__kovo` so emitted links match the mount path, then run:
 pnpm --filter @kovojs/example-devtool dev:mounted
 ```
 
-## Build a bundle directly
+## Build a bundle directly when you own the host
 
 For a host app, provide the graph JSON and source root:
 
@@ -66,7 +66,7 @@ export default app;
 The package is data-free: the host provides app graph and source root; the devtool derives node
 cards, lanes, source previews, and edges from that input.
 
-## MCP surface
+## Query the same graph through MCP
 
 Run the MCP server over the same graph:
 
@@ -78,13 +78,28 @@ kovo-devtool mcp --graph ./graph.json --src ./src --label "My App"
 deterministic BM25-ranked cards. Results include stable `kovo-explain/v1` text and structured
 content for agents.
 
-## Conformance
+## Check that both surfaces match
 
-Use a conformance check to prove the MCP cards and graph edges are the same artifact:
+Use the repo check that exercises the devtool against real graphs rather than rerunning the MCP
+command above:
 
 ```sh
-kovo-devtool mcp --graph ./graph.json --src ./src --label "My App"
+pnpm run check:vp
 ```
 
 When a graph assertion fails, fix the app facts first: route, query, mutation, domain, or generated
 graph emission. The devtool should explain the graph you built, not patch around it.
+
+## Next
+
+- [Reading kovo check & kovo explain](/guides/kovo-explain/) - the graph and audit output behind
+  the cards.
+- [Testing](/guides/testing/) - where to keep graph assertions in app CI.
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+The graph/explain artifact contract and stable `kovo-explain/v1` text shape: SPEC §11.4. Machine-
+auditable generation and authorable outputs: SPEC §1.3, Constitution #3.
+
+</details>

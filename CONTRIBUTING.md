@@ -7,14 +7,14 @@ package layout, and how to build and test. For what Kovo is and why, see the
 
 ## Documents
 
-| Document                                                       | Role                                                               |
-| -------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [`SPEC.md`](SPEC.md)                                           | The normative source of truth for framework behavior               |
-| [`rules/`](rules)                                              | Standing agent, release, and conformance rules                     |
-| [`plans/archive.md`](plans/archive.md)                         | Completed and retired implementation plan registry                 |
-| [`rules/constitution.md`](rules/constitution.md)               | The five design tests every feature must pass (summary of SPEC §2) |
-| [`rules/compiler-hard-rules.md`](rules/compiler-hard-rules.md) | Compiler release gates (summary of SPEC §5.2)                      |
-| [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md)            | Instructions for coding agents working in this repo                |
+| Document                                                       | Role                                                                |
+| -------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [`SPEC.md`](SPEC.md)                                           | The normative source of truth for framework behavior                |
+| [`rules/`](rules)                                              | Standing agent, release, and conformance rules                      |
+| [`plans/archive.md`](plans/archive.md)                         | Completed and retired implementation plan registry                  |
+| [`rules/constitution.md`](rules/constitution.md)               | The five design tests every feature must pass (summary of SPEC §2)  |
+| [`rules/compiler-hard-rules.md`](rules/compiler-hard-rules.md) | Compiler release gates (summary of SPEC §5.2)                       |
+| [`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md), `.kovo/`   | Local instructions and helper assets for coding agents in this repo |
 
 ## Prior art
 
@@ -41,7 +41,7 @@ What it deliberately rejects (client routers, hydration, shadow DOM, custom elem
 | `packages/server`      | Mutations, queries, guards, wire protocol                    |
 | `packages/drizzle`     | Touch-set extraction and schema-as-registry adapter          |
 | `packages/cli`         | The `kovo` command-line surface                              |
-| `packages/test`        | `kovoTest` harness                                           |
+| `packages/test`        | Kovo test harness and shared test helpers                    |
 | `packages/create-kovo` | Starter-template scaffolder                                  |
 | `examples/commerce`    | The reference commerce app (`rules/v1-acceptance.md` target) |
 | `conformance/`         | Pinned Drizzle-surface conformance suite                     |

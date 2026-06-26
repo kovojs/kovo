@@ -20,7 +20,7 @@ Kovo request context, and exposes sign-in/sign-out as ordinary CSRF-protected Ko
 | `src/components/auth-forms.tsx` | Sign-in and sign-out forms bound to the auth mutations.                               |
 | `src/app.tsx`                   | `sessionProvider`, guarded home route, `/login`, and mutation registration.           |
 
-## Session provider
+## Wire the session provider
 
 The integration path is:
 
@@ -31,6 +31,47 @@ The integration path is:
 
 That keeps `request.session` typed in routes and mutations without making page components call the
 auth library directly.
+
+Use one shared auth module so the session shape, Better Auth adapter, and CSRF binding stay in one
+place:
+
+```ts
+import { betterAuthSession } from '@kovojs/better-auth';
+import { s, session, type CsrfValidationOptions } from '@kovojs/server';
+
+export interface AppRequest {
+  authCsrfId?: string | null;
+  session?: { id: string; user: { id: string; email: string; name: string } } | null;
+}
+
+export const appSession = session(
+  s.object({
+    id: s.string(),
+    user: s.object({ id: s.string(), email: s.string(), name: s.string() }),
+  }),
+);
+
+function requireAuthSecret(): string {
+  const secret = process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET;
+  if (!secret) throw new Error('Set BETTER_AUTH_SECRET or KOVO_CSRF_SECRET.');
+  return secret;
+}
+
+export const appCsrf = {
+  field: 'csrf',
+  secret: requireAuthSecret(),
+  sessionId(request: AppRequest) {
+    return request.session?.id ?? request.authCsrfId ?? undefined;
+  },
+} satisfies CsrfValidationOptions<AppRequest>;
+
+export const appSessionProvider = appSession.provider(
+  betterAuthSession(auth, ({ session: authSession, user }) => ({
+    id: authSession.id,
+    user: { id: user.id, email: user.email, name: user.name },
+  })),
+);
+```
 
 ## Sign-in and sign-out mutations
 
@@ -93,5 +134,17 @@ vp test
 npm run build:prod
 ```
 
-For a larger auth example, read [Commerce](/examples/commerce/) and the
-`examples/commerce/src/components/auth-forms.tsx` source.
+## Next
+
+- [Project structure](/getting-started/project-structure/) - see where the starter keeps this
+  wiring.
+- [Security & authorization](/guides/security/) - the broader CSRF and guard model behind the
+  starter snippet.
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+Session typing, CSRF binding before/after login, and fail-closed secret handling: SPEC §6.6. Route
+guards and redirect outcomes: SPEC §9.5, §10.2.
+
+</details>

@@ -105,3 +105,5 @@ inline where the primitives first appear.
 - [Project structure](/getting-started/project-structure/) - every generated file and where to extend it.
 - [Quickstart](/getting-started/quickstart/#5-extend-the-starter-safely) - the first larger changes to make after install.
 - [Better Auth integration](/guides/auth-better-auth/) - auth wiring from the scaffold in detail.
+- [Troubleshooting & upgrading](/getting-started/troubleshooting/) - common setup failures and how
+  to compare your app against the current scaffold.

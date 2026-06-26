@@ -24,12 +24,12 @@ this site's generated [API reference](/api) keep that line visible.
 
 ## Public vs internal packages
 
-| Public (depend on these)                                                                                                                                                                                                                   | Internal / special                                                                                                                                                           |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kovojs/core`, `@kovojs/server`, `@kovojs/browser`, `@kovojs/drizzle` (the real-database data layer — see the [data-layer guide](/guides/data-layer/))                                                                                    | `@kovojs/compiler` — framework build machinery used behind the `kovo` CLI; app projects should run `kovo compile`, `kovo check`, or `kovo explain`, not import compiler APIs |
-| `@kovojs/better-auth` — the Better Auth integration: credential mutations and session forwarding, and `@kovojs/headless-ui` — accessible behavior/attribute builders for UI primitives (see [Components & copy-in UI](/guides/components)) | `@kovojs/test` (harness only; fixtures live in the private `@kovojs/conformance-fixtures`)                                                                                   |
-| `@kovojs/style`, `@kovojs/ui` — versioned styled component subpaths such as `@kovojs/ui/button`; use `kovo add` only when you want copied source to become app-owned code                                                                  |                                                                                                                                                                              |
-| `@kovojs/cli`, `create-kovo` (CLIs — the `kovo` executable contract, plus `@kovojs/cli`'s `kovoCheck`/`kovoExplain`)                                                                                                                       |                                                                                                                                                                              |
+| Public (depend on these)                                                                                                                                                                                                               | Internal / special                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kovojs/core`, `@kovojs/server`, `@kovojs/browser`, `@kovojs/drizzle` (the real-database data layer — see the [data-layer guide](/guides/data-layer/))                                                                                | `@kovojs/compiler` — framework build machinery used behind the `kovo` CLI; app projects should run `kovo compile`, `kovo check`, or `kovo explain`, not import compiler APIs |
+| `@kovojs/better-auth` — the Better Auth integration: credential mutations and session forwarding; `@kovojs/headless-ui` — accessible behavior/attribute builders for UI primitives (see [Components & copy-in UI](/guides/components)) | `@kovojs/test` — test harness helpers for Kovo apps and packages                                                                                                             |
+| `@kovojs/style`, `@kovojs/ui` — versioned styled component subpaths such as `@kovojs/ui/button`; use `kovo add` only when you want copied source to become app-owned code                                                              |                                                                                                                                                                              |
+| `@kovojs/cli`, `create-kovo` (CLIs — the `kovo` executable contract, plus `@kovojs/cli`'s `kovoCheck`/`kovoExplain`)                                                                                                                   |                                                                                                                                                                              |
 
 ## Versioning
 
@@ -60,3 +60,18 @@ component symbols on direct component subpaths such as `@kovojs/ui/button`. The 
 entry intentionally exports no components.
 
 `create-kovo` is a public CLI package, not an app import surface.
+
+## Next
+
+- [Components & copy-in UI](/guides/components/) - the package boundaries for UI imports and copied
+  source.
+- [`CONTRIBUTING.md`](https://github.com/kovojs/kovo/blob/main/CONTRIBUTING.md) - the monorepo
+  package map and repo test commands.
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+Public API boundary, authorable TSX source requirement, and generated/internal separation: SPEC
+§5.2. Additional package-level policy lives in `STABILITY.md` and `public-packages.json`.
+
+</details>

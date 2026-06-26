@@ -6,14 +6,12 @@ order: 10
 
 # Accessibility
 
-Most component libraries claim accessibility and ship an audit once. Kovo treats it as a standing
-contract: every primitive family is run through [axe-core](https://github.com/dequelabs/axe-core) in
-a real Chromium browser, not at initial render only but in the **end-state of each interaction
-tier** — open, expanded, checked, selected, pressed, complete, error. If a primitive can reach a
-state, that state is asserted axe-clean in CI. This is the framework's own guarantee, so apps inherit
-it without writing accessibility tests of their own.
+Use this page for the split that matters in practice: what the framework already proves for you, and
+what still belongs to the app you author. Kovo runs its primitive families through
+[axe-core](https://github.com/dequelabs/axe-core) in a real Chromium browser at the end-state of
+each interaction tier. If a primitive can reach a state, that state is asserted axe-clean in CI.
 
-## What "axe-clean across state tiers" means
+## Use the primitives for the hard part
 
 A primitive isn't one DOM — it's a small state machine. A dialog has a closed state and an open,
 focus-trapped, `aria-modal` top-layer state. A checkbox has unchecked, checked, and
@@ -43,25 +41,11 @@ For native top-layer content (`<dialog>` promoted via `showModal`, popover-backe
 suite verifies that axe descends into the promoted subtree rather than passing vacuously against a
 hidden node — the assertion is anchored to a genuinely visible, active element.
 
-## States that are intentionally not asserted
+## Add the app-specific semantics
 
-A few states cannot be represented as an axe-stable DOM, and the suite documents each exclusion
-rather than writing a test that would pass without proving anything:
-
-- **Transient transition frames.** The suite zeroes transitions and asserts terminal states; the
-  in-between closing/dismissing frames are not stable DOM to assert against.
-- **Toast auto-dismiss countdown.** A live region mid-countdown is a moving target; the open and
-  dismissed end-states are asserted instead.
-- **Hover-only visual states with no ARIA/DOM delta.** A purely visual `:hover` style with no
-  attribute or structure change has nothing for axe to evaluate that the resting state doesn't
-  already cover.
-
-## What this means for your app
-
-You don't need to re-prove primitive accessibility. The styled families you compose from are already
-held to the axe-clean-across-states bar by the framework's suite. Your accessibility work is the part
-only you can know: meaningful labels and copy, correct heading order in your own layouts, and the
-semantics of content you author around the primitives.
+You do not need to re-prove primitive accessibility. Your job is the part only the app can know:
+meaningful labels and copy, correct heading order in your own layouts, and the semantics around the
+primitive.
 
 That part is plain HTML. A primitive can be flawless and the surrounding region still fail an audit
 if the labels are missing or the heading levels skip. Concretely — give the form region an
@@ -94,12 +78,30 @@ export function ShippingSection() {
 ```
 
 The framework proves `Select` emits a correct listbox contract; only you can know that it labels
-_delivery speed_, sits under a _Shipping_ heading, and that the heading order around it is `h2 → h3`
-rather than `h2 → h4`. axe can't infer that intent, and the gallery suite never sees your layout — so
-this is the slice that stays yours.
+_delivery speed_, sits under a _Shipping_ heading, and that the heading order around it is `h2 →
+h3` rather than `h2 → h4`.
+
+## Know the documented exclusions
+
+A few states cannot be represented as an axe-stable DOM, and the suite documents each exclusion
+rather than writing a test that would pass without proving anything:
+
+- **Transient transition frames.** The suite zeroes transitions and asserts terminal states; the
+  in-between closing/dismissing frames are not stable DOM to assert against.
+- **Toast auto-dismiss countdown.** A live region mid-countdown is a moving target; the open and
+  dismissed end-states are asserted instead.
+- **Hover-only visual states with no ARIA/DOM delta.** A purely visual `:hover` style with no
+  attribute or structure change has nothing for axe to evaluate that the resting state doesn't
+  already cover.
+
+## Next
+
+- [Components & copy-in UI](/guides/components/) - where those primitive families come from.
+- [Testing](/guides/testing/) - add app-level browser checks for your own labels, headings, and
+  flows.
 
 <details>
-<summary>Spec & evidence</summary>
+<summary>Spec & diagnostics</summary>
 
 The accessibility conformance contract — that every claimed primitive family is axe-clean across its
 interactive state tiers (open/expanded/checked/selected/pressed/complete/error end-states), with

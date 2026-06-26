@@ -72,11 +72,11 @@ it in `src/components/contacts.tsx`, and update `src/mutations.ts` if the add-co
 write it. That path exercises the whole starter: Drizzle schema, typed query, guarded mutation,
 styled component render, and test coverage.
 
-A normal wiring mistake fails early. For example, if `contactsQuery` returns `name` and `email` but
-a component tries to render a missing `company` field:
+A normal wiring mistake fails early. For example, if `contactsQuery` returns `id`, `name`, `email`,
+and `company` but a component tries to render a field that does not exist:
 
 ```tsx
-<span>{contact.company}</span>
+<span>{contact.phone}</span>
 ```
 
 then:
@@ -126,15 +126,17 @@ When the feature crosses data domains or relies on optimistic behavior, add a gr
 framework CLI (`kovo check`, `kovo explain`, `kovo add`). The full table - and the rule for which
 binary does what - lives in [Installation > The everyday commands](/getting-started/installation/#the-everyday-commands).
 
-## Next steps
+## Next
 
 - [Thinking in Kovo](/getting-started/mental-model/) - how components become self-describing HTML.
 - [Installation](/getting-started/installation/) - prerequisites and what the scaffold sets up.
+- [Project structure](/getting-started/project-structure/) - where the starter keeps auth, data,
+  and route wiring.
 - [Examples](/examples/) - larger apps built from the same route/query/mutation facts.
 - [Commerce example](/examples/commerce/) - a larger authenticated storefront built the same way.
 
 <details>
-<summary>Spec references</summary>
+<summary>Spec & diagnostics</summary>
 
 Typed routes and link checking: SPEC section 6.4. Strict-TypeScript sound subset as the basis for
 the static guarantees: SPEC section 6.6. Data-binding paths checked against query result shape:

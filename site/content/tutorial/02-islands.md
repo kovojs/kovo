@@ -36,8 +36,9 @@ Three things to notice in what you wrote — and didn't:
 
 ## Render it into the page
 
-The app imports the component's compiled lowered IR — the compiled, still-authorable form under
-`src/generated/` — and renders it into the product page:
+The app renders the authored TSX component into the product page. The compiler may emit generated
+artifacts under `src/generated/` for inspection, but those are outputs to verify, not source you
+author or import by hand:
 
 {{snippet:02-islands/src/app.ts#render-island}}
 
@@ -72,6 +73,8 @@ closure earns a naming nudge, and the popover substitution is recorded:
 
 Every Kovo diagnostic shows what would have been generated, why it can't be, and the fix menu.
 The [reading kovo check guide](/guides/kovo-explain/) tours the diagnostic registry.
+
+## Next
 
 You now have a free popover, a lazy island, and tests proving both from strings. Next: real
 data — queries, and the bindings the compiler derives from them.

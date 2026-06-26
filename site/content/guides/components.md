@@ -72,8 +72,7 @@ A copied component depends only on public, versioned packages:
 - **`@kovojs/style`** — typed StyleX objects, property-level merge, tokens, themes, and readable atomic CSS.
 - **`@kovojs/headless-ui`** — the `*Attributes` builders and headless render-input types.
 - **`@kovojs/core`** — `component()`, the server component constructor.
-- **`@kovojs/server/internal/html`** — `escapeHtml` / `escapeAttribute`, used by generated or in-repo components that interpolate text
-  into markup.
+- **`@kovojs/server`** — the JSX runtime used by copied TSX files.
 
 ### The flow
 
@@ -162,10 +161,9 @@ export const Button = component({
 });
 ```
 
-A component with real interaction behavior adds the headless attribute builders and (when it
-interpolates text) `escapeHtml`. The select trigger, for instance, pulls its ARIA and `data-*`
-attributes from `selectTriggerAttributes` in `@kovojs/headless-ui` rather than spelling out the
-state machine by hand:
+A component with real interaction behavior adds the headless attribute builders. The select trigger,
+for instance, pulls its ARIA and `data-*` attributes from `selectTriggerAttributes` in
+`@kovojs/headless-ui` rather than spelling out the state machine by hand:
 
 ```tsx
 /** @jsxImportSource @kovojs/server */
@@ -216,9 +214,10 @@ export const SelectTrigger = component({
 ```
 
 You spread the builder's output onto the host element rather than hand-writing the ARIA contract;
-the compiler wires the interactive `on:*` handlers and `data-bind` updates onto the same element when
-the component is enhanced. (Components that interpolate untrusted text into markup also import
-`escapeHtml` from `@kovojs/server/internal/html`.)
+the compiler wires the interactive `on:*` handlers and `data-bind` updates onto the same element
+when the component is enhanced. For copied TSX, plain JSX children already escape text content; if a
+component needs extra string shaping, keep that helper local to the copied file instead of reaching
+into `@kovojs/server/internal/html`.
 
 Because the behavior lives in `@kovojs/headless-ui`, your copy stays small: it owns markup and
 StyleX objects, the public package owns correctness.
@@ -232,12 +231,11 @@ StyleX objects, the public package owns correctness.
 ### The registry
 
 The package ships a machine-readable manifest, `packages/ui/registry.json`, listing every component:
-its source file(s), the symbols it exports, and the exact `@kovojs/style` /
-`@kovojs/headless-ui` / `@kovojs/core` / `@kovojs/server` symbols it imports (plus any sibling
-components to copy alongside it). This is the data `kovo add <component>` consumes to copy a
-component and its dependencies into your app. It is also enforced: a copy-in smoke test typechecks a
-representative component against the public packages alone, so a component can never start depending
-on a non-public symbol without the build catching it.
+its source file(s), the symbols it exports, and the exact public package symbols it imports (plus
+any sibling components to copy alongside it). This is the data `kovo add <component>` consumes to
+copy a component and its dependencies into your app. It is also enforced: a copy-in smoke test
+typechecks a representative component against the public packages alone, so a component can never
+start depending on a non-public symbol without the build catching it.
 
 ## Choosing a mode
 

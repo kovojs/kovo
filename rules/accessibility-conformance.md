@@ -30,4 +30,5 @@ Each exclusion MUST be justified in the proving suite.
 
 Conformance is proven by the gallery browser axe suite
 (`examples/gallery/src/interactive-gallery.browser.test.ts`), run under
-Chromium.
+Chromium. Public docs that summarize this rule should point readers here or to
+SPEC §12.1 rather than rephrasing the full proof inline.
