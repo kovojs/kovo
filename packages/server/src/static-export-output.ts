@@ -263,8 +263,7 @@ function staticExportPlannedWrite(
   if (target.itemKind === 'header-sidecar') {
     return {
       ...target,
-      write: async (writePath) =>
-        writeTextStaticExportFile(buildNetlifyHeadersSidecar(plan.artifacts), writePath),
+      write: async (writePath) => writeTextStaticExportFile(buildNetlifyHeadersSidecar(plan), writePath),
     };
   }
 
@@ -276,18 +275,39 @@ function staticExportPlannedWrite(
 }
 
 /**
+ * @internal bugz-3 L8 / SPEC §6.6: the immutable-asset security floor that every server
+ * preset applies to versioned client modules (`/c/…`) and static assets (`/assets/…`).
+ * Kept in lockstep with `immutableStaticHeaders()` in `build.ts` (the Vercel/Cloudflare
+ * Worker presets); a bare static file cannot carry HTTP headers, so the Netlify/Cloudflare-
+ * Pages `_headers` sidecar must materialize this floor or public JS/CSS ships without
+ * `x-content-type-options: nosniff`, `cross-origin-resource-policy: same-origin`, or
+ * immutable caching — a DiD regression vs all server presets.
+ */
+const STATIC_EXPORT_IMMUTABLE_ASSET_HEADERS: Readonly<Record<string, string>> = {
+  'cache-control': 'public, max-age=31536000, immutable',
+  'cross-origin-resource-policy': 'same-origin',
+  'x-content-type-options': 'nosniff',
+};
+
+/**
  * @internal Builds the content of a Netlify-style `_headers` file from the captured
  * per-document security headers (SPEC §6.6 DiD floor; bugz M4). Each route-document path
  * gets a stanza associating it with its full header set. Headers are already filtered by
  * `staticExportHeaders()` at capture time (set-cookie and kovo-* are stripped).
  *
+ * bugz-3 L8: route documents are not the only artifacts that need a header floor. The
+ * `/c/` versioned client modules and `/assets/` static files are public JS/CSS that every
+ * server preset serves with the immutable-asset floor (nosniff/CORP/immutable). Emit
+ * wildcard splat stanzas (`/c/*`, `/assets/*`) matching the presets' `/(?:assets|c)/(.*)`
+ * rule so the static export carries the same floor a bare file cannot.
+ *
  * The `_headers` format is recognized by Netlify and Cloudflare Pages. Hosts that use
  * `config.json` routes (Vercel) are handled separately via their platform preset.
  */
-function buildNetlifyHeadersSidecar(artifacts: readonly StaticExportArtifact[]): string {
+function buildNetlifyHeadersSidecar(plan: StaticExportOutputArtifacts): string {
   const lines: string[] = ['# Kovo static export security headers (SPEC §6.6)'];
 
-  for (const artifact of artifacts) {
+  for (const artifact of plan.artifacts) {
     const entries = Object.entries(artifact.headers);
     if (entries.length === 0) continue;
 
@@ -298,8 +318,26 @@ function buildNetlifyHeadersSidecar(artifacts: readonly StaticExportArtifact[]):
     }
   }
 
+  // bugz-3 L8: versioned client modules live under `/c/` (enforced by
+  // `assertStaticExportClientModuleTarget`); static assets under `/assets/` follow the
+  // preset convention. Carry the immutable-asset floor on those public file trees.
+  if (plan.clientModules.length > 0) {
+    appendStaticExportImmutableHeaderStanza(lines, '/c/*');
+  }
+  if (plan.assets.some((asset) => asset.path.startsWith('/assets/'))) {
+    appendStaticExportImmutableHeaderStanza(lines, '/assets/*');
+  }
+
   lines.push('');
   return lines.join('\n');
+}
+
+function appendStaticExportImmutableHeaderStanza(lines: string[], pathPattern: string): void {
+  lines.push('');
+  lines.push(pathPattern);
+  for (const [name, value] of Object.entries(STATIC_EXPORT_IMMUTABLE_ASSET_HEADERS)) {
+    lines.push(`  ${name}: ${value}`);
+  }
 }
 
 async function assertReadableStaticExportAssetSource(

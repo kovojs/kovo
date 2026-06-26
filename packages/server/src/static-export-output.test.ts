@@ -642,6 +642,69 @@ describe('server static export output boundary', () => {
     }
   });
 
+  // bugz-3 L8 / SPEC §6.6: the sidecar must ALSO carry the immutable-asset floor
+  // (nosniff / CORP:same-origin / immutable cache-control) for the public `/c/` client
+  // modules and `/assets/` static files, matching `immutableStaticHeaders()` that every
+  // server preset (Vercel/Cloudflare Worker) applies via `/(?:assets|c)/(.*)`. Without
+  // these stanzas, prerendered JS/CSS on Netlify/Cloudflare Pages ship weaker than dynamic
+  // dispatch + presets.
+  it('emits /c/ and /assets/ immutable-asset header stanzas in the sidecar (L8)', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-immutable-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-imm-src-'));
+    try {
+      const cssSource = path.join(sourceDir, 'app.css');
+      await writeFile(cssSource, 'body { color: black; }\n', 'utf8');
+
+      const plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home</main>',
+            headers: { 'content-type': 'text/html; charset=utf-8' },
+            path: '/index.html',
+            status: 200,
+          },
+        ],
+        assets: staticExportAssetArtifacts([
+          {
+            contentType: 'text/css; charset=utf-8',
+            path: '/assets/app.css',
+            source: pathToFileURL(cssSource),
+          },
+        ]),
+        clientModules: [
+          {
+            body: 'export const app = true;',
+            headers: { 'content-type': 'text/javascript; charset=utf-8' },
+            href: '/c/__v/app/app.client.js',
+            path: '/c/__v/app/app.client.js',
+            status: 200,
+          },
+        ],
+        outDir,
+      });
+
+      await writeStaticExportOutput(plan);
+
+      const headersFile = await readFile(path.join(outDir, '_headers'), 'utf8');
+
+      // The immutable-asset floor is keyed by wildcard splats matching the preset rule.
+      expect(headersFile).toContain('/c/*');
+      expect(headersFile).toContain('/assets/*');
+
+      // Both wildcard stanzas carry the full immutable floor that every server preset applies.
+      const cBlock = headersFile.slice(headersFile.indexOf('/c/*'), headersFile.indexOf('/assets/*'));
+      const assetBlock = headersFile.slice(headersFile.indexOf('/assets/*'));
+      for (const block of [cBlock, assetBlock]) {
+        expect(block).toContain('x-content-type-options: nosniff');
+        expect(block).toContain('cross-origin-resource-policy: same-origin');
+        expect(block).toContain('cache-control: public, max-age=31536000, immutable');
+      }
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
   it('omits the _headers sidecar when all artifact header maps are empty', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-no-headers-'));
     try {

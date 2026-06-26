@@ -93,9 +93,15 @@ export function staticExportOutputTargets(
 
   // Emit a Netlify-style `_headers` sidecar that materializes the captured per-document
   // security-header floor (CSP, X-Frame-Options, COOP, Permissions-Policy, Referrer-Policy)
-  // into a host-consumable artifact (SPEC §6.6 DiD floor; bugz M4). The sidecar is only
-  // emitted when there are route-document artifacts with non-empty headers.
-  if (plan.artifacts.length > 0 && plan.artifacts.some((a) => Object.keys(a.headers).length > 0)) {
+  // into a host-consumable artifact (SPEC §6.6 DiD floor; bugz M4). bugz-3 L8: the sidecar
+  // must ALSO carry the immutable-asset floor (nosniff/CORP/immutable cache-control) for
+  // versioned client modules (`/c/…`) and static assets (`/assets/…`) that every server
+  // preset applies (build.ts `immutableStaticHeaders()`), so emit it whenever there are
+  // route-document headers OR any `/c/`/`/assets/` artifacts to protect.
+  const hasRouteDocumentHeaders = plan.artifacts.some((a) => Object.keys(a.headers).length > 0);
+  const hasImmutableAssetArtifacts =
+    plan.clientModules.length > 0 || plan.assets.some((a) => a.path.startsWith('/assets/'));
+  if (hasRouteDocumentHeaders || hasImmutableAssetArtifacts) {
     targets.push({
       diagnosticPath: '_headers',
       itemIndex: 0,

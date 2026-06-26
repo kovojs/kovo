@@ -316,7 +316,39 @@ function quoteHashes(hashes: readonly string[]): string[] {
 
 function directive(name: string, values: readonly string[] | undefined): string | undefined {
   if (!values || values.length === 0) return undefined;
-  return `${name} ${dedupe(values).join(' ')}`;
+  const deduped = dedupe(values);
+  for (const value of deduped) assertSafeCspSourceListValue(name, value);
+  return `${name} ${deduped.join(' ')}`;
+}
+
+/**
+ * bugz-3 L18 / SPEC §6.6: source-list values are joined with spaces and the assembled
+ * directives are joined with `; `, so a value containing `;`, `,`, whitespace, a newline,
+ * or a control char would smuggle or split a directive. Because CSP is first-occurrence-
+ * wins, a crafted allowlist entry (e.g. `evil.com; script-src 'unsafe-inline'`) could
+ * inject a directive that overrides the supposedly NON-overridable hardening directives
+ * (`base-uri`/`object-src`/`form-action`/`frame-ancestors`), contradicting this module's
+ * "NEVER reachable from here" invariant. A legitimate CSP source expression (`'self'`,
+ * `'none'`, a `'sha256-…'` hash, a scheme like `data:`, or an origin) never contains any
+ * of these separators, so reject them fail-closed at assembly time with a clear error.
+ */
+function assertSafeCspSourceListValue(name: string, value: string): void {
+  if (/[\s;,]/.test(value) || hasCspControlCharacter(value)) {
+    throw new Error(
+      `Kovo refused to assemble a Content-Security-Policy: the '${name}' source-list value ${JSON.stringify(
+        value,
+      )} contains a directive separator (';'/','), whitespace, a newline, or a control character. ` +
+        `Such a value can smuggle or override CSP directives (SPEC §6.6 / bugz-3 L18); CSP allowlist entries must be single source expressions like 'self', a 'sha256-…' hash, a scheme, or an origin.`,
+    );
+  }
+}
+
+function hasCspControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
 }
 
 function dedupe(values: readonly string[]): string[] {
