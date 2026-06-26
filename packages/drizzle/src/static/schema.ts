@@ -1461,7 +1461,52 @@ function relationTargetTableName(
 /** @internal */ export function isKovoAnnotationCall(node: Node): boolean {
   if (!Node.isCallExpression(node)) return false;
   const expression = node.getExpression();
-  return Node.isIdentifier(expression) && isKovoExtraConfigCallName(expression.getText());
+  if (Node.isIdentifier(expression)) {
+    const name = expression.getText();
+    if (isKovoExtraConfigCallName(name)) return true;
+    return kovoAnnotationCallBindingsForSourceFile(expression.getSourceFile()).identifiers.has(
+      name,
+    );
+  }
+  if (!Node.isPropertyAccessExpression(expression)) return false;
+  if (!isKovoExtraConfigCallName(expression.getName())) return false;
+  const receiver = unwrappedStaticExpressionNode(expression.getExpression());
+  return (
+    Node.isIdentifier(receiver) &&
+    kovoAnnotationCallBindingsForSourceFile(expression.getSourceFile()).namespaces.has(
+      receiver.getText(),
+    )
+  );
+}
+
+interface KovoAnnotationCallBindings {
+  identifiers: ReadonlySet<string>;
+  namespaces: ReadonlySet<string>;
+}
+
+const kovoAnnotationCallBindingsCache = new WeakMap<SourceFile, KovoAnnotationCallBindings>();
+
+function kovoAnnotationCallBindingsForSourceFile(
+  sourceFile: SourceFile,
+): KovoAnnotationCallBindings {
+  const cached = kovoAnnotationCallBindingsCache.get(sourceFile);
+  if (cached) return cached;
+
+  const identifiers = new Set<string>();
+  const namespaces = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== '@kovojs/drizzle') continue;
+    for (const named of declaration.getNamedImports()) {
+      if (!isKovoExtraConfigCallName(named.getName())) continue;
+      identifiers.add(named.getAliasNode()?.getText() ?? named.getName());
+    }
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) namespaces.add(namespace.getText());
+  }
+
+  const bindings = { identifiers, namespaces };
+  kovoAnnotationCallBindingsCache.set(sourceFile, bindings);
+  return bindings;
 }
 
 /** @internal */ export function tableNameArgument(initializer: Node): string | undefined {
