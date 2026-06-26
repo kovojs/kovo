@@ -19,6 +19,7 @@ import * as writeGovernanceApi from '../write-governance.js';
 import * as confidentialAtRestApi from '../confidential-at-rest.js';
 import * as capabilityUrlApi from '../capability-url.js';
 import * as capabilityRouteApi from '../capability-route.js';
+import * as commandApi from '../command.js';
 import * as egressApi from '../egress.js';
 import * as egressBootstrapApi from '../egress-bootstrap.js';
 import * as egressCredentialsApi from '../egress-credentials.js';
@@ -429,6 +430,10 @@ describe('server app-shell public API barrels', () => {
       drainCapabilityMintFacts: capabilityRouteApi.drainCapabilityMintFacts,
       // SPEC §6.6 / §9.1: rooted file serving is the public local-file sink capability.
       rootedFiles: fileApi.rootedFiles,
+      // SPEC §6.6 / plans/most-secure-web-framework.md §3: shell-free command
+      // execution is available only through this minted command sink primitive.
+      cmd: commandApi.cmd,
+      runCommand: commandApi.runCommand,
       // SPEC §6.6 / plans/most-secure-web-framework.md OPP-10: argon2id-only password sink.
       PASSWORD_ARGON2ID_DEFAULTS: passwordApi.PASSWORD_ARGON2ID_DEFAULTS,
       hashPassword: passwordApi.hashPassword,
