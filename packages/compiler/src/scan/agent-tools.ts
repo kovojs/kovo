@@ -19,11 +19,12 @@ export interface AgentToolModuleSource {
  * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
  * helpers reached through static named/default imports including static local re-export barrels,
- * static namespace-property calls into exported local helpers, and default object exports whose
- * properties statically point at summarized local helpers. It does not inspect raw source text after
- * parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace
- * access, computed/spread object exports, export-star namespaces, and dynamic paths remain outside
- * the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
+ * static namespace-property calls into exported local helpers, default object exports whose
+ * properties statically point at summarized local helpers, and handler properties that reference a
+ * summarized local/imported helper function. It does not inspect raw source text after parse and it
+ * skips non-invoked nested function bodies, so ordinary callbacks, computed namespace access,
+ * computed/spread object exports, export-star namespaces, and dynamic paths remain outside the
+ * SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -54,10 +55,10 @@ export function agentToolSinksFromSource(
     const name = stringPropertyValue(definition, 'name');
     if (name === undefined) return;
 
-    const handler = handlerBody(definition);
+    const handler = handlerTarget(definition, moduleFacts);
     if (handler === undefined) return;
 
-    facts.push(...handlerSinkFacts(sourceFile, name, handler, moduleFacts));
+    facts.push(...handlerSinkFacts(name, handler));
   };
 
   visit(sourceFile);
@@ -77,6 +78,12 @@ interface HelperDefinition {
   id: string;
   moduleFacts: ModuleFacts;
   node: ts.FunctionLikeDeclaration;
+}
+
+interface HandlerTarget {
+  moduleFacts: ModuleFacts;
+  node: ts.FunctionLikeDeclaration;
+  origin: AgentToolSinkOrigin;
 }
 
 interface ModuleSummaries {
@@ -492,13 +499,18 @@ function frameworkToolImportNames(sourceFile: ts.SourceFile): Set<string> {
 }
 
 function handlerSinkFacts(
-  sourceFile: ts.SourceFile,
   tool: string,
-  handler: ts.FunctionLikeDeclaration,
-  moduleFacts: ModuleFacts,
+  handler: HandlerTarget,
 ): CoreGraph.AgentToolReachableSinkFact[] {
-  if (!handler.body) return [];
-  return reachableSinkFacts(sourceFile, tool, handler, moduleFacts, new Set(), 'handler');
+  if (!handler.node.body) return [];
+  return reachableSinkFacts(
+    handler.moduleFacts.sourceFile,
+    tool,
+    handler.node,
+    handler.moduleFacts,
+    new Set(),
+    handler.origin,
+  );
 }
 
 function reachableSinkFacts(
@@ -737,21 +749,43 @@ function secretReadEvidence(origin: AgentToolSinkOrigin): string {
   }
 }
 
-function handlerBody(
+function handlerTarget(
   definition: ts.ObjectLiteralExpression,
-): ts.FunctionLikeDeclaration | undefined {
+  moduleFacts: ModuleFacts,
+): HandlerTarget | undefined {
   const property = propertyNamed(definition, 'handler');
   if (property === undefined) return undefined;
 
-  if (ts.isMethodDeclaration(property)) return property;
+  if (ts.isMethodDeclaration(property)) {
+    return { moduleFacts, node: property, origin: 'handler' };
+  }
+
+  if (ts.isShorthandPropertyAssignment(property)) {
+    return helperHandlerTarget(property.name.text, moduleFacts);
+  }
+
   if (!ts.isPropertyAssignment(property)) return undefined;
 
   const initializer = property.initializer;
   if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
-    return initializer;
+    return { moduleFacts, node: initializer, origin: 'handler' };
   }
 
+  if (ts.isIdentifier(initializer)) return helperHandlerTarget(initializer.text, moduleFacts);
+
   return undefined;
+}
+
+function helperHandlerTarget(name: string, moduleFacts: ModuleFacts): HandlerTarget | undefined {
+  const helper = moduleFacts.helpers.get(name);
+  if (!helper) return undefined;
+
+  return {
+    moduleFacts: helper.moduleFacts,
+    node: helper.node,
+    origin:
+      helper.moduleFacts.sourceFile === moduleFacts.sourceFile ? 'handler' : 'imported-helper',
+  };
 }
 
 function stringPropertyValue(
