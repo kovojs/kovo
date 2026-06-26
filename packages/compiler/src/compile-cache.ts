@@ -14,6 +14,8 @@ export interface CompileCacheKeyInput {
   readonly fileName: string;
   readonly packageComponentPrefixes?: unknown;
   readonly previousRegistryFacts?: unknown;
+  /** Canonical projection of {@link CompileComponentOptions.productionRenderPlanGate}. */
+  readonly productionRenderPlanGate?: unknown;
   readonly queryShapeFacts?: unknown;
   readonly queryShapes?: unknown;
   readonly registryFacts?: unknown;
@@ -105,6 +107,10 @@ export function compileCacheKey(input: CompileCacheKeyInput): string {
     compileContext,
     compilerBuildId: compilerBuildId(),
     fileName: input.fileName,
+    // SPEC §5.2.1: the key must be a total function of all compile-affecting options.
+    // productionRenderPlanGate flips the KV435 confidentiality gate and the KV416 token-
+    // monotonicity gate, so two compiles differing only in this option must produce different keys.
+    productionRenderPlanGate: input.productionRenderPlanGate ?? null,
     root: input.root ?? null,
     sourceHash: stableHash(input.source),
     sourceProvenance: input.sourceProvenance ?? null,
@@ -124,6 +130,17 @@ export function compileComponentCacheKeyInput(
     ...(options.previousRegistryFacts === undefined
       ? {}
       : { previousRegistryFacts: options.previousRegistryFacts }),
+    // SPEC §5.2.1: productionRenderPlanGate is a compile-affecting option — it gates KV435 and
+    // KV416 diagnostics. Fold a canonical, stable projection (no function values) so two compiles
+    // differing only in this option always produce distinct cache keys.
+    ...(options.productionRenderPlanGate === undefined
+      ? {}
+      : {
+          productionRenderPlanGate: {
+            hasTokenFn: options.productionRenderPlanGate.tokenFn !== undefined,
+            previous: options.productionRenderPlanGate.previous,
+          },
+        }),
     ...(options.queryShapeFacts === undefined ? {} : { queryShapeFacts: options.queryShapeFacts }),
     ...(options.queryShapes === undefined ? {} : { queryShapes: options.queryShapes }),
     ...(options.registryFacts === undefined ? {} : { registryFacts: options.registryFacts }),

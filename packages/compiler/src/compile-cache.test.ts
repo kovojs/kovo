@@ -191,6 +191,51 @@ describe('CompileCache', () => {
     expect(compile).toHaveBeenCalledTimes(1);
   });
 
+  it('productionRenderPlanGate is included in the cache key (SPEC §5.2.1 total-function)', () => {
+    // Two compiles of identical source differing only in productionRenderPlanGate must produce
+    // different cache keys — the gate flips the KV435 confidentiality and KV416 token-monotonicity
+    // diagnostics, so a stale-green hit on the wrong key suppresses a build-failing diagnostic.
+    const withoutGate = compileComponentCacheKeyInput({
+      fileName: 'cart.tsx',
+      source: 'component({})',
+    });
+    const withGate = compileComponentCacheKeyInput({
+      fileName: 'cart.tsx',
+      productionRenderPlanGate: { previous: { cart: 'tok-1' } },
+      source: 'component({})',
+    });
+    const withDifferentPrevious = compileComponentCacheKeyInput({
+      fileName: 'cart.tsx',
+      productionRenderPlanGate: { previous: { cart: 'tok-2' } },
+      source: 'component({})',
+    });
+    const withCustomTokenFn = compileComponentCacheKeyInput({
+      fileName: 'cart.tsx',
+      productionRenderPlanGate: {
+        previous: { cart: 'tok-1' },
+        tokenFn: (input) => JSON.stringify(input),
+      },
+      source: 'component({})',
+    });
+
+    // A gate-absent compile must differ from a gate-present compile.
+    expect(compileCacheKey(withGate)).not.toBe(compileCacheKey(withoutGate));
+    // Different `previous` values must differ.
+    expect(compileCacheKey(withDifferentPrevious)).not.toBe(compileCacheKey(withGate));
+    // A custom tokenFn must differ from no tokenFn (same previous).
+    expect(compileCacheKey(withCustomTokenFn)).not.toBe(compileCacheKey(withGate));
+    // Identical inputs must produce identical keys.
+    expect(
+      compileCacheKey(
+        compileComponentCacheKeyInput({
+          fileName: 'cart.tsx',
+          productionRenderPlanGate: { previous: { cart: 'tok-1' } },
+          source: 'component({})',
+        }),
+      ),
+    ).toBe(compileCacheKey(withGate));
+  });
+
   it('includes every declared component compile input that can affect lowering', () => {
     const base = compileComponentCacheKeyInput({
       fileName: 'product-card.tsx',
