@@ -4,7 +4,7 @@ import { component } from '@kovojs/core';
 import { cartQuery, type CartResult } from '../queries.js';
 
 // Tutorial step 04 (chapter 4): declared queries make the badge an inferred
-// server-refreshable fragment target (SPEC.md sections 4.1 and 9.1).
+// server-refreshable fragment target.
 
 // snippet:cart-badge
 export const CartBadge = component({

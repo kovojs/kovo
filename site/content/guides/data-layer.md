@@ -6,50 +6,28 @@ order: 1.5
 
 # Domains, writes & data access
 
-Every tutorial chapter that mentions "the database" points here. A query says which domains it reads;
-a mutation calls a write that touches those domains; the framework reruns the right queries. The whole
-contract is the domain — a named unit of cache currency that connects writes to reads. This guide
-shows the write side of that contract, the `db.<domain>.<write>` access shape, and the one progression
-that matters: how a plain in-memory store maps onto the real Drizzle path, where invalidation stops
-being something you declare and starts being something the compiler extracts from your SQL.
+Use this guide when a mutation needs to change data. Put the write behind a domain first. Kovo can
+then connect that write to the queries that read the same domain, whether the backing store is a
+plain object, PGlite, SQLite, or hosted Postgres.
 
 ## Declare a domain and its writes
 
-A domain is a name. Queries `read` it; mutations `touch` it. A write is the only place data changes:
+A domain is a name. Queries read it; mutations write it. Start with one domain and one insert:
 
 ```ts
 import { domain, write } from '@kovojs/server';
-import { eq, sql } from 'drizzle-orm';
-import { cartItems, products } from './schema.js';
-
+import { cartItems } from './schema.js';
 export const cart = domain('cart');
-export const product = domain('product');
-
-// ALL writes flow through here — direct db access in a handler is lint KV330.
 export const addItem = write({
   key: 'cart/add-item',
-  touches: [cart, product],
-  run: async (db, productId: string, qty: number) => {
-    await db
-      .insert(cartItems)
-      .values({ productId, qty })
-      .onConflictDoUpdate({
-        target: [cartItems.productId],
-        set: { qty: sql`${cartItems.qty} + ${qty}` },
-      });
-    await db
-      .update(products)
-      .set({ stock: sql`${products.stock} - ${qty}` })
-      .where(eq(products.id, productId));
-  },
+  touches: [cart],
+  run: (db, productId: string, qty: number) => db.insert(cartItems).values({ productId, qty }),
 });
 ```
 
-You never call `invalidate()` here. Calling `addItem` _is_ the invalidation declaration: the static
-pass reads the insert/update targets out of the body, maps `cart_items → cart` and `products →
-product`, and reruns every query whose `reads` list names those domains (SPEC §10.3, §11.1). The
-manual `touches: [cart, product]` above is the explicit form — useful and required when the analyzer
-can't see through the write, and the path the next section replaces with extraction.
+You never call `invalidate()` here. Calling `addItem` is the invalidation declaration. With a plain
+store or an opaque helper, `touches` is the explicit promise. On the Drizzle path, Kovo can extract
+the touched table from the SQL and map it back to a domain.
 
 ## The `db.<domain>.<write>` access shape
 
@@ -62,17 +40,17 @@ import { mutation, s } from '@kovojs/server';
 export const addToCart = mutation('cart/add', {
   input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
   handler(input, request) {
-    // writes go through the domain layer — `request.db.cart.add(...)`, never
-    // `request.db.insert(...)` in the handler body (KV330).
+    // writes go through the domain layer: `request.db.cart.add(...)`, never
+    // `request.db.insert(...)` in the handler body.
     return request.db.cart.add(input);
   },
 });
 ```
 
-This is the rule, not a style preference. **Direct `insert`/`update`/`delete` in a mutation handler
-is KV330** — a lint that pushes the write into a domain where the static pass can summarize it and
-the invalidation graph stays honest. The handler decides _whether_ and _what_ to write; the domain
-write decides _how_, in one analyzable place.
+This is the rule, not a style preference. Direct `insert`/`update`/`delete` in a mutation handler
+triggers the raw-db access lint. The lint pushes the write into a domain where the static pass can
+summarize it and the invalidation graph stays honest. The handler decides _whether_ and _what_ to
+write; the domain write decides _how_, in one analyzable place.
 
 ## Manual `touches`: the explicit escape hatch
 
@@ -90,20 +68,19 @@ export const merge = write({
 });
 ```
 
-A statically un-analyzable write site without `touches` is **KV406** (SPEC §11.1). The declaration
-isn't taken on faith: at test and dev time the verifier parses every executed statement and enforces
-`observed ⊆ static ∪ KV406-declared` (SPEC §11.2). Declare a domain the write never touches and you
-get **KV403** (a warning — over-invalidation is wasteful but correct); touch a domain you didn't
-declare and you get **KV402** (an error — that's the silent-stale-UI bug this whole layer exists to
-kill). See [testing](/guides/testing/) for running the verifier.
+A statically un-analyzable write site without `touches` is rejected. The declaration isn't taken on
+faith: at test and dev time the verifier parses every executed statement and enforces
+`observed ⊆ static ∪ declared`. Declare a domain the write never touches and you get a warning;
+touch a domain you didn't declare and you get an error. See [testing](/guides/testing/) for running
+the verifier.
 
 Copyable rule: **never interpolate request, form, or query data into SQL text**. Use Drizzle
 builders or `sql\`\`` placeholders so scalar values bind as parameters, and use typed allowlists or
 schema facts for identifiers and sort directions.
 
-## The raw-db access ban (KV330)
+## Keep raw db access out of handlers
 
-`KV330` is the lint that keeps the touch graph trustworthy. If handlers could call `db.insert(...)`
+The raw-db access lint keeps the touch graph trustworthy. If handlers could call `db.insert(...)`
 directly, every handler would be a write site the static pass would have to chase, and a forgotten
 one would silently render stale UI. Routing through `db.<domain>.<write>` means:
 
@@ -111,9 +88,9 @@ one would silently render stale UI. Routing through `db.<domain>.<write>` means:
 - the handler stays about decisions (`fail('OUT_OF_STOCK')`, branching), not SQL,
 - and the invalidation set is derived from the write's body, not re-declared at each call.
 
-KV330 is a lint, not a hard error — but treat it as load-bearing. Suppressing it moves a write out of
-the analyzed set, and the verifier will flag the resulting `observed ⊄ static` violation as a CI
-failure anyway.
+The lint is not a hard error, but treat it as load-bearing. Suppressing it moves a write out of the
+analyzed set, and the verifier will flag the resulting `observed ⊄ static` violation as a CI failure
+anyway.
 
 ## Start with a plain store
 
@@ -143,7 +120,7 @@ export const addItem = write({
 
 Everything above the data access — queries, components, mutations, optimistic transforms, the
 `kovo explain` graph — works identically. The only thing the plain store gives up is automatic touch
-extraction: every write is effectively a KV406 site, so you carry the `touches` lists by hand and the
+extraction: every write is an explicit-touch site, so you carry the `touches` lists by hand and the
 runtime verifier still holds you to them. That's the trade you retire by moving to Drizzle.
 
 ## The Drizzle path: invalidation extracted from real SQL
@@ -194,13 +171,15 @@ export const orders = pgTable(
 
 `kovo({ domain })` groups a table into a logical domain; `key` makes invalidation row-level so a write
 to `product p1` refreshes `product:p1`, not every product on the site. A table with no annotation
-defaults to a same-named domain. The annotation takes `{ domain, key? }` or `{ exempt: true }` and
-nothing else (verified against `@kovojs/drizzle`'s `kovo()` surface).
+defaults to a same-named domain. The table annotation also carries the security and concurrency facts
+Kovo needs later: `owner`, `governed`, `secret`, `confidentialAtRest`, `atomic`, `version`, and
+`fans`. Use `{ exempt: true }` only for tables that no query reads. Views use the separate
+`kovo({ view })` form.
 
 With the schema annotated, the `touches` on a Drizzle write become redundant. The static pass rests on
 one property — **Drizzle's table argument is always an imported identifier with a known declaration
 site** — so it follows each `insert`/`update`/`delete` back to its `pgTable`, reads the `kovo` domain
-off it, and traces eq-predicates in the `.where()` to a write argument for the row key (SPEC §11.1):
+off it, and traces eq-predicates in the `.where()` to a write argument for the row key:
 
 ```ts
 // generated/touch-graph.ts — generated, DO NOT EDIT
@@ -256,6 +235,66 @@ configured with `provider: 'sqlite'`. The blessed scaffolded drivers are PGlite 
 `better-sqlite3` for SQLite; LibSQL/Turso, SQL.js, and Bun SQLite may be recognized by analyzer
 stages, but they are not starter defaults.
 
+## Provision and evolve the schema
+
+PGlite examples can create their schema at startup because they are in-process fixtures. A persistent
+Postgres database needs an operator-owned schema step before the app starts serving traffic:
+
+```ts
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS cart_items (
+    id serial PRIMARY KEY,
+    product_id text NOT NULL,
+    qty integer NOT NULL
+  )
+`);
+```
+
+Kovo does not scaffold `drizzle-kit`, `drizzle.config.ts`, or a migrations folder. The runtime
+database is ordinary Drizzle, so you can add drizzle-kit yourself, use a managed migration service,
+or keep hand-written DDL checked into your app. The important part is operational: run migrations
+before the new app version receives requests, and keep the Drizzle schema source in lockstep with
+the database objects those migrations create.
+
+Treat schema changes like deploys, not like request-time work. Add nullable or defaulted columns
+before code reads them, backfill separately when needed, then tighten constraints in a later deploy.
+When you rename a table, column, domain, or row key, update the Drizzle schema and re-run the Kovo
+checks so query reads, write touches, typed links, and optimistic transforms move together.
+
+## Protect single-row counters
+
+When one row carries a contested fact such as stock, mark that fact in the schema:
+
+```ts
+export const products = pgTable(
+  'products',
+  {
+    id: text('id').primaryKey(),
+    stock: integer('stock').notNull(),
+    version: integer('version').notNull(),
+  },
+  kovo({ domain: 'product', key: 'id', atomic: 'stock', version: 'version' }),
+);
+```
+
+A write that subtracts from `stock` should include the check in the same `UPDATE ... WHERE` statement.
+Guard either the `atomic` column itself or a declared `version` column that the statement increments:
+
+```ts
+const cas = await compareAndSet(
+  db
+    .update(products)
+    .set({ stock: sql`${products.stock} - ${qty}`, version: sql`${products.version} + 1` })
+    .where(and(eq(products.id, id), eq(products.version, input.version))),
+);
+if (!cas.ok) throw new StaleVersionError();
+```
+
+A stale version is a typed conflict, so the client can refetch fresh query truth and retry. Ordinary
+business validation, such as "only two are available," stays a declared form error. This check is
+single-row by design. Multi-row reservations, uniqueness across ranges, and cross-table invariants
+belong to database constraints, transaction isolation, locks, or a reservation table.
+
 ## Set up Drizzle over Postgres or SQLite
 
 The runtime `db` is ordinary Drizzle. The commerce reference app runs on real Postgres semantics
@@ -278,8 +317,7 @@ export function createCommerceDb(): CommerceDb {
 
 Swapping PGlite for a hosted Postgres is a driver change — `drizzle({ client: pool })` over
 `drizzle-orm/node-postgres` — with the schema, domains, writes, queries, and the entire derived graph
-unchanged. The request shell resolves the `db` provider once per request before any guard runs
-(SPEC §9.5).
+unchanged. The request shell resolves the `db` provider once per request before any guard runs.
 
 A SQLite scaffold has the same Kovo shape with the SQLite driver and schema core:
 
@@ -301,14 +339,14 @@ export function createAppDb(filename = ':memory:'): AppDb {
 The progression is additive — moving from a plain store to Drizzle changes only the data access, and
 in exchange the compiler takes over work you were doing by hand:
 
-| Concern               | Plain store                           | Drizzle path                                   |
-| --------------------- | ------------------------------------- | ---------------------------------------------- |
-| Domains & writes      | `domain(...)` / `write(...)`          | identical                                      |
-| Handler access        | `db.<domain>.<write>` (KV330 ban)     | identical                                      |
-| Touch set             | hand-declared `touches` (KV406 sites) | extracted from SQL via `kovo({ domain, key })` |
-| Row-level keys        | not available                         | `key` annotation → `product:p1`                |
-| Runtime verification  | `observed ⊆ static ∪ declared`        | same invariant, fewer manual declarations      |
-| Optimistic derivation | hand-written transforms only          | compiler can derive from the SQL shape         |
+| Concern               | Plain store                    | Drizzle path                                   |
+| --------------------- | ------------------------------ | ---------------------------------------------- |
+| Domains & writes      | `domain(...)` / `write(...)`   | identical                                      |
+| Handler access        | `db.<domain>.<write>`          | identical                                      |
+| Touch set             | hand-declared `touches`        | extracted from SQL via `kovo({ domain, key })` |
+| Row-level keys        | not available                  | `key` annotation → `product:p1`                |
+| Runtime verification  | `observed ⊆ static ∪ declared` | same invariant, fewer manual declarations      |
+| Optimistic derivation | hand-written transforms only   | compiler can derive from the SQL shape         |
 
 The handler you wrote against the store keeps working; you delete `touches` lines as the analyzer
 takes over, and the verifier confirms nothing slipped.
@@ -325,13 +363,15 @@ takes over, and the verifier confirms nothing slipped.
 <summary>Spec & diagnostics</summary>
 
 Domains, writes, and the guard chain: SPEC §10.3. Schema as domain registry and the `kovo({ domain,
-key })` / `exempt` annotation: SPEC §10.1 (verified against `examples/commerce/src/schema.ts` and
-`@kovojs/drizzle`'s `kovo()`). Dialect support and SQLite type mapping are mirrored from
-`docs/data-layer-dialects.md`. Touch-set extraction from Drizzle SQL and the committed
-`touch-graph.ts`: SPEC §11.1. Runtime cross-check `observed ⊆ static ∪ KV406-declared`: SPEC §11.2.
-Direct db access in a handler is **KV330**; a statically un-analyzable write needs manual `touches`
-or it is **KV406**; a write touching an undeclared domain is **KV402**, a declared-but-never-written
-domain is **KV403**, a write to an unmapped table is **KV404**, and an `exempt` table read by a query
-is **KV411** (SPEC §10.1, §11.3). The `db` provider and per-request resolution: SPEC §9.5.
+key, owner, governed, secret, confidentialAtRest, atomic, version, fans })`, `kovo({ exempt })`, and
+`kovo({ view })` annotations: SPEC §10.1 and `packages/drizzle/src/drizzle-surface.ts`. Dialect
+support and SQLite type mapping are mirrored from `docs/data-layer-dialects.md`. Touch-set extraction
+from Drizzle SQL and the committed `touch-graph.ts`: SPEC §11.1. Runtime cross-check
+`observed ⊆ static ∪ KV406-declared`: SPEC §11.2. Direct db access in a handler is **KV330**; a
+statically un-analyzable write needs manual `touches` or it is **KV406**; a write touching an
+undeclared domain is **KV402**, a declared-but-never-written domain is **KV403**, a write to an
+unmapped table is **KV404**, and an `exempt` table read by a query is **KV411** (SPEC §10.1, §11.3).
+Single-row lost-update gates: SPEC §10.1 and §10.3; missing compare-and-set on
+`kovo({ atomic, version })` is **KV429**. The `db` provider and per-request resolution: SPEC §9.5.
 
 </details>

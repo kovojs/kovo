@@ -1,6 +1,5 @@
 // Tutorial step 04 (chapter 4): the in-memory database gains transactions and
-// named-table writes so the mutation lifecycle (SPEC.md section 10.3 —
-// BEGIN tx → handler → COMMIT, rollback on fail()) is real, not simulated.
+// named-table writes so commit and rollback behavior is real, not simulated.
 
 export interface ShopProduct {
   id: string;

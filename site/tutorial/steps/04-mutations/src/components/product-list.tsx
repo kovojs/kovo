@@ -9,10 +9,10 @@ import { productsQuery, type ProductsResult } from '../queries.js';
 import { addToCart, shopCsrf, type AddToCartFailure, type AddToCartFailureState } from '../app.js';
 
 // Tutorial step 04 (chapter 4): every product card carries a real form
-// posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS
-// fallback IS the output; `enhance` upgrades it to the section 9.1 fragment
-// wire. Failure state and the per-request CSRF token are request context,
-// not query data, so they arrive as an explicit second render argument.
+// posting to the mutation endpoint. The no-JS fallback IS the output;
+// `enhance` upgrades it to the fragment wire. Failure state and the
+// per-request CSRF token are request context, not query data, so they arrive
+// as an explicit second render argument.
 
 export interface ProductListRenderContext {
   failure?: AddToCartFailureState | undefined;
@@ -52,11 +52,11 @@ export const ProductList = component({
 });
 
 // snippet:add-to-cart-form
-// SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation
-// endpoint; `enhance` upgrades it to the fragment wire. Authored `key` gives
-// repeated forms stable identity; the compiler derives the submitted-form
-// target. The kovo-csrf token is stamped into the form whenever the request
-// carries a session (SPEC.md section 6.6).
+// The no-JS add-to-cart form posts to the mutation endpoint; `enhance`
+// upgrades it to the fragment wire. Authored `key` gives repeated forms
+// stable identity, and the compiler derives the submitted-form target. The
+// kovo-csrf token is stamped into the form whenever the request carries a
+// session.
 export function renderAddToCartForm(
   item: Pick<ShopProduct, 'id' | 'stock'>,
   failure?: AddToCartFailure,

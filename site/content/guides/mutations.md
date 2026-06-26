@@ -14,61 +14,123 @@ what happens when it fails.
 
 ## Declare a mutation
 
-A mutation is a named POST with a schema-validated input. Here is the one the commerce reference
-app uses:
+A mutation is a named POST with a schema-validated input. Start with the write the form needs:
 
 ```ts
-// app.ts — the commerce reference app's shape
-import { guards, mutation, s } from '@kovojs/server';
+import { mutation, s } from '@kovojs/server';
+
+export const addToCart = mutation('cart/add', {
+  input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
+  handler(input, request) {
+    return request.db.cart.add(input);
+  },
+});
+```
+
+That is enough to get a typed form posting to one endpoint. `quantity` arrives from `FormData` as a
+string; the schema says how it becomes a number. The handler writes through the data layer, so the
+same write can feed invalidation, testing, and optimistic proof.
+
+## Add CSRF and guards
+
+Browser forms carry ambient cookies, so mutation endpoints are CSRF-checked by default. In a
+server-rendered form, Kovo stamps a `kovo-csrf` hidden field and verifies it before parsing input or
+running guards:
+
+```ts
+import { csrfField } from '@kovojs/server';
+
+const csrf = csrfField(request, commerceCsrf);
+```
+
+Set `csrf: false` only for non-browser or externally authenticated writes. If a write uses browser
+session authority, keep CSRF on and express authorization as a guard:
+
+```ts
+import { guards } from '@kovojs/server';
 
 export const addToCart = mutation('cart/add', {
   csrf: commerceCsrf,
-  input: s.object({
-    productId: s.string(),
-    quantity: s.number().int().min(1).default(1), // FormData coercion declared here
-  }),
-  errors: {
-    OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
-  },
   guard: guards.all(
     guards.authed<CommerceRequest>(),
     guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),
   ),
+  input: addToCartInput,
+  handler: addToCartHandler,
+});
+```
+
+`authed` refines `req.session` before the handler runs. The rate limiter belongs in the same chain,
+so the audit can print the whole browser-reachable posture.
+
+## Add typed errors
+
+Expected failures are part of the mutation contract. Declare them once, then return them from the
+handler:
+
+```ts
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
+  errors: { OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }) },
+  handler(input, request, context) {
+    const found = request.db.products.get(input.productId);
+    if (!found || found.stock < input.quantity) {
+      return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });
+    }
+    return request.db.cart.add(input);
+  },
+});
+```
+
+Validation failures and declared failures return typed form state. The enhanced path morphs the
+submitted form. The no-JS path re-renders the page with the same failure.
+
+## Add transaction and queueing
+
+Use `transaction` when the handler needs a real commit/rollback boundary:
+
+```ts
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
+  transaction(request: CommerceRequest, run) {
+    return request.db.transaction((db) => run({ ...request, db }));
+  },
+  handler: addToCartHandler,
+});
+```
+
+Use `queue` when multiple submissions from the same client must stay ordered. The client applies
+optimistic transforms when each submit is enqueued, sends only the queue head, and then rebases
+remaining predictions over server truth:
+
+```ts
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
   queue: 'cart',
+  handler: addToCartHandler,
+});
+```
+
+## Add optimism
+
+Optimism is keyed to queries, not components. Each entry predicts the query value that the server
+will send after commit:
+
+```ts
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
   optimistic: {
     cart(draft, input) {
       draft.count = (draft.count ?? 0) + input.quantity;
     },
     productGrid: 'await-fragment',
   },
-  transaction(request: CommerceRequest, run) {
-    return request.db.transaction((db) => run({ ...request, db }));
-  },
-  handler(input, request, context) {
-    const found = request.db.products.get(input.productId);
-    if (!found || found.stock < input.quantity) {
-      return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });
-    }
-    // writes go through the domain layer (db.<domain>.<write>) — direct db access here is KV330.
-    // See queries.md "Where invalidation comes from" and /guides/data-layer/ for write() authoring.
-    return { productId: input.productId, quantity: input.quantity };
-  },
+  handler: addToCartHandler,
 });
 ```
 
-You declare each part once, and the framework derives the rest from it:
-
-- **`input`** names the fields, their types, and their FormData coercion. Form values arrive as
-  strings; `s.number().int().min(1).default(1)` says how `quantity` becomes a number. The same
-  schema validates the wire at runtime.
-- **`errors`** is the failure vocabulary. `context.fail('OUT_OF_STOCK', …)` is typed against it,
-  and callers receive an exhaustive discriminated union.
-- **`guard`** composes from combinators. `authed` refines `req.session` so the user is non-null
-  inside the handler, and every mutation shows up in the `kovo explain --unguarded` audit — the
-  report of everything reachable without authentication.
-- **`optimistic`** is query-keyed prediction for the same write. Each transform mutates a cloned
-  query draft; `'await-fragment'` records that this query should wait for server truth. `queue`
-  names the FIFO lane for submissions that must stay ordered.
+`'await-fragment'` is honest: this query should wait for server truth because the app has not
+declared a safe prediction for it.
 
 ## Render the form
 
@@ -129,10 +191,9 @@ signed-cookie secret, so pre-auth forms like login, signup, and password reset a
 before there is a session to bind to.
 
 A `csrf: false` mutation may not read `req.session` or run a session/cookie-derived guard such as
-`authed`, `role()`, or `owns()`; that is **KV418** because the mutation would skip CSRF while still
-riding ambient browser authority. Truly non-browser writes belong in
-[endpoints and webhooks](/guides/endpoints-webhooks/). Any opt-out shows up in the
-`kovo explain --endpoints` audit with its justification.
+`authed`, `role()`, or `owns()` because the mutation would skip CSRF while still riding ambient
+browser authority. Truly non-browser writes belong in [endpoints and webhooks](/guides/endpoints-webhooks/).
+Any opt-out shows up in the `kovo explain --endpoints` audit with its justification.
 
 ## The request lifecycle
 
@@ -192,13 +253,13 @@ What each piece does:
   serializable props needed to reconstruct the visible component instance. This matters for
   [deployment](/guides/deployment/).
 - **`<kovo-query>`** chunks replace the client's query values and run each query's update plan across
-  every dependent island. When §4.8 bindings cover the affected output, query JSON or prod deltas
+  every dependent island. When bindings cover the affected output, query JSON or prod deltas
   are preferred over a full fragment.
 - **`<kovo-fragment>`** chunks are DOM-morphed in by default, so focus, scroll, selection, and
   browser-owned element state survive. The morph carries no serialization of island-local
   `kovo-state`: an island declaring local `state` inside another component's server-refreshable
-  target is **KV420**, because refreshing the parent would clobber the child's private state. They
-  are sent for affected live targets whose output is not fully covered by the query update plan.
+  target is rejected because refreshing the parent would clobber the child's private state. They are
+  sent for affected live targets whose output is not fully covered by the query update plan.
   `mode="append"` is the explicit vocabulary for pagination and streams.
 - **`Kovo-Changes`** is the sanitized summary of committed writes — `{domain, keys}` only, never
   mutation input or failure detail.
@@ -209,11 +270,9 @@ does not route ordinary success fragments by mutation key.
 
 ## The no-JS path: POST-redirect-GET
 
-When the same endpoint sees no `Kovo-Fragment` header, it answers with PRG. In the commerce app's
-tests, a successful no-JS `cart/add` returns `303` with `Location: /cart` and
-`Cache-Control: no-store`, and the next GET renders the updated page. Errors re-render the full page
-with messages in place. You don't write success fragment routing: query-backed components declare the
-data they need, and Kovo reruns those queries after the mutation commits.
+When the same endpoint sees no `Kovo-Fragment` header, it answers with PRG. A successful no-JS
+submit returns `303`, `Cache-Control: no-store`, and a `Location` header. The next GET renders the
+updated page. Errors re-render the full page with messages in place.
 
 ```ts
 export const cartPage = route('/cart', {
@@ -222,25 +281,83 @@ export const cartPage = route('/cart', {
 
 export const addToCart = mutation('cart/add', {
   csrf: commerceCsrf,
+  defaultRedirectTo: '/cart',
   input: addToCartInput,
-  registry: { queries: [cartQuery, productGridQuery] },
   handler(input, request) {
     return request.db.cart.add(input);
   },
 });
 ```
 
-The app declares the page, mutation, input schema, and affected queries. Kovo's request shell owns
-the endpoint response: PRG for no-JS success, typed 422 pages for failures, and fragment/query
-chunks for enhanced submissions.
+`defaultRedirectTo` is the static success target. Use it when every successful submit lands on the
+same page.
 
-`registry.queries` isn't a refresh-target list — that contradiction is only apparent. _Which_
-queries go stale is still derived from the touch graph (SPEC §10.3); `registry.queries` just hands
-the runtime the query _definitions_ it needs to actually re-run after commit. In a fully compiled
-app the build wires this for you (it merges the derived query set into `registry`), so you only spell
-it out in hand-authored or partially-wired modules where the analyzer can't reach the definitions.
-You never enumerate components or DOM targets here — those stay derived from the live `kovo-deps`
-stamps at request time.
+## Choose the PRG target
+
+Use `redirectTo` when the handler result decides where the browser goes. A plain string works, but a
+typed `redirect()` value is better for routes with params:
+
+```ts
+import { redirect } from '@kovojs/core';
+
+export const createOrder = mutation('order/create', {
+  input: createOrderInput,
+  redirectTo: (result) => redirect('/orders/:id', { params: { id: result.value.id } }),
+  handler(input, request) {
+    return request.db.orders.create(input);
+  },
+});
+```
+
+That is the create-then-navigate path: the order id is only known after the handler runs, and the
+redirect target is still checked against the route table. Rename `/orders/:id`, or change its params,
+and the redirect call turns red with the links and GET forms.
+
+`defaultRedirectTo` is common and static. `redirectTo` is mutation-local and can be static or a
+function of the success result. Both affect the no-JS PRG success path; enhanced submissions still
+receive query and fragment truth unless the loader chooses a full navigation.
+
+## Prevent lost updates on one row
+
+The dangerous stock check is "read stock, decide it is enough, then update later." Two users can pass
+the read before either write lands. Mark the contended column in the schema, then fold the check and
+the write into one SQL statement:
+
+```ts
+export const products = pgTable(
+  'products',
+  {
+    id: text('id').primaryKey(),
+    stock: integer('stock').notNull(),
+    version: integer('version').notNull(),
+  },
+  kovo({ domain: 'product', key: 'id', atomic: 'stock', version: 'version' }),
+);
+```
+
+Then update with a compare-and-set predicate. The predicate can guard the atomic value itself, or a
+separate version column that you also increment:
+
+```ts
+const cas = await compareAndSet(
+  db
+    .update(products)
+    .set({ stock: sql`${products.stock} - ${qty}`, version: sql`${products.version} + 1` })
+    .where(and(eq(products.id, id), eq(products.version, input.version))),
+);
+if (!cas.ok) throw new StaleVersionError();
+```
+
+On conflict, return the typed stale-version outcome. The enhanced client refetches fresh truth and
+can retry with the new version; no-JS users see the same typed failure page. Use a declared 422 error
+for ordinary validation such as "you asked for more than the current available quantity." Use the
+409 conflict when the user's version was stale even though the request shape was valid.
+
+This is a single-row ceiling. It protects stock counters, account balances, and row versions where
+one row carries the contested fact. Multi-row reservations, range constraints, and cross-table
+invariants still need database constraints, serializable transactions, advisory locks, or an
+application-specific reservation table. Kovo makes the missing single-row compare-and-set loud; it
+does not replace the database's isolation model.
 
 ## Handle a failure: the 422 path
 
@@ -346,6 +463,8 @@ SPEC §9.2. The guard chain, the unguarded audit, and the request lifecycle: SPE
 endpoints audit: SPEC §11.4. Anonymous CSRF and KV418: SPEC §6.6. Replay reservation and per-submit
 `Kovo-Idem`: SPEC §10.3. Fragment morph state preservation and KV420: SPEC §9.1 and §4.5. Update
 plans across dependent islands: SPEC §4.8. Direct db access in a handler is **KV330**. The
-`kovo explain` artifact format: SPEC §5.3.
+`kovo explain` artifact format: SPEC §5.3. Typed `redirect()` targets and route-rename propagation:
+SPEC §6.4 and KV220. Single-row lost-update gates: SPEC §10.1 and §10.3; missing compare-and-set on
+`kovo({ atomic, version })` is **KV429**.
 
 </details>

@@ -6,40 +6,41 @@ order: 4
 
 # Mutations & forms
 
-Your shop shows live data; now you'll sell something. In this chapter you add `cart/add`: a
-schema-validated, transactional write whose UI is a real HTML form. One endpoint answers
-browsers without JavaScript (POST-redirect-GET) and enhanced browsers (the fragment wire, Kovo's
-readable chunk format for partial updates) — one handler, two response modes. Step state:
-`site/tutorial/steps/04-mutations/`.
+Your shop shows live data; now you'll sell something. In this chapter you add `cart/add`: a typed
+write behind a real HTML form. The same endpoint handles no-JS POST-redirect-GET and the enhanced
+fragment response. Step state: `site/tutorial/steps/04-mutations/`.
 
-## Declare the write once
+## Declare the input
 
-{{snippet:04-mutations/src/app.ts#add-to-cart}}
+{{snippet:04-mutations/src/app.ts#add-to-cart-input}}
 
-Each declaration in there derives several surfaces:
+This is the form contract. `quantity` arrives as a string, and the schema says how it becomes a
+number.
 
-- **`input`** is the single source of truth for field names, types, and FormData coercion.
-  Attribute and form values arrive as strings, so `s.number().int().min(1).default(1)` says how
-  `quantity` becomes a number, once. The same schema validates the wire at runtime.
-- **`errors`** declares the failure vocabulary. `context.fail('OUT_OF_STOCK', …)` is typed
-  against it, and every consumer — fragment renderers, `onError` callbacks — receives an
-  exhaustive discriminated union.
-- **`transaction`** wraps the handler in a fixed lifecycle: validate → guard → `BEGIN` →
-  handler → `COMMIT`, with `fail()` rolling back. The step's tiny database makes the
-  commit/rollback boundary concrete:
+## Add the CSRF token source
 
-{{snippet:04-mutations/src/db.ts#transaction}}
-
-## Add CSRF protection
-
-Before you write the form, the request shell needs one more declaration. Mutations are
-browser-reachable POSTs, so CSRF protection is default-on: a mutation with no token source
-refuses every request rather than accepting forged ones. The token is a session-bound
-synchronizer the framework stamps into forms and verifies before input parsing:
+Before the form can submit, the request shell needs a token source. Mutations are browser-reachable
+POSTs, so Kovo stamps a `kovo-csrf` hidden field into the form and verifies it before input parsing:
 
 {{snippet:04-mutations/src/app.ts#csrf}}
 
 {{snippet:04-mutations/src/app.test.ts#csrf-test}}
+
+## Declare the mutation
+
+The mutation now has its token source, input schema, failure vocabulary, transaction wrapper, and
+handler in one place. This step also lists the query definitions the request shell can rerun after
+commit; the next chapters show how the invalidation graph derives that set from domains and writes
+instead of making you maintain it by hand.
+
+{{snippet:04-mutations/src/app.ts#add-to-cart}}
+
+`errors` gives the form a typed `OUT_OF_STOCK` state. `transaction` gives `fail()` a rollback
+boundary.
+
+The step's tiny database makes the commit/rollback boundary concrete:
+
+{{snippet:04-mutations/src/db.ts#transaction}}
 
 ## Render the no-JS form
 
@@ -85,9 +86,8 @@ form that caused them:
 
 The [mutations guide](/guides/mutations/) covers guards, file uploads, and response headers.
 
-You now have a real write, working with and without JavaScript. But the enhanced response
-carried no updated query JSON: nothing told the server which queries this write invalidated.
-That's the next chapter.
+You now have a real write, working with and without JavaScript. The next chapter makes the refresh
+path feel instant by adding optimistic query transforms.
 
 <details>
 <summary>Spec & diagnostics</summary>

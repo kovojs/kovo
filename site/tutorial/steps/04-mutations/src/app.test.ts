@@ -21,8 +21,8 @@ import {
 import { CartBadge } from './components/cart-badge.js';
 import { createShopDb } from './db.js';
 
-// Tutorial step 04: one mutation endpoint, two response modes (SPEC.md
-// section 9.1) — POST-redirect-GET without JavaScript, fragment wire with it.
+// Tutorial step 04: one mutation endpoint, two response modes:
+// POST-redirect-GET without JavaScript, fragment wire with it.
 // Both are plain request/response assertions; no browser.
 
 function shopRequest(db = createShopDb()): ShopRequest {
@@ -30,7 +30,7 @@ function shopRequest(db = createShopDb()): ShopRequest {
 }
 
 // The browser would echo the stamped kovo-csrf hidden field back; tests build
-// the same submission explicitly (SPEC.md section 6.6).
+// the same submission explicitly.
 function formInput(request: ShopRequest, fields: Record<string, string>) {
   return { ...fields, 'kovo-csrf': csrfToken(request, shopCsrf, { mutation: addToCart }) };
 }

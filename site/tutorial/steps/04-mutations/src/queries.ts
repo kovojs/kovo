@@ -3,9 +3,9 @@ import { query, type QueryLoadContext } from '@kovojs/server';
 import { createShopDb, type ShopDb, type ShopProduct, type ShopRequest } from './db.js';
 import { cart, product } from './domains.js';
 
-// Typed reads declared once (SPEC.md section 10.2). Loaders read the per-request
-// database through query context so generated post-commit refresh renders the
-// same state the mutation just wrote (SPEC.md sections 9.1 and 10.3).
+// Typed reads declared once. Loaders read the per-request database through
+// query context so generated post-commit refresh renders the same state the
+// mutation just wrote.
 
 export interface CartResult {
   count: number;

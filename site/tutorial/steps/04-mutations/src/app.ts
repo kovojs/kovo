@@ -7,18 +7,14 @@ import * as productListComponent from './components/product-list.js';
 import { cartQuery, loadCart, loadProducts, productsQuery } from './queries.js';
 
 // Tutorial step 04 (chapter 4): a typed write over a real form. One mutation
-// endpoint answers both response modes — POST-redirect-GET without
-// JavaScript, the section 9.1 fragment wire with it (SPEC.md sections 6.3,
-// 9.1, 10.3). CSRF is default-on (section 6.6): a mutation with no token
-// source fails closed, so the request shell declares one up front.
+// endpoint answers both response modes: POST-redirect-GET without JavaScript
+// and the fragment wire with it.
 
 export type { ShopRequest } from './db.js';
 
 const EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET = 'EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET';
 
 // snippet:csrf
-// SPEC.md section 6.6: kovo-csrf is a session-bound synchronizer token stamped
-// into every emitted form and verified before input parsing on every POST.
 export const shopCsrf = {
   secret: tutorialDeploymentSecret(
     'KOVO_TUTORIAL_SHOP_CSRF_SECRET',
@@ -39,13 +35,17 @@ export interface AddToCartFailureState {
 
 export const { ProductList, renderAddToCartError, renderAddToCartForm } = productListComponent;
 
+// snippet:add-to-cart-input
+export const addToCartInput = s.object({
+  productId: s.string(),
+  quantity: s.number().int().min(1).default(1),
+});
+// /snippet
+
 // snippet:add-to-cart
 export const addToCart = mutation('cart/add', {
   csrf: shopCsrf,
-  input: s.object({
-    productId: s.string(),
-    quantity: s.number().int().min(1).default(1), // FormData coercion declared here
-  }),
+  input: addToCartInput,
   errors: {
     OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
   },
