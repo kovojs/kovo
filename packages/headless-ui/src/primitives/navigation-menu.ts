@@ -18,6 +18,18 @@ import {
   type TypeaheadState,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuItem } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuItem = {} as NavigationMenuItem;
+ * ```
+ */
 export interface NavigationMenuItem {
   disabled?: boolean;
   hasContent?: boolean;
@@ -26,6 +38,18 @@ export interface NavigationMenuItem {
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuState } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuState = {} as NavigationMenuState;
+ * ```
+ */
 export interface NavigationMenuState {
   activeValue?: string;
   dir?: TextDirection;
@@ -36,6 +60,18 @@ export interface NavigationMenuState {
   orientation?: CollectionOrientation;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuRootAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuRootAttributeOptions = {} as NavigationMenuRootAttributeOptions;
+ * ```
+ */
 export interface NavigationMenuRootAttributeOptions extends NavigationMenuState {
   descriptionId?: string;
   id?: string;
@@ -43,17 +79,53 @@ export interface NavigationMenuRootAttributeOptions extends NavigationMenuState 
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu list attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuListAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuListAttributeOptions = {} as NavigationMenuListAttributeOptions;
+ * ```
+ */
 export interface NavigationMenuListAttributeOptions extends NavigationMenuState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu item attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuItemAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuItemAttributeOptions = {} as NavigationMenuItemAttributeOptions;
+ * ```
+ */
 export interface NavigationMenuItemAttributeOptions extends NavigationMenuState {
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu trigger attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuTriggerAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuTriggerAttributeOptions = {} as NavigationMenuTriggerAttributeOptions;
+ * ```
+ */
 export interface NavigationMenuTriggerAttributeOptions extends NavigationMenuState {
   contentId?: string;
   id?: string;
@@ -62,12 +134,36 @@ export interface NavigationMenuTriggerAttributeOptions extends NavigationMenuSta
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu content attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuContentAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuContentAttributeOptions = {} as NavigationMenuContentAttributeOptions;
+ * ```
+ */
 export interface NavigationMenuContentAttributeOptions extends NavigationMenuState {
   id?: string;
   labelledBy?: string;
   value: string;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu link attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuLinkAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuLinkAttributeOptions = {} as NavigationMenuLinkAttributeOptions;
+ * ```
+ */
 export interface NavigationMenuLinkAttributeOptions extends NavigationMenuState {
   href?: string;
   id?: string;
@@ -76,14 +172,50 @@ export interface NavigationMenuLinkAttributeOptions extends NavigationMenuState 
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu viewport attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuViewportAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuViewportAttributeOptions = {} as NavigationMenuViewportAttributeOptions;
+ * ```
+ */
 export interface NavigationMenuViewportAttributeOptions extends NavigationMenuState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu indicator attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuIndicatorAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuIndicatorAttributeOptions = {} as NavigationMenuIndicatorAttributeOptions;
+ * ```
+ */
 export interface NavigationMenuIndicatorAttributeOptions extends NavigationMenuState {
   id?: string;
 }
 
+/**
+ * Reason token reported by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuOpenChangeReason } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuOpenChangeReason = {} as NavigationMenuOpenChangeReason;
+ * ```
+ */
 export type NavigationMenuOpenChangeReason =
   | 'escape-key'
   | 'link-select'
@@ -93,26 +225,98 @@ export type NavigationMenuOpenChangeReason =
   | 'trigger-keyboard'
   | 'trigger-pointer-enter';
 
+/**
+ * Reason token reported by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuSelectReason } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuSelectReason = {} as NavigationMenuSelectReason;
+ * ```
+ */
 export type NavigationMenuSelectReason = 'link-click' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuOpenChangeDetail } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuOpenChangeDetail = {} as NavigationMenuOpenChangeDetail;
+ * ```
+ */
 export type NavigationMenuOpenChangeDetail = PrimitiveChangeDetail<
   NavigationMenuOpenChangeReason,
   string | undefined
 >;
 
+/**
+ * Cancelable change detail emitted by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuSelectDetail } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuSelectDetail = {} as NavigationMenuSelectDetail;
+ * ```
+ */
 export type NavigationMenuSelectDetail = PrimitiveChangeDetail<NavigationMenuSelectReason, string>;
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuChangeOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuChangeOptions = {} as NavigationMenuChangeOptions;
+ * ```
+ */
 export interface NavigationMenuChangeOptions {
   onOpenChange?: (detail: NavigationMenuOpenChangeDetail) => void;
   onSelect?: (detail: NavigationMenuSelectDetail) => void;
 }
 
+/**
+ * Result returned by the Navigation Menu primitive navigation menu open change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuOpenChangeResult } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuOpenChangeResult = {} as NavigationMenuOpenChangeResult;
+ * ```
+ */
 export interface NavigationMenuOpenChangeResult {
   changed: boolean;
   detail?: NavigationMenuOpenChangeDetail;
   openValue: string | undefined;
 }
 
+/**
+ * Result returned by the Navigation Menu primitive navigation menu select.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuSelectResult } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuSelectResult = {} as NavigationMenuSelectResult;
+ * ```
+ */
 export interface NavigationMenuSelectResult {
   detail?: NavigationMenuSelectDetail;
   open: NavigationMenuOpenChangeResult;
@@ -120,15 +324,51 @@ export interface NavigationMenuSelectResult {
   value: string;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuMoveOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuMoveOptions = {} as NavigationMenuMoveOptions;
+ * ```
+ */
 export interface NavigationMenuMoveOptions {
   loop?: boolean;
 }
 
+/**
+ * Result returned by the Navigation Menu primitive navigation menu move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuMoveResult } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuMoveResult = {} as NavigationMenuMoveResult;
+ * ```
+ */
 export interface NavigationMenuMoveResult {
   activeIndex: number;
   activeValue: string | undefined;
 }
 
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuTypeaheadOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuTypeaheadOptions = {} as NavigationMenuTypeaheadOptions;
+ * ```
+ */
 export interface NavigationMenuTypeaheadOptions extends NavigationMenuMoveOptions {
   currentValue?: string;
   now: number;
@@ -136,16 +376,91 @@ export interface NavigationMenuTypeaheadOptions extends NavigationMenuMoveOption
   timeoutMs?: number;
 }
 
+/**
+ * Result returned by the Navigation Menu primitive navigation menu typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuTypeaheadResult } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuTypeaheadResult = {} as NavigationMenuTypeaheadResult;
+ * ```
+ */
 export interface NavigationMenuTypeaheadResult extends NavigationMenuMoveResult {
   state: TypeaheadState;
 }
 
+/**
+ * Serializable attribute record returned by Navigation Menu primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuPrimitiveAttributes } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuPrimitiveAttributes = {} as NavigationMenuPrimitiveAttributes;
+ * ```
+ */
 export type NavigationMenuPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuTriggerEvent } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuTriggerEvent = {} as NavigationMenuTriggerEvent;
+ * ```
+ */
 export type NavigationMenuTriggerEvent = Event;
+
+/**
+ * Event shape consumed by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuLinkEvent } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuLinkEvent = {} as NavigationMenuLinkEvent;
+ * ```
+ */
 export type NavigationMenuLinkEvent = Event;
+
+/**
+ * Event shape consumed by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuKeyboardEvent } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuKeyboardEvent = {} as NavigationMenuKeyboardEvent;
+ * ```
+ */
 export type NavigationMenuKeyboardEvent = Event & { readonly key: string };
+
+/**
+ * Event shape consumed by the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuFocusEvent } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuFocusEvent = {} as NavigationMenuFocusEvent;
+ * ```
+ */
 export type NavigationMenuFocusEvent = Event & {
   readonly currentTarget?: {
     ownerDocument?: {
@@ -158,11 +473,39 @@ export type NavigationMenuFocusEvent = Event & {
     };
   } | null;
 };
+
+/**
+ * Options accepted by the Navigation Menu primitive navigation menu focus.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NavigationMenuFocusOptions } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const value: NavigationMenuFocusOptions = {} as NavigationMenuFocusOptions;
+ * ```
+ */
 export interface NavigationMenuFocusOptions {
   defer?: boolean;
   schedule?: (callback: () => void) => void;
 }
 
+/**
+ * Builds the navigation menu root attributes record for the Navigation Menu primitive.
+ *
+ * Emits `aria-describedby`, `aria-disabled`, `aria-label`, `aria-labelledby`, `aria-orientation`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuRootAttributes } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuRootAttributes>[0];
+ * const result = navigationMenuRootAttributes(input);
+ * ```
+ */
 export function navigationMenuRootAttributes(
   options: NavigationMenuRootAttributeOptions = {},
 ): NavigationMenuPrimitiveAttributes {
@@ -180,6 +523,21 @@ export function navigationMenuRootAttributes(
   });
 }
 
+/**
+ * Builds the navigation menu list attributes record for the Navigation Menu primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuListAttributes } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuListAttributes>[0];
+ * const result = navigationMenuListAttributes(input);
+ * ```
+ */
 export function navigationMenuListAttributes(
   options: NavigationMenuListAttributeOptions = {},
 ): NavigationMenuPrimitiveAttributes {
@@ -191,6 +549,19 @@ export function navigationMenuListAttributes(
   });
 }
 
+/**
+ * Builds the navigation menu item attributes record for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuItemAttributes } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuItemAttributes>[0];
+ * const result = navigationMenuItemAttributes(input);
+ * ```
+ */
 export function navigationMenuItemAttributes(
   options: NavigationMenuItemAttributeOptions,
 ): NavigationMenuPrimitiveAttributes {
@@ -201,6 +572,21 @@ export function navigationMenuItemAttributes(
   });
 }
 
+/**
+ * Builds the navigation menu trigger attributes record for the Navigation Menu primitive.
+ *
+ * Emits `aria-controls`, `aria-expanded`, `aria-haspopup`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuTriggerAttributes } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuTriggerAttributes>[0];
+ * const result = navigationMenuTriggerAttributes(input);
+ * ```
+ */
 export function navigationMenuTriggerAttributes(
   options: NavigationMenuTriggerAttributeOptions,
 ): NavigationMenuPrimitiveAttributes {
@@ -222,6 +608,21 @@ export function navigationMenuTriggerAttributes(
   });
 }
 
+/**
+ * Builds the navigation menu content attributes record for the Navigation Menu primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuContentAttributes } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuContentAttributes>[0];
+ * const result = navigationMenuContentAttributes(input);
+ * ```
+ */
 export function navigationMenuContentAttributes(
   options: NavigationMenuContentAttributeOptions,
 ): NavigationMenuPrimitiveAttributes {
@@ -237,6 +638,21 @@ export function navigationMenuContentAttributes(
   });
 }
 
+/**
+ * Builds the navigation menu link attributes record for the Navigation Menu primitive.
+ *
+ * Emits `aria-disabled`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuLinkAttributes } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuLinkAttributes>[0];
+ * const result = navigationMenuLinkAttributes(input);
+ * ```
+ */
 export function navigationMenuLinkAttributes(
   options: NavigationMenuLinkAttributeOptions,
 ): NavigationMenuPrimitiveAttributes {
@@ -257,6 +673,19 @@ export function navigationMenuLinkAttributes(
   });
 }
 
+/**
+ * Builds the navigation menu viewport attributes record for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuViewportAttributes } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuViewportAttributes>[0];
+ * const result = navigationMenuViewportAttributes(input);
+ * ```
+ */
 export function navigationMenuViewportAttributes(
   options: NavigationMenuViewportAttributeOptions = {},
 ): NavigationMenuPrimitiveAttributes {
@@ -269,6 +698,19 @@ export function navigationMenuViewportAttributes(
   });
 }
 
+/**
+ * Builds the navigation menu indicator attributes record for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuIndicatorAttributes } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuIndicatorAttributes>[0];
+ * const result = navigationMenuIndicatorAttributes(input);
+ * ```
+ */
 export function navigationMenuIndicatorAttributes(
   options: NavigationMenuIndicatorAttributeOptions = {},
 ): NavigationMenuPrimitiveAttributes {
@@ -281,16 +723,58 @@ export function navigationMenuIndicatorAttributes(
   });
 }
 
+/**
+ * Computes navigation menu item highlighted for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuItemHighlighted } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuItemHighlighted>[0];
+ * const result = navigationMenuItemHighlighted(input);
+ * ```
+ */
 export function navigationMenuItemHighlighted(
   options: NavigationMenuItemAttributeOptions,
 ): boolean {
   return options.activeValue === options.itemValue;
 }
 
+/**
+ * Computes navigation menu item open for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuItemOpen } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuItemOpen>[0];
+ * const result = navigationMenuItemOpen(input);
+ * ```
+ */
 export function navigationMenuItemOpen(options: NavigationMenuItemAttributeOptions): boolean {
   return options.openValue === options.itemValue;
 }
 
+/**
+ * Computes the set navigation menu open value transition for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setNavigationMenuOpenValue } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof setNavigationMenuOpenValue>[0];
+ * const state = {} as Parameters<typeof setNavigationMenuOpenValue>[1];
+ * const options = {} as Parameters<typeof setNavigationMenuOpenValue>[2];
+ * const detail = {} as Parameters<typeof setNavigationMenuOpenValue>[3];
+ * const result = setNavigationMenuOpenValue(input, state, options, detail);
+ * ```
+ */
 export function setNavigationMenuOpenValue(
   state: NavigationMenuState,
   openValue: string | undefined,
@@ -313,6 +797,22 @@ export function setNavigationMenuOpenValue(
   return { changed: true, detail, openValue };
 }
 
+/**
+ * Computes the toggle navigation menu open value transition for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { toggleNavigationMenuOpenValue } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof toggleNavigationMenuOpenValue>[0];
+ * const state = {} as Parameters<typeof toggleNavigationMenuOpenValue>[1];
+ * const options = {} as Parameters<typeof toggleNavigationMenuOpenValue>[2];
+ * const detail = {} as Parameters<typeof toggleNavigationMenuOpenValue>[3];
+ * const result = toggleNavigationMenuOpenValue(input, state, options, detail);
+ * ```
+ */
 export function toggleNavigationMenuOpenValue(
   state: NavigationMenuState,
   value: string,
@@ -327,6 +827,22 @@ export function toggleNavigationMenuOpenValue(
   );
 }
 
+/**
+ * Computes the select navigation menu link transition for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectNavigationMenuLink } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof selectNavigationMenuLink>[0];
+ * const state = {} as Parameters<typeof selectNavigationMenuLink>[1];
+ * const options = {} as Parameters<typeof selectNavigationMenuLink>[2];
+ * const detail = {} as Parameters<typeof selectNavigationMenuLink>[3];
+ * const result = selectNavigationMenuLink(input, state, options, detail);
+ * ```
+ */
 export function selectNavigationMenuLink(
   state: NavigationMenuState,
   value: string,
@@ -359,6 +875,21 @@ export function selectNavigationMenuLink(
   };
 }
 
+/**
+ * Computes navigation menu move for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuMove } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuMove>[0];
+ * const state = {} as Parameters<typeof navigationMenuMove>[1];
+ * const options = {} as Parameters<typeof navigationMenuMove>[2];
+ * const result = navigationMenuMove(input, state, options);
+ * ```
+ */
 export function navigationMenuMove(
   state: NavigationMenuState,
   key: string,
@@ -387,6 +918,21 @@ export function navigationMenuMove(
   };
 }
 
+/**
+ * Computes navigation menu typeahead for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuTypeahead } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuTypeahead>[0];
+ * const state = {} as Parameters<typeof navigationMenuTypeahead>[1];
+ * const options = {} as Parameters<typeof navigationMenuTypeahead>[2];
+ * const result = navigationMenuTypeahead(input, state, options);
+ * ```
+ */
 export function navigationMenuTypeahead(
   state: NavigationMenuState,
   key: string,
@@ -428,6 +974,18 @@ export function navigationMenuTypeahead(
 }
 
 /**
+ * Handles the navigation menu trigger click interaction for the Navigation Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuTriggerClick } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuTriggerClick>[0];
+ * const state = {} as Parameters<typeof navigationMenuTriggerClick>[1];
+ * const options = {} as Parameters<typeof navigationMenuTriggerClick>[2];
+ * const result = navigationMenuTriggerClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -449,6 +1007,18 @@ export function navigationMenuTriggerClick(
 }
 
 /**
+ * Handles the navigation menu trigger pointer enter interaction for the Navigation Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuTriggerPointerEnter } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuTriggerPointerEnter>[0];
+ * const state = {} as Parameters<typeof navigationMenuTriggerPointerEnter>[1];
+ * const options = {} as Parameters<typeof navigationMenuTriggerPointerEnter>[2];
+ * const result = navigationMenuTriggerPointerEnter(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -466,6 +1036,18 @@ export function navigationMenuTriggerPointerEnter(
 }
 
 /**
+ * Handles the navigation menu trigger focus interaction for the Navigation Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuTriggerFocus } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuTriggerFocus>[0];
+ * const state = {} as Parameters<typeof navigationMenuTriggerFocus>[1];
+ * const options = {} as Parameters<typeof navigationMenuTriggerFocus>[2];
+ * const result = navigationMenuTriggerFocus(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -483,6 +1065,18 @@ export function navigationMenuTriggerFocus(
 }
 
 /**
+ * Handles the navigation menu link click interaction for the Navigation Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuLinkClick } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuLinkClick>[0];
+ * const state = {} as Parameters<typeof navigationMenuLinkClick>[1];
+ * const options = {} as Parameters<typeof navigationMenuLinkClick>[2];
+ * const result = navigationMenuLinkClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -504,6 +1098,18 @@ export function navigationMenuLinkClick(
 }
 
 /**
+ * Handles the navigation menu key down interaction for the Navigation Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuKeyDown } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuKeyDown>[0];
+ * const state = {} as Parameters<typeof navigationMenuKeyDown>[1];
+ * const options = {} as Parameters<typeof navigationMenuKeyDown>[2];
+ * const result = navigationMenuKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -540,6 +1146,21 @@ export function navigationMenuKeyDown(
   return undefined;
 }
 
+/**
+ * Handles the navigation menu focus element interaction for the Navigation Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { navigationMenuFocusElement } from '@kovojs/headless-ui/navigation-menu';
+ *
+ * const input = {} as Parameters<typeof navigationMenuFocusElement>[0];
+ * const state = {} as Parameters<typeof navigationMenuFocusElement>[1];
+ * const options = {} as Parameters<typeof navigationMenuFocusElement>[2];
+ * const result = navigationMenuFocusElement(input, state, options);
+ * ```
+ */
 export function navigationMenuFocusElement(
   event: NavigationMenuFocusEvent,
   id: string | undefined,

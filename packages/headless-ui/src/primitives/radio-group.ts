@@ -13,11 +13,35 @@ import {
   type TextDirection,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupItem } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupItem = {} as RadioGroupItem;
+ * ```
+ */
 export interface RadioGroupItem {
   disabled?: boolean;
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupState } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupState = {} as RadioGroupState;
+ * ```
+ */
 export interface RadioGroupState {
   dir?: TextDirection;
   disabled?: boolean;
@@ -31,6 +55,18 @@ export interface RadioGroupState {
   value?: string;
 }
 
+/**
+ * Options accepted by the Radio Group primitive radio group root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupRootAttributeOptions } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupRootAttributeOptions = {} as RadioGroupRootAttributeOptions;
+ * ```
+ */
 export interface RadioGroupRootAttributeOptions extends RadioGroupState {
   descriptionId?: string;
   errorId?: string;
@@ -38,52 +74,211 @@ export interface RadioGroupRootAttributeOptions extends RadioGroupState {
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Radio Group primitive radio group item attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupItemAttributeOptions } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupItemAttributeOptions = {} as RadioGroupItemAttributeOptions;
+ * ```
+ */
 export interface RadioGroupItemAttributeOptions extends RadioGroupState {
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Radio Group primitive radio group radio attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupRadioAttributeOptions } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupRadioAttributeOptions = {} as RadioGroupRadioAttributeOptions;
+ * ```
+ */
 export interface RadioGroupRadioAttributeOptions extends RadioGroupItemAttributeOptions {
   controlId?: string;
 }
 
+/**
+ * Options accepted by the Radio Group primitive radio group label attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupLabelAttributeOptions } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupLabelAttributeOptions = {} as RadioGroupLabelAttributeOptions;
+ * ```
+ */
 export interface RadioGroupLabelAttributeOptions extends RadioGroupItemAttributeOptions {
   controlId?: string;
 }
 
+/**
+ * Reason token reported by the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupChangeReason } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupChangeReason = {} as RadioGroupChangeReason;
+ * ```
+ */
 export type RadioGroupChangeReason = 'item-click' | 'keyboard' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupChangeDetail } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupChangeDetail = {} as RadioGroupChangeDetail;
+ * ```
+ */
 export type RadioGroupChangeDetail = PrimitiveChangeDetail<
   RadioGroupChangeReason,
   string | undefined
 >;
 
+/**
+ * Options accepted by the Radio Group primitive radio group change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupChangeOptions } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupChangeOptions = {} as RadioGroupChangeOptions;
+ * ```
+ */
 export interface RadioGroupChangeOptions {
   onValueChange?: (detail: RadioGroupChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Radio Group primitive radio group change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupChangeResult } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupChangeResult = {} as RadioGroupChangeResult;
+ * ```
+ */
 export interface RadioGroupChangeResult {
   changed: boolean;
   detail?: RadioGroupChangeDetail;
   value: string | undefined;
 }
 
+/**
+ * Result returned by the Radio Group primitive radio group move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupMoveResult } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupMoveResult = {} as RadioGroupMoveResult;
+ * ```
+ */
 export interface RadioGroupMoveResult {
   index: number;
   value: string | undefined;
 }
 
+/**
+ * Serializable attribute record returned by Radio Group primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupPrimitiveAttributes } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupPrimitiveAttributes = {} as RadioGroupPrimitiveAttributes;
+ * ```
+ */
 export type RadioGroupPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupItemEvent } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupItemEvent = {} as RadioGroupItemEvent;
+ * ```
+ */
 export type RadioGroupItemEvent = Event;
+
+/**
+ * Event shape consumed by the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { RadioGroupKeyboardEvent } from '@kovojs/headless-ui/radio-group';
+ *
+ * const value: RadioGroupKeyboardEvent = {} as RadioGroupKeyboardEvent;
+ * ```
+ */
 export type RadioGroupKeyboardEvent = Event & { readonly key: string };
 
+/**
+ * Computes radio group item checked for the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { radioGroupItemChecked } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof radioGroupItemChecked>[0];
+ * const result = radioGroupItemChecked(input);
+ * ```
+ */
 export function radioGroupItemChecked(options: RadioGroupItemAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
 
+/**
+ * Computes radio group roving index for the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { radioGroupRovingIndex } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof radioGroupRovingIndex>[0];
+ * const result = radioGroupRovingIndex(input);
+ * ```
+ */
 export function radioGroupRovingIndex(state: RadioGroupState): number {
   const items = state.items ?? [];
   if (items.length === 0) return -1;
@@ -99,6 +294,21 @@ export function radioGroupRovingIndex(state: RadioGroupState): number {
   });
 }
 
+/**
+ * Builds the radio group root attributes record for the Radio Group primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { radioGroupRootAttributes } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof radioGroupRootAttributes>[0];
+ * const result = radioGroupRootAttributes(input);
+ * ```
+ */
 export function radioGroupRootAttributes(
   options: RadioGroupRootAttributeOptions = {},
 ): RadioGroupPrimitiveAttributes {
@@ -116,6 +326,19 @@ export function radioGroupRootAttributes(
   });
 }
 
+/**
+ * Builds the radio group item attributes record for the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { radioGroupItemAttributes } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof radioGroupItemAttributes>[0];
+ * const result = radioGroupItemAttributes(input);
+ * ```
+ */
 export function radioGroupItemAttributes(
   options: RadioGroupItemAttributeOptions,
 ): RadioGroupPrimitiveAttributes {
@@ -125,6 +348,21 @@ export function radioGroupItemAttributes(
   });
 }
 
+/**
+ * Builds the radio group radio attributes record for the Radio Group primitive.
+ *
+ * Emits `aria-checked`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { radioGroupRadioAttributes } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof radioGroupRadioAttributes>[0];
+ * const result = radioGroupRadioAttributes(input);
+ * ```
+ */
 export function radioGroupRadioAttributes(
   options: RadioGroupRadioAttributeOptions,
 ): RadioGroupPrimitiveAttributes {
@@ -148,6 +386,19 @@ export function radioGroupRadioAttributes(
   });
 }
 
+/**
+ * Builds the radio group label attributes record for the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { radioGroupLabelAttributes } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof radioGroupLabelAttributes>[0];
+ * const result = radioGroupLabelAttributes(input);
+ * ```
+ */
 export function radioGroupLabelAttributes(
   options: RadioGroupLabelAttributeOptions,
 ): RadioGroupPrimitiveAttributes {
@@ -158,6 +409,22 @@ export function radioGroupLabelAttributes(
   });
 }
 
+/**
+ * Computes the set radio group value transition for the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setRadioGroupValue } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof setRadioGroupValue>[0];
+ * const state = {} as Parameters<typeof setRadioGroupValue>[1];
+ * const options = {} as Parameters<typeof setRadioGroupValue>[2];
+ * const detail = {} as Parameters<typeof setRadioGroupValue>[3];
+ * const result = setRadioGroupValue(input, state, options, detail);
+ * ```
+ */
 export function setRadioGroupValue(
   state: RadioGroupState,
   value: string | undefined,
@@ -176,6 +443,20 @@ export function setRadioGroupValue(
   return { changed: true, detail, value };
 }
 
+/**
+ * Computes radio group move value for the Radio Group primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { radioGroupMoveValue } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof radioGroupMoveValue>[0];
+ * const state = {} as Parameters<typeof radioGroupMoveValue>[1];
+ * const result = radioGroupMoveValue(input, state);
+ * ```
+ */
 export function radioGroupMoveValue(
   state: RadioGroupState,
   intent: NavigationIntent,
@@ -199,6 +480,18 @@ export function radioGroupMoveValue(
 }
 
 /**
+ * Handles the radio group item click interaction for the Radio Group primitive.
+ *
+ * @example
+ * ```ts
+ * import { radioGroupItemClick } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof radioGroupItemClick>[0];
+ * const state = {} as Parameters<typeof radioGroupItemClick>[1];
+ * const options = {} as Parameters<typeof radioGroupItemClick>[2];
+ * const result = radioGroupItemClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -220,6 +513,18 @@ export function radioGroupItemClick(
 }
 
 /**
+ * Handles the radio group key down interaction for the Radio Group primitive.
+ *
+ * @example
+ * ```ts
+ * import { radioGroupKeyDown } from '@kovojs/headless-ui/radio-group';
+ *
+ * const input = {} as Parameters<typeof radioGroupKeyDown>[0];
+ * const state = {} as Parameters<typeof radioGroupKeyDown>[1];
+ * const options = {} as Parameters<typeof radioGroupKeyDown>[2];
+ * const result = radioGroupKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

@@ -14,6 +14,18 @@ import {
   type TypeaheadState,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuItem } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuItem = {} as DropdownMenuItem;
+ * ```
+ */
 export interface DropdownMenuItem {
   disabled?: boolean;
   label?: string;
@@ -21,6 +33,18 @@ export interface DropdownMenuItem {
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuState } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuState = {} as DropdownMenuState;
+ * ```
+ */
 export interface DropdownMenuState {
   disabled?: boolean;
   highlightedValue?: string;
@@ -28,21 +52,69 @@ export interface DropdownMenuState {
   open?: boolean;
 }
 
+/**
+ * Options accepted by the Dropdown Menu primitive dropdown menu root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuRootAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuRootAttributeOptions = {} as DropdownMenuRootAttributeOptions;
+ * ```
+ */
 export interface DropdownMenuRootAttributeOptions extends DropdownMenuState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Dropdown Menu primitive dropdown menu trigger attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuTriggerAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuTriggerAttributeOptions = {} as DropdownMenuTriggerAttributeOptions;
+ * ```
+ */
 export interface DropdownMenuTriggerAttributeOptions extends DropdownMenuState {
   contentId?: string;
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Dropdown Menu primitive dropdown menu content attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuContentAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuContentAttributeOptions = {} as DropdownMenuContentAttributeOptions;
+ * ```
+ */
 export interface DropdownMenuContentAttributeOptions extends DropdownMenuState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Dropdown Menu primitive dropdown menu item attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuItemAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuItemAttributeOptions = {} as DropdownMenuItemAttributeOptions;
+ * ```
+ */
 export interface DropdownMenuItemAttributeOptions extends DropdownMenuState {
   id?: string;
   itemDisabled?: boolean;
@@ -50,15 +122,51 @@ export interface DropdownMenuItemAttributeOptions extends DropdownMenuState {
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Dropdown Menu primitive dropdown menu group attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuGroupAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuGroupAttributeOptions = {} as DropdownMenuGroupAttributeOptions;
+ * ```
+ */
 export interface DropdownMenuGroupAttributeOptions extends DropdownMenuState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Dropdown Menu primitive dropdown menu separator attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuSeparatorAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuSeparatorAttributeOptions = {} as DropdownMenuSeparatorAttributeOptions;
+ * ```
+ */
 export interface DropdownMenuSeparatorAttributeOptions {
   id?: string;
 }
 
+/**
+ * Reason token reported by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuOpenChangeReason } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuOpenChangeReason = {} as DropdownMenuOpenChangeReason;
+ * ```
+ */
 export type DropdownMenuOpenChangeReason =
   | 'arrow-key'
   | 'escape-key'
@@ -66,26 +174,98 @@ export type DropdownMenuOpenChangeReason =
   | 'programmatic'
   | 'trigger-click';
 
+/**
+ * Reason token reported by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuSelectReason } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuSelectReason = {} as DropdownMenuSelectReason;
+ * ```
+ */
 export type DropdownMenuSelectReason = 'item-click' | 'item-keyboard' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuOpenChangeDetail } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuOpenChangeDetail = {} as DropdownMenuOpenChangeDetail;
+ * ```
+ */
 export type DropdownMenuOpenChangeDetail = PrimitiveChangeDetail<
   DropdownMenuOpenChangeReason,
   boolean
 >;
 
+/**
+ * Cancelable change detail emitted by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuSelectDetail } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuSelectDetail = {} as DropdownMenuSelectDetail;
+ * ```
+ */
 export type DropdownMenuSelectDetail = PrimitiveChangeDetail<DropdownMenuSelectReason, string>;
 
+/**
+ * Options accepted by the Dropdown Menu primitive dropdown menu change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuChangeOptions } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuChangeOptions = {} as DropdownMenuChangeOptions;
+ * ```
+ */
 export interface DropdownMenuChangeOptions {
   onOpenChange?: (detail: DropdownMenuOpenChangeDetail) => void;
   onSelect?: (detail: DropdownMenuSelectDetail) => void;
 }
 
+/**
+ * Result returned by the Dropdown Menu primitive dropdown menu open change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuOpenChangeResult } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuOpenChangeResult = {} as DropdownMenuOpenChangeResult;
+ * ```
+ */
 export interface DropdownMenuOpenChangeResult {
   changed: boolean;
   detail?: DropdownMenuOpenChangeDetail;
   open: boolean;
 }
 
+/**
+ * Result returned by the Dropdown Menu primitive dropdown menu select.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuSelectResult } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuSelectResult = {} as DropdownMenuSelectResult;
+ * ```
+ */
 export interface DropdownMenuSelectResult {
   detail?: DropdownMenuSelectDetail;
   open: DropdownMenuOpenChangeResult;
@@ -93,11 +273,35 @@ export interface DropdownMenuSelectResult {
   value: string;
 }
 
+/**
+ * Result returned by the Dropdown Menu primitive dropdown menu move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuMoveResult } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuMoveResult = {} as DropdownMenuMoveResult;
+ * ```
+ */
 export interface DropdownMenuMoveResult {
   highlightedIndex: number;
   highlightedValue: string | undefined;
 }
 
+/**
+ * Options accepted by the Dropdown Menu primitive dropdown menu typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuTypeaheadOptions } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuTypeaheadOptions = {} as DropdownMenuTypeaheadOptions;
+ * ```
+ */
 export interface DropdownMenuTypeaheadOptions {
   currentValue?: string;
   loop?: boolean;
@@ -106,16 +310,91 @@ export interface DropdownMenuTypeaheadOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Result returned by the Dropdown Menu primitive dropdown menu typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuTypeaheadResult } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuTypeaheadResult = {} as DropdownMenuTypeaheadResult;
+ * ```
+ */
 export interface DropdownMenuTypeaheadResult extends DropdownMenuMoveResult {
   state: TypeaheadState;
 }
 
+/**
+ * Serializable attribute record returned by Dropdown Menu primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuPrimitiveAttributes } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuPrimitiveAttributes = {} as DropdownMenuPrimitiveAttributes;
+ * ```
+ */
 export type DropdownMenuPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuTriggerEvent } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuTriggerEvent = {} as DropdownMenuTriggerEvent;
+ * ```
+ */
 export type DropdownMenuTriggerEvent = Event;
+
+/**
+ * Event shape consumed by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuItemEvent } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuItemEvent = {} as DropdownMenuItemEvent;
+ * ```
+ */
 export type DropdownMenuItemEvent = Event;
+
+/**
+ * Event shape consumed by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuKeyboardEvent } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuKeyboardEvent = {} as DropdownMenuKeyboardEvent;
+ * ```
+ */
 export type DropdownMenuKeyboardEvent = Event & { readonly key: string };
+
+/**
+ * Event shape consumed by the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuFocusEvent } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuFocusEvent = {} as DropdownMenuFocusEvent;
+ * ```
+ */
 export type DropdownMenuFocusEvent = Event & {
   readonly currentTarget?: {
     ownerDocument?: {
@@ -128,11 +407,37 @@ export type DropdownMenuFocusEvent = Event & {
     };
   } | null;
 };
+
+/**
+ * Options accepted by the Dropdown Menu primitive dropdown menu focus.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DropdownMenuFocusOptions } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const value: DropdownMenuFocusOptions = {} as DropdownMenuFocusOptions;
+ * ```
+ */
 export interface DropdownMenuFocusOptions {
   defer?: boolean;
   schedule?: (callback: () => void) => void;
 }
 
+/**
+ * Builds the dropdown menu root attributes record for the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuRootAttributes } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuRootAttributes>[0];
+ * const result = dropdownMenuRootAttributes(input);
+ * ```
+ */
 export function dropdownMenuRootAttributes(
   options: DropdownMenuRootAttributeOptions = {},
 ): DropdownMenuPrimitiveAttributes {
@@ -142,6 +447,21 @@ export function dropdownMenuRootAttributes(
   });
 }
 
+/**
+ * Builds the dropdown menu trigger attributes record for the Dropdown Menu primitive.
+ *
+ * Emits `aria-controls`, `aria-expanded`, `aria-haspopup`, `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuTriggerAttributes } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuTriggerAttributes>[0];
+ * const result = dropdownMenuTriggerAttributes(input);
+ * ```
+ */
 export function dropdownMenuTriggerAttributes(
   options: DropdownMenuTriggerAttributeOptions = {},
 ): DropdownMenuPrimitiveAttributes {
@@ -159,6 +479,21 @@ export function dropdownMenuTriggerAttributes(
   });
 }
 
+/**
+ * Builds the dropdown menu content attributes record for the Dropdown Menu primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuContentAttributes } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuContentAttributes>[0];
+ * const result = dropdownMenuContentAttributes(input);
+ * ```
+ */
 export function dropdownMenuContentAttributes(
   options: DropdownMenuContentAttributeOptions = {},
 ): DropdownMenuPrimitiveAttributes {
@@ -172,6 +507,21 @@ export function dropdownMenuContentAttributes(
   });
 }
 
+/**
+ * Builds the dropdown menu item attributes record for the Dropdown Menu primitive.
+ *
+ * Emits `aria-disabled`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuItemAttributes } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuItemAttributes>[0];
+ * const result = dropdownMenuItemAttributes(input);
+ * ```
+ */
 export function dropdownMenuItemAttributes(
   options: DropdownMenuItemAttributeOptions,
 ): DropdownMenuPrimitiveAttributes {
@@ -189,6 +539,21 @@ export function dropdownMenuItemAttributes(
   });
 }
 
+/**
+ * Builds the dropdown menu group attributes record for the Dropdown Menu primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuGroupAttributes } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuGroupAttributes>[0];
+ * const result = dropdownMenuGroupAttributes(input);
+ * ```
+ */
 export function dropdownMenuGroupAttributes(
   options: DropdownMenuGroupAttributeOptions = {},
 ): DropdownMenuPrimitiveAttributes {
@@ -200,6 +565,19 @@ export function dropdownMenuGroupAttributes(
   });
 }
 
+/**
+ * Builds the dropdown menu separator attributes record for the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuSeparatorAttributes } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuSeparatorAttributes>[0];
+ * const result = dropdownMenuSeparatorAttributes(input);
+ * ```
+ */
 export function dropdownMenuSeparatorAttributes(
   options: DropdownMenuSeparatorAttributeOptions = {},
 ): DropdownMenuPrimitiveAttributes {
@@ -209,10 +587,39 @@ export function dropdownMenuSeparatorAttributes(
   });
 }
 
+/**
+ * Computes dropdown menu item highlighted for the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuItemHighlighted } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuItemHighlighted>[0];
+ * const result = dropdownMenuItemHighlighted(input);
+ * ```
+ */
 export function dropdownMenuItemHighlighted(options: DropdownMenuItemAttributeOptions): boolean {
   return options.highlightedValue === options.itemValue;
 }
 
+/**
+ * Computes the set dropdown menu open transition for the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setDropdownMenuOpen } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof setDropdownMenuOpen>[0];
+ * const state = {} as Parameters<typeof setDropdownMenuOpen>[1];
+ * const options = {} as Parameters<typeof setDropdownMenuOpen>[2];
+ * const detail = {} as Parameters<typeof setDropdownMenuOpen>[3];
+ * const result = setDropdownMenuOpen(input, state, options, detail);
+ * ```
+ */
 export function setDropdownMenuOpen(
   state: DropdownMenuState,
   open: boolean,
@@ -231,6 +638,21 @@ export function setDropdownMenuOpen(
   return { changed: true, detail, open };
 }
 
+/**
+ * Computes the toggle dropdown menu transition for the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { toggleDropdownMenu } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof toggleDropdownMenu>[0];
+ * const state = {} as Parameters<typeof toggleDropdownMenu>[1];
+ * const options = {} as Parameters<typeof toggleDropdownMenu>[2];
+ * const result = toggleDropdownMenu(input, state, options);
+ * ```
+ */
 export function toggleDropdownMenu(
   state: DropdownMenuState,
   reason: DropdownMenuOpenChangeReason,
@@ -239,6 +661,22 @@ export function toggleDropdownMenu(
   return setDropdownMenuOpen(state, !(state.open === true), reason, options);
 }
 
+/**
+ * Computes the select dropdown menu item transition for the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectDropdownMenuItem } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof selectDropdownMenuItem>[0];
+ * const state = {} as Parameters<typeof selectDropdownMenuItem>[1];
+ * const options = {} as Parameters<typeof selectDropdownMenuItem>[2];
+ * const detail = {} as Parameters<typeof selectDropdownMenuItem>[3];
+ * const result = selectDropdownMenuItem(input, state, options, detail);
+ * ```
+ */
 export function selectDropdownMenuItem(
   state: DropdownMenuState,
   value: string,
@@ -281,6 +719,21 @@ export function selectDropdownMenuItem(
   };
 }
 
+/**
+ * Computes dropdown menu move for the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuMove } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuMove>[0];
+ * const state = {} as Parameters<typeof dropdownMenuMove>[1];
+ * const options = {} as Parameters<typeof dropdownMenuMove>[2];
+ * const result = dropdownMenuMove(input, state, options);
+ * ```
+ */
 export function dropdownMenuMove(
   state: DropdownMenuState,
   key: string,
@@ -305,6 +758,21 @@ export function dropdownMenuMove(
   };
 }
 
+/**
+ * Computes dropdown menu typeahead for the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuTypeahead } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuTypeahead>[0];
+ * const state = {} as Parameters<typeof dropdownMenuTypeahead>[1];
+ * const options = {} as Parameters<typeof dropdownMenuTypeahead>[2];
+ * const result = dropdownMenuTypeahead(input, state, options);
+ * ```
+ */
 export function dropdownMenuTypeahead(
   state: DropdownMenuState,
   key: string,
@@ -349,6 +817,18 @@ export function dropdownMenuTypeahead(
 }
 
 /**
+ * Handles the dropdown menu trigger click interaction for the Dropdown Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuTriggerClick } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuTriggerClick>[0];
+ * const state = {} as Parameters<typeof dropdownMenuTriggerClick>[1];
+ * const options = {} as Parameters<typeof dropdownMenuTriggerClick>[2];
+ * const result = dropdownMenuTriggerClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -370,6 +850,18 @@ export function dropdownMenuTriggerClick(
 }
 
 /**
+ * Handles the dropdown menu trigger key down interaction for the Dropdown Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuTriggerKeyDown } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuTriggerKeyDown>[0];
+ * const state = {} as Parameters<typeof dropdownMenuTriggerKeyDown>[1];
+ * const options = {} as Parameters<typeof dropdownMenuTriggerKeyDown>[2];
+ * const result = dropdownMenuTriggerKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -390,6 +882,18 @@ export function dropdownMenuTriggerKeyDown(
 }
 
 /**
+ * Handles the dropdown menu item click interaction for the Dropdown Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuItemClick } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuItemClick>[0];
+ * const state = {} as Parameters<typeof dropdownMenuItemClick>[1];
+ * const options = {} as Parameters<typeof dropdownMenuItemClick>[2];
+ * const result = dropdownMenuItemClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -411,6 +915,18 @@ export function dropdownMenuItemClick(
 }
 
 /**
+ * Handles the dropdown menu item key down interaction for the Dropdown Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuItemKeyDown } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuItemKeyDown>[0];
+ * const state = {} as Parameters<typeof dropdownMenuItemKeyDown>[1];
+ * const options = {} as Parameters<typeof dropdownMenuItemKeyDown>[2];
+ * const result = dropdownMenuItemKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -431,6 +947,18 @@ export function dropdownMenuItemKeyDown(
 }
 
 /**
+ * Handles the dropdown menu key down interaction for the Dropdown Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuKeyDown } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuKeyDown>[0];
+ * const state = {} as Parameters<typeof dropdownMenuKeyDown>[1];
+ * const options = {} as Parameters<typeof dropdownMenuKeyDown>[2];
+ * const result = dropdownMenuKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -458,6 +986,21 @@ export function dropdownMenuKeyDown(
   return undefined;
 }
 
+/**
+ * Handles the dropdown menu focus element interaction for the Dropdown Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dropdownMenuFocusElement } from '@kovojs/headless-ui/dropdown-menu';
+ *
+ * const input = {} as Parameters<typeof dropdownMenuFocusElement>[0];
+ * const state = {} as Parameters<typeof dropdownMenuFocusElement>[1];
+ * const options = {} as Parameters<typeof dropdownMenuFocusElement>[2];
+ * const result = dropdownMenuFocusElement(input, state, options);
+ * ```
+ */
 export function dropdownMenuFocusElement(
   event: DropdownMenuFocusEvent,
   id: string | undefined,

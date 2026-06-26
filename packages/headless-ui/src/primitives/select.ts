@@ -13,6 +13,18 @@ import {
   type TypeaheadState,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectItem } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectItem = {} as SelectItem;
+ * ```
+ */
 export interface SelectItem {
   disabled?: boolean;
   id?: string;
@@ -21,6 +33,18 @@ export interface SelectItem {
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectState } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectState = {} as SelectState;
+ * ```
+ */
 export interface SelectState {
   disabled?: boolean;
   form?: string;
@@ -35,10 +59,34 @@ export interface SelectState {
   value?: string;
 }
 
+/**
+ * Options accepted by the Select primitive select root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectRootAttributeOptions } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectRootAttributeOptions = {} as SelectRootAttributeOptions;
+ * ```
+ */
 export interface SelectRootAttributeOptions extends SelectState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Select primitive select trigger attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectTriggerAttributeOptions } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectTriggerAttributeOptions = {} as SelectTriggerAttributeOptions;
+ * ```
+ */
 export interface SelectTriggerAttributeOptions extends SelectState {
   descriptionId?: string;
   errorId?: string;
@@ -46,13 +94,49 @@ export interface SelectTriggerAttributeOptions extends SelectState {
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Select primitive select hidden input attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectHiddenInputAttributeOptions } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectHiddenInputAttributeOptions = {} as SelectHiddenInputAttributeOptions;
+ * ```
+ */
 export interface SelectHiddenInputAttributeOptions extends SelectState {}
 
+/**
+ * Options accepted by the Select primitive select content attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectContentAttributeOptions } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectContentAttributeOptions = {} as SelectContentAttributeOptions;
+ * ```
+ */
 export interface SelectContentAttributeOptions extends SelectState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Select primitive select item attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectItemAttributeOptions } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectItemAttributeOptions = {} as SelectItemAttributeOptions;
+ * ```
+ */
 export interface SelectItemAttributeOptions extends SelectState {
   id?: string;
   itemDisabled?: boolean;
@@ -60,12 +144,48 @@ export interface SelectItemAttributeOptions extends SelectState {
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Select primitive select value attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectValueAttributeOptions } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectValueAttributeOptions = {} as SelectValueAttributeOptions;
+ * ```
+ */
 export interface SelectValueAttributeOptions extends SelectState {
   id?: string;
 }
 
+/**
+ * Reason token reported by the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectChangeReason } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectChangeReason = {} as SelectChangeReason;
+ * ```
+ */
 export type SelectChangeReason = 'item-select' | 'programmatic' | 'trigger-change';
 
+/**
+ * Reason token reported by the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectOpenChangeReason } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectOpenChangeReason = {} as SelectOpenChangeReason;
+ * ```
+ */
 export type SelectOpenChangeReason =
   | 'arrow-key'
   | 'escape-key'
@@ -74,36 +194,133 @@ export type SelectOpenChangeReason =
   | 'trigger-click'
   | 'typeahead';
 
+/**
+ * Cancelable change detail emitted by the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectChangeDetail } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectChangeDetail = {} as SelectChangeDetail;
+ * ```
+ */
 export type SelectChangeDetail = PrimitiveChangeDetail<SelectChangeReason, string | undefined>;
+
+/**
+ * Cancelable change detail emitted by the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectOpenChangeDetail } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectOpenChangeDetail = {} as SelectOpenChangeDetail;
+ * ```
+ */
 export type SelectOpenChangeDetail = PrimitiveChangeDetail<SelectOpenChangeReason, boolean>;
 
+/**
+ * Options accepted by the Select primitive select change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectChangeOptions } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectChangeOptions = {} as SelectChangeOptions;
+ * ```
+ */
 export interface SelectChangeOptions {
   onOpenChange?: (detail: SelectOpenChangeDetail) => void;
   onValueChange?: (detail: SelectChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Select primitive select change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectChangeResult } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectChangeResult = {} as SelectChangeResult;
+ * ```
+ */
 export interface SelectChangeResult {
   changed: boolean;
   detail?: SelectChangeDetail;
   value: string | undefined;
 }
 
+/**
+ * Result returned by the Select primitive select open change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectOpenChangeResult } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectOpenChangeResult = {} as SelectOpenChangeResult;
+ * ```
+ */
 export interface SelectOpenChangeResult {
   changed: boolean;
   detail?: SelectOpenChangeDetail;
   open: boolean;
 }
 
+/**
+ * Result returned by the Select primitive select move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectMoveResult } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectMoveResult = {} as SelectMoveResult;
+ * ```
+ */
 export interface SelectMoveResult {
   highlightedIndex: number;
   highlightedValue: string | undefined;
 }
 
+/**
+ * Result returned by the Select primitive select option select.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectOptionSelectResult } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectOptionSelectResult = {} as SelectOptionSelectResult;
+ * ```
+ */
 export interface SelectOptionSelectResult {
   open: SelectOpenChangeResult;
   value: SelectChangeResult;
 }
 
+/**
+ * Options accepted by the Select primitive select typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectTypeaheadOptions } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectTypeaheadOptions = {} as SelectTypeaheadOptions;
+ * ```
+ */
 export interface SelectTypeaheadOptions {
   currentValue?: string;
   loop?: boolean;
@@ -112,30 +329,131 @@ export interface SelectTypeaheadOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Result returned by the Select primitive select typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectTypeaheadResult } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectTypeaheadResult = {} as SelectTypeaheadResult;
+ * ```
+ */
 export interface SelectTypeaheadResult {
   matchIndex: number;
   state: TypeaheadState;
   value: string | undefined;
 }
 
+/**
+ * Serializable attribute record returned by Select primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectPrimitiveAttributes } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectPrimitiveAttributes = {} as SelectPrimitiveAttributes;
+ * ```
+ */
 export type SelectPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectTriggerEvent } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectTriggerEvent = {} as SelectTriggerEvent;
+ * ```
+ */
 export type SelectTriggerEvent = Event & {
   readonly currentTarget: EventTarget & { value?: string };
 };
+
+/**
+ * Event shape consumed by the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectKeyboardEvent } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectKeyboardEvent = {} as SelectKeyboardEvent;
+ * ```
+ */
 export type SelectKeyboardEvent = Event & { readonly key: string };
+
+/**
+ * Event shape consumed by the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectItemEvent } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectItemEvent = {} as SelectItemEvent;
+ * ```
+ */
 export type SelectItemEvent = Event;
+
+/**
+ * Result returned by the Select primitive select keyboard.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectKeyboardResult } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectKeyboardResult = {} as SelectKeyboardResult;
+ * ```
+ */
 export type SelectKeyboardResult =
   | SelectMoveResult
   | SelectOpenChangeResult
   | SelectOptionSelectResult
   | SelectTypeaheadResult;
 
+/**
+ * Computes the select item selected transition for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectItemSelected } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectItemSelected>[0];
+ * const result = selectItemSelected(input);
+ * ```
+ */
 export function selectItemSelected(options: SelectItemAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
 
+/**
+ * Computes the select value text transition for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectValueText } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectValueText>[0];
+ * const result = selectValueText(input);
+ * ```
+ */
 export function selectValueText(state: SelectState): string {
   const selected = state.items?.find((item) => item.value === state.value);
   if (selected) return selected.label ?? selected.textValue ?? selected.value;
@@ -143,6 +461,19 @@ export function selectValueText(state: SelectState): string {
   return state.value;
 }
 
+/**
+ * Builds the select root attributes record for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectRootAttributes } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectRootAttributes>[0];
+ * const result = selectRootAttributes(input);
+ * ```
+ */
 export function selectRootAttributes(
   options: SelectRootAttributeOptions = {},
 ): SelectPrimitiveAttributes {
@@ -152,6 +483,21 @@ export function selectRootAttributes(
   });
 }
 
+/**
+ * Builds the select trigger attributes record for the Select primitive.
+ *
+ * Emits `aria-activedescendant`, `aria-controls`, `aria-expanded`, `aria-haspopup`, `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectTriggerAttributes } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectTriggerAttributes>[0];
+ * const result = selectTriggerAttributes(input);
+ * ```
+ */
 export function selectTriggerAttributes(
   options: SelectTriggerAttributeOptions = {},
 ): SelectPrimitiveAttributes {
@@ -177,6 +523,21 @@ export function selectTriggerAttributes(
   });
 }
 
+/**
+ * Builds the select hidden input attributes record for the Select primitive.
+ *
+ * Emits `hidden`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectHiddenInputAttributes } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectHiddenInputAttributes>[0];
+ * const result = selectHiddenInputAttributes(input);
+ * ```
+ */
 export function selectHiddenInputAttributes(
   options: SelectHiddenInputAttributeOptions = {},
 ): SelectPrimitiveAttributes {
@@ -189,6 +550,21 @@ export function selectHiddenInputAttributes(
   });
 }
 
+/**
+ * Builds the select content attributes record for the Select primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectContentAttributes } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectContentAttributes>[0];
+ * const result = selectContentAttributes(input);
+ * ```
+ */
 export function selectContentAttributes(
   options: SelectContentAttributeOptions = {},
 ): SelectPrimitiveAttributes {
@@ -201,6 +577,19 @@ export function selectContentAttributes(
   });
 }
 
+/**
+ * Builds the select item attributes record for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectItemAttributes } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectItemAttributes>[0];
+ * const result = selectItemAttributes(input);
+ * ```
+ */
 export function selectItemAttributes(
   options: SelectItemAttributeOptions,
 ): SelectPrimitiveAttributes {
@@ -223,6 +612,19 @@ export function selectItemAttributes(
   });
 }
 
+/**
+ * Builds the select value attributes record for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectValueAttributes } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectValueAttributes>[0];
+ * const result = selectValueAttributes(input);
+ * ```
+ */
 export function selectValueAttributes(
   options: SelectValueAttributeOptions = {},
 ): SelectPrimitiveAttributes {
@@ -232,6 +634,22 @@ export function selectValueAttributes(
   });
 }
 
+/**
+ * Computes the set select value transition for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setSelectValue } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof setSelectValue>[0];
+ * const state = {} as Parameters<typeof setSelectValue>[1];
+ * const options = {} as Parameters<typeof setSelectValue>[2];
+ * const detail = {} as Parameters<typeof setSelectValue>[3];
+ * const result = setSelectValue(input, state, options, detail);
+ * ```
+ */
 export function setSelectValue(
   state: SelectState,
   value: string | undefined,
@@ -250,6 +668,22 @@ export function setSelectValue(
   return { changed: true, detail, value };
 }
 
+/**
+ * Computes the set select open transition for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setSelectOpen } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof setSelectOpen>[0];
+ * const state = {} as Parameters<typeof setSelectOpen>[1];
+ * const options = {} as Parameters<typeof setSelectOpen>[2];
+ * const detail = {} as Parameters<typeof setSelectOpen>[3];
+ * const result = setSelectOpen(input, state, options, detail);
+ * ```
+ */
 export function setSelectOpen(
   state: SelectState,
   open: boolean,
@@ -268,6 +702,21 @@ export function setSelectOpen(
   return { changed: true, detail, open };
 }
 
+/**
+ * Computes the select option transition for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectOption } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectOption>[0];
+ * const state = {} as Parameters<typeof selectOption>[1];
+ * const options = {} as Parameters<typeof selectOption>[2];
+ * const result = selectOption(input, state, options);
+ * ```
+ */
 export function selectOption(
   state: SelectState,
   value: string | undefined,
@@ -299,6 +748,21 @@ export function selectOption(
   };
 }
 
+/**
+ * Computes the select move transition for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectMove } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectMove>[0];
+ * const state = {} as Parameters<typeof selectMove>[1];
+ * const options = {} as Parameters<typeof selectMove>[2];
+ * const result = selectMove(input, state, options);
+ * ```
+ */
 export function selectMove(
   state: SelectState,
   key: string,
@@ -328,6 +792,21 @@ export function selectMove(
   };
 }
 
+/**
+ * Computes the select typeahead transition for the Select primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectTypeahead } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectTypeahead>[0];
+ * const state = {} as Parameters<typeof selectTypeahead>[1];
+ * const options = {} as Parameters<typeof selectTypeahead>[2];
+ * const result = selectTypeahead(input, state, options);
+ * ```
+ */
 export function selectTypeahead(
   state: SelectState,
   key: string,
@@ -366,6 +845,18 @@ export function selectTypeahead(
 }
 
 /**
+ * Computes the select trigger change transition for the Select primitive.
+ *
+ * @example
+ * ```ts
+ * import { selectTriggerChange } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectTriggerChange>[0];
+ * const state = {} as Parameters<typeof selectTriggerChange>[1];
+ * const options = {} as Parameters<typeof selectTriggerChange>[2];
+ * const result = selectTriggerChange(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -388,6 +879,18 @@ export function selectTriggerChange(
 }
 
 /**
+ * Computes the select trigger click transition for the Select primitive.
+ *
+ * @example
+ * ```ts
+ * import { selectTriggerClick } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectTriggerClick>[0];
+ * const state = {} as Parameters<typeof selectTriggerClick>[1];
+ * const options = {} as Parameters<typeof selectTriggerClick>[2];
+ * const result = selectTriggerClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -406,6 +909,18 @@ export function selectTriggerClick(
 }
 
 /**
+ * Computes the select item click transition for the Select primitive.
+ *
+ * @example
+ * ```ts
+ * import { selectItemClick } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectItemClick>[0];
+ * const state = {} as Parameters<typeof selectItemClick>[1];
+ * const options = {} as Parameters<typeof selectItemClick>[2];
+ * const result = selectItemClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -427,6 +942,18 @@ export function selectItemClick(
 }
 
 /**
+ * Computes the select key down transition for the Select primitive.
+ *
+ * @example
+ * ```ts
+ * import { selectKeyDown } from '@kovojs/headless-ui/select';
+ *
+ * const input = {} as Parameters<typeof selectKeyDown>[0];
+ * const state = {} as Parameters<typeof selectKeyDown>[1];
+ * const options = {} as Parameters<typeof selectKeyDown>[2];
+ * const result = selectKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

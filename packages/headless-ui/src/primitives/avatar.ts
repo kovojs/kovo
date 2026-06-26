@@ -1,12 +1,48 @@
 import { type PrimitiveDataAttributes } from '../lib/index.js';
 
+/**
+ * Public type used by the Avatar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AvatarImageStatus } from '@kovojs/headless-ui/avatar';
+ *
+ * const value: AvatarImageStatus = {} as AvatarImageStatus;
+ * ```
+ */
 export type AvatarImageStatus = 'error' | 'loaded' | 'loading';
 
+/**
+ * State snapshot consumed by the Avatar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AvatarState } from '@kovojs/headless-ui/avatar';
+ *
+ * const value: AvatarState = {} as AvatarState;
+ * ```
+ */
 export interface AvatarState {
   src?: string;
   status?: AvatarImageStatus;
 }
 
+/**
+ * State snapshot consumed by the Avatar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AvatarComputedState } from '@kovojs/headless-ui/avatar';
+ *
+ * const value: AvatarComputedState = {} as AvatarComputedState;
+ * ```
+ */
 export interface AvatarComputedState {
   fallbackHidden: boolean;
   imageHidden: boolean;
@@ -14,10 +50,34 @@ export interface AvatarComputedState {
   status: AvatarImageStatus;
 }
 
+/**
+ * Options accepted by the Avatar primitive avatar root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AvatarRootAttributeOptions } from '@kovojs/headless-ui/avatar';
+ *
+ * const value: AvatarRootAttributeOptions = {} as AvatarRootAttributeOptions;
+ * ```
+ */
 export interface AvatarRootAttributeOptions extends AvatarState {
   label?: string;
 }
 
+/**
+ * Options accepted by the Avatar primitive avatar image attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AvatarImageAttributeOptions } from '@kovojs/headless-ui/avatar';
+ *
+ * const value: AvatarImageAttributeOptions = {} as AvatarImageAttributeOptions;
+ * ```
+ */
 export interface AvatarImageAttributeOptions extends AvatarState {
   alt: string;
   decoding?: 'async' | 'auto' | 'sync';
@@ -27,13 +87,50 @@ export interface AvatarImageAttributeOptions extends AvatarState {
   srcSet?: string;
 }
 
+/**
+ * Options accepted by the Avatar primitive avatar fallback attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AvatarFallbackAttributeOptions } from '@kovojs/headless-ui/avatar';
+ *
+ * const value: AvatarFallbackAttributeOptions = {} as AvatarFallbackAttributeOptions;
+ * ```
+ */
 export interface AvatarFallbackAttributeOptions extends AvatarState {
   delayMs?: number;
 }
 
+/**
+ * Serializable attribute record returned by Avatar primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AvatarPrimitiveAttributes } from '@kovojs/headless-ui/avatar';
+ *
+ * const value: AvatarPrimitiveAttributes = {} as AvatarPrimitiveAttributes;
+ * ```
+ */
 export type AvatarPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Computes avatar image state for the Avatar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { avatarImageState } from '@kovojs/headless-ui/avatar';
+ *
+ * const input = {} as Parameters<typeof avatarImageState>[0];
+ * const result = avatarImageState(input);
+ * ```
+ */
 export function avatarImageState(options: AvatarState = {}): AvatarComputedState {
   const src = normalizeAvatarSrc(options.src);
   const status = src === undefined ? 'error' : (options.status ?? 'loading');
@@ -46,6 +143,21 @@ export function avatarImageState(options: AvatarState = {}): AvatarComputedState
   });
 }
 
+/**
+ * Builds the avatar root attributes record for the Avatar primitive.
+ *
+ * Emits `aria-label`, `data-state`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { avatarRootAttributes } from '@kovojs/headless-ui/avatar';
+ *
+ * const input = {} as Parameters<typeof avatarRootAttributes>[0];
+ * const result = avatarRootAttributes(input);
+ * ```
+ */
 export function avatarRootAttributes(
   options: AvatarRootAttributeOptions = {},
 ): AvatarPrimitiveAttributes {
@@ -57,6 +169,21 @@ export function avatarRootAttributes(
   });
 }
 
+/**
+ * Builds the avatar image attributes record for the Avatar primitive.
+ *
+ * Emits `data-state`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { avatarImageAttributes } from '@kovojs/headless-ui/avatar';
+ *
+ * const input = {} as Parameters<typeof avatarImageAttributes>[0];
+ * const result = avatarImageAttributes(input);
+ * ```
+ */
 export function avatarImageAttributes(
   options: AvatarImageAttributeOptions,
 ): AvatarPrimitiveAttributes {
@@ -75,6 +202,21 @@ export function avatarImageAttributes(
   });
 }
 
+/**
+ * Builds the avatar fallback attributes record for the Avatar primitive.
+ *
+ * Emits `data-delay`, `data-state`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { avatarFallbackAttributes } from '@kovojs/headless-ui/avatar';
+ *
+ * const input = {} as Parameters<typeof avatarFallbackAttributes>[0];
+ * const result = avatarFallbackAttributes(input);
+ * ```
+ */
 export function avatarFallbackAttributes(
   options: AvatarFallbackAttributeOptions = {},
 ): AvatarPrimitiveAttributes {
@@ -87,14 +229,49 @@ export function avatarFallbackAttributes(
   });
 }
 
+/**
+ * Result returned by the Avatar primitive avatar image status.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AvatarImageStatusResult } from '@kovojs/headless-ui/avatar';
+ *
+ * const value: AvatarImageStatusResult = {} as AvatarImageStatusResult;
+ * ```
+ */
 export interface AvatarImageStatusResult {
   changed: boolean;
   status: AvatarImageStatus;
 }
 
+/**
+ * Event shape consumed by the Avatar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AvatarImageEvent } from '@kovojs/headless-ui/avatar';
+ *
+ * const value: AvatarImageEvent = {} as AvatarImageEvent;
+ * ```
+ */
 export type AvatarImageEvent = Event;
 
 /**
+ * Computes avatar image load for the Avatar primitive.
+ *
+ * @example
+ * ```ts
+ * import { avatarImageLoad } from '@kovojs/headless-ui/avatar';
+ *
+ * const input = {} as Parameters<typeof avatarImageLoad>[0];
+ * const state = {} as Parameters<typeof avatarImageLoad>[1];
+ * const result = avatarImageLoad(input, state);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * Flips the avatar to `loaded` when its `<img>` fires the native `load` event.
@@ -113,6 +290,17 @@ export function avatarImageLoad(
 }
 
 /**
+ * Computes avatar image error for the Avatar primitive.
+ *
+ * @example
+ * ```ts
+ * import { avatarImageError } from '@kovojs/headless-ui/avatar';
+ *
+ * const input = {} as Parameters<typeof avatarImageError>[0];
+ * const state = {} as Parameters<typeof avatarImageError>[1];
+ * const result = avatarImageError(input, state);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * Flips the avatar to `error` when its `<img>` fires the native `error` event, so

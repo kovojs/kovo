@@ -13,6 +13,18 @@ import {
   type TypeaheadState,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteItem } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteItem = {} as AutocompleteItem;
+ * ```
+ */
 export interface AutocompleteItem {
   disabled?: boolean;
   id?: string;
@@ -21,6 +33,18 @@ export interface AutocompleteItem {
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteState } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteState = {} as AutocompleteState;
+ * ```
+ */
 export interface AutocompleteState {
   disabled?: boolean;
   form?: string;
@@ -36,10 +60,34 @@ export interface AutocompleteState {
   value?: string;
 }
 
+/**
+ * Options accepted by the Autocomplete primitive autocomplete root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteRootAttributeOptions } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteRootAttributeOptions = {} as AutocompleteRootAttributeOptions;
+ * ```
+ */
 export interface AutocompleteRootAttributeOptions extends AutocompleteState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Autocomplete primitive autocomplete input attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteInputAttributeOptions } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteInputAttributeOptions = {} as AutocompleteInputAttributeOptions;
+ * ```
+ */
 export interface AutocompleteInputAttributeOptions extends AutocompleteState {
   autocomplete?: string;
   descriptionId?: string;
@@ -48,11 +96,35 @@ export interface AutocompleteInputAttributeOptions extends AutocompleteState {
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Autocomplete primitive autocomplete list attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteListAttributeOptions } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteListAttributeOptions = {} as AutocompleteListAttributeOptions;
+ * ```
+ */
 export interface AutocompleteListAttributeOptions extends AutocompleteState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Autocomplete primitive autocomplete option attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteOptionAttributeOptions } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteOptionAttributeOptions = {} as AutocompleteOptionAttributeOptions;
+ * ```
+ */
 export interface AutocompleteOptionAttributeOptions extends AutocompleteState {
   id?: string;
   itemDisabled?: boolean;
@@ -60,13 +132,62 @@ export interface AutocompleteOptionAttributeOptions extends AutocompleteState {
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Autocomplete primitive autocomplete value attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteValueAttributeOptions } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteValueAttributeOptions = {} as AutocompleteValueAttributeOptions;
+ * ```
+ */
 export interface AutocompleteValueAttributeOptions extends AutocompleteState {
   id?: string;
 }
 
+/**
+ * Reason token reported by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteInputChangeReason } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteInputChangeReason = {} as AutocompleteInputChangeReason;
+ * ```
+ */
 export type AutocompleteInputChangeReason = 'input' | 'option-select' | 'programmatic';
+
+/**
+ * Reason token reported by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteValueChangeReason } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteValueChangeReason = {} as AutocompleteValueChangeReason;
+ * ```
+ */
 export type AutocompleteValueChangeReason = 'option-select' | 'programmatic' | 'typeahead';
 
+/**
+ * Reason token reported by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteOpenChangeReason } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteOpenChangeReason = {} as AutocompleteOpenChangeReason;
+ * ```
+ */
 export type AutocompleteOpenChangeReason =
   | 'arrow-key'
   | 'escape-key'
@@ -75,56 +196,176 @@ export type AutocompleteOpenChangeReason =
   | 'programmatic'
   | 'typeahead';
 
+/**
+ * Cancelable change detail emitted by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteInputChangeDetail } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteInputChangeDetail = {} as AutocompleteInputChangeDetail;
+ * ```
+ */
 export type AutocompleteInputChangeDetail = PrimitiveChangeDetail<
   AutocompleteInputChangeReason,
   string
 >;
 
+/**
+ * Cancelable change detail emitted by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteValueChangeDetail } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteValueChangeDetail = {} as AutocompleteValueChangeDetail;
+ * ```
+ */
 export type AutocompleteValueChangeDetail = PrimitiveChangeDetail<
   AutocompleteValueChangeReason,
   string | undefined
 >;
 
+/**
+ * Cancelable change detail emitted by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteOpenChangeDetail } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteOpenChangeDetail = {} as AutocompleteOpenChangeDetail;
+ * ```
+ */
 export type AutocompleteOpenChangeDetail = PrimitiveChangeDetail<
   AutocompleteOpenChangeReason,
   boolean
 >;
 
+/**
+ * Options accepted by the Autocomplete primitive autocomplete change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteChangeOptions } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteChangeOptions = {} as AutocompleteChangeOptions;
+ * ```
+ */
 export interface AutocompleteChangeOptions {
   onInputValueChange?: (detail: AutocompleteInputChangeDetail) => void;
   onOpenChange?: (detail: AutocompleteOpenChangeDetail) => void;
   onValueChange?: (detail: AutocompleteValueChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Autocomplete primitive autocomplete input change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteInputChangeResult } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteInputChangeResult = {} as AutocompleteInputChangeResult;
+ * ```
+ */
 export interface AutocompleteInputChangeResult {
   changed: boolean;
   detail?: AutocompleteInputChangeDetail;
   inputValue: string;
 }
 
+/**
+ * Result returned by the Autocomplete primitive autocomplete value change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteValueChangeResult } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteValueChangeResult = {} as AutocompleteValueChangeResult;
+ * ```
+ */
 export interface AutocompleteValueChangeResult {
   changed: boolean;
   detail?: AutocompleteValueChangeDetail;
   value: string | undefined;
 }
 
+/**
+ * Result returned by the Autocomplete primitive autocomplete open change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteOpenChangeResult } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteOpenChangeResult = {} as AutocompleteOpenChangeResult;
+ * ```
+ */
 export interface AutocompleteOpenChangeResult {
   changed: boolean;
   detail?: AutocompleteOpenChangeDetail;
   open: boolean;
 }
 
+/**
+ * Result returned by the Autocomplete primitive autocomplete move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteMoveResult } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteMoveResult = {} as AutocompleteMoveResult;
+ * ```
+ */
 export interface AutocompleteMoveResult {
   highlightedIndex: number;
   highlightedValue: string | undefined;
 }
 
+/**
+ * Result returned by the Autocomplete primitive autocomplete option select.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteOptionSelectResult } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteOptionSelectResult = {} as AutocompleteOptionSelectResult;
+ * ```
+ */
 export interface AutocompleteOptionSelectResult {
   inputValue: AutocompleteInputChangeResult;
   open: AutocompleteOpenChangeResult;
   value: AutocompleteValueChangeResult;
 }
 
+/**
+ * Options accepted by the Autocomplete primitive autocomplete typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteTypeaheadOptions } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteTypeaheadOptions = {} as AutocompleteTypeaheadOptions;
+ * ```
+ */
 export interface AutocompleteTypeaheadOptions {
   currentValue?: string;
   loop?: boolean;
@@ -133,36 +374,150 @@ export interface AutocompleteTypeaheadOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Result returned by the Autocomplete primitive autocomplete typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteTypeaheadResult } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteTypeaheadResult = {} as AutocompleteTypeaheadResult;
+ * ```
+ */
 export interface AutocompleteTypeaheadResult {
   matchIndex: number;
   state: TypeaheadState;
   value: string | undefined;
 }
 
+/**
+ * Serializable attribute record returned by Autocomplete primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompletePrimitiveAttributes } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompletePrimitiveAttributes = {} as AutocompletePrimitiveAttributes;
+ * ```
+ */
 export type AutocompletePrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteInputEvent } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteInputEvent = {} as AutocompleteInputEvent;
+ * ```
+ */
 export type AutocompleteInputEvent = Event & {
   readonly currentTarget: (EventTarget & { value?: string }) | null;
   readonly target?: (EventTarget & { value?: string }) | null;
 };
+
+/**
+ * Event shape consumed by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteOptionEvent } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteOptionEvent = {} as AutocompleteOptionEvent;
+ * ```
+ */
 export type AutocompleteOptionEvent = Event;
+
+/**
+ * Event shape consumed by the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteKeyboardEvent } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteKeyboardEvent = {} as AutocompleteKeyboardEvent;
+ * ```
+ */
 export type AutocompleteKeyboardEvent = Event & { readonly key: string };
+
+/**
+ * Result returned by the Autocomplete primitive autocomplete keyboard.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AutocompleteKeyboardResult } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const value: AutocompleteKeyboardResult = {} as AutocompleteKeyboardResult;
+ * ```
+ */
 export type AutocompleteKeyboardResult =
   | AutocompleteMoveResult
   | AutocompleteOpenChangeResult
   | AutocompleteOptionSelectResult;
 
+/**
+ * Computes autocomplete option selected for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteOptionSelected } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteOptionSelected>[0];
+ * const result = autocompleteOptionSelected(input);
+ * ```
+ */
 export function autocompleteOptionSelected(options: AutocompleteOptionAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
 
+/**
+ * Computes autocomplete option highlighted for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteOptionHighlighted } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteOptionHighlighted>[0];
+ * const result = autocompleteOptionHighlighted(input);
+ * ```
+ */
 export function autocompleteOptionHighlighted(
   options: AutocompleteOptionAttributeOptions,
 ): boolean {
   return options.highlightedValue === options.itemValue;
 }
 
+/**
+ * Computes autocomplete value text for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteValueText } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteValueText>[0];
+ * const result = autocompleteValueText(input);
+ * ```
+ */
 export function autocompleteValueText(state: AutocompleteState): string {
   const selected = state.items?.find((item) => item.value === state.value);
   if (selected) return selected.label ?? selected.textValue ?? selected.value;
@@ -170,6 +525,19 @@ export function autocompleteValueText(state: AutocompleteState): string {
   return state.value;
 }
 
+/**
+ * Computes autocomplete suggestions for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteSuggestions } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteSuggestions>[0];
+ * const result = autocompleteSuggestions(input);
+ * ```
+ */
 export function autocompleteSuggestions(state: AutocompleteState): readonly AutocompleteItem[] {
   const query = (state.inputValue ?? state.value ?? '').trim().toLocaleLowerCase();
   const items = state.items ?? [];
@@ -181,6 +549,19 @@ export function autocompleteSuggestions(state: AutocompleteState): readonly Auto
   });
 }
 
+/**
+ * Builds the autocomplete root attributes record for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteRootAttributes } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteRootAttributes>[0];
+ * const result = autocompleteRootAttributes(input);
+ * ```
+ */
 export function autocompleteRootAttributes(
   options: AutocompleteRootAttributeOptions = {},
 ): AutocompletePrimitiveAttributes {
@@ -190,6 +571,21 @@ export function autocompleteRootAttributes(
   });
 }
 
+/**
+ * Builds the autocomplete input attributes record for the Autocomplete primitive.
+ *
+ * Emits `aria-autocomplete`, `aria-expanded`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteInputAttributes } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteInputAttributes>[0];
+ * const result = autocompleteInputAttributes(input);
+ * ```
+ */
 export function autocompleteInputAttributes(
   options: AutocompleteInputAttributeOptions = {},
 ): AutocompletePrimitiveAttributes {
@@ -221,6 +617,21 @@ export function autocompleteInputAttributes(
   });
 }
 
+/**
+ * Builds the autocomplete list attributes record for the Autocomplete primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteListAttributes } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteListAttributes>[0];
+ * const result = autocompleteListAttributes(input);
+ * ```
+ */
 export function autocompleteListAttributes(
   options: AutocompleteListAttributeOptions = {},
 ): AutocompletePrimitiveAttributes {
@@ -233,6 +644,19 @@ export function autocompleteListAttributes(
   });
 }
 
+/**
+ * Builds the autocomplete option attributes record for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteOptionAttributes } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteOptionAttributes>[0];
+ * const result = autocompleteOptionAttributes(input);
+ * ```
+ */
 export function autocompleteOptionAttributes(
   options: AutocompleteOptionAttributeOptions,
 ): AutocompletePrimitiveAttributes {
@@ -256,6 +680,19 @@ export function autocompleteOptionAttributes(
   });
 }
 
+/**
+ * Builds the autocomplete value attributes record for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteValueAttributes } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteValueAttributes>[0];
+ * const result = autocompleteValueAttributes(input);
+ * ```
+ */
 export function autocompleteValueAttributes(
   options: AutocompleteValueAttributeOptions = {},
 ): AutocompletePrimitiveAttributes {
@@ -265,6 +702,22 @@ export function autocompleteValueAttributes(
   });
 }
 
+/**
+ * Computes the set autocomplete input value transition for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setAutocompleteInputValue } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof setAutocompleteInputValue>[0];
+ * const state = {} as Parameters<typeof setAutocompleteInputValue>[1];
+ * const options = {} as Parameters<typeof setAutocompleteInputValue>[2];
+ * const detail = {} as Parameters<typeof setAutocompleteInputValue>[3];
+ * const result = setAutocompleteInputValue(input, state, options, detail);
+ * ```
+ */
 export function setAutocompleteInputValue(
   state: AutocompleteState,
   inputValue: string,
@@ -287,6 +740,22 @@ export function setAutocompleteInputValue(
   return { changed: true, detail, inputValue };
 }
 
+/**
+ * Computes the set autocomplete value transition for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setAutocompleteValue } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof setAutocompleteValue>[0];
+ * const state = {} as Parameters<typeof setAutocompleteValue>[1];
+ * const options = {} as Parameters<typeof setAutocompleteValue>[2];
+ * const detail = {} as Parameters<typeof setAutocompleteValue>[3];
+ * const result = setAutocompleteValue(input, state, options, detail);
+ * ```
+ */
 export function setAutocompleteValue(
   state: AutocompleteState,
   value: string | undefined,
@@ -305,6 +774,22 @@ export function setAutocompleteValue(
   return { changed: true, detail, value };
 }
 
+/**
+ * Computes the set autocomplete open transition for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setAutocompleteOpen } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof setAutocompleteOpen>[0];
+ * const state = {} as Parameters<typeof setAutocompleteOpen>[1];
+ * const options = {} as Parameters<typeof setAutocompleteOpen>[2];
+ * const detail = {} as Parameters<typeof setAutocompleteOpen>[3];
+ * const result = setAutocompleteOpen(input, state, options, detail);
+ * ```
+ */
 export function setAutocompleteOpen(
   state: AutocompleteState,
   open: boolean,
@@ -323,6 +808,21 @@ export function setAutocompleteOpen(
   return { changed: true, detail, open };
 }
 
+/**
+ * Computes the select autocomplete option transition for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectAutocompleteOption } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof selectAutocompleteOption>[0];
+ * const state = {} as Parameters<typeof selectAutocompleteOption>[1];
+ * const options = {} as Parameters<typeof selectAutocompleteOption>[2];
+ * const result = selectAutocompleteOption(input, state, options);
+ * ```
+ */
 export function selectAutocompleteOption(
   state: AutocompleteState,
   value: string | undefined,
@@ -376,6 +876,21 @@ export function selectAutocompleteOption(
   };
 }
 
+/**
+ * Computes autocomplete typeahead for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteTypeahead } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteTypeahead>[0];
+ * const state = {} as Parameters<typeof autocompleteTypeahead>[1];
+ * const options = {} as Parameters<typeof autocompleteTypeahead>[2];
+ * const result = autocompleteTypeahead(input, state, options);
+ * ```
+ */
 export function autocompleteTypeahead(
   state: AutocompleteState,
   key: string,
@@ -413,6 +928,21 @@ export function autocompleteTypeahead(
   };
 }
 
+/**
+ * Computes autocomplete move for the Autocomplete primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteMove } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteMove>[0];
+ * const state = {} as Parameters<typeof autocompleteMove>[1];
+ * const options = {} as Parameters<typeof autocompleteMove>[2];
+ * const result = autocompleteMove(input, state, options);
+ * ```
+ */
 export function autocompleteMove(
   state: AutocompleteState,
   key: string,
@@ -440,6 +970,18 @@ export function autocompleteMove(
 }
 
 /**
+ * Handles the autocomplete input interaction for the Autocomplete primitive.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteInput } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteInput>[0];
+ * const state = {} as Parameters<typeof autocompleteInput>[1];
+ * const options = {} as Parameters<typeof autocompleteInput>[2];
+ * const result = autocompleteInput(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -466,6 +1008,18 @@ export function autocompleteInput(
 }
 
 /**
+ * Handles the autocomplete option click interaction for the Autocomplete primitive.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteOptionClick } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteOptionClick>[0];
+ * const state = {} as Parameters<typeof autocompleteOptionClick>[1];
+ * const options = {} as Parameters<typeof autocompleteOptionClick>[2];
+ * const result = autocompleteOptionClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -487,6 +1041,18 @@ export function autocompleteOptionClick(
 }
 
 /**
+ * Handles the autocomplete key down interaction for the Autocomplete primitive.
+ *
+ * @example
+ * ```ts
+ * import { autocompleteKeyDown } from '@kovojs/headless-ui/autocomplete';
+ *
+ * const input = {} as Parameters<typeof autocompleteKeyDown>[0];
+ * const state = {} as Parameters<typeof autocompleteKeyDown>[1];
+ * const options = {} as Parameters<typeof autocompleteKeyDown>[2];
+ * const result = autocompleteKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

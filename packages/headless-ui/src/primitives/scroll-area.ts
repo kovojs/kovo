@@ -7,11 +7,74 @@ import {
   type TextDirection,
 } from '../lib/index.js';
 
+/**
+ * Public type used by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaOrientation } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaOrientation = {} as ScrollAreaOrientation;
+ * ```
+ */
 export type ScrollAreaOrientation = 'horizontal' | 'vertical';
+
+/**
+ * Public type used by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaScrollPosition } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaScrollPosition = {} as ScrollAreaScrollPosition;
+ * ```
+ */
 export type ScrollAreaScrollPosition = 'end' | 'middle' | 'none' | 'start';
+
+/**
+ * Public type used by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaScrollbars } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaScrollbars = {} as ScrollAreaScrollbars;
+ * ```
+ */
 export type ScrollAreaScrollbars = 'both' | 'horizontal' | 'none' | 'vertical';
+
+/**
+ * State snapshot consumed by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaVisibilityState } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaVisibilityState = {} as ScrollAreaVisibilityState;
+ * ```
+ */
 export type ScrollAreaVisibilityState = 'hidden' | 'visible';
 
+/**
+ * State snapshot consumed by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaState } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaState = {} as ScrollAreaState;
+ * ```
+ */
 export interface ScrollAreaState {
   disabled?: boolean;
   dir?: TextDirection;
@@ -22,10 +85,34 @@ export interface ScrollAreaState {
   scrollbars?: ScrollAreaScrollbars;
 }
 
+/**
+ * Options accepted by the Scroll Area primitive scroll area root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaRootAttributeOptions } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaRootAttributeOptions = {} as ScrollAreaRootAttributeOptions;
+ * ```
+ */
 export interface ScrollAreaRootAttributeOptions extends ScrollAreaState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Scroll Area primitive scroll area viewport attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaViewportAttributeOptions } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaViewportAttributeOptions = {} as ScrollAreaViewportAttributeOptions;
+ * ```
+ */
 export interface ScrollAreaViewportAttributeOptions extends ScrollAreaState {
   descriptionId?: string;
   id?: string;
@@ -35,6 +122,18 @@ export interface ScrollAreaViewportAttributeOptions extends ScrollAreaState {
   scrollY?: ScrollAreaScrollPosition;
 }
 
+/**
+ * Options accepted by the Scroll Area primitive scroll area scrollbar attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaScrollbarAttributeOptions } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaScrollbarAttributeOptions = {} as ScrollAreaScrollbarAttributeOptions;
+ * ```
+ */
 export interface ScrollAreaScrollbarAttributeOptions extends ScrollAreaState {
   forceMount?: boolean;
   id?: string;
@@ -43,17 +142,65 @@ export interface ScrollAreaScrollbarAttributeOptions extends ScrollAreaState {
   visible?: boolean;
 }
 
+/**
+ * Options accepted by the Scroll Area primitive scroll area thumb attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaThumbAttributeOptions } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaThumbAttributeOptions = {} as ScrollAreaThumbAttributeOptions;
+ * ```
+ */
 export interface ScrollAreaThumbAttributeOptions extends ScrollAreaScrollbarAttributeOptions {}
 
+/**
+ * Options accepted by the Scroll Area primitive scroll area corner attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaCornerAttributeOptions } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaCornerAttributeOptions = {} as ScrollAreaCornerAttributeOptions;
+ * ```
+ */
 export interface ScrollAreaCornerAttributeOptions extends ScrollAreaState {
   forceMount?: boolean;
   id?: string;
   visible?: boolean;
 }
 
+/**
+ * Serializable attribute record returned by Scroll Area primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaPrimitiveAttributes } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaPrimitiveAttributes = {} as ScrollAreaPrimitiveAttributes;
+ * ```
+ */
 export type ScrollAreaPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Public interface used by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaViewportTarget } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaViewportTarget = {} as ScrollAreaViewportTarget;
+ * ```
+ */
 export interface ScrollAreaViewportTarget {
   readonly clientHeight: number;
   readonly clientWidth: number;
@@ -63,6 +210,18 @@ export interface ScrollAreaViewportTarget {
   readonly scrollWidth: number;
 }
 
+/**
+ * Public interface used by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaPointerTarget } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaPointerTarget = {} as ScrollAreaPointerTarget;
+ * ```
+ */
 export interface ScrollAreaPointerTarget {
   readonly clientHeight?: number;
   readonly clientWidth?: number;
@@ -75,10 +234,34 @@ export interface ScrollAreaPointerTarget {
   };
 }
 
+/**
+ * Options accepted by the Scroll Area primitive scroll area thumb geometry.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaThumbGeometryOptions } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaThumbGeometryOptions = {} as ScrollAreaThumbGeometryOptions;
+ * ```
+ */
 export interface ScrollAreaThumbGeometryOptions extends ScrollAreaState {
   orientation?: ScrollAreaOrientation;
 }
 
+/**
+ * State snapshot consumed by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaViewportComputedState } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaViewportComputedState = {} as ScrollAreaViewportComputedState;
+ * ```
+ */
 export interface ScrollAreaViewportComputedState {
   readonly cornerVisible: boolean;
   readonly horizontalVisible: boolean;
@@ -93,8 +276,32 @@ export interface ScrollAreaViewportComputedState {
   readonly verticalVisible: boolean;
 }
 
+/**
+ * Result returned by the Scroll Area primitive scroll area viewport scroll.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaViewportScrollResult } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaViewportScrollResult = {} as ScrollAreaViewportScrollResult;
+ * ```
+ */
 export type ScrollAreaViewportScrollResult = ScrollAreaViewportComputedState;
 
+/**
+ * Public interface used by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaThumbGeometry } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaThumbGeometry = {} as ScrollAreaThumbGeometry;
+ * ```
+ */
 export interface ScrollAreaThumbGeometry {
   readonly offsetRatio: number;
   readonly scrollPosition: ScrollAreaScrollPosition;
@@ -102,6 +309,18 @@ export interface ScrollAreaThumbGeometry {
   readonly visible: boolean;
 }
 
+/**
+ * Public interface used by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaThumbDragStart } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaThumbDragStart = {} as ScrollAreaThumbDragStart;
+ * ```
+ */
 export interface ScrollAreaThumbDragStart {
   readonly pointerStart: number;
   readonly scrollStart: number;
@@ -109,6 +328,18 @@ export interface ScrollAreaThumbDragStart {
   readonly trackSize: number;
 }
 
+/**
+ * Options accepted by the Scroll Area primitive scroll area thumb drag.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaThumbDragOptions } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaThumbDragOptions = {} as ScrollAreaThumbDragOptions;
+ * ```
+ */
 export interface ScrollAreaThumbDragOptions extends ScrollAreaState {
   orientation?: ScrollAreaOrientation;
   pointerStart: number;
@@ -117,11 +348,35 @@ export interface ScrollAreaThumbDragOptions extends ScrollAreaState {
   trackSize: number;
 }
 
+/**
+ * Event shape consumed by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaViewportScrollEvent } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaViewportScrollEvent = {} as ScrollAreaViewportScrollEvent;
+ * ```
+ */
 export type ScrollAreaViewportScrollEvent = Event & {
   readonly currentTarget: ScrollAreaViewportTarget | null;
   readonly target?: Partial<ScrollAreaViewportTarget> | null;
 };
 
+/**
+ * Event shape consumed by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaPointerEvent } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaPointerEvent = {} as ScrollAreaPointerEvent;
+ * ```
+ */
 export type ScrollAreaPointerEvent = Event & {
   readonly clientX?: number;
   readonly clientY?: number;
@@ -131,6 +386,19 @@ export type ScrollAreaPointerEvent = Event & {
   readonly target?: ScrollAreaPointerTarget | null;
 };
 
+/**
+ * Builds the scroll area root attributes record for the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaRootAttributes } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaRootAttributes>[0];
+ * const result = scrollAreaRootAttributes(input);
+ * ```
+ */
 export function scrollAreaRootAttributes(
   options: ScrollAreaRootAttributeOptions = {},
 ): ScrollAreaPrimitiveAttributes {
@@ -141,6 +409,21 @@ export function scrollAreaRootAttributes(
   });
 }
 
+/**
+ * Builds the scroll area viewport attributes record for the Scroll Area primitive.
+ *
+ * Emits `aria-describedby`, `aria-disabled`, `aria-label`, `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaViewportAttributes } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaViewportAttributes>[0];
+ * const result = scrollAreaViewportAttributes(input);
+ * ```
+ */
 export function scrollAreaViewportAttributes(
   options: ScrollAreaViewportAttributeOptions = {},
 ): ScrollAreaPrimitiveAttributes {
@@ -157,6 +440,21 @@ export function scrollAreaViewportAttributes(
   });
 }
 
+/**
+ * Builds the scroll area scrollbar attributes record for the Scroll Area primitive.
+ *
+ * Emits `aria-hidden`, `hidden`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaScrollbarAttributes } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaScrollbarAttributes>[0];
+ * const result = scrollAreaScrollbarAttributes(input);
+ * ```
+ */
 export function scrollAreaScrollbarAttributes(
   options: ScrollAreaScrollbarAttributeOptions = {},
 ): ScrollAreaPrimitiveAttributes {
@@ -171,6 +469,21 @@ export function scrollAreaScrollbarAttributes(
   });
 }
 
+/**
+ * Builds the scroll area thumb attributes record for the Scroll Area primitive.
+ *
+ * Emits `aria-hidden`, `hidden`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaThumbAttributes } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaThumbAttributes>[0];
+ * const result = scrollAreaThumbAttributes(input);
+ * ```
+ */
 export function scrollAreaThumbAttributes(
   options: ScrollAreaThumbAttributeOptions = {},
 ): ScrollAreaPrimitiveAttributes {
@@ -185,6 +498,21 @@ export function scrollAreaThumbAttributes(
   });
 }
 
+/**
+ * Builds the scroll area corner attributes record for the Scroll Area primitive.
+ *
+ * Emits `aria-hidden`, `hidden`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaCornerAttributes } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaCornerAttributes>[0];
+ * const result = scrollAreaCornerAttributes(input);
+ * ```
+ */
 export function scrollAreaCornerAttributes(
   options: ScrollAreaCornerAttributeOptions = {},
 ): ScrollAreaPrimitiveAttributes {
@@ -198,6 +526,19 @@ export function scrollAreaCornerAttributes(
   });
 }
 
+/**
+ * Computes scroll area scrollbar state for the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaScrollbarState } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaScrollbarState>[0];
+ * const result = scrollAreaScrollbarState(input);
+ * ```
+ */
 export function scrollAreaScrollbarState(
   options: ScrollAreaScrollbarAttributeOptions = {},
 ): ScrollAreaVisibilityState {
@@ -209,6 +550,19 @@ export function scrollAreaScrollbarState(
   return options.visible === false ? 'hidden' : 'visible';
 }
 
+/**
+ * Computes scroll area corner state for the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaCornerState } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaCornerState>[0];
+ * const result = scrollAreaCornerState(input);
+ * ```
+ */
 export function scrollAreaCornerState(
   options: ScrollAreaCornerAttributeOptions = {},
 ): ScrollAreaVisibilityState {
@@ -218,6 +572,20 @@ export function scrollAreaCornerState(
   return options.visible === false ? 'hidden' : 'visible';
 }
 
+/**
+ * Computes scroll area viewport state for the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaViewportState } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaViewportState>[0];
+ * const state = {} as Parameters<typeof scrollAreaViewportState>[1];
+ * const result = scrollAreaViewportState(input, state);
+ * ```
+ */
 export function scrollAreaViewportState(
   target: ScrollAreaViewportTarget,
   state: ScrollAreaState = {},
@@ -260,6 +628,20 @@ export function scrollAreaViewportState(
   });
 }
 
+/**
+ * Computes scroll area thumb geometry for the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaThumbGeometry } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaThumbGeometry>[0];
+ * const state = {} as Parameters<typeof scrollAreaThumbGeometry>[1];
+ * const result = scrollAreaThumbGeometry(input, state);
+ * ```
+ */
 export function scrollAreaThumbGeometry(
   target: ScrollAreaViewportTarget,
   options: ScrollAreaThumbGeometryOptions = {},
@@ -286,6 +668,17 @@ export function scrollAreaThumbGeometry(
 }
 
 /**
+ * Computes scroll area viewport scroll for the Scroll Area primitive.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaViewportScroll } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaViewportScroll>[0];
+ * const state = {} as Parameters<typeof scrollAreaViewportScroll>[1];
+ * const result = scrollAreaViewportScroll(input, state);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -303,6 +696,18 @@ export function scrollAreaViewportScroll(
   return scrollAreaViewportState(target, state);
 }
 
+/**
+ * Public interface used by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaScrollToTrigger } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaScrollToTrigger = {} as ScrollAreaScrollToTrigger;
+ * ```
+ */
 export interface ScrollAreaScrollToTrigger {
   getAttribute(name: string): string | null;
   readonly ownerDocument?: {
@@ -310,22 +715,69 @@ export interface ScrollAreaScrollToTrigger {
   } | null;
 }
 
+/**
+ * Public interface used by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaScrollToViewport } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaScrollToViewport = {} as ScrollAreaScrollToViewport;
+ * ```
+ */
 export interface ScrollAreaScrollToViewport {
   scrollTop: number;
   readonly scrollHeight: number;
 }
 
+/**
+ * Event shape consumed by the Scroll Area primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaScrollToEvent } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaScrollToEvent = {} as ScrollAreaScrollToEvent;
+ * ```
+ */
 export type ScrollAreaScrollToEvent = Event & {
   readonly currentTarget?: ScrollAreaScrollToTrigger | null;
   readonly target?: ScrollAreaScrollToTrigger | null;
 };
 
+/**
+ * Result returned by the Scroll Area primitive scroll area scroll to.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ScrollAreaScrollToResult } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const value: ScrollAreaScrollToResult = {} as ScrollAreaScrollToResult;
+ * ```
+ */
 export interface ScrollAreaScrollToResult {
   scrollTop: number;
   scrollY: 'end' | 'start';
 }
 
 /**
+ * Computes scroll area scroll to for the Scroll Area primitive.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaScrollTo } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaScrollTo>[0];
+ * const state = {} as Parameters<typeof scrollAreaScrollTo>[1];
+ * const result = scrollAreaScrollTo(input, state);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * Imperatively scrolls the viewport to the top/bottom in response to a control
@@ -359,6 +811,18 @@ export function scrollAreaScrollTo(
 }
 
 /**
+ * Handles the scroll area track pointer down interaction for the Scroll Area primitive.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaTrackPointerDown } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaTrackPointerDown>[0];
+ * const state = {} as Parameters<typeof scrollAreaTrackPointerDown>[1];
+ * const options = {} as Parameters<typeof scrollAreaTrackPointerDown>[2];
+ * const result = scrollAreaTrackPointerDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -401,6 +865,18 @@ export function scrollAreaTrackPointerDown(
 }
 
 /**
+ * Computes scroll area thumb drag start for the Scroll Area primitive.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaThumbDragStart } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaThumbDragStart>[0];
+ * const state = {} as Parameters<typeof scrollAreaThumbDragStart>[1];
+ * const options = {} as Parameters<typeof scrollAreaThumbDragStart>[2];
+ * const result = scrollAreaThumbDragStart(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -436,6 +912,18 @@ export function scrollAreaThumbDragStart(
 }
 
 /**
+ * Computes scroll area thumb drag for the Scroll Area primitive.
+ *
+ * @example
+ * ```ts
+ * import { scrollAreaThumbDrag } from '@kovojs/headless-ui/scroll-area';
+ *
+ * const input = {} as Parameters<typeof scrollAreaThumbDrag>[0];
+ * const state = {} as Parameters<typeof scrollAreaThumbDrag>[1];
+ * const options = {} as Parameters<typeof scrollAreaThumbDrag>[2];
+ * const result = scrollAreaThumbDrag(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

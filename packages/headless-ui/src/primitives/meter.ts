@@ -1,7 +1,31 @@
 import { type PrimitiveDataAttributes } from '../lib/index.js';
 
+/**
+ * State snapshot consumed by the Meter primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MeterDataState } from '@kovojs/headless-ui/meter';
+ *
+ * const value: MeterDataState = {} as MeterDataState;
+ * ```
+ */
 export type MeterDataState = 'even-less-good' | 'optimum' | 'suboptimum';
 
+/**
+ * Options accepted by the Meter primitive meter attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MeterAttributeOptions } from '@kovojs/headless-ui/meter';
+ *
+ * const value: MeterAttributeOptions = {} as MeterAttributeOptions;
+ * ```
+ */
 export interface MeterAttributeOptions {
   high?: number;
   low?: number;
@@ -12,6 +36,18 @@ export interface MeterAttributeOptions {
   valueText?: string;
 }
 
+/**
+ * State snapshot consumed by the Meter primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MeterComputedState } from '@kovojs/headless-ui/meter';
+ *
+ * const value: MeterComputedState = {} as MeterComputedState;
+ * ```
+ */
 export interface MeterComputedState {
   high: number;
   low: number;
@@ -23,11 +59,36 @@ export interface MeterComputedState {
   valueRatio: number;
 }
 
+/**
+ * Serializable attribute record returned by Meter primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MeterPrimitiveAttributes } from '@kovojs/headless-ui/meter';
+ *
+ * const value: MeterPrimitiveAttributes = {} as MeterPrimitiveAttributes;
+ * ```
+ */
 export type MeterPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, number | string>>;
 
 type MeterRegion = 'high' | 'low' | 'middle';
 
+/**
+ * Computes meter value state for the Meter primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { meterValueState } from '@kovojs/headless-ui/meter';
+ *
+ * const input = {} as Parameters<typeof meterValueState>[0];
+ * const result = meterValueState(input);
+ * ```
+ */
 export function meterValueState(options: MeterAttributeOptions = {}): MeterComputedState {
   const min = normalizeMeterMin(options.min);
   const max = normalizeMeterMax(options.max, min);
@@ -48,6 +109,21 @@ export function meterValueState(options: MeterAttributeOptions = {}): MeterCompu
   });
 }
 
+/**
+ * Builds the meter root attributes record for the Meter primitive.
+ *
+ * Emits `aria-valuetext`, `data-high`, `data-low`, `data-max`, `data-min`, `data-optimum`, `data-state`, `data-value`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { meterRootAttributes } from '@kovojs/headless-ui/meter';
+ *
+ * const input = {} as Parameters<typeof meterRootAttributes>[0];
+ * const result = meterRootAttributes(input);
+ * ```
+ */
 export function meterRootAttributes(options: MeterAttributeOptions = {}): MeterPrimitiveAttributes {
   const state = meterValueState(options);
 

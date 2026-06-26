@@ -8,6 +8,18 @@ import {
 } from '../lib/index.js';
 import { runDialogInvokerCommand, type DialogInvokerEvent } from '../lib/dialog-invoker.js';
 
+/**
+ * Reason token reported by the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogChangeReason } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogChangeReason = {} as AlertDialogChangeReason;
+ * ```
+ */
 export type AlertDialogChangeReason =
   | 'action-click'
   | 'cancel-click'
@@ -16,61 +28,257 @@ export type AlertDialogChangeReason =
   | 'programmatic'
   | 'trigger-click';
 
+/**
+ * Cancelable change detail emitted by the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogChangeDetail } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogChangeDetail = {} as AlertDialogChangeDetail;
+ * ```
+ */
 export type AlertDialogChangeDetail = PrimitiveChangeDetail<AlertDialogChangeReason, boolean>;
 
+/**
+ * Public type used by the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogActionIntent } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogActionIntent = {} as AlertDialogActionIntent;
+ * ```
+ */
 export type AlertDialogActionIntent = 'confirm' | 'destructive';
 
+/**
+ * State snapshot consumed by the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogState } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogState = {} as AlertDialogState;
+ * ```
+ */
 export interface AlertDialogState {
   disabled?: boolean;
   open: boolean;
 }
 
+/**
+ * Options accepted by the Alert Dialog primitive alert dialog attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogAttributeOptions } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogAttributeOptions = {} as AlertDialogAttributeOptions;
+ * ```
+ */
 export interface AlertDialogAttributeOptions extends AlertDialogState {
   contentId?: string;
   descriptionId?: string;
   titleId?: string;
 }
 
+/**
+ * Options accepted by the Alert Dialog primitive alert dialog action attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogActionAttributeOptions } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogActionAttributeOptions = {} as AlertDialogActionAttributeOptions;
+ * ```
+ */
 export interface AlertDialogActionAttributeOptions extends AlertDialogAttributeOptions {
   intent?: AlertDialogActionIntent;
 }
 
+/**
+ * Options accepted by the Alert Dialog primitive alert dialog cancel attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogCancelAttributeOptions } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogCancelAttributeOptions = {} as AlertDialogCancelAttributeOptions;
+ * ```
+ */
 export interface AlertDialogCancelAttributeOptions extends AlertDialogAttributeOptions {
   autoFocus?: boolean;
 }
 
+/**
+ * Options accepted by the Alert Dialog primitive alert dialog change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogChangeOptions } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogChangeOptions = {} as AlertDialogChangeOptions;
+ * ```
+ */
 export interface AlertDialogChangeOptions {
   onOpenChange?: (detail: AlertDialogChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Alert Dialog primitive alert dialog change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogChangeResult } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogChangeResult = {} as AlertDialogChangeResult;
+ * ```
+ */
 export interface AlertDialogChangeResult {
   changed: boolean;
   detail?: AlertDialogChangeDetail;
   open: boolean;
 }
 
+/**
+ * Serializable attribute record returned by Alert Dialog primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogPrimitiveAttributes } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogPrimitiveAttributes = {} as AlertDialogPrimitiveAttributes;
+ * ```
+ */
 export type AlertDialogPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | string>>;
 
+/**
+ * Event shape consumed by the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogTriggerEvent } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogTriggerEvent = {} as AlertDialogTriggerEvent;
+ * ```
+ */
 export type AlertDialogTriggerEvent = Event & DialogInvokerEvent;
 
+/**
+ * Event shape consumed by the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogActionEvent } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogActionEvent = {} as AlertDialogActionEvent;
+ * ```
+ */
 export type AlertDialogActionEvent = Event & DialogInvokerEvent;
 
+/**
+ * Event shape consumed by the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogCancelButtonEvent } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogCancelButtonEvent = {} as AlertDialogCancelButtonEvent;
+ * ```
+ */
 export type AlertDialogCancelButtonEvent = Event & DialogInvokerEvent;
 
+/**
+ * Event shape consumed by the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogCancelEvent } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogCancelEvent = {} as AlertDialogCancelEvent;
+ * ```
+ */
 export type AlertDialogCancelEvent = Event;
 
+/**
+ * Event shape consumed by the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { AlertDialogBeforeToggleEvent } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const value: AlertDialogBeforeToggleEvent = {} as AlertDialogBeforeToggleEvent;
+ * ```
+ */
 export type AlertDialogBeforeToggleEvent = Event &
   Readonly<{
     newState?: 'closed' | 'open';
   }>;
 
+/**
+ * Builds the alert dialog root attributes record for the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogRootAttributes } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogRootAttributes>[0];
+ * const result = alertDialogRootAttributes(input);
+ * ```
+ */
 export function alertDialogRootAttributes(state: AlertDialogState): AlertDialogPrimitiveAttributes {
   return Object.freeze({
     ...mergeDataAttributes(openState(state.open), dataDisabled(state.disabled === true)),
   });
 }
 
+/**
+ * Builds the alert dialog trigger attributes record for the Alert Dialog primitive.
+ *
+ * Emits `aria-controls`, `aria-expanded`, `aria-haspopup`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogTriggerAttributes } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogTriggerAttributes>[0];
+ * const result = alertDialogTriggerAttributes(input);
+ * ```
+ */
 export function alertDialogTriggerAttributes(
   options: AlertDialogAttributeOptions,
 ): AlertDialogPrimitiveAttributes {
@@ -92,6 +300,21 @@ export function alertDialogTriggerAttributes(
   });
 }
 
+/**
+ * Builds the alert dialog content attributes record for the Alert Dialog primitive.
+ *
+ * Emits `aria-describedby`, `aria-labelledby`, `aria-modal`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogContentAttributes } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogContentAttributes>[0];
+ * const result = alertDialogContentAttributes(input);
+ * ```
+ */
 export function alertDialogContentAttributes(
   options: AlertDialogAttributeOptions,
 ): AlertDialogPrimitiveAttributes {
@@ -106,6 +329,21 @@ export function alertDialogContentAttributes(
   });
 }
 
+/**
+ * Builds the alert dialog cancel attributes record for the Alert Dialog primitive.
+ *
+ * Emits `data-intent`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogCancelAttributes } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogCancelAttributes>[0];
+ * const result = alertDialogCancelAttributes(input);
+ * ```
+ */
 export function alertDialogCancelAttributes(
   options: AlertDialogCancelAttributeOptions,
 ): AlertDialogPrimitiveAttributes {
@@ -126,6 +364,21 @@ export function alertDialogCancelAttributes(
   });
 }
 
+/**
+ * Builds the alert dialog action attributes record for the Alert Dialog primitive.
+ *
+ * Emits `data-intent`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogActionAttributes } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogActionAttributes>[0];
+ * const result = alertDialogActionAttributes(input);
+ * ```
+ */
 export function alertDialogActionAttributes(
   options: AlertDialogActionAttributeOptions,
 ): AlertDialogPrimitiveAttributes {
@@ -145,6 +398,22 @@ export function alertDialogActionAttributes(
   });
 }
 
+/**
+ * Computes the set alert dialog open transition for the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setAlertDialogOpen } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof setAlertDialogOpen>[0];
+ * const state = {} as Parameters<typeof setAlertDialogOpen>[1];
+ * const options = {} as Parameters<typeof setAlertDialogOpen>[2];
+ * const detail = {} as Parameters<typeof setAlertDialogOpen>[3];
+ * const result = setAlertDialogOpen(input, state, options, detail);
+ * ```
+ */
 export function setAlertDialogOpen(
   state: AlertDialogState,
   open: boolean,
@@ -163,6 +432,21 @@ export function setAlertDialogOpen(
   return { changed: true, detail, open };
 }
 
+/**
+ * Computes the toggle alert dialog transition for the Alert Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { toggleAlertDialog } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof toggleAlertDialog>[0];
+ * const state = {} as Parameters<typeof toggleAlertDialog>[1];
+ * const options = {} as Parameters<typeof toggleAlertDialog>[2];
+ * const result = toggleAlertDialog(input, state, options);
+ * ```
+ */
 export function toggleAlertDialog(
   state: AlertDialogState,
   reason: AlertDialogChangeReason,
@@ -172,6 +456,18 @@ export function toggleAlertDialog(
 }
 
 /**
+ * Handles the alert dialog trigger click interaction for the Alert Dialog primitive.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogTriggerClick } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogTriggerClick>[0];
+ * const state = {} as Parameters<typeof alertDialogTriggerClick>[1];
+ * const options = {} as Parameters<typeof alertDialogTriggerClick>[2];
+ * const result = alertDialogTriggerClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -194,6 +490,18 @@ export function alertDialogTriggerClick(
 }
 
 /**
+ * Handles the alert dialog cancel click interaction for the Alert Dialog primitive.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogCancelClick } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogCancelClick>[0];
+ * const state = {} as Parameters<typeof alertDialogCancelClick>[1];
+ * const options = {} as Parameters<typeof alertDialogCancelClick>[2];
+ * const result = alertDialogCancelClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -216,6 +524,18 @@ export function alertDialogCancelClick(
 }
 
 /**
+ * Handles the alert dialog action click interaction for the Alert Dialog primitive.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogActionClick } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogActionClick>[0];
+ * const state = {} as Parameters<typeof alertDialogActionClick>[1];
+ * const options = {} as Parameters<typeof alertDialogActionClick>[2];
+ * const result = alertDialogActionClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -238,6 +558,18 @@ export function alertDialogActionClick(
 }
 
 /**
+ * Handles the alert dialog cancel interaction for the Alert Dialog primitive.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogCancel } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogCancel>[0];
+ * const state = {} as Parameters<typeof alertDialogCancel>[1];
+ * const options = {} as Parameters<typeof alertDialogCancel>[2];
+ * const result = alertDialogCancel(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -259,6 +591,18 @@ export function alertDialogCancel(
 }
 
 /**
+ * Handles the alert dialog before toggle interaction for the Alert Dialog primitive.
+ *
+ * @example
+ * ```ts
+ * import { alertDialogBeforeToggle } from '@kovojs/headless-ui/alert-dialog';
+ *
+ * const input = {} as Parameters<typeof alertDialogBeforeToggle>[0];
+ * const state = {} as Parameters<typeof alertDialogBeforeToggle>[1];
+ * const options = {} as Parameters<typeof alertDialogBeforeToggle>[2];
+ * const result = alertDialogBeforeToggle(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
