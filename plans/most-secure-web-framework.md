@@ -508,7 +508,10 @@ packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm 
       `pnpm run check:vp` passed. Explicitly summarized prefixed guard-object helpers such as
       `returns: { kind: "guard", path: "profile" }` now have positive/negative coverage proving
       `profile.userId` scopes only against owner `profile.userId`; focused scope-audit tests,
-      `git diff --check`, and `pnpm run check:vp` passed.
+      `git diff --check`, and `pnpm run check:vp` passed. Owner-domain write audits now reuse the narrow
+      owner-column principal proof: summarized guard/session predicates on the owner column are `scope: session`,
+      while mismatched or unsummarized write predicates fail closed as `scope: unknown`; `pnpm exec vitest run
+packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
