@@ -141,7 +141,12 @@ export async function buildCrmInteractiveApp(
       }),
       dealDetailRoute,
     ],
-    sessionProvider: () => demoSession,
+    sessionProvider: {
+      justification:
+        'The CRM demo owns validation, rotation, expiry, and revocation for its fixed demo session.',
+      lifecycle: 'delegated',
+      provider: () => demoSession,
+    },
   });
 
   const handler: RequestHandler = createRequestHandler(app);
