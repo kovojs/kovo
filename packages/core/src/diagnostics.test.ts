@@ -23,6 +23,7 @@ describe('diagnostic registry', () => {
       'KV226',
       'KV227',
       'KV228',
+      'KV229',
       'KV230',
       'KV231',
       'KV232',
@@ -46,6 +47,7 @@ describe('diagnostic registry', () => {
       'KV310',
       'KV311',
       'KV312',
+      'KV313',
       'KV314',
       'KV315',
       'KV316',
@@ -213,6 +215,15 @@ describe('diagnostic registry', () => {
       Fixes: remove duplicate route facts, split overlapping patterns, add a static segment, or make one route path more specific.
       SPEC §9.5 requires route matching to be unambiguous at compile time.",
           "message": "Ambiguous route table: two routes can match the same canonical request path or duplicate route path.",
+          "severity": "error",
+        },
+        "KV229": {
+          "code": "KV229",
+          "help": "Would lower to: an L0/L1 static export artifact whose route can be replayed through a synthetic GET with no guard-only, session-dependent, mutation-only, or unenumerated-param requirement.
+      Blocked reason: this route depends on runtime session/guard state, mutation-only interaction, or parameter paths that static export cannot prove and enumerate.
+      Fixes: remove the export target, make the route session-independent, enumerate static paths, or serve the route dynamically instead of exporting it.
+      SPEC §9.5 requires static export to fail or skip loudly when a route cannot be emitted as an L0/L1 artifact.",
+          "message": "Static export constraint violation.",
           "severity": "error",
         },
         "KV230": {
@@ -422,6 +433,14 @@ describe('diagnostic registry', () => {
       SPEC §4.8 and §4.9 require every changing rendered fact, including time, to have declared update coverage.
       Escape: renderOnce is the documented suppression for intentionally immutable clock output.",
           "message": "Time-dependent rendered position lacks a declared cadence.",
+          "severity": "error",
+        },
+        "KV313": {
+          "code": "KV313",
+          "help": "Blocked reason: an applied optimistic transform settled without the server truth needed to reconcile the affected query.
+      Fixes: return the invalidated query truth in the mutation response, declare await-fragment for fragment-only reconciliation, or refetch the affected query before presenting settled data.
+      SPEC §10.4 requires missing server truth to discard or refetch the prediction instead of freezing optimistic data as authoritative.",
+          "message": "Optimistic transform settled with missing server truth.",
           "severity": "error",
         },
         "KV314": {
@@ -777,7 +796,8 @@ describe('diagnostic registry', () => {
   it('requires class-specific teaching help for every compiler-owned diagnostic', () => {
     type CompilerTeachingCode = keyof typeof compilerDiagnosticTeachingSchemas;
     const compilerDiagnosticCodes = Object.keys(diagnosticDefinitions).filter(
-      (code): code is CompilerTeachingCode => code === 'KV201' || /^KV[23]\d\d$/.test(code),
+      (code): code is CompilerTeachingCode =>
+        code === 'KV201' || (code !== 'KV313' && /^KV[23]\d\d$/.test(code)),
     );
 
     expect(compilerDiagnosticCodes).not.toEqual([]);
