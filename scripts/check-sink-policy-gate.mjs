@@ -873,6 +873,26 @@ export function deserializationSinkFindings(filePath, text) {
     }
   }
 
+  const staticRegExpBindings = staticRegExpSourceBindingNames(source);
+  const requestDerivedRegExpBindings = requestInputDerivedBindingNames(
+    source,
+    staticRegExpBindings,
+  );
+  for (const call of callArgumentLists(source, /\bnew\s+RegExp\s*\(/g)) {
+    const args = splitTopLevelArguments(call.argumentsText);
+    const sourceArg = args[0]?.trim() ?? '';
+    if (
+      !containsRequestInputDerivedExpression(sourceArg, requestDerivedRegExpBindings, {
+        staticNames: staticRegExpBindings,
+      })
+    ) {
+      continue;
+    }
+    findings.push(
+      `${filePath}: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation`,
+    );
+  }
+
   const importedDeserializers = deserializationImportLocals(source);
   for (const imported of importedDeserializers.named) {
     findings.push(
@@ -1232,6 +1252,97 @@ function containsRequestDerivedLogValue(text) {
       String.raw`\b${requestRoot}\s*\[`,
     ].join('|'),
   ).test(text);
+}
+
+function requestInputDerivedBindingNames(text, staticNames = new Set()) {
+  const names = new Set();
+  const declarationPattern =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;]+?)(?=;|\n(?:\s*(?:const|let|var|return|if|for|while|switch|try|export|function|class)\b)|$)/g;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    declarationPattern.lastIndex = 0;
+    let declaration;
+    while ((declaration = declarationPattern.exec(text)) !== null) {
+      const [, name, initializer] = declaration;
+      if (names.has(name)) continue;
+      if (
+        !containsRequestInputDerivedExpression(initializer.trim(), names, {
+          staticNames,
+        })
+      ) {
+        continue;
+      }
+      names.add(name);
+      changed = true;
+    }
+  }
+  return names;
+}
+
+function staticRegExpSourceBindingNames(text) {
+  const names = new Set();
+  const declarationPattern =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;]+?)(?=;|\n(?:\s*(?:const|let|var|return|if|for|while|switch|try|export|function|class)\b)|$)/g;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    declarationPattern.lastIndex = 0;
+    let declaration;
+    while ((declaration = declarationPattern.exec(text)) !== null) {
+      const [, name, initializer] = declaration;
+      if (names.has(name)) continue;
+      if (!isStaticRegExpSourceExpression(initializer.trim()) && !names.has(initializer.trim())) {
+        continue;
+      }
+      names.add(name);
+      changed = true;
+    }
+  }
+  return names;
+}
+
+function containsRequestInputDerivedExpression(text, derivedNames = new Set(), options = {}) {
+  const expression = text.trim();
+  if (!expression || isStaticRegExpSourceExpression(expression)) return false;
+  if (options.staticNames?.has(expression)) return false;
+
+  const requestIdentifiers = String.raw`(?:req|request)`;
+  const contextRequestProperties = String.raw`(?:ctx|context)\s*\.\s*(?:request|req)`;
+  const requestRoot = String.raw`(?:${requestIdentifiers}|${contextRequestProperties})`;
+  if (
+    new RegExp(
+      [
+        String.raw`\$\{[^}]*\b${requestRoot}\b[^}]*\}`,
+        String.raw`\b${requestRoot}\s*\.`,
+        String.raw`\b${requestRoot}\s*\[`,
+      ].join('|'),
+    ).test(expression)
+  ) {
+    return true;
+  }
+
+  const inputNames = [
+    'input',
+    'patternInput',
+    'query',
+    'requestInput',
+    'search',
+    'searchPattern',
+    'searchTerm',
+    'userInput',
+  ];
+  const dynamicNames = [...derivedNames, ...inputNames].map(escapeRegExp);
+  if (dynamicNames.length === 0) return false;
+  return new RegExp(String.raw`\b(?:${dynamicNames.join('|')})\b`).test(expression);
+}
+
+function isStaticRegExpSourceExpression(text) {
+  return (
+    /^(['"])(?:\\.|(?!\1)[\s\S])*\1$/.test(text) ||
+    /^`(?:\\.|(?!\$\{)[\s\S])*`$/.test(text) ||
+    /^String\.raw\s*`(?:\\.|(?!\$\{)[\s\S])*`$/.test(text)
+  );
 }
 
 function containsLogNeutralizer(text) {

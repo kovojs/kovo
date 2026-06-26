@@ -582,6 +582,63 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects request-derived dynamic RegExp construction', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-match.ts',
+        `
+          export function matchesRequest(request) {
+            return [
+              new RegExp(request.headers.get("x-pattern") ?? ""),
+            ];
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-match.ts: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation',
+    ]);
+
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-match.ts',
+        `
+          export function matchesRequest(request) {
+            const fromQuery = request.query.get("pattern");
+            const fromContext = \`\${request.url}\`;
+            const oneHop = fromQuery;
+            return [new RegExp(oneHop, "i"), new RegExp(fromContext)];
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-match.ts: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation',
+    ]);
+  });
+
+  it('allows static RegExp construction and reviver-free JSON decode', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/safe-match.ts',
+        `
+          const STATIC_PATTERN = "^[a-z0-9_-]+$";
+          const RAW_STATIC_PATTERN = String.raw\`^/assets/[a-z]+$\`;
+          const input = STATIC_PATTERN;
+          export function decodeAndMatch(raw) {
+            const parsed = JSON.parse(raw);
+            return [
+              parsed,
+              new RegExp("^[a-z]+$", "i"),
+              new RegExp(\`^kovo-[a-z]+$\`),
+              new RegExp(STATIC_PATTERN),
+              new RegExp(RAW_STATIC_PATTERN),
+              new RegExp(input),
+            ];
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
   it('rejects deserialize and unserialize imports and calls', () => {
     expect(
       deserializationSinkFindings(
@@ -652,7 +709,12 @@ describe('sink-policy gate', () => {
         readText: (file) =>
           file === 'sink-policy.ts'
             ? validPolicy
-            : 'export const decoded = JSON.parse(payload, revivePayload);',
+            : `
+              export function unsafe(request) {
+                const decoded = JSON.parse(payload, revivePayload);
+                return new RegExp(request.url);
+              }
+            `,
         responseFragmentApplyPath: undefined,
         rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
@@ -662,6 +724,7 @@ describe('sink-policy gate', () => {
       }),
     ).toEqual([
       'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization sink JSON.parse reviver; keep body/wire decode reviver-free and route request shapes through schema validation',
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation',
     ]);
   });
 
