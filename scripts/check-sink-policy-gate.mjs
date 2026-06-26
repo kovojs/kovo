@@ -830,6 +830,7 @@ function hasForbiddenEvalCall(source) {
       ),
     );
   }
+  patterns.push(...dynamicCodeMemberHelperCallPatterns('eval', globalEvalExpression, aliases));
 
   for (const pattern of patterns) {
     for (const call of callArgumentLists(source, pattern)) {
@@ -861,6 +862,9 @@ function hasForbiddenFunctionConstructorCall(source, options = {}) {
         ),
       );
     }
+    patterns.push(
+      ...dynamicCodeMemberHelperCallPatterns('Function', globalFunctionExpression, aliases),
+    );
   }
 
   if (options.callOnly !== true) {
@@ -923,12 +927,19 @@ function dynamicCodeGlobalAliasNames(source, targetName) {
       String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*\(\s*(${targetExpression})\s*\)\s*(?=;|\n|$)`,
       'g',
     ),
+    new RegExp(
+      String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(${targetExpression}|\(\s*${targetExpression}\s*\))\s*\.\s*bind\s*\([^;\n]*\)\s*(?=;|\n|$)`,
+      'g',
+    ),
   ];
 
   for (const declarationPattern of declarationPatterns) {
     let declaration;
     while ((declaration = declarationPattern.exec(source)) !== null) {
-      const expression = declaration[2].trim();
+      const expression = declaration[2]
+        .trim()
+        .replace(/^\(\s*/, '')
+        .replace(/\s*\)$/, '');
       if (
         expression === targetName &&
         hasLocalBindingBefore(source, targetName, declaration.index)
@@ -946,6 +957,29 @@ function dynamicCodeGlobalAliasNames(source, targetName) {
   }
 
   return aliases;
+}
+
+function dynamicCodeMemberHelperCallPatterns(targetName, globalExpression, aliases) {
+  const memberHelpers = String.raw`(?:call|apply)`;
+  const patterns = [
+    new RegExp(
+      String.raw`(^|[^\w$])(?:${targetName}|\(\s*${targetName}\s*\)|${globalExpression}|\(\s*${globalExpression}\s*\))\s*\.\s*${memberHelpers}\s*\(`,
+      'g',
+    ),
+  ];
+
+  for (const alias of aliases.keys()) {
+    patterns.push(
+      new RegExp(
+        String.raw`(^|[^\w$.])(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(
+          alias,
+        )}\s*\))\s*\.\s*${memberHelpers}\s*\(`,
+        'g',
+      ),
+    );
+  }
+
+  return patterns;
 }
 
 function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()) {
@@ -966,6 +1000,29 @@ function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()
     return true;
   }
 
+  const memberHelperBase = dynamicCodeMemberHelperBaseName(callPrefix);
+  if (memberHelperBase !== undefined) {
+    if (memberHelperBase === 'globalThis') return false;
+    if (memberHelperBase === targetName) {
+      const aliasDeclarationEnd = aliases.get(targetName);
+      const isGlobalAlias =
+        aliasDeclarationEnd !== undefined &&
+        call.index > aliasDeclarationEnd &&
+        !isReboundAfterAliasDeclaration(source, targetName, aliasDeclarationEnd, call.index);
+      if (!isGlobalAlias && hasLocalBindingBefore(source, targetName, call.index)) return true;
+      return false;
+    }
+
+    const aliasDeclarationEnd = aliases.get(memberHelperBase);
+    if (aliasDeclarationEnd === undefined || call.index <= aliasDeclarationEnd) return false;
+    return isReboundAfterAliasDeclaration(
+      source,
+      memberHelperBase,
+      aliasDeclarationEnd,
+      call.index,
+    );
+  }
+
   if (call.name === 'globalThis') {
     return hasLocalBindingBefore(source, 'globalThis', call.index);
   }
@@ -983,6 +1040,18 @@ function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()
   const aliasDeclarationEnd = aliases.get(call.name);
   if (aliasDeclarationEnd === undefined || call.index <= aliasDeclarationEnd) return false;
   return isReboundAfterAliasDeclaration(source, call.name, aliasDeclarationEnd, call.index);
+}
+
+function dynamicCodeMemberHelperBaseName(callPrefix) {
+  if (!/\.\s*(?:call|apply)\s*$/.test(callPrefix)) return undefined;
+  const targetExpression = callPrefix
+    .replace(/^([^\w$]*)/, '')
+    .replace(/\.\s*(?:call|apply)\s*$/, '')
+    .trim()
+    .replace(/^\(\s*/, '')
+    .replace(/\s*\)$/, '')
+    .trim();
+  return targetExpression.match(/^([A-Za-z_$][\w$]*)/)?.[1];
 }
 
 function hasNewPrefixBeforeCall(source, callIndex) {
