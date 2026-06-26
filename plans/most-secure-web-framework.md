@@ -228,8 +228,12 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       Statically resolved imported helpers that directly invoke an inline callback parameter now preserve the
       same enforced callback egress/secret-read rows, with imported callback alias/dynamic invocation still
       outside the proof; the same focused registry/check command, `git diff --check`, and `pnpm run check:vp`
-      passed. Remaining gap: callback aliases, nonliteral/dynamic calls, computed/export-star namespace shapes,
-      unresolved imports, and broader egress/secret analyzer reachability.
+      passed. Const callback-parameter aliases in same-module and imported helpers now preserve enforced callback
+      egress/secret-read rows, while mutable or dynamic callback aliasing remains outside the proof;
+      `pnpm exec vitest run packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts --run`,
+      `git diff --cached --check`, and file-level `vp check` passed. Remaining gap: nonliteral/dynamic calls,
+      mutable callback aliases, computed/export-star namespace shapes, unresolved imports, and broader
+      egress/secret analyzer reachability.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -246,7 +250,11 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       imported helper calls, including static local named re-export barrels, static namespace imports, and
       static default imports/default aliases/default-object helper exports, static handler references, and
       directly invoked inline callback parameters for local/imported helpers are enforced when declared
-      capabilities do not cover them. Remaining gap: broader analyzer integration beyond the framework-owned
+      capabilities do not cover them. Ambient opt-in now requires structured justification plus explicit credential
+      classes, detects cookies, authorization/proxy-authorization, auth-proxy identity headers, and request
+      sessions, and normalizes handler requests with `credentials: "omit"`; focused `agent-tool.test.ts` Vitest,
+      `git diff --cached --check`, file-level `vp check`, and `pnpm run check:api-surface` passed. Remaining gap:
+      broader analyzer integration beyond the framework-owned
       `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
@@ -575,7 +583,11 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       the same focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed. Const array
       destructuring from a static tuple literal now preserves summarized guard provenance while
       spreads/defaults/mismatches remain outside the proof; the focused scope-audit test, staged `git diff --check`,
-      and file-level `vp check` passed.
+      and file-level `vp check` passed. Const object destructuring from static object literals now preserves
+      summarized guard/session provenance for proven properties, while defaulted and spread-backed object
+      destructuring remain `scope: unknown`; `pnpm exec vitest run
+      packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --cached --check`, and file-level
+      `vp check` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
