@@ -42,6 +42,7 @@ export type {
   AppRouteDeclaration,
   AppRouteRenderContext,
   CreateAppOptions,
+  DelegatedSessionLifecycleAssertions,
   ErrorShellRenderer,
   KovoApp,
   RequestHandler,
@@ -63,6 +64,7 @@ import type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
   DelegatedSessionProvider,
+  DelegatedSessionLifecycleAssertions,
   AppLifecycleRequest,
   AppMutationDeclaration,
   CreateAppOptions,
@@ -222,7 +224,8 @@ function resolveDelegatedSessionProvider<SessionValue, RawRequest extends global
   if (typeof value === 'function') {
     throw new Error(
       'createApp({ sessionProvider }) now requires an explicit delegated lifecycle declaration: ' +
-        "{ lifecycle: 'delegated', provider, justification }. Kovo owns opaque sessions by " +
+        "{ lifecycle: 'delegated', provider, justification, lifecycleAssertions }. Kovo owns " +
+        'opaque sessions by ' +
         'default; use `session` for Kovo-owned opaque lifecycle or declare why a delegated ' +
         'provider owns validation, rotation, expiry, and revocation (SPEC §6.5 / OPP-11).',
     );
@@ -236,6 +239,7 @@ function resolveDelegatedSessionProvider<SessionValue, RawRequest extends global
   const record = value as {
     justification?: unknown;
     lifecycle?: unknown;
+    lifecycleAssertions?: unknown;
     provider?: unknown;
   };
   if (record.lifecycle !== 'delegated') {
@@ -256,6 +260,7 @@ function resolveDelegatedSessionProvider<SessionValue, RawRequest extends global
         'covering validation, rotation, expiry, and revocation ownership (SPEC §6.5 / OPP-11).',
     );
   }
+  assertDelegatedLifecycleAssertions(record.lifecycleAssertions);
   if (isOpaqueSessionProvider(record.provider)) {
     throw new Error(
       'createApp() received a Kovo-owned opaque session provider through `sessionProvider`. ' +
@@ -265,6 +270,27 @@ function resolveDelegatedSessionProvider<SessionValue, RawRequest extends global
     );
   }
   return record.provider as SessionProvider<RawRequest, SessionValue>;
+}
+
+function assertDelegatedLifecycleAssertions(
+  value: unknown,
+): asserts value is DelegatedSessionLifecycleAssertions {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(
+      'createApp({ sessionProvider }) requires delegated `lifecycleAssertions` with ' +
+        'non-empty validation, rotation, expiry, and revocation ownership fields ' +
+        '(SPEC §6.5 / OPP-11).',
+    );
+  }
+  for (const field of ['validation', 'rotation', 'expiry', 'revocation'] as const) {
+    const assertion = (value as Record<string, unknown>)[field];
+    if (typeof assertion !== 'string' || assertion.trim() === '') {
+      throw new Error(
+        `createApp({ sessionProvider }) requires a non-empty delegated lifecycleAssertions.${field} ` +
+          'ownership assertion (SPEC §6.5 / OPP-11).',
+      );
+    }
+  }
 }
 
 function resolveAppSessionProvider<SessionValue, RawRequest extends globalThis.Request>(

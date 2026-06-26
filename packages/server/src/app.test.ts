@@ -49,6 +49,12 @@ function delegatedSessionProvider(provider: (request: Request) => unknown) {
   return {
     justification: 'test delegates session lifecycle to an app-owned provider',
     lifecycle: 'delegated' as const,
+    lifecycleAssertions: {
+      expiry: 'test provider enforces session expiration',
+      revocation: 'test provider revokes sessions on sign-out',
+      rotation: 'test provider rotates credentials after authentication',
+      validation: 'test provider validates browser session credentials',
+    },
     provider,
   };
 }
@@ -403,10 +409,46 @@ describe('server createApp request shell', () => {
         sessionProvider: {
           justification: '   ',
           lifecycle: 'delegated',
+          lifecycleAssertions: {
+            expiry: 'test provider enforces session expiration',
+            revocation: 'test provider revokes sessions on sign-out',
+            rotation: 'test provider rotates credentials after authentication',
+            validation: 'test provider validates browser session credentials',
+          },
           provider: () => ({ user: { id: 'delegated' } }),
         },
       }),
     ).toThrow('requires a non-empty delegated session justification');
+  });
+
+  it('rejects delegated sessionProvider declarations without lifecycle assertions', () => {
+    expect(() =>
+      createApp({
+        sessionProvider: {
+          justification: 'delegated provider under migration',
+          lifecycle: 'delegated',
+          provider: () => ({ user: { id: 'delegated' } }),
+        } as never,
+      }),
+    ).toThrow('requires delegated `lifecycleAssertions`');
+  });
+
+  it('rejects delegated sessionProvider declarations with empty lifecycle assertions', () => {
+    expect(() =>
+      createApp({
+        sessionProvider: {
+          justification: 'delegated provider under migration',
+          lifecycle: 'delegated',
+          lifecycleAssertions: {
+            expiry: 'test provider enforces session expiration',
+            revocation: 'test provider revokes sessions on sign-out',
+            rotation: '   ',
+            validation: 'test provider validates browser session credentials',
+          },
+          provider: () => ({ user: { id: 'delegated' } }),
+        },
+      }),
+    ).toThrow('requires a non-empty delegated lifecycleAssertions.rotation');
   });
 
   it('rejects ambiguous owned and delegated session lifecycles', () => {

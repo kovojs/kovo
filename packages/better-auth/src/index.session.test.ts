@@ -26,6 +26,25 @@ const mappedAppSession: AppSession = {
   },
 };
 
+function betterAuthDelegatedDeclaration(provider: SessionProvider<RequestWithHeaders, AppSession>) {
+  return {
+    justification:
+      'Better Auth owns validation, rotation, expiry, and revocation for this app session.',
+    lifecycle: 'delegated' as const,
+    lifecycleAssertions: {
+      expiry: 'Better Auth session max-age and database expiry own expiration.',
+      revocation: 'Better Auth sign-out and session deletion own revocation.',
+      rotation: 'Better Auth session refresh and sign-in issue rotated credentials.',
+      validation: 'Better Auth getSession validates the browser session credential.',
+    },
+    provider,
+  };
+}
+
+function normalizedBetterAuthProvider(provider: SessionProvider<RequestWithHeaders, AppSession>) {
+  return createApp({ sessionProvider: betterAuthDelegatedDeclaration(provider) }).sessionProvider!;
+}
+
 describe('betterAuthSession', () => {
   it('maps a Better Auth-like session into the app session provider seam', async () => {
     const auth = new FakeBetterAuth();
@@ -55,12 +74,7 @@ describe('betterAuthSession', () => {
     const auth = new FakeBetterAuth();
     const provider = betterAuthSession(auth, mapSession);
     const app = createApp({
-      sessionProvider: {
-        justification:
-          'Better Auth owns validation, rotation, expiry, and revocation for this app session.',
-        lifecycle: 'delegated',
-        provider,
-      },
+      sessionProvider: betterAuthDelegatedDeclaration(provider),
     });
 
     expect(app.session).toBeUndefined();
@@ -115,7 +129,7 @@ describe('betterAuthSession', () => {
       { headers: new Headers({ cookie: 'kovo_session=s1' }) },
       {
         onSessionSetCookie: (cookie) => forwarded.push(cookie),
-        sessionProvider: provider,
+        sessionProvider: normalizedBetterAuthProvider(provider),
       },
     );
 
@@ -136,7 +150,7 @@ describe('betterAuthSession', () => {
       { headers: new Headers({ cookie: 'kovo_session=s1' }) },
       {
         onSessionSetCookie: (cookie) => forwarded.push(cookie),
-        sessionProvider: provider,
+        sessionProvider: normalizedBetterAuthProvider(provider),
       },
     );
 
@@ -155,7 +169,7 @@ describe('betterAuthSession', () => {
       { headers: new Headers({ cookie: 'kovo_session=s1' }) },
       {
         onSessionSetCookie: (cookie) => forwarded.push(cookie),
-        sessionProvider: provider,
+        sessionProvider: normalizedBetterAuthProvider(provider),
       },
     );
 
