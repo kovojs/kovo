@@ -193,8 +193,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       outside the rooted file-serve primitive owner; focused sink-policy tests, `pnpm run check:sink-policy`, and
       `git diff --check` passed. Default `fs` imports and direct raw filesystem sink re-exports are now covered
       by the same rooted-file gate; focused sink-policy tests, `pnpm run check:sink-policy`, and
-      `git diff --check` passed. Remaining gap: other §3 candidates and full static by-construction value-path
-      analyzer integration are not complete.
+      `git diff --check` passed. Static dynamic imports of `fs`/`node:fs/promises` now feed the same raw
+      file-serving/open sink gate while non-sink `readFile` stays quiet; focused sink-policy tests,
+      `pnpm run check:sink-policy`, and `git diff --check` passed. Remaining gap: other §3 candidates and full
+      static by-construction value-path analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
@@ -275,7 +277,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `pnpm run check:vp` passed. Static object wrappers around proven callback arrays such as
       `wrapper.callbacks[0]()` now preserve enforced callback-body reachability, while computed, spread, mutable,
       dynamic, and escaped wrappers remain outside the proof; focused registry tests, `git diff --check`, and
-      `pnpm run check:vp` passed.
+      `pnpm run check:vp` passed. Inline const-literal callback array wrappers such as
+      `{ callbacks: [callback] as const }` now preserve enforced callback-body reachability for static wrapper
+      methods, while inline spread, dynamic method, and escaped variants remain outside the proof; focused registry
+      tests, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -305,8 +310,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       validated ambient credential posture so caller mutation after declaration cannot widen the runtime allowlist;
       focused agent-tool tests and `git diff --check` passed. `agentToolAuditFacts()` now returns frozen audit
       fact snapshots, including nested ambient justification, authority, capability, and reachable-sink data;
-      focused agent-tool tests and `git diff --check` passed. Remaining gap: broader analyzer integration beyond
-      the framework-owned `tool()` boundary.
+      focused agent-tool tests and `git diff --check` passed. `tool()` now freezes the returned declaration so
+      post-review assignment cannot replace default-reject ambient posture with an opt-in posture; focused
+      agent-tool tests and `git diff --check` passed. Remaining gap: broader analyzer integration beyond the
+      framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
@@ -432,7 +439,9 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       the request session or cookie expiry; focused opaque-session/app tests and `git diff --check` passed.
       Browser session cookies now derive `Max-Age` and `Expires` from the store-backed absolute expiry and refuse
       already-expired custom-store records before setting a cookie; focused opaque-session tests and
-      `git diff --check` passed.
+      `git diff --check` passed. Custom-store validation exceptions now fail closed as `malformed`, and the
+      request-shell provider treats those credentials as anonymous instead of leaking lifecycle exceptions;
+      focused opaque-session tests and `git diff --check` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
@@ -677,6 +686,9 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       `scope: unknown`; the focused scope-audit test and `git diff --check` passed. Const scalar/object aliases
       placed inside static readonly object wrappers now preserve exact owner-principal provenance, while mutable
       alias variants stay `scope: unknown`; the focused scope-audit test and `git diff --check` passed.
+      `Object.freeze()` around a const summarized guard/session scalar alias now preserves exact owner-principal
+      provenance, while unsummarized, mismatched, and mutable scalar aliases stay `scope: unknown`; the focused
+      scope-audit test and `git diff --check` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
