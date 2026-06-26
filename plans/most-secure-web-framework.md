@@ -321,7 +321,10 @@ packages/server/src/opaque-session.test.ts`, `git diff --check`, and `pnpm run c
 packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed.
       `createOpaqueSessionManager()` now rejects malformed cookie names, caller-supplied secure-prefix aliases,
       and incomplete stores at construction so Kovo owns the credential alias set and lifecycle methods; focused
-      opaque-session/app/API tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
+      opaque-session/app/API tests, `git diff --check`, and `pnpm run check:vp` passed. Custom store validation
+      now fails closed when the returned record has a mismatched id, malformed opaque id, or incoherent lifetime,
+      and establishment refuses malformed store-created records before setting a browser cookie; focused
+      opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
       Better Auth delegation and explicit `sessionProvider` remain supported boundaries, so opaque sessions are
       not yet the only framework-wide default lifecycle.
 
