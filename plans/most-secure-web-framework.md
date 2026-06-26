@@ -155,11 +155,15 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       declared tool-body sinks without making them enforced. Analyzer-produced top-level `agentToolSinks` rows
       for egress and secret-read can now remain sound and be enforced; `packages/compiler/src/scan/agent-tools.ts`
       derives direct framework-owned `tool()` handler `fetch("https://host/...")` and `process.env.NAME` sinks
-      from parsed AST while ignoring type-only imports, nested declarations, and public/manual rows as audit-grade.
-      Focused graph/check/explain/registry/agent-tool tests plus `pnpm exec vitest run
+      from parsed AST while ignoring type-only imports, nested declarations, and public/manual rows as audit-grade;
+      direct same-module helper calls now contribute enforced helper egress/secret-read sink rows while shadowed,
+      imported, dynamic, and callback paths stay outside the proof. Focused graph/check/explain/registry/agent-tool
+      tests plus `pnpm exec vitest run
 packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts --run`,
-      `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
-      interprocedural, callback, nonliteral, and broader egress/secret analyzer reachability.
+      `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Latest helper-scan
+      extension verified the same focused Vitest command plus `git diff --check` and `pnpm run check:vp`.
+      Remaining gap: imported helpers, callbacks, nonliteral/dynamic calls, and broader egress/secret analyzer
+      reachability.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
@@ -171,9 +175,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       explicit justification for ambient credential opt-in; `kovo explain --capabilities` renders ambient posture
       and `kovo audit --fail-on-findings` flags missing justification for ambient-credential opt-in. The OPP-07
       graph subset now enforces declared write capabilities for matching framework-owned tool rows and renders
-      declared audit-grade reachable sinks; direct AST-produced `process.env` reads and literal `fetch()` egress
-      from framework-owned tool handlers are enforced when declared capabilities do not cover them. Remaining gap:
-      broader analyzer integration beyond the framework-owned `tool()` boundary.
+      declared audit-grade reachable sinks; direct AST-produced `process.env` reads plus literal `fetch()` egress
+      from framework-owned tool handlers and same-module helper calls are enforced when declared capabilities do
+      not cover them. Remaining gap: broader analyzer integration beyond the framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
