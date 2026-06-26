@@ -8,6 +8,11 @@ import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { mutation } from './mutation.js';
+import {
+  createMemoryOpaqueSessionStore,
+  createOpaqueSessionManager,
+  type OpaqueSessionManager,
+} from './opaque-session.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
 import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
@@ -119,7 +124,9 @@ export function createApp<
   );
   const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
   ensureKovoLoaderRuntimeClientModule(clientModules);
-  const sessionProvider = resolveAppSessionProvider(options);
+  const session = resolveAppSession(options);
+  const sessionProvider =
+    session === undefined ? options.sessionProvider : resolveAppSessionProvider(session);
 
   return {
     clientModules,
@@ -141,9 +148,35 @@ export function createApp<
       : { mutationReplayStore: options.mutationReplayStore }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
-    ...(options.session === undefined ? {} : { session: options.session }),
+    ...(session === undefined ? {} : { session }),
     ...(sessionProvider === undefined ? {} : { sessionProvider }),
   };
+}
+
+function resolveAppSession<
+  SessionValue,
+  DbValue,
+  RawRequest extends globalThis.Request,
+  AppRequest,
+>(
+  options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>,
+): OpaqueSessionManager<SessionValue> | undefined {
+  if (options.session !== undefined && options.sessionProvider !== undefined) {
+    throw new Error(
+      'createApp() received both `session` and `sessionProvider`. `session` gives the request ' +
+        'shell Kovo-owned opaque session lifecycle control (SPEC §6.5 / OPP-11); use ' +
+        '`sessionProvider` only for an explicit delegated session boundary.',
+    );
+  }
+  if (options.sessionProvider !== undefined) return undefined;
+  if (options.session !== undefined) return options.session;
+
+  // OPP-11 default posture: when the app does not explicitly delegate session provenance,
+  // the request shell owns an opaque, store-validated lifecycle instead of having no
+  // session boundary at all. SPEC §6.5 still permits explicit delegated providers.
+  return createOpaqueSessionManager<SessionValue>({
+    store: createMemoryOpaqueSessionStore<SessionValue>(),
+  });
 }
 
 function resolveAppSessionProvider<
@@ -152,17 +185,9 @@ function resolveAppSessionProvider<
   RawRequest extends globalThis.Request,
   AppRequest,
 >(
-  options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>,
+  session: OpaqueSessionManager<SessionValue>,
 ): CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>['sessionProvider'] {
-  if (options.session !== undefined && options.sessionProvider !== undefined) {
-    throw new Error(
-      'createApp() received both `session` and `sessionProvider`. `session` gives the request ' +
-        'shell Kovo-owned opaque session lifecycle control (SPEC §6.5 / OPP-11); use ' +
-        '`sessionProvider` only for an explicit delegated session boundary.',
-    );
-  }
-  if (options.session === undefined) return options.sessionProvider;
-  return options.session.provider as CreateAppOptions<
+  return session.provider as CreateAppOptions<
     SessionValue,
     DbValue,
     RawRequest,

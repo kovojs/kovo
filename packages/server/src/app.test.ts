@@ -310,6 +310,41 @@ describe('server createApp request shell', () => {
     ).resolves.toBeNull();
   });
 
+  it('defaults to a Kovo-owned opaque session manager when no session boundary is supplied', async () => {
+    const app = createApp<{ user: { id: string } | null }>();
+    const established = await app.session!.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    expect(app.session).toBeDefined();
+    expect(app.sessionProvider).toBe(app.session!.provider);
+    expect(app.session!.cookieName).toBe('kovo_session');
+    expect(established.session.id).toMatch(/^kos_[A-Za-z0-9_-]+$/);
+    expect(established.session.id).not.toContain('.');
+    await expect(
+      app.sessionProvider!(new Request('https://app.test/account', { headers: { cookie } })),
+    ).resolves.toEqual({ user: { id: 'u1' } });
+    await expect(
+      app.sessionProvider!(
+        new Request('https://app.test/account', {
+          headers: { cookie: 'kovo_session=header.payload.signature' },
+        }),
+      ),
+    ).resolves.toBeNull();
+
+    await app.session!.revoke(established.session.id);
+    await expect(
+      app.sessionProvider!(new Request('https://app.test/account', { headers: { cookie } })),
+    ).resolves.toBeNull();
+  });
+
+  it('keeps delegated sessionProvider as an explicit non-owned boundary', () => {
+    const sessionProvider = () => ({ user: { id: 'delegated' } });
+    const app = createApp({ sessionProvider });
+
+    expect(app.session).toBeUndefined();
+    expect(app.sessionProvider).toBe(sessionProvider);
+  });
+
   it('rejects ambiguous owned and delegated session lifecycles', () => {
     const manager = createOpaqueSessionManager({
       store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
