@@ -252,11 +252,13 @@ export function createOpaqueSessionManager<SessionValue>(
 ): OpaqueSessionManager<SessionValue> {
   assertOpaqueSessionManagerOptions(options);
   const cookieName = options.cookieName ?? 'kovo_session';
+  const store = snapshotOpaqueSessionStore(options.store);
   const cookieOptions: CookieOptions = {
     ...options.cookie,
     class: 'session',
     path: options.cookie?.path ?? '/',
   };
+  const acceptAuthorizationHeader = options.acceptAuthorizationHeader === true;
 
   const validate = async (
     id: string | null | undefined,
@@ -264,7 +266,7 @@ export function createOpaqueSessionManager<SessionValue>(
     if (id === null || id === undefined || id === '') return { ok: false, reason: 'missing' };
     if (!isOpaqueSessionId(id)) return { ok: false, reason: 'malformed' };
     try {
-      return normalizeOpaqueSessionValidation(id, await options.store.validate(id));
+      return normalizeOpaqueSessionValidation(id, await store.validate(id));
     } catch {
       // SPEC §6.5 / OPP-11: the request shell treats absent or invalid owned-session material as
       // anonymous. A store outage or adapter bug must not turn browser credentials into a request
@@ -276,7 +278,7 @@ export function createOpaqueSessionManager<SessionValue>(
     request: Request,
   ): Promise<SessionValue | null> => {
     const result = await validate(
-      extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
+      extractOpaqueSessionId(request, cookieName, acceptAuthorizationHeader),
     );
     return result.ok ? result.session.value : null;
   };
@@ -289,9 +291,7 @@ export function createOpaqueSessionManager<SessionValue>(
     cookieName,
     validate,
     async validateRequest(request: Request): Promise<OpaqueSessionValidation<SessionValue>> {
-      return validate(
-        extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
-      );
+      return validate(extractOpaqueSessionId(request, cookieName, acceptAuthorizationHeader));
     },
     provider,
     async establish(
@@ -302,9 +302,9 @@ export function createOpaqueSessionManager<SessionValue>(
     ): Promise<OpaqueSessionEstablishResult<SessionValue>> {
       const rawSession =
         establishOptions.priorId === null || establishOptions.priorId === undefined
-          ? await options.store.create(value, establishOptions)
+          ? await store.create(value, establishOptions)
           : await rotateOpaqueSession(
-              options.store,
+              store,
               establishOptions.priorId,
               value,
               establishOptions.ttlMs === undefined ? {} : { ttlMs: establishOptions.ttlMs },
@@ -324,7 +324,7 @@ export function createOpaqueSessionManager<SessionValue>(
     },
     async revoke(id: string | null | undefined): Promise<OpaqueSessionRevokeResult> {
       if (id !== null && id !== undefined && id !== '') {
-        await revokeOpaqueSession(options.store, id);
+        await revokeOpaqueSession(store, id);
       }
       return {
         setCookie: serializeCookie(cookieName, '', {
@@ -500,6 +500,28 @@ function assertOpaqueSessionManagerOptions<SessionValue>(
     );
   }
   if (options.cookieName !== undefined) assertOpaqueSessionCookieName(options.cookieName);
+}
+
+function snapshotOpaqueSessionStore<SessionValue>(
+  store: OpaqueSessionStore<SessionValue>,
+): OpaqueSessionStore<SessionValue> {
+  // SPEC §6.5 / OPP-11: the manager-facing lifecycle methods are accepted once at construction.
+  // Later mutation of a store object must not swap validation, rotation, or revocation semantics.
+  const { create, validate, rotate, revoke } = store;
+  return {
+    create(value, options) {
+      return create.call(store, value, options);
+    },
+    validate(id) {
+      return validate.call(store, id);
+    },
+    rotate(priorId, value, options) {
+      return rotate.call(store, priorId, value, options);
+    },
+    revoke(id) {
+      return revoke.call(store, id);
+    },
+  };
 }
 
 function assertOpaqueSessionCookieName(cookieName: string): void {

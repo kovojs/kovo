@@ -290,6 +290,77 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     ).toThrow('createOpaqueSessionManager requires an opaque session store');
   });
 
+  it('pins accepted store lifecycle methods against post-construction mutation', async () => {
+    type Session = { user: { id: string } | null };
+    const baseStore = createMemoryOpaqueSessionStore<Session>();
+    const store = { ...baseStore };
+    const manager = createOpaqueSessionManager({ store });
+    const anonymous = await manager.establish({ user: null });
+
+    store.validate = async () => ({
+      ok: true,
+      session: {
+        id: anonymous.session.id,
+        createdAt: 1,
+        expiresAt: Date.now() + 60_000,
+        value: { user: { id: 'attacker' } },
+      },
+    });
+    await expect(manager.validate(anonymous.session.id)).resolves.toMatchObject({
+      ok: true,
+      session: { value: { user: null } },
+    });
+
+    store.rotate = async (_priorId, value) => ({
+      ...anonymous.session,
+      expiresAt: Date.now() + 60_000,
+      value,
+    });
+    const authenticated = await manager.establish(
+      { user: { id: 'u1' } },
+      { priorId: anonymous.session.id },
+    );
+    expect(authenticated.session.id).not.toBe(anonymous.session.id);
+    await expect(manager.validate(anonymous.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'revoked',
+    });
+
+    store.revoke = async () => {
+      // Store mutation after manager construction must not disable the accepted revocation sink.
+    };
+    await manager.revoke(authenticated.session.id);
+    await expect(manager.validate(authenticated.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'revoked',
+    });
+  });
+
+  it('pins accepted manager lifecycle knobs against post-construction option mutation', async () => {
+    const cookie = { path: '/accepted' };
+    const options = {
+      acceptAuthorizationHeader: false,
+      cookie,
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    };
+    const manager = createOpaqueSessionManager(options);
+
+    options.acceptAuthorizationHeader = true;
+    cookie.path = '/mutated';
+
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    expect(established.setCookie).toContain('Path=/accepted');
+    expect(established.setCookie).not.toContain('Path=/mutated');
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: { authorization: `Bearer ${established.session.id}` },
+        }),
+      ),
+    ).resolves.toBeNull();
+  });
+
   it('accepts Kovo-managed secure cookie aliases for a valid custom base name', async () => {
     const manager = createOpaqueSessionManager({
       cookieName: 'app_session',
