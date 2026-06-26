@@ -8,6 +8,10 @@ import {
   type ServerResponseBase,
 } from './response.js';
 import type { Schema } from './schema.js';
+import {
+  assertNormalizedSessionProvider,
+  markNormalizedSessionProvider,
+} from './session-provider-boundary.js';
 
 /**
  * A guard denial that expresses the user-facing *intent* of a rejection, leaving
@@ -387,7 +391,7 @@ export function session<Value>(schema: Schema<Value>): SessionDefinition<Value> 
       return schema.parse(request.session);
     },
     provider(provider) {
-      return provider;
+      return markNormalizedSessionProvider(provider, 'delegated');
     },
     schema,
   };
@@ -417,6 +421,7 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   let lifecycleRequest: unknown = request;
 
   if (options.sessionProvider) {
+    assertNormalizedSessionProvider(options.sessionProvider);
     const resolved = await options.sessionProvider(request);
     // part-3 I2 (SPEC §6.5): unwrap the additive `{ value, setCookies }` envelope so a
     // rolling/refresh provider's fresh Set-Cookie headers reach the response; a plain
