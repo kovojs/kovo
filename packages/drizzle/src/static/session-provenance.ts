@@ -66,6 +66,7 @@ function analyzerHelperSummariesForSourceFile(
     const helperName = summaryHelperName(helper);
     if (helperName) summaries.set(`name:${helperName}`, provenance);
   }
+  addLocalHelperSummaryAliases(sourceFile, summaries);
   return summaries;
 }
 
@@ -80,6 +81,42 @@ function helperSymbolKeyForSummary(node: Node): string | undefined {
 function summaryHelperName(node: Node): string | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   return Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+}
+
+function addLocalHelperSummaryAliases(
+  sourceFile: SourceFile,
+  summaries: Map<string, PrivateScopeProvenance>,
+): void {
+  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const name = declaration.getNameNode();
+    if (!Node.isIdentifier(name)) continue;
+
+    const declarationList = declaration.getParent();
+    if (!Node.isVariableDeclarationList(declarationList)) continue;
+    if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') continue;
+
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+
+    const provenance = helperSummaryForStaticReference(initializer, summaries);
+    if (!provenance) continue;
+
+    const key = resolvedSymbolKey(symbolForIdentifierReference(name) ?? name.getSymbol());
+    if (key) summaries.set(key, provenance);
+    summaries.set(`name:${name.getText()}`, provenance);
+  }
+}
+
+function helperSummaryForStaticReference(
+  node: Node,
+  summaries: ReadonlyMap<string, PrivateScopeProvenance>,
+): PrivateScopeProvenance | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
+  const name = Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+  return (
+    (key ? summaries.get(key) : undefined) ?? (name ? summaries.get(`name:${name}`) : undefined)
+  );
 }
 
 function analyzerSummaryReturnProvenance(node: Node): PrivateScopeProvenance | undefined {
