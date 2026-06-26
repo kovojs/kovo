@@ -790,7 +790,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       Direct non-equality owner predicates (`ne(...)` and `not(eq(...))`) now feed the fail-closed arg-candidate
       path for read/write audits while remaining excluded from exact session/principal owner proof, so client
       non-equality scopes report `args` and session non-equality stays `unknown`; the focused scope-audit test,
-      `git diff --check`, and `pnpm run check:vp` passed.
+      `git diff --check`, and `pnpm run check:vp` passed. Direct range predicates (`gt`/`gte`/`lt`/`lte`/
+      `between`) now feed the same fail-closed arg-candidate path for read/write owner audits, while
+      session/guard range predicates remain excluded from exact `scope: session` proof; the focused scope-audit
+      test, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
