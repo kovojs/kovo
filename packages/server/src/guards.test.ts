@@ -158,9 +158,9 @@ describe('server guard and session primitives', () => {
     expect(() => request.db.$client.prepare('select * from products')).toThrow(/KV422/);
     expect(calls).toEqual([]);
 
-    expect(request.db.pglite.query({ text: 'select * from products', values: [] })).toBe(
-      'pglite-ok',
-    );
+    expect(
+      request.db.pglite.query({ text: 'select * from products where id = $1', values: ['p1'] }),
+    ).toBe('pglite-ok');
     expect(request.db.sqlite.exec(stampParameterizedSql({}))).toBe('sqlite-ok');
     expect(
       request.db.client.execute({ sql: 'select * from products where id = ?', args: ['p1'] }),
