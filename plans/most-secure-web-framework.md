@@ -447,11 +447,14 @@ scripts/check-pack-security.test.mjs` passed; `pnpm run check:pack-security -- -
       private-scope aliases such as `const { guard: { userId } } = ctx` while rejecting mismatched guard fields;
       shallow const object-property aliases such as `principal.userId` also prove only exact matching guard fields.
       Const destructured query args such as `const { id } = input` now stay classified as `arg:*` owner reads,
-      while non-`input` destructuring remains `scope: unknown`.
+      while non-`input` destructuring remains `scope: unknown`. Explicitly summarized static property-call guard
+      helpers such as `guardFns.currentGuardUser(ctx)` can now prove exact owner-column predicates, while
+      mismatched or unsummarized helpers remain `scope: unknown`.
       Focused scope-audit tests, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface`
       passed; latest destructured-arg coverage used `pnpm exec vitest run
-packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm run check:vp`. Remaining gap:
-      this is not full guard-predicate correctness.
+packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm run check:vp`; latest
+      property-call helper coverage used the same focused test, `git diff --check`, and `pnpm run check:vp`.
+      Remaining gap: this is not full guard-predicate correctness.
 
 ---
 
