@@ -53,6 +53,7 @@ import {
   type QueryInstanceKeyOperand,
   type QueryReceiverReferences,
   type QueryShape,
+  type PrivateScopeProvenance,
   type SessionProvenanceContext,
   type SourceFileInput,
   type UnmodeledRelationFact,
@@ -773,7 +774,9 @@ function eqOperandsAreTableColumnArgKeyed(
   expression: Node,
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
-  const provenance = privateScopeForExpression(expression, sessionContext);
+  const provenance =
+    privateScopeForExpression(expression, sessionContext) ??
+    summarizedStaticCallPrivateScope(expression, sessionContext);
   if (!provenance) {
     // SPEC §11.1 / KV414 (minimal session-via-local tracing): recognize a session
     // value bound to a local const and then used in the scoping predicate, e.g.
@@ -792,6 +795,22 @@ function eqOperandsAreTableColumnArgKeyed(
     privateKey: privateScopeKey(provenance),
     ...(provenance.kind === 'session' ? { sessionKey: provenance.path } : {}),
   };
+}
+
+function summarizedStaticCallPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isCallExpression(node)) return undefined;
+
+  const callee = unwrappedStaticExpressionNode(node.getExpression());
+  const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
+  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  return (
+    (key ? sessionContext.helpers.get(key) : undefined) ??
+    (name ? sessionContext.helpers.get(`name:${name}`) : undefined)
+  );
 }
 
 /**
