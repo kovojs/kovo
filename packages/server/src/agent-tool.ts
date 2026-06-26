@@ -194,17 +194,20 @@ export async function runAgentTool<Input, Output, Context = unknown>(
   },
 ): Promise<Output> {
   assertAgentToolDeclaration(declaration);
-  assertAuthorityAllowed(declaration, context.authority);
+  const invocationContext = snapshotAgentToolInvocationContext(context);
+  assertAuthorityAllowed(declaration, invocationContext.authority);
   const request =
-    context.request === undefined
+    invocationContext.request === undefined
       ? undefined
-      : normalizeAgentToolRequest(declaration, context.request);
+      : normalizeAgentToolRequest(declaration, invocationContext.request);
 
-  return declaration.handler(input, {
-    authority: context.authority,
+  const normalizedContext = Object.freeze({
+    authority: invocationContext.authority,
     ...(request === undefined ? {} : { request }),
-    value: context.value,
+    value: invocationContext.value as Context,
   });
+
+  return declaration.handler(input, normalizedContext);
 }
 
 /** Produce audit facts for declared agent tools. */
@@ -268,6 +271,59 @@ function assertAuthorityAllowed(
       `Agent tool "${declaration.name}" cannot run with undeclared authority "${requested}".`,
     );
   }
+}
+
+function snapshotAgentToolInvocationContext<Context>(context: {
+  authority: AgentToolAuthority;
+  request?: Request;
+  value: Context;
+}): AgentToolInvocationContext<Context> & { request?: Request } {
+  assertObject(context, 'agentTool.context');
+  const authority = snapshotInvocationAuthority(
+    requiredOwnDataProperty(context, 'authority', 'agentTool.context.authority'),
+  );
+  const request = optionalOwnDataProperty(context, 'request', 'agentTool.context.request') as
+    | Request
+    | undefined;
+  const value = requiredOwnDataProperty(context, 'value', 'agentTool.context.value') as Context;
+
+  return Object.freeze({
+    authority,
+    ...(request === undefined ? {} : { request }),
+    value,
+  });
+}
+
+function snapshotInvocationAuthority(authority: unknown): AgentToolAuthority {
+  assertObject(authority, 'agentTool.context.authority');
+  const kind = requiredOwnDataProperty(authority, 'kind', 'agentTool.context.authority.kind');
+  const requirement = requiredOwnString(
+    authority,
+    'requirement',
+    'agentTool.context.authority.requirement',
+  );
+
+  if (kind === 'principal') {
+    return Object.freeze({
+      kind,
+      principal: requiredOwnString(authority, 'principal', 'agentTool.context.authority.principal'),
+      requirement,
+    });
+  }
+  if (kind === 'capability') {
+    return Object.freeze({
+      capability: requiredOwnString(
+        authority,
+        'capability',
+        'agentTool.context.authority.capability',
+      ),
+      kind,
+      requirement,
+    });
+  }
+  throw new AgentToolCapabilityError(
+    'agentTool.context.authority.kind must be a known authority kind.',
+  );
 }
 
 type AmbientCredentialHeader = {

@@ -445,6 +445,151 @@ describe('agent tool capability primitive', () => {
     ).rejects.toThrow('cannot run with undeclared authority "capability:orders:wide"');
   });
 
+  it('requires runtime invocation metadata to be own data properties before handler dispatch', async () => {
+    let handlerRuns = 0;
+    let authorityGetterRan = false;
+    let requestGetterRan = false;
+    let valueGetterRan = false;
+    const updateOrder = tool({
+      audit: { owner: 'security' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'orders.write', reason: 'update one order status' }],
+      handler: (_input: { id: string }, context) => {
+        handlerRuns += 1;
+        return {
+          frozenContext: Object.isFrozen(context),
+          principal:
+            context.authority.kind === 'principal' ? context.authority.principal : undefined,
+          value: context.value,
+        };
+      },
+      name: 'orders.ownPropsUpdate',
+      purpose: 'Update a single order status after a human-approved agent action.',
+    });
+
+    await expect(
+      runAgentTool(updateOrder, { id: 'ord_1' }, { authority: principalAuthority, value: 123 }),
+    ).resolves.toEqual({
+      frozenContext: true,
+      principal: 'user:123',
+      value: 123,
+    });
+    expect(handlerRuns).toBe(1);
+
+    const inheritedContext = Object.create({
+      authority: principalAuthority,
+      value: {},
+    }) as {
+      authority: AgentToolAuthority;
+      value: Record<string, never>;
+    };
+
+    await expect(runAgentTool(updateOrder, { id: 'ord_1' }, inheritedContext)).rejects.toThrow(
+      'agentTool.context.authority must be declared as an own data property',
+    );
+    expect(handlerRuns).toBe(1);
+
+    const accessorContext = {
+      get authority() {
+        authorityGetterRan = true;
+        return principalAuthority;
+      },
+      value: {},
+    };
+
+    await expect(
+      runAgentTool(updateOrder, { id: 'ord_1' }, accessorContext as never),
+    ).rejects.toThrow('agentTool.context.authority must be declared as an own data property');
+    expect(authorityGetterRan).toBe(false);
+    expect(handlerRuns).toBe(1);
+
+    await expect(
+      runAgentTool(updateOrder, { id: 'ord_1' }, {
+        authority: principalAuthority,
+        get request() {
+          requestGetterRan = true;
+          return new Request('https://example.test/tool');
+        },
+        value: {},
+      } as never),
+    ).rejects.toThrow('agentTool.context.request must be declared as an own data property');
+    expect(requestGetterRan).toBe(false);
+    expect(handlerRuns).toBe(1);
+
+    await expect(
+      runAgentTool(updateOrder, { id: 'ord_1' }, {
+        authority: principalAuthority,
+        get value() {
+          valueGetterRan = true;
+          return {};
+        },
+      } as never),
+    ).rejects.toThrow('agentTool.context.value must be declared as an own data property');
+    expect(valueGetterRan).toBe(false);
+    expect(handlerRuns).toBe(1);
+  });
+
+  it('requires runtime invocation authority fields to be own data properties', async () => {
+    const updateOrder = declaredTool();
+    let kindGetterRan = false;
+    let principalGetterRan = false;
+
+    await expect(
+      runAgentTool(
+        updateOrder,
+        { id: 'ord_1' },
+        {
+          authority: Object.create({
+            kind: 'principal',
+            principal: 'user:123',
+            requirement: 'agent runtime bound the user principal for this call',
+          }) as AgentToolAuthority,
+          value: {},
+        },
+      ),
+    ).rejects.toThrow('agentTool.context.authority.kind must be declared as an own data property');
+
+    await expect(
+      runAgentTool(
+        updateOrder,
+        { id: 'ord_1' },
+        {
+          authority: {
+            get kind() {
+              kindGetterRan = true;
+              return 'principal';
+            },
+            principal: 'user:123',
+            requirement: 'agent runtime bound the user principal for this call',
+          } as never,
+          value: {},
+        },
+      ),
+    ).rejects.toThrow('agentTool.context.authority.kind must be declared as an own data property');
+    expect(kindGetterRan).toBe(false);
+
+    await expect(
+      runAgentTool(
+        updateOrder,
+        { id: 'ord_1' },
+        {
+          authority: {
+            kind: 'principal',
+            get principal() {
+              principalGetterRan = true;
+              return 'user:123';
+            },
+            requirement: 'agent runtime bound the user principal for this call',
+          } as never,
+          value: {},
+        },
+      ),
+    ).rejects.toThrow(
+      'agentTool.context.authority.principal must be declared as an own data property',
+    );
+    expect(principalGetterRan).toBe(false);
+  });
+
   it('allows only declared ambient credential kinds and normalizes the request', async () => {
     const ambientTool = tool({
       ambientCredentials: {
