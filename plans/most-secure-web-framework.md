@@ -179,8 +179,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       while preserving reviver-free JSON plus schema validation; focused sink-policy gate tests,
       `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. The same gate now also
       rejects straightforward dynamic imports of known deserializer APIs/modules; focused sink-policy gate tests,
-      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3
-      candidates and full static by-construction value-path analyzer integration are not complete.
+      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Direct value-side SQL
+      brand field laundering through `__kovoSqlBrand`, `__kovoSqlIdentifierBrand`, and `__kovoSqlKeywordBrand`
+      object fields or assignments is now rejected outside the owning SQL constructor module; focused
+      sink-policy tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3 candidates
+      and full static by-construction value-path analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
       (capability _bounding_) + runtime-DiD (value-moving approval) · lev 7 · XL · non-breaking. Kovo's headline
@@ -378,7 +381,10 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       not yet the only framework-wide lifecycle. Session lifecycle provider witnesses now use module-private
       symbols instead of global `Symbol.for()` keys, so app code cannot forge normalized or opaque-provider
       markers for lower-level request-shell helpers; focused server session tests, `git diff --check`, and
-      `pnpm run check:vp` passed.
+      `pnpm run check:vp` passed. Delegated session declarations now require `lifecycle`, `provider`,
+      `justification`, `lifecycleAssertions`, and each assertion field to be own data properties, and snapshot the
+      delegated provider before validation returns so accessors cannot validate as delegated and later expose a
+      Kovo-owned opaque provider; focused app/session tests, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
