@@ -206,6 +206,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       constructor aliases such as `const Pattern = RegExp; Pattern(request.url)` now hit the same KV442
       dynamic-RegExp gate while static patterns, non-RegExp aliases, and local shadowing stay quiet; focused
       sink-policy tests, `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed.
+      Global constructor forms (`globalThis.RegExp`, `new globalThis.RegExp`, bracket access, and direct aliases
+      from those constructors) now hit KV442 for request-derived patterns, while static patterns and locally
+      shadowed `globalThis` forms stay quiet; focused sink-policy tests, `pnpm run check:sink-policy`,
+      `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: other §3 candidates and full
       static by-construction value-path analyzer integration are not complete.
 
