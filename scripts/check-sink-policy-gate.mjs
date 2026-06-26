@@ -34,6 +34,24 @@ export const defaultLogChannelNeutralizerFiles = ['packages/server/src/logging.t
 export const defaultResponseFragmentApplyPath = 'packages/browser/src/response-fragment-apply.ts';
 
 const responseFragmentHtmlSinkKind = 'browser:response-fragment-html';
+const defaultSqlBlessedBrandRoots = [
+  'packages/core/src',
+  'packages/drizzle/src',
+  'packages/server/src',
+];
+const defaultSqlBlessedBrandConstructorFiles = ['packages/core/src/internal/sql-safety.ts'];
+const sqlBlessedBrandTypeNames = new Set([
+  'KovoParameterizedSql',
+  'KovoSqlIdentifier',
+  'KovoSqlKeyword',
+  'KovoStaticSql',
+  'KovoTrustedSql',
+  'ParameterizedSql',
+  'SqlIdentifier',
+  'SqlKeyword',
+  'StaticSqlText',
+  'TrustedSql',
+]);
 
 const allowedSinkPolicyExports = new Set([
   'Blessed',
@@ -90,6 +108,11 @@ export function checkSinkPolicyGate(options = {}) {
   const responseFragmentApplyPath = Object.hasOwn(options, 'responseFragmentApplyPath')
     ? options.responseFragmentApplyPath
     : defaultResponseFragmentApplyPath;
+  const sqlBlessedBrandFiles =
+    options.sqlBlessedBrandFiles ?? collectSourceFiles(root, defaultSqlBlessedBrandRoots);
+  const sqlBlessedBrandConstructorFileSet = new Set(
+    options.sqlBlessedBrandConstructorFiles ?? defaultSqlBlessedBrandConstructorFiles,
+  );
   const commandExecutionFiles =
     options.commandExecutionFiles ?? collectSourceFiles(root, commandExecutionRoots);
   const logChannelFiles = options.logChannelFiles ?? collectSourceFiles(root, logChannelRoots);
@@ -144,6 +167,18 @@ export function checkSinkPolicyGate(options = {}) {
         );
       }
     }
+  }
+
+  for (const filePath of sqlBlessedBrandFiles) {
+    if (!exists(filePath)) {
+      findings.push(`${filePath}: SQL blessed-brand laundering gate input is missing`);
+      continue;
+    }
+    findings.push(
+      ...sqlBlessedBrandLaunderingFindings(filePath, readText(filePath), {
+        allowedConstructorFile: sqlBlessedBrandConstructorFileSet.has(filePath),
+      }),
+    );
   }
 
   const commandExecutionSinkFileSet = new Set(commandExecutionSinkFiles);
@@ -273,6 +308,55 @@ export function responseFragmentApplyInvariantFindings(filePath, text) {
   }
 
   return findings;
+}
+
+export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) {
+  if (options.allowedConstructorFile === true) return [];
+
+  const source = stripComments(text);
+  const findings = [];
+  const brandNames = [...sqlBlessedBrandTypeNames].join('|');
+  const brandType = String.raw`(?:${brandNames})\b`;
+  const anyOrUnknown = String.raw`(?:any|unknown)\b`;
+
+  // Narrow KV440 floor: catch local TypeScript assertion/satisfies escape hatches that mint a
+  // blessed SQL brand without flowing through sql-safety.ts stamp* constructors. This is not the
+  // full §3.1 symbol-provenance analyzer; it pins the most direct laundering shapes.
+  const patterns = [
+    {
+      pattern: new RegExp(
+        String.raw`\bas\s+${anyOrUnknown}\s+as\s+(?:[^;\n]*&\s*)?${brandType}`,
+        'g',
+      ),
+      description: 'any/unknown assertion chain',
+    },
+    {
+      pattern: new RegExp(String.raw`\bas\s+(?:[^;\n]*&\s*)?${brandType}`, 'g'),
+      description: 'direct type assertion',
+    },
+    {
+      pattern: new RegExp(String.raw`\bsatisfies\s+(?:[^;\n]*&\s*)?${brandType}`, 'g'),
+      description: 'satisfies assertion',
+    },
+  ];
+
+  for (const { pattern, description } of patterns) {
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+      const precedingText = source.slice(Math.max(0, match.index - 32), match.index);
+      if (
+        description === 'direct type assertion' &&
+        /\bas\s+(?:any|unknown)\s*$/.test(precedingText)
+      ) {
+        continue;
+      }
+      findings.push(
+        `${filePath}: KV440 SQL blessed-brand laundering via ${description}; use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor`,
+      );
+    }
+  }
+
+  return dedupe(findings);
 }
 
 export function commandExecutionSinkFindings(filePath, text, options = {}) {
