@@ -735,6 +735,9 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       and `pnpm run check:vp` passed. Nullish and logical owner-principal expressions now prove scope only when
       both sides resolve to the same exact private key, with mismatched, client-input, and mutable aliases staying
       `scope: unknown`; the focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
+      Singleton `inArray(ownerColumn, [principal])` predicates now reuse the exact owner-principal proof path,
+      while non-singleton, client-input, mismatched, mutable, computed, and mixed arrays remain outside the
+      `scope: session` subset; the focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
