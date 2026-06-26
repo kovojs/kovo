@@ -459,6 +459,97 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  // OPP-28 narrow DATA subset: `inArray(ownerColumn, [principal])` is equality-equivalent
+  // only for a literal singleton array. Larger, mixed, mutable, computed, or mismatched
+  // predicates stay outside the proof subset instead of being laundered into `session`.
+  it('OPP-28: proves only singleton inArray owner-column principal predicates', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { inArray } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const orderByInput = query("orderByInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    return db.select({ id: orders.id }).from(orders).where(inArray(orders.userId, [input.userId]));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMine = query("ordersMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string; otherUserId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(inArray(orders.userId, [req.session.userId]));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMineMulti = query("ordersMineMulti", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string; otherUserId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(inArray(orders.userId, [req.session.userId, req.session.otherUserId]));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMineMixed = query("ordersMineMixed", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(inArray(orders.userId, [req.session.userId, input.userId]));',
+              '  },',
+              '});',
+              '',
+              'export const orderBySessionId = query("orderBySessionId", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(inArray(orders.id, [req.session.userId]));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMineMutable = query("ordersMineMutable", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    let principals = [req.session.userId];',
+              '    return db.select({ id: orders.id }).from(orders).where(inArray(orders.userId, principals));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMineComputed = query("ordersMineComputed", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(inArray(orders.userId, Array.of(req.session.userId)));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'orderByInput', scope: 'args' },
+      { name: 'orderBySessionId', scope: 'unknown' },
+      { name: 'ordersMine', scope: 'session' },
+      { name: 'ordersMineComputed', scope: 'unknown' },
+      { name: 'ordersMineMixed', scope: 'unknown' },
+      { name: 'ordersMineMulti', scope: 'unknown' },
+      { name: 'ordersMineMutable', scope: 'unknown' },
+    ]);
+    expect(audit.scopeAudits.find((a) => a.name === 'ordersMine')?.detail).toContain(
+      'owner column compared to session:userId',
+    );
+  });
+
   it('carries exact client owner keys for same-domain arg-scoped reads', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({

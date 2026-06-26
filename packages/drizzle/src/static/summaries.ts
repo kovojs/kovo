@@ -2332,11 +2332,27 @@ function localDestructuredInputKey(expression: Node): string | undefined {
     };
   }
 
+  if (name === 'inArray') {
+    const [left, right] = expression.getArguments();
+    const onlyElement = right ? singleLiteralArrayElement(right) : undefined;
+    return left && onlyElement
+      ? { kind: 'eq', left, right: onlyElement }
+      : { expr: expression.getText(), kind: 'opaque' };
+  }
+
   if (name !== 'eq') return { expr: expression.getText(), kind: 'opaque' };
   const [left, right] = expression.getArguments();
   return left && right
     ? { kind: 'eq', left, right }
     : { expr: expression.getText(), kind: 'opaque' };
+}
+
+function singleLiteralArrayElement(node: Node): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isArrayLiteralExpression(expression)) return undefined;
+
+  const elements = expression.getElements();
+  return elements.length === 1 ? elements[0] : undefined;
 }
 
 /** @internal */ export function pnfExactConjuncts(

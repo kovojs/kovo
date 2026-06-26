@@ -234,7 +234,8 @@ export {
   };
   /**
    * Narrow OPP-28 Authorization-gates-DATA subset: owner-annotated domains whose
-   * owner column is compared against the matching session/principal private symbol.
+   * owner column is compared against the matching session/principal private symbol
+   * through `eq(...)` or the equality-equivalent `inArray(owner, [principal])` subset.
    * This is stricter than `sessionAnchoredReads`, which may anchor any table column.
    */
   ownerScopedSessionReads?: readonly string[];
@@ -503,7 +504,8 @@ function ownerAuthorizationDataProofDetail(
   name: string;
   /**
    * Narrow OPP-28 Authorization-gates-DATA subset for writes: owner-annotated domains whose
-   * owner column is compared against the matching session/principal private symbol.
+   * owner column is compared against the matching session/principal private symbol through
+   * `eq(...)` or the equality-equivalent `inArray(owner, [principal])` subset.
    */
   ownerScopedSessionWrites?: readonly string[];
   /** Exact private principal symbols for `ownerScopedSessionWrites`, e.g. `guard:userId`. */
