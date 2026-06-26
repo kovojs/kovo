@@ -313,6 +313,42 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
   });
 
+  it('fails closed when a custom store returns a malformed validation result', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        validate: async () => undefined as never,
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+    await expect(
+      manager.provider(new Request('https://app.test/account', { headers: { cookie } })),
+    ).resolves.toBeNull();
+  });
+
+  it('fails closed when a custom store returns an unknown validation rejection reason', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        validate: async () => ({ ok: false, reason: 'active' }) as never,
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+  });
+
   it('refuses to set a browser cookie when a custom store creates a malformed session record', async () => {
     const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
     const malformedStore: OpaqueSessionStore<{ user: { id: string } }> = {

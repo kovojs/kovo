@@ -355,13 +355,33 @@ async function rotateOpaqueSession<SessionValue>(
 
 function normalizeOpaqueSessionValidation<SessionValue>(
   presentedId: string,
-  result: OpaqueSessionValidation<SessionValue>,
+  result: unknown,
 ): OpaqueSessionValidation<SessionValue> {
-  if (!result.ok) return result;
-  if (!isCoherentOpaqueSessionRecord(result.session) || result.session.id !== presentedId) {
+  // SPEC §6.5 / OPP-11: custom stores sit on the owned session trust boundary. Treat
+  // malformed validation outcomes as anonymous/malformed instead of throwing or accepting an
+  // undeclared lifecycle reason.
+  if (result === null || typeof result !== 'object') return { ok: false, reason: 'malformed' };
+  const validation = result as {
+    ok?: unknown;
+    reason?: unknown;
+    session?: unknown;
+  };
+  if (validation.ok !== true) {
+    return isOpaqueSessionRejectReason(validation.reason)
+      ? { ok: false, reason: validation.reason }
+      : { ok: false, reason: 'malformed' };
+  }
+  if (
+    !isCoherentOpaqueSessionRecord<SessionValue>(validation.session) ||
+    validation.session.id !== presentedId
+  ) {
     return { ok: false, reason: 'malformed' };
   }
-  return result;
+  return { ok: true, session: validation.session };
+}
+
+function isOpaqueSessionRejectReason(value: unknown): value is OpaqueSessionRejectReason {
+  return value === 'missing' || value === 'malformed' || value === 'expired' || value === 'revoked';
 }
 
 function assertEstablishedOpaqueSession<SessionValue>(
