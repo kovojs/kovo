@@ -34,12 +34,13 @@ ledger's H1-H9/M1-M4/L1-L5 list.
   - **Distinct from `bugz.md`:** not the H3/H5 session-provenance laundering and not H4 SQL helper aliasing; this loses the table facts before those gates run.
   - **Fix:** resolve the callee binding to `@kovojs/drizzle`'s `kovo` export, including import aliases and namespace members, anywhere `isKovoAnnotationCall` is used.
 
-- [ ] **H3 - Aliased/namespace `route()` calls disappear from route-page graph facts, bypassing KV436.** `packages/compiler/src/scan/route-pages.ts:123-134,361-372`, `packages/compiler/src/app-graph.ts:55-82`, `packages/cli/src/graph-output.ts:808-813`
+- [x] **H3 - Aliased/namespace `route()` calls disappear from route-page graph facts, bypassing KV436.** `packages/compiler/src/scan/route-pages.ts:123-134,361-372`, `packages/compiler/src/app-graph.ts:55-82`, `packages/cli/src/graph-output.ts:808-813`
   - `routePageFromCall` accepts only `route(...)` where the callee is the literal identifier `route`; `layout` scanning has the same exact-name issue. Runtime-valid code using `import { route as r } from '@kovojs/server'` or `server.route(...)` still serves the page, but `compileRouteModule` emits no `routePageFacts`. `deriveAppGraph` therefore has no page to classify, and `kovo check` never emits missing-access `KV436`.
   - **Exploit:** a sensitive route declared as `r('/secret', { page: ... })` can ship with no access decision because the default-deny access fact is never created.
   - **Verified:** compiler sub-agent throwaway vitest compared canonical, aliased, and namespace calls. Canonical emitted one page and a `decision:'missing'` access fact; alias/namespace emitted no page and no access fact.
   - **Distinct from `bugz.md`:** separate from SQL aliasing, ReDoS, output escaping, list stamps, and session provenance; this is routing graph/import-binding soundness.
   - **Fix:** collect `@kovojs/server` import bindings for `route`/`layout`, accept namespace members, and remove raw text prefilters that skip aliased route modules.
+  - Evidence 2026-06-26: route-page scanning now resolves aliased and namespace `route`/`layout` imports; focused compiler/CLI tests, `git diff --check`, and `pnpm run check:vp` passed after integration.
 
 - [ ] **H4 - Structured document primitives render attacker-shaped attribute names verbatim.** `packages/server/src/document-structured.ts:125-132,151-166,261-275,366-376,379-394`
   - `renderShellAttributes` and `renderAttributes` escape values but concatenate attribute names directly. `HtmlAttrs`/`BodyAttrs` allow arbitrary `data-*` keys, and `Link(props)` renders all own props, so a spread object can inject a name like `data-x><script>alert(1)</script>` into the framework-owned document shell/head. This is the same sink class as `bugz.md` H1, but in the structured document API rather than JSX runtime spreads.
@@ -81,10 +82,11 @@ ledger's H1-H9/M1-M4/L1-L5 list.
 
 ## LOW
 
-- [ ] **L1 - Route CSS target extraction skips aliased `route()` modules before AST scanning.** `packages/compiler/src/package-styles.ts:119-141`
+- [x] **L1 - Route CSS target extraction skips aliased `route()` modules before AST scanning.** `packages/compiler/src/package-styles.ts:119-141`
   - `extractAppRouteCssTargets` prefilters source files with `source.includes('route(')`. A module using `import { route as r }` and `r('/x', ...)` is skipped before `compileRouteModule` can inspect it. This is closely related to H3 but affects route-level CSS splitting rather than access enforcement.
   - **Verified:** compiler sub-agent source review; same alias condition as H3.
   - **Fix:** remove the string prefilter or broaden it to import-aware AST scanning.
+  - Evidence 2026-06-26: CSS target extraction no longer skips modules that import `@kovojs/server` without literal `route(`; `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/package-styles.test.ts packages/compiler/src/registry.test.ts`, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **L2 - Structured document `Link` accepts extra props despite a fixed primitive contract.** `packages/server/src/document-structured.ts:151-166,366-376`
   - `Link`'s public type lists a fixed attribute set, but the implementation passes the whole `props` object to `renderAttributes`, so any extra own property supplied via spread or `as any` is rendered. This is folded into H4 for XSS when the extra prop name is malicious; independently, it undermines the structured-document contract by permitting unreviewed head attributes.
