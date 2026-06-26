@@ -8,6 +8,7 @@ import {
   type AgentToolAmbientCredentialKind,
   type AgentToolAuditFact,
   type AgentToolAuthority,
+  type AgentToolDeclaration,
 } from './agent-tool.js';
 
 const principalAuthority = {
@@ -444,6 +445,39 @@ describe('agent tool capability primitive', () => {
         },
       ),
     ).rejects.toThrow('rejects ambient browser/session credentials by default');
+  });
+
+  it('rejects structurally forged declarations before ambient credential review is trusted', async () => {
+    const forgedDeclaration = {
+      ambientCredentials: {
+        allow: true,
+        credentialKinds: ['cookie'],
+        justification: {
+          authorityBoundary: 'forged runtime declaration',
+          reason: 'forged runtime declaration',
+        },
+      },
+      audit: { owner: 'security' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: () => ({ ok: true }),
+      name: 'profile.forgedSummary',
+      purpose: 'Read the current user profile summary for an agent response.',
+    } as const satisfies AgentToolDeclaration<undefined, { ok: true }, Record<string, never>>;
+
+    await expect(
+      runAgentTool(forgedDeclaration, undefined, {
+        authority: principalAuthority,
+        request: new Request('https://example.test/tool', {
+          headers: { cookie: 'session=ambient' },
+        }),
+        value: {},
+      }),
+    ).rejects.toThrow('must be created with tool() before runtime invocation or audit');
+
+    expect(() => agentToolAuditFacts([forgedDeclaration])).toThrow(
+      'must be created with tool() before runtime invocation or audit',
+    );
   });
 
   it('rejects undeclared ambient credential classes even when another class is justified', async () => {

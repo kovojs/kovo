@@ -165,6 +165,8 @@ export class AgentToolCapabilityError extends Error {
   }
 }
 
+const declaredAgentTools = new WeakSet<AgentToolDeclaration<unknown, unknown, unknown>>();
+
 /**
  * Declare an agent-exposed server tool with explicit purpose, authority, allowed capabilities,
  * audit owner, and ambient-credential posture.
@@ -182,10 +184,12 @@ export function tool<const Input, Output, Context = unknown>(
   assertAmbientCredentials(definition.ambientCredentials);
   assertReachableSinks(definition.reachableSinks);
 
-  return Object.freeze({
+  const declaration = Object.freeze({
     ...definition,
     ambientCredentials: snapshotAmbientCredentials(definition.ambientCredentials),
   });
+  declaredAgentTools.add(declaration as AgentToolDeclaration<unknown, unknown, unknown>);
+  return declaration;
 }
 
 /**
@@ -202,6 +206,7 @@ export async function runAgentTool<Input, Output, Context = unknown>(
     value: Context;
   },
 ): Promise<Output> {
+  assertAgentToolDeclaration(declaration);
   assertAuthorityAllowed(declaration, context.authority);
   const request =
     context.request === undefined
@@ -221,6 +226,7 @@ export function agentToolAuditFacts(
 ): readonly AgentToolAuditFact[] {
   return Object.freeze(
     tools.map((declaration) => {
+      assertAgentToolDeclaration(declaration);
       const ambient = declaration.ambientCredentials;
       return Object.freeze({
         ambientBrowserCredentials: ambient.allow === true ? 'allowed' : 'rejected',
@@ -253,6 +259,16 @@ export function agentToolAuditFacts(
       });
     }),
   );
+}
+
+function assertAgentToolDeclaration(
+  declaration: AgentToolDeclaration<unknown, unknown, unknown>,
+): void {
+  if (!declaredAgentTools.has(declaration)) {
+    throw new AgentToolCapabilityError(
+      'Agent tool declarations must be created with tool() before runtime invocation or audit.',
+    );
+  }
 }
 
 function assertAuthorityAllowed(
