@@ -244,4 +244,55 @@ export const CartBadge = component({
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it('extracts route CSS split targets from aliased route imports', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-app-route-css-alias-'));
+
+    try {
+      mkdirSync(join(root, 'components'), { recursive: true });
+      writeFileSync(
+        join(root, 'routes.tsx'),
+        `
+import { route as defineRoute } from '@kovojs/server';
+import { CheckoutSummary } from './components/checkout-summary.js';
+
+export const checkout = defineRoute('/checkout', {
+  page: () => <CheckoutSummary />,
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'components/checkout-summary.tsx'),
+        `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const styles = style.create({ root: { color: 'purple' } });
+export const CheckoutSummary = component({
+  queries: { checkout: checkoutQuery },
+  render: () => <checkout-summary {...style.attrs(styles.root)}>Checkout</checkout-summary>,
+});
+`,
+        'utf8',
+      );
+
+      const result = extractAppRouteCssTargets({
+        fileName: join(root, 'routes.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: '',
+      });
+
+      expect(result.routeTargets).toEqual([
+        {
+          fragmentTargets: ['components/checkout-summary/checkout-summary'],
+          route: '/checkout',
+          sourceFileNames: ['components/checkout-summary.css'],
+        },
+      ]);
+      expect(result.routePageFacts[0]?.route).toBe('/checkout');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 });
