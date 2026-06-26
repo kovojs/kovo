@@ -314,3 +314,41 @@ describe('queryDeltaIsSmaller', () => {
     expect(queryDeltaIsSmaller(delta!, value)).toBe(false);
   });
 });
+
+describe('read-side pagination accumulation (SPEC §9.1.1/§9.3)', () => {
+  it('accumulates a "load more" append page into the held list without re-shipping prior rows', () => {
+    // The held base is page 1; the wire delta carries ONLY page 2's rows.
+    const page1: JsonValue = { items: [{ id: 'p1' }, { id: 'p2' }], nextCursor: 'p2' };
+    const next = applyQueryDelta(page1, {
+      set: { nextCursor: 'p4' },
+      lists: { items: { key: 'id', upsert: [{ id: 'p3' }, { id: 'p4' }] } },
+    });
+
+    // Prior rows kept (not re-shipped), new page appended at the END in wire order.
+    expect(next).toEqual({
+      items: [{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' }],
+      nextCursor: 'p4',
+    });
+  });
+
+  it('prepends a "load older" page at the FRONT of the held list in wire order', () => {
+    const held: JsonValue = { items: [{ id: 'm3' }, { id: 'm4' }] };
+    const next = applyQueryDelta(held, {
+      lists: { items: { key: 'id', prepend: true, upsert: [{ id: 'm1' }, { id: 'm2' }] } },
+    });
+
+    expect(next).toEqual({ items: [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }, { id: 'm4' }] });
+  });
+
+  it('dedupes by kovo-key: a re-shipped prepend page reconciles in place, never duplicates (§13.2)', () => {
+    const held: JsonValue = { items: [{ id: 'm2', body: 'old' }, { id: 'm3' }] };
+    const next = applyQueryDelta(held, {
+      lists: {
+        items: { key: 'id', prepend: true, upsert: [{ id: 'm1' }, { id: 'm2', body: 'new' }] },
+      },
+    });
+
+    // m2 already present → reconciled in place (updated), only m1 inserted at front.
+    expect(next).toEqual({ items: [{ id: 'm1' }, { id: 'm2', body: 'new' }, { id: 'm3' }] });
+  });
+});

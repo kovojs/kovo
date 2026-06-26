@@ -56,6 +56,28 @@ describe('fragment morph runtime', () => {
       '<article kovo-key="p1"></article><article kovo-key="p2"></article>',
     );
   });
+
+  it('prepends fragment chunks at the START when the wire mode is prepend (SPEC §9.3)', () => {
+    const root = new FakeMorphRoot();
+    root.targets.set('chat-log', new FakeMorphTarget('<article kovo-key="m2"></article>'));
+    const store = createQueryStore();
+
+    const result = applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks(
+        '<kovo-fragment target="chat-log" mode="prepend"><article kovo-key="m1"></article></kovo-fragment>',
+      ),
+      { root, store },
+    );
+
+    expect(result.fragments).toEqual([
+      { html: '<article kovo-key="m1"></article>', mode: 'prepend', target: 'chat-log' },
+    ]);
+    expect(result.appliedFragments).toEqual(['chat-log']);
+    // The older row (m1) lands BEFORE the held row (m2).
+    expect(root.targets.get('chat-log')?.html).toBe(
+      '<article kovo-key="m1"></article><article kovo-key="m2"></article>',
+    );
+  });
 });
 
 describe('structural morph runtime', () => {

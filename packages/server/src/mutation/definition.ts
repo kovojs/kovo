@@ -169,8 +169,30 @@ export type MutationOptimisticTransform<Input = unknown, Value = unknown> = (
   input: Input,
 ) => void;
 
+/**
+ * One query's optimistic policy in a mutation's `optimistic` map (SPEC §10.4/§10.6). Three
+ * forms, each counting toward KV310 exhaustiveness (§10.6):
+ *
+ * - a pure {@link MutationOptimisticTransform} — predict from input, for an UNKEYED query;
+ * - a **keyed** `{ keys, transform }` pair — for a query with several INSTANCES on a page
+ *   (`questionDetail:q3` vs `questionDetail:q7`, §10.2). Optimism is keyed to the *query*
+ *   (§10.4), so a transform on a keyed detail query must say WHICH instance it predicts: the
+ *   `keys` companion derives that instance key from the same validated mutation `input` the
+ *   `transform` sees, exactly as the query's own instance key does (§10.2 — the WHERE
+ *   eq-predicate resolved to `args.*`). `keys` returns either the canonical instance-key VALUE
+ *   string (the `keyValue` of `name:keyValue`, §10.2:1040) or the declared args object (e.g.
+ *   `{ id: input.targetId }`), whose values reduce to the keyValue in declared order. The
+ *   lowered plan routes the prediction to that instance's store slot and reconciles it against
+ *   the matching `<kovo-query name key>` server-truth chunk by `kovo-key` (§13.2), so the keyed
+ *   detail view gets an INSTANT prediction instead of an `'await-fragment'` round-trip;
+ * - `'await-fragment'` — a recorded decision to wait for the server fragment.
+ */
 export type MutationOptimisticEntry<Input = unknown, Value = unknown> =
   | MutationOptimisticTransform<Input, Value>
+  | {
+      keys: (input: Input) => string | Record<string, string | number | boolean>;
+      transform: MutationOptimisticTransform<Input, Value>;
+    }
   | 'await-fragment';
 
 type KnownMutationOptimisticMap<Key extends string, InputSchema extends Schema<unknown>> = {

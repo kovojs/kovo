@@ -138,6 +138,12 @@ export class FakeMorphTarget {
     this.html += html;
   }
 
+  prependHtml(html: string): void {
+    // SPEC §9.3: prepend inserts at the START (front). The browser-free fake keeps
+    // string order; DOM keyed dedup + scroll anchoring live in DomMorphTarget.
+    this.html = html + this.html;
+  }
+
   readHtml(): string {
     return this.html;
   }
