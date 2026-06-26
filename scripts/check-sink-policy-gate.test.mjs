@@ -5,6 +5,7 @@ import {
   checkSinkPolicyGate,
   commandExecutionSinkFindings,
   commandPrimitiveInvariantFindings,
+  deserializationSinkFindings,
   dynamicCodeExecutionSinkFindings,
   exportedNames,
   extractRegisteredBlessedSinkKinds,
@@ -32,6 +33,7 @@ function runFixture(files) {
   return checkSinkPolicyGate({
     blessedSinkFiles: Object.keys(files).filter((file) => file !== 'public.ts'),
     commandExecutionFiles: [],
+    deserializationFiles: [],
     logChannelFiles: [],
     exists: (file) => Object.hasOwn(files, file),
     publicEntrypointFiles: Object.hasOwn(files, 'public.ts') ? ['public.ts'] : [],
@@ -227,6 +229,7 @@ describe('sink-policy gate', () => {
       checkSinkPolicyGate({
         blessedSinkFiles: [],
         commandExecutionFiles: ['packages/server/src/unsafe.ts'],
+        deserializationFiles: [],
         logChannelFiles: [],
         exists: (file) => file === 'packages/server/src/unsafe.ts' || file === 'sink-policy.ts',
         publicEntrypointFiles: [],
@@ -308,6 +311,7 @@ describe('sink-policy gate', () => {
       checkSinkPolicyGate({
         blessedSinkFiles: [],
         commandExecutionFiles: ['packages/server/src/unsafe.ts', 'packages/server/src/safe.ts'],
+        deserializationFiles: [],
         logChannelFiles: [],
         exists: (file) =>
           file === 'packages/server/src/unsafe.ts' ||
@@ -328,6 +332,84 @@ describe('sink-policy gate', () => {
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code',
+    ]);
+  });
+
+  it('rejects JSON.parse revivers as unsafe deserialization sinks', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-deserialize.ts',
+        `
+          export function decode(bytes) {
+            return JSON.parse(new TextDecoder().decode(bytes), (_key, value) => value);
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization sink JSON.parse reviver; keep body/wire decode reviver-free and route request shapes through schema validation',
+    ]);
+  });
+
+  it('rejects deserialize and unserialize imports and calls', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-deserialize.ts',
+        `
+          import { deserialize as thaw } from "node:v8";
+          import * as serializer from "serialize-javascript";
+          const { unserialize } = require("php-serialize");
+          thaw(bytes);
+          serializer.deserialize(blob);
+          unserialize(payload);
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization import deserialize; avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation',
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization call thaw(); avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation',
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization import unserialize; avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation',
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization call unserialize(); avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation',
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization call serializer.deserialize(); avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation',
+    ]);
+  });
+
+  it('allows reviver-free JSON decode before schema/body validation', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/safe-body.ts',
+        `
+          import { parseSchemaAsync } from "./schema.js";
+          export async function decodeBody(schema, request) {
+            const raw = await request.text();
+            const parsed = JSON.parse(raw);
+            return parseSchemaAsync(schema, parsed);
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('runs the deserialization gate over configured server source files', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: [],
+        deserializationFiles: ['packages/server/src/unsafe-deserialize.ts'],
+        exists: (file) =>
+          file === 'packages/server/src/unsafe-deserialize.ts' || file === 'sink-policy.ts',
+        logChannelFiles: [],
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'export const decoded = JSON.parse(payload, revivePayload);',
+        responseFragmentApplyPath: undefined,
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([
+      'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization sink JSON.parse reviver; keep body/wire decode reviver-free and route request shapes through schema validation',
     ]);
   });
 
@@ -368,6 +450,7 @@ describe('sink-policy gate', () => {
       checkSinkPolicyGate({
         blessedSinkFiles: [],
         commandExecutionFiles: [],
+        deserializationFiles: [],
         exists: (file) => file === 'sink-policy.ts' || file === 'packages/server/src/unsafe.ts',
         logChannelFiles: ['packages/server/src/unsafe.ts'],
         publicEntrypointFiles: [],
@@ -550,6 +633,7 @@ describe('sink-policy gate', () => {
       checkSinkPolicyGate({
         blessedSinkFiles: [],
         commandExecutionFiles: [],
+        deserializationFiles: [],
         logChannelFiles: [],
         exists: (file) => file === 'sink-policy.ts',
         publicEntrypointFiles: [],
