@@ -104,7 +104,10 @@ function variableDeclarationIsExported(
     },
     skipAddingFilesFromTsConfig: true,
   });
-  const sourceFile = project.createSourceFile(file.fileName, file.source);
+  // `overwrite: true` so an absolute `fileName` that already exists on disk (e.g. the
+  // build-time data-plane gate passes resolved app paths, SPEC §11.4) does not throw the
+  // ts-morph "source file already exists" error. Mirrors project-setup.ts createSourceFile.
+  const sourceFile = project.createSourceFile(file.fileName, file.source, { overwrite: true });
 
   try {
     return visit(sourceFile);

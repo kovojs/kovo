@@ -723,17 +723,27 @@ function sqlSafetyDiagnosticsForSourceFile(
   const diagnostics: TouchGraphDiagnostic[] = [];
   const scopes = new Map<Node, Map<string, SqlTextSafety>>();
   const nativeDrizzleSqlReceivers = nativeDrizzleSqlReceiverTexts(sourceFile);
+  // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
+  // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
+  // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
+  // Kovo handles arrive via context (`req.db`) or `drizzle(...)` — never a `new` expression — so
+  // exempting `new`-constructed receivers never masks an injection on a managed handle.
+  const rawDriverClients = new Set<string>();
 
   for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
     const name = declaration.getNameNode();
     if (!Node.isIdentifier(name)) continue;
+    const initializer = declaration.getInitializer();
+    if (initializer && Node.isNewExpression(initializer)) {
+      rawDriverClients.add(name.getText());
+    }
     const scope = nearestSqlSafetyScope(declaration);
     let bindings = scopes.get(scope);
     if (!bindings) {
       bindings = new Map();
       scopes.set(scope, bindings);
     }
-    bindings.set(name.getText(), sqlTextSafety(declaration.getInitializer(), scopes));
+    bindings.set(name.getText(), sqlTextSafety(initializer, scopes));
   }
 
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
@@ -747,6 +757,7 @@ function sqlSafetyDiagnosticsForSourceFile(
 
     const sinkName = sqlSinkName(call);
     if (!sinkName) continue;
+    if (sqlSinkReceiverIsRawDriverClient(call, rawDriverClients)) continue;
     const [statement] = call.getArguments();
     const safety = sqlTextSafety(statement, scopes);
     if (safety === 'safe') continue;
@@ -809,6 +820,19 @@ function nativeDrizzleSqlReceiverTexts(sourceFile: SourceFile): Set<string> {
     if (namespace) receivers.add(`${namespace.getText()}.sql`);
   }
   return receivers;
+}
+
+function sqlSinkReceiverIsRawDriverClient(
+  call: CallExpression,
+  rawDriverClients: ReadonlySet<string>,
+): boolean {
+  if (rawDriverClients.size === 0) return false;
+  const expression = call.getExpression();
+  const receiver =
+    Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)
+      ? expression.getExpression()
+      : undefined;
+  return Boolean(receiver && Node.isIdentifier(receiver) && rawDriverClients.has(receiver.getText()));
 }
 
 function sqlSinkName(call: CallExpression): string | null {

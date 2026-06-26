@@ -46,6 +46,29 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     );
   });
 
+  it('exempts raw driver handles captured before the framework wraps them (SPEC §10.2 non-goal)', () => {
+    // A driver client created with `new` (e.g. `new PGlite()`) is out of KV422 scope: SPEC §10.2
+    // states KV422 "does not prove safety for driver handles captured before the framework wraps
+    // them." A managed handle (req.db / a `drizzle(...)` result) is never `new`-constructed, so an
+    // injection at one is still flagged — the exemption is narrow and cannot mask a managed sink.
+    const diagnostics = diagnosticsFor(`
+      import { PGlite } from '@electric-sql/pglite';
+      import { drizzle } from 'drizzle-orm/pglite';
+      const SCHEMA_DDL = ["create table t (id text)", "create table u (id text)"].join("\\n");
+      export async function createDb(input: { id: string }) {
+        const client = new PGlite();
+        await client.exec(SCHEMA_DDL);
+        await client.exec("insert into t values ('seed')");
+        const db = drizzle({ client });
+        await db.execute("select * from t where id = '" + input.id + "'");
+        return db;
+      }
+    `);
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV422']);
+    expect(diagnostics[0]?.message).toContain('execute() receives');
+  });
+
   it('flags unknown-provenance helpers, untagged templates, and unaudited raw helpers', () => {
     const diagnostics = diagnosticsFor(`
       import { sql } from '@kovojs/drizzle';
