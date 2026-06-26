@@ -718,7 +718,9 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       scope-audit test, `git diff --check`, and `pnpm run check:vp` passed. Conditional owner-principal
       expressions now prove scope only when both branches resolve to the same exact private key, with mismatched
       branches and mutable aliases staying `scope: unknown`; the focused scope-audit test, `git diff --check`,
-      and `pnpm run check:vp` passed.
+      and `pnpm run check:vp` passed. Nullish and logical owner-principal expressions now prove scope only when
+      both sides resolve to the same exact private key, with mismatched, client-input, and mutable aliases staying
+      `scope: unknown`; the focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
