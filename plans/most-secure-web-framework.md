@@ -144,7 +144,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `pnpm run check:vp` gates. The sink-policy gate now rejects aliased, wildcard, and imported public
       re-export escape hatches from the internal witness substrate, and copied redirect response objects fail
       closed at the web response boundary; focused sink-policy/response tests, `pnpm run check:sink-policy`,
-      `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3 candidates and static
+      `git diff --check`, and `pnpm run check:vp` passed. The sink-policy gate now also rejects raw
+      `child_process` command execution imports/calls outside `packages/server/src/command.ts` and asserts the
+      command primitive keeps the `server:command-exec-file` witness plus `execFile(..., { shell: false })`;
+      focused sink-policy/command tests, `pnpm run check:sink-policy`, `git diff --check`, and
+      `pnpm run check:vp` passed. Remaining gap: other §3 candidates and static
       by-construction analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
@@ -175,7 +179,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       and inline-IIFE extensions verified the same focused Vitest command plus `git diff --check` and
       `pnpm run check:vp`. Simple statically resolvable relative named imports now contribute enforced
       imported-helper egress/secret-read rows for exported helper functions; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed.
+      `git diff --check`, and `pnpm run check:vp` passed. Static local named re-export barrels now preserve
+      enforced imported-helper egress/secret-read reachability, while export-star barrels remain outside the
+      sound subset; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: callbacks, nonliteral/dynamic calls, namespace/unresolved imports, and broader egress/secret analyzer
       reachability.
 
@@ -191,8 +197,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       graph subset now enforces declared write capabilities for matching framework-owned tool rows and renders
       declared audit-grade reachable sinks; direct AST-produced `process.env` reads plus literal `fetch()` egress
       from framework-owned tool handlers, same-module helper calls, directly invoked inline functions, and simple
-      imported helper calls are enforced when declared capabilities do not cover them. Remaining gap: broader
-      analyzer integration beyond the framework-owned `tool()` boundary.
+      imported helper calls, including static local named re-export barrels, are enforced when declared
+      capabilities do not cover them. Remaining gap: broader analyzer integration beyond the framework-owned
+      `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
       _gate_, destination-column-anchored) + runtime-DiD (the crypto floor) · lev 7 · L · breaking. Kovo proves
@@ -273,7 +280,11 @@ session: manager })` now wires the Kovo-owned opaque manager into the request sh
 packages/server/src/api/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Owned opaque
       sessions now have a regression test proving one store validation per guarded request, consistent guard/page
       request threading, and immediate anonymous treatment for rotated-prior and revoked cookies; `pnpm exec vitest run
-packages/server/src/opaque-session.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
+packages/server/src/opaque-session.test.ts`, `git diff --check`, and `pnpm run check:vp` passed.
+      Better Auth delegated session refresh/cookie-cache `Set-Cookie` forwarding now requires an accepted
+      incoming browser credential, while revocation cookies still forward when a missing/unaccepted credential
+      must be cleared; `pnpm exec vitest --run packages/better-auth/src/index.session.test.ts`,
+      `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
       Better Auth delegation and explicit `sessionProvider` remain supported boundaries, so opaque sessions are
       not yet the only framework-wide default lifecycle.
 
@@ -468,7 +479,10 @@ packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm 
       property-call helper coverage used the same focused test, `git diff --check`, and `pnpm run check:vp`.
       Local `const` aliases to explicitly summarized static property-call guard helpers now preserve the guard
       principal proof while unsummarized aliases remain `scope: unknown`; `pnpm exec vitest run
-packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm run check:vp` passed.
+packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Readonly
+      object wrappers around summarized property-call guard helpers now preserve exact owner-column predicates,
+      while mismatched wrapped helpers remain `scope: unknown`; the same focused scope-audit test,
+      `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
