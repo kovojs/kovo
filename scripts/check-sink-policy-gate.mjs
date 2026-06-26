@@ -318,24 +318,22 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
   const brandNames = [...sqlBlessedBrandTypeNames].join('|');
   const brandType = String.raw`(?:${brandNames})\b`;
   const anyOrUnknown = String.raw`(?:any|unknown)\b`;
+  const sqlBrandAssertionType = String.raw`(?:[^;\n<>]*&\s*)?${brandType}(?:\s*&[^;\n<>]*)?`;
 
   // Narrow KV440 floor: catch local TypeScript assertion/satisfies escape hatches that mint a
   // blessed SQL brand without flowing through sql-safety.ts stamp* constructors. This is not the
   // full §3.1 symbol-provenance analyzer; it pins the most direct laundering shapes.
   const patterns = [
     {
-      pattern: new RegExp(
-        String.raw`\bas\s+${anyOrUnknown}\s+as\s+(?:[^;\n]*&\s*)?${brandType}`,
-        'g',
-      ),
+      pattern: new RegExp(String.raw`\bas\s+${anyOrUnknown}\s+as\s+${sqlBrandAssertionType}`, 'g'),
       description: 'any/unknown assertion chain',
     },
     {
-      pattern: new RegExp(String.raw`\bas\s+(?:[^;\n]*&\s*)?${brandType}`, 'g'),
+      pattern: new RegExp(String.raw`\bas\s+${sqlBrandAssertionType}`, 'g'),
       description: 'direct type assertion',
     },
     {
-      pattern: new RegExp(String.raw`\bsatisfies\s+(?:[^;\n]*&\s*)?${brandType}`, 'g'),
+      pattern: new RegExp(String.raw`\bsatisfies\s+${sqlBrandAssertionType}`, 'g'),
       description: 'satisfies assertion',
     },
   ];
@@ -356,7 +354,29 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
     }
   }
 
+  // Angle-bracket assertions are not valid in TSX, and `<TrustedSql>` can be a JSX tag there.
+  // Keep this floor to .ts/.mts/.cts sources and require expression-start punctuation so generic
+  // type arguments such as `identity<TrustedSql>(value)` do not look like laundering.
+  if (!/\.[cm]?tsx$/.test(filePath)) {
+    const angleAssertionPattern = new RegExp(String.raw`<\s*${sqlBrandAssertionType}\s*>`, 'g');
+    let match;
+    while ((match = angleAssertionPattern.exec(source)) !== null) {
+      const precedingText = source.slice(0, match.index);
+      if (!canStartTypeScriptAngleAssertion(precedingText)) continue;
+      findings.push(
+        `${filePath}: KV440 SQL blessed-brand laundering via angle-bracket type assertion; use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor`,
+      );
+    }
+  }
+
   return dedupe(findings);
+}
+
+function canStartTypeScriptAngleAssertion(precedingText) {
+  const trimmed = precedingText.trimEnd();
+  if (trimmed === '') return true;
+  if (/[=(:,[{?!]$/.test(trimmed)) return true;
+  return /\b(?:return|throw|yield)\s*$/.test(trimmed);
 }
 
 export function commandExecutionSinkFindings(filePath, text, options = {}) {
