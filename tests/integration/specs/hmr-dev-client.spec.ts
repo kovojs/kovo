@@ -32,6 +32,10 @@ import {
   type LiveTargetRenderer,
 } from '@kovojs/server/internal/wire';
 
+// These specs spin up ad hoc Vite/HTTP HMR servers and mutate module graphs; running
+// them concurrently inside one file causes CI-only startup/teardown contention.
+test.describe.configure({ mode: 'serial' });
+
 type ViteMiddleware = (
   request: IncomingMessage,
   response: ServerResponse,
