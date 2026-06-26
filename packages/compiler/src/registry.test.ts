@@ -2023,6 +2023,59 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from static const object helper aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/object-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import { sendMail } from './mail';",
+            'const mail = { sendMail };',
+            'export const notify = tool({',
+            "  name: 'orders.objectAlias',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.objectAlias',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.objectAlias',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from static default object helper exports', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -2119,6 +2172,64 @@ export const ProductGrid = component({
             "import * as mail from './star-barrel';",
             'export const notify = tool({',
             "  name: 'orders.starBarrel',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven const object aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/computed-object-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '}',
+            "const mail = { ['sendMail']: sendMail };",
+            'export const notify = tool({',
+            "  name: 'orders.computedObjectAlias',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/spread-object-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '}',
+            'const helpers = { sendMail };',
+            'const mail = { ...helpers };',
+            'export const notify = tool({',
+            "  name: 'orders.spreadObjectAlias',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/dynamic-object-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send');",
+            '}',
+            'let mail = { sendMail };',
+            'export const notify = tool({',
+            "  name: 'orders.dynamicObjectAlias',",
             '  handler() {',
             '    return mail.sendMail();',
             '  },',

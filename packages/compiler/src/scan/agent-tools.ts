@@ -20,12 +20,13 @@ export interface AgentToolModuleSource {
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
  * helpers reached through static named/default imports including static local re-export barrels,
  * unique local `export *` barrels for named imports, default exports that alias a summarized local
- * helper, static namespace-property calls into exported local helpers, default object exports whose
- * properties statically point at summarized local helpers, handler properties that reference a
- * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
- * that directly invokes that callback parameter or a simple `const` alias of that parameter. It does
- * not inspect raw source text after parse and it skips non-invoked nested function bodies, so
- * ordinary callbacks, computed namespace access, computed/spread object exports, export-star
+ * helper, static namespace-property calls into exported local helpers, local `const` object aliases
+ * whose properties statically point at summarized helpers, default object exports whose properties
+ * statically point at summarized local helpers, handler properties that reference a summarized
+ * local/imported helper function, and inline callbacks passed to a local/imported helper that
+ * directly invokes that callback parameter or a simple `const` alias of that parameter. It does not
+ * inspect raw source text after parse and it skips non-invoked nested function bodies, so ordinary
+ * callbacks, computed namespace access, computed/spread object aliases and exports, export-star
  * namespaces, ambiguous export-star names, reassigned callback aliases, and dynamic paths remain
  * outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
  */
@@ -72,6 +73,7 @@ interface ModuleFacts {
   ambiguousExportStarHelpers: ReadonlySet<string>;
   defaultObjectHelpers: ReadonlyMap<string, HelperDefinition>;
   helpers: ReadonlyMap<string, HelperDefinition>;
+  objectAliasHelpers: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   namespaceImports: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   sourceFile: ts.SourceFile;
   topLevelBindings: ReadonlySet<string>;
@@ -125,12 +127,14 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   const ambiguousExportStarHelpers = new Set<string>();
   const defaultObjectHelpers = new Map<string, HelperDefinition>();
   const helpers = new Map<string, HelperDefinition>();
+  const objectAliasHelpers = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const namespaceImports = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const topLevelBindings = new Set<string>();
   const moduleFacts: ModuleFacts = {
     ambiguousExportStarHelpers,
     defaultObjectHelpers,
     helpers,
+    objectAliasHelpers,
     namespaceImports,
     sourceFile,
     topLevelBindings,
@@ -188,6 +192,7 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
   }
 
   for (const statement of sourceFile.statements) {
+    collectObjectAliasHelperBindings(statement, moduleFacts);
     collectDefaultHelperAlias(statement, moduleFacts);
     collectDefaultObjectHelperBindings(statement, moduleFacts);
   }
@@ -302,6 +307,10 @@ function linkImportedHelpers(
     }
   }
 
+  for (const statement of moduleFacts.sourceFile.statements) {
+    changed = collectObjectAliasHelperBindings(statement, moduleFacts) || changed;
+  }
+
   return changed;
 }
 
@@ -382,6 +391,39 @@ function linkNamespaceBinding(
   return true;
 }
 
+function collectObjectAliasHelperBindings(
+  statement: ts.Statement,
+  moduleFacts: ModuleFacts,
+): boolean {
+  if (!ts.isVariableStatement(statement)) return false;
+  if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) return false;
+
+  let changed = false;
+
+  for (const declaration of statement.declarationList.declarations) {
+    if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+
+    const expression = unwrapParentheses(declaration.initializer);
+    if (!ts.isObjectLiteralExpression(expression)) continue;
+
+    const helperBindings = helperBindingsFromObjectLiteral(expression, moduleFacts);
+    if (!helperBindings) continue;
+
+    const objectAliasHelpers = moduleFacts.objectAliasHelpers as Map<
+      string,
+      ReadonlyMap<string, HelperDefinition>
+    >;
+    if (helperBindingMapsEqual(objectAliasHelpers.get(declaration.name.text), helperBindings)) {
+      continue;
+    }
+
+    objectAliasHelpers.set(declaration.name.text, helperBindings);
+    changed = true;
+  }
+
+  return changed;
+}
+
 function collectDefaultObjectHelperBindings(
   statement: ts.Statement,
   moduleFacts: ModuleFacts,
@@ -391,35 +433,45 @@ function collectDefaultObjectHelperBindings(
   const expression = unwrapParentheses(statement.expression);
   if (!ts.isObjectLiteralExpression(expression)) return;
 
-  const helperBindings = new Map<string, HelperDefinition>();
-  for (const property of expression.properties) {
-    if (ts.isSpreadAssignment(property)) return;
-    if (ts.isShorthandPropertyAssignment(property)) {
-      const helper = moduleFacts.helpers.get(property.name.text);
-      if (!helper) return;
-      helperBindings.set(property.name.text, exportedHelperAlias(helper));
-      continue;
-    }
-
-    if (!ts.isPropertyAssignment(property)) return;
-    if (property.name === undefined || ts.isComputedPropertyName(property.name)) return;
-
-    const propertyName = staticPropertyName(property.name);
-    if (propertyName === undefined) return;
-
-    const initializer = unwrapParentheses(property.initializer);
-    if (!ts.isIdentifier(initializer)) return;
-
-    const helper = moduleFacts.helpers.get(initializer.text);
-    if (!helper) return;
-
-    helperBindings.set(propertyName, exportedHelperAlias(helper));
-  }
+  const helperBindings = helperBindingsFromObjectLiteral(expression, moduleFacts);
+  if (!helperBindings) return;
 
   const defaultObjectHelpers = moduleFacts.defaultObjectHelpers as Map<string, HelperDefinition>;
   for (const [propertyName, helper] of helperBindings) {
     defaultObjectHelpers.set(propertyName, helper);
   }
+}
+
+function helperBindingsFromObjectLiteral(
+  expression: ts.ObjectLiteralExpression,
+  moduleFacts: ModuleFacts,
+): ReadonlyMap<string, HelperDefinition> | undefined {
+  const helperBindings = new Map<string, HelperDefinition>();
+  for (const property of expression.properties) {
+    if (ts.isSpreadAssignment(property)) return undefined;
+    if (ts.isShorthandPropertyAssignment(property)) {
+      const helper = moduleFacts.helpers.get(property.name.text);
+      if (!helper) return undefined;
+      helperBindings.set(property.name.text, exportedHelperAlias(helper));
+      continue;
+    }
+
+    if (!ts.isPropertyAssignment(property)) return undefined;
+    if (property.name === undefined || ts.isComputedPropertyName(property.name)) return undefined;
+
+    const propertyName = staticPropertyName(property.name);
+    if (propertyName === undefined) return undefined;
+
+    const initializer = unwrapParentheses(property.initializer);
+    if (!ts.isIdentifier(initializer)) return undefined;
+
+    const helper = moduleFacts.helpers.get(initializer.text);
+    if (!helper) return undefined;
+
+    helperBindings.set(propertyName, exportedHelperAlias(helper));
+  }
+
+  return helperBindings;
 }
 
 function collectDefaultHelperAlias(statement: ts.Statement, moduleFacts: ModuleFacts): void {
@@ -947,7 +999,9 @@ function calledHelper(
     if (!ts.isIdentifier(namespaceName)) return undefined;
     if (blockedNames.has(namespaceName.text)) return undefined;
 
-    const namespaceHelpers = moduleFacts.namespaceImports.get(namespaceName.text);
+    const namespaceHelpers =
+      moduleFacts.objectAliasHelpers.get(namespaceName.text) ??
+      moduleFacts.namespaceImports.get(namespaceName.text);
     return namespaceHelpers?.get(node.expression.name.text);
   }
 
