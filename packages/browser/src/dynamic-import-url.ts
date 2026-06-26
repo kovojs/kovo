@@ -89,7 +89,9 @@ function allowedClientModuleUrlManifest(explicit?: readonly string[]): ReadonlyS
 
 function documentModulepreloadClientModules(): readonly string[] | undefined {
   if (typeof document === 'undefined') return undefined;
-  const links = document.querySelectorAll?.('link[rel~="modulepreload"][href]');
+  const links = document.querySelectorAll?.(
+    'link[data-kovo-module-allowlist][rel~="modulepreload"][href]',
+  );
   if (!links || typeof links[Symbol.iterator] !== 'function') return undefined;
 
   const hrefs: string[] = [];

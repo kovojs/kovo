@@ -56,6 +56,23 @@ describe('Kovo dynamic import URL guard', () => {
     );
   });
 
+  it('treats document modulepreloads as an allowlist only when explicitly marked', () => {
+    withDocumentModulepreloads(
+      { allowlistHrefs: [], modulepreloadHrefs: ['/c/__v/cart-v1/eager.client.js'] },
+      () => {
+        expect(isAllowedKovoDynamicImportUrl('/c/__v/cart-v1/lazy.client.js')).toBe(true);
+      },
+    );
+
+    withDocumentModulepreloads(
+      { allowlistHrefs: ['/c/__v/cart-v1/eager.client.js'], modulepreloadHrefs: [] },
+      () => {
+        expect(isAllowedKovoDynamicImportUrl('/c/__v/cart-v1/eager.client.js')).toBe(true);
+        expect(isAllowedKovoDynamicImportUrl('/c/__v/cart-v1/lazy.client.js')).toBe(false);
+      },
+    );
+  });
+
   it('fails closed before import when a manifest-listed build URL is missing', () => {
     expect(() =>
       assertAllowedKovoDynamicImportUrl('/c/__v/cart-v1/secret.client.js', {
@@ -65,3 +82,36 @@ describe('Kovo dynamic import URL guard', () => {
     ).toThrow('Disallowed Kovo dynamic import URL: /c/__v/cart-v1/secret.client.js');
   });
 });
+
+function withDocumentModulepreloads(
+  options: { allowlistHrefs: readonly string[]; modulepreloadHrefs: readonly string[] },
+  run: () => void,
+): void {
+  const document = globalThis.document;
+  Reflect.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      querySelectorAll(selector: string) {
+        const hrefs =
+          selector === 'link[data-kovo-module-allowlist][rel~="modulepreload"][href]'
+            ? options.allowlistHrefs
+            : selector === 'link[rel~="modulepreload"][href]'
+              ? options.modulepreloadHrefs
+              : [];
+        return hrefs.map((href) => ({
+          getAttribute(name: string) {
+            return name === 'href' ? href : null;
+          },
+        }));
+      },
+    },
+  });
+  try {
+    run();
+  } finally {
+    Reflect.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: document,
+    });
+  }
+}

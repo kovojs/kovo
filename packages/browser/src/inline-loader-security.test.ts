@@ -66,7 +66,7 @@ describe('inline loader output security', () => {
       }
     });
 
-    it(`${label}: keeps dynamic import guard parity for dev, /c/, and manifest paths`, async () => {
+    it(`${label}: keeps dynamic import guard parity for dev, /c/, and allowlist paths`, async () => {
       const productionUpload = await dispatchInlineGuardPath({
         href: 'https://kovo.test/admin/upload.ts#noop',
         installSource,
@@ -95,10 +95,19 @@ describe('inline loader output security', () => {
       expect(localhostTsx.error).toBeUndefined();
       expect(localhostTsx.importCalls).toEqual(['/admin/upload.tsx']);
 
+      const plainModulepreload = await dispatchInlineGuardPath({
+        href: '/c/lazy.js#noop',
+        installSource,
+        modulepreloadHrefs: ['/c/eager.js'],
+        origin: 'https://kovo.test',
+      });
+      expect(plainModulepreload.error).toBeUndefined();
+      expect(plainModulepreload.importCalls).toEqual(['/c/lazy.js']);
+
       const manifestAllowed = await dispatchInlineGuardPath({
         href: '/c/allowed.js?v=1#noop',
+        allowlistHrefs: ['/c/allowed.js?v=1'],
         installSource,
-        manifestHrefs: ['/c/allowed.js?v=1'],
         origin: 'https://kovo.test',
       });
       expect(manifestAllowed.error).toBeUndefined();
@@ -106,8 +115,8 @@ describe('inline loader output security', () => {
 
       const manifestRejected = await dispatchInlineGuardPath({
         href: '/c/other.js#noop',
+        allowlistHrefs: ['/c/allowed.js?v=1'],
         installSource,
-        manifestHrefs: ['/c/allowed.js?v=1'],
         origin: 'https://kovo.test',
       });
       expect(manifestRejected.error).toEqual(
@@ -230,9 +239,10 @@ describe('inline loader output security', () => {
 });
 
 async function dispatchInlineGuardPath(options: {
+  allowlistHrefs?: readonly string[];
   href: string;
   installSource: (typeof inlineSourceInstallCases)[number][1];
-  manifestHrefs?: readonly string[];
+  modulepreloadHrefs?: readonly string[];
   origin: string;
 }): Promise<{ error?: unknown; importCalls: string[] }> {
   const globalRecord = globalThis as unknown as Record<string, unknown>;
@@ -255,8 +265,13 @@ async function dispatchInlineGuardPath(options: {
     };
     globalRecord.document = {
       querySelectorAll(selector: string) {
-        if (selector !== 'link[rel~="modulepreload"][href]') return [];
-        return (options.manifestHrefs ?? []).map((href) => ({
+        const hrefs =
+          selector === 'link[data-kovo-module-allowlist][rel~="modulepreload"][href]'
+            ? (options.allowlistHrefs ?? [])
+            : selector === 'link[rel~="modulepreload"][href]'
+              ? (options.modulepreloadHrefs ?? [])
+              : [];
+        return hrefs.map((href) => ({
           getAttribute(name: string) {
             return name === 'href' ? href : null;
           },
