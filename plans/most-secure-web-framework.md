@@ -327,6 +327,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       helper imports now preserves enforced reachability (`const { sendMail } = mail` / `const [sendMail] =
       mail`), while default values, computed/nested/rest destructuring, mutable declarations, and unproven
       shapes remain outside the proof; focused registry/check tests, `git diff --check`, and
+      `pnpm run check:vp` passed. Static local default re-export barrels now forward already-proven default
+      helper, default-object, and default-array summaries, including named `default as ...` re-exports, while
+      unproven default shapes remain outside the proof; focused registry/check tests, `git diff --check`, and
       `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
