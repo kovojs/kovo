@@ -242,26 +242,31 @@ function resolveDelegatedSessionProvider<SessionValue, RawRequest extends global
     lifecycleAssertions?: unknown;
     provider?: unknown;
   };
+  assertDelegatedDataProperty(value, 'lifecycle');
   if (record.lifecycle !== 'delegated') {
     throw new Error(
       "createApp({ sessionProvider }) requires `lifecycle: 'delegated'` for non-opaque " +
         'session ownership (SPEC §6.5 / OPP-11).',
     );
   }
-  if (typeof record.provider !== 'function') {
+  assertDelegatedDataProperty(value, 'provider');
+  const provider = record.provider;
+  if (typeof provider !== 'function') {
     throw new Error(
       'createApp({ sessionProvider }) requires a callable delegated `provider` ' +
         '(SPEC §6.5 / OPP-11).',
     );
   }
+  assertDelegatedDataProperty(value, 'justification');
   if (typeof record.justification !== 'string' || record.justification.trim() === '') {
     throw new Error(
       'createApp({ sessionProvider }) requires a non-empty delegated session justification ' +
         'covering validation, rotation, expiry, and revocation ownership (SPEC §6.5 / OPP-11).',
     );
   }
+  assertDelegatedDataProperty(value, 'lifecycleAssertions');
   assertDelegatedLifecycleAssertions(record.lifecycleAssertions);
-  if (isOpaqueSessionProvider(record.provider)) {
+  if (isOpaqueSessionProvider(provider)) {
     throw new Error(
       'createApp() received a Kovo-owned opaque session provider through `sessionProvider`. ' +
         'Pass the manager as `session` so the request shell records an owned opaque session ' +
@@ -269,7 +274,17 @@ function resolveDelegatedSessionProvider<SessionValue, RawRequest extends global
         'ownership (SPEC §6.5 / OPP-11).',
     );
   }
-  return record.provider as SessionProvider<RawRequest, SessionValue>;
+  return provider as SessionProvider<RawRequest, SessionValue>;
+}
+
+function assertDelegatedDataProperty(value: object, field: string): void {
+  const descriptor = Object.getOwnPropertyDescriptor(value, field);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new Error(
+      `createApp({ sessionProvider }) requires delegated \`${field}\` to be an own data property ` +
+        'so lifecycle ownership cannot change during createApp validation (SPEC §6.5 / OPP-11).',
+    );
+  }
 }
 
 function assertDelegatedLifecycleAssertions(
@@ -281,6 +296,9 @@ function assertDelegatedLifecycleAssertions(
         'non-empty validation, rotation, expiry, and revocation ownership fields ' +
         '(SPEC §6.5 / OPP-11).',
     );
+  }
+  for (const field of ['validation', 'rotation', 'expiry', 'revocation'] as const) {
+    assertDelegatedDataProperty(value, field);
   }
   for (const field of ['validation', 'rotation', 'expiry', 'revocation'] as const) {
     const assertion = (value as Record<string, unknown>)[field];

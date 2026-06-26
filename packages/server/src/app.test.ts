@@ -381,6 +381,53 @@ describe('server createApp request shell', () => {
     );
   });
 
+  it('rejects delegated sessionProvider accessors that could change after validation', () => {
+    const manager = createOpaqueSessionManager({
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    let reads = 0;
+    const declaration = {
+      justification: 'test delegates session lifecycle to an app-owned provider',
+      lifecycle: 'delegated' as const,
+      lifecycleAssertions: {
+        expiry: 'test provider enforces session expiration',
+        revocation: 'test provider revokes sessions on sign-out',
+        rotation: 'test provider rotates credentials after authentication',
+        validation: 'test provider validates browser session credentials',
+      },
+      get provider() {
+        reads += 1;
+        return reads === 1 ? () => ({ user: { id: 'delegated' } }) : manager.provider;
+      },
+    };
+
+    expect(() => createApp({ sessionProvider: declaration as never })).toThrow(
+      'requires delegated `provider` to be an own data property',
+    );
+  });
+
+  it('rejects delegated lifecycle assertion accessors', () => {
+    const lifecycleAssertions = {
+      expiry: 'test provider enforces session expiration',
+      revocation: 'test provider revokes sessions on sign-out',
+      get rotation() {
+        return 'test provider rotates credentials after authentication';
+      },
+      validation: 'test provider validates browser session credentials',
+    };
+
+    expect(() =>
+      createApp({
+        sessionProvider: {
+          justification: 'test delegates session lifecycle to an app-owned provider',
+          lifecycle: 'delegated',
+          lifecycleAssertions,
+          provider: () => ({ user: { id: 'delegated' } }),
+        } as never,
+      }),
+    ).toThrow('requires delegated `rotation` to be an own data property');
+  });
+
   it('does not treat forged global-symbol opaque provider markers as framework-owned', () => {
     const forgedProvider = (() => ({ user: { id: 'delegated' } })) as (() => {
       user: { id: string };
