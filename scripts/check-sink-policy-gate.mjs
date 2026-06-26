@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +20,10 @@ export const defaultPublicEntrypointFiles = [
   'packages/core/src/index.ts',
   'packages/server/src/index.ts',
 ];
+
+export const defaultCommandExecutionRoots = ['packages/server/src'];
+
+export const defaultCommandExecutionSinkFiles = ['packages/server/src/command.ts'];
 
 const allowedSinkPolicyExports = new Set([
   'Blessed',
@@ -65,6 +69,11 @@ export function checkSinkPolicyGate(options = {}) {
   const root = options.repoRoot ?? repoRoot;
   const sinkPolicyPath = options.sinkPolicyPath ?? defaultSinkPolicyPath;
   const blessedSinkFiles = options.blessedSinkFiles ?? defaultBlessedSinkFiles;
+  const commandExecutionRoots = options.commandExecutionRoots ?? defaultCommandExecutionRoots;
+  const commandExecutionSinkFiles =
+    options.commandExecutionSinkFiles ?? defaultCommandExecutionSinkFiles;
+  const commandExecutionFiles =
+    options.commandExecutionFiles ?? collectSourceFiles(root, commandExecutionRoots);
   const publicEntrypointFiles = options.publicEntrypointFiles ?? defaultPublicEntrypointFiles;
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
@@ -110,6 +119,23 @@ export function checkSinkPolicyGate(options = {}) {
     }
   }
 
+  const commandExecutionSinkFileSet = new Set(commandExecutionSinkFiles);
+  for (const filePath of commandExecutionFiles) {
+    if (!exists(filePath)) {
+      findings.push(`${filePath}: command execution gate input is missing`);
+      continue;
+    }
+    const text = readText(filePath);
+    findings.push(
+      ...commandExecutionSinkFindings(filePath, text, {
+        allowedExecutionSink: commandExecutionSinkFileSet.has(filePath),
+      }),
+    );
+    if (commandExecutionSinkFileSet.has(filePath)) {
+      findings.push(...commandPrimitiveInvariantFindings(filePath, text));
+    }
+  }
+
   for (const filePath of publicEntrypointFiles) {
     if (!exists(filePath)) continue;
     const text = readText(filePath);
@@ -121,6 +147,94 @@ export function checkSinkPolicyGate(options = {}) {
       }
     }
     findings.push(...publicSinkPolicyEscapeFindings(filePath, text));
+  }
+
+  return findings;
+}
+
+export function commandExecutionSinkFindings(filePath, text, options = {}) {
+  const source = stripComments(text);
+  const findings = [];
+  const allowedExecutionSink = options.allowedExecutionSink === true;
+  const childProcessImports = childProcessImportLocals(source);
+
+  for (const imported of childProcessImports.named) {
+    if (imported.imported === 'exec' || imported.imported === 'execSync') {
+      findings.push(
+        `${filePath}: forbidden child_process.${imported.imported} import; use cmd()/runCommand() so command execution stays shell-free and witnessed`,
+      );
+      continue;
+    }
+    if (!allowedExecutionSink && commandExecutionImportNames.has(imported.imported)) {
+      findings.push(
+        `${filePath}: raw child_process.${imported.imported} import is outside the command primitive; use cmd()/runCommand()`,
+      );
+    }
+  }
+
+  for (const local of childProcessImports.namespaces) {
+    for (const name of commandExecutionImportNames) {
+      const pattern = new RegExp(`\\b${escapeRegExp(local)}\\s*\\.\\s*${name}\\s*\\(`);
+      if (pattern.test(source)) {
+        findings.push(
+          `${filePath}: raw child_process.${name} call is outside the command primitive; use cmd()/runCommand()`,
+        );
+      }
+    }
+  }
+
+  for (const imported of childProcessImports.named) {
+    if (!commandExecutionImportNames.has(imported.imported)) continue;
+    const pattern = new RegExp(`\\b${escapeRegExp(imported.local)}\\s*\\(`);
+    if (
+      pattern.test(source) &&
+      !allowedExecutionSink &&
+      imported.imported !== 'exec' &&
+      imported.imported !== 'execSync'
+    ) {
+      findings.push(
+        `${filePath}: raw child_process.${imported.imported} call is outside the command primitive; use cmd()/runCommand()`,
+      );
+    }
+  }
+
+  return dedupe(findings);
+}
+
+export function commandPrimitiveInvariantFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+
+  if (
+    !/\bconst\s+COMMAND_EXEC_FILE_SINK\s*(?::[^=]+)?=\s*['"]server:command-exec-file['"]/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: command primitive must declare the registered server:command-exec-file sink kind`,
+    );
+  }
+  if (!/\bblessSink\s*(?:<[^>()]*>)?\s*\(\s*COMMAND_EXEC_FILE_SINK\s*,/.test(source)) {
+    findings.push(
+      `${filePath}: cmd() must mint Command values with the registered command execution witness`,
+    );
+  }
+  if (!/\bisBlessedSink\s*(?:<[^>()]*>)?\s*\(\s*COMMAND_EXEC_FILE_SINK\s*,/.test(source)) {
+    findings.push(
+      `${filePath}: runCommand() must re-check the registered command execution witness`,
+    );
+  }
+  if (
+    !/\bexecFile\s*\(\s*command\s*\.\s*program\s*,\s*\[\s*\.\.\.\s*command\s*\.\s*argv\s*\]\s*,\s*execOptions\s*,/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: runCommand() must execute the minted program/argv through execFile with explicit options`,
+    );
+  }
+  if (!/\bshell\s*:\s*false\b/.test(source)) {
+    findings.push(`${filePath}: runCommand() execFile options must set shell: false`);
   }
 
   return findings;
@@ -268,6 +382,104 @@ function parseNamedSpecifiers(text) {
     .filter((specifier) => specifier !== undefined);
 }
 
+const commandExecutionImportNames = new Set([
+  'exec',
+  'execFile',
+  'execSync',
+  'fork',
+  'spawn',
+  'spawnSync',
+]);
+
+function childProcessImportLocals(text) {
+  const named = [];
+  const namespaces = new Set();
+  const childProcessModule = String.raw`(?:node:)?child_process`;
+
+  const namedImportPattern = new RegExp(
+    String.raw`\bimport\s*\{([^}]+)\}\s*from\s*(['"])${childProcessModule}\2`,
+    'g',
+  );
+  let namedImport;
+  while ((namedImport = namedImportPattern.exec(text)) !== null) {
+    named.push(...parseNamedSpecifiers(namedImport[1]));
+  }
+
+  const namespaceImportPattern = new RegExp(
+    String.raw`\bimport\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*(['"])${childProcessModule}\2`,
+    'g',
+  );
+  let namespaceImport;
+  while ((namespaceImport = namespaceImportPattern.exec(text)) !== null) {
+    namespaces.add(namespaceImport[1]);
+  }
+
+  const destructuredRequirePattern = new RegExp(
+    String.raw`\b(?:const|let|var)\s*\{([^}]+)\}\s*=\s*require\s*\(\s*(['"])${childProcessModule}\2\s*\)`,
+    'g',
+  );
+  let destructuredRequire;
+  while ((destructuredRequire = destructuredRequirePattern.exec(text)) !== null) {
+    named.push(...parseObjectBindingSpecifiers(destructuredRequire[1]));
+  }
+
+  const namespaceRequirePattern = new RegExp(
+    String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*require\s*\(\s*(['"])${childProcessModule}\2\s*\)`,
+    'g',
+  );
+  let namespaceRequire;
+  while ((namespaceRequire = namespaceRequirePattern.exec(text)) !== null) {
+    namespaces.add(namespaceRequire[1]);
+  }
+
+  return { named, namespaces };
+}
+
+function parseObjectBindingSpecifiers(text) {
+  return text
+    .split(',')
+    .map((specifier) => {
+      const cleaned = specifier.trim();
+      if (!cleaned) return undefined;
+      const [imported, local = imported] = cleaned.split(/\s*:\s*/);
+      return {
+        imported: imported.trim(),
+        local: local.trim(),
+      };
+    })
+    .filter((specifier) => specifier !== undefined);
+}
+
+function collectSourceFiles(root, roots) {
+  const files = [];
+  for (const relativeRoot of roots) {
+    const absoluteRoot = path.join(root, relativeRoot);
+    if (!existsSync(absoluteRoot)) continue;
+    collectSourceFilesInto(root, absoluteRoot, files);
+  }
+  return files.sort((left, right) => left.localeCompare(right));
+}
+
+function collectSourceFilesInto(root, absolutePath, files) {
+  for (const entry of readdirSync(absolutePath, { withFileTypes: true })) {
+    const absoluteEntryPath = path.join(absolutePath, entry.name);
+    if (entry.isDirectory()) {
+      collectSourceFilesInto(root, absoluteEntryPath, files);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const relativePath = path.relative(root, absoluteEntryPath).split(path.sep).join('/');
+    if (!/\.[cm]?tsx?$/.test(relativePath)) continue;
+    if (relativePath.endsWith('.d.ts')) continue;
+    if (/\.(?:test|spec)\.[cm]?tsx?$/.test(relativePath)) continue;
+    files.push(relativePath);
+  }
+}
+
+function dedupe(values) {
+  return [...new Set(values)];
+}
+
 function stringLiteralUnionTypeMembers(text, namePattern) {
   const kinds = [];
   const typePattern = /\btype\s+([A-Za-z_$][\w$]*)\s*=\s*([^;]*['"][^;]+)\s*;/g;
@@ -295,6 +507,10 @@ function stringLiterals(text) {
 
 function stripComments(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
