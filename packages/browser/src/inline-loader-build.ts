@@ -60,16 +60,29 @@ type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpec
 // shim that routes the always-on `p`/`d` raw-HTML write sinks (response-fragment-apply.ts)
 // through the framework `kovo` policy — what lets Trusted Types ship DEFAULT-ON without bricking
 // Kovo's own hydration on Chromium; (3) the extracted fragment sanitizer now byte-tracks the shared
-// KV236 sink policy for imagesrcset, comma-aware srcset, CSS text, and raw-HTML sink names. The TT API
-// tokens (`trustedTypes`/`createPolicy`/`createHTML`) and sanitizer grammar are irreducible over the
-// hardened loader; future increases require comparable XSS-sink evidence.
-export const inlineKovoLoaderGzipByteBudget = 10000;
+// KV236 sink policy for imagesrcset, comma-aware srcset, CSS text, and raw-HTML sink names; (4) the
+// inline dynamic-import wall now matches the modular runtime's localhost-only TS/TSX dev exception
+// and production `/c/` modulepreload manifest restriction. The TT API tokens, sanitizer grammar, and
+// import allowlist are irreducible over the hardened loader; future increases require comparable
+// security-boundary evidence.
+export const inlineKovoLoaderGzipByteBudget = 10200;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
 export const inlineFragmentTargetEscapeReadableSource =
   readInlineFragmentTargetEscapeReadableSource();
 export const inlineDelegatedEvents = readModularDefaultDelegatedEvents();
+const inlineBooleanPresenceAttributes = [
+  'checked',
+  'disabled',
+  'hidden',
+  'indeterminate',
+  'multiple',
+  'open',
+  'readonly',
+  'required',
+  'selected',
+] as const;
 
 export const inlineKovoLoaderInstallerReadableSource =
   buildInlineKovoLoaderInstallerReadableSource();
@@ -203,10 +216,29 @@ function installInlineKovoLoader(im) {
     try {
       const l = globalThis.location || { href: 'http://localhost/', origin: 'http://localhost' };
       const p = new URL(url, l.href);
-      return (
-        p.origin === l.origin &&
-        ((/^\/c\//.test(p.pathname)) || p.pathname.endsWith('ts'))
-      );
+      if (p.origin !== l.origin) return false;
+      const pn = p.pathname;
+      if (
+        p.protocol === 'http:' &&
+        /^(?:localhost|127\.0\.0\.1|::1)$/.test(p.hostname) &&
+        !pn.startsWith('/c/') &&
+        /\.(?:[cm]?tsx?)$/.test(pn)
+      ) {
+        return true;
+      }
+      if (!pn.startsWith('/c/')) return false;
+      let f = false;
+      const k = p.origin + pn + p.search;
+      for (const a of qa(doc, 'link[rel~="modulepreload"][href]')) {
+        try {
+          const u = new URL(a.getAttribute?.('href') || '', l.href);
+          if (u.origin === l.origin && u.pathname.startsWith('/c/')) {
+            f = true;
+            if (u.origin + u.pathname + u.search === k) return true;
+          }
+        } catch {}
+      }
+      return !f;
     } catch {
       return false;
     }
@@ -223,7 +255,7 @@ function installInlineKovoLoader(im) {
       (attr) => attr.name.startsWith('data-bind:') && attr.value,
     );
   const wa = (el, name, val) => {
-    if ((name === 'checked' || name === 'indeterminate') && val === false) val = null;
+    const n = name.toLowerCase();
     // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
     // lives in the top layer. Toggling its open attribute alone never exits the
     // top layer (it stays :modal with an inert backdrop intercepting every
@@ -241,9 +273,19 @@ function installInlineKovoLoader(im) {
       } else if (el.open) el.close();
       return;
     }
+    // SPEC.md §4.6/§4.8: HTML boolean-presence attributes use presence, not
+    // stringified booleans. Keep inline data-bind:* in parity with the module
+    // query/state runtime for the full boolean-presence set.
+    if (/^(?:${inlineBooleanPresenceAttributes.join('|')})$/.test(n)) {
+      const on = val != null && val !== false;
+      if (on) el.setAttribute?.(name, '');
+      else el.removeAttribute?.(name);
+      if (n === 'checked' && el.checked !== undefined) el.checked = on;
+      if (n === 'indeterminate' && el.indeterminate !== undefined) el.indeterminate = on;
+      return;
+    }
     if (val == null) el.removeAttribute?.(name);
     else {
-      const n = name.toLowerCase();
       if (r(n)) el.removeAttribute?.(name);
       else {
         let r = fb(val);
@@ -268,10 +310,6 @@ function installInlineKovoLoader(im) {
     }
     if ((name === 'scrollTop' || name === 'scrolltop') && el.scrollTop !== undefined) {
       el.scrollTop = Number(val) || 0;
-    }
-    if (name === 'checked' && el.checked !== undefined) el.checked = val != null;
-    if (name === 'indeterminate' && el.indeterminate !== undefined) {
-      el.indeterminate = val != null;
     }
   };
   const ws = (el, path, bt, state, root = 'state') => {
