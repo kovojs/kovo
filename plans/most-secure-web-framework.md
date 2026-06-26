@@ -336,7 +336,9 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       metadata, authority, capabilities, ambient posture, and reachable sinks only from own data properties, then
       snapshots and freezes the rows before runtime/audit consumption so inherited/accessor-backed or
       post-declaration mutation cannot widen audit facts; focused agent-tool tests, `git diff --check`, and
-      `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
+      `pnpm run check:vp` passed. `kovo explain --capabilities` now emits explicit `AGENT_TOOL_SINK` rows for
+      audit-grade and sound reachable agent-tool sinks, including grade, kind, target, required capability, site,
+      and evidence; focused explain tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
       framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
