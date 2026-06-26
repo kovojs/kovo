@@ -2470,7 +2470,27 @@ function readonlyTupleLiteralValue(node: Node, depth = 0): Node | undefined {
     const argument = singleObjectFreezeArgument(expression);
     return argument ? readonlyTupleLiteralValue(argument, depth + 1) : undefined;
   }
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    if (!staticAccessRootHasStableConstBinding(expression)) return undefined;
+    const value = localConstLiteralStaticAccessValue(expression);
+    return value ? readonlyTupleLiteralValue(value, depth + 1) : undefined;
+  }
   return localConstReadonlyTupleAliasValue(expression, depth + 1);
+}
+
+function staticAccessRootHasStableConstBinding(node: Node): boolean {
+  const declaration = staticAccessRootVariableDeclaration(node);
+  if (!declaration || !Node.isIdentifier(declaration.getNameNode())) return false;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return false;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return false;
+
+  return !isStaticBindingMutatedAfterDeclaration(
+    node.getSourceFile(),
+    declaration.getNameNode().getText(),
+    declaration,
+  );
 }
 
 function localConstReadonlyTupleAliasValue(node: Node, depth = 0): Node | undefined {
