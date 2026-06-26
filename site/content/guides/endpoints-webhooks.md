@@ -18,6 +18,8 @@ raw response code, not a Kovo safe-by-default helper lane.
 An endpoint is registry-visible and receives the raw `Request` before body parsing:
 
 ```ts
+import { endpoint } from '@kovojs/server';
+
 export const oauthCallback = endpoint('/auth/callback', {
   method: 'GET',
   reason: 'OAuth provider callback',
@@ -44,6 +46,9 @@ state, or another explicit scheme authenticate the request.
 Use `webhook()` for third-party POSTs that write Kovo-owned data:
 
 ```ts
+import { hmacSignature } from '@kovojs/core';
+import { s, webhook } from '@kovojs/server';
+
 export const stripeWebhook = webhook('stripe', {
   path: '/hooks/stripe',
   verify: hmacSignature({

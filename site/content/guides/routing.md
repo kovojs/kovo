@@ -158,8 +158,10 @@ with a `Location` the route table validates, and the next GET renders the update
 ```ts
 import { redirect } from '@kovojs/server';
 
-// after a successful no-JS mutation, the request shell issues PRG to a typed target
-return redirect('/deals/:id', { params: { id: created.id } });
+export async function createDeal() {
+  const created = await db.deals.create(formData);
+  return redirect('/deals/:id', { params: { id: created.id } });
+}
 ```
 
 Renaming `/deals/:id` turns this `redirect()` red exactly like it turns every `<Link>` red — the
@@ -238,9 +240,9 @@ single edit whose every stale consumer surfaces as a type error:
 export const dealDetailRoute = route('/deals/:dealId', { /* … */ });
 
 // …and every one of these goes red under `vp check` until updated:
-<Link to="/deals/:id" params={{ id }}>…       // ✗ literal no longer in RouteRegistry
-redirect('/deals/:id', { params: { id } });    // ✗ same
-<a href="/deals/p1">…                           // ✗ KV220: matches no declared route
+// <Link to="/deals/:id" params={{ id }}>…</Link>  // literal no longer in RouteRegistry
+// redirect('/deals/:id', { params: { id } });     // same stale literal
+// <a href="/deals/p1">…</a>                       // KV220: matches no declared route
 ```
 
 There is no broken link to discover in production, and no grep-the-codebase migration — the type

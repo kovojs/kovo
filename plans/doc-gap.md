@@ -24,6 +24,7 @@ traceability. Mark `- [x]` only when the exact fix is shipped and re-verified.
 - Undocumented diagnostics: `comm -23 <(grep -rhoE 'KV[0-9]{3}' packages/*/src | sort -u) <(grep -oE 'KV[0-9]{3}' site/gen/reference/diagnostics.md | sort -u)` → `KV229 KV313 KV999`.
 - Undocumented API prose: `node -e` over `site/gen/api/*.sidebar.json` `documented:false` → ui 458/460, headless-ui 777/880; all other packages 0.
 - Missing READMEs: only `packages/icons/README.md` exists among 12 npm-public packages.
+- Authored code snippets: `cd site && npm run content` runs `code-snippets/v1 snippets=103 OK` through the content pipeline.
 - Regen is clean (no committed drift): `cd site && npm run content` then `git diff --stat site/gen` → empty (gen/ is gitignored, reproducibly built).
 
 ### Verified non-issues (checked, do not re-file)
@@ -144,6 +145,9 @@ streaming↔DG-20, request-shell↔DG-21, components↔DG-30.)
 
 - [x] **DS-C1** [med·sm] Add an **authored-page skeleton** to `rules/docs-style.md`. _Shipped 2026-06-25:_ added a `## Voice` section (Simon-Willison register — plain, direct, show-don't-tell, with a before/after) and three per-mode verb-heading skeletons (Guide: job → smallest code → Run it → production shape → Handle failure → Next + collapsed `Spec & diagnostics`; Tutorial: build slice → Run it → What just happened → Next; Reference: when-to-reach → minimal use → enumerate → examples). Exemplars cited: tutorial/08, kovo-explain.
 - [ ] **DS-C2** [med·md] Add doc lints to the content pipeline / CI: first-code-block line-count + unresolved-identifier check; citation-quarantine grep (DS-S3); opener app-noun-ratio check. (The content pipeline already extracts from compiling step states, so first-block extraction is feasible.)
+  - [x] Authored `ts`/`tsx` snippets are extracted and type-checked during the content pipeline, with shared local declarations for deliberately focused examples.
+    _Evidence:_ `site/scripts/code-snippets-check.mjs` is wired from `site/scripts/content-pipeline.mjs`; `pnpm exec vitest --run site/scripts/code-snippets-check.test.mjs` and `cd site && npm run content` passed with `code-snippets/v1 snippets=103 OK`.
+  - [ ] Still open: first-code-block line-count lint, citation-quarantine grep, and opener app-noun-ratio check.
 
 ---
 

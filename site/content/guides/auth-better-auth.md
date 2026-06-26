@@ -71,10 +71,14 @@ production, set `BETTER_AUTH_SECRET` or `KOVO_CSRF_SECRET` through real secret m
 Use route-level redirects for pages:
 
 ```tsx
-page(_context, request: AppRequest) {
-  if (!request.session) return redirect('/login', {});
-  return <HomePage request={request} />;
-}
+import { redirect, route } from '@kovojs/server';
+
+export const homeRoute = route('/', {
+  page(_context, request: AppRequest) {
+    if (!request.session) return redirect('/login', {});
+    return <HomePage request={request} />;
+  },
+});
 ```
 
 Use `authed<AppRequest>()` for mutations that require a signed-in user. Auth failures and typed

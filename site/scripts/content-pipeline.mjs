@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { generateApiReference } from './api-ref.mjs';
 import { captureAll } from './capture.mjs';
+import { checkAuthoredCodeSnippets } from './code-snippets-check.mjs';
 import { generateCliReference } from './cli-ref.mjs';
 import { generateCreateKovoReference } from './create-kovo-ref.mjs';
 import { generateDiagnosticsReference } from './diagnostics-ref.mjs';
@@ -42,6 +43,7 @@ export async function runContentPipeline() {
   await generateCliReference();
   await generateCreateKovoReference();
   await generateDiagnosticsReference();
+  await checkAuthoredCodeSnippets();
   await mkdir(genDir, { recursive: true });
 
   const captures = await captureAll(repoRoot);

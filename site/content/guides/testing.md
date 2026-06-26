@@ -17,14 +17,13 @@ browser.
 `@kovojs/test` runs mutations as functions and pages as strings — no browser, no HTTP server:
 
 ```ts
-import { createKovoTestHarness } from '@kovojs/test/harness';
-import type { TouchGraph } from '@kovojs/core';
+import { createKovoTestHarness, type KovoTestTouchGraph } from '@kovojs/test/harness';
 
 const harness = createKovoTestHarness({
   db: createCommerceDb(),
   pages: { '/cart': renderCartPage },
   request: { session: { id: 's1', user: { id: 'u1' } } },
-  touchGraph: commerceTouchGraph as unknown as TouchGraph,
+  touchGraph: commerceTouchGraph as unknown as KovoTestTouchGraph,
   verification: {
     domainByTable: { cart_items: 'cart', orders: 'order', products: 'product' },
   },
