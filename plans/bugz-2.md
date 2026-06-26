@@ -55,11 +55,12 @@ ledger's H1-H9/M1-M4/L1-L5 list.
 
 ## MEDIUM
 
-- [ ] **M1 - Streamed raw endpoint bodies can run handler side effects before max-body 413.** `packages/server/src/app-request.ts:45-57`, `packages/server/src/app-load-shed.ts:175-191,295-330,333-350`, `packages/server/src/app-dispatch.ts:80-87`
+- [x] **M1 - Streamed raw endpoint bodies can run handler side effects before max-body 413.** `packages/server/src/app-request.ts:45-57`, `packages/server/src/app-load-shed.ts:175-191,295-330,333-350`, `packages/server/src/app-dispatch.ts:80-87`
   - The pre-dispatch load-shed check rejects only when `Content-Length` is present and over limit. Otherwise the request is wrapped so `text()`/`json()`/`body` throw after reading too many bytes, but raw `endpoint()` handlers have already been dispatched. A handler can perform side effects before or while consuming the oversized stream, then the framework returns 413.
   - **Exploit:** CSRF-exempt raw endpoint increments a counter or writes an audit row before `await request.text()`; oversized chunked request returns 413 but side effect happened.
   - **Verified:** server sub-agent throwaway vitest with `maxBodyBytes:4` and no `Content-Length` produced `{ status: 413, sideEffects: 1 }`.
   - **Fix:** for raw endpoints, drain/check the limited body before handler dispatch when a body is present, or expose a separate declared streaming endpoint class whose side-effect ordering is explicitly opt-in.
+  - Evidence 2026-06-26: raw endpoint bodies are now verified and buffered before endpoint auth/CSRF/handler dispatch; `pnpm exec vitest --run packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed after integration.
 
 - [x] **M2 - Inline loader writes `false` boolean-presence attrs as present.** `packages/browser/src/inline-loader-build.ts:220-255`, generated `packages/browser/src/inline-loader.ts:8`; contrast `packages/browser/src/query-bindings.ts:610-669`
   - The module runtime treats all boolean-presence attributes (`hidden`, `disabled`, `required`, `selected`, etc.) as remove-on-false. The inline loader only special-cases `checked` and `indeterminate`; `data-bind:hidden=false` becomes `hidden="false"`, which is still present in HTML.

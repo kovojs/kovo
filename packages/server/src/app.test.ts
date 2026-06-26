@@ -1009,8 +1009,12 @@ describe('server createApp request shell', () => {
     expect(queryLoad).not.toHaveBeenCalled();
   });
 
-  it('rejects oversized streamed bodies without trusting Content-Length alone', async () => {
-    const endpointHandler = vi.fn(async (request: Request) => new Response(await request.text()));
+  it('rejects oversized streamed endpoint bodies before dispatch', async () => {
+    let sideEffects = 0;
+    const endpointHandler = vi.fn(async (request: Request) => {
+      sideEffects += 1;
+      return new Response(await request.text());
+    });
     const handler = createRequestHandler(
       createApp({
         endpoints: [
@@ -1051,7 +1055,8 @@ describe('server createApp request shell', () => {
 
     expect(response.status).toBe(413);
     await expect(response.text()).resolves.toBe('Payload Too Large');
-    expect(endpointHandler).toHaveBeenCalledTimes(1);
+    expect(endpointHandler).not.toHaveBeenCalled();
+    expect(sideEffects).toBe(0);
   });
 
   // SPEC §9.5 / §10.3: coarse per-IP mutation limiting runs before replay, parse,
