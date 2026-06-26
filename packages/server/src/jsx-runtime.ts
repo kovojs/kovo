@@ -23,6 +23,7 @@ import {
   renderedHtml,
   type RenderedHtml,
   safeRuntimeAttribute,
+  safeRuntimeAttributeName,
   unwrapCoercedRenderedHtml,
 } from './html.js';
 import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
@@ -244,10 +245,16 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       continue;
     }
 
-    // SPEC.md §4.8 + §5.2#10: every runtime attribute write passes through the
-    // shared sink policy. URL values are scheme-checked, srcset candidate lists
-    // are filtered, and executable sinks (`on*`, `srcdoc`, raw CSS/HTML text)
-    // are omitted before HTML is emitted.
+    // SPEC.md §4.8 + §5.2#10: the sink policy classifies attribute VALUES but
+    // trusts the NAME verbatim. A dynamic spread (`<div {...record}>`) can carry
+    // attacker-controlled keys (a jsonb column, CMS blob, `Object.fromEntries`),
+    // so the name is fail-closed against a strict allowlist first. A hostile key
+    // like `x><img onerror=…>` (or a boolean-true key injecting raw `<script>`) is
+    // omitted before HTML is emitted. Guards BOTH the value and boolean-true
+    // branches below.
+    if (!safeRuntimeAttributeName(name)) continue;
+    // URL values are scheme-checked, srcset candidate lists are filtered, and
+    // executable sinks (`on*`, `srcdoc`, raw CSS/HTML text) are omitted.
     const attributeValue = safeRuntimeAttribute(name, attributeText(name, value));
     if (attributeValue === null) continue;
     rendered += value === true ? ` ${name}` : ` ${name}="${attributeValue}"`;

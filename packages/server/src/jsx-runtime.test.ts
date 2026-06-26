@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
+import {
+  setRuntimeSinkSecurityEventHandler,
+  type RuntimeSinkSecurityEvent,
+} from '@kovojs/core/internal/sink-policy';
 import * as style from '@kovojs/style';
 
 import { validateCsrfToken } from './csrf.js';
-import { renderHtmlValue } from './html.js';
+import { escapeText, renderHtmlValue } from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { Fragment, jsx, jsxDEV, jsxs } from './jsx-runtime.js';
 import { mutationFormAttributes } from './mutation.js';
@@ -163,6 +167,56 @@ describe('server jsx runtime', () => {
 
   it('escapes attribute values', () => {
     expect(html(jsx('input', { value: 'a"b<c&d' }))).toBe('<input value="a&quot;b&lt;c&amp;d">');
+  });
+
+  // bugz H1 (SPEC.md §1.1/§2, §4.8 KV236): the runtime sink policy classifies attribute
+  // VALUES but trusted the NAME verbatim, so a dynamic spread (`<div {...record}>`) with
+  // attacker-controlled keys broke out of the tag (stored XSS). Attribute names are now
+  // fail-closed against a strict allowlist.
+  it('H1: omits attacker-controlled attribute names from a dynamic spread', () => {
+    const record: Record<string, unknown> = { 'x><img src=x onerror=alert(1)>': 'y' };
+    const out = html(jsx('div', { ...record }));
+    expect(out).toBe('<div></div>');
+    expect(out).not.toContain('onerror');
+  });
+
+  it('H1: omits a boolean-true hostile key that would inject raw markup', () => {
+    const record: Record<string, unknown> = { '><script>alert(1)</script>': true };
+    expect(html(jsx('div', { ...record }))).toBe('<div></div>');
+  });
+
+  it('H1: retains legitimate hyphen/colon/aria/data attribute names', () => {
+    expect(html(jsx('a', { 'data-bind': 'x', 'aria-label': 'Close', 'xlink:href': '/y' }))).toBe(
+      '<a data-bind="x" aria-label="Close" xlink:href="/y"></a>',
+    );
+  });
+
+  it('H1: drains a redacted KV236 event when an attribute name is rejected', () => {
+    const events: RuntimeSinkSecurityEvent[] = [];
+    const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
+    try {
+      html(jsx('div', { 'x ><b>': 'secret-token' }));
+    } finally {
+      restore();
+    }
+    expect(events).toHaveLength(1);
+    expect([events[0]!.code, events[0]!.family, events[0]!.action]).toEqual([
+      'KV236',
+      'attribute',
+      'remove',
+    ]);
+    expect(JSON.stringify(events)).not.toContain('><b>');
+  });
+
+  // bugz M2 (SPEC.md §4.5/§5.2): the compiler injects `{escapeText(expr)}`; its result is
+  // re-rendered through the server JSX runtime, which previously escaped a SECOND time
+  // (`&` -> `&amp;amp;`). escapeText now returns framework-rendered HTML so the second pass
+  // is a no-op and metacharacter data renders single-escaped.
+  it('M2: a compiler-injected escapeText value renders single-escaped through the runtime', () => {
+    const child = escapeText('AT&T <b> R&D');
+    expect(html(jsx('h2', { 'data-bind': 'x', children: child }))).toBe(
+      '<h2 data-bind="x">AT&amp;T &lt;b&gt; R&amp;D</h2>',
+    );
   });
 
   // F1 — server URL-scheme sanitizer (SPEC.md §4.8 + §5.2#10).

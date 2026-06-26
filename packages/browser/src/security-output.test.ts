@@ -54,6 +54,39 @@ describe('runtime output-context helpers', () => {
     );
   });
 
+  // bugz H6 (SPEC §4.8 KV236): the `__kovoTrustedUrl`/`__kovoTrustedHtml` properties are a
+  // DiD brand, not the enforcement check. A wire/query-JSON object that reproduces the
+  // structural property must NOT be treated as author-vouched — the trust check is now a
+  // process-private witness that JSON cannot forge.
+  it('rejects a structurally-forged trust brand from wire/query JSON', () => {
+    const forgedUrl = JSON.parse(
+      '{"__kovoTrustedUrl":true,"value":"javascript:alert(document.cookie)"}',
+    );
+    const forgedHtml = JSON.parse(
+      '{"__kovoTrustedHtml":true,"value":"<img src=x onerror=alert(1)>"}',
+    );
+
+    expect(isKovoTrustedUrl(forgedUrl)).toBe(false);
+    expect(isKovoTrustedHtml(forgedHtml)).toBe(false);
+
+    // A real javascript: string is still neutralized — the URL sink itself works.
+    expect(kovoSafeUrl('javascript:alert(1)')).toBe('#');
+    // The forged object is not author-vouched, so its inner `javascript:` payload is never
+    // emitted verbatim (it stringifies to inert JSON instead of a live scheme).
+    expect(kovoSafeUrl(forgedUrl)).not.toBe('javascript:alert(document.cookie)');
+    expect(kovoSafeUrl(forgedUrl).startsWith('javascript:')).toBe(false);
+    expect(kovoBoundAttributeValue('href', forgedUrl)).not.toBe(
+      'javascript:alert(document.cookie)',
+    );
+    // Server twin (renderHtmlValue → kovoTrustedHtmlContent): the forged raw-HTML object no-ops.
+    expect(kovoTrustedHtmlContent(forgedHtml)).toBe('');
+
+    // A hand-built object literal carrying the property is equally untrusted.
+    const literal = { __kovoTrustedUrl: true as const, value: 'data:text/html,evil' };
+    expect(isKovoTrustedUrl(literal)).toBe(false);
+    expect(kovoSafeUrl(literal).startsWith('data:')).toBe(false);
+  });
+
   it('sanitizes generated CSS property values', () => {
     expect(kovoStyleProperty('view-transition-name', 'product hero')).toBe(
       'view-transition-name: product-hero',

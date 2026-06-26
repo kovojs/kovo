@@ -1,7 +1,7 @@
 import type { TrustedHtml } from '@kovojs/browser';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
-import { escapeText, isRenderedHtml, type RenderedHtml } from './html.js';
+import { escapeTextWithRenderedHtml, isRenderedHtml, type RenderedHtml } from './html.js';
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
@@ -36,7 +36,11 @@ export function renderServerRenderable(children: InternalServerRenderable): Mayb
       : (rendered as string[]).join('');
   }
 
-  return escapeText(children);
+  // SPEC.md §4.5/§5.2: escape the scalar child to a plain string. `escapeText`
+  // brands its result as RenderedHtml so the compiler-injected `{escapeText(expr)}`
+  // child is not re-escaped here; this final scalar branch must NOT re-brand, or a
+  // nested render would double-escape, so it uses the string-returning escaper.
+  return escapeTextWithRenderedHtml(children);
 }
 
 function isPromiseLike<Value>(value: unknown): value is PromiseLike<Value> {

@@ -2,6 +2,7 @@ import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/se
 import {
   decideRuntimeAttributeWrite,
   drainRuntimeSinkSecurityEvent,
+  type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
@@ -79,10 +80,10 @@ export function renderHtmlValue(value: unknown): string {
   }
   if (typeof value === 'string') return escapeTextWithRenderedHtml(value);
   if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
-    return escapeText(value);
+    return escapeTextWithRenderedHtml(value);
   }
 
-  return escapeText(JSON.stringify(value) ?? '');
+  return escapeTextWithRenderedHtml(JSON.stringify(value) ?? '');
 }
 
 /** @internal escape text while preserving framework-rendered HTML coerced via `+`. */
@@ -167,6 +168,43 @@ export function safeRuntimeAttribute(name: string, value: string): string | null
   return decision.action === 'remove' ? null : escapeAttribute(decision.value ?? value);
 }
 
+// SPEC.md §4.8 / §5.2#10: the runtime sink policy classifies an attribute *value*
+// but trusts the *name* verbatim. A dynamic spread (`<div {...record}>`) can carry
+// attacker-controlled keys, so the name itself must be validated before it is
+// concatenated into the tag — otherwise a key like `x><img onerror=…>` breaks out
+// of the element (stored XSS). Fail closed to a strict HTML/XML name-token allowlist
+// that can never contain whitespace, `=`, `/`, `<`, `>`, or quotes.
+const safeAttributeNamePattern = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/;
+
+/**
+ * @internal Fail-closed attribute-NAME guard for runtime server attribute writes
+ * (SPEC.md §4.8 KV236). Returns true only for a safe HTML/XML name token; on mismatch
+ * it omits the write (returns false) and drains a redacted KV236 sink event so the
+ * blocked write is observable in dev/test, mirroring the value-side sink policy.
+ */
+export function safeRuntimeAttributeName(name: string): boolean {
+  if (safeAttributeNamePattern.test(name)) return true;
+  drainRuntimeSinkSecurityEvent(rejectedAttributeNameEvent(name));
+  return false;
+}
+
+function rejectedAttributeNameEvent(name: string): RuntimeSinkSecurityEvent {
+  const reason = 'attribute name is not a safe HTML name token';
+  return {
+    action: 'remove',
+    code: 'KV236',
+    family: 'attribute',
+    message: `KV236 runtime remove for attribute-name sink: ${reason}`,
+    reason,
+    sink: 'attribute-name',
+    value: {
+      length: name.length,
+      preview: `<redacted:${name.length}>`,
+      redacted: true,
+    },
+  };
+}
+
 /**
  * @internal part-4 L-i18n-meta-1: scheme-check a URL-bearing VALUE that is emitted into a
  * non-URL-named attribute (e.g. `<meta property="og:image" content="…">`). Returns `'#'`
@@ -186,9 +224,16 @@ export function safeUrlValue(value: string): string {
  * interpolations in this helper during lowering so generated components are
  * safe-by-default; it is a no-op for values without HTML metacharacters. Exported only
  * for compiler-emitted code, not app authors.
+ *
+ * The result is returned as branded {@link RenderedHtml} (SPEC.md §4.5, §5.2): the
+ * compiler emits `{escapeText(expr)}` as a JSX child, and that child is rendered by
+ * `renderServerRenderable`, whose string branch would escape a *second* time
+ * (`&` → `&amp;amp;`). Branding the already-escaped text makes that second pass a
+ * pass-through (`isRenderedHtml` → returns `.html`), so output stays single-escaped
+ * while the `escapeText(` presence the §5.2 equivalence gate keys on is preserved.
  */
-export function escapeText(value: unknown): string {
-  return escapeTextWithRenderedHtml(value);
+export function escapeText(value: unknown): RenderedHtml {
+  return renderedHtml(escapeTextWithRenderedHtml(value));
 }
 
 /**

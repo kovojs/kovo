@@ -63,6 +63,17 @@ export interface TrustedHtml {
   readonly value: string | BrowserTrustedHTML;
 }
 
+// SPEC §4.8 KV236: the `__kovoTrustedHtml` / `__kovoTrustedUrl` properties are a
+// DEFENSE-IN-DEPTH brand for source/`kovo explain`, NOT the enforcement check. A
+// structural property is JSON-reproducible, so a value decoded from the wire/query
+// JSON (`{"__kovoTrustedUrl":true,"value":"javascript:…"}`) would forge author trust
+// and bypass scheme neutralization / SSR HTML escaping. The non-forgeable witness is
+// these module-private WeakSets, minted only at `trustedUrl()` / `trustedHtml()`
+// creation — mirroring `blessSink` in core/internal/sink-policy.ts. JSON cannot add a
+// value to a WeakSet, so a wire-decoded object is never treated as author-vouched.
+const trustedHtmlWitnesses = new WeakSet<object>();
+const trustedUrlWitnesses = new WeakSet<object>();
+
 /**
  * Marks intentional raw HTML for Kovo sinks that require an explicit escape hatch.
  */
@@ -80,6 +91,7 @@ export function trustedHtml(
     [Symbol.toPrimitive]: { value: stringify },
     toString: { value: stringify },
   });
+  trustedHtmlWitnesses.add(trusted);
   return trusted;
 }
 
@@ -115,14 +127,13 @@ export function sanitizeRichHtml(value: string, options?: SafeRichHtmlOptions): 
 }
 
 /**
- * Returns whether a value uses Kovo's explicit raw HTML wrapper.
+ * Returns whether a value is a process-minted Kovo trusted-HTML brand. SPEC §4.8
+ * KV236: checks the non-forgeable module-private witness, NOT the structural
+ * `__kovoTrustedHtml` property, so a wire/query-JSON object that merely reproduces
+ * the property shape is never honored as author-vouched raw HTML.
  */
 export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { __kovoTrustedHtml?: unknown }).__kovoTrustedHtml === true
-  );
+  return typeof value === 'object' && value !== null && trustedHtmlWitnesses.has(value);
 }
 
 /**
@@ -146,18 +157,19 @@ export interface TrustedUrl {
  * brand is visible in source and `kovo explain`.
  */
 export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput): TrustedUrl {
-  return { __kovoTrustedUrl: true, ...trustedOutputMetadata(metadata), value };
+  const trusted: TrustedUrl = { __kovoTrustedUrl: true, ...trustedOutputMetadata(metadata), value };
+  trustedUrlWitnesses.add(trusted);
+  return trusted;
 }
 
 /**
- * Returns whether a value uses Kovo's explicit trusted-URL wrapper.
+ * Returns whether a value is a process-minted Kovo trusted-URL brand. SPEC §4.8
+ * KV236: checks the non-forgeable module-private witness, NOT the structural
+ * `__kovoTrustedUrl` property, so a wire/query-JSON object that merely reproduces
+ * the property shape is never honored as an author-vouched URL.
  */
 export function isKovoTrustedUrl(value: unknown): value is TrustedUrl {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { __kovoTrustedUrl?: unknown }).__kovoTrustedUrl === true
-  );
+  return typeof value === 'object' && value !== null && trustedUrlWitnesses.has(value);
 }
 
 /**
