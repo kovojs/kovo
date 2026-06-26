@@ -122,10 +122,28 @@ export interface OpaqueSessionManager<SessionValue> {
   /** Mint or rotate a browser session and return the hardened `Set-Cookie` header. */
   establish(
     value: SessionValue,
-    options?: OpaqueSessionEstablishOptions & { priorId?: string | null | undefined },
+    options?: OpaqueSessionEstablishOptions & {
+      priorId?: string | null | undefined;
+      /**
+       * The originating request. When it is HTTPS, the primary session credential is emitted
+       * `Secure` (with the `__Host-`/`__Secure-` prefix) regardless of `NODE_ENV` (SPEC §6.6/§9.1,
+       * bugz-3 L1), instead of the session cookie depending solely on the env string.
+       */
+      request?: Request;
+    },
   ): Promise<OpaqueSessionEstablishResult<SessionValue>>;
   /** Revoke an id immediately and return an expiring session cookie header. */
-  revoke(id: string | null | undefined): Promise<OpaqueSessionRevokeResult>;
+  revoke(
+    id: string | null | undefined,
+    options?: {
+      /**
+       * The originating request. When it is HTTPS, the clearing cookie is emitted `Secure` (with the
+       * `__Host-`/`__Secure-` prefix) so it matches — and therefore clears — a `Secure`-prefixed
+       * session credential set on the same HTTPS request (SPEC §6.6/§9.1, bugz-3 L1).
+       */
+      request?: Request;
+    },
+  ): Promise<OpaqueSessionRevokeResult>;
 }
 
 /**
@@ -299,6 +317,7 @@ export function createOpaqueSessionManager<SessionValue>(
       value: SessionValue,
       establishOptions: OpaqueSessionEstablishOptions & {
         priorId?: string | null | undefined;
+        request?: Request;
       } = {},
     ): Promise<OpaqueSessionEstablishResult<SessionValue>> {
       const rawSession =
@@ -315,6 +334,11 @@ export function createOpaqueSessionManager<SessionValue>(
         session,
         setCookie: serializeCookie(cookieName, session.id, {
           ...emittedCookieOptions,
+          // SPEC §6.6/§9.1, bugz-3 L1: thread the per-request HTTPS signal so the primary session
+          // credential carries `Secure` (+ the `__Host-`/`__Secure-` prefix) on an HTTPS request
+          // regardless of `NODE_ENV` — the most sensitive cookie previously had no per-request
+          // fallback and depended solely on the env string. Plain-http dev keeps the carve-out.
+          ...(requestIsHttps(establishOptions.request) ? { secure: true } : {}),
           // SPEC §6.5 / OPP-11: the browser credential must not outlive the store-backed
           // lifecycle. Derive cookie expiry from the store's absolute expiry at emission time,
           // not from a store-supplied createdAt delta.
@@ -323,7 +347,10 @@ export function createOpaqueSessionManager<SessionValue>(
         }),
       };
     },
-    async revoke(id: string | null | undefined): Promise<OpaqueSessionRevokeResult> {
+    async revoke(
+      id: string | null | undefined,
+      revokeOptions: { request?: Request } = {},
+    ): Promise<OpaqueSessionRevokeResult> {
       // SPEC §6.5 / OPP-11: revocation accepts browser-sourced credential material, but custom
       // stores only receive ids that satisfy Kovo's opaque-id grammar. A malformed logout input
       // still clears the browser cookie without delegating untrusted strings into store code.
@@ -333,6 +360,9 @@ export function createOpaqueSessionManager<SessionValue>(
       return {
         setCookie: serializeCookie(cookieName, '', {
           ...emittedCookieOptions,
+          // SPEC §6.6/§9.1, bugz-3 L1: match the HTTPS-request `Secure`/prefix so the clearing
+          // cookie targets — and clears — a `__Host-`/`__Secure-` session credential set on HTTPS.
+          ...(requestIsHttps(revokeOptions.request) ? { secure: true } : {}),
           expires: new Date(0),
           maxAge: 0,
         }),
@@ -641,6 +671,21 @@ function assertOpaqueSessionCookieName(cookieName: string): void {
     throw new Error(
       'Opaque session cookieName must be the unprefixed base name; Kovo owns __Host-/__Secure- aliases for the session credential',
     );
+  }
+}
+
+/**
+ * Whether the originating request arrived over HTTPS (SPEC §6.6/§9.1, bugz-3 L1). The per-request
+ * HTTPS signal forces the session credential's `Secure` floor independent of `NODE_ENV`; mirrors
+ * `csrf.ts` `requestIsHttps`. An absent or unparseable request URL fails closed to "not HTTPS",
+ * preserving the localhost-http dev carve-out applied by the `serializeCookie` floor.
+ */
+function requestIsHttps(request: Request | undefined): boolean {
+  if (!(request instanceof Request)) return false;
+  try {
+    return new URL(request.url).protocol === 'https:';
+  } catch {
+    return false;
   }
 }
 

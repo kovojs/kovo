@@ -267,6 +267,37 @@ describe('csrf helpers', () => {
       validateCsrfToken({ csrf: token }, postRequest, anonymousCsrf, { audience: 'auth/sign-in' }),
     ).toBe(true);
   });
+
+  // M1 (SPEC §6.6/§9.1, KV432): the framework's own anonymous CSRF cookie no longer translates
+  // `anonymousCookie.secure` into `productionSecure` to dodge the credential floor. BEFORE the fix
+  // `options.productionSecure = cookieOptions.secure` made `secure:false` flow into
+  // resolveProductionSecure() → a no-Secure cookie minted with NO KV432 and NO audit fact, even in
+  // production. AFTER the fix `secure` flows straight through, so an un-audited insecure CSRF cookie
+  // is inexpressible (CsrfAnonymousCookieOptions has no `unsafe` escape) and minting rejects.
+  it('rejects an un-audited insecure anonymous CSRF cookie in production (no productionSecure dodge) (M1)', () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const insecureCsrf = {
+        anonymousCookie: { secure: false },
+        field: 'csrf',
+        secret: 'anonymous-secret',
+        sessionId(): string | undefined {
+          return undefined;
+        },
+      };
+      expect(() =>
+        runWithJsxRequestContext(
+          new Request('https://shop.example.test/login'),
+          { onCsrfSetCookie: () => {} },
+          () => renderMutationCsrfField({ csrf: insecureCsrf, key: 'auth/sign-in' }),
+        ),
+      ).toThrow('KV432');
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
 });
 
 // SPEC §6.5/§9.1 (audit trap #3): mutation dispatch validates the CSRF token with

@@ -305,14 +305,17 @@ function csrfFieldForBinding<Request>(
  * runtime defense-in-depth floor that is sound at that sink but bypassable by a same-process raw
  * `Set-Cookie`. The floor itself forces HttpOnly, so no per-call `httpOnly: true` is needed.
  *
- * Secure is resolved so localhost-http dev keeps working without tripping the credential floor's
- * KV432 downgrade guard:
- * - When the caller explicitly set `secure`, it is forwarded as `productionSecure` (the documented
- *   override that force-sets or force-suppresses the gate without being treated as a downgrade).
+ * Secure is governed entirely by the single `serializeCookie` credential floor — never dodged via
+ * `productionSecure` (bugz-3 M1: the prior `options.productionSecure = cookieOptions.secure`
+ * translation let `secure: false` silently suppress the floor with no KV432 throw and no audit):
+ * - A caller-supplied `secure` flows straight through. `secure: true` engages the floor regardless
+ *   of `NODE_ENV`; `secure: false` is routed through the SAME KV432 downgrade gate as any other
+ *   credential cookie, so an un-audited insecure CSRF cookie is inexpressible
+ *   (`CsrfAnonymousCookieOptions` has no `unsafe` escape, so in production it simply throws).
  * - Otherwise, when the request arrived over HTTPS, `secure: true` opts in even outside production
  *   (dev-over-TLS). On plain http we pass NOTHING and let the floor's env-derived gate decide, so
  *   production always gets `Secure` (even behind a proxy that reports an http request URL) while
- *   dev-http simply omits it. We never pass `secure: false`, which the prod floor would reject.
+ *   dev-http simply omits it (the localhost carve-out).
  */
 function buildAnonymousCsrfCookieOptions(
   request: unknown,
@@ -325,7 +328,7 @@ function buildAnonymousCsrfCookieOptions(
     sameSite: cookieOptions.sameSite ?? 'lax',
   };
   if (cookieOptions.secure !== undefined) {
-    options.productionSecure = cookieOptions.secure;
+    options.secure = cookieOptions.secure;
   } else if (requestIsHttps(request)) {
     options.secure = true;
   }
