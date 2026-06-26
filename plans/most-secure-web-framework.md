@@ -613,6 +613,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       Dominated optional-chain guard principals such as `ctx.guard?.userId` now have positive coverage, while
       unguarded optional-chain predicates stay `scope: unknown`; `pnpm exec vitest --run
       packages/drizzle/src/index.scope-audits.test.ts --reporter=verbose --testTimeout=15000 --hookTimeout=15000`,
+      `git diff --check`, and `pnpm run check:vp` passed. Nested readonly tuple wrappers such as
+      `wrapper.principal[0]` now preserve summarized guard/session provenance only through static const
+      object/array literal paths; spread-backed, computed, mutable, duplicate, and ambiguous shapes remain
+      `scope: unknown`; `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts --run`,
       `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
