@@ -188,7 +188,8 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       reachability for exported local helper calls, while computed namespace access and export-star namespaces
       remain outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp`
       passed. Static default imports now preserve enforced helper egress/secret-read reachability for local
-      default-exported function helpers, while default object exports and default identifier aliases remain
+      default-exported function helpers. Static default object helper exports such as `export default { sendMail }`
+      now preserve enforced egress/secret-read reachability, while computed/spread/default-alias shapes remain
       outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: callbacks, nonliteral/dynamic calls, computed/export-star namespace shapes, unresolved
       imports, and broader egress/secret analyzer reachability.
@@ -206,7 +207,7 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       declared audit-grade reachable sinks; direct AST-produced `process.env` reads plus literal `fetch()` egress
       from framework-owned tool handlers, same-module helper calls, directly invoked inline functions, and simple
       imported helper calls, including static local named re-export barrels, static namespace imports, and
-      static default imports, are
+      static default imports/default-object helper exports, are
       enforced when declared capabilities do not cover them. Remaining gap: broader analyzer integration beyond
       the framework-owned `tool()` boundary.
 
