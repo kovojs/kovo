@@ -879,15 +879,30 @@ export function deserializationSinkFindings(filePath, text) {
     staticRegExpBindings,
   );
   const regExpAliases = regExpConstructorAliasNames(source);
-  const regExpCallPatterns = [/(^|[^\w$.])(?:new\s+)?RegExp\s*\(/g];
+  const regExpCallPatterns = [
+    { globalObject: undefined, pattern: /(^|[^\w$.])(?:new\s+)?RegExp\s*\(/g },
+    {
+      globalObject: 'globalThis',
+      pattern: /(^|[^\w$])(?:new\s+)?globalThis\s*\.\s*RegExp\s*\(/g,
+    },
+    {
+      globalObject: 'globalThis',
+      pattern: /(^|[^\w$])(?:new\s+)?globalThis\s*\[\s*(['"])RegExp\2\s*\]\s*\(/g,
+    },
+  ];
   for (const alias of regExpAliases.keys()) {
-    regExpCallPatterns.push(
-      new RegExp(String.raw`(^|[^\w$.])(?:new\s+)?${escapeRegExp(alias)}\s*\(`, 'g'),
-    );
+    regExpCallPatterns.push({
+      globalObject: undefined,
+      pattern: new RegExp(String.raw`(^|[^\w$.])(?:new\s+)?${escapeRegExp(alias)}\s*\(`, 'g'),
+    });
   }
 
-  for (const callPattern of regExpCallPatterns) {
+  for (const { globalObject, pattern: callPattern } of regExpCallPatterns) {
     for (const call of callArgumentLists(source, callPattern)) {
+      if (globalObject !== undefined && hasLocalBindingBefore(source, globalObject, call.index)) {
+        continue;
+      }
+
       if (
         call.name !== 'RegExp' &&
         isLocallyShadowedRegExpAlias(source, call.name, regExpAliases, call.index)
@@ -940,12 +955,30 @@ export function deserializationSinkFindings(filePath, text) {
 function regExpConstructorAliasNames(text) {
   const aliases = new Map();
   const declarationPattern =
-    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*RegExp\s*(?=;|\n|$)/g;
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(RegExp|globalThis\s*\.\s*RegExp|globalThis\s*\[\s*(['"])RegExp\3\s*\])\s*(?=;|\n|$)/g;
   let declaration;
   while ((declaration = declarationPattern.exec(text)) !== null) {
+    if (
+      declaration[2].startsWith('globalThis') &&
+      hasLocalBindingBefore(text, 'globalThis', declaration.index)
+    ) {
+      continue;
+    }
     aliases.set(declaration[1], declarationPattern.lastIndex);
   }
   return aliases;
+}
+
+function hasLocalBindingBefore(text, name, callIndex) {
+  const before = text.slice(0, callIndex);
+  const escapedName = escapeRegExp(name);
+  return new RegExp(
+    [
+      String.raw`\b(?:const|let|var|function|class)\s+${escapedName}\b`,
+      String.raw`\bfunction\b[^{;=]*\([^)]*\b${escapedName}\b[^)]*\)`,
+      String.raw`\([^)]*\b${escapedName}\b[^)]*\)\s*=>`,
+    ].join('|'),
+  ).test(before);
 }
 
 function isLocallyShadowedRegExpAlias(text, name, aliases, callIndex) {

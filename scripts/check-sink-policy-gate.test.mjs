@@ -647,6 +647,45 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects request-derived dynamic RegExp construction through global constructor members', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-match.ts',
+        `
+          export function matchesRequest(request) {
+            return [
+              globalThis.RegExp(request.url),
+              new globalThis.RegExp(request.headers.get("x-pattern") ?? ""),
+              globalThis["RegExp"](request.query.get("pattern")),
+            ];
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-match.ts: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation',
+    ]);
+  });
+
+  it('rejects request-derived dynamic RegExp construction through a global constructor alias', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-match.ts',
+        `
+          const Pattern = globalThis.RegExp;
+          const BracketPattern = globalThis["RegExp"];
+          export function matchesRequest(request) {
+            return [
+              Pattern(request.url),
+              new BracketPattern(request.headers.get("x-pattern") ?? ""),
+            ];
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-match.ts: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation',
+    ]);
+  });
+
   it('allows static RegExp construction and reviver-free JSON decode', () => {
     expect(
       deserializationSinkFindings(
@@ -666,6 +705,8 @@ describe('sink-policy gate', () => {
               new RegExp(input),
               RegExp("^[a-z]+$", "i"),
               RegExp(STATIC_PATTERN),
+              globalThis.RegExp("^[a-z]+$", "i"),
+              new globalThis.RegExp(STATIC_PATTERN),
             ];
           }
         `,
@@ -690,6 +731,24 @@ describe('sink-policy gate', () => {
               StaticPattern("^[a-z]+$"),
               Parser(request.url),
               new RegExp("^[a-z]+$", "i"),
+            ];
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('allows locally shadowed global RegExp member forms', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/safe-match.ts',
+        `
+          export function decodeAndMatch(globalThis, request) {
+            const Pattern = globalThis.RegExp;
+            return [
+              globalThis.RegExp(request.url),
+              new globalThis["RegExp"](request.headers.get("x-pattern") ?? ""),
+              Pattern(request.url),
             ];
           }
         `,
