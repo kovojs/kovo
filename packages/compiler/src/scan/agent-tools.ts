@@ -18,17 +18,17 @@ export interface AgentToolModuleSource {
  * This scanner intentionally accepts a narrow subset: a named `tool` import from `@kovojs/server`,
  * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
- * helpers reached through static named/default imports including static local re-export barrels,
- * unique local `export *` barrels for named imports, static local default re-export barrels for
- * already-proven default helper/object/array summaries, default exports that alias a summarized
- * local helper, static namespace-property calls into exported local helpers, local `const` object
- * aliases whose properties statically point at summarized helpers, `Object.freeze(...)` wrappers
- * around those same static object aliases or already-proven object/nested-object aliases that are
- * not assigned or mutated, local `const` array/tuple aliases and default array/tuple exports whose
- * literal indexes statically point at summarized helpers, `Object.freeze(...)` wrappers around
- * those same static array/tuple aliases or already-proven array aliases that are not assigned or
- * mutated, default object exports whose properties statically point at summarized helpers or freeze
- * an already-proven object alias,
+ * helpers reached through parenthesized/type-only call targets, static named/default imports
+ * including static local re-export barrels, unique local `export *` barrels for named imports,
+ * static local default re-export barrels for already-proven default helper/object/array summaries,
+ * default exports that alias a summarized local helper, static namespace-property calls into
+ * exported local helpers, local `const` object aliases whose properties statically point at
+ * summarized helpers, `Object.freeze(...)` wrappers around those same static object aliases or
+ * already-proven object/nested-object aliases that are not assigned or mutated, local `const`
+ * array/tuple aliases and default array/tuple exports whose literal indexes statically point at
+ * summarized helpers, `Object.freeze(...)` wrappers around those same static array/tuple aliases or
+ * already-proven array aliases that are not assigned or mutated, default object exports whose
+ * properties statically point at summarized helpers or freeze an already-proven object alias,
  * top-level `const` destructuring from
  * already-proven helper object/array aliases or namespaces, handler properties that reference a
  * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
@@ -2779,34 +2779,36 @@ function calledHelper(
 ): HelperDefinition | undefined {
   if (!ts.isCallExpression(node)) return undefined;
 
-  if (ts.isElementAccessExpression(node.expression)) {
-    const aliasName = node.expression.expression;
+  const expression = unwrapParentheses(node.expression);
+
+  if (ts.isElementAccessExpression(expression)) {
+    const aliasName = expression.expression;
     if (!ts.isIdentifier(aliasName)) return undefined;
     if (blockedNames.has(aliasName.text)) return undefined;
 
-    const index = staticElementIndex(node.expression.argumentExpression);
+    const index = staticElementIndex(expression.argumentExpression);
     if (index === undefined) return undefined;
 
     return moduleFacts.arrayAliasHelpers.get(aliasName.text)?.get(index);
   }
 
-  if (ts.isPropertyAccessExpression(node.expression)) {
-    const nestedHelper = nestedObjectAliasHelper(node.expression, moduleFacts, blockedNames);
+  if (ts.isPropertyAccessExpression(expression)) {
+    const nestedHelper = nestedObjectAliasHelper(expression, moduleFacts, blockedNames);
     if (nestedHelper) return nestedHelper;
 
-    const namespaceName = node.expression.expression;
+    const namespaceName = expression.expression;
     if (!ts.isIdentifier(namespaceName)) return undefined;
     if (blockedNames.has(namespaceName.text)) return undefined;
 
     const namespaceHelpers =
       moduleFacts.objectAliasHelpers.get(namespaceName.text) ??
       moduleFacts.namespaceImports.get(namespaceName.text);
-    return namespaceHelpers?.get(node.expression.name.text);
+    return namespaceHelpers?.get(expression.name.text);
   }
 
-  if (!ts.isIdentifier(node.expression)) return undefined;
+  if (!ts.isIdentifier(expression)) return undefined;
 
-  const name = node.expression.text;
+  const name = expression.text;
   if (blockedNames.has(name)) return undefined;
   return moduleFacts.helpers.get(name);
 }

@@ -1172,6 +1172,104 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from parenthesized and type-only helper call targets', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'function sendPostmark() {',
+            '  const token = process.env.POSTMARK_TOKEN;',
+            "  return fetch('https://api.postmarkapp.com/email', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'function sendMailgun() {',
+            '  const token = process.env.MAILGUN_TOKEN;',
+            "  return fetch('https://api.mailgun.net/v3/messages', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'const mail = { sendPostmark };',
+            'const helpers = [sendMailgun] as const;',
+            'export const notify = tool({',
+            "  name: 'orders.notifyWrappedCalls',",
+            '  async handler() {',
+            '    await (sendMail)();',
+            '    await (mail.sendPostmark satisfies () => Promise<unknown>)();',
+            '    await (helpers[0] as () => Promise<unknown>)();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.mailgun.net',
+        evidence: 'static-tool-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:16:10',
+        target: 'api.mailgun.net',
+        tool: 'orders.notifyWrappedCalls',
+      },
+      {
+        capability: 'egress:api.postmarkapp.com',
+        evidence: 'static-tool-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:10:10',
+        target: 'api.postmarkapp.com',
+        tool: 'orders.notifyWrappedCalls',
+      },
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:4:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyWrappedCalls',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:15:17',
+        target: 'env.MAILGUN_TOKEN',
+        tool: 'orders.notifyWrappedCalls',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:9:17',
+        target: 'env.POSTMARK_TOKEN',
+        tool: 'orders.notifyWrappedCalls',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:3:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyWrappedCalls',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from simple imported local helper calls', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -4053,6 +4151,22 @@ export const ProductGrid = component({
   it('does not produce enforced agent-tool sink rows from unproven const object aliases', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
+        {
+          fileName: 'src/tools/wrapped-computed-object-alias.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function sendMail() {',
+            "  return fetch('https://wrapped-computed.example.test/mail');",
+            '}',
+            'const mail = { sendMail };',
+            'export const notify = tool({',
+            "  name: 'orders.wrappedComputedObjectAlias',",
+            '  handler() {',
+            "    return (mail['sendMail'] as () => Promise<unknown>)();",
+            '  },',
+            '});',
+          ].join('\n'),
+        },
         {
           fileName: 'src/tools/computed-object-alias.ts',
           source: [
