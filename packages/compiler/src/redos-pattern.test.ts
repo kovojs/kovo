@@ -68,6 +68,21 @@ const schema = s.string().min(3).pattern(re);`,
       expect(codes(source)).toContain('KV434');
     });
 
+    // Regression: H7 — matchGroupClose must track classDepth so a literal ')' inside [...] does
+    // not fool the group-close search into mis-locating the group boundary (SPEC §6.6 / KV434).
+    // Before the fix, `([\w)]+)+` was accepted (no KV434) because the ')' inside [...] caused
+    // an early depth decrement that hid the outer nested-quantifier structure.
+    it('fires KV434 for nested-quantifier groups with ) inside character class (H7 regression)', () => {
+      const src1 = component(`const schema = s.string().pattern('([)]+)+');`);
+      expect(codes(src1)).toContain('KV434');
+
+      const src2 = component(`const schema = s.string().pattern('([\\\\w)]+)+');`);
+      expect(codes(src2)).toContain('KV434');
+
+      const src3 = component(`const schema = s.string().pattern('^([\\\\w)]+)+$');`);
+      expect(codes(src3)).toContain('KV434');
+    });
+
     it('fires KV434 for quantified overlapping alternatives, including the documented case', () => {
       const source = component(`const schema = s.string().pattern('^(a|a)*$');`);
       expect(codes(source)).toContain('KV434');

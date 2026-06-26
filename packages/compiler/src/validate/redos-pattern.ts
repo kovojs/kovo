@@ -185,12 +185,28 @@ function isAsciiDigitCode(code: number): boolean {
   return code >= 0x30 && code <= 0x39;
 }
 
+/**
+ * Index of the `)` closing the group opened at `open`, accounting for nesting, escapes, and
+ * character-class spans (SPEC §6.6 / KV434 soundness). A `)` inside `[...]` is a literal
+ * character, not a group delimiter — ignoring class spans caused `matchGroupClose` to
+ * mis-locate the group close for patterns like `([\w)]+)+`, hiding the nested quantifier.
+ * Fix: mirror the `classDepth` tracking already present in `splitTopLevelAlternatives`.
+ */
 function matchGroupClose(source: string, open: number): number {
   let depth = 0;
+  let classDepth = 0;
   for (let i = open; i < source.length; i += 1) {
     const ch = source[i];
     if (ch === '\\') {
       i += 1;
+      continue;
+    }
+    if (classDepth > 0) {
+      if (ch === ']') classDepth -= 1;
+      continue;
+    }
+    if (ch === '[') {
+      classDepth += 1;
       continue;
     }
     if (ch === '(') depth += 1;

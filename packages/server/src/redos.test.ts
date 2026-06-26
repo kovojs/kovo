@@ -51,6 +51,16 @@ describe('static ReDoS pattern analysis (KV434)', () => {
     expect(() => assertLinearSafePattern('([a-z]+)*$')).toThrow(RedosPatternError);
   });
 
+  // Regression: H7 — matchGroupClose must track classDepth so a literal ')' inside [...] does
+  // not fool the group-close search into mis-locating the group boundary (SPEC §6.6 / KV434).
+  // Before the fix, `([\w)]+)+` was accepted because the ')' inside [...] decremented depth
+  // early, hiding the outer quantifier nesting.
+  it('rejects nested-quantifier groups with ) inside character class (H7 regression)', () => {
+    expect(() => assertLinearSafePattern('([)]+)+')).toThrow(RedosPatternError);
+    expect(() => assertLinearSafePattern('([\\w)]+)+')).toThrow(RedosPatternError);
+    expect(() => assertLinearSafePattern('^([\\w)]+)+$')).toThrow(RedosPatternError);
+  });
+
   it('rejects quantified overlapping alternatives, including the documented pathological case', () => {
     expect(() => assertLinearSafePattern('^(a|a)*$')).toThrow(RedosPatternError);
     expect(() => assertLinearSafePattern('^(a|aa)+$')).toThrow(/overlapping alternatives/u);
