@@ -19,6 +19,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the command components.
+ *
+ * @example
+ * import type { CommandStyleOverrides } from "@kovojs/ui/command";
+ * const styles: CommandStyleOverrides = {};
+ */
 export interface CommandStyleOverrides {
   close?: style.StyleInput;
   dialog?: style.StyleInput;
@@ -31,6 +38,13 @@ export interface CommandStyleOverrides {
   value?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the command component family.
+ *
+ * @example
+ * import type { CommandStateProps } from "@kovojs/ui/command";
+ * const state: CommandStateProps = {};
+ */
 export interface CommandStateProps {
   disabled?: boolean;
   form?: string;
@@ -45,12 +59,26 @@ export interface CommandStateProps {
   value?: string;
 }
 
+/**
+ * Props for the command component.
+ *
+ * @example
+ * import type { CommandProps } from "@kovojs/ui/command";
+ * const props: CommandProps = { children: 'Content' };
+ */
 export interface CommandProps extends CommandStateProps {
   children?: string;
   id?: string;
   styles?: CommandStyleOverrides;
 }
 
+/**
+ * Props for the command trigger component.
+ *
+ * @example
+ * import type { CommandTriggerProps } from "@kovojs/ui/command";
+ * const props: CommandTriggerProps = { children: 'Content' };
+ */
 export interface CommandTriggerProps extends CommandStateProps {
   children?: string;
   contentId?: string;
@@ -59,6 +87,13 @@ export interface CommandTriggerProps extends CommandStateProps {
   styles?: CommandStyleOverrides;
 }
 
+/**
+ * Props for the command dialog component.
+ *
+ * @example
+ * import type { CommandDialogProps } from "@kovojs/ui/command";
+ * const props: CommandDialogProps = { children: 'Content' };
+ */
 export interface CommandDialogProps extends CommandStateProps {
   children?: string;
   contentId?: string;
@@ -67,12 +102,26 @@ export interface CommandDialogProps extends CommandStateProps {
   titleId?: string;
 }
 
+/**
+ * Props for the command close component.
+ *
+ * @example
+ * import type { CommandCloseProps } from "@kovojs/ui/command";
+ * const props: CommandCloseProps = { children: 'Content' };
+ */
 export interface CommandCloseProps extends CommandStateProps {
   children?: string;
   contentId?: string;
   styles?: CommandStyleOverrides;
 }
 
+/**
+ * Props for the command input component.
+ *
+ * @example
+ * import type { CommandInputProps } from "@kovojs/ui/command";
+ * const props: CommandInputProps = {};
+ */
 export interface CommandInputProps extends CommandStateProps {
   autocomplete?: string;
   descriptionId?: string;
@@ -82,6 +131,13 @@ export interface CommandInputProps extends CommandStateProps {
   styles?: CommandStyleOverrides;
 }
 
+/**
+ * Props for the command listbox component.
+ *
+ * @example
+ * import type { CommandListboxProps } from "@kovojs/ui/command";
+ * const props: CommandListboxProps = { children: 'Content' };
+ */
 export interface CommandListboxProps extends CommandStateProps {
   children?: string;
   id?: string;
@@ -89,6 +145,13 @@ export interface CommandListboxProps extends CommandStateProps {
   styles?: CommandStyleOverrides;
 }
 
+/**
+ * Props for the command item component.
+ *
+ * @example
+ * import type { CommandItemProps } from "@kovojs/ui/command";
+ * const props: CommandItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface CommandItemProps extends CommandStateProps {
   children?: string;
   id?: string;
@@ -98,12 +161,26 @@ export interface CommandItemProps extends CommandStateProps {
   styles?: CommandStyleOverrides;
 }
 
+/**
+ * Props for the command empty component.
+ *
+ * @example
+ * import type { CommandEmptyProps } from "@kovojs/ui/command";
+ * const props: CommandEmptyProps = { children: 'Content' };
+ */
 export interface CommandEmptyProps extends CommandStateProps {
   children?: string;
   id?: string;
   styles?: CommandStyleOverrides;
 }
 
+/**
+ * Props for the command value component.
+ *
+ * @example
+ * import type { CommandValueProps } from "@kovojs/ui/command";
+ * const props: CommandValueProps = {};
+ */
 export interface CommandValueProps extends CommandStateProps {
   id?: string;
   styles?: CommandStyleOverrides;
@@ -113,6 +190,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the command components.
+ *
+ * @example
+ * import { commandStyles } from "@kovojs/ui/command";
+ * const styles = commandStyles;
+ */
 export const commandStyles = style.create({
   close: {
     alignItems: 'center',
@@ -338,6 +422,13 @@ export const commandStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled command primitive.
+ *
+ * @example
+ * import { Command } from "@kovojs/ui/command";
+ * const component = Command;
+ */
 export const Command = component({
   render(props: CommandProps) {
     const attrs = commandRootAttributes(toCommandState(props));
@@ -359,6 +450,13 @@ export const Command = component({
   },
 });
 
+/**
+ * Renders the styled command trigger primitive.
+ *
+ * @example
+ * import { CommandTrigger } from "@kovojs/ui/command";
+ * const component = CommandTrigger;
+ */
 export const CommandTrigger = component({
   render(props: CommandTriggerProps) {
     const attrs = commandTriggerAttributes({
@@ -391,6 +489,13 @@ export const CommandTrigger = component({
   },
 });
 
+/**
+ * Renders the styled command dialog primitive.
+ *
+ * @example
+ * import { CommandDialog } from "@kovojs/ui/command";
+ * const component = CommandDialog;
+ */
 export const CommandDialog = component({
   render(props: CommandDialogProps) {
     const attrs = commandDialogAttributes({
@@ -419,6 +524,13 @@ export const CommandDialog = component({
   },
 });
 
+/**
+ * Renders the styled command input primitive.
+ *
+ * @example
+ * import { CommandInput } from "@kovojs/ui/command";
+ * const component = CommandInput;
+ */
 export const CommandInput = component({
   render(props: CommandInputProps) {
     const attrs = commandInputAttributes({
@@ -465,6 +577,13 @@ export const CommandInput = component({
   },
 });
 
+/**
+ * Renders the styled command listbox primitive.
+ *
+ * @example
+ * import { CommandListbox } from "@kovojs/ui/command";
+ * const component = CommandListbox;
+ */
 export const CommandListbox = component({
   render(props: CommandListboxProps) {
     const attrs = commandListboxAttributes({
@@ -491,6 +610,13 @@ export const CommandListbox = component({
   },
 });
 
+/**
+ * Renders the styled command item primitive.
+ *
+ * @example
+ * import { CommandItem } from "@kovojs/ui/command";
+ * const component = CommandItem;
+ */
 export const CommandItem = component({
   render(props: CommandItemProps) {
     const attrs = commandItemAttributes({
@@ -524,6 +650,13 @@ export const CommandItem = component({
   },
 });
 
+/**
+ * Renders the styled command close primitive.
+ *
+ * @example
+ * import { CommandClose } from "@kovojs/ui/command";
+ * const component = CommandClose;
+ */
 export const CommandClose = component({
   render(props: CommandCloseProps) {
     const attrs = commandCloseAttributes({
@@ -549,6 +682,13 @@ export const CommandClose = component({
   },
 });
 
+/**
+ * Renders the styled command empty primitive.
+ *
+ * @example
+ * import { CommandEmpty } from "@kovojs/ui/command";
+ * const component = CommandEmpty;
+ */
 export const CommandEmpty = component({
   render(props: CommandEmptyProps) {
     const attrs = commandEmptyAttributes({
@@ -571,6 +711,13 @@ export const CommandEmpty = component({
   },
 });
 
+/**
+ * Renders the styled command value primitive.
+ *
+ * @example
+ * import { CommandValue } from "@kovojs/ui/command";
+ * const component = CommandValue;
+ */
 export const CommandValue = component({
   render(props: CommandValueProps) {
     const styleAttrs = style.attrs(commandStyles.value, props.styles?.value);

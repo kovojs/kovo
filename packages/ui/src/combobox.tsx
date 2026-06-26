@@ -15,6 +15,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the combobox components.
+ *
+ * @example
+ * import type { ComboboxStyleOverrides } from "@kovojs/ui/combobox";
+ * const styles: ComboboxStyleOverrides = {};
+ */
 export interface ComboboxStyleOverrides {
   input?: style.StyleInput;
   listbox?: style.StyleInput;
@@ -23,6 +30,13 @@ export interface ComboboxStyleOverrides {
   value?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the combobox component family.
+ *
+ * @example
+ * import type { ComboboxStateProps } from "@kovojs/ui/combobox";
+ * const state: ComboboxStateProps = {};
+ */
 export interface ComboboxStateProps {
   disabled?: boolean;
   form?: string;
@@ -37,12 +51,26 @@ export interface ComboboxStateProps {
   value?: string;
 }
 
+/**
+ * Props for the combobox component.
+ *
+ * @example
+ * import type { ComboboxProps } from "@kovojs/ui/combobox";
+ * const props: ComboboxProps = { children: 'Content' };
+ */
 export interface ComboboxProps extends ComboboxStateProps {
   children?: string;
   id?: string;
   styles?: ComboboxStyleOverrides;
 }
 
+/**
+ * Props for the combobox input component.
+ *
+ * @example
+ * import type { ComboboxInputProps } from "@kovojs/ui/combobox";
+ * const props: ComboboxInputProps = {};
+ */
 export interface ComboboxInputProps extends ComboboxStateProps {
   descriptionId?: string;
   errorId?: string;
@@ -51,6 +79,13 @@ export interface ComboboxInputProps extends ComboboxStateProps {
   styles?: ComboboxStyleOverrides;
 }
 
+/**
+ * Props for the combobox listbox component.
+ *
+ * @example
+ * import type { ComboboxListboxProps } from "@kovojs/ui/combobox";
+ * const props: ComboboxListboxProps = { children: 'Content' };
+ */
 export interface ComboboxListboxProps extends ComboboxStateProps {
   children?: string;
   id?: string;
@@ -58,6 +93,13 @@ export interface ComboboxListboxProps extends ComboboxStateProps {
   styles?: ComboboxStyleOverrides;
 }
 
+/**
+ * Props for the combobox option component.
+ *
+ * @example
+ * import type { ComboboxOptionProps } from "@kovojs/ui/combobox";
+ * const props: ComboboxOptionProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface ComboboxOptionProps extends ComboboxStateProps {
   children?: string;
   id?: string;
@@ -67,6 +109,13 @@ export interface ComboboxOptionProps extends ComboboxStateProps {
   styles?: ComboboxStyleOverrides;
 }
 
+/**
+ * Props for the combobox value component.
+ *
+ * @example
+ * import type { ComboboxValueProps } from "@kovojs/ui/combobox";
+ * const props: ComboboxValueProps = {};
+ */
 export interface ComboboxValueProps extends ComboboxStateProps {
   id?: string;
   styles?: ComboboxStyleOverrides;
@@ -76,6 +125,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the combobox components.
+ *
+ * @example
+ * import { comboboxStyles } from "@kovojs/ui/combobox";
+ * const styles = comboboxStyles;
+ */
 export const comboboxStyles = style.create({
   input: {
     backgroundColor: uiTheme.color.background,
@@ -189,6 +245,13 @@ export const comboboxStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled combobox primitive.
+ *
+ * @example
+ * import { Combobox } from "@kovojs/ui/combobox";
+ * const component = Combobox;
+ */
 export const Combobox = component({
   render(props: ComboboxProps) {
     const attrs = comboboxRootAttributes({
@@ -224,6 +287,13 @@ export const Combobox = component({
   },
 });
 
+/**
+ * Renders the styled combobox input primitive.
+ *
+ * @example
+ * import { ComboboxInput } from "@kovojs/ui/combobox";
+ * const component = ComboboxInput;
+ */
 export const ComboboxInput = component({
   render(props: ComboboxInputProps) {
     const attrs = comboboxInputAttributes({
@@ -276,6 +346,13 @@ export const ComboboxInput = component({
   },
 });
 
+/**
+ * Renders the styled combobox listbox primitive.
+ *
+ * @example
+ * import { ComboboxListbox } from "@kovojs/ui/combobox";
+ * const component = ComboboxListbox;
+ */
 export const ComboboxListbox = component({
   render(props: ComboboxListboxProps) {
     const attrs = comboboxListboxAttributes({
@@ -315,6 +392,13 @@ export const ComboboxListbox = component({
   },
 });
 
+/**
+ * Renders the styled combobox option primitive.
+ *
+ * @example
+ * import { ComboboxOption } from "@kovojs/ui/combobox";
+ * const component = ComboboxOption;
+ */
 export const ComboboxOption = component({
   render(props: ComboboxOptionProps) {
     const attrs = comboboxOptionAttributes({
@@ -355,6 +439,13 @@ export const ComboboxOption = component({
   },
 });
 
+/**
+ * Renders the styled combobox value primitive.
+ *
+ * @example
+ * import { ComboboxValue } from "@kovojs/ui/combobox";
+ * const component = ComboboxValue;
+ */
 export const ComboboxValue = component({
   render(props: ComboboxValueProps) {
     const attrs = comboboxValueAttributes({

@@ -12,17 +12,38 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the avatar components.
+ *
+ * @example
+ * import type { AvatarStyleOverrides } from "@kovojs/ui/avatar";
+ * const styles: AvatarStyleOverrides = {};
+ */
 export interface AvatarStyleOverrides {
   fallback?: style.StyleInput;
   image?: style.StyleInput;
   root?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the avatar component family.
+ *
+ * @example
+ * import type { AvatarStateProps } from "@kovojs/ui/avatar";
+ * const state: AvatarStateProps = {};
+ */
 export interface AvatarStateProps {
   src?: string;
   status?: AvatarImageStatus;
 }
 
+/**
+ * Props for the avatar component.
+ *
+ * @example
+ * import type { AvatarProps } from "@kovojs/ui/avatar";
+ * const props: AvatarProps = { children: 'Content' };
+ */
 export interface AvatarProps extends AvatarStateProps {
   children?: string;
   id?: string;
@@ -30,6 +51,13 @@ export interface AvatarProps extends AvatarStateProps {
   styles?: AvatarStyleOverrides;
 }
 
+/**
+ * Props for the avatar image component.
+ *
+ * @example
+ * import type { AvatarImageProps } from "@kovojs/ui/avatar";
+ * const props: AvatarImageProps = { alt: 'alt' };
+ */
 export interface AvatarImageProps extends AvatarStateProps {
   alt: string;
   decoding?: 'async' | 'auto' | 'sync';
@@ -40,12 +68,26 @@ export interface AvatarImageProps extends AvatarStateProps {
   srcSet?: string;
 }
 
+/**
+ * Props for the avatar fallback component.
+ *
+ * @example
+ * import type { AvatarFallbackProps } from "@kovojs/ui/avatar";
+ * const props: AvatarFallbackProps = { children: 'Content' };
+ */
 export interface AvatarFallbackProps extends AvatarStateProps {
   children?: string;
   delayMs?: number;
   styles?: AvatarStyleOverrides;
 }
 
+/**
+ * Style definitions used by the avatar components.
+ *
+ * @example
+ * import { avatarStyles } from "@kovojs/ui/avatar";
+ * const styles = avatarStyles;
+ */
 export const avatarStyles = style.create({
   // The fallback fills the relative root (inset:0) so the initials sit centered
   // behind/over the image rather than stacking next to it in static flow.
@@ -98,6 +140,13 @@ export const avatarStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled avatar primitive.
+ *
+ * @example
+ * import { Avatar } from "@kovojs/ui/avatar";
+ * const component = Avatar;
+ */
 export const Avatar = component({
   render(props: AvatarProps) {
     const attrs = avatarRootAttributes({
@@ -122,6 +171,13 @@ export const Avatar = component({
   },
 });
 
+/**
+ * Renders the styled avatar image primitive.
+ *
+ * @example
+ * import { AvatarImage } from "@kovojs/ui/avatar";
+ * const component = AvatarImage;
+ */
 export const AvatarImage = component({
   render(props: AvatarImageProps) {
     const attrs = avatarImageAttributes({
@@ -154,6 +210,13 @@ export const AvatarImage = component({
   },
 });
 
+/**
+ * Renders the styled avatar fallback primitive.
+ *
+ * @example
+ * import { AvatarFallback } from "@kovojs/ui/avatar";
+ * const component = AvatarFallback;
+ */
 export const AvatarFallback = component({
   render(props: AvatarFallbackProps) {
     const attrs = avatarFallbackAttributes({

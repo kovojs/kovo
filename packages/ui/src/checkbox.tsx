@@ -7,12 +7,26 @@ import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the checkbox components.
+ *
+ * @example
+ * import type { CheckboxStyleOverrides } from "@kovojs/ui/checkbox";
+ * const styles: CheckboxStyleOverrides = {};
+ */
 export interface CheckboxStyleOverrides {
   box?: style.StyleInput;
   input?: style.StyleInput;
   root?: style.StyleInput;
 }
 
+/**
+ * Props for the checkbox component.
+ *
+ * @example
+ * import type { CheckboxProps } from "@kovojs/ui/checkbox";
+ * const props: CheckboxProps = { children: 'Content' };
+ */
 export interface CheckboxProps {
   describedBy?: string;
   checked?: CheckboxCheckedState;
@@ -27,6 +41,13 @@ export interface CheckboxProps {
   value?: string;
 }
 
+/**
+ * Style definitions used by the checkbox components.
+ *
+ * @example
+ * import { checkboxStyles } from "@kovojs/ui/checkbox";
+ * const styles = checkboxStyles;
+ */
 export const checkboxStyles = style.create({
   // Custom square. Carries data-state to paint the fill + check/dash glyph.
   box: {
@@ -112,6 +133,13 @@ export const checkboxStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled checkbox primitive.
+ *
+ * @example
+ * import { Checkbox } from "@kovojs/ui/checkbox";
+ * const component = Checkbox;
+ */
 export const Checkbox = component({
   render(props: CheckboxProps) {
     const attrs = checkboxRootAttributes({

@@ -4,11 +4,25 @@ import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Props for the keyboard key component.
+ *
+ * @example
+ * import type { KbdProps } from "@kovojs/ui/kbd";
+ * const props: KbdProps = { children: 'Content' };
+ */
 export interface KbdProps {
   children?: string;
   style?: style.StyleInput;
 }
 
+/**
+ * Style definitions used by the kbd components.
+ *
+ * @example
+ * import { kbdStyles } from "@kovojs/ui/kbd";
+ * const styles = kbdStyles;
+ */
 export const kbdStyles = style.create({
   root: {
     alignItems: 'center',
@@ -32,6 +46,13 @@ export const kbdStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled keyboard key primitive.
+ *
+ * @example
+ * import { Kbd } from "@kovojs/ui/kbd";
+ * const component = Kbd;
+ */
 export const Kbd = component({
   render(props: KbdProps) {
     const attrs = style.attrs(kbdStyles.root, props.style);

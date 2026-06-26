@@ -15,6 +15,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the menubar components.
+ *
+ * @example
+ * import type { MenubarStyleOverrides } from "@kovojs/ui/menubar";
+ * const styles: MenubarStyleOverrides = {};
+ */
 export interface MenubarStyleOverrides {
   group?: style.StyleInput;
   item?: style.StyleInput;
@@ -23,6 +30,13 @@ export interface MenubarStyleOverrides {
   submenu?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the menubar component family.
+ *
+ * @example
+ * import type { MenubarStateProps } from "@kovojs/ui/menubar";
+ * const state: MenubarStateProps = {};
+ */
 export interface MenubarStateProps {
   activeValue?: string;
   dir?: TextDirection;
@@ -33,6 +47,13 @@ export interface MenubarStateProps {
   orientation?: CollectionOrientation;
 }
 
+/**
+ * Props for the menubar component.
+ *
+ * @example
+ * import type { MenubarProps } from "@kovojs/ui/menubar";
+ * const props: MenubarProps = { children: 'Content' };
+ */
 export interface MenubarProps extends MenubarStateProps {
   children?: string;
   descriptionId?: string;
@@ -42,6 +63,13 @@ export interface MenubarProps extends MenubarStateProps {
   styles?: MenubarStyleOverrides;
 }
 
+/**
+ * Props for the menubar item component.
+ *
+ * @example
+ * import type { MenubarItemProps } from "@kovojs/ui/menubar";
+ * const props: MenubarItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface MenubarItemProps extends MenubarStateProps {
   children?: string;
   contentId?: string;
@@ -53,6 +81,13 @@ export interface MenubarItemProps extends MenubarStateProps {
   styles?: MenubarStyleOverrides;
 }
 
+/**
+ * Props for the menubar submenu component.
+ *
+ * @example
+ * import type { MenubarSubmenuProps } from "@kovojs/ui/menubar";
+ * const props: MenubarSubmenuProps = { value: 'value', children: 'Content' };
+ */
 export interface MenubarSubmenuProps extends MenubarStateProps {
   children?: string;
   id?: string;
@@ -61,6 +96,13 @@ export interface MenubarSubmenuProps extends MenubarStateProps {
   value: string;
 }
 
+/**
+ * Props for the menubar group component.
+ *
+ * @example
+ * import type { MenubarGroupProps } from "@kovojs/ui/menubar";
+ * const props: MenubarGroupProps = { children: 'Content' };
+ */
 export interface MenubarGroupProps extends MenubarStateProps {
   children?: string;
   id?: string;
@@ -68,6 +110,13 @@ export interface MenubarGroupProps extends MenubarStateProps {
   styles?: MenubarStyleOverrides;
 }
 
+/**
+ * Props for the menubar separator component.
+ *
+ * @example
+ * import type { MenubarSeparatorProps } from "@kovojs/ui/menubar";
+ * const props: MenubarSeparatorProps = {};
+ */
 export interface MenubarSeparatorProps {
   id?: string;
   styles?: MenubarStyleOverrides;
@@ -77,6 +126,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the menubar components.
+ *
+ * @example
+ * import { menubarStyles } from "@kovojs/ui/menubar";
+ * const styles = menubarStyles;
+ */
 export const menubarStyles = style.create({
   group: {
     display: 'grid',
@@ -181,6 +237,13 @@ export const menubarStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled menubar primitive.
+ *
+ * @example
+ * import { Menubar } from "@kovojs/ui/menubar";
+ * const component = Menubar;
+ */
 export const Menubar = component({
   render(props: MenubarProps) {
     const attrs = menubarRootAttributes({
@@ -218,6 +281,13 @@ export const Menubar = component({
   },
 });
 
+/**
+ * Renders the styled menubar item primitive.
+ *
+ * @example
+ * import { MenubarItem } from "@kovojs/ui/menubar";
+ * const component = MenubarItem;
+ */
 export const MenubarItem = component({
   render(props: MenubarItemProps) {
     const attrs = menubarItemAttributes({
@@ -261,6 +331,13 @@ export const MenubarItem = component({
   },
 });
 
+/**
+ * Renders the styled menubar submenu primitive.
+ *
+ * @example
+ * import { MenubarSubmenu } from "@kovojs/ui/menubar";
+ * const component = MenubarSubmenu;
+ */
 export const MenubarSubmenu = component({
   render(props: MenubarSubmenuProps) {
     const attrs = menubarSubmenuAttributes({
@@ -295,6 +372,13 @@ export const MenubarSubmenu = component({
   },
 });
 
+/**
+ * Renders the styled menubar group primitive.
+ *
+ * @example
+ * import { MenubarGroup } from "@kovojs/ui/menubar";
+ * const component = MenubarGroup;
+ */
 export const MenubarGroup = component({
   render(props: MenubarGroupProps) {
     const attrs = menubarGroupAttributes({
@@ -326,6 +410,13 @@ export const MenubarGroup = component({
   },
 });
 
+/**
+ * Renders the styled menubar separator primitive.
+ *
+ * @example
+ * import { MenubarSeparator } from "@kovojs/ui/menubar";
+ * const component = MenubarSeparator;
+ */
 export const MenubarSeparator = component({
   render(props: MenubarSeparatorProps) {
     const attrs = menubarSeparatorAttributes(props.id === undefined ? {} : { id: props.id });

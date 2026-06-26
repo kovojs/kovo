@@ -17,6 +17,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the scroll area components.
+ *
+ * @example
+ * import type { ScrollAreaStyleOverrides } from "@kovojs/ui/scroll-area";
+ * const styles: ScrollAreaStyleOverrides = {};
+ */
 export interface ScrollAreaStyleOverrides {
   corner?: style.StyleInput;
   root?: style.StyleInput;
@@ -25,18 +32,39 @@ export interface ScrollAreaStyleOverrides {
   viewport?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the scroll area component family.
+ *
+ * @example
+ * import type { ScrollAreaStateProps } from "@kovojs/ui/scroll-area";
+ * const state: ScrollAreaStateProps = {};
+ */
 export interface ScrollAreaStateProps {
   disabled?: boolean;
   dir?: TextDirection;
   scrollbars?: ScrollAreaScrollbars;
 }
 
+/**
+ * Props for the scroll area component.
+ *
+ * @example
+ * import type { ScrollAreaProps } from "@kovojs/ui/scroll-area";
+ * const props: ScrollAreaProps = { children: 'Content' };
+ */
 export interface ScrollAreaProps extends ScrollAreaStateProps {
   children?: string;
   id?: string;
   styles?: ScrollAreaStyleOverrides;
 }
 
+/**
+ * Props for the scroll area viewport component.
+ *
+ * @example
+ * import type { ScrollAreaViewportProps } from "@kovojs/ui/scroll-area";
+ * const props: ScrollAreaViewportProps = { children: 'Content' };
+ */
 export interface ScrollAreaViewportProps extends ScrollAreaStateProps {
   children?: string;
   descriptionId?: string;
@@ -48,6 +76,13 @@ export interface ScrollAreaViewportProps extends ScrollAreaStateProps {
   styles?: ScrollAreaStyleOverrides;
 }
 
+/**
+ * Props for the scroll area scrollbar component.
+ *
+ * @example
+ * import type { ScrollAreaScrollbarProps } from "@kovojs/ui/scroll-area";
+ * const props: ScrollAreaScrollbarProps = { children: 'Content' };
+ */
 export interface ScrollAreaScrollbarProps extends ScrollAreaStateProps {
   children?: string;
   forceMount?: boolean;
@@ -58,8 +93,22 @@ export interface ScrollAreaScrollbarProps extends ScrollAreaStateProps {
   visible?: boolean;
 }
 
+/**
+ * Props for the scroll area thumb component.
+ *
+ * @example
+ * import type { ScrollAreaThumbProps } from "@kovojs/ui/scroll-area";
+ * const props: ScrollAreaThumbProps = { children: 'Content' };
+ */
 export interface ScrollAreaThumbProps extends ScrollAreaScrollbarProps {}
 
+/**
+ * Props for the scroll area corner component.
+ *
+ * @example
+ * import type { ScrollAreaCornerProps } from "@kovojs/ui/scroll-area";
+ * const props: ScrollAreaCornerProps = {};
+ */
 export interface ScrollAreaCornerProps extends ScrollAreaStateProps {
   forceMount?: boolean;
   id?: string;
@@ -67,6 +116,13 @@ export interface ScrollAreaCornerProps extends ScrollAreaStateProps {
   visible?: boolean;
 }
 
+/**
+ * Style definitions used by the scroll area components.
+ *
+ * @example
+ * import { scrollAreaStyles } from "@kovojs/ui/scroll-area";
+ * const styles = scrollAreaStyles;
+ */
 export const scrollAreaStyles = style.create({
   corner: {
     backgroundColor: uiTheme.color.backgroundSubtleHigh,
@@ -159,6 +215,13 @@ export const scrollAreaStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled scroll area primitive.
+ *
+ * @example
+ * import { ScrollArea } from "@kovojs/ui/scroll-area";
+ * const component = ScrollArea;
+ */
 export const ScrollArea = component({
   render(props: ScrollAreaProps) {
     const attrs = scrollAreaRootAttributes({
@@ -184,6 +247,13 @@ export const ScrollArea = component({
   },
 });
 
+/**
+ * Renders the styled scroll area viewport primitive.
+ *
+ * @example
+ * import { ScrollAreaViewport } from "@kovojs/ui/scroll-area";
+ * const component = ScrollAreaViewport;
+ */
 export const ScrollAreaViewport = component({
   render(props: ScrollAreaViewportProps) {
     const attrs = scrollAreaViewportAttributes({
@@ -225,6 +295,13 @@ export const ScrollAreaViewport = component({
   },
 });
 
+/**
+ * Renders the styled scroll area scrollbar primitive.
+ *
+ * @example
+ * import { ScrollAreaScrollbar } from "@kovojs/ui/scroll-area";
+ * const component = ScrollAreaScrollbar;
+ */
 export const ScrollAreaScrollbar = component({
   render(props: ScrollAreaScrollbarProps) {
     const attrs = scrollAreaScrollbarAttributes({
@@ -258,6 +335,13 @@ export const ScrollAreaScrollbar = component({
   },
 });
 
+/**
+ * Renders the styled scroll area thumb primitive.
+ *
+ * @example
+ * import { ScrollAreaThumb } from "@kovojs/ui/scroll-area";
+ * const component = ScrollAreaThumb;
+ */
 export const ScrollAreaThumb = component({
   render(props: ScrollAreaThumbProps) {
     const attrs = scrollAreaThumbAttributes({
@@ -289,6 +373,13 @@ export const ScrollAreaThumb = component({
   },
 });
 
+/**
+ * Renders the styled scroll area corner primitive.
+ *
+ * @example
+ * import { ScrollAreaCorner } from "@kovojs/ui/scroll-area";
+ * const component = ScrollAreaCorner;
+ */
 export const ScrollAreaCorner = component({
   render(props: ScrollAreaCornerProps) {
     const attrs = scrollAreaCornerAttributes({

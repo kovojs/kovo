@@ -15,6 +15,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the dropdown menu components.
+ *
+ * @example
+ * import type { DropdownMenuStyleOverrides } from "@kovojs/ui/dropdown-menu";
+ * const styles: DropdownMenuStyleOverrides = {};
+ */
 export interface DropdownMenuStyleOverrides {
   content?: style.StyleInput;
   group?: style.StyleInput;
@@ -24,6 +31,13 @@ export interface DropdownMenuStyleOverrides {
   trigger?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the dropdown menu component family.
+ *
+ * @example
+ * import type { DropdownMenuStateProps } from "@kovojs/ui/dropdown-menu";
+ * const state: DropdownMenuStateProps = {};
+ */
 export interface DropdownMenuStateProps {
   disabled?: boolean;
   highlightedValue?: string;
@@ -31,12 +45,26 @@ export interface DropdownMenuStateProps {
   open?: boolean;
 }
 
+/**
+ * Props for the dropdown menu component.
+ *
+ * @example
+ * import type { DropdownMenuProps } from "@kovojs/ui/dropdown-menu";
+ * const props: DropdownMenuProps = { children: 'Content' };
+ */
 export interface DropdownMenuProps extends DropdownMenuStateProps {
   children?: string;
   id?: string;
   styles?: DropdownMenuStyleOverrides;
 }
 
+/**
+ * Props for the dropdown menu trigger component.
+ *
+ * @example
+ * import type { DropdownMenuTriggerProps } from "@kovojs/ui/dropdown-menu";
+ * const props: DropdownMenuTriggerProps = { children: 'Content' };
+ */
 export interface DropdownMenuTriggerProps extends DropdownMenuStateProps {
   children?: string;
   contentId?: string;
@@ -45,6 +73,13 @@ export interface DropdownMenuTriggerProps extends DropdownMenuStateProps {
   styles?: DropdownMenuStyleOverrides;
 }
 
+/**
+ * Props for the dropdown menu content component.
+ *
+ * @example
+ * import type { DropdownMenuContentProps } from "@kovojs/ui/dropdown-menu";
+ * const props: DropdownMenuContentProps = { children: 'Content' };
+ */
 export interface DropdownMenuContentProps extends DropdownMenuStateProps {
   children?: string;
   id?: string;
@@ -52,6 +87,13 @@ export interface DropdownMenuContentProps extends DropdownMenuStateProps {
   styles?: DropdownMenuStyleOverrides;
 }
 
+/**
+ * Props for the dropdown menu item component.
+ *
+ * @example
+ * import type { DropdownMenuItemProps } from "@kovojs/ui/dropdown-menu";
+ * const props: DropdownMenuItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface DropdownMenuItemProps extends DropdownMenuStateProps {
   children?: string;
   id?: string;
@@ -61,6 +103,13 @@ export interface DropdownMenuItemProps extends DropdownMenuStateProps {
   styles?: DropdownMenuStyleOverrides;
 }
 
+/**
+ * Props for the dropdown menu group component.
+ *
+ * @example
+ * import type { DropdownMenuGroupProps } from "@kovojs/ui/dropdown-menu";
+ * const props: DropdownMenuGroupProps = { children: 'Content' };
+ */
 export interface DropdownMenuGroupProps extends DropdownMenuStateProps {
   children?: string;
   id?: string;
@@ -68,6 +117,13 @@ export interface DropdownMenuGroupProps extends DropdownMenuStateProps {
   styles?: DropdownMenuStyleOverrides;
 }
 
+/**
+ * Props for the dropdown menu separator component.
+ *
+ * @example
+ * import type { DropdownMenuSeparatorProps } from "@kovojs/ui/dropdown-menu";
+ * const props: DropdownMenuSeparatorProps = {};
+ */
 export interface DropdownMenuSeparatorProps {
   id?: string;
   styles?: DropdownMenuStyleOverrides;
@@ -77,6 +133,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the dropdown menu components.
+ *
+ * @example
+ * import { dropdownMenuStyles } from "@kovojs/ui/dropdown-menu";
+ * const styles = dropdownMenuStyles;
+ */
 export const dropdownMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
@@ -196,6 +259,13 @@ export const dropdownMenuStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled dropdown menu primitive.
+ *
+ * @example
+ * import { DropdownMenu } from "@kovojs/ui/dropdown-menu";
+ * const component = DropdownMenu;
+ */
 export const DropdownMenu = component({
   render(props: DropdownMenuProps) {
     const attrs = dropdownMenuRootAttributes({
@@ -221,6 +291,13 @@ export const DropdownMenu = component({
   },
 });
 
+/**
+ * Renders the styled dropdown menu trigger primitive.
+ *
+ * @example
+ * import { DropdownMenuTrigger } from "@kovojs/ui/dropdown-menu";
+ * const component = DropdownMenuTrigger;
+ */
 export const DropdownMenuTrigger = component({
   render(props: DropdownMenuTriggerProps) {
     const attrs = dropdownMenuTriggerAttributes({
@@ -254,6 +331,13 @@ export const DropdownMenuTrigger = component({
   },
 });
 
+/**
+ * Renders the styled dropdown menu content primitive.
+ *
+ * @example
+ * import { DropdownMenuContent } from "@kovojs/ui/dropdown-menu";
+ * const component = DropdownMenuContent;
+ */
 export const DropdownMenuContent = component({
   render(props: DropdownMenuContentProps) {
     const attrs = dropdownMenuContentAttributes({
@@ -284,6 +368,13 @@ export const DropdownMenuContent = component({
   },
 });
 
+/**
+ * Renders the styled dropdown menu item primitive.
+ *
+ * @example
+ * import { DropdownMenuItem } from "@kovojs/ui/dropdown-menu";
+ * const component = DropdownMenuItem;
+ */
 export const DropdownMenuItem = component({
   render(props: DropdownMenuItemProps) {
     const attrs = dropdownMenuItemAttributes({
@@ -319,6 +410,13 @@ export const DropdownMenuItem = component({
   },
 });
 
+/**
+ * Renders the styled dropdown menu group primitive.
+ *
+ * @example
+ * import { DropdownMenuGroup } from "@kovojs/ui/dropdown-menu";
+ * const component = DropdownMenuGroup;
+ */
 export const DropdownMenuGroup = component({
   render(props: DropdownMenuGroupProps) {
     const attrs = dropdownMenuGroupAttributes({
@@ -347,6 +445,13 @@ export const DropdownMenuGroup = component({
   },
 });
 
+/**
+ * Renders the styled dropdown menu separator primitive.
+ *
+ * @example
+ * import { DropdownMenuSeparator } from "@kovojs/ui/dropdown-menu";
+ * const component = DropdownMenuSeparator;
+ */
 export const DropdownMenuSeparator = component({
   render(props: DropdownMenuSeparatorProps) {
     const attrs = dropdownMenuSeparatorAttributes(props.id === undefined ? {} : { id: props.id });

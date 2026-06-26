@@ -15,6 +15,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the alert dialog components.
+ *
+ * @example
+ * import type { AlertDialogStyleOverrides } from "@kovojs/ui/alert-dialog";
+ * const styles: AlertDialogStyleOverrides = {};
+ */
 export interface AlertDialogStyleOverrides {
   action?: style.StyleInput;
   cancel?: style.StyleInput;
@@ -28,17 +35,38 @@ export interface AlertDialogStyleOverrides {
   trigger?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the alert dialog component family.
+ *
+ * @example
+ * import type { AlertDialogStateProps } from "@kovojs/ui/alert-dialog";
+ * const state: AlertDialogStateProps = {};
+ */
 export interface AlertDialogStateProps {
   disabled?: boolean;
   open?: boolean;
 }
 
+/**
+ * Props for the alert dialog component.
+ *
+ * @example
+ * import type { AlertDialogProps } from "@kovojs/ui/alert-dialog";
+ * const props: AlertDialogProps = { children: 'Content' };
+ */
 export interface AlertDialogProps extends AlertDialogStateProps {
   children?: string;
   id?: string;
   styles?: AlertDialogStyleOverrides;
 }
 
+/**
+ * Props for the alert dialog trigger component.
+ *
+ * @example
+ * import type { AlertDialogTriggerProps } from "@kovojs/ui/alert-dialog";
+ * const props: AlertDialogTriggerProps = { children: 'Content' };
+ */
 export interface AlertDialogTriggerProps extends AlertDialogStateProps {
   children?: string;
   contentId?: string;
@@ -46,6 +74,13 @@ export interface AlertDialogTriggerProps extends AlertDialogStateProps {
   styles?: AlertDialogStyleOverrides;
 }
 
+/**
+ * Props for the alert dialog content component.
+ *
+ * @example
+ * import type { AlertDialogContentProps } from "@kovojs/ui/alert-dialog";
+ * const props: AlertDialogContentProps = { children: 'Content' };
+ */
 export interface AlertDialogContentProps extends AlertDialogStateProps {
   children?: string;
   contentId?: string;
@@ -54,6 +89,13 @@ export interface AlertDialogContentProps extends AlertDialogStateProps {
   titleId?: string;
 }
 
+/**
+ * Props for the alert dialog cancel component.
+ *
+ * @example
+ * import type { AlertDialogCancelProps } from "@kovojs/ui/alert-dialog";
+ * const props: AlertDialogCancelProps = { children: 'Content' };
+ */
 export interface AlertDialogCancelProps extends AlertDialogStateProps {
   autoFocus?: boolean;
   children?: string;
@@ -62,6 +104,13 @@ export interface AlertDialogCancelProps extends AlertDialogStateProps {
   styles?: AlertDialogStyleOverrides;
 }
 
+/**
+ * Props for the alert dialog action component.
+ *
+ * @example
+ * import type { AlertDialogActionProps } from "@kovojs/ui/alert-dialog";
+ * const props: AlertDialogActionProps = { children: 'Content' };
+ */
 export interface AlertDialogActionProps extends AlertDialogStateProps {
   children?: string;
   contentId?: string;
@@ -70,12 +119,26 @@ export interface AlertDialogActionProps extends AlertDialogStateProps {
   styles?: AlertDialogStyleOverrides;
 }
 
+/**
+ * Props for the alert dialog part component.
+ *
+ * @example
+ * import type { AlertDialogPartProps } from "@kovojs/ui/alert-dialog";
+ * const props: AlertDialogPartProps = { children: 'Content' };
+ */
 export interface AlertDialogPartProps {
   children?: string;
   id?: string;
   styles?: AlertDialogStyleOverrides;
 }
 
+/**
+ * Style definitions used by the alert dialog components.
+ *
+ * @example
+ * import { alertDialogStyles } from "@kovojs/ui/alert-dialog";
+ * const styles = alertDialogStyles;
+ */
 export const alertDialogStyles = style.create({
   action: {
     alignItems: 'center',
@@ -289,6 +352,13 @@ function alertDialogState(props: AlertDialogStateProps) {
   };
 }
 
+/**
+ * Renders the styled alert dialog primitive.
+ *
+ * @example
+ * import { AlertDialog } from "@kovojs/ui/alert-dialog";
+ * const component = AlertDialog;
+ */
 export const AlertDialog = component({
   render(props: AlertDialogProps) {
     const attrs = alertDialogRootAttributes(alertDialogState(props));
@@ -308,6 +378,13 @@ export const AlertDialog = component({
   },
 });
 
+/**
+ * Renders the styled alert dialog trigger primitive.
+ *
+ * @example
+ * import { AlertDialogTrigger } from "@kovojs/ui/alert-dialog";
+ * const component = AlertDialogTrigger;
+ */
 export const AlertDialogTrigger = component({
   render(props: AlertDialogTriggerProps) {
     const attrs = alertDialogTriggerAttributes({
@@ -337,6 +414,13 @@ export const AlertDialogTrigger = component({
   },
 });
 
+/**
+ * Renders the styled alert dialog content primitive.
+ *
+ * @example
+ * import { AlertDialogContent } from "@kovojs/ui/alert-dialog";
+ * const component = AlertDialogContent;
+ */
 export const AlertDialogContent = component({
   render(props: AlertDialogContentProps) {
     const attrs = alertDialogContentAttributes({
@@ -390,6 +474,13 @@ export const AlertDialogContent = component({
   },
 });
 
+/**
+ * Renders the styled alert dialog cancel primitive.
+ *
+ * @example
+ * import { AlertDialogCancel } from "@kovojs/ui/alert-dialog";
+ * const component = AlertDialogCancel;
+ */
 export const AlertDialogCancel = component({
   render(props: AlertDialogCancelProps) {
     const attrs = alertDialogCancelAttributes({
@@ -419,6 +510,13 @@ export const AlertDialogCancel = component({
   },
 });
 
+/**
+ * Renders the styled alert dialog action primitive.
+ *
+ * @example
+ * import { AlertDialogAction } from "@kovojs/ui/alert-dialog";
+ * const component = AlertDialogAction;
+ */
 export const AlertDialogAction = component({
   render(props: AlertDialogActionProps) {
     const attrs = alertDialogActionAttributes({
@@ -447,6 +545,13 @@ export const AlertDialogAction = component({
   },
 });
 
+/**
+ * Renders the styled alert dialog header primitive.
+ *
+ * @example
+ * import { AlertDialogHeader } from "@kovojs/ui/alert-dialog";
+ * const component = AlertDialogHeader;
+ */
 export const AlertDialogHeader = component({
   render(props: AlertDialogPartProps) {
     const styleAttrs = style.attrs(alertDialogStyles.header, props.styles?.header);
@@ -458,6 +563,13 @@ export const AlertDialogHeader = component({
   },
 });
 
+/**
+ * Renders the styled alert dialog title primitive.
+ *
+ * @example
+ * import { AlertDialogTitle } from "@kovojs/ui/alert-dialog";
+ * const component = AlertDialogTitle;
+ */
 export const AlertDialogTitle = component({
   render(props: AlertDialogPartProps) {
     const styleAttrs = style.attrs(alertDialogStyles.title, props.styles?.title);
@@ -469,6 +581,13 @@ export const AlertDialogTitle = component({
   },
 });
 
+/**
+ * Renders the styled alert dialog description primitive.
+ *
+ * @example
+ * import { AlertDialogDescription } from "@kovojs/ui/alert-dialog";
+ * const component = AlertDialogDescription;
+ */
 export const AlertDialogDescription = component({
   render(props: AlertDialogPartProps) {
     const styleAttrs = style.attrs(alertDialogStyles.description, props.styles?.description);
@@ -482,6 +601,13 @@ export const AlertDialogDescription = component({
 
 // Footer row that lays the Cancel/Action buttons out with a real gap instead of
 // flush siblings (the "squished footer" defect). See issues-digest alert-dialog P1.
+/**
+ * Renders the styled alert dialog footer primitive.
+ *
+ * @example
+ * import { AlertDialogFooter } from "@kovojs/ui/alert-dialog";
+ * const component = AlertDialogFooter;
+ */
 export const AlertDialogFooter = component({
   render(props: AlertDialogPartProps) {
     const styleAttrs = style.attrs(alertDialogStyles.footer, props.styles?.footer);

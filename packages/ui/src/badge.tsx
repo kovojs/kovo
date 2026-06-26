@@ -4,8 +4,22 @@ import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Supported badge variant values.
+ *
+ * @example
+ * import type { BadgeVariant } from "@kovojs/ui/badge";
+ * const value: BadgeVariant = 'neutral';
+ */
 export type BadgeVariant = 'neutral' | 'success' | 'warning' | 'destructive' | 'outline';
 
+/**
+ * Props for the badge component.
+ *
+ * @example
+ * import type { BadgeProps } from "@kovojs/ui/badge";
+ * const props: BadgeProps = { children: 'Content' };
+ */
 export interface BadgeProps {
   children?: string;
   style?: style.StyleInput;
@@ -57,6 +71,13 @@ const variants = style.create({
   },
 });
 
+/**
+ * Style definitions used by the badge components.
+ *
+ * @example
+ * import { badgeStyles } from "@kovojs/ui/badge";
+ * const styles = badgeStyles;
+ */
 export const badgeStyles = {
   base,
   variants,
@@ -66,6 +87,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Renders the styled badge primitive.
+ *
+ * @example
+ * import { Badge } from "@kovojs/ui/badge";
+ * const component = Badge;
+ */
 export const Badge = component({
   render(props: BadgeProps) {
     const attrs = style.attrs(base.root, variants[props.variant ?? 'neutral'], props.style);

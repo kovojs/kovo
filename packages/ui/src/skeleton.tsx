@@ -4,6 +4,13 @@ import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Props for the skeleton component.
+ *
+ * @example
+ * import type { SkeletonProps } from "@kovojs/ui/skeleton";
+ * const props: SkeletonProps = {};
+ */
 export interface SkeletonProps {
   style?: style.StyleInput;
 }
@@ -19,6 +26,13 @@ const pulse = style.keyframes(
   { namespace: 'skeletonPulse', source: 'skeleton.tsx' },
 );
 
+/**
+ * Style definitions used by the skeleton components.
+ *
+ * @example
+ * import { skeletonStyles } from "@kovojs/ui/skeleton";
+ * const styles = skeletonStyles;
+ */
 export const skeletonStyles = style.create({
   root: {
     // `border` (outlineVariant) is the M3 divider tone — distinctly darker than
@@ -34,6 +48,13 @@ export const skeletonStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled skeleton primitive.
+ *
+ * @example
+ * import { Skeleton } from "@kovojs/ui/skeleton";
+ * const component = Skeleton;
+ */
 export const Skeleton = component({
   render(props: SkeletonProps) {
     return <div {...style.attrs(skeletonStyles.root, props.style)} aria-hidden="true" />;

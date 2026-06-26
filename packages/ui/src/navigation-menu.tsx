@@ -19,6 +19,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the navigation menu components.
+ *
+ * @example
+ * import type { NavigationMenuStyleOverrides } from "@kovojs/ui/navigation-menu";
+ * const styles: NavigationMenuStyleOverrides = {};
+ */
 export interface NavigationMenuStyleOverrides {
   content?: style.StyleInput;
   indicator?: style.StyleInput;
@@ -30,6 +37,13 @@ export interface NavigationMenuStyleOverrides {
   viewport?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the navigation menu component family.
+ *
+ * @example
+ * import type { NavigationMenuStateProps } from "@kovojs/ui/navigation-menu";
+ * const state: NavigationMenuStateProps = {};
+ */
 export interface NavigationMenuStateProps {
   activeValue?: string;
   dir?: TextDirection;
@@ -40,6 +54,13 @@ export interface NavigationMenuStateProps {
   orientation?: CollectionOrientation;
 }
 
+/**
+ * Props for the navigation menu component.
+ *
+ * @example
+ * import type { NavigationMenuProps } from "@kovojs/ui/navigation-menu";
+ * const props: NavigationMenuProps = { children: 'Content' };
+ */
 export interface NavigationMenuProps extends NavigationMenuStateProps {
   children?: string;
   descriptionId?: string;
@@ -49,6 +70,13 @@ export interface NavigationMenuProps extends NavigationMenuStateProps {
   styles?: NavigationMenuStyleOverrides;
 }
 
+/**
+ * Props for the navigation menu list component.
+ *
+ * @example
+ * import type { NavigationMenuListProps } from "@kovojs/ui/navigation-menu";
+ * const props: NavigationMenuListProps = { children: 'Content' };
+ */
 export interface NavigationMenuListProps extends NavigationMenuStateProps {
   children?: string;
   id?: string;
@@ -56,6 +84,13 @@ export interface NavigationMenuListProps extends NavigationMenuStateProps {
   styles?: NavigationMenuStyleOverrides;
 }
 
+/**
+ * Props for the navigation menu item component.
+ *
+ * @example
+ * import type { NavigationMenuItemProps } from "@kovojs/ui/navigation-menu";
+ * const props: NavigationMenuItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface NavigationMenuItemProps extends NavigationMenuStateProps {
   children?: string;
   id?: string;
@@ -64,11 +99,25 @@ export interface NavigationMenuItemProps extends NavigationMenuStateProps {
   styles?: NavigationMenuStyleOverrides;
 }
 
+/**
+ * Props for the navigation menu trigger component.
+ *
+ * @example
+ * import type { NavigationMenuTriggerProps } from "@kovojs/ui/navigation-menu";
+ * const props: NavigationMenuTriggerProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface NavigationMenuTriggerProps extends NavigationMenuItemProps {
   contentId?: string;
   itemLabel?: string;
 }
 
+/**
+ * Props for the navigation menu content component.
+ *
+ * @example
+ * import type { NavigationMenuContentProps } from "@kovojs/ui/navigation-menu";
+ * const props: NavigationMenuContentProps = { value: 'value', children: 'Content' };
+ */
 export interface NavigationMenuContentProps extends NavigationMenuStateProps {
   children?: string;
   id?: string;
@@ -77,11 +126,25 @@ export interface NavigationMenuContentProps extends NavigationMenuStateProps {
   value: string;
 }
 
+/**
+ * Props for the navigation menu link component.
+ *
+ * @example
+ * import type { NavigationMenuLinkProps } from "@kovojs/ui/navigation-menu";
+ * const props: NavigationMenuLinkProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface NavigationMenuLinkProps extends NavigationMenuItemProps {
   href?: string;
   itemLabel?: string;
 }
 
+/**
+ * Props for the navigation menu part component.
+ *
+ * @example
+ * import type { NavigationMenuPartProps } from "@kovojs/ui/navigation-menu";
+ * const props: NavigationMenuPartProps = { children: 'Content' };
+ */
 export interface NavigationMenuPartProps extends NavigationMenuStateProps {
   children?: string;
   id?: string;
@@ -92,6 +155,13 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Style definitions used by the navigation menu components.
+ *
+ * @example
+ * import { navigationMenuStyles } from "@kovojs/ui/navigation-menu";
+ * const styles = navigationMenuStyles;
+ */
 export const navigationMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
@@ -280,6 +350,13 @@ export const navigationMenuStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled navigation menu primitive.
+ *
+ * @example
+ * import { NavigationMenu } from "@kovojs/ui/navigation-menu";
+ * const component = NavigationMenu;
+ */
 export const NavigationMenu = component({
   render(props: NavigationMenuProps) {
     const attrs = navigationMenuRootAttributes({
@@ -311,6 +388,13 @@ export const NavigationMenu = component({
   },
 });
 
+/**
+ * Renders the styled navigation menu list primitive.
+ *
+ * @example
+ * import { NavigationMenuList } from "@kovojs/ui/navigation-menu";
+ * const component = NavigationMenuList;
+ */
 export const NavigationMenuList = component({
   render(props: NavigationMenuListProps) {
     const attrs = navigationMenuListAttributes({
@@ -336,6 +420,13 @@ export const NavigationMenuList = component({
   },
 });
 
+/**
+ * Renders the styled navigation menu item primitive.
+ *
+ * @example
+ * import { NavigationMenuItem } from "@kovojs/ui/navigation-menu";
+ * const component = NavigationMenuItem;
+ */
 export const NavigationMenuItem = component({
   render(props: NavigationMenuItemProps) {
     const attrs = navigationMenuItemAttributes({
@@ -362,6 +453,13 @@ export const NavigationMenuItem = component({
   },
 });
 
+/**
+ * Renders the styled navigation menu trigger primitive.
+ *
+ * @example
+ * import { NavigationMenuTrigger } from "@kovojs/ui/navigation-menu";
+ * const component = NavigationMenuTrigger;
+ */
 export const NavigationMenuTrigger = component({
   render(props: NavigationMenuTriggerProps) {
     const attrs = navigationMenuTriggerAttributes({
@@ -403,6 +501,13 @@ export const NavigationMenuTrigger = component({
   },
 });
 
+/**
+ * Renders the styled navigation menu content primitive.
+ *
+ * @example
+ * import { NavigationMenuContent } from "@kovojs/ui/navigation-menu";
+ * const component = NavigationMenuContent;
+ */
 export const NavigationMenuContent = component({
   render(props: NavigationMenuContentProps) {
     const attrs = navigationMenuContentAttributes({
@@ -431,6 +536,13 @@ export const NavigationMenuContent = component({
   },
 });
 
+/**
+ * Renders the styled navigation menu link primitive.
+ *
+ * @example
+ * import { NavigationMenuLink } from "@kovojs/ui/navigation-menu";
+ * const component = NavigationMenuLink;
+ */
 export const NavigationMenuLink = component({
   render(props: NavigationMenuLinkProps) {
     const attrs = navigationMenuLinkAttributes({
@@ -467,6 +579,13 @@ export const NavigationMenuLink = component({
   },
 });
 
+/**
+ * Renders the styled navigation menu viewport primitive.
+ *
+ * @example
+ * import { NavigationMenuViewport } from "@kovojs/ui/navigation-menu";
+ * const component = NavigationMenuViewport;
+ */
 export const NavigationMenuViewport = component({
   render(props: NavigationMenuPartProps) {
     const attrs = navigationMenuViewportAttributes(toNavigationState(props));
@@ -487,6 +606,13 @@ export const NavigationMenuViewport = component({
   },
 });
 
+/**
+ * Renders the styled navigation menu indicator primitive.
+ *
+ * @example
+ * import { NavigationMenuIndicator } from "@kovojs/ui/navigation-menu";
+ * const component = NavigationMenuIndicator;
+ */
 export const NavigationMenuIndicator = component({
   render(props: NavigationMenuPartProps) {
     const attrs = navigationMenuIndicatorAttributes(toNavigationState(props));

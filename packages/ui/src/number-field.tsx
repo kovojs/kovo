@@ -13,6 +13,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the number field components.
+ *
+ * @example
+ * import type { NumberFieldStyleOverrides } from "@kovojs/ui/number-field";
+ * const styles: NumberFieldStyleOverrides = {};
+ */
 export interface NumberFieldStyleOverrides {
   button?: style.StyleInput;
   control?: style.StyleInput;
@@ -20,6 +27,13 @@ export interface NumberFieldStyleOverrides {
   root?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the number field component family.
+ *
+ * @example
+ * import type { NumberFieldStateProps } from "@kovojs/ui/number-field";
+ * const state: NumberFieldStateProps = {};
+ */
 export interface NumberFieldStateProps {
   disabled?: boolean;
   invalid?: boolean;
@@ -31,12 +45,26 @@ export interface NumberFieldStateProps {
   value?: NumberFieldValue;
 }
 
+/**
+ * Props for the number field component.
+ *
+ * @example
+ * import type { NumberFieldProps } from "@kovojs/ui/number-field";
+ * const props: NumberFieldProps = { children: 'Content' };
+ */
 export interface NumberFieldProps extends NumberFieldStateProps {
   children?: string;
   id?: string;
   styles?: NumberFieldStyleOverrides;
 }
 
+/**
+ * Props for the number field input component.
+ *
+ * @example
+ * import type { NumberFieldInputProps } from "@kovojs/ui/number-field";
+ * const props: NumberFieldInputProps = {};
+ */
 export interface NumberFieldInputProps extends NumberFieldStateProps {
   descriptionId?: string;
   errorId?: string;
@@ -47,6 +75,13 @@ export interface NumberFieldInputProps extends NumberFieldStateProps {
   styles?: NumberFieldStyleOverrides;
 }
 
+/**
+ * Props for the number field button component.
+ *
+ * @example
+ * import type { NumberFieldButtonProps } from "@kovojs/ui/number-field";
+ * const props: NumberFieldButtonProps = { children: 'Content' };
+ */
 export interface NumberFieldButtonProps extends NumberFieldStateProps {
   children?: string;
   id?: string;
@@ -55,6 +90,13 @@ export interface NumberFieldButtonProps extends NumberFieldStateProps {
   styles?: NumberFieldStyleOverrides;
 }
 
+/**
+ * Style definitions used by the number field components.
+ *
+ * @example
+ * import { numberFieldStyles } from "@kovojs/ui/number-field";
+ * const styles = numberFieldStyles;
+ */
 export const numberFieldStyles = style.create({
   button: {
     alignItems: 'center',
@@ -150,6 +192,13 @@ export const numberFieldStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled number field primitive.
+ *
+ * @example
+ * import { NumberField } from "@kovojs/ui/number-field";
+ * const component = NumberField;
+ */
 export const NumberField = component({
   render(props: NumberFieldProps) {
     const attrs = numberFieldRootAttributes({
@@ -180,6 +229,13 @@ export const NumberField = component({
   },
 });
 
+/**
+ * Renders the styled number field control primitive.
+ *
+ * @example
+ * import { NumberFieldControl } from "@kovojs/ui/number-field";
+ * const component = NumberFieldControl;
+ */
 export const NumberFieldControl = component({
   render(props: NumberFieldProps) {
     const attrs = numberFieldRootAttributes({
@@ -210,6 +266,13 @@ export const NumberFieldControl = component({
   },
 });
 
+/**
+ * Renders the styled number field input primitive.
+ *
+ * @example
+ * import { NumberFieldInput } from "@kovojs/ui/number-field";
+ * const component = NumberFieldInput;
+ */
 export const NumberFieldInput = component({
   render(props: NumberFieldInputProps) {
     const attrs = numberFieldInputAttributes({
@@ -256,6 +319,13 @@ export const NumberFieldInput = component({
   },
 });
 
+/**
+ * Renders the styled number field decrement primitive.
+ *
+ * @example
+ * import { NumberFieldDecrement } from "@kovojs/ui/number-field";
+ * const component = NumberFieldDecrement;
+ */
 export const NumberFieldDecrement = component({
   render(props: NumberFieldButtonProps) {
     const attrs = numberFieldDecrementAttributes({
@@ -293,6 +363,13 @@ export const NumberFieldDecrement = component({
   },
 });
 
+/**
+ * Renders the styled number field increment primitive.
+ *
+ * @example
+ * import { NumberFieldIncrement } from "@kovojs/ui/number-field";
+ * const component = NumberFieldIncrement;
+ */
 export const NumberFieldIncrement = component({
   render(props: NumberFieldButtonProps) {
     const attrs = numberFieldIncrementAttributes({

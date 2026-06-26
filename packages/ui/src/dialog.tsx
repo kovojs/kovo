@@ -12,6 +12,13 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the dialog components.
+ *
+ * @example
+ * import type { DialogStyleOverrides } from "@kovojs/ui/dialog";
+ * const styles: DialogStyleOverrides = {};
+ */
 export interface DialogStyleOverrides {
   close?: style.StyleInput;
   closeX?: style.StyleInput;
@@ -23,17 +30,38 @@ export interface DialogStyleOverrides {
   trigger?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the dialog component family.
+ *
+ * @example
+ * import type { DialogStateProps } from "@kovojs/ui/dialog";
+ * const state: DialogStateProps = {};
+ */
 export interface DialogStateProps {
   disabled?: boolean;
   open?: boolean;
 }
 
+/**
+ * Props for the dialog component.
+ *
+ * @example
+ * import type { DialogProps } from "@kovojs/ui/dialog";
+ * const props: DialogProps = { children: 'Content' };
+ */
 export interface DialogProps extends DialogStateProps {
   children?: string;
   id?: string;
   styles?: DialogStyleOverrides;
 }
 
+/**
+ * Props for the dialog trigger component.
+ *
+ * @example
+ * import type { DialogTriggerProps } from "@kovojs/ui/dialog";
+ * const props: DialogTriggerProps = { children: 'Content' };
+ */
 export interface DialogTriggerProps extends DialogStateProps {
   children?: string;
   contentId?: string;
@@ -41,6 +69,13 @@ export interface DialogTriggerProps extends DialogStateProps {
   styles?: DialogStyleOverrides;
 }
 
+/**
+ * Props for the dialog content component.
+ *
+ * @example
+ * import type { DialogContentProps } from "@kovojs/ui/dialog";
+ * const props: DialogContentProps = { children: 'Content' };
+ */
 export interface DialogContentProps extends DialogStateProps {
   children?: string;
   contentId?: string;
@@ -50,6 +85,13 @@ export interface DialogContentProps extends DialogStateProps {
   titleId?: string;
 }
 
+/**
+ * Props for the dialog close component.
+ *
+ * @example
+ * import type { DialogCloseProps } from "@kovojs/ui/dialog";
+ * const props: DialogCloseProps = { children: 'Content' };
+ */
 export interface DialogCloseProps extends DialogStateProps {
   children?: string;
   contentId?: string;
@@ -57,12 +99,26 @@ export interface DialogCloseProps extends DialogStateProps {
   styles?: DialogStyleOverrides;
 }
 
+/**
+ * Props for the dialog part component.
+ *
+ * @example
+ * import type { DialogPartProps } from "@kovojs/ui/dialog";
+ * const props: DialogPartProps = { children: 'Content' };
+ */
 export interface DialogPartProps {
   children?: string;
   id?: string;
   styles?: DialogStyleOverrides;
 }
 
+/**
+ * Style definitions used by the dialog components.
+ *
+ * @example
+ * import { dialogStyles } from "@kovojs/ui/dialog";
+ * const styles = dialogStyles;
+ */
 export const dialogStyles = style.create({
   close: {
     alignItems: 'center',
@@ -223,6 +279,13 @@ function dialogState(props: DialogStateProps) {
   };
 }
 
+/**
+ * Renders the styled dialog primitive.
+ *
+ * @example
+ * import { Dialog } from "@kovojs/ui/dialog";
+ * const component = Dialog;
+ */
 export const Dialog = component({
   render(props: DialogProps) {
     const attrs = dialogRootAttributes(dialogState(props));
@@ -242,6 +305,13 @@ export const Dialog = component({
   },
 });
 
+/**
+ * Renders the styled dialog trigger primitive.
+ *
+ * @example
+ * import { DialogTrigger } from "@kovojs/ui/dialog";
+ * const component = DialogTrigger;
+ */
 export const DialogTrigger = component({
   render(props: DialogTriggerProps) {
     const attrs = dialogTriggerAttributes({
@@ -271,6 +341,13 @@ export const DialogTrigger = component({
   },
 });
 
+/**
+ * Renders the styled dialog content primitive.
+ *
+ * @example
+ * import { DialogContent } from "@kovojs/ui/dialog";
+ * const component = DialogContent;
+ */
 export const DialogContent = component({
   render(props: DialogContentProps) {
     const attrs = dialogContentAttributes({
@@ -301,6 +378,13 @@ export const DialogContent = component({
   },
 });
 
+/**
+ * Renders the styled dialog close primitive.
+ *
+ * @example
+ * import { DialogClose } from "@kovojs/ui/dialog";
+ * const component = DialogClose;
+ */
 export const DialogClose = component({
   render(props: DialogCloseProps) {
     const attrs = dialogCloseAttributes({
@@ -330,6 +414,13 @@ export const DialogClose = component({
 // Top-right "×" affordance carrying the same command='close'/commandfor close
 // semantics as DialogClose (shadcn Dialog parity). SPEC.md §5.2 keeps the
 // command wiring intact; an accessible name is required (rules/accessibility-conformance.md).
+/**
+ * Renders the styled dialog close x primitive.
+ *
+ * @example
+ * import { DialogCloseX } from "@kovojs/ui/dialog";
+ * const component = DialogCloseX;
+ */
 export const DialogCloseX = component({
   render(props: DialogCloseProps) {
     const attrs = dialogCloseAttributes({
@@ -357,6 +448,13 @@ export const DialogCloseX = component({
   },
 });
 
+/**
+ * Renders the styled dialog header primitive.
+ *
+ * @example
+ * import { DialogHeader } from "@kovojs/ui/dialog";
+ * const component = DialogHeader;
+ */
 export const DialogHeader = component({
   render(props: DialogPartProps) {
     const styleAttrs = style.attrs(dialogStyles.header, props.styles?.header);
@@ -368,6 +466,13 @@ export const DialogHeader = component({
   },
 });
 
+/**
+ * Renders the styled dialog title primitive.
+ *
+ * @example
+ * import { DialogTitle } from "@kovojs/ui/dialog";
+ * const component = DialogTitle;
+ */
 export const DialogTitle = component({
   render(props: DialogPartProps) {
     const styleAttrs = style.attrs(dialogStyles.title, props.styles?.title);
@@ -379,6 +484,13 @@ export const DialogTitle = component({
   },
 });
 
+/**
+ * Renders the styled dialog description primitive.
+ *
+ * @example
+ * import { DialogDescription } from "@kovojs/ui/dialog";
+ * const component = DialogDescription;
+ */
 export const DialogDescription = component({
   render(props: DialogPartProps) {
     const styleAttrs = style.attrs(dialogStyles.description, props.styles?.description);

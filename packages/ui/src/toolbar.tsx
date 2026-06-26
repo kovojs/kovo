@@ -14,12 +14,26 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+/**
+ * Style override slots accepted by the toolbar components.
+ *
+ * @example
+ * import type { ToolbarStyleOverrides } from "@kovojs/ui/toolbar";
+ * const styles: ToolbarStyleOverrides = {};
+ */
 export interface ToolbarStyleOverrides {
   button?: style.StyleInput;
   item?: style.StyleInput;
   root?: style.StyleInput;
 }
 
+/**
+ * Shared state props for the toolbar component family.
+ *
+ * @example
+ * import type { ToolbarStateProps } from "@kovojs/ui/toolbar";
+ * const state: ToolbarStateProps = {};
+ */
 export interface ToolbarStateProps {
   activeValue?: string;
   dir?: TextDirection;
@@ -29,6 +43,13 @@ export interface ToolbarStateProps {
   orientation?: ToolbarOrientation;
 }
 
+/**
+ * Props for the toolbar component.
+ *
+ * @example
+ * import type { ToolbarProps } from "@kovojs/ui/toolbar";
+ * const props: ToolbarProps = { children: 'Content' };
+ */
 export interface ToolbarProps extends ToolbarStateProps {
   children?: string;
   descriptionId?: string;
@@ -38,6 +59,13 @@ export interface ToolbarProps extends ToolbarStateProps {
   styles?: ToolbarStyleOverrides;
 }
 
+/**
+ * Props for the toolbar item component.
+ *
+ * @example
+ * import type { ToolbarItemProps } from "@kovojs/ui/toolbar";
+ * const props: ToolbarItemProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface ToolbarItemProps extends ToolbarStateProps {
   children?: string;
   id?: string;
@@ -46,10 +74,24 @@ export interface ToolbarItemProps extends ToolbarStateProps {
   styles?: ToolbarStyleOverrides;
 }
 
+/**
+ * Props for the toolbar button component.
+ *
+ * @example
+ * import type { ToolbarButtonProps } from "@kovojs/ui/toolbar";
+ * const props: ToolbarButtonProps = { itemValue: 'item', children: 'Content' };
+ */
 export interface ToolbarButtonProps extends ToolbarItemProps {
   pressed?: boolean;
 }
 
+/**
+ * Style definitions used by the toolbar components.
+ *
+ * @example
+ * import { toolbarStyles } from "@kovojs/ui/toolbar";
+ * const styles = toolbarStyles;
+ */
 export const toolbarStyles = style.create({
   button: {
     alignItems: 'center',
@@ -115,6 +157,13 @@ export const toolbarStyles = style.create({
   },
 });
 
+/**
+ * Renders the styled toolbar primitive.
+ *
+ * @example
+ * import { Toolbar } from "@kovojs/ui/toolbar";
+ * const component = Toolbar;
+ */
 export const Toolbar = component({
   render(props: ToolbarProps) {
     const attrs = toolbarRootAttributes({
@@ -152,6 +201,13 @@ export const Toolbar = component({
   },
 });
 
+/**
+ * Renders the styled toolbar item primitive.
+ *
+ * @example
+ * import { ToolbarItem } from "@kovojs/ui/toolbar";
+ * const component = ToolbarItem;
+ */
 export const ToolbarItem = component({
   render(props: ToolbarItemProps) {
     const attrs = toolbarItemAttributes({
@@ -181,6 +237,13 @@ export const ToolbarItem = component({
   },
 });
 
+/**
+ * Renders the styled toolbar button primitive.
+ *
+ * @example
+ * import { ToolbarButton } from "@kovojs/ui/toolbar";
+ * const component = ToolbarButton;
+ */
 export const ToolbarButton = component({
   render(props: ToolbarButtonProps) {
     const attrs = toolbarButtonAttributes({
