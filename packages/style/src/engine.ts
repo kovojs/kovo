@@ -384,6 +384,7 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
     const cssProperty = `--kovo-${namespace}-${toKebabCase(token)}`;
     result[token] = `var(${cssProperty})`;
     if (value != null) {
+      assertCssValueSafe(value, 'style.defineVars', token);
       rules.push({
         atRules: [],
         className: ':root',
@@ -442,6 +443,7 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
   for (const token of Object.keys(overrides) as Array<Extract<keyof Tokens, string>>) {
     const value = overrides[token];
     if (value == null) continue;
+    assertCssValueSafe(value, 'style.createTheme', token);
     const tokenValue = baseTokens[token];
     const cssProperty = tokenValue.slice(4, -1);
     rules.push({
@@ -600,6 +602,40 @@ function assertObjectInput(
 ): asserts value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError(`${apiName} requires ${argumentName} to be an object.`);
+  }
+}
+
+// CSS rule/declaration delimiters (`<` `>` `{` `}` `;` and backslash) plus C0
+// control characters (newline/CR/tab/…). These let an author value break out of
+// the `:root{…}` / `.theme{…}` declaration block (`}` closes it, `;` appends a
+// sibling declaration) or, when the emitted CSS is inlined, out of a `<style>`
+// element (`</style>`). Ordinary values — `1px solid red`, `var(--x)`,
+// `color-mix(in srgb, #fff 50%, #000)`, `#16a34a` — contain none of these.
+const UNSAFE_CSS_DELIMITERS = new Set(['<', '>', '{', '}', ';', '\\']);
+
+/**
+ * Reject author CSS values that could break out of the declaration or rule they
+ * are interpolated into. `style.defineVars` / `style.createTheme` are the only
+ * public runtime functions that serialize an author value verbatim into a
+ * `__rules[].rule` string (`:root{--x:<value>}` / `.theme{--x:<value>}`, and
+ * thence `emitAtomicCss` output and, if an app inlines it, a `<style>` element).
+ * On the static build path these are compiler-checked literals, but at runtime
+ * an attacker-influenced value carrying `}` / `;` / `</style>` could inject new
+ * rules or break out of the stylesheet. Kovo fails closed (CLAUDE.md technical-
+ * preview bias; mirrors the CSP source-list validation in
+ * `packages/server/src/csp.ts`), so a value carrying any of these is rejected
+ * rather than escaped (SPEC.md §13.1).
+ */
+function assertCssValueSafe(value: StylePrimitive, apiName: string, token: string): void {
+  if (typeof value !== 'string') return;
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code <= 0x1f || UNSAFE_CSS_DELIMITERS.has(char)) {
+      throw new TypeError(
+        `${apiName} rejected an unsafe CSS value for token "${token}": value must not contain ` +
+          `${JSON.stringify(char)} (a CSS rule/declaration delimiter or markup/control character).`,
+      );
+    }
   }
 }
 
