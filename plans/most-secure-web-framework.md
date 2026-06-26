@@ -5,8 +5,8 @@ the most secure web framework, benchmarked against Rails, Laravel, Django, Next.
 meta-frameworks (SvelteKit/Remix/Astro), Spring Security / ASP.NET Core / Phoenix, the modern browser
 security platform, supply-chain SOTA (SLSA/Sigstore/pnpm), and the OWASP Top 10 / API Top 10 / LLM Top 10.
 
-**Latest local verification (2026-06-25 PDT):** after the OPP-07/08, OPP-11, OPP-28, and sink-token
-batch, `pnpm run check`, `pnpm run check:api-surface` (baseline unchanged:
+**Latest local verification (2026-06-25 PDT):** after the latest OPP-07/08, OPP-11, OPP-28, and sink-token
+worker batches, `pnpm run check`, `pnpm run check:api-surface` (baseline unchanged:
 1338/1804), `pnpm run check:build`, and `pnpm run check:kovo` passed.
 
 This plan is the forward roadmap; it does **not** restate shipped work. Prior security ledgers:
@@ -158,7 +158,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       response-fragment raw HTML route is now centrally registered as `browser:response-fragment-html`, and
       `scripts/check-sink-policy-gate.mjs` pins it to the `trustedHtml()`/`kovo` Trusted Types/template
       sanitizer path; focused sink-policy/browser gate tests, `pnpm run check:sink-policy`, `git diff --check`,
-      and `pnpm run check:vp` passed. Remaining gap: other
+      and `pnpm run check:vp` passed. KV439 now has an internal `neutralizeLogValue()`/`formatLogMessage()`
+      control-character neutralizer plus a sink-policy gate for raw request-derived `console.*` logging in
+      server source; focused log/gate tests, `pnpm run check:sink-policy`, `git diff --check`, and
+      `pnpm run check:vp` passed. Remaining gap: other
       §3 candidates and static by-construction analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
@@ -199,6 +202,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       default-exported function helpers. Static default object helper exports such as `export default { sendMail }`
       now preserve enforced egress/secret-read reachability, while computed/spread/default-alias shapes remain
       outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
+      Static `tool({ handler: fn })` and shorthand `tool({ handler })` references now preserve reachable
+      egress/secret-read sinks when `fn` is a summarized local/imported helper, while factory/member/computed
+      handler references remain outside the proof; focused registry/check tests, `git diff --check`, and
+      `pnpm run check:vp` passed.
       Remaining gap: callbacks, nonliteral/dynamic calls, computed/export-star namespace shapes, unresolved
       imports, and broader egress/secret analyzer reachability.
 
@@ -215,7 +222,7 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       declared audit-grade reachable sinks; direct AST-produced `process.env` reads plus literal `fetch()` egress
       from framework-owned tool handlers, same-module helper calls, directly invoked inline functions, and simple
       imported helper calls, including static local named re-export barrels, static namespace imports, and
-      static default imports/default-object helper exports, are
+      static default imports/default-object helper exports plus static handler references, are
       enforced when declared capabilities do not cover them. Remaining gap: broader analyzer integration beyond
       the framework-owned `tool()` boundary.
 
@@ -308,7 +315,10 @@ packages/server/src/opaque-session.test.ts`, `git diff --check`, and `pnpm run c
       `pnpm run check:api-surface`, and `pnpm run check:vp` passed. Owned opaque credential extraction now
       fails closed on duplicate cookie aliases or cookie-plus-bearer ambiguity instead of choosing by header
       precedence; `pnpm exec vitest --run packages/server/src/opaque-session.test.ts
-packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
+packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed.
+      `createOpaqueSessionManager()` now rejects malformed cookie names, caller-supplied secure-prefix aliases,
+      and incomplete stores at construction so Kovo owns the credential alias set and lifecycle methods; focused
+      opaque-session/app/API tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
       Better Auth delegation and explicit `sessionProvider` remain supported boundaries, so opaque sessions are
       not yet the only framework-wide default lifecycle.
 
@@ -516,6 +526,9 @@ packages/drizzle/src/index.scope-audits.test.ts`, `git diff --check`, and `pnpm 
       owner-column principal proof: summarized guard/session predicates on the owner column are `scope: session`,
       while mismatched or unsummarized write predicates fail closed as `scope: unknown`; `pnpm exec vitest run
 packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed.
+      Summarized guard objects now have literal element-access coverage (`principal["userId"]`) while computed
+      element reads remain `scope: unknown`; the same focused scope-audit test, `git diff --check`, and
+      `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---

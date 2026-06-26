@@ -1061,6 +1061,53 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from static handler function references', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'async function notifyBuyer() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.notifyReferencedHandler',",
+            "  purpose: 'Notify the buyer.',",
+            "  audit: { owner: 'security' },",
+            "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+            '  handler: notifyBuyer,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-body-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:4:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyReferencedHandler',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-body-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:3:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyReferencedHandler',
+      },
+    ]);
+  });
+
   it('produces sound agent-tool sink rows from direct same-module helper calls', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -1456,6 +1503,41 @@ export const ProductGrid = component({
             '      });',
             '    });',
             '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toBeUndefined();
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven handler references', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/handler-call.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function makeHandler() {',
+            '  return () => fetch("https://api.sendgrid.com/v3/mail/send");',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.handlerCall',",
+            '  handler: makeHandler(),',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/handler-member.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'const handlers = {',
+            '  notify: () => fetch("https://api.sendgrid.com/v3/mail/send"),',
+            '};',
+            'export const notify = tool({',
+            "  name: 'orders.handlerMember',",
+            '  handler: handlers.notify,',
             '});',
           ].join('\n'),
         },

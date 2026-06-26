@@ -8,6 +8,8 @@ import {
   dynamicCodeExecutionSinkFindings,
   exportedNames,
   extractRegisteredBlessedSinkKinds,
+  logChannelNeutralizerInvariantFindings,
+  logChannelSinkFindings,
   publicSinkPolicyEscapeFindings,
   responseFragmentApplyInvariantFindings,
 } from './check-sink-policy-gate.mjs';
@@ -27,6 +29,7 @@ function runFixture(files) {
   return checkSinkPolicyGate({
     blessedSinkFiles: Object.keys(files).filter((file) => file !== 'public.ts'),
     commandExecutionFiles: [],
+    logChannelFiles: [],
     exists: (file) => Object.hasOwn(files, file),
     publicEntrypointFiles: Object.hasOwn(files, 'public.ts') ? ['public.ts'] : [],
     readText: (file) => files[file],
@@ -218,6 +221,7 @@ describe('sink-policy gate', () => {
       checkSinkPolicyGate({
         blessedSinkFiles: [],
         commandExecutionFiles: ['packages/server/src/unsafe.ts'],
+        logChannelFiles: [],
         exists: (file) => file === 'packages/server/src/unsafe.ts' || file === 'sink-policy.ts',
         publicEntrypointFiles: [],
         readText: (file) =>
@@ -295,6 +299,7 @@ describe('sink-policy gate', () => {
       checkSinkPolicyGate({
         blessedSinkFiles: [],
         commandExecutionFiles: ['packages/server/src/unsafe.ts', 'packages/server/src/safe.ts'],
+        logChannelFiles: [],
         exists: (file) =>
           file === 'packages/server/src/unsafe.ts' ||
           file === 'packages/server/src/safe.ts' ||
@@ -314,11 +319,84 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects raw console logging of request-derived values', () => {
+    expect(
+      logChannelSinkFindings(
+        'packages/server/src/unsafe.ts',
+        `
+          export function handle(request) {
+            console.warn(\`failed \${request.url}\`);
+            console.error('method', request.method);
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: raw console.warn of request-derived values is a KV439 log sink; route values through neutralizeLogValue()/formatLogMessage() before logging',
+      'packages/server/src/unsafe.ts: raw console.error of request-derived values is a KV439 log sink; route values through neutralizeLogValue()/formatLogMessage() before logging',
+    ]);
+  });
+
+  it('allows request-derived console logging through the central neutralizer path', () => {
+    expect(
+      logChannelSinkFindings(
+        'packages/server/src/safe.ts',
+        `
+          import { formatLogMessage, neutralizeLogValue } from './logging.js';
+          export function handle(ctx) {
+            console.warn(formatLogMessage\`failed \${ctx.request.url}\`);
+            console.error('method', neutralizeLogValue(ctx.request.method));
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('runs the log-channel gate over configured server source files', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: [],
+        exists: (file) => file === 'sink-policy.ts' || file === 'packages/server/src/unsafe.ts',
+        logChannelFiles: ['packages/server/src/unsafe.ts'],
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'export function handle(request) { console.info(request.url); }',
+        responseFragmentApplyPath: undefined,
+        sinkPolicyPath: 'sink-policy.ts',
+      }),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: raw console.info of request-derived values is a KV439 log sink; route values through neutralizeLogValue()/formatLogMessage() before logging',
+    ]);
+  });
+
+  it('pins the log-channel neutralizer to visible control-character escaping', () => {
+    expect(
+      logChannelNeutralizerInvariantFindings(
+        'packages/server/src/logging.ts',
+        `
+          const CONTROL_CHARACTER_PATTERN = /[\\u0000-\\u001f\\u007f-\\u009f]/g;
+          function visibleControlEscape(char: string): string {
+            return \`\\\\u\${char.charCodeAt(0).toString(16).padStart(4, '0')}\`;
+          }
+          export function neutralizeLogValue(value: unknown): string {
+            return String(value).replace(CONTROL_CHARACTER_PATTERN, visibleControlEscape);
+          }
+          export function formatLogMessage(strings: TemplateStringsArray, ...values: unknown[]): string {
+            return neutralizeLogValue(String.raw(strings, ...values));
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
   it('requires the browser response-fragment HTML sink kind to be centrally registered', () => {
     expect(
       checkSinkPolicyGate({
         blessedSinkFiles: [],
         commandExecutionFiles: [],
+        logChannelFiles: [],
         exists: (file) => file === 'sink-policy.ts',
         publicEntrypointFiles: [],
         readText: () => `

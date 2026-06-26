@@ -322,6 +322,115 @@ describe('kovo check', () => {
     });
   });
 
+  it('enforces static handler-reference agent-tool sink rows and passes when declared', () => {
+    const agentToolModules = [
+      {
+        fileName: 'src/tools/orders.ts',
+        source: [
+          "import { tool } from '@kovojs/server';",
+          'const handler = async () => {',
+          '  const token = process.env.SENDGRID_TOKEN;',
+          "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+          '    headers: { authorization: token },',
+          '  });',
+          '};',
+          'export const notify = tool({',
+          "  name: 'orders.notifyReferencedHandler',",
+          "  purpose: 'Notify the buyer.',",
+          "  audit: { owner: 'security' },",
+          "  authority: [{ kind: 'principal', principal: 'user:123', requirement: 'caller' }],",
+          '  handler,',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    const capability = {
+      ambientBrowserCredentials: 'rejected' as const,
+      authority: ['principal:user:123'],
+      kind: 'agentTool' as const,
+      owner: 'security',
+      purpose: 'Notify the buyer.',
+      site: 'src/tools/orders.ts:8',
+      target: 'orders.notifyReferencedHandler',
+    };
+    const missingSecret = deriveAppGraph({
+      agentToolModules,
+      graph: {
+        capabilities: [
+          {
+            ...capability,
+            declaredCapabilities: ['egress:api.sendgrid.com'],
+          },
+        ],
+      },
+    }).graph;
+    const declared = deriveAppGraph({
+      agentToolModules,
+      graph: {
+        capabilities: [
+          {
+            ...capability,
+            declaredCapabilities: ['egress:api.sendgrid.com', 'secrets.read'],
+          },
+        ],
+      },
+    }).graph;
+
+    expect(kovoCheck(missingSecret)).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR AGENT_TOOL_CAPABILITY orders.notifyReferencedHandler sink=secret-read:env.SENDGRID_TOKEN required=secrets.read site=src/tools/orders.ts:3:17 Declared tool capabilities do not cover statically reachable sink.',
+        '',
+      ].join('\n'),
+    });
+    expect(kovoCheck(declared)).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
+  it('does not enforce unproven handler-reference agent-tool sink rows', () => {
+    const graph = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function makeHandler() {',
+            "  return () => fetch('https://api.sendgrid.com/v3/mail/send');",
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.unprovenHandlerReference',",
+            '  handler: makeHandler(),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+      graph: {
+        capabilities: [
+          {
+            ambientBrowserCredentials: 'rejected',
+            authority: ['principal:user:123'],
+            declaredCapabilities: [],
+            kind: 'agentTool',
+            owner: 'security',
+            purpose: 'Notify the buyer.',
+            site: 'src/tools/orders.ts:5',
+            target: 'orders.unprovenHandlerReference',
+          },
+        ],
+      },
+    }).graph;
+
+    expect(graph.agentToolSinks).toBeUndefined();
+    expect(kovoCheck(graph)).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
   it('enforces imported-helper AST-produced agent-tool sink rows and passes when declared', () => {
     const agentToolModules = [
       {
