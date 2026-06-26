@@ -74,6 +74,24 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     expect(result.message).toMatch(/KV422/);
   });
 
+  it('rejects an unbranded carrier with an empty values array', () => {
+    const result = validateManagedSqlStatement({
+      text: "select * from products where id = '1; drop table products; --'",
+      values: [],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/KV422/);
+  });
+
+  it('rejects an unbranded carrier whose values array has no SQL bind marker', () => {
+    const result = validateManagedSqlStatement({
+      text: "select * from products where id = 'already assembled'",
+      values: ['unused'],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/KV422/);
+  });
+
   it('accepts a genuinely separated { text, values } carrier', () => {
     expect(
       validateManagedSqlStatement({
@@ -81,6 +99,27 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
         values: ['open'],
       }).ok,
     ).toBe(true);
+  });
+
+  it('accepts common separated carrier parameter spellings', () => {
+    expect(
+      validateManagedSqlStatement({ text: 'select * from t where id = ?', args: [1] }).ok,
+    ).toBe(true);
+    expect(
+      validateManagedSqlStatement({ sql: 'select * from t where id = :id', params: ['p1'] }).ok,
+    ).toBe(true);
+    expect(
+      validateManagedSqlStatement({ text: 'select * from t where id = @id', values: ['p1'] }).ok,
+    ).toBe(true);
+  });
+
+  it('does not accept bind-marker lookalikes inside SQL strings or comments', () => {
+    expect(
+      validateManagedSqlStatement({
+        text: "select '$1' as literal -- ?\nfrom products",
+        values: ['unused'],
+      }).ok,
+    ).toBe(false);
   });
 
   it('accepts legitimately branded parameterized / static / trusted / identifier / keyword statements', () => {
