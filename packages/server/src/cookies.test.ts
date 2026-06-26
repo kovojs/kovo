@@ -12,7 +12,11 @@ import {
 describe('cookie header helpers', () => {
   it('serializes structured Set-Cookie values', () => {
     expect(
+      // `class: 'app-data'` keeps this focused on attribute serialization mechanics — a classless
+      // cookie now fails closed to the credential floor (L1), which would add the __Secure- prefix
+      // here (Domain set) and is exercised by the dedicated floor tests below.
       serializeCookie('kovo_csrf', 'c1', {
+        class: 'app-data',
         domain: 'example.test',
         expires: new Date('2026-01-02T03:04:05Z'),
         httpOnly: true,
@@ -29,7 +33,10 @@ describe('cookie header helpers', () => {
   it('rejects invalid cookie names and attributes', () => {
     expect(() => serializeCookie('bad name', 'value')).toThrow('Cookie name must be an HTTP token');
     // B2: semicolons are now percent-encoded rather than rejected; 'bad;value' → 'bad%3Bvalue'
-    expect(serializeCookie('name', 'bad;value')).toBe('name=bad%3Bvalue; SameSite=Lax');
+    // (explicit `class: 'app-data'` — a classless cookie now fails closed to the credential floor, L1)
+    expect(serializeCookie('name', 'bad;value', { class: 'app-data' })).toBe(
+      'name=bad%3Bvalue; SameSite=Lax',
+    );
     expect(() => serializeCookie('name', 'value', { maxAge: 1.5 })).toThrow(
       'Cookie maxAge must be an integer',
     );
@@ -56,6 +63,7 @@ describe('cookie header helpers', () => {
     ).toThrow(CookieDowngradeError);
     expect(
       serializeCookie('embed', 'tok', {
+        class: 'app-data',
         httpOnly: true,
         partitioned: true,
         path: '/',
@@ -63,19 +71,21 @@ describe('cookie header helpers', () => {
         secure: true,
       }),
     ).toBe('embed=tok; Path=/; HttpOnly; Secure; SameSite=None; Partitioned');
-    expect(serializeCookie('pref', 'tok', { priority: 'high' })).toBe(
+    expect(serializeCookie('pref', 'tok', { class: 'app-data', priority: 'high' })).toBe(
       'pref=tok; SameSite=Lax; Priority=High',
     );
-    expect(serializeCookie('pref', 'tok', { priority: 'medium' })).toBe(
+    expect(serializeCookie('pref', 'tok', { class: 'app-data', priority: 'medium' })).toBe(
       'pref=tok; SameSite=Lax; Priority=Medium',
     );
   });
 
   // B2: SPEC §9.1.1:846 — typed builder must percent-encode the value.
   it('percent-encodes cookie values so special characters cannot inject cookies (B2)', () => {
-    expect(serializeCookie('pref', 'a b,c=d')).toBe('pref=a%20b%2Cc%3Dd; SameSite=Lax');
+    expect(serializeCookie('pref', 'a b,c=d', { class: 'app-data' })).toBe(
+      'pref=a%20b%2Cc%3Dd; SameSite=Lax',
+    );
     // round-trip: decodeURIComponent recovers the original value
-    const serialized = serializeCookie('pref', 'a b,c=d');
+    const serialized = serializeCookie('pref', 'a b,c=d', { class: 'app-data' });
     const encodedValue = serialized.split(';')[0]?.split('=').slice(1).join('=') ?? '';
     expect(decodeURIComponent(encodedValue)).toBe('a b,c=d');
   });
@@ -117,30 +127,61 @@ describe('cookie header helpers', () => {
     );
   });
 
-  // SF Phase 5 (SPEC §6.6/§9.1): classless cookies no longer bypass the floor.
-  it('defaults classless app-data cookies to SameSite=Lax', () => {
-    expect(serializeCookie('theme', 'dark')).toBe('theme=dark; SameSite=Lax');
-    expect(serializeCookie('theme', 'dark', { sameSite: 'strict' })).toBe(
-      'theme=dark; SameSite=Strict',
-    );
-  });
-
-  it('applies the credential floor to classless session/auth-shaped cookie names', () => {
+  // L1 (SPEC §2 default-deny over default-allow, §6.6/§9.1): an OMITTED `class` fails CLOSED to the
+  // credential floor, never the client-readable app-data floor. Shipping a client-readable cookie
+  // must be an explicit `class: 'app-data'`. The old name-guessing `inferCookieClass` is deleted.
+  it('fails closed: a classless cookie gets the credential floor regardless of name (L1)', () => {
     const originalNodeEnv = process.env.NODE_ENV;
     try {
       process.env.NODE_ENV = 'development';
-      expect(serializeCookie('sid', 'tok')).toBe('sid=tok; Path=/; HttpOnly; SameSite=Lax');
+      // Names that the old heuristic would NOT have matched (so previously shipped insecure as
+      // app-data) now get HttpOnly + Path=/ by default. No `class`, no fail-open.
+      for (const name of ['theme', 'access_token', 'jwt', 'bearer', 'token', 'whatever']) {
+        const cookie = serializeCookie(name, 'v');
+        expect(cookie).toContain('HttpOnly');
+        expect(cookie).toContain('Path=/');
+        expect(cookie).toContain('SameSite=Lax');
+      }
+      // Dev: no Secure (localhost-http) and so no __Host- prefix.
+      expect(serializeCookie('theme', 'dark')).toBe('theme=dark; Path=/; HttpOnly; SameSite=Lax');
 
+      // Production: the classless credential floor forces Secure + the __Host- prefix.
       process.env.NODE_ENV = 'production';
-      expect(serializeCookie('better-auth.session', 'tok')).toBe(
-        '__Host-better-auth.session=tok; Path=/; HttpOnly; Secure; SameSite=Lax',
+      expect(serializeCookie('access_token', 'tok')).toBe(
+        '__Host-access_token=tok; Path=/; HttpOnly; Secure; SameSite=Lax',
       );
-      expect(serializeCookie('sessionToken', 'tok')).toBe(
-        '__Host-sessionToken=tok; Path=/; HttpOnly; Secure; SameSite=Lax',
+      expect(serializeCookie('sid', 'tok')).toBe(
+        '__Host-sid=tok; Path=/; HttpOnly; Secure; SameSite=Lax',
       );
     } finally {
       process.env.NODE_ENV = originalNodeEnv;
     }
+  });
+
+  // L1: a client-readable cookie is opt-in and explicit — `class: 'app-data'` is the only way to
+  // ship a cookie without the HttpOnly/Secure floor.
+  it('requires an explicit class: "app-data" to ship a client-readable cookie (L1)', () => {
+    // app-data is environment-independent: no env-gated Secure, no __Host- prefix.
+    const cookie = serializeCookie('theme', 'dark', { class: 'app-data' });
+    expect(cookie).toBe('theme=dark; SameSite=Lax');
+    expect(cookie).not.toContain('HttpOnly');
+    expect(cookie).not.toContain('Secure');
+    expect(serializeCookie('theme', 'dark', { class: 'app-data', sameSite: 'strict' })).toBe(
+      'theme=dark; SameSite=Strict',
+    );
+  });
+
+  // L2 (SPEC §9.1.1): an app-data cookie with SameSite=None is auto-paired with Secure so browsers
+  // do not silently drop it — mirroring the credential and forwarded paths. Previously the app-data
+  // branch returned `secure: options.secure` verbatim, emitting `SameSite=None` without `Secure`.
+  it('pairs an app-data SameSite=None cookie with Secure (L2)', () => {
+    // Environment-independent: the Secure pairing follows SameSite=None, not NODE_ENV.
+    const cookie = serializeCookie('theme', 'dark', { class: 'app-data', sameSite: 'none' });
+    expect(cookie).toBe('theme=dark; Secure; SameSite=None');
+    expect(cookie).toContain('Secure');
+    // An explicit secure:true is preserved (no double-forcing); a non-None app-data cookie is
+    // unaffected and stays Secure-free in dev.
+    expect(serializeCookie('theme', 'dark', { class: 'app-data' })).not.toContain('Secure');
   });
 });
 

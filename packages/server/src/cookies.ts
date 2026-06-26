@@ -38,9 +38,10 @@ export interface UnsafeCookieDowngrade {
  */
 export interface CookieOptions {
   /**
-   * The security class that selects the attribute floor (SPEC §6.6/§9.1). When omitted, Kovo derives
-   * a conservative floor at the sink: session/auth-shaped names use the credential floor, while all
-   * other cookies use the `app-data` floor.
+   * The security class that selects the attribute floor (SPEC §6.6/§9.1). When omitted, Kovo applies
+   * the **credential floor** (HttpOnly + Secure(prod) + `__Host-`) — default-deny over default-allow
+   * (SPEC §2). Shipping a client-readable cookie therefore requires an explicit `class: 'app-data'`;
+   * there is no name-guessing fallback that could fail open on an unrecognized credential name.
    */
   class?: CookieClass;
   domain?: string;
@@ -159,25 +160,6 @@ function isCredentialClass(cookieClass: CookieClass): boolean {
   return cookieClass === 'session' || cookieClass === 'auth';
 }
 
-function inferCookieClass(name: string): CookieClass {
-  const normalized = name.replace(/^__(?:Host|Secure)-/, '').toLowerCase();
-  const parts = normalized.split(/[^a-z0-9]+/).filter(Boolean);
-  if (
-    parts.some(
-      (part) =>
-        part === 'sid' ||
-        part === 'session' ||
-        part === 'sessionid' ||
-        part === 'sessiontoken' ||
-        part === 'auth' ||
-        part === 'authtoken',
-    )
-  ) {
-    return 'session';
-  }
-  return 'app-data';
-}
-
 /**
  * Apply the class-derived attribute floor (SPEC §6.6/§9.1). Returns the effective attributes a
  * credential cookie must carry, and emits KV432 (via {@link CookieDowngradeError}) on an unjustified
@@ -196,12 +178,15 @@ function applyCookieFloor(
   const downgrade = options.unsafe?.downgrade;
 
   // app-data: do not force HttpOnly/Secure (these cookies are often read by client JS by design),
-  // but never leave SameSite silently unset — default to `lax`.
+  // but never leave SameSite silently unset — default to `lax`. SPEC §9.1.1: a `SameSite=None` cookie
+  // MUST be paired with `Secure` (browsers silently drop a `SameSite=None` cookie without `Secure`),
+  // mirroring the credential and forwarded paths — so a cross-site app-data cookie is never emitted
+  // in a form every major browser rejects.
   if (!isCredentialClass(cookieClass)) {
     return {
       httpOnly: options.httpOnly,
       sameSite: options.sameSite ?? 'lax',
-      secure: options.secure,
+      secure: options.sameSite === 'none' ? true : options.secure,
     };
   }
 
@@ -270,10 +255,13 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
 
   // SPEC §6.6/§9.1 secure-framework Phase 5: resolve the class-derived attribute floor before
   // serialization so an insecure credential cookie is inexpressible by default (KV432 on an
-  // unjustified downgrade); the floor is by-construction at this single Set-Cookie sink for declared
-  // classes and the app-data default. The name-based credential inference is runtime defense-in-depth
-  // for classless legacy callers, not a static proof.
-  const cookieClass = options.class ?? inferCookieClass(name);
+  // unjustified downgrade); the floor is by-construction at this single Set-Cookie sink.
+  // SPEC §2 (default-deny over default-allow): an OMITTED `class` resolves to the credential floor
+  // (HttpOnly + Secure(prod) + `__Host-`), never the client-readable `app-data` floor — so a cookie
+  // shipped without a declared class fails closed. Emitting a client-readable cookie must be an
+  // explicit, auditable `class: 'app-data'`; there is no name-guessing heuristic (which would fail
+  // open on any unrecognized credential name like `access_token`/`jwt`/`bearer`).
+  const cookieClass = options.class ?? 'session';
   const isCredential = isCredentialClass(cookieClass);
   const floored = applyCookieFloor(name, cookieClass, options);
   const effectiveName = applyCookieNamePrefix(name, cookieClass, floored, options);
