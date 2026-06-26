@@ -52,6 +52,33 @@ describe('upload byte sniffer (KV428)', () => {
     });
   });
 
+  // L5 regression (bugz L5): ZIP/OOXML containers are download-only by policy (SPEC §6.6/§9.1,
+  // KV428). A PK header contains a NUL at offset ~5 which truncates `leadingAsciiLower` before any
+  // embedded HTML is reached — so `active===false` for a plain ZIP — but `inlineSafe` must still
+  // be `false` because a ZIP archive can carry active HTML/script in its members.
+  it('ZIP PK local-file-header (PK\\x03\\x04) is recognised but NOT inline-safe', () => {
+    // Minimal local file header: PK\x03\x04 + version/flags/etc, NUL-padded
+    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    expect(sniffUploadBytes(zip)).toEqual({ contentType: 'application/zip', inlineSafe: false });
+  });
+
+  it('ZIP PK end-of-central-directory (PK\\x05\\x06) is recognised but NOT inline-safe', () => {
+    // Empty archive (end-of-central-directory only)
+    const zip = new Uint8Array([0x50, 0x4b, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    expect(sniffUploadBytes(zip)).toEqual({ contentType: 'application/zip', inlineSafe: false });
+  });
+
+  it('ZIP PK spanned-archive header (PK\\x07\\x08) is recognised but NOT inline-safe', () => {
+    const zip = new Uint8Array([0x50, 0x4b, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    expect(sniffUploadBytes(zip)).toEqual({ contentType: 'application/zip', inlineSafe: false });
+  });
+
+  it('assertInlineSafe throws KV428 for a ZIP (download-only policy, SPEC §6.6 KV428)', () => {
+    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    expect(() => assertInlineSafe(zip)).toThrow(InlineUnverifiedUploadError);
+    expect(() => assertInlineSafe(zip)).toThrow(/KV428/u);
+  });
+
   it('assertInlineSafe throws KV428 for non-passive bytes and returns the type for passive bytes', () => {
     expect(assertInlineSafe(png).contentType).toBe('image/png');
     expect(() => assertInlineSafe(svg)).toThrow(InlineUnverifiedUploadError);

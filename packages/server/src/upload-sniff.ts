@@ -108,8 +108,14 @@ export function sniffUploadBytes(bytes: Uint8Array): SniffedContentType {
   const recognized = recognizePassiveMagic(bytes);
   if (recognized !== undefined) {
     // A recognised passive type is inline-safe only if the prefix carries no active-content
-    // markers (polyglot defense). Otherwise serve it download-only with its real type.
-    return { contentType: recognized, inlineSafe: !active };
+    // markers (polyglot defense) AND is not a ZIP/OOXML container.
+    // ZIP is download-only by policy (SPEC §6.6/§9.1, KV428): a ZIP archive can carry HTML or
+    // other active content in its members; recognising the PK header doesn't make it safe to
+    // render inline. The `active` flag alone is not sufficient here because the NUL byte at
+    // offset ~5 in a real PK header truncates `leadingAsciiLower` before any embedded markup
+    // is reached, so `active===false` for a vanilla ZIP — contradicting the file's own
+    // invariant at the `recognizePassiveMagic` return site (:136-137).
+    return { contentType: recognized, inlineSafe: !active && recognized !== 'application/zip' };
   }
 
   // Unrecognised bytes (or active-content markup): octet-stream, never inline-safe.
