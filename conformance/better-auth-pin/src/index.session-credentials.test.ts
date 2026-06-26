@@ -1,6 +1,6 @@
 import { runMutation } from '@kovojs/server/internal/execution';
 import { renderRoutePageResponse } from '@kovojs/server/internal/route';
-import { route } from '@kovojs/server';
+import { route, session, s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { createKovoTestHarness } from '@kovojs/test/harness';
 import { describe, expect, it } from 'vitest';
@@ -171,17 +171,30 @@ describe('Better Auth pinned conformance', () => {
 
   it('proves the starter/reference recipe can drive real Better Auth sessions through adapter route guards', async () => {
     const { auth } = createRealAuth();
-    const sessionProvider = betterAuthSession(
-      auth,
-      ({ session, user }): ReferenceSession => ({
-        id: session.id,
-        user: {
-          email: user.email,
-          id: user.id,
-          name: user.name ?? user.email,
-          roles: user.email.startsWith('admin@') ? ['admin'] : ['member'],
-        },
+    const referenceSession = session(
+      s.object({
+        id: s.string(),
+        user: s.object({
+          email: s.string(),
+          id: s.string(),
+          name: s.string(),
+          roles: s.array(s.string()),
+        }),
       }),
+    );
+    const sessionProvider = referenceSession.provider(
+      betterAuthSession(
+        auth,
+        ({ session, user }): ReferenceSession => ({
+          id: session.id,
+          user: {
+            email: user.email,
+            id: user.id,
+            name: user.name ?? user.email,
+            roles: user.email.startsWith('admin@') ? ['admin'] : ['member'],
+          },
+        }),
+      ),
     );
     const signIn = betterAuthSignInEmailMutation<'auth/sign-in', ReferenceRequest>(auth, {
       csrf: false,

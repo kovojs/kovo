@@ -4,7 +4,7 @@ import { serializeCookie, type CookieOptions } from './cookies.js';
 import type { SessionProvider } from './guards.js';
 import { markNormalizedSessionProvider } from './session-provider-boundary.js';
 
-const OPAQUE_SESSION_PROVIDER = Symbol('kovo.opaqueSessionProvider');
+const OPAQUE_SESSION_PROVIDER = Symbol.for('kovo.opaqueSessionProvider');
 
 /** Stable rejection code for an opaque session lookup that did not produce a live session. */
 export type OpaqueSessionRejectReason = 'missing' | 'malformed' | 'expired' | 'revoked';
