@@ -1930,7 +1930,56 @@ export const ProductGrid = component({
     ]);
   });
 
-  it('does not produce enforced agent-tool sink rows from unproven callback object-property aliases', () => {
+  it('produces sound agent-tool sink rows from static helper callback array-index aliases', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/orders.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function withToolBody(callback: () => unknown) {',
+            '  const callbacks = [callback] as const;',
+            '  return callbacks[0]();',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.notifyCallbackArrayAliasHelper',",
+            '  handler() {',
+            '    return withToolBody(() => {',
+            '      const token = process.env.SENDGRID_TOKEN;',
+            "      return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '        headers: { authorization: token },',
+            '      });',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/orders.ts:11:14',
+        target: 'api.sendgrid.com',
+        tool: 'orders.notifyCallbackArrayAliasHelper',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/orders.ts:10:21',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.notifyCallbackArrayAliasHelper',
+      },
+    ]);
+  });
+
+  it('does not produce enforced agent-tool sink rows from unproven callback object-property or array-index aliases', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
         {
@@ -2011,6 +2060,74 @@ export const ProductGrid = component({
             '}',
             'export const notify = tool({',
             "  name: 'orders.escapedCallbackObjectAlias',",
+            '  handler() {',
+            '    return withToolBody(() => fetch("https://api.sendgrid.com/v3/mail/send"));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/spread-callback-array.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function withToolBody(callback: () => unknown) {',
+            '  const callbacks = [...[callback]] as const;',
+            '  return callbacks[0]();',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.spreadCallbackArrayAlias',",
+            '  handler() {',
+            '    return withToolBody(() => fetch("https://api.sendgrid.com/v3/mail/send"));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mutated-callback-array.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function withToolBody(callback: () => unknown) {',
+            '  const callbacks = [callback] as const;',
+            '  callbacks[0] = () => undefined;',
+            '  return callbacks[0]();',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.mutatedCallbackArrayAlias',",
+            '  handler() {',
+            '    return withToolBody(() => fetch("https://api.sendgrid.com/v3/mail/send"));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/dynamic-callback-array.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'function withToolBody(callback: () => unknown) {',
+            '  const callbacks = [callback] as const;',
+            '  const index = 0;',
+            '  return callbacks[index]();',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.dynamicCallbackArrayAlias',",
+            '  handler() {',
+            '    return withToolBody(() => fetch("https://api.sendgrid.com/v3/mail/send"));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/escaped-callback-array.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            'declare function replaceCallbacks(callbacks: readonly [() => unknown]): void;',
+            'function withToolBody(callback: () => unknown) {',
+            '  const callbacks = [callback] as const;',
+            '  replaceCallbacks(callbacks);',
+            '  return callbacks[0]();',
+            '}',
+            'export const notify = tool({',
+            "  name: 'orders.escapedCallbackArrayAlias',",
             '  handler() {',
             '    return withToolBody(() => fetch("https://api.sendgrid.com/v3/mail/send"));',
             '  },',

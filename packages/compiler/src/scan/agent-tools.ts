@@ -26,13 +26,14 @@ export interface AgentToolModuleSource {
  * statically point at summarized local helpers, top-level `const` destructuring from already-proven
  * helper object/array aliases or namespaces, handler properties that reference a summarized local/
  * imported helper function, and inline callbacks passed to a local/imported helper that directly
- * invokes that callback parameter, a simple `const` alias of that parameter, or a static `const`
- * object property alias of that parameter. It does not inspect raw source text after parse and it
+ * invokes that callback parameter, a simple `const` alias of that parameter, a static `const`
+ * object property alias of that parameter, or a static `const` array index alias of that parameter.
+ * It does not inspect raw source text after parse and it
  * skips non-invoked nested function bodies, so ordinary callbacks, computed namespace access,
  * computed/spread object/array aliases and exports, export-star namespaces, ambiguous export-star
- * names, reassigned callback aliases, mutated callback property aliases, mutable/defaulted/nested
- * destructuring, and dynamic paths remain outside the SPEC.md §6.6 sound subset until a dedicated
- * analyzer proves them.
+ * names, reassigned callback aliases, mutated callback property/index aliases, mutable/defaulted/
+ * nested destructuring, and dynamic paths remain outside the SPEC.md §6.6 sound subset until a
+ * dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -921,6 +922,7 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
 
   const aliasNames = simpleCallbackParameterAliases(body, candidateNames);
   const objectAliasProperties = simpleCallbackParameterObjectAliases(body, candidateNames);
+  const arrayAliasElements = simpleCallbackParameterArrayAliases(body, candidateNames);
   const callableParameterNames = new Map<string, string>();
   for (const candidateName of candidateNames) {
     callableParameterNames.set(candidateName, candidateName);
@@ -931,6 +933,7 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
   const callableNames = new Set([
     ...callableParameterNames.keys(),
     ...objectAliasProperties.keys(),
+    ...arrayAliasElements.keys(),
   ]);
 
   const invokedNames = new Set<string>();
@@ -962,6 +965,16 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
       }
     }
 
+    if (ts.isCallExpression(node) && ts.isElementAccessExpression(node.expression)) {
+      const aliasName = node.expression.expression;
+      if (ts.isIdentifier(aliasName) && !nextBlockedNames.has(aliasName.text)) {
+        const index = staticElementIndex(node.expression.argumentExpression);
+        const parameterName =
+          index === undefined ? undefined : arrayAliasElements.get(aliasName.text)?.get(index);
+        if (parameterName !== undefined) invokedNames.add(parameterName);
+      }
+    }
+
     const assignedName = assignedIdentifierName(node);
     if (assignedName !== undefined && !nextBlockedNames.has(assignedName)) {
       const parameterName = callableParameterNames.get(assignedName);
@@ -975,9 +988,24 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
     );
     if (assignedProperty !== undefined) reassignedNames.add(assignedProperty);
 
+    const assignedElement = assignedCallbackArrayElementParameter(
+      node,
+      arrayAliasElements,
+      nextBlockedNames,
+    );
+    if (assignedElement !== undefined) reassignedNames.add(assignedElement);
+
     for (const unsafeParameter of unsafeCallbackObjectAliasParameters(
       node,
       objectAliasProperties,
+      nextBlockedNames,
+    )) {
+      reassignedNames.add(unsafeParameter);
+    }
+
+    for (const unsafeParameter of unsafeCallbackArrayAliasParameters(
+      node,
+      arrayAliasElements,
       nextBlockedNames,
     )) {
       reassignedNames.add(unsafeParameter);
@@ -1060,6 +1088,60 @@ function simpleCallbackParameterObjectAliases(
   return aliases;
 }
 
+function simpleCallbackParameterArrayAliases(
+  body: ts.ConciseBody,
+  parameterNames: ReadonlySet<string>,
+): ReadonlyMap<string, ReadonlyMap<string, string>> {
+  if (!ts.isBlock(body)) return new Map();
+
+  const aliases = new Map<string, ReadonlyMap<string, string>>();
+  const ambiguousAliases = new Set<string>();
+  for (const statement of body.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+
+      const initializer = unwrapParentheses(declaration.initializer);
+      if (!ts.isArrayLiteralExpression(initializer)) continue;
+
+      const elements = callbackParameterArrayAliasElements(initializer, parameterNames);
+      if (!elements) continue;
+
+      const aliasName = declaration.name.text;
+      if (parameterNames.has(aliasName) || aliases.has(aliasName)) {
+        aliases.delete(aliasName);
+        ambiguousAliases.add(aliasName);
+        continue;
+      }
+      if (!ambiguousAliases.has(aliasName)) aliases.set(aliasName, elements);
+    }
+  }
+
+  return aliases;
+}
+
+function callbackParameterArrayAliasElements(
+  expression: ts.ArrayLiteralExpression,
+  parameterNames: ReadonlySet<string>,
+): ReadonlyMap<string, string> | undefined {
+  const elements = new Map<string, string>();
+  for (let index = 0; index < expression.elements.length; index += 1) {
+    const element = expression.elements[index];
+    if (!element || ts.isSpreadElement(element) || ts.isOmittedExpression(element)) {
+      return undefined;
+    }
+
+    const callback = unwrapParentheses(element);
+    if (!ts.isIdentifier(callback) || !parameterNames.has(callback.text)) return undefined;
+
+    elements.set(String(index), callback.text);
+  }
+
+  return elements.size === 0 ? undefined : elements;
+}
+
 function callbackParameterObjectAliasProperties(
   expression: ts.ObjectLiteralExpression,
   parameterNames: ReadonlySet<string>,
@@ -1123,6 +1205,38 @@ function assignedCallbackObjectPropertyParameter(
   return objectAliasProperties.get(aliasName.text)?.get(left.name.text);
 }
 
+function assignedCallbackArrayElementParameter(
+  node: ts.Node,
+  arrayAliasElements: ReadonlyMap<string, ReadonlyMap<string, string>>,
+  blockedNames: ReadonlySet<string>,
+): string | undefined {
+  let left: ts.Expression | undefined;
+  if (
+    ts.isBinaryExpression(node) &&
+    isAssignmentOperator(node.operatorToken.kind) &&
+    ts.isElementAccessExpression(node.left)
+  ) {
+    left = node.left;
+  }
+
+  if (
+    (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+    (node.operator === ts.SyntaxKind.PlusPlusToken ||
+      node.operator === ts.SyntaxKind.MinusMinusToken) &&
+    ts.isElementAccessExpression(node.operand)
+  ) {
+    left = node.operand;
+  }
+
+  if (!left || !ts.isElementAccessExpression(left)) return undefined;
+
+  const aliasName = left.expression;
+  if (!ts.isIdentifier(aliasName) || blockedNames.has(aliasName.text)) return undefined;
+
+  const index = staticElementIndex(left.argumentExpression);
+  return index === undefined ? undefined : arrayAliasElements.get(aliasName.text)?.get(index);
+}
+
 function unsafeCallbackObjectAliasParameters(
   node: ts.Node,
   objectAliasProperties: ReadonlyMap<string, ReadonlyMap<string, string>>,
@@ -1150,6 +1264,36 @@ function unsafeCallbackObjectAliasParameters(
   }
 
   return new Set(properties.values());
+}
+
+function unsafeCallbackArrayAliasParameters(
+  node: ts.Node,
+  arrayAliasElements: ReadonlyMap<string, ReadonlyMap<string, string>>,
+  blockedNames: ReadonlySet<string>,
+): ReadonlySet<string> {
+  if (!ts.isIdentifier(node)) return new Set();
+  const elements = arrayAliasElements.get(node.text);
+  if (!elements || blockedNames.has(node.text)) return new Set();
+
+  if (
+    ts.isVariableDeclaration(node.parent) &&
+    node.parent.name === node &&
+    ts.isIdentifier(node.parent.name)
+  ) {
+    return new Set();
+  }
+
+  if (
+    ts.isElementAccessExpression(node.parent) &&
+    node.parent.expression === node &&
+    ts.isCallExpression(node.parent.parent) &&
+    node.parent.parent.expression === node.parent &&
+    staticElementIndex(node.parent.argumentExpression) !== undefined
+  ) {
+    return new Set();
+  }
+
+  return new Set(elements.values());
 }
 
 function isLexicalScopeNode(node: ts.Node): boolean {
