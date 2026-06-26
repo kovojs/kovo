@@ -56,45 +56,101 @@ export interface CsrfOptions<Request> {
 export type CsrfValidationOptions<Request> = CsrfOptions<Request>;
 
 /**
- * Mint a session-bound CSRF synchronizer token for a request (SPEC §6.6).
+ * The mutation a hand-authored CSRF token/field targets (SPEC §6.5/§9.1): either the mutation
+ * definition (any object carrying its `key`) or the bare mutation key string. Both resolve to the
+ * same `definition.key` value that mutation dispatch validates the token against
+ * (`runMutation`/`renderMutationResponse`/the no-JS path all check `{ audience: definition.key }`).
+ * Naming the target is how `csrfField`/`csrfToken` bind the correct audience instead of the
+ * generic `field:<name>` default — so a hand-rolled login/signup/logout/reset form cannot mint a
+ * token the targeted mutation then rejects with a bare 422.
  *
- * @param request - The request to derive the session from.
+ * @internal Kept private to `csrf.ts`; the public `csrfToken`/`csrfField` signatures inline this
+ * shape so they do not require a separately-exported helper type (rules/api-surface.md). The same
+ * structural shape is what callers pass.
+ */
+type CsrfMutationTarget = string | { readonly key: string };
+
+/**
+ * Audience-binding context for the standalone `csrfToken`/`csrfField` helpers (SPEC §6.5/§6.6/§9.1).
+ *
+ * Pass `mutation` (the targeted mutation definition or its key) so the minted token's signing
+ * audience is `definition.key` — exactly what mutation dispatch validates against. This closes the
+ * audit trap where a hand-authored auth form minted a `field:<name>`-audience token that the
+ * mutation sink silently rejected (HTTP 422). `audience` remains for advanced, non-mutation sinks
+ * that bind a custom audience; when both are supplied they MUST agree (a contradictory pair is a
+ * configuration error and throws rather than minting a token for the wrong sink).
+ *
+ * @internal Inlined into the public signatures for the same api-surface reason as
+ * `CsrfMutationTarget`.
+ */
+interface CsrfAudienceContext {
+  audience?: string;
+  mutation?: CsrfMutationTarget;
+}
+
+/**
+ * Mint a CSRF synchronizer token for a request, bound to the targeted mutation (SPEC §6.5/§6.6/§9.1).
+ *
+ * For a hand-authored form, pass the targeted `mutation` so the token's audience is bound to the
+ * mutation's `key` — the value mutation dispatch validates against. Without it the token defaults to
+ * the generic `field:<name>` audience, which a mutation sink rejects with a bare 422; binding the
+ * mutation closes that audit trap by construction.
+ *
+ * @param request - The request to derive the session (or anonymous binding) from.
  * @param options - The CSRF `secret` and `sessionId` extractor.
+ * @param context - Audience binding: the targeted `mutation` (preferred) or a raw `audience`.
  * @returns The CSRF token string.
  * @example
  * import { csrfToken } from '@kovojs/server';
  *
  * interface Req { session: { id: string } }
+ * // Bind the token to the mutation the form targets (closes the audience-mismatch trap):
  * const token: string = csrfToken({ session: { id: 's1' } } as Req, {
  *   secret: 'shop-secret',
  *   sessionId: (request: Req) => request.session.id,
- * });
+ * }, { mutation: signInMutation });
  */
 export function csrfToken<Request>(
   request: Request,
   options: CsrfOptions<Request>,
-  context: { audience?: string } = {},
+  // Shape inlined (not a named export) so the public signature needs no extra exported helper type
+  // (rules/api-surface.md); structurally identical to the private `CsrfAudienceContext`.
+  context: { audience?: string; mutation?: string | { readonly key: string } } = {},
 ): string {
   const binding = resolveCsrfBinding(request, options);
   if (!binding) throw new Error('csrfToken requires a session id or anonymous CSRF cookie');
 
-  return createCsrfToken(binding.value, options.secret, csrfAudience(options, context.audience));
+  return createCsrfToken(binding.value, options.secret, resolveCsrfAudience(options, context));
 }
 
 /**
  * Render a hidden `<input>` carrying a CSRF token, ready to drop inside a form.
  * Forms emitted by the framework include this automatically; use it for
- * hand-written forms (SPEC §6.6).
+ * hand-written forms (SPEC §6.5/§6.6/§9.1).
  *
- * @param request - The request to derive the session from.
- * @param options - CSRF options plus an optional `field` name (defaults to `kovo-csrf`).
+ * Pass the targeted `mutation` (its definition or key) so the token's audience binds to the
+ * mutation's `key` — exactly what dispatch validates against. The framework-emitted
+ * `<form mutation={…}>` path binds this automatically via `renderMutationCsrfField`; hand-rolled
+ * forms must name the mutation here or the submit silently 422s on an audience mismatch.
+ *
+ * @param request - The request to derive the session (or anonymous binding) from.
+ * @param options - CSRF options plus the targeted `mutation`/`audience` and an optional `field`
+ *   name (defaults to `kovo-csrf`).
  * @returns The hidden-input HTML string.
  */
 export function csrfField<Request>(
   request: Request,
-  options: CsrfOptions<Request> & { audience?: string; field?: string },
+  // Shape inlined (not a named export) so the public signature needs no extra exported helper type
+  // (rules/api-surface.md); structurally identical to `CsrfOptions & CsrfAudienceContext & field`.
+  options: CsrfOptions<Request> & {
+    audience?: string;
+    field?: string;
+    mutation?: string | { readonly key: string };
+  },
 ): string {
-  const context = options.audience === undefined ? {} : { audience: options.audience };
+  const context: CsrfAudienceContext = {};
+  if (options.audience !== undefined) context.audience = options.audience;
+  if (options.mutation !== undefined) context.mutation = options.mutation;
   return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(csrfToken(request, options, context))}">`;
 }
 
@@ -442,4 +498,29 @@ function csrfPurpose(binding: string): string {
 
 function csrfAudience(options: { field?: string }, audience?: string): string {
   return audience ?? `field:${options.field ?? 'kovo-csrf'}`;
+}
+
+/**
+ * Resolve the CSRF signing audience for a hand-authored token/field (SPEC §6.5/§6.6/§9.1).
+ *
+ * When the caller names the targeted `mutation`, bind the audience to `definition.key` — the exact
+ * value `runMutation`/`renderMutationResponse`/the no-JS path validate against (mutation dispatch
+ * checks `{ audience: definition.key }`). This is the audit-trap fix: a hand-rolled
+ * login/signup/logout/reset form can no longer mint a `field:<name>`-audience token that the
+ * mutation sink then rejects with a bare 422. If an explicit `audience` is *also* supplied it must
+ * equal the mutation's key — a contradictory pair is a configuration error, surfaced loudly rather
+ * than silently minting a token for the wrong sink. Absent a mutation, fall back to the legacy
+ * `field:<name>` audience for advanced non-mutation sinks.
+ */
+function resolveCsrfAudience(options: { field?: string }, context: CsrfAudienceContext): string {
+  if (context.mutation !== undefined) {
+    const bound = typeof context.mutation === 'string' ? context.mutation : context.mutation.key;
+    if (context.audience !== undefined && context.audience !== bound) {
+      throw new Error(
+        `csrf audience "${context.audience}" does not match targeted mutation key "${bound}"`,
+      );
+    }
+    return bound;
+  }
+  return csrfAudience(options, context.audience);
 }

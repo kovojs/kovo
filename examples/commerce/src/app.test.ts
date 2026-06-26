@@ -16,7 +16,13 @@ import {
   htmlFormFields,
 } from '@kovojs/test/html-fragment';
 
-import { commerceAuthCsrf, commerceCsrf, commerceSignIn } from './domain.js';
+import {
+  addToCart,
+  commerceAuthCsrf,
+  commerceCsrf,
+  commerceSignIn,
+  commerceSignOut,
+} from './domain.js';
 import { createCommerceApp } from './app.js';
 
 let server: Server | undefined;
@@ -123,12 +129,15 @@ describe('commerce app HTTP entry', () => {
     const enhancedForm = new URLSearchParams();
     enhancedForm.set('productId', 'p1');
     enhancedForm.set('quantity', '2');
-    enhancedForm.set('csrf', csrfToken(sessionRequest, commerceCsrf));
+    enhancedForm.set('csrf', csrfToken(sessionRequest, commerceCsrf, { mutation: addToCart }));
     const enhanced = await fetch(`${origin}/_m/cart/add`, {
       body: enhancedForm,
       headers: {
         cookie: sessionCookie,
         'Content-Type': 'application/x-www-form-urlencoded',
+        // SPEC §6.6/§9.1: real browsers send a same-origin Origin on unsafe POSTs; the CSRF
+        // Origin floor requires it. Node fetch omits it, so the test supplies it explicitly.
+        Origin: origin,
         ...enhancedMutationHeaders(),
       },
       method: 'POST',
@@ -145,12 +154,13 @@ describe('commerce app HTTP entry', () => {
     const noJsForm = new URLSearchParams();
     noJsForm.set('productId', 'p2');
     noJsForm.set('quantity', '1');
-    noJsForm.set('csrf', csrfToken(sessionRequest, commerceCsrf));
+    noJsForm.set('csrf', csrfToken(sessionRequest, commerceCsrf, { mutation: addToCart }));
     const noJs = await fetch(`${origin}/_m/cart/add`, {
       body: noJsForm,
       headers: {
         cookie: sessionCookie,
         'Content-Type': 'application/x-www-form-urlencoded',
+        Origin: origin,
       },
       method: 'POST',
       redirect: 'manual',
@@ -175,7 +185,7 @@ describe('commerce app HTTP entry', () => {
     const origin = serverOrigin(server);
 
     const failedForm = new URLSearchParams();
-    failedForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
+    failedForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf, { mutation: commerceSignIn }));
     failedForm.set('email', 'ada@example.com');
     failedForm.set('password', 'wrong');
     failedForm.set('next', '/cart');
@@ -184,6 +194,7 @@ describe('commerce app HTTP entry', () => {
       // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        Origin: origin,
         referer: `${origin}/login?next=%2Fcart`,
         'x-forwarded-for': '203.0.113.31',
       },
@@ -202,7 +213,7 @@ describe('commerce app HTTP entry', () => {
     expect(htmlFormFields(failedBody, 'next')).toMatchObject([{ name: 'next', value: '/cart' }]);
 
     const loginForm = new URLSearchParams();
-    loginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
+    loginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf, { mutation: commerceSignIn }));
     loginForm.set('email', 'ada@example.com');
     loginForm.set('password', 'correct');
     loginForm.set('next', '/cart');
@@ -211,6 +222,7 @@ describe('commerce app HTTP entry', () => {
       // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        Origin: origin,
         'x-forwarded-for': '203.0.113.33',
       },
       method: 'POST',
@@ -233,6 +245,7 @@ describe('commerce app HTTP entry', () => {
           session: { id: 'session-u1', user: { id: 'u1' } },
         },
         commerceAuthCsrf,
+        { mutation: commerceSignOut },
       ),
     );
     const logout = await fetch(`${origin}/_m/auth/sign-out`, {
@@ -240,6 +253,7 @@ describe('commerce app HTTP entry', () => {
       headers: {
         cookie: sessionCookie,
         'Content-Type': 'application/x-www-form-urlencoded',
+        Origin: origin,
       },
       method: 'POST',
       redirect: 'manual',
@@ -266,7 +280,7 @@ async function signInCookie(db: ReturnType<typeof createCommerceApp>['db']): Pro
   const result = await runMutation(
     commerceSignIn,
     {
-      csrf: csrfToken(request, commerceAuthCsrf),
+      csrf: csrfToken(request, commerceAuthCsrf, { mutation: commerceSignIn }),
       email: 'ada@example.com',
       password: 'correct',
     },

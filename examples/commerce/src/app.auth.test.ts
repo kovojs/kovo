@@ -51,7 +51,7 @@ describe('commerce example', () => {
     const signIn = await runMutation(
       commerceSignIn,
       {
-        csrf: csrfToken(request, commerceAuthCsrf),
+        csrf: csrfToken(request, commerceAuthCsrf, { mutation: commerceSignIn }),
         email: 'ada@example.com',
         password: 'correct',
       },

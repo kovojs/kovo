@@ -230,17 +230,21 @@ export function renderReferenceLoginForm(
       ? '<output role="alert" data-error-code="INVALID_CREDENTIALS">Invalid email or password.</output>'
       : '';
 
-  return `<form ${renderReferenceMutationFormAttributes(referenceSignIn)}>${csrfField(
-    request,
-    referenceAuthCsrf,
-  )}<input type="hidden" name="next" value="${escapeAttribute(options.next ?? '/account')}"><input name="email" type="email" autocomplete="email" required><input name="password" type="password" autocomplete="current-password" required>${error}<button type="submit">Sign in</button></form>`;
+  // SPEC §6.5/§9.1 (audit trap #3): bind the CSRF token to the targeted mutation so its audience
+  // matches the `{ audience: definition.key }` dispatch validates against. Without `mutation`, the
+  // hand-rolled form would mint a `field:csrf`-audience token and every sign-in would 422.
+  return `<form ${renderReferenceMutationFormAttributes(referenceSignIn)}>${csrfField(request, {
+    ...referenceAuthCsrf,
+    mutation: referenceSignIn,
+  })}<input type="hidden" name="next" value="${escapeAttribute(options.next ?? '/account')}"><input name="email" type="email" autocomplete="email" required><input name="password" type="password" autocomplete="current-password" required>${error}<button type="submit">Sign in</button></form>`;
 }
 
 export function renderReferenceLogoutForm(request: ReferenceRequest): string {
-  return `<form ${renderReferenceMutationFormAttributes(referenceSignOut)}>${csrfField(
-    request,
-    referenceAuthCsrf,
-  )}<button type="submit">Sign out</button></form>`;
+  // SPEC §6.5/§9.1 (audit trap #3): bind the CSRF token to the sign-out mutation, see above.
+  return `<form ${renderReferenceMutationFormAttributes(referenceSignOut)}>${csrfField(request, {
+    ...referenceAuthCsrf,
+    mutation: referenceSignOut,
+  })}<button type="submit">Sign out</button></form>`;
 }
 
 function renderReferenceMutationFormAttributes(mutation: { key: string }): string {
@@ -268,8 +272,16 @@ export function referenceAuthRequest(cookie?: string): ReferenceRequest {
   };
 }
 
-export function referenceAuthToken(request: ReferenceRequest): string {
-  return csrfToken(request, referenceAuthCsrf);
+/**
+ * Mint a CSRF token for a hand-authored reference auth form, bound to the targeted mutation
+ * (SPEC §6.5/§9.1, audit trap #3). Callers pass the sign-in/sign-out mutation so the token's
+ * audience matches the `{ audience: definition.key }` mutation dispatch validates against.
+ */
+export function referenceAuthToken(
+  request: ReferenceRequest,
+  mutation: { key: string },
+): string {
+  return csrfToken(request, referenceAuthCsrf, { mutation });
 }
 
 function referenceAuthResponse(

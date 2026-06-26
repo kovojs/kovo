@@ -269,6 +269,74 @@ describe('csrf helpers', () => {
   });
 });
 
+// SPEC §6.5/§9.1 (audit trap #3): mutation dispatch validates the CSRF token with
+// `{ audience: definition.key }` (mutation.ts runMutation/renderMutationResponse/no-JS path). The
+// standalone csrfField/csrfToken helpers therefore MUST bind the audience to the targeted mutation,
+// or a hand-authored login/signup/logout form silently fails CSRF with a bare 422. These tests pin
+// the binding: minting WITH the mutation passes the same dispatch; minting WITHOUT it (the legacy
+// `field:<name>` audience) is rejected — which is exactly the audit finding.
+describe('csrf mutation audience binding (audit trap #3, SPEC §6.5/§9.1)', () => {
+  const request = { session: { id: 's1' } };
+  const csrf = {
+    field: 'csrf',
+    secret: 'binding-secret-at-least-32-characters-long',
+    sessionId(candidate: typeof request) {
+      return candidate.session.id;
+    },
+  };
+  const signIn = defineMutation('auth/sign-in', {
+    csrf,
+    input: s.object({ email: s.string() }),
+    handler(input: { email: string }) {
+      return input.email;
+    },
+  });
+
+  it('csrfToken bound to a mutation definition passes that mutation dispatch', async () => {
+    const token = csrfToken(request, csrf, { mutation: signIn });
+    await expect(
+      runMutation(signIn, { csrf: token, email: 'ada@example.com' }, request),
+    ).resolves.toMatchObject({ ok: true, value: 'ada@example.com' });
+  });
+
+  it('csrfToken bound by bare mutation key matches the dispatch audience', () => {
+    const token = csrfToken(request, csrf, { mutation: 'auth/sign-in' });
+    expect(validateCsrfToken({ csrf: token }, request, csrf, { audience: 'auth/sign-in' })).toBe(
+      true,
+    );
+  });
+
+  it('reproduces the trap: an unbound (field-audience) token is rejected by mutation dispatch', async () => {
+    // Legacy call shape with no mutation → audience defaults to `field:csrf`, which the
+    // `{ audience: 'auth/sign-in' }` dispatch rejects. This is exactly audit finding #3.
+    const unbound = csrfToken(request, csrf);
+    await expect(
+      runMutation(signIn, { csrf: unbound, email: 'ada@example.com' }, request),
+    ).resolves.toMatchObject({ error: { code: 'CSRF' }, ok: false, status: 422 });
+  });
+
+  it('csrfField binds the audience so the rendered hidden field passes dispatch', async () => {
+    const html = csrfField(request, { ...csrf, mutation: signIn });
+    const token = /value="([^"]+)"/.exec(html)?.[1];
+    if (!token) throw new Error(`expected csrf field value in ${html}`);
+    await expect(
+      runMutation(signIn, { csrf: token, email: 'ada@example.com' }, request),
+    ).resolves.toMatchObject({ ok: true, value: 'ada@example.com' });
+  });
+
+  it('throws when an explicit audience contradicts the targeted mutation key', () => {
+    expect(() => csrfToken(request, csrf, { audience: 'cart/add', mutation: signIn })).toThrow(
+      /does not match targeted mutation key/,
+    );
+  });
+
+  it('accepts a matching explicit audience alongside the mutation', () => {
+    expect(() =>
+      csrfToken(request, csrf, { audience: 'auth/sign-in', mutation: 'auth/sign-in' }),
+    ).not.toThrow();
+  });
+});
+
 describe('mutation CSRF enforcement', () => {
   it('validates mutation CSRF tokens before running guards', async () => {
     const request = { session: { id: 's1' } };
