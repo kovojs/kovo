@@ -8,6 +8,18 @@ import {
 } from '../lib/index.js';
 import { runDialogInvokerCommand, type DialogInvokerEvent } from '../lib/dialog-invoker.js';
 
+/**
+ * Reason token reported by the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogChangeReason } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogChangeReason = {} as DialogChangeReason;
+ * ```
+ */
 export type DialogChangeReason =
   | 'cancel-event'
   | 'close-click'
@@ -15,13 +27,49 @@ export type DialogChangeReason =
   | 'programmatic'
   | 'trigger-click';
 
+/**
+ * Cancelable change detail emitted by the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogChangeDetail } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogChangeDetail = {} as DialogChangeDetail;
+ * ```
+ */
 export type DialogChangeDetail = PrimitiveChangeDetail<DialogChangeReason, boolean>;
 
+/**
+ * State snapshot consumed by the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogState } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogState = {} as DialogState;
+ * ```
+ */
 export interface DialogState {
   disabled?: boolean;
   open: boolean;
 }
 
+/**
+ * Options accepted by the Dialog primitive dialog attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogAttributeOptions } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogAttributeOptions = {} as DialogAttributeOptions;
+ * ```
+ */
 export interface DialogAttributeOptions extends DialogState {
   contentId?: string;
   descriptionId?: string;
@@ -29,36 +77,148 @@ export interface DialogAttributeOptions extends DialogState {
   titleId?: string;
 }
 
+/**
+ * Options accepted by the Dialog primitive dialog change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogChangeOptions } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogChangeOptions = {} as DialogChangeOptions;
+ * ```
+ */
 export interface DialogChangeOptions {
   onOpenChange?: (detail: DialogChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Dialog primitive dialog change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogChangeResult } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogChangeResult = {} as DialogChangeResult;
+ * ```
+ */
 export interface DialogChangeResult {
   changed: boolean;
   detail?: DialogChangeDetail;
   open: boolean;
 }
 
+/**
+ * Serializable attribute record returned by Dialog primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogPrimitiveAttributes } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogPrimitiveAttributes = {} as DialogPrimitiveAttributes;
+ * ```
+ */
 export type DialogPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | string>>;
 
+/**
+ * Event shape consumed by the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogTriggerEvent } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogTriggerEvent = {} as DialogTriggerEvent;
+ * ```
+ */
 export type DialogTriggerEvent = Event & DialogInvokerEvent;
 
+/**
+ * Event shape consumed by the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogCloseEvent } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogCloseEvent = {} as DialogCloseEvent;
+ * ```
+ */
 export type DialogCloseEvent = Event & DialogInvokerEvent;
 
+/**
+ * Event shape consumed by the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogCancelEvent } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogCancelEvent = {} as DialogCancelEvent;
+ * ```
+ */
 export type DialogCancelEvent = Event;
 
+/**
+ * Event shape consumed by the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { DialogBeforeToggleEvent } from '@kovojs/headless-ui/dialog';
+ *
+ * const value: DialogBeforeToggleEvent = {} as DialogBeforeToggleEvent;
+ * ```
+ */
 export type DialogBeforeToggleEvent = Event &
   Readonly<{
     newState?: 'closed' | 'open';
   }>;
 
+/**
+ * Builds the dialog root attributes record for the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dialogRootAttributes } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof dialogRootAttributes>[0];
+ * const result = dialogRootAttributes(input);
+ * ```
+ */
 export function dialogRootAttributes(state: DialogState): DialogPrimitiveAttributes {
   return Object.freeze({
     ...mergeDataAttributes(openState(state.open), dataDisabled(state.disabled === true)),
   });
 }
 
+/**
+ * Builds the dialog trigger attributes record for the Dialog primitive.
+ *
+ * Emits `aria-controls`, `aria-expanded`, `aria-haspopup`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dialogTriggerAttributes } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof dialogTriggerAttributes>[0];
+ * const result = dialogTriggerAttributes(input);
+ * ```
+ */
 export function dialogTriggerAttributes(
   options: DialogAttributeOptions,
 ): DialogPrimitiveAttributes {
@@ -80,6 +240,21 @@ export function dialogTriggerAttributes(
   });
 }
 
+/**
+ * Builds the dialog content attributes record for the Dialog primitive.
+ *
+ * Emits `aria-describedby`, `aria-labelledby`, `aria-modal`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dialogContentAttributes } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof dialogContentAttributes>[0];
+ * const result = dialogContentAttributes(input);
+ * ```
+ */
 export function dialogContentAttributes(
   options: DialogAttributeOptions,
 ): DialogPrimitiveAttributes {
@@ -99,6 +274,19 @@ export function dialogContentAttributes(
   });
 }
 
+/**
+ * Builds the dialog close attributes record for the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { dialogCloseAttributes } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof dialogCloseAttributes>[0];
+ * const result = dialogCloseAttributes(input);
+ * ```
+ */
 export function dialogCloseAttributes(options: DialogAttributeOptions): DialogPrimitiveAttributes {
   const enabledContentId = options.disabled === true ? undefined : options.contentId;
 
@@ -115,6 +303,22 @@ export function dialogCloseAttributes(options: DialogAttributeOptions): DialogPr
   });
 }
 
+/**
+ * Computes the set dialog open transition for the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setDialogOpen } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof setDialogOpen>[0];
+ * const state = {} as Parameters<typeof setDialogOpen>[1];
+ * const options = {} as Parameters<typeof setDialogOpen>[2];
+ * const detail = {} as Parameters<typeof setDialogOpen>[3];
+ * const result = setDialogOpen(input, state, options, detail);
+ * ```
+ */
 export function setDialogOpen(
   state: DialogState,
   open: boolean,
@@ -133,6 +337,21 @@ export function setDialogOpen(
   return { changed: true, detail, open };
 }
 
+/**
+ * Computes the toggle dialog transition for the Dialog primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { toggleDialog } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof toggleDialog>[0];
+ * const state = {} as Parameters<typeof toggleDialog>[1];
+ * const options = {} as Parameters<typeof toggleDialog>[2];
+ * const result = toggleDialog(input, state, options);
+ * ```
+ */
 export function toggleDialog(
   state: DialogState,
   reason: DialogChangeReason,
@@ -142,6 +361,18 @@ export function toggleDialog(
 }
 
 /**
+ * Handles the dialog trigger click interaction for the Dialog primitive.
+ *
+ * @example
+ * ```ts
+ * import { dialogTriggerClick } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof dialogTriggerClick>[0];
+ * const state = {} as Parameters<typeof dialogTriggerClick>[1];
+ * const options = {} as Parameters<typeof dialogTriggerClick>[2];
+ * const result = dialogTriggerClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -164,6 +395,18 @@ export function dialogTriggerClick(
 }
 
 /**
+ * Handles the dialog close click interaction for the Dialog primitive.
+ *
+ * @example
+ * ```ts
+ * import { dialogCloseClick } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof dialogCloseClick>[0];
+ * const state = {} as Parameters<typeof dialogCloseClick>[1];
+ * const options = {} as Parameters<typeof dialogCloseClick>[2];
+ * const result = dialogCloseClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -186,6 +429,18 @@ export function dialogCloseClick(
 }
 
 /**
+ * Handles the dialog cancel interaction for the Dialog primitive.
+ *
+ * @example
+ * ```ts
+ * import { dialogCancel } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof dialogCancel>[0];
+ * const state = {} as Parameters<typeof dialogCancel>[1];
+ * const options = {} as Parameters<typeof dialogCancel>[2];
+ * const result = dialogCancel(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -207,6 +462,18 @@ export function dialogCancel(
 }
 
 /**
+ * Handles the dialog before toggle interaction for the Dialog primitive.
+ *
+ * @example
+ * ```ts
+ * import { dialogBeforeToggle } from '@kovojs/headless-ui/dialog';
+ *
+ * const input = {} as Parameters<typeof dialogBeforeToggle>[0];
+ * const state = {} as Parameters<typeof dialogBeforeToggle>[1];
+ * const options = {} as Parameters<typeof dialogBeforeToggle>[2];
+ * const result = dialogBeforeToggle(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

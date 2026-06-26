@@ -13,13 +13,49 @@ import {
   type TextDirection,
 } from '../lib/index.js';
 
+/**
+ * Public type used by the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsActivationMode } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsActivationMode = {} as TabsActivationMode;
+ * ```
+ */
 export type TabsActivationMode = 'automatic' | 'manual';
 
+/**
+ * Public interface used by the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsItem } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsItem = {} as TabsItem;
+ * ```
+ */
 export interface TabsItem {
   disabled?: boolean;
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsState } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsState = {} as TabsState;
+ * ```
+ */
 export interface TabsState {
   activationMode?: TabsActivationMode;
   activeValue?: string;
@@ -31,10 +67,34 @@ export interface TabsState {
   value?: string;
 }
 
+/**
+ * Options accepted by the Tabs primitive tabs root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsRootAttributeOptions } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsRootAttributeOptions = {} as TabsRootAttributeOptions;
+ * ```
+ */
 export interface TabsRootAttributeOptions extends TabsState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Tabs primitive tabs list attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsListAttributeOptions } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsListAttributeOptions = {} as TabsListAttributeOptions;
+ * ```
+ */
 export interface TabsListAttributeOptions extends TabsState {
   descriptionId?: string;
   id?: string;
@@ -42,6 +102,18 @@ export interface TabsListAttributeOptions extends TabsState {
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Tabs primitive tabs trigger attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsTriggerAttributeOptions } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsTriggerAttributeOptions = {} as TabsTriggerAttributeOptions;
+ * ```
+ */
 export interface TabsTriggerAttributeOptions extends TabsState {
   id?: string;
   itemDisabled?: boolean;
@@ -49,6 +121,18 @@ export interface TabsTriggerAttributeOptions extends TabsState {
   panelId?: string;
 }
 
+/**
+ * Options accepted by the Tabs primitive tabs panel attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsPanelAttributeOptions } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsPanelAttributeOptions = {} as TabsPanelAttributeOptions;
+ * ```
+ */
 export interface TabsPanelAttributeOptions extends TabsState {
   id?: string;
   itemDisabled?: boolean;
@@ -56,41 +140,176 @@ export interface TabsPanelAttributeOptions extends TabsState {
   triggerId?: string;
 }
 
+/**
+ * Reason token reported by the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsChangeReason } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsChangeReason = {} as TabsChangeReason;
+ * ```
+ */
 export type TabsChangeReason = 'keyboard' | 'programmatic' | 'trigger-click';
 
+/**
+ * Cancelable change detail emitted by the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsChangeDetail } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsChangeDetail = {} as TabsChangeDetail;
+ * ```
+ */
 export type TabsChangeDetail = PrimitiveChangeDetail<TabsChangeReason, string | undefined>;
 
+/**
+ * Options accepted by the Tabs primitive tabs change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsChangeOptions } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsChangeOptions = {} as TabsChangeOptions;
+ * ```
+ */
 export interface TabsChangeOptions {
   onValueChange?: (detail: TabsChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Tabs primitive tabs change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsChangeResult } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsChangeResult = {} as TabsChangeResult;
+ * ```
+ */
 export interface TabsChangeResult {
   changed: boolean;
   detail?: TabsChangeDetail;
   value: string | undefined;
 }
 
+/**
+ * Result returned by the Tabs primitive tabs move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsMoveResult } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsMoveResult = {} as TabsMoveResult;
+ * ```
+ */
 export interface TabsMoveResult {
   index: number;
   value: string | undefined;
 }
 
+/**
+ * Result returned by the Tabs primitive tabs keyboard.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsKeyboardResult } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsKeyboardResult = {} as TabsKeyboardResult;
+ * ```
+ */
 export interface TabsKeyboardResult extends TabsMoveResult {
   activeValue: string | undefined;
   changed: boolean;
   detail?: TabsChangeDetail;
 }
 
+/**
+ * Serializable attribute record returned by Tabs primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsPrimitiveAttributes } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsPrimitiveAttributes = {} as TabsPrimitiveAttributes;
+ * ```
+ */
 export type TabsPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsKeyboardEvent } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsKeyboardEvent = {} as TabsKeyboardEvent;
+ * ```
+ */
 export type TabsKeyboardEvent = Event & { readonly key: string };
+
+/**
+ * Event shape consumed by the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { TabsTriggerEvent } from '@kovojs/headless-ui/tabs';
+ *
+ * const value: TabsTriggerEvent = {} as TabsTriggerEvent;
+ * ```
+ */
 export type TabsTriggerEvent = Event;
 
+/**
+ * Computes tabs item selected for the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { tabsItemSelected } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof tabsItemSelected>[0];
+ * const result = tabsItemSelected(input);
+ * ```
+ */
 export function tabsItemSelected(options: TabsTriggerAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
 
+/**
+ * Computes tabs roving index for the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { tabsRovingIndex } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof tabsRovingIndex>[0];
+ * const result = tabsRovingIndex(input);
+ * ```
+ */
 export function tabsRovingIndex(state: TabsState): number {
   const items = state.items ?? [];
   if (items.length === 0) return -1;
@@ -111,6 +330,19 @@ export function tabsRovingIndex(state: TabsState): number {
   });
 }
 
+/**
+ * Builds the tabs root attributes record for the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { tabsRootAttributes } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof tabsRootAttributes>[0];
+ * const result = tabsRootAttributes(input);
+ * ```
+ */
 export function tabsRootAttributes(
   options: TabsRootAttributeOptions = {},
 ): TabsPrimitiveAttributes {
@@ -120,6 +352,21 @@ export function tabsRootAttributes(
   });
 }
 
+/**
+ * Builds the tabs list attributes record for the Tabs primitive.
+ *
+ * Emits `aria-describedby`, `aria-disabled`, `aria-label`, `aria-labelledby`, `aria-orientation`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { tabsListAttributes } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof tabsListAttributes>[0];
+ * const result = tabsListAttributes(input);
+ * ```
+ */
 export function tabsListAttributes(
   options: TabsListAttributeOptions = {},
 ): TabsPrimitiveAttributes {
@@ -137,6 +384,21 @@ export function tabsListAttributes(
   });
 }
 
+/**
+ * Builds the tabs trigger attributes record for the Tabs primitive.
+ *
+ * Emits `aria-controls`, `aria-selected`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { tabsTriggerAttributes } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof tabsTriggerAttributes>[0];
+ * const result = tabsTriggerAttributes(input);
+ * ```
+ */
 export function tabsTriggerAttributes(
   options: TabsTriggerAttributeOptions,
 ): TabsPrimitiveAttributes {
@@ -156,6 +418,21 @@ export function tabsTriggerAttributes(
   });
 }
 
+/**
+ * Builds the tabs panel attributes record for the Tabs primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { tabsPanelAttributes } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof tabsPanelAttributes>[0];
+ * const result = tabsPanelAttributes(input);
+ * ```
+ */
 export function tabsPanelAttributes(options: TabsPanelAttributeOptions): TabsPrimitiveAttributes {
   const selected = tabsItemSelected(options);
 
@@ -169,6 +446,22 @@ export function tabsPanelAttributes(options: TabsPanelAttributeOptions): TabsPri
   });
 }
 
+/**
+ * Computes the set tabs value transition for the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setTabsValue } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof setTabsValue>[0];
+ * const state = {} as Parameters<typeof setTabsValue>[1];
+ * const options = {} as Parameters<typeof setTabsValue>[2];
+ * const detail = {} as Parameters<typeof setTabsValue>[3];
+ * const result = setTabsValue(input, state, options, detail);
+ * ```
+ */
 export function setTabsValue(
   state: TabsState,
   value: string | undefined,
@@ -187,6 +480,20 @@ export function setTabsValue(
   return { changed: true, detail, value };
 }
 
+/**
+ * Handles the tabs move focus interaction for the Tabs primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { tabsMoveFocus } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof tabsMoveFocus>[0];
+ * const state = {} as Parameters<typeof tabsMoveFocus>[1];
+ * const result = tabsMoveFocus(input, state);
+ * ```
+ */
 export function tabsMoveFocus(state: TabsState, intent: NavigationIntent): TabsMoveResult {
   const items = state.items ?? [];
   if (state.disabled || items.length === 0) return { index: -1, value: state.activeValue };
@@ -207,6 +514,18 @@ export function tabsMoveFocus(state: TabsState, intent: NavigationIntent): TabsM
 }
 
 /**
+ * Handles the tabs trigger click interaction for the Tabs primitive.
+ *
+ * @example
+ * ```ts
+ * import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof tabsTriggerClick>[0];
+ * const state = {} as Parameters<typeof tabsTriggerClick>[1];
+ * const options = {} as Parameters<typeof tabsTriggerClick>[2];
+ * const result = tabsTriggerClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -228,6 +547,18 @@ export function tabsTriggerClick(
 }
 
 /**
+ * Handles the tabs key down interaction for the Tabs primitive.
+ *
+ * @example
+ * ```ts
+ * import { tabsKeyDown } from '@kovojs/headless-ui/tabs';
+ *
+ * const input = {} as Parameters<typeof tabsKeyDown>[0];
+ * const state = {} as Parameters<typeof tabsKeyDown>[1];
+ * const options = {} as Parameters<typeof tabsKeyDown>[2];
+ * const result = tabsKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

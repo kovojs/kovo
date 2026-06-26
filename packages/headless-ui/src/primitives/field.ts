@@ -1,5 +1,17 @@
 import { dataDisabled, mergeDataAttributes, type PrimitiveDataAttributes } from '../lib/index.js';
 
+/**
+ * Options accepted by the Field primitive field attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { FieldAttributeOptions } from '@kovojs/headless-ui/field';
+ *
+ * const value: FieldAttributeOptions = {} as FieldAttributeOptions;
+ * ```
+ */
 export interface FieldAttributeOptions {
   id?: string;
   disabled?: boolean;
@@ -7,6 +19,18 @@ export interface FieldAttributeOptions {
   required?: boolean;
 }
 
+/**
+ * Options accepted by the Field primitive field control attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { FieldControlAttributeOptions } from '@kovojs/headless-ui/field';
+ *
+ * const value: FieldControlAttributeOptions = {} as FieldControlAttributeOptions;
+ * ```
+ */
 export interface FieldControlAttributeOptions extends FieldAttributeOptions {
   autoComplete?: string;
   descriptionId?: string;
@@ -19,14 +43,50 @@ export interface FieldControlAttributeOptions extends FieldAttributeOptions {
   pattern?: string;
 }
 
+/**
+ * Options accepted by the Field primitive field label attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { FieldLabelAttributeOptions } from '@kovojs/headless-ui/field';
+ *
+ * const value: FieldLabelAttributeOptions = {} as FieldLabelAttributeOptions;
+ * ```
+ */
 export interface FieldLabelAttributeOptions extends FieldAttributeOptions {
   controlId?: string;
 }
 
+/**
+ * Options accepted by the Field primitive field message attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { FieldMessageAttributeOptions } from '@kovojs/headless-ui/field';
+ *
+ * const value: FieldMessageAttributeOptions = {} as FieldMessageAttributeOptions;
+ * ```
+ */
 export interface FieldMessageAttributeOptions extends FieldAttributeOptions {
   visible?: boolean;
 }
 
+/**
+ * Options accepted by the Field primitive fieldset attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { FieldsetAttributeOptions } from '@kovojs/headless-ui/field';
+ *
+ * const value: FieldsetAttributeOptions = {} as FieldsetAttributeOptions;
+ * ```
+ */
 export interface FieldsetAttributeOptions extends FieldAttributeOptions {
   descriptionId?: string;
   errorId?: string;
@@ -34,9 +94,34 @@ export interface FieldsetAttributeOptions extends FieldAttributeOptions {
   name?: string;
 }
 
+/**
+ * Serializable attribute record returned by Field primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { FieldPrimitiveAttributes } from '@kovojs/headless-ui/field';
+ *
+ * const value: FieldPrimitiveAttributes = {} as FieldPrimitiveAttributes;
+ * ```
+ */
 export type FieldPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Builds the field root attributes record for the Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { fieldRootAttributes } from '@kovojs/headless-ui/field';
+ *
+ * const input = {} as Parameters<typeof fieldRootAttributes>[0];
+ * const result = fieldRootAttributes(input);
+ * ```
+ */
 export function fieldRootAttributes(options: FieldAttributeOptions = {}): FieldPrimitiveAttributes {
   return Object.freeze({
     ...fieldDataAttributes(options),
@@ -44,6 +129,19 @@ export function fieldRootAttributes(options: FieldAttributeOptions = {}): FieldP
   });
 }
 
+/**
+ * Builds the field label attributes record for the Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { fieldLabelAttributes } from '@kovojs/headless-ui/field';
+ *
+ * const input = {} as Parameters<typeof fieldLabelAttributes>[0];
+ * const result = fieldLabelAttributes(input);
+ * ```
+ */
 export function fieldLabelAttributes(
   options: FieldLabelAttributeOptions = {},
 ): FieldPrimitiveAttributes {
@@ -54,6 +152,19 @@ export function fieldLabelAttributes(
   });
 }
 
+/**
+ * Builds the field control attributes record for the Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { fieldControlAttributes } from '@kovojs/headless-ui/field';
+ *
+ * const input = {} as Parameters<typeof fieldControlAttributes>[0];
+ * const result = fieldControlAttributes(input);
+ * ```
+ */
 export function fieldControlAttributes(
   options: FieldControlAttributeOptions = {},
 ): FieldPrimitiveAttributes {
@@ -78,6 +189,19 @@ export function fieldControlAttributes(
   });
 }
 
+/**
+ * Builds the field description attributes record for the Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { fieldDescriptionAttributes } from '@kovojs/headless-ui/field';
+ *
+ * const input = {} as Parameters<typeof fieldDescriptionAttributes>[0];
+ * const result = fieldDescriptionAttributes(input);
+ * ```
+ */
 export function fieldDescriptionAttributes(
   options: FieldMessageAttributeOptions = {},
 ): FieldPrimitiveAttributes {
@@ -88,6 +212,19 @@ export function fieldDescriptionAttributes(
   });
 }
 
+/**
+ * Builds the field error attributes record for the Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { fieldErrorAttributes } from '@kovojs/headless-ui/field';
+ *
+ * const input = {} as Parameters<typeof fieldErrorAttributes>[0];
+ * const result = fieldErrorAttributes(input);
+ * ```
+ */
 export function fieldErrorAttributes(
   options: FieldMessageAttributeOptions = {},
 ): FieldPrimitiveAttributes {
@@ -99,6 +236,19 @@ export function fieldErrorAttributes(
   });
 }
 
+/**
+ * Builds the fieldset root attributes record for the Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { fieldsetRootAttributes } from '@kovojs/headless-ui/field';
+ *
+ * const input = {} as Parameters<typeof fieldsetRootAttributes>[0];
+ * const result = fieldsetRootAttributes(input);
+ * ```
+ */
 export function fieldsetRootAttributes(
   options: FieldsetAttributeOptions = {},
 ): FieldPrimitiveAttributes {
@@ -115,6 +265,19 @@ export function fieldsetRootAttributes(
   });
 }
 
+/**
+ * Builds the fieldset legend attributes record for the Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { fieldsetLegendAttributes } from '@kovojs/headless-ui/field';
+ *
+ * const input = {} as Parameters<typeof fieldsetLegendAttributes>[0];
+ * const result = fieldsetLegendAttributes(input);
+ * ```
+ */
 export function fieldsetLegendAttributes(
   options: FieldAttributeOptions = {},
 ): FieldPrimitiveAttributes {

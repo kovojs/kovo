@@ -14,11 +14,35 @@ import {
   type TypeaheadState,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuPoint } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuPoint = {} as ContextMenuPoint;
+ * ```
+ */
 export interface ContextMenuPoint {
   x: number;
   y: number;
 }
 
+/**
+ * Public interface used by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuItem } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuItem = {} as ContextMenuItem;
+ * ```
+ */
 export interface ContextMenuItem {
   disabled?: boolean;
   label?: string;
@@ -26,6 +50,18 @@ export interface ContextMenuItem {
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuState } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuState = {} as ContextMenuState;
+ * ```
+ */
 export interface ContextMenuState {
   disabled?: boolean;
   highlightedValue?: string;
@@ -34,21 +70,69 @@ export interface ContextMenuState {
   point?: ContextMenuPoint;
 }
 
+/**
+ * Options accepted by the Context Menu primitive context menu root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuRootAttributeOptions } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuRootAttributeOptions = {} as ContextMenuRootAttributeOptions;
+ * ```
+ */
 export interface ContextMenuRootAttributeOptions extends ContextMenuState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Context Menu primitive context menu trigger attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuTriggerAttributeOptions } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuTriggerAttributeOptions = {} as ContextMenuTriggerAttributeOptions;
+ * ```
+ */
 export interface ContextMenuTriggerAttributeOptions extends ContextMenuState {
   contentId?: string;
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Context Menu primitive context menu content attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuContentAttributeOptions } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuContentAttributeOptions = {} as ContextMenuContentAttributeOptions;
+ * ```
+ */
 export interface ContextMenuContentAttributeOptions extends ContextMenuState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Context Menu primitive context menu item attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuItemAttributeOptions } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuItemAttributeOptions = {} as ContextMenuItemAttributeOptions;
+ * ```
+ */
 export interface ContextMenuItemAttributeOptions extends ContextMenuState {
   id?: string;
   itemDisabled?: boolean;
@@ -56,15 +140,51 @@ export interface ContextMenuItemAttributeOptions extends ContextMenuState {
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Context Menu primitive context menu group attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuGroupAttributeOptions } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuGroupAttributeOptions = {} as ContextMenuGroupAttributeOptions;
+ * ```
+ */
 export interface ContextMenuGroupAttributeOptions extends ContextMenuState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Context Menu primitive context menu separator attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuSeparatorAttributeOptions } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuSeparatorAttributeOptions = {} as ContextMenuSeparatorAttributeOptions;
+ * ```
+ */
 export interface ContextMenuSeparatorAttributeOptions {
   id?: string;
 }
 
+/**
+ * Reason token reported by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuOpenChangeReason } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuOpenChangeReason = {} as ContextMenuOpenChangeReason;
+ * ```
+ */
 export type ContextMenuOpenChangeReason =
   | 'escape-key'
   | 'item-select'
@@ -72,20 +192,80 @@ export type ContextMenuOpenChangeReason =
   | 'programmatic'
   | 'trigger-context-menu';
 
+/**
+ * Reason token reported by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuSelectReason } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuSelectReason = {} as ContextMenuSelectReason;
+ * ```
+ */
 export type ContextMenuSelectReason = 'item-click' | 'item-keyboard' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuOpenChangeDetail } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuOpenChangeDetail = {} as ContextMenuOpenChangeDetail;
+ * ```
+ */
 export type ContextMenuOpenChangeDetail = PrimitiveChangeDetail<
   ContextMenuOpenChangeReason,
   boolean
 >;
 
+/**
+ * Cancelable change detail emitted by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuSelectDetail } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuSelectDetail = {} as ContextMenuSelectDetail;
+ * ```
+ */
 export type ContextMenuSelectDetail = PrimitiveChangeDetail<ContextMenuSelectReason, string>;
 
+/**
+ * Options accepted by the Context Menu primitive context menu change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuChangeOptions } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuChangeOptions = {} as ContextMenuChangeOptions;
+ * ```
+ */
 export interface ContextMenuChangeOptions {
   onOpenChange?: (detail: ContextMenuOpenChangeDetail) => void;
   onSelect?: (detail: ContextMenuSelectDetail) => void;
 }
 
+/**
+ * Result returned by the Context Menu primitive context menu open change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuOpenChangeResult } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuOpenChangeResult = {} as ContextMenuOpenChangeResult;
+ * ```
+ */
 export interface ContextMenuOpenChangeResult {
   changed: boolean;
   detail?: ContextMenuOpenChangeDetail;
@@ -93,6 +273,18 @@ export interface ContextMenuOpenChangeResult {
   point?: ContextMenuPoint;
 }
 
+/**
+ * Result returned by the Context Menu primitive context menu select.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuSelectResult } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuSelectResult = {} as ContextMenuSelectResult;
+ * ```
+ */
 export interface ContextMenuSelectResult {
   detail?: ContextMenuSelectDetail;
   open: ContextMenuOpenChangeResult;
@@ -100,11 +292,35 @@ export interface ContextMenuSelectResult {
   value: string;
 }
 
+/**
+ * Result returned by the Context Menu primitive context menu move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuMoveResult } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuMoveResult = {} as ContextMenuMoveResult;
+ * ```
+ */
 export interface ContextMenuMoveResult {
   highlightedIndex: number;
   highlightedValue: string | undefined;
 }
 
+/**
+ * Options accepted by the Context Menu primitive context menu typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuTypeaheadOptions } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuTypeaheadOptions = {} as ContextMenuTypeaheadOptions;
+ * ```
+ */
 export interface ContextMenuTypeaheadOptions {
   currentValue?: string;
   loop?: boolean;
@@ -113,13 +329,49 @@ export interface ContextMenuTypeaheadOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Result returned by the Context Menu primitive context menu typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuTypeaheadResult } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuTypeaheadResult = {} as ContextMenuTypeaheadResult;
+ * ```
+ */
 export interface ContextMenuTypeaheadResult extends ContextMenuMoveResult {
   state: TypeaheadState;
 }
 
+/**
+ * Serializable attribute record returned by Context Menu primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuPrimitiveAttributes } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuPrimitiveAttributes = {} as ContextMenuPrimitiveAttributes;
+ * ```
+ */
 export type ContextMenuPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuTriggerEvent } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuTriggerEvent = {} as ContextMenuTriggerEvent;
+ * ```
+ */
 export type ContextMenuTriggerEvent = Event &
   Readonly<{
     clientX?: number;
@@ -131,11 +383,50 @@ export type ContextMenuTriggerEvent = Event &
     // preventDefault, so it still opens the styled menu instead of bailing.
     kovoNativeDefaultManaged?: boolean;
   }>;
+
+/**
+ * Event shape consumed by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuItemEvent } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuItemEvent = {} as ContextMenuItemEvent;
+ * ```
+ */
 export type ContextMenuItemEvent = Event;
+
+/**
+ * Event shape consumed by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuKeyboardEvent } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuKeyboardEvent = {} as ContextMenuKeyboardEvent;
+ * ```
+ */
 export type ContextMenuKeyboardEvent = Event & {
   readonly key: string;
   readonly shiftKey?: boolean;
 };
+
+/**
+ * Event shape consumed by the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuFocusEvent } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuFocusEvent = {} as ContextMenuFocusEvent;
+ * ```
+ */
 export type ContextMenuFocusEvent = Event & {
   readonly currentTarget?: {
     ownerDocument?: {
@@ -148,11 +439,37 @@ export type ContextMenuFocusEvent = Event & {
     };
   } | null;
 };
+
+/**
+ * Options accepted by the Context Menu primitive context menu focus.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { ContextMenuFocusOptions } from '@kovojs/headless-ui/context-menu';
+ *
+ * const value: ContextMenuFocusOptions = {} as ContextMenuFocusOptions;
+ * ```
+ */
 export interface ContextMenuFocusOptions {
   defer?: boolean;
   schedule?: (callback: () => void) => void;
 }
 
+/**
+ * Builds the context menu root attributes record for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuRootAttributes } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuRootAttributes>[0];
+ * const result = contextMenuRootAttributes(input);
+ * ```
+ */
 export function contextMenuRootAttributes(
   options: ContextMenuRootAttributeOptions = {},
 ): ContextMenuPrimitiveAttributes {
@@ -162,6 +479,21 @@ export function contextMenuRootAttributes(
   });
 }
 
+/**
+ * Builds the context menu trigger attributes record for the Context Menu primitive.
+ *
+ * Emits `aria-controls`, `aria-disabled`, `aria-expanded`, `aria-haspopup`, `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuTriggerAttributes } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuTriggerAttributes>[0];
+ * const result = contextMenuTriggerAttributes(input);
+ * ```
+ */
 export function contextMenuTriggerAttributes(
   options: ContextMenuTriggerAttributeOptions = {},
 ): ContextMenuPrimitiveAttributes {
@@ -184,6 +516,21 @@ export function contextMenuTriggerAttributes(
   });
 }
 
+/**
+ * Builds the context menu content attributes record for the Context Menu primitive.
+ *
+ * Emits `aria-labelledby`, `data-anchor-x`, `data-anchor-y`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuContentAttributes } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuContentAttributes>[0];
+ * const result = contextMenuContentAttributes(input);
+ * ```
+ */
 export function contextMenuContentAttributes(
   options: ContextMenuContentAttributeOptions = {},
 ): ContextMenuPrimitiveAttributes {
@@ -203,6 +550,21 @@ export function contextMenuContentAttributes(
   });
 }
 
+/**
+ * Builds the context menu item attributes record for the Context Menu primitive.
+ *
+ * Emits `aria-disabled`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuItemAttributes } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuItemAttributes>[0];
+ * const result = contextMenuItemAttributes(input);
+ * ```
+ */
 export function contextMenuItemAttributes(
   options: ContextMenuItemAttributeOptions,
 ): ContextMenuPrimitiveAttributes {
@@ -220,6 +582,21 @@ export function contextMenuItemAttributes(
   });
 }
 
+/**
+ * Builds the context menu group attributes record for the Context Menu primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuGroupAttributes } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuGroupAttributes>[0];
+ * const result = contextMenuGroupAttributes(input);
+ * ```
+ */
 export function contextMenuGroupAttributes(
   options: ContextMenuGroupAttributeOptions = {},
 ): ContextMenuPrimitiveAttributes {
@@ -231,6 +608,19 @@ export function contextMenuGroupAttributes(
   });
 }
 
+/**
+ * Builds the context menu separator attributes record for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuSeparatorAttributes } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuSeparatorAttributes>[0];
+ * const result = contextMenuSeparatorAttributes(input);
+ * ```
+ */
 export function contextMenuSeparatorAttributes(
   options: ContextMenuSeparatorAttributeOptions = {},
 ): ContextMenuPrimitiveAttributes {
@@ -240,10 +630,40 @@ export function contextMenuSeparatorAttributes(
   });
 }
 
+/**
+ * Computes context menu item highlighted for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuItemHighlighted } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuItemHighlighted>[0];
+ * const result = contextMenuItemHighlighted(input);
+ * ```
+ */
 export function contextMenuItemHighlighted(options: ContextMenuItemAttributeOptions): boolean {
   return options.highlightedValue === options.itemValue;
 }
 
+/**
+ * Computes the set context menu open transition for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setContextMenuOpen } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof setContextMenuOpen>[0];
+ * const state = {} as Parameters<typeof setContextMenuOpen>[1];
+ * const options = {} as Parameters<typeof setContextMenuOpen>[2];
+ * const detail = {} as Parameters<typeof setContextMenuOpen>[3];
+ * const extra = {} as Parameters<typeof setContextMenuOpen>[4];
+ * const result = setContextMenuOpen(input, state, options, detail, extra);
+ * ```
+ */
 export function setContextMenuOpen(
   state: ContextMenuState,
   open: boolean,
@@ -277,6 +697,22 @@ export function setContextMenuOpen(
   };
 }
 
+/**
+ * Computes the toggle context menu transition for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { toggleContextMenu } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof toggleContextMenu>[0];
+ * const state = {} as Parameters<typeof toggleContextMenu>[1];
+ * const options = {} as Parameters<typeof toggleContextMenu>[2];
+ * const detail = {} as Parameters<typeof toggleContextMenu>[3];
+ * const result = toggleContextMenu(input, state, options, detail);
+ * ```
+ */
 export function toggleContextMenu(
   state: ContextMenuState,
   reason: ContextMenuOpenChangeReason,
@@ -286,6 +722,22 @@ export function toggleContextMenu(
   return setContextMenuOpen(state, !(state.open === true), reason, options, point);
 }
 
+/**
+ * Computes the select context menu item transition for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectContextMenuItem } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof selectContextMenuItem>[0];
+ * const state = {} as Parameters<typeof selectContextMenuItem>[1];
+ * const options = {} as Parameters<typeof selectContextMenuItem>[2];
+ * const detail = {} as Parameters<typeof selectContextMenuItem>[3];
+ * const result = selectContextMenuItem(input, state, options, detail);
+ * ```
+ */
 export function selectContextMenuItem(
   state: ContextMenuState,
   value: string,
@@ -336,6 +788,21 @@ export function selectContextMenuItem(
   };
 }
 
+/**
+ * Computes context menu move for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuMove } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuMove>[0];
+ * const state = {} as Parameters<typeof contextMenuMove>[1];
+ * const options = {} as Parameters<typeof contextMenuMove>[2];
+ * const result = contextMenuMove(input, state, options);
+ * ```
+ */
 export function contextMenuMove(
   state: ContextMenuState,
   key: string,
@@ -360,6 +827,21 @@ export function contextMenuMove(
   };
 }
 
+/**
+ * Computes context menu typeahead for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuTypeahead } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuTypeahead>[0];
+ * const state = {} as Parameters<typeof contextMenuTypeahead>[1];
+ * const options = {} as Parameters<typeof contextMenuTypeahead>[2];
+ * const result = contextMenuTypeahead(input, state, options);
+ * ```
+ */
 export function contextMenuTypeahead(
   state: ContextMenuState,
   key: string,
@@ -404,6 +886,18 @@ export function contextMenuTypeahead(
 }
 
 /**
+ * Computes context menu trigger context menu for the Context Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuTriggerContextMenu } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuTriggerContextMenu>[0];
+ * const state = {} as Parameters<typeof contextMenuTriggerContextMenu>[1];
+ * const options = {} as Parameters<typeof contextMenuTriggerContextMenu>[2];
+ * const result = contextMenuTriggerContextMenu(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -435,6 +929,18 @@ export function contextMenuTriggerContextMenu(
 }
 
 /**
+ * Handles the context menu trigger key down interaction for the Context Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuTriggerKeyDown } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuTriggerKeyDown>[0];
+ * const state = {} as Parameters<typeof contextMenuTriggerKeyDown>[1];
+ * const options = {} as Parameters<typeof contextMenuTriggerKeyDown>[2];
+ * const result = contextMenuTriggerKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -457,6 +963,18 @@ export function contextMenuTriggerKeyDown(
 }
 
 /**
+ * Handles the context menu item click interaction for the Context Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuItemClick } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuItemClick>[0];
+ * const state = {} as Parameters<typeof contextMenuItemClick>[1];
+ * const options = {} as Parameters<typeof contextMenuItemClick>[2];
+ * const result = contextMenuItemClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -478,6 +996,18 @@ export function contextMenuItemClick(
 }
 
 /**
+ * Handles the context menu item key down interaction for the Context Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuItemKeyDown } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuItemKeyDown>[0];
+ * const state = {} as Parameters<typeof contextMenuItemKeyDown>[1];
+ * const options = {} as Parameters<typeof contextMenuItemKeyDown>[2];
+ * const result = contextMenuItemKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -498,6 +1028,18 @@ export function contextMenuItemKeyDown(
 }
 
 /**
+ * Handles the context menu key down interaction for the Context Menu primitive.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuKeyDown } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuKeyDown>[0];
+ * const state = {} as Parameters<typeof contextMenuKeyDown>[1];
+ * const options = {} as Parameters<typeof contextMenuKeyDown>[2];
+ * const result = contextMenuKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -519,10 +1061,38 @@ export function contextMenuKeyDown(
   return undefined;
 }
 
+/**
+ * Computes context menu point from event for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuPointFromEvent } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuPointFromEvent>[0];
+ * const result = contextMenuPointFromEvent(input);
+ * ```
+ */
 export function contextMenuPointFromEvent(event: ContextMenuTriggerEvent): ContextMenuPoint {
   return { x: event.clientX ?? 0, y: event.clientY ?? 0 };
 }
 
+/**
+ * Handles the context menu focus element interaction for the Context Menu primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { contextMenuFocusElement } from '@kovojs/headless-ui/context-menu';
+ *
+ * const input = {} as Parameters<typeof contextMenuFocusElement>[0];
+ * const state = {} as Parameters<typeof contextMenuFocusElement>[1];
+ * const options = {} as Parameters<typeof contextMenuFocusElement>[2];
+ * const result = contextMenuFocusElement(input, state, options);
+ * ```
+ */
 export function contextMenuFocusElement(
   event: ContextMenuFocusEvent,
   id: string | undefined,

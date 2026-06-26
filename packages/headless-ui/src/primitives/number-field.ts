@@ -6,8 +6,32 @@ import {
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
 
+/**
+ * Public type used by the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldValue } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldValue = {} as NumberFieldValue;
+ * ```
+ */
 export type NumberFieldValue = number | undefined;
 
+/**
+ * State snapshot consumed by the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldState } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldState = {} as NumberFieldState;
+ * ```
+ */
 export interface NumberFieldState {
   disabled?: boolean;
   invalid?: boolean;
@@ -21,10 +45,34 @@ export interface NumberFieldState {
   value?: NumberFieldValue;
 }
 
+/**
+ * Options accepted by the Number Field primitive number field root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldRootAttributeOptions } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldRootAttributeOptions = {} as NumberFieldRootAttributeOptions;
+ * ```
+ */
 export interface NumberFieldRootAttributeOptions extends NumberFieldState {
   id?: string;
 }
 
+/**
+ * Options accepted by the Number Field primitive number field input attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldInputAttributeOptions } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldInputAttributeOptions = {} as NumberFieldInputAttributeOptions;
+ * ```
+ */
 export interface NumberFieldInputAttributeOptions extends NumberFieldState {
   descriptionId?: string;
   errorId?: string;
@@ -34,37 +82,147 @@ export interface NumberFieldInputAttributeOptions extends NumberFieldState {
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Number Field primitive number field button attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldButtonAttributeOptions } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldButtonAttributeOptions = {} as NumberFieldButtonAttributeOptions;
+ * ```
+ */
 export interface NumberFieldButtonAttributeOptions extends NumberFieldState {
   id?: string;
   inputId?: string;
   label?: string;
 }
 
+/**
+ * Reason token reported by the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldChangeReason } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldChangeReason = {} as NumberFieldChangeReason;
+ * ```
+ */
 export type NumberFieldChangeReason = 'decrement' | 'increment' | 'input' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldChangeDetail } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldChangeDetail = {} as NumberFieldChangeDetail;
+ * ```
+ */
 export type NumberFieldChangeDetail = PrimitiveChangeDetail<
   NumberFieldChangeReason,
   NumberFieldValue
 >;
 
+/**
+ * Options accepted by the Number Field primitive number field change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldChangeOptions } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldChangeOptions = {} as NumberFieldChangeOptions;
+ * ```
+ */
 export interface NumberFieldChangeOptions {
   onValueChange?: (detail: NumberFieldChangeDetail) => void;
 }
 
+/**
+ * Result returned by the Number Field primitive number field change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldChangeResult } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldChangeResult = {} as NumberFieldChangeResult;
+ * ```
+ */
 export interface NumberFieldChangeResult {
   changed: boolean;
   detail?: NumberFieldChangeDetail;
   value: NumberFieldValue;
 }
 
+/**
+ * Serializable attribute record returned by Number Field primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldPrimitiveAttributes } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldPrimitiveAttributes = {} as NumberFieldPrimitiveAttributes;
+ * ```
+ */
 export type NumberFieldPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldButtonEvent } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldButtonEvent = {} as NumberFieldButtonEvent;
+ * ```
+ */
 export type NumberFieldButtonEvent = Event;
+
+/**
+ * Event shape consumed by the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldInputEvent } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldInputEvent = {} as NumberFieldInputEvent;
+ * ```
+ */
 export type NumberFieldInputEvent = Event & {
   readonly currentTarget: { value: string } | null;
   readonly target?: { value?: string } | null;
 };
+
+/**
+ * Event shape consumed by the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { NumberFieldKeyboardEvent } from '@kovojs/headless-ui/number-field';
+ *
+ * const value: NumberFieldKeyboardEvent = {} as NumberFieldKeyboardEvent;
+ * ```
+ */
 export type NumberFieldKeyboardEvent = Event & {
   readonly altKey?: boolean;
   readonly ctrlKey?: boolean;
@@ -73,6 +231,19 @@ export type NumberFieldKeyboardEvent = Event & {
   readonly shiftKey?: boolean;
 };
 
+/**
+ * Builds the number field root attributes record for the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { numberFieldRootAttributes } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof numberFieldRootAttributes>[0];
+ * const result = numberFieldRootAttributes(input);
+ * ```
+ */
 export function numberFieldRootAttributes(
   options: NumberFieldRootAttributeOptions = {},
 ): NumberFieldPrimitiveAttributes {
@@ -82,6 +253,19 @@ export function numberFieldRootAttributes(
   });
 }
 
+/**
+ * Builds the number field input attributes record for the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { numberFieldInputAttributes } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof numberFieldInputAttributes>[0];
+ * const result = numberFieldInputAttributes(input);
+ * ```
+ */
 export function numberFieldInputAttributes(
   options: NumberFieldInputAttributeOptions = {},
 ): NumberFieldPrimitiveAttributes {
@@ -108,18 +292,60 @@ export function numberFieldInputAttributes(
   });
 }
 
+/**
+ * Builds the number field increment attributes record for the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { numberFieldIncrementAttributes } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof numberFieldIncrementAttributes>[0];
+ * const result = numberFieldIncrementAttributes(input);
+ * ```
+ */
 export function numberFieldIncrementAttributes(
   options: NumberFieldButtonAttributeOptions = {},
 ): NumberFieldPrimitiveAttributes {
   return numberFieldStepButtonAttributes(options, 'increment');
 }
 
+/**
+ * Builds the number field decrement attributes record for the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { numberFieldDecrementAttributes } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof numberFieldDecrementAttributes>[0];
+ * const result = numberFieldDecrementAttributes(input);
+ * ```
+ */
 export function numberFieldDecrementAttributes(
   options: NumberFieldButtonAttributeOptions = {},
 ): NumberFieldPrimitiveAttributes {
   return numberFieldStepButtonAttributes(options, 'decrement');
 }
 
+/**
+ * Computes the set number field value transition for the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setNumberFieldValue } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof setNumberFieldValue>[0];
+ * const state = {} as Parameters<typeof setNumberFieldValue>[1];
+ * const options = {} as Parameters<typeof setNumberFieldValue>[2];
+ * const detail = {} as Parameters<typeof setNumberFieldValue>[3];
+ * const result = setNumberFieldValue(input, state, options, detail);
+ * ```
+ */
 export function setNumberFieldValue(
   state: NumberFieldState,
   value: NumberFieldValue,
@@ -141,6 +367,20 @@ export function setNumberFieldValue(
   return { changed: true, detail, value: nextValue };
 }
 
+/**
+ * Computes the increment number field value transition for the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { incrementNumberFieldValue } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof incrementNumberFieldValue>[0];
+ * const state = {} as Parameters<typeof incrementNumberFieldValue>[1];
+ * const result = incrementNumberFieldValue(input, state);
+ * ```
+ */
 export function incrementNumberFieldValue(
   state: NumberFieldState,
   options: NumberFieldChangeOptions = {},
@@ -148,6 +388,20 @@ export function incrementNumberFieldValue(
   return setNumberFieldValue(state, numberFieldStepValue(state, 'increment'), 'increment', options);
 }
 
+/**
+ * Computes the decrement number field value transition for the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { decrementNumberFieldValue } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof decrementNumberFieldValue>[0];
+ * const state = {} as Parameters<typeof decrementNumberFieldValue>[1];
+ * const result = decrementNumberFieldValue(input, state);
+ * ```
+ */
 export function decrementNumberFieldValue(
   state: NumberFieldState,
   options: NumberFieldChangeOptions = {},
@@ -155,6 +409,19 @@ export function decrementNumberFieldValue(
   return setNumberFieldValue(state, numberFieldStepValue(state, 'decrement'), 'decrement', options);
 }
 
+/**
+ * Computes number field value from string for the Number Field primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { numberFieldValueFromString } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof numberFieldValueFromString>[0];
+ * const result = numberFieldValueFromString(input);
+ * ```
+ */
 export function numberFieldValueFromString(value: string): NumberFieldValue {
   const trimmed = value.trim();
   if (trimmed === '') return undefined;
@@ -164,6 +431,18 @@ export function numberFieldValueFromString(value: string): NumberFieldValue {
 }
 
 /**
+ * Handles the number field input interaction for the Number Field primitive.
+ *
+ * @example
+ * ```ts
+ * import { numberFieldInput } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof numberFieldInput>[0];
+ * const state = {} as Parameters<typeof numberFieldInput>[1];
+ * const options = {} as Parameters<typeof numberFieldInput>[2];
+ * const result = numberFieldInput(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -194,6 +473,18 @@ export function numberFieldInput(
 }
 
 /**
+ * Handles the number field increment click interaction for the Number Field primitive.
+ *
+ * @example
+ * ```ts
+ * import { numberFieldIncrementClick } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof numberFieldIncrementClick>[0];
+ * const state = {} as Parameters<typeof numberFieldIncrementClick>[1];
+ * const options = {} as Parameters<typeof numberFieldIncrementClick>[2];
+ * const result = numberFieldIncrementClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -215,6 +506,18 @@ export function numberFieldIncrementClick(
 }
 
 /**
+ * Handles the number field decrement click interaction for the Number Field primitive.
+ *
+ * @example
+ * ```ts
+ * import { numberFieldDecrementClick } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof numberFieldDecrementClick>[0];
+ * const state = {} as Parameters<typeof numberFieldDecrementClick>[1];
+ * const options = {} as Parameters<typeof numberFieldDecrementClick>[2];
+ * const result = numberFieldDecrementClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -236,6 +539,18 @@ export function numberFieldDecrementClick(
 }
 
 /**
+ * Handles the number field key down interaction for the Number Field primitive.
+ *
+ * @example
+ * ```ts
+ * import { numberFieldKeyDown } from '@kovojs/headless-ui/number-field';
+ *
+ * const input = {} as Parameters<typeof numberFieldKeyDown>[0];
+ * const state = {} as Parameters<typeof numberFieldKeyDown>[1];
+ * const options = {} as Parameters<typeof numberFieldKeyDown>[2];
+ * const result = numberFieldKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

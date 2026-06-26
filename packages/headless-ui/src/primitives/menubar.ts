@@ -17,6 +17,18 @@ import {
   type TypeaheadState,
 } from '../lib/index.js';
 
+/**
+ * Public interface used by the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarItem } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarItem = {} as MenubarItem;
+ * ```
+ */
 export interface MenubarItem {
   disabled?: boolean;
   hasPopup?: boolean;
@@ -26,6 +38,18 @@ export interface MenubarItem {
   value: string;
 }
 
+/**
+ * State snapshot consumed by the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarState } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarState = {} as MenubarState;
+ * ```
+ */
 export interface MenubarState {
   activeValue?: string;
   dir?: TextDirection;
@@ -36,6 +60,18 @@ export interface MenubarState {
   orientation?: CollectionOrientation;
 }
 
+/**
+ * Options accepted by the Menubar primitive menubar root attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarRootAttributeOptions } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarRootAttributeOptions = {} as MenubarRootAttributeOptions;
+ * ```
+ */
 export interface MenubarRootAttributeOptions extends MenubarState {
   descriptionId?: string;
   id?: string;
@@ -43,6 +79,18 @@ export interface MenubarRootAttributeOptions extends MenubarState {
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Menubar primitive menubar item attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarItemAttributeOptions } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarItemAttributeOptions = {} as MenubarItemAttributeOptions;
+ * ```
+ */
 export interface MenubarItemAttributeOptions extends MenubarState {
   contentId?: string;
   id?: string;
@@ -52,21 +100,69 @@ export interface MenubarItemAttributeOptions extends MenubarState {
   itemValue: string;
 }
 
+/**
+ * Options accepted by the Menubar primitive menubar submenu attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarSubmenuAttributeOptions } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarSubmenuAttributeOptions = {} as MenubarSubmenuAttributeOptions;
+ * ```
+ */
 export interface MenubarSubmenuAttributeOptions extends MenubarState {
   id?: string;
   labelledBy?: string;
   value: string;
 }
 
+/**
+ * Options accepted by the Menubar primitive menubar group attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarGroupAttributeOptions } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarGroupAttributeOptions = {} as MenubarGroupAttributeOptions;
+ * ```
+ */
 export interface MenubarGroupAttributeOptions extends MenubarState {
   id?: string;
   labelledBy?: string;
 }
 
+/**
+ * Options accepted by the Menubar primitive menubar separator attribute.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarSeparatorAttributeOptions } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarSeparatorAttributeOptions = {} as MenubarSeparatorAttributeOptions;
+ * ```
+ */
 export interface MenubarSeparatorAttributeOptions {
   id?: string;
 }
 
+/**
+ * Reason token reported by the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarOpenChangeReason } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarOpenChangeReason = {} as MenubarOpenChangeReason;
+ * ```
+ */
 export type MenubarOpenChangeReason =
   | 'escape-key'
   | 'item-click'
@@ -75,26 +171,98 @@ export type MenubarOpenChangeReason =
   | 'item-select'
   | 'programmatic';
 
+/**
+ * Reason token reported by the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarSelectReason } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarSelectReason = {} as MenubarSelectReason;
+ * ```
+ */
 export type MenubarSelectReason = 'item-click' | 'keyboard' | 'programmatic';
 
+/**
+ * Cancelable change detail emitted by the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarOpenChangeDetail } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarOpenChangeDetail = {} as MenubarOpenChangeDetail;
+ * ```
+ */
 export type MenubarOpenChangeDetail = PrimitiveChangeDetail<
   MenubarOpenChangeReason,
   string | undefined
 >;
 
+/**
+ * Cancelable change detail emitted by the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarSelectDetail } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarSelectDetail = {} as MenubarSelectDetail;
+ * ```
+ */
 export type MenubarSelectDetail = PrimitiveChangeDetail<MenubarSelectReason, string>;
 
+/**
+ * Options accepted by the Menubar primitive menubar change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarChangeOptions } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarChangeOptions = {} as MenubarChangeOptions;
+ * ```
+ */
 export interface MenubarChangeOptions {
   onOpenChange?: (detail: MenubarOpenChangeDetail) => void;
   onSelect?: (detail: MenubarSelectDetail) => void;
 }
 
+/**
+ * Result returned by the Menubar primitive menubar open change.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarOpenChangeResult } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarOpenChangeResult = {} as MenubarOpenChangeResult;
+ * ```
+ */
 export interface MenubarOpenChangeResult {
   changed: boolean;
   detail?: MenubarOpenChangeDetail;
   openValue: string | undefined;
 }
 
+/**
+ * Result returned by the Menubar primitive menubar select.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarSelectResult } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarSelectResult = {} as MenubarSelectResult;
+ * ```
+ */
 export interface MenubarSelectResult {
   detail?: MenubarSelectDetail;
   open: MenubarOpenChangeResult;
@@ -102,17 +270,53 @@ export interface MenubarSelectResult {
   value: string;
 }
 
+/**
+ * Options accepted by the Menubar primitive menubar move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarMoveOptions } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarMoveOptions = {} as MenubarMoveOptions;
+ * ```
+ */
 export interface MenubarMoveOptions {
   loop?: boolean;
   parentValue?: string;
 }
 
+/**
+ * Result returned by the Menubar primitive menubar move.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarMoveResult } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarMoveResult = {} as MenubarMoveResult;
+ * ```
+ */
 export interface MenubarMoveResult {
   activeIndex: number;
   activeValue: string | undefined;
   parentValue: string | undefined;
 }
 
+/**
+ * Options accepted by the Menubar primitive menubar typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarTypeaheadOptions } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarTypeaheadOptions = {} as MenubarTypeaheadOptions;
+ * ```
+ */
 export interface MenubarTypeaheadOptions extends MenubarMoveOptions {
   currentValue?: string;
   now: number;
@@ -120,15 +324,77 @@ export interface MenubarTypeaheadOptions extends MenubarMoveOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Result returned by the Menubar primitive menubar typeahead.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarTypeaheadResult } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarTypeaheadResult = {} as MenubarTypeaheadResult;
+ * ```
+ */
 export interface MenubarTypeaheadResult extends MenubarMoveResult {
   state: TypeaheadState;
 }
 
+/**
+ * Serializable attribute record returned by Menubar primitive builders.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarPrimitiveAttributes } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarPrimitiveAttributes = {} as MenubarPrimitiveAttributes;
+ * ```
+ */
 export type MenubarPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+/**
+ * Event shape consumed by the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarItemEvent } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarItemEvent = {} as MenubarItemEvent;
+ * ```
+ */
 export type MenubarItemEvent = Event;
+
+/**
+ * Event shape consumed by the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarKeyboardEvent } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarKeyboardEvent = {} as MenubarKeyboardEvent;
+ * ```
+ */
 export type MenubarKeyboardEvent = Event & { readonly key: string };
+
+/**
+ * Event shape consumed by the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarFocusEvent } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarFocusEvent = {} as MenubarFocusEvent;
+ * ```
+ */
 export type MenubarFocusEvent = Event & {
   readonly currentTarget?: {
     ownerDocument?: {
@@ -141,11 +407,39 @@ export type MenubarFocusEvent = Event & {
     };
   } | null;
 };
+
+/**
+ * Options accepted by the Menubar primitive menubar focus.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { MenubarFocusOptions } from '@kovojs/headless-ui/menubar';
+ *
+ * const value: MenubarFocusOptions = {} as MenubarFocusOptions;
+ * ```
+ */
 export interface MenubarFocusOptions {
   defer?: boolean;
   schedule?: (callback: () => void) => void;
 }
 
+/**
+ * Builds the menubar root attributes record for the Menubar primitive.
+ *
+ * Emits `aria-describedby`, `aria-disabled`, `aria-label`, `aria-labelledby`, `aria-orientation`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarRootAttributes } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarRootAttributes>[0];
+ * const result = menubarRootAttributes(input);
+ * ```
+ */
 export function menubarRootAttributes(
   options: MenubarRootAttributeOptions = {},
 ): MenubarPrimitiveAttributes {
@@ -163,6 +457,21 @@ export function menubarRootAttributes(
   });
 }
 
+/**
+ * Builds the menubar item attributes record for the Menubar primitive.
+ *
+ * Emits `aria-controls`, `aria-disabled`, `aria-expanded`, `aria-haspopup`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarItemAttributes } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarItemAttributes>[0];
+ * const result = menubarItemAttributes(input);
+ * ```
+ */
 export function menubarItemAttributes(
   options: MenubarItemAttributeOptions,
 ): MenubarPrimitiveAttributes {
@@ -186,6 +495,21 @@ export function menubarItemAttributes(
   });
 }
 
+/**
+ * Builds the menubar submenu attributes record for the Menubar primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarSubmenuAttributes } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarSubmenuAttributes>[0];
+ * const result = menubarSubmenuAttributes(input);
+ * ```
+ */
 export function menubarSubmenuAttributes(
   options: MenubarSubmenuAttributeOptions,
 ): MenubarPrimitiveAttributes {
@@ -201,6 +525,21 @@ export function menubarSubmenuAttributes(
   });
 }
 
+/**
+ * Builds the menubar group attributes record for the Menubar primitive.
+ *
+ * Emits `aria-labelledby`.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarGroupAttributes } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarGroupAttributes>[0];
+ * const result = menubarGroupAttributes(input);
+ * ```
+ */
 export function menubarGroupAttributes(
   options: MenubarGroupAttributeOptions = {},
 ): MenubarPrimitiveAttributes {
@@ -212,6 +551,19 @@ export function menubarGroupAttributes(
   });
 }
 
+/**
+ * Builds the menubar separator attributes record for the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarSeparatorAttributes } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarSeparatorAttributes>[0];
+ * const result = menubarSeparatorAttributes(input);
+ * ```
+ */
 export function menubarSeparatorAttributes(
   options: MenubarSeparatorAttributeOptions = {},
 ): MenubarPrimitiveAttributes {
@@ -221,14 +573,56 @@ export function menubarSeparatorAttributes(
   });
 }
 
+/**
+ * Computes menubar item highlighted for the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarItemHighlighted } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarItemHighlighted>[0];
+ * const result = menubarItemHighlighted(input);
+ * ```
+ */
 export function menubarItemHighlighted(options: MenubarItemAttributeOptions): boolean {
   return options.activeValue === options.itemValue;
 }
 
+/**
+ * Computes menubar item open for the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarItemOpen } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarItemOpen>[0];
+ * const result = menubarItemOpen(input);
+ * ```
+ */
 export function menubarItemOpen(options: MenubarItemAttributeOptions): boolean {
   return options.openValue === options.itemValue;
 }
 
+/**
+ * Computes the set menubar open value transition for the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { setMenubarOpenValue } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof setMenubarOpenValue>[0];
+ * const state = {} as Parameters<typeof setMenubarOpenValue>[1];
+ * const options = {} as Parameters<typeof setMenubarOpenValue>[2];
+ * const detail = {} as Parameters<typeof setMenubarOpenValue>[3];
+ * const result = setMenubarOpenValue(input, state, options, detail);
+ * ```
+ */
 export function setMenubarOpenValue(
   state: MenubarState,
   openValue: string | undefined,
@@ -247,6 +641,22 @@ export function setMenubarOpenValue(
   return { changed: true, detail, openValue };
 }
 
+/**
+ * Computes the toggle menubar open value transition for the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { toggleMenubarOpenValue } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof toggleMenubarOpenValue>[0];
+ * const state = {} as Parameters<typeof toggleMenubarOpenValue>[1];
+ * const options = {} as Parameters<typeof toggleMenubarOpenValue>[2];
+ * const detail = {} as Parameters<typeof toggleMenubarOpenValue>[3];
+ * const result = toggleMenubarOpenValue(input, state, options, detail);
+ * ```
+ */
 export function toggleMenubarOpenValue(
   state: MenubarState,
   value: string,
@@ -256,6 +666,22 @@ export function toggleMenubarOpenValue(
   return setMenubarOpenValue(state, state.openValue === value ? undefined : value, reason, options);
 }
 
+/**
+ * Computes the select menubar item transition for the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { selectMenubarItem } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof selectMenubarItem>[0];
+ * const state = {} as Parameters<typeof selectMenubarItem>[1];
+ * const options = {} as Parameters<typeof selectMenubarItem>[2];
+ * const detail = {} as Parameters<typeof selectMenubarItem>[3];
+ * const result = selectMenubarItem(input, state, options, detail);
+ * ```
+ */
 export function selectMenubarItem(
   state: MenubarState,
   value: string,
@@ -298,6 +724,21 @@ export function selectMenubarItem(
   };
 }
 
+/**
+ * Computes menubar move for the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarMove } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarMove>[0];
+ * const state = {} as Parameters<typeof menubarMove>[1];
+ * const options = {} as Parameters<typeof menubarMove>[2];
+ * const result = menubarMove(input, state, options);
+ * ```
+ */
 export function menubarMove(
   state: MenubarState,
   key: string,
@@ -328,6 +769,21 @@ export function menubarMove(
   };
 }
 
+/**
+ * Computes menubar typeahead for the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarTypeahead } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarTypeahead>[0];
+ * const state = {} as Parameters<typeof menubarTypeahead>[1];
+ * const options = {} as Parameters<typeof menubarTypeahead>[2];
+ * const result = menubarTypeahead(input, state, options);
+ * ```
+ */
 export function menubarTypeahead(
   state: MenubarState,
   key: string,
@@ -372,6 +828,18 @@ export function menubarTypeahead(
 }
 
 /**
+ * Handles the menubar submenu trigger click interaction for the Menubar primitive.
+ *
+ * @example
+ * ```ts
+ * import { menubarSubmenuTriggerClick } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarSubmenuTriggerClick>[0];
+ * const state = {} as Parameters<typeof menubarSubmenuTriggerClick>[1];
+ * const options = {} as Parameters<typeof menubarSubmenuTriggerClick>[2];
+ * const result = menubarSubmenuTriggerClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -393,6 +861,18 @@ export function menubarSubmenuTriggerClick(
 }
 
 /**
+ * Handles the menubar item pointer enter interaction for the Menubar primitive.
+ *
+ * @example
+ * ```ts
+ * import { menubarItemPointerEnter } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarItemPointerEnter>[0];
+ * const state = {} as Parameters<typeof menubarItemPointerEnter>[1];
+ * const options = {} as Parameters<typeof menubarItemPointerEnter>[2];
+ * const result = menubarItemPointerEnter(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -410,6 +890,18 @@ export function menubarItemPointerEnter(
 }
 
 /**
+ * Handles the menubar item click interaction for the Menubar primitive.
+ *
+ * @example
+ * ```ts
+ * import { menubarItemClick } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarItemClick>[0];
+ * const state = {} as Parameters<typeof menubarItemClick>[1];
+ * const options = {} as Parameters<typeof menubarItemClick>[2];
+ * const result = menubarItemClick(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -431,6 +923,18 @@ export function menubarItemClick(
 }
 
 /**
+ * Handles the menubar item key down interaction for the Menubar primitive.
+ *
+ * @example
+ * ```ts
+ * import { menubarItemKeyDown } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarItemKeyDown>[0];
+ * const state = {} as Parameters<typeof menubarItemKeyDown>[1];
+ * const options = {} as Parameters<typeof menubarItemKeyDown>[2];
+ * const result = menubarItemKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -451,6 +955,18 @@ export function menubarItemKeyDown(
 }
 
 /**
+ * Handles the menubar key down interaction for the Menubar primitive.
+ *
+ * @example
+ * ```ts
+ * import { menubarKeyDown } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarKeyDown>[0];
+ * const state = {} as Parameters<typeof menubarKeyDown>[1];
+ * const options = {} as Parameters<typeof menubarKeyDown>[2];
+ * const result = menubarKeyDown(input, state, options);
+ * ```
+ *
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -482,6 +998,21 @@ export function menubarKeyDown(
   return undefined;
 }
 
+/**
+ * Handles the menubar focus element interaction for the Menubar primitive.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import { menubarFocusElement } from '@kovojs/headless-ui/menubar';
+ *
+ * const input = {} as Parameters<typeof menubarFocusElement>[0];
+ * const state = {} as Parameters<typeof menubarFocusElement>[1];
+ * const options = {} as Parameters<typeof menubarFocusElement>[2];
+ * const result = menubarFocusElement(input, state, options);
+ * ```
+ */
 export function menubarFocusElement(
   event: MenubarFocusEvent,
   id: string | undefined,
