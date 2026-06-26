@@ -21,8 +21,9 @@ export interface AgentToolModuleSource {
  * helpers reached through static named/default imports including static local re-export barrels,
  * default exports that alias a summarized local helper, static namespace-property calls into
  * exported local helpers, default object exports whose properties statically point at summarized
- * local helpers, and handler properties that reference a summarized local/imported helper
- * function. It does not inspect raw source text after parse and it skips non-invoked nested
+ * local helpers, handler properties that reference a summarized local/imported helper function,
+ * and inline callbacks passed to a same-module helper that directly invokes that callback
+ * parameter. It does not inspect raw source text after parse and it skips non-invoked nested
  * function bodies, so ordinary callbacks, computed namespace access, computed/spread object
  * exports, export-star namespaces, and dynamic paths remain outside the SPEC.md §6.6 sound subset
  * until a dedicated analyzer proves them.
@@ -578,6 +579,19 @@ function reachableSinkFacts(
           helperOrigin,
         ),
       );
+
+      for (const callback of directlyInvokedCallbackArguments(node, helper, moduleFacts)) {
+        facts.push(
+          ...reachableSinkFacts(
+            sourceFile,
+            tool,
+            callback,
+            moduleFacts,
+            new Set([...activeHelpers, helper.id]),
+            helperOrigin,
+          ),
+        );
+      }
     }
 
     ts.forEachChild(node, visit);
@@ -598,6 +612,119 @@ function directlyInvokedInlineFunction(node: ts.Node): ts.FunctionLikeDeclaratio
   }
 
   return undefined;
+}
+
+function directlyInvokedCallbackArguments(
+  node: ts.Node,
+  helper: HelperDefinition,
+  callerModuleFacts: ModuleFacts,
+): ts.FunctionLikeDeclaration[] {
+  if (!ts.isCallExpression(node)) return [];
+  if (helper.moduleFacts.sourceFile !== callerModuleFacts.sourceFile) return [];
+
+  const invokedParameters = directlyInvokedCallbackParameters(helper.node);
+  if (invokedParameters.size === 0) return [];
+
+  const callbacks: ts.FunctionLikeDeclaration[] = [];
+  helper.node.parameters.forEach((parameter, index) => {
+    if (!ts.isIdentifier(parameter.name)) return;
+    if (!invokedParameters.has(parameter.name.text)) return;
+
+    const argument = node.arguments[index];
+    if (!argument) return;
+
+    const expression = unwrapParentheses(argument);
+    if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
+      callbacks.push(expression);
+    }
+  });
+
+  return callbacks;
+}
+
+function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): ReadonlySet<string> {
+  const body = fn.body;
+  if (!body) return new Set();
+
+  const candidateNames = new Set<string>();
+  for (const parameter of fn.parameters) {
+    if (ts.isIdentifier(parameter.name)) candidateNames.add(parameter.name.text);
+  }
+  if (candidateNames.size === 0) return new Set();
+
+  const invokedNames = new Set<string>();
+  const reassignedNames = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (node !== body && ts.isFunctionLike(node)) return;
+
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      candidateNames.has(node.expression.text)
+    ) {
+      invokedNames.add(node.expression.text);
+    }
+
+    const assignedName = assignedIdentifierName(node);
+    if (assignedName !== undefined && candidateNames.has(assignedName)) {
+      reassignedNames.add(assignedName);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(body);
+
+  for (const reassignedName of reassignedNames) {
+    invokedNames.delete(reassignedName);
+  }
+
+  return invokedNames;
+}
+
+function assignedIdentifierName(node: ts.Node): string | undefined {
+  if (
+    ts.isBinaryExpression(node) &&
+    isAssignmentOperator(node.operatorToken.kind) &&
+    ts.isIdentifier(node.left)
+  ) {
+    return node.left.text;
+  }
+
+  if (
+    (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+    (node.operator === ts.SyntaxKind.PlusPlusToken ||
+      node.operator === ts.SyntaxKind.MinusMinusToken) &&
+    ts.isIdentifier(node.operand)
+  ) {
+    return node.operand.text;
+  }
+
+  return undefined;
+}
+
+function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
+  switch (kind) {
+    case ts.SyntaxKind.FirstAssignment:
+    case ts.SyntaxKind.PlusEqualsToken:
+    case ts.SyntaxKind.MinusEqualsToken:
+    case ts.SyntaxKind.AsteriskEqualsToken:
+    case ts.SyntaxKind.AsteriskAsteriskEqualsToken:
+    case ts.SyntaxKind.SlashEqualsToken:
+    case ts.SyntaxKind.PercentEqualsToken:
+    case ts.SyntaxKind.LessThanLessThanEqualsToken:
+    case ts.SyntaxKind.GreaterThanGreaterThanEqualsToken:
+    case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken:
+    case ts.SyntaxKind.AmpersandEqualsToken:
+    case ts.SyntaxKind.BarEqualsToken:
+    case ts.SyntaxKind.CaretEqualsToken:
+    case ts.SyntaxKind.AmpersandAmpersandEqualsToken:
+    case ts.SyntaxKind.BarBarEqualsToken:
+    case ts.SyntaxKind.QuestionQuestionEqualsToken:
+      return true;
+    default:
+      return false;
+  }
 }
 
 function unwrapParentheses(expression: ts.Expression): ts.Expression {
