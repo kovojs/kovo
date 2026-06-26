@@ -818,7 +818,8 @@ function eqOperandsAreTableColumnArgKeyed(
   const provenance =
     privateScopeForExpression(expression, sessionContext) ??
     summarizedStaticCallPrivateScope(expression, sessionContext) ??
-    conditionalExpressionPrivateScope(expression, sessionContext);
+    conditionalExpressionPrivateScope(expression, sessionContext) ??
+    binaryExpressionPrivateScope(expression, sessionContext);
   if (!provenance) {
     const tupleElement = localConstTupleElementPrivateScope(expression, sessionContext);
     if (tupleElement) {
@@ -1223,6 +1224,8 @@ function staticWrapperValuePrivateScope(
   }
   const conditional = conditionalExpressionPrivateScope(node, sessionContext, depth + 1);
   if (conditional) return conditional;
+  const binary = binaryExpressionPrivateScope(node, sessionContext, depth + 1);
+  if (binary) return binary;
   if (!Node.isIdentifier(node)) {
     if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
       const provenance = staticWrapperAccessPrivateScope(node, sessionContext, depth + 1);
@@ -1386,6 +1389,31 @@ function conditionalExpressionPrivateScope(
   if (!whenTrue || !whenFalse) return undefined;
   if (privateScopeKey(whenTrue) !== privateScopeKey(whenFalse)) return undefined;
   return whenTrue;
+}
+
+function binaryExpressionPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+  depth = 0,
+): PrivateScopeProvenance | undefined {
+  if (depth > 4) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isBinaryExpression(node)) return undefined;
+
+  const operator = node.getOperatorToken().getKind();
+  if (
+    operator !== SyntaxKind.QuestionQuestionToken &&
+    operator !== SyntaxKind.BarBarToken &&
+    operator !== SyntaxKind.AmpersandAmpersandToken
+  ) {
+    return undefined;
+  }
+
+  const left = staticWrapperValuePrivateScope(node.getLeft(), sessionContext, depth + 1);
+  const right = staticWrapperValuePrivateScope(node.getRight(), sessionContext, depth + 1);
+  if (!left || !right) return undefined;
+  if (privateScopeKey(left) !== privateScopeKey(right)) return undefined;
+  return left;
 }
 
 /**
