@@ -393,6 +393,9 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
 
     for (const capability of capabilities) {
       lines.push(capabilityLine(capability));
+      if (capability.kind === 'agentTool') {
+        lines.push(...agentToolReachableSinkLines(capability));
+      }
     }
 
     lines.push(`SUMMARY total=${capabilities.length}`);
@@ -1913,6 +1916,41 @@ function agentToolSinkList(
     .map((sink) => `${sink.grade}:${sink.kind}:${sink.target}->${sink.capability}@${sink.site}`)
     .sort()
     .join(',');
+}
+
+function agentToolReachableSinkLines(capability: CoreGraph.CapabilityExplain): string[] {
+  const sinks = capability.reachableSinks ?? [];
+  if (sinks.length === 0) return [];
+
+  return [...sinks]
+    .sort(compareAgentToolReachableSink)
+    .map((sink) =>
+      [
+        'AGENT_TOOL_SINK',
+        `tool=${sink.tool}`,
+        `grade=${sink.grade}`,
+        `kind=${sink.kind}`,
+        `target=${sink.target}`,
+        `capability=${sink.capability}`,
+        `site=${sink.site}`,
+        `evidence=${stableValue(sink.evidence)}`,
+      ].join(' '),
+    );
+}
+
+function compareAgentToolReachableSink(
+  left: CoreGraph.AgentToolReachableSinkFact,
+  right: CoreGraph.AgentToolReachableSinkFact,
+): number {
+  return (
+    left.tool.localeCompare(right.tool) ||
+    left.grade.localeCompare(right.grade) ||
+    left.kind.localeCompare(right.kind) ||
+    left.target.localeCompare(right.target) ||
+    left.capability.localeCompare(right.capability) ||
+    left.site.localeCompare(right.site) ||
+    (left.evidence ?? '').localeCompare(right.evidence ?? '')
+  );
 }
 
 interface AgentToolCapabilityCoverageFailure {

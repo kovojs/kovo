@@ -919,6 +919,15 @@ describe('kovo explain', () => {
     expect(result.output).toContain(
       'sinks=audit:secret-read:env.SENDGRID_TOKEN->secrets.read@app/tools/orders.ts:29,sound:egress:smtp->email.send@app/tools/orders.ts:31,sound:secret-read:env.SENDGRID_TOKEN->secrets.read@app/tools/orders.ts:32,sound:write:orders->orders.write@mutation:orders.updateStatus',
     );
+    expect(result.output).toContain(
+      'AGENT_TOOL_SINK tool=orders.updateStatus grade=audit kind=secret-read target=env.SENDGRID_TOKEN capability=secrets.read site=app/tools/orders.ts:29 evidence="declared-tool-body"',
+    );
+    expect(result.output).toContain(
+      'AGENT_TOOL_SINK tool=orders.updateStatus grade=sound kind=egress target=smtp capability=email.send site=app/tools/orders.ts:31 evidence="static-tool-body-egress"',
+    );
+    expect(result.output).toContain(
+      'AGENT_TOOL_SINK tool=orders.updateStatus grade=sound kind=write target=orders capability=orders.write site=mutation:orders.updateStatus evidence="graph-write-domain"',
+    );
   });
 
   it('prints the cookie downgrade audit table (--cookies)', () => {
