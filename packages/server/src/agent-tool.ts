@@ -426,6 +426,10 @@ function requestWithoutSession(request: Request): AgentToolRequest {
   if (!('session' in request)) return request as AgentToolRequest;
 
   return new Proxy(request, {
+    getOwnPropertyDescriptor(target, property) {
+      if (property === 'session') return undefined;
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
     get(target, property) {
       if (property === 'session') return undefined;
 
@@ -435,6 +439,9 @@ function requestWithoutSession(request: Request): AgentToolRequest {
     has(target, property) {
       if (property === 'session') return false;
       return property in target;
+    },
+    ownKeys(target) {
+      return Reflect.ownKeys(target).filter((property) => property !== 'session');
     },
   }) as AgentToolRequest;
 }
