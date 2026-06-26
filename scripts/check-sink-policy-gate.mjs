@@ -819,6 +819,13 @@ export function rootedFileServeRawSinkFindings(filePath, text, options = {}) {
     }
   }
 
+  for (const exported of fsImports.reExports) {
+    if (!rootedFileServeRawSinkNames.has(exported.imported)) continue;
+    findings.push(
+      `${filePath}: KV424 raw filesystem ${exported.imported} re-export is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed`,
+    );
+  }
+
   return dedupe(findings);
 }
 
@@ -1262,7 +1269,18 @@ function childProcessImportLocals(text) {
 function fsImportLocals(text) {
   const named = [];
   const namespaces = new Set();
+  const reExports = [];
   const fsModule = String.raw`(?:node:)?fs(?:\/promises)?`;
+
+  const defaultImportPattern = new RegExp(
+    String.raw`\bimport\s+(?!type\b)([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]+\}\s*)?from\s*(['"])${fsModule}\2`,
+    'g',
+  );
+  let defaultImport;
+  while ((defaultImport = defaultImportPattern.exec(text)) !== null) {
+    if (isInsideStringOrComment(text, defaultImport.index)) continue;
+    namespaces.add(defaultImport[1]);
+  }
 
   const namedImportPattern = new RegExp(
     String.raw`\bimport\s*\{([^}]+)\}\s*from\s*(['"])${fsModule}\2`,
@@ -1304,7 +1322,17 @@ function fsImportLocals(text) {
     namespaces.add(namespaceRequire[1]);
   }
 
-  return { named, namespaces };
+  const directExportPattern = new RegExp(
+    String.raw`\bexport\s*\{([^}]+)\}\s*from\s*(['"])${fsModule}\2`,
+    'g',
+  );
+  let directExport;
+  while ((directExport = directExportPattern.exec(text)) !== null) {
+    if (isInsideStringOrComment(text, directExport.index)) continue;
+    reExports.push(...parseNamedSpecifiers(directExport[1]));
+  }
+
+  return { named, namespaces, reExports };
 }
 
 function deserializationImportLocals(text) {

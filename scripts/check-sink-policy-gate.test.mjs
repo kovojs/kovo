@@ -344,8 +344,11 @@ describe('sink-policy gate', () => {
         'packages/server/src/unsafe-file.ts',
         `
           import { createReadStream, open as rawOpen } from "node:fs";
+          import fs from "fs";
           import * as fsPromises from "node:fs/promises";
+          export { open as rawOpenPromise } from "node:fs/promises";
           const stream = createReadStream(requestedPath);
+          fs.createWriteStream(requestedPath);
           rawOpen(requestedPath, "r", () => {});
           await fsPromises.open(requestedPath);
         `,
@@ -355,6 +358,8 @@ describe('sink-policy gate', () => {
       'packages/server/src/unsafe-file.ts: KV424 raw filesystem createReadStream call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
       'packages/server/src/unsafe-file.ts: KV424 raw filesystem open import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
       'packages/server/src/unsafe-file.ts: KV424 raw filesystem open call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createWriteStream call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem open re-export is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
     ]);
   });
 
