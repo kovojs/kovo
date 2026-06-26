@@ -270,7 +270,10 @@ session: manager })` now wires the Kovo-owned opaque manager into the request sh
       `session` plus delegated `sessionProvider`; `createApp()` now auto-provisions a Kovo-owned opaque manager
       when no session boundary is supplied and keeps explicit `sessionProvider` as a fenced delegated boundary.
       `pnpm exec vitest run packages/server/src/app.test.ts packages/server/src/opaque-session.test.ts
-packages/server/src/api/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
+packages/server/src/api/app.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Owned opaque
+      sessions now have a regression test proving one store validation per guarded request, consistent guard/page
+      request threading, and immediate anonymous treatment for rotated-prior and revoked cookies; `pnpm exec vitest run
+packages/server/src/opaque-session.test.ts`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap:
       Better Auth delegation and explicit `sessionProvider` remain supported boundaries, so opaque sessions are
       not yet the only framework-wide default lifecycle.
 
