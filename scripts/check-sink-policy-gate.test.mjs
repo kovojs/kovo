@@ -13,6 +13,8 @@ import {
   publicSinkPolicyEscapeFindings,
   responseFragmentApplyInvariantFindings,
   sqlBlessedBrandLaunderingFindings,
+  sqlGuardDowngradeFindings,
+  sqlSafetyInvariantFindings,
 } from './check-sink-policy-gate.mjs';
 
 const validPolicy = `
@@ -37,6 +39,8 @@ function runFixture(files) {
     responseFragmentApplyPath: undefined,
     sinkPolicyPath: 'sink-policy.ts',
     sqlBlessedBrandFiles: [],
+    sqlGuardDowngradeFiles: [],
+    sqlSafetyInvariantFiles: [],
   });
 }
 
@@ -233,6 +237,8 @@ describe('sink-policy gate', () => {
         responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: forbidden child_process.execSync import; use cmd()/runCommand() so command execution stays shell-free and witnessed',
@@ -317,6 +323,8 @@ describe('sink-policy gate', () => {
         responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code',
@@ -370,6 +378,8 @@ describe('sink-policy gate', () => {
         responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: raw console.info of request-derived values is a KV439 log sink; route values through neutralizeLogValue()/formatLogMessage() before logging',
@@ -396,6 +406,145 @@ describe('sink-policy gate', () => {
     ).toEqual([]);
   });
 
+  it('rejects fail-open SQL guard env and config downgrade paths in production source', () => {
+    expect(
+      sqlGuardDowngradeFindings(
+        'packages/server/src/sql-safe-handle.ts',
+        `
+          export function resolveSqlGuard() {
+            if (process.env.KOVO_SQL_GUARD === 'off') return 'off';
+            return { sqlSafetyMode: 'warn' };
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/sql-safe-handle.ts: SQL safety must remain default-deny; remove SQL guard downgrade path (KOVO_SQL_GUARD env knob)',
+      'packages/server/src/sql-safe-handle.ts: SQL safety must remain default-deny; remove SQL guard downgrade path (SQL-related process.env guard)',
+      'packages/server/src/sql-safe-handle.ts: SQL safety must remain default-deny; remove SQL guard downgrade path (sql guard warn/off config)',
+    ]);
+  });
+
+  it('rejects a fake SqlSafetyMode warn/off union', () => {
+    expect(
+      sqlGuardDowngradeFindings(
+        'packages/core/src/internal/sql-safety.ts',
+        `export type SqlSafetyMode = 'enforce' | 'warn' | 'off';`,
+      ),
+    ).toEqual([
+      'packages/core/src/internal/sql-safety.ts: SQL safety must remain default-deny; remove SQL guard downgrade path (SqlSafetyMode warn/off union)',
+    ]);
+  });
+
+  it('allows explanatory SQL guard text in comments, tests, and plans', () => {
+    expect(
+      sqlGuardDowngradeFindings(
+        'packages/server/src/sql-safe-handle.ts',
+        `
+          // KOVO_SQL_GUARD=warn/off used to fail open; this comment must stay legal.
+          export const mode = 'enforce';
+        `,
+      ),
+    ).toEqual([]);
+    expect(
+      sqlGuardDowngradeFindings(
+        'packages/server/src/sql-safe-handle.test.ts',
+        `
+          process.env.KOVO_SQL_GUARD = 'warn';
+          const sqlSafetyMode = 'off';
+        `,
+      ),
+    ).toEqual([]);
+    expect(
+      sqlGuardDowngradeFindings(
+        'plans/most-secure-web-framework.md',
+        'KOVO_SQL_GUARD warn/off must stay forbidden in production source.',
+      ),
+    ).toEqual([]);
+  });
+
+  it('pins SQL-safety diagnostics and managed-handle behavior to error/default-deny', () => {
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/core/src/diagnostics.ts',
+        `
+          export const diagnosticDefinitions = {
+            KV422: {
+              code: 'KV422',
+              severity: 'error',
+              message: 'SQL text injection risk.',
+            },
+          };
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/core/src/internal/sql-safety.ts',
+        `
+          export type SqlSafetyMode = 'enforce';
+          function unsafeSqlResult(message: string): SqlStatementValidationResult {
+            return { ok: false, message };
+          }
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/server/src/sql-safe-handle.ts',
+        `
+          function assertManagedSqlStatement(statement: unknown): void {
+            const validation = validateManagedSqlStatement(statement);
+            if (validation.ok) return;
+            throw new Error(validation.message);
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('flags SQL-safety invariant drift toward warn or pass-through', () => {
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/core/src/diagnostics.ts',
+        `export const diagnosticDefinitions = { KV422: { severity: 'warn' } };`,
+      ),
+    ).toEqual([
+      'packages/core/src/diagnostics.ts: KV422 SQL-safety diagnostic severity must remain error',
+    ]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/core/src/internal/sql-safety.ts',
+        `
+          export type SqlSafetyMode = 'enforce' | 'warn';
+          function unsafeSqlResult(message: string): SqlStatementValidationResult {
+            return { ok: true, message };
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/core/src/internal/sql-safety.ts: SqlSafetyMode must remain the single enforce mode',
+      'packages/core/src/internal/sql-safety.ts: unsafe SQL validation results must remain fail-closed',
+    ]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/server/src/sql-safe-handle.ts',
+        `
+          function assertManagedSqlStatement(statement: unknown): void {
+            const validation = validateManagedSqlStatement(statement);
+            if (validation.ok) return;
+            console.warn(validation.message);
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/sql-safe-handle.ts: managed DB handle must throw on failed SQL validation',
+    ]);
+  });
+
   it('requires the browser response-fragment HTML sink kind to be centrally registered', () => {
     expect(
       checkSinkPolicyGate({
@@ -413,6 +562,8 @@ describe('sink-policy gate', () => {
         responseFragmentApplyPath: undefined,
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
       }),
     ).toEqual([
       'sink-policy.ts: FRAMEWORK_BLESSED_SINK_KINDS must register "browser:response-fragment-html" for the browser response-fragment raw HTML sink',

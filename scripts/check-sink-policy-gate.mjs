@@ -33,6 +33,22 @@ export const defaultLogChannelNeutralizerFiles = ['packages/server/src/logging.t
 
 export const defaultResponseFragmentApplyPath = 'packages/browser/src/response-fragment-apply.ts';
 
+export const defaultSqlGuardDowngradeRoots = [
+  'packages/core/src',
+  'packages/drizzle/src',
+  'packages/server/src',
+  'packages/cli/src',
+];
+
+export const defaultSqlSafetyInvariantFiles = [
+  'packages/core/src/diagnostics.ts',
+  'packages/core/src/internal/sql-safety.ts',
+  'packages/drizzle/src/static.ts',
+  'packages/cli/src/commands/compile.ts',
+  'packages/cli/src/graph-output.ts',
+  'packages/server/src/sql-safe-handle.ts',
+];
+
 const responseFragmentHtmlSinkKind = 'browser:response-fragment-html';
 const defaultSqlBlessedBrandRoots = [
   'packages/core/src',
@@ -108,6 +124,9 @@ export function checkSinkPolicyGate(options = {}) {
   const responseFragmentApplyPath = Object.hasOwn(options, 'responseFragmentApplyPath')
     ? options.responseFragmentApplyPath
     : defaultResponseFragmentApplyPath;
+  const sqlGuardDowngradeFiles =
+    options.sqlGuardDowngradeFiles ?? collectSourceFiles(root, defaultSqlGuardDowngradeRoots);
+  const sqlSafetyInvariantFiles = options.sqlSafetyInvariantFiles ?? defaultSqlSafetyInvariantFiles;
   const sqlBlessedBrandFiles =
     options.sqlBlessedBrandFiles ?? collectSourceFiles(root, defaultSqlBlessedBrandRoots);
   const sqlBlessedBrandConstructorFileSet = new Set(
@@ -181,6 +200,22 @@ export function checkSinkPolicyGate(options = {}) {
     );
   }
 
+  for (const filePath of sqlGuardDowngradeFiles) {
+    if (!exists(filePath)) {
+      findings.push(`${filePath}: SQL guard downgrade gate input is missing`);
+      continue;
+    }
+    findings.push(...sqlGuardDowngradeFindings(filePath, readText(filePath)));
+  }
+
+  for (const filePath of sqlSafetyInvariantFiles) {
+    if (!exists(filePath)) {
+      findings.push(`${filePath}: SQL safety invariant gate input is missing`);
+      continue;
+    }
+    findings.push(...sqlSafetyInvariantFindings(filePath, readText(filePath)));
+  }
+
   const commandExecutionSinkFileSet = new Set(commandExecutionSinkFiles);
   const dynamicCodeExecutionSinkFileSet = new Set(dynamicCodeExecutionSinkFiles);
   const logChannelNeutralizerFileSet = new Set(logChannelNeutralizerFiles);
@@ -246,6 +281,124 @@ export function checkSinkPolicyGate(options = {}) {
           readText(responseFragmentApplyPath),
         ),
       );
+    }
+  }
+
+  return findings;
+}
+
+export function sqlGuardDowngradeFindings(filePath, text) {
+  if (!isProductionSourceFile(filePath)) return [];
+
+  const source = stripComments(text);
+  const findings = [];
+  const addFinding = (reason) => {
+    findings.push(
+      `${filePath}: SQL safety must remain default-deny; remove SQL guard downgrade path (${reason})`,
+    );
+  };
+
+  if (/\bKOVO_SQL_GUARD\b/.test(source)) {
+    addFinding('KOVO_SQL_GUARD env knob');
+  }
+
+  if (
+    /\bprocess\s*\.\s*env\s*\.\s*[A-Za-z0-9_]*SQL[A-Za-z0-9_]*(?:GUARD|SAFETY|MODE)[A-Za-z0-9_]*/i.test(
+      source,
+    )
+  ) {
+    addFinding('SQL-related process.env guard');
+  }
+
+  if (/\bSqlSafetyMode\s*=\s*[^;]*['"](?:warn|off)['"]/.test(source)) {
+    addFinding('SqlSafetyMode warn/off union');
+  }
+
+  if (/\b(?:sqlGuard|sqlSafetyGuard|sqlSafetyMode)\b\s*[:=]\s*['"](?:warn|off)['"]/i.test(source)) {
+    addFinding('sql guard warn/off config');
+  }
+
+  return dedupe(findings);
+}
+
+export function sqlSafetyInvariantFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+
+  if (filePath.endsWith('packages/core/src/diagnostics.ts')) {
+    const kv422Definition = /\bKV422\s*:\s*\{([\s\S]*?)\n\s*\},/.exec(source)?.[1] ?? '';
+    if (!/\bseverity\s*:\s*['"]error['"]/.test(kv422Definition)) {
+      findings.push(`${filePath}: KV422 SQL-safety diagnostic severity must remain error`);
+    }
+  }
+
+  if (filePath.endsWith('packages/core/src/internal/sql-safety.ts')) {
+    if (!/\bexport\s+type\s+SqlSafetyMode\s*=\s*['"]enforce['"]\s*;/.test(source)) {
+      findings.push(`${filePath}: SqlSafetyMode must remain the single enforce mode`);
+    }
+    if (
+      !/\bfunction\s+unsafeSqlResult\s*\([^)]*\)\s*:[^{]+SqlStatementValidationResult\s*\{[\s\S]*?\bok\s*:\s*false\b/.test(
+        source,
+      )
+    ) {
+      findings.push(`${filePath}: unsafe SQL validation results must remain fail-closed`);
+    }
+  }
+
+  if (filePath.endsWith('packages/drizzle/src/static.ts')) {
+    if (
+      !/\bcode\s*:\s*['"]KV422['"][\s\S]{0,240}\bseverity\s*:\s*diagnosticDefinitions\s*\.\s*KV422\s*\.\s*severity/.test(
+        source,
+      )
+    ) {
+      findings.push(`${filePath}: Drizzle static SQL-safety diagnostics must use KV422 severity`);
+    }
+  }
+
+  if (filePath.endsWith('packages/cli/src/commands/compile.ts')) {
+    if (
+      !/\bsqlSafetyDiagnosticErrors\s*\([^)]*\)[\s\S]*?\?\?\s*['"]error['"][\s\S]*?===\s*['"]error['"]/.test(
+        source,
+      )
+    ) {
+      findings.push(
+        `${filePath}: drizzle-static SQL-safety diagnostics must default absent severity to error`,
+      );
+    }
+    if (!/\bsqlSafetyErrors\s*\.\s*length\s*>\s*0[\s\S]{0,500}\bexitCode\s*:\s*1\b/.test(source)) {
+      findings.push(`${filePath}: drizzle-static KV422 SQL-safety errors must force exitCode 1`);
+    }
+  }
+
+  if (filePath.endsWith('packages/cli/src/graph-output.ts')) {
+    if (
+      !/\bfor\s*\(\s*const\s+diagnostic\s+of\s+sqlSafetyDiagnostics\s*\(\s*graph\s*\)\s*\)[\s\S]{0,200}diagnosticSeverity\s*\(\s*diagnostic\s*\)\s*===\s*['"]error['"]/.test(
+        source,
+      )
+    ) {
+      findings.push(`${filePath}: kovo check must fail on error-severity SQL-safety diagnostics`);
+    }
+    if (
+      !/\bconst\s+severity\s*=\s*diagnostic\s*\.\s*severity\s*\?\?\s*definition\?\s*\.\s*severity\s*\?\?\s*['"]error['"]/.test(
+        source,
+      )
+    ) {
+      findings.push(
+        `${filePath}: SQL-safety finding rendering must default unknown KV422 severity to error`,
+      );
+    }
+  }
+
+  if (filePath.endsWith('packages/server/src/sql-safe-handle.ts')) {
+    if (!/\bvalidateManagedSqlStatement\s*\(\s*statement\s*\)/.test(source)) {
+      findings.push(`${filePath}: managed DB handle must validate statements through KV422 floor`);
+    }
+    if (
+      !/\bif\s*\(\s*validation\s*\.\s*ok\s*\)\s*return\s*;[\s\S]{0,120}\bthrow\s+new\s+Error\s*\(\s*validation\s*\.\s*message\s*\)/.test(
+        source,
+      )
+    ) {
+      findings.push(`${filePath}: managed DB handle must throw on failed SQL validation`);
     }
   }
 
@@ -830,6 +983,13 @@ function collectSourceFilesInto(root, absolutePath, files) {
     if (/\.(?:test|spec)\.[cm]?tsx?$/.test(relativePath)) continue;
     files.push(relativePath);
   }
+}
+
+function isProductionSourceFile(filePath) {
+  if (!/\.[cm]?tsx?$/.test(filePath)) return false;
+  if (filePath.endsWith('.d.ts')) return false;
+  if (/\.(?:test|spec)\.[cm]?tsx?$/.test(filePath)) return false;
+  return /^(?:packages\/(?:core|drizzle|server|cli)\/src)\//.test(filePath);
 }
 
 function dedupe(values) {
