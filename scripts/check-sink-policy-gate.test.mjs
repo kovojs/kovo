@@ -729,6 +729,28 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects request-derived dynamic RegExp construction through destructured global constructor aliases', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-match.ts',
+        `
+          const { RegExp: Pattern } = globalThis;
+          const { ["RegExp"]: BracketPattern } = globalThis;
+          const { "RegExp": QuotedPattern } = (globalThis);
+          export function matchesRequest(request) {
+            return [
+              Pattern(request.url),
+              new BracketPattern(request.headers.get("x-pattern") ?? ""),
+              QuotedPattern?.(request.query.get("pattern")),
+            ];
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-match.ts: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation',
+    ]);
+  });
+
   it('rejects request-derived dynamic RegExp construction through parenthesized constructor aliases', () => {
     expect(
       deserializationSinkFindings(
@@ -759,6 +781,8 @@ describe('sink-policy gate', () => {
           const STATIC_PATTERN = "^[a-z0-9_-]+$";
           const RAW_STATIC_PATTERN = String.raw\`^/assets/[a-z]+$\`;
           const input = STATIC_PATTERN;
+          const { RegExp: Pattern } = globalThis;
+          const { ["RegExp"]: BracketPattern } = globalThis;
           export function decodeAndMatch(raw) {
             const parsed = JSON.parse(raw);
             return [
@@ -780,6 +804,8 @@ describe('sink-policy gate', () => {
               globalThis.RegExp?.("^[a-z]+$", "i"),
               globalThis["RegExp"]?.(STATIC_PATTERN),
               new (globalThis["RegExp"])(STATIC_PATTERN),
+              Pattern("^[a-z]+$", "i"),
+              new BracketPattern(STATIC_PATTERN),
             ];
           }
         `,
@@ -794,9 +820,13 @@ describe('sink-policy gate', () => {
         `
           const Pattern = RegExp;
           const StaticPattern = RegExp;
+          const { RegExp: DestructuredPattern } = globalThis;
           const Parser = URLPattern;
           export function decodeAndMatch(request) {
             function Pattern(value) {
+              return value;
+            }
+            function DestructuredPattern(value) {
               return value;
             }
             return [
@@ -805,6 +835,7 @@ describe('sink-policy gate', () => {
               (Pattern)(request.url),
               StaticPattern("^[a-z]+$"),
               StaticPattern?.("^[a-z]+$"),
+              DestructuredPattern(request.url),
               Parser(request.url),
               new RegExp("^[a-z]+$", "i"),
             ];
@@ -841,6 +872,7 @@ describe('sink-policy gate', () => {
         `
           export function decodeAndMatch(globalThis, request) {
             const Pattern = globalThis.RegExp;
+            const { RegExp: DestructuredPattern } = globalThis;
             return [
               globalThis.RegExp(request.url),
               globalThis.RegExp?.(request.url),
@@ -848,6 +880,7 @@ describe('sink-policy gate', () => {
               new globalThis["RegExp"](request.headers.get("x-pattern") ?? ""),
               Pattern?.(request.url),
               Pattern(request.url),
+              DestructuredPattern(request.url),
             ];
           }
         `,

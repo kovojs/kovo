@@ -997,7 +997,39 @@ function regExpConstructorAliasNames(text) {
       aliases.set(declaration[1], declarationPattern.lastIndex);
     }
   }
+  for (const alias of destructuredGlobalRegExpAliasDeclarations(text)) {
+    aliases.set(alias.name, alias.end);
+  }
   return aliases;
+}
+
+function destructuredGlobalRegExpAliasDeclarations(text) {
+  const aliases = [];
+  const declarationPattern =
+    /\b(?:const|let|var)\s*\{([\s\S]*?)\}\s*(?::[^=;]+)?=\s*\(?\s*globalThis\s*\)?\s*(?=;|\n|$)/g;
+  let declaration;
+  while ((declaration = declarationPattern.exec(text)) !== null) {
+    if (hasLocalBindingBefore(text, 'globalThis', declaration.index)) {
+      continue;
+    }
+
+    for (const entry of splitTopLevelArguments(declaration[1])) {
+      const aliasName = destructuredRegExpAliasName(entry);
+      if (aliasName === undefined) continue;
+      aliases.push({ name: aliasName, end: declarationPattern.lastIndex });
+    }
+  }
+  return aliases;
+}
+
+function destructuredRegExpAliasName(entry) {
+  const trimmed = entry.trim();
+  const key = String.raw`(?:RegExp|\[\s*(['"])RegExp\1\s*\]|(['"])RegExp\2)`;
+  const alias = String.raw`([A-Za-z_$][\w$]*)`;
+  const renamedPattern = new RegExp(String.raw`^${key}\s*:\s*${alias}$`);
+  const renamed = renamedPattern.exec(trimmed);
+  if (renamed !== null) return renamed[3];
+  return undefined;
 }
 
 function hasLocalBindingBefore(text, name, callIndex) {
