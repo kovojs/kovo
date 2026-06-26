@@ -43,7 +43,9 @@ describe('F1: KV236 trusted-brand suppression is symbol-identity, fail-closed', 
   });
 
   it('BYPASS CLOSED: a local shadow `const trustedHtml` no longer suppresses KV236', () => {
-    expect(kv236(SCRIPT('const trustedHtml = (s: string) => s;', 'trustedHtml(cfg.inline)'))).toBeGreaterThan(0);
+    expect(
+      kv236(SCRIPT('const trustedHtml = (s: string) => s;', 'trustedHtml(cfg.inline)')),
+    ).toBeGreaterThan(0);
   });
 
   it('BYPASS CLOSED: a same-named import from a non-Kovo module no longer suppresses KV236', () => {
@@ -66,7 +68,9 @@ describe('F1: KV236 trusted-brand suppression is symbol-identity, fail-closed', 
   });
 
   it('BYPASS CLOSED: <style> rawtext shadow is KV236, real import suppresses', () => {
-    expect(kv236(STYLE('const trustedHtml = (s: string) => s;', 'trustedHtml(cfg.css)'))).toBeGreaterThan(0);
+    expect(
+      kv236(STYLE('const trustedHtml = (s: string) => s;', 'trustedHtml(cfg.css)')),
+    ).toBeGreaterThan(0);
     expect(kv236(STYLE(REAL, 'trustedHtml(cfg.css)'))).toBe(0);
   });
 });

@@ -387,11 +387,7 @@ export const guards = {
    * compile-time sugar over this runtime contract). Composes with the other guards, e.g.
    * `all(authed, owns((req) => req.args.id, ownsOrder))`.
    */
-  owns<
-    Request extends SessionRequestLike,
-    KeyedRequest extends Request = Request,
-    Key = unknown,
-  >(
+  owns<Request extends SessionRequestLike, KeyedRequest extends Request = Request, Key = unknown>(
     keyOf: (request: KeyedRequest) => Key,
     ownsRow: (request: KeyedRequest, key: Key) => boolean | Promise<boolean>,
   ): Guard<Request> {
@@ -401,9 +397,7 @@ export const guards = {
       // BEFORE this guard runs (SPEC §10.3:1155-1157), so the runtime value is a `KeyedRequest`
       // even though the guard's *attachment* type is the base request. View it as such for `keyOf`.
       const keyedRequest = request as unknown as KeyedRequest;
-      return (await ownsRow(keyedRequest, keyOf(keyedRequest)))
-        ? true
-        : unauthorizedGuardFailure();
+      return (await ownsRow(keyedRequest, keyOf(keyedRequest))) ? true : unauthorizedGuardFailure();
     };
   },
 };

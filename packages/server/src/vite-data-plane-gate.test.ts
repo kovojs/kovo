@@ -197,9 +197,9 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     await plugin.configResolved({ command: 'serve', root });
     const server = await configureDevServer(plugin, root, captured);
     await plugin.buildStart();
-    expect(
-      captured.some((report) => report.diagnostics.some((d) => d.code === 'KV422')),
-    ).toBe(true);
+    expect(captured.some((report) => report.diagnostics.some((d) => d.code === 'KV422'))).toBe(
+      true,
+    );
 
     const queryPath = join(root, 'src/queries/search.ts');
     await writeFile(queryPath, KV422_CLEAN, 'utf8');

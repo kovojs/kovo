@@ -478,7 +478,9 @@ interface KovoDrizzleStaticModule {
     files: readonly DataPlaneSourceFile[];
   }): readonly TouchGraphDiagnosticLike[];
   diagnosticsForQueryFacts(facts: readonly unknown[]): readonly TouchGraphDiagnosticLike[];
-  extractQueryFactsFromProject(options: { files: readonly DataPlaneSourceFile[] }): readonly unknown[];
+  extractQueryFactsFromProject(options: {
+    files: readonly DataPlaneSourceFile[];
+  }): readonly unknown[];
   extractToctouFromProject(options: {
     files: readonly DataPlaneSourceFile[];
   }): readonly ToctouFactLike[];
@@ -498,7 +500,9 @@ async function importKovoDrizzleStaticModule(): Promise<KovoDrizzleStaticModule>
   } catch (error) {
     const workspaceSource = new URL('../../drizzle/src/static.ts', import.meta.url);
     if (existsSync(workspaceSource)) {
-      return (await importOptionalModule(workspaceSource.href)) as unknown as KovoDrizzleStaticModule;
+      return (await importOptionalModule(
+        workspaceSource.href,
+      )) as unknown as KovoDrizzleStaticModule;
     }
     throw missingDrizzleError(error);
   }

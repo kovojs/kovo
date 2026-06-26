@@ -704,13 +704,21 @@ function sqlTemplateArith(
   const spans = template.getTemplateSpans();
 
   const lower = (operand: Node): SymbolicValue =>
-    symbolicValueFromExpression(operand, paramSymbolKeys, sessionContext, selfColumn, symbolContext);
+    symbolicValueFromExpression(
+      operand,
+      paramSymbolKeys,
+      sessionContext,
+      selfColumn,
+      symbolContext,
+    );
   const arith = (
     left: SymbolicValue,
     op: ArithOp,
     right: SymbolicValue,
   ): SymbolicValue | undefined =>
-    left.kind === 'opaque' || right.kind === 'opaque' ? undefined : { kind: 'arith', left, op, right };
+    left.kind === 'opaque' || right.kind === 'opaque'
+      ? undefined
+      : { kind: 'arith', left, op, right };
 
   // Both operands interpolated: `sql`${A} <op> ${B}`` (incl. `${1}` as a const operand).
   if (spans.length === 2) {

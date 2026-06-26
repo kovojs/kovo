@@ -922,9 +922,7 @@ export function kovoCheck(
 
     for (const mutation of graph.mutations ?? []) {
       if (mutation.csrf === 'exempt' && !mutation.csrfJustification) {
-        pushFinding(
-          `WARN MUTATION ${mutation.key} csrf exemption requires a named justification.`,
-        );
+        pushFinding(`WARN MUTATION ${mutation.key} csrf exemption requires a named justification.`);
       }
       // SPEC §6.6/§9.1: KV418 — a `csrf: false` mutation MUST NOT reference ambient browser
       // authority. It skips the synchronizer-token check yet still rides the victim's ambient

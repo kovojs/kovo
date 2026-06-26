@@ -832,7 +832,9 @@ function sqlSinkReceiverIsRawDriverClient(
     Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)
       ? expression.getExpression()
       : undefined;
-  return Boolean(receiver && Node.isIdentifier(receiver) && rawDriverClients.has(receiver.getText()));
+  return Boolean(
+    receiver && Node.isIdentifier(receiver) && rawDriverClients.has(receiver.getText()),
+  );
 }
 
 function sqlSinkName(call: CallExpression): string | null {
