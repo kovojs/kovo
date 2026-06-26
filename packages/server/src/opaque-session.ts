@@ -287,9 +287,15 @@ export function createOpaqueSessionManager<SessionValue>(
         priorId?: string | null | undefined;
       } = {},
     ): Promise<OpaqueSessionEstablishResult<SessionValue>> {
-      const session = establishOptions.priorId
-        ? await options.store.rotate(establishOptions.priorId, value, establishOptions)
-        : await options.store.create(value, establishOptions);
+      const session =
+        establishOptions.priorId === null || establishOptions.priorId === undefined
+          ? await options.store.create(value, establishOptions)
+          : await rotateOpaqueSession(
+              options.store,
+              establishOptions.priorId,
+              value,
+              establishOptions.ttlMs === undefined ? {} : { ttlMs: establishOptions.ttlMs },
+            );
       assertEstablishedOpaqueSession(session);
       return {
         session,
@@ -310,6 +316,41 @@ export function createOpaqueSessionManager<SessionValue>(
       };
     },
   };
+}
+
+async function rotateOpaqueSession<SessionValue>(
+  store: OpaqueSessionStore<SessionValue>,
+  priorId: string,
+  value: SessionValue,
+  options?: OpaqueSessionEstablishOptions,
+): Promise<OpaqueSessionRecord<SessionValue>> {
+  if (priorId === '') {
+    throw new Error(
+      'Opaque session rotation requires a live prior session; validation rejected it as missing',
+    );
+  }
+  const prior = normalizeOpaqueSessionValidation(priorId, await store.validate(priorId));
+  if (!prior.ok) {
+    throw new Error(
+      `Opaque session rotation requires a live prior session; validation rejected it as ${prior.reason}`,
+    );
+  }
+
+  const next = await store.rotate(priorId, value, options);
+  assertEstablishedOpaqueSession(next);
+  if (next.id === priorId) {
+    throw new Error(
+      'Opaque session store returned the prior id during rotation; refusing to set a browser session cookie',
+    );
+  }
+
+  const revokedPrior = normalizeOpaqueSessionValidation(priorId, await store.validate(priorId));
+  if (revokedPrior.ok) {
+    throw new Error(
+      'Opaque session store did not immediately revoke the prior id during rotation; refusing to set a browser session cookie',
+    );
+  }
+  return next;
 }
 
 function normalizeOpaqueSessionValidation<SessionValue>(
