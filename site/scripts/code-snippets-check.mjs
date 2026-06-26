@@ -238,12 +238,14 @@ declare global {
   var BroadcastChannel: any;
   var AccordionRoot: any;
   var AccountDenied: any;
+  var AccountOverviewPage: any;
   var AccountShell: any;
   var AlertDialogRoot: any;
   var AdminDashboard: any;
   var AppShell: any;
   var Badge: any;
   var Button: any;
+  var CartBadge: any;
   var CartPage: any;
   var ComboboxRoot: any;
   var CommerceCartLayout: any;
@@ -265,6 +267,7 @@ declare global {
   var MissingInvoice: any;
   var NotFoundShell: any;
   var PipelineLayout: any;
+  var ProductList: any;
   var ProductGrid: any;
   var ProductPage: any;
   var SearchDialog: any;
@@ -350,6 +353,8 @@ declare global {
   var formData: any;
   var form: any;
   var forms: any;
+  var formatDate: any;
+  var formatRelative: any;
   var generatedCartStates: any;
   var guards: any;
   var harness: any;
@@ -372,6 +377,7 @@ declare global {
   var loginRoute: any;
   var maskedEmail: any;
   var menuRoot: any;
+  var messageQuery: any;
   var mutation: <Value = any>(...args: any[]) => any;
   var mutations: any;
   var notFound: any;
@@ -386,6 +392,7 @@ declare global {
   var postQuery: any;
   var priceParam: any;
   var product: any;
+  var productQuery: any;
   var productGrid: any;
   var productGridQuery: any;
   var productId: any;
@@ -397,6 +404,7 @@ declare global {
   var rateLimit: any;
   var redisLiveEmitter: any;
   var renderCartPage: any;
+  var renderOnce: any;
   var renderProduct: any;
   var renderProductGrid: any;
   var req: any;
@@ -430,6 +438,9 @@ declare global {
   var trustedReveal: any;
   var tx: any;
   var qty: any;
+  var auctionQuery: any;
+  var queueQuery: any;
+  var trialQuery: any;
   var updateCartLine: any;
   var updateContact: any;
   var updateOrder: any;
@@ -520,6 +531,7 @@ export type StyleInput = any;
 
 export const BodyEnd: any;
 export const Button: any;
+export const Defer: any;
 export const Document: any;
 export const FontPreload: any;
 export const Head: any;
@@ -549,6 +561,7 @@ export const guards: {
 export const hmacSignature: any;
 export const installKovoLoader: any;
 export const layout: any;
+export const metaFromQuery: any;
 export const mutation: <Value = any>(...args: any[]) => any;
 export const notFound: any;
 export const query: any;
@@ -576,6 +589,7 @@ export type StyleInput = any;
 
 export const BodyEnd = anyFn;
 export const Button = anyFn;
+export const Defer = anyFn;
 export const Document = anyFn;
 export const FontPreload = anyFn;
 export const Head = anyFn;
@@ -598,6 +612,7 @@ export const form = anyFn;
 export const hmacSignature = anyFn;
 export const installKovoLoader = anyFn;
 export const layout = anyFn;
+export const metaFromQuery = anyFn;
 export const mutation = anyFn;
 export const notFound = anyFn;
 export const query = anyFn;

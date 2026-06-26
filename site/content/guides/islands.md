@@ -199,7 +199,7 @@ Use `renderOnce(...)` when freezing a clock value for the document lifetime is i
 published date that should not tick while the page is open:
 
 ```tsx
-import { component, renderOnce } from '@kovojs/core';
+import { component } from '@kovojs/core';
 
 export const PublishedAt = component({
   queries: { post: postQuery },
