@@ -510,6 +510,12 @@ function ownerAuthorizationDataProofDetail(
   ownerScopedPrivateWriteKeys?: readonly OwnerPrivateScopeKey[];
   /** Owner-table domains this write touches (the audited surface). */
   reads: readonly string[];
+  /**
+   * The write predicate selects rows through a client-visible `input.*` arg on any
+   * table. For owner writes without an owner/principal predicate, this is a
+   * client-pivoted IDOR candidate (SPEC §10.3, KV414).
+   */
+  hasClientArgPredicate?: boolean;
   /** Owner-table domains keyed by `req.session.*` → `session` (safe). */
   sessionAnchoredWrites: readonly string[];
   site: string;
@@ -580,6 +586,21 @@ function ownerAuthorizationDataProofDetail(
       const ownerScope = ownerScopes.find((owner) => owner.domain === domain);
       if (sessionScoped && !ownerScope?.owner) {
         audits.push({ domain, kind: 'write', name: fact.name, scope: 'session', site: fact.site });
+        continue;
+      }
+
+      // Write-side join/from-keyed bypass: an owner-table update/delete whose
+      // predicate is client-pivoted through another table is still an IDOR candidate
+      // unless the owner column is scoped to the current principal.
+      if (fact.hasClientArgPredicate) {
+        audits.push({
+          detail: ownerAuthorizationDataDetail(ownerScope, sessionScoped),
+          domain,
+          kind: 'write',
+          name: fact.name,
+          scope: 'args',
+          site: fact.site,
+        });
         continue;
       }
 
@@ -1260,11 +1281,13 @@ function writeScopeFactsForFunction(
       call.instanceKeyComparisons,
       tables,
     );
+    const hasClientArgPredicate = queryHasClientArgPredicate(call.instanceKeyComparisons);
     const sessionAnchoredWrites = querySessionAnchoredDomains(call.instanceKeyComparisons, tables);
 
     facts.push({
       argScopedWrites,
       ...(argScopedWriteKeys.length > 0 ? { argScopedWriteKeys } : {}),
+      ...(hasClientArgPredicate ? { hasClientArgPredicate } : {}),
       name: fn.name,
       ...(ownerScopedPrivateWriteKeys.length > 0 ? { ownerScopedPrivateWriteKeys } : {}),
       ...(ownerScopedSessionWrites.length > 0 ? { ownerScopedSessionWrites } : {}),

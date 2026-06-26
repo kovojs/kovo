@@ -276,6 +276,62 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'unknown' }]);
   });
 
+  it('flags scope:args for an owner-table write keyed only through a non-owner table arg', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'update(table: unknown): { set(value: unknown): { from(table: unknown): { where(value: unknown): Promise<void> } } };',
+          ]),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              'export const items = pgTable("items", { id: text("id").primaryKey(), orderId: text("order_id").notNull() }, kovo({ domain: "item", key: (t) => t.id }));',
+              '',
+              'export async function closeOrderViaItem(db: PgAsyncDatabase<any, any>, input: { itemId: string }) {',
+              '  await db.update(orders).set({ status: "closed" }).from(items).where(eq(items.id, input.itemId));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'args' }]);
+  });
+
+  it('keeps a from-bearing owner write scope:session when the owner table is session-scoped', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'update(table: unknown): { set(value: unknown): { from(table: unknown): { where(value: unknown): Promise<void> } } };',
+          ]),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { and, eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              'export const items = pgTable("items", { id: text("id").primaryKey(), orderId: text("order_id").notNull() }, kovo({ domain: "item", key: (t) => t.id }));',
+              '',
+              'export async function closeMyOrderViaItem(db: PgAsyncDatabase<any, any>, input: { itemId: string }, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).from(items).where(and(eq(orders.userId, req.session.userId), eq(items.id, input.itemId)));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'session' }]);
+  });
+
   // A2 (SPEC §11.1 / KV414): a combinator-wrapped owner read must not disarm the gate.
   // `and(eq(orders.id, input.id), eq(orders.status, "open"))` keys an owner read by a
   // client arg → scope:'args'; a sibling `and(eq(orders.userId, req.session.userId), …)`
