@@ -1,7 +1,11 @@
 // SPEC §6.5 + §9.5: the request shell resolves the sessionProvider once, then
 // route/query/mutation guards and handlers observe that same session value.
 import { createApp, domain, guards, mutation, query, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  delegatedFixtureSessionProvider,
+  type KovoFixtureRequest,
+} from '@kovojs/test/internal/integration/define';
 
 interface AppSession {
   id: string;
@@ -10,6 +14,10 @@ interface AppSession {
 type AppRequest = Request & KovoFixtureRequest & { session?: AppSession | null };
 
 const sessionDomain = domain('session-once');
+const csrf = {
+  secret: 'session-provider-once-csrf-secret-key-0123456789',
+  sessionId: () => 'session-provider-once-fixture-session',
+};
 
 async function record(request: AppRequest, kind: string): Promise<void> {
   const caseKey = request.headers.get('x-session-case') ?? new URL(request.url).pathname;
@@ -39,7 +47,6 @@ export const sessionOnceQuery = query('session-once', {
 });
 
 export const sessionOnceMutation = mutation('session-once/mutate', {
-  csrf: false,
   guard: recordingAuthed('mutation'),
   input: s.object({}),
   handler: async (_input: unknown, request: AppRequest) => {
@@ -58,10 +65,11 @@ const routeCase = route('/route', {
 
 export default defineFixture({
   app: createApp<AppSession>({
+    csrf,
     mutations: [sessionOnceMutation],
     queries: [sessionOnceQuery],
     routes: [routeCase],
-    sessionProvider: async (request) => {
+    sessionProvider: delegatedFixtureSessionProvider(async (request) => {
       const appRequest = request as unknown as AppRequest;
       const caseKey = request.headers.get('x-session-case') ?? new URL(request.url).pathname;
       const session = {
@@ -73,7 +81,7 @@ export default defineFixture({
         [caseKey, 'provider', session.user.id],
       );
       return session;
-    },
+    }),
     mutationResponses: {
       [sessionOnceMutation.key]: async ({ request }) => {
         await record(request as unknown as AppRequest, 'response:mutation');

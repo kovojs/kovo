@@ -2,7 +2,11 @@
 // then serves bytes through the swappable StorageCapability.
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 import { createApp, guards, notFound, respond, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  delegatedFixtureSessionProvider,
+  type KovoFixtureRequest,
+} from '@kovojs/test/internal/integration/define';
 
 interface StorageSession {
   user: { id: string; roles: readonly string[] };
@@ -59,7 +63,7 @@ const downloadRoute = route('/files/download', {
 export default defineFixture({
   app: createApp<StorageSession>({
     routes: [downloadRoute],
-    sessionProvider: (request) => readSessionCookie(request),
+    sessionProvider: delegatedFixtureSessionProvider((request) => readSessionCookie(request)),
   }),
   schema: `create table files (
     storage_key text primary key,

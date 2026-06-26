@@ -2,7 +2,10 @@
 // endpoint callers; the query endpoint must not leak protected data anonymously.
 import { createApp, domain, guards, query, route, s } from '@kovojs/server';
 import { runQuery } from '@kovojs/server/internal/execution';
-import { defineFixture } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  delegatedFixtureSessionProvider,
+} from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {
   user: { id: string; roles: readonly string[] };
@@ -58,6 +61,6 @@ export default defineFixture({
   app: createApp<AuthSession>({
     queries: [accountQuery],
     routes: [homeRoute],
-    sessionProvider: (request) => readSessionCookie(request),
+    sessionProvider: delegatedFixtureSessionProvider((request) => readSessionCookie(request)),
   }),
 });

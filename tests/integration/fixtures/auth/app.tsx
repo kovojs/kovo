@@ -3,7 +3,11 @@
 // the cookie-derived session (via sessionProvider) and renders the signed-in user.
 // Exercises the public auth surface: sessionProvider, guards.authed, setCookie.
 import { createApp, guards, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  delegatedFixtureSessionProvider,
+  type KovoFixtureRequest,
+} from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {
   user: { id: string; roles: readonly string[] };
@@ -73,7 +77,7 @@ const accountRoute = route('/account', {
 const app = createApp<AuthSession>({
   mutations: [signIn, signOut],
   routes: [loginRoute, accountRoute],
-  sessionProvider: (request) => readSessionCookie(request),
+  sessionProvider: delegatedFixtureSessionProvider((request) => readSessionCookie(request)),
 });
 
 export default defineFixture({ app });

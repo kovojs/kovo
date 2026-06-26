@@ -6,7 +6,7 @@
 // writes only the app and (optionally) its schema/seed. SPEC §11 frames this as a
 // framework-owned suite: fixtures exercise framework public APIs end-to-end, not
 // app wiring.
-import type { KovoApp } from '@kovojs/server';
+import type { DelegatedSessionProvider, KovoApp, SessionProvider } from '@kovojs/server';
 import type { TouchGraph } from '@kovojs/core/internal/graph';
 
 import type { PgliteTestDb } from '../pglite.js';
@@ -67,6 +67,31 @@ export interface KovoFixtureDescriptor {
  */
 export function defineFixture(definition: FixtureDefinition): KovoFixtureDescriptor {
   return { [FIXTURE_BRAND]: true, definition };
+}
+
+/**
+ * Declare that an integration fixture deliberately owns its cookie/session lifecycle
+ * outside Kovo's opaque store. This keeps fixture-only session providers aligned with
+ * SPEC §6.5 / OPP-11 without weakening the production `createApp()` gate.
+ */
+export function delegatedFixtureSessionProvider<
+  SessionValue,
+  RawRequest extends globalThis.Request = globalThis.Request,
+>(
+  provider: SessionProvider<RawRequest, SessionValue>,
+  owner = 'The integration fixture session provider',
+): DelegatedSessionProvider<RawRequest, SessionValue> {
+  return {
+    justification: `${owner} owns validation, rotation, expiry, and revocation for this fixture session.`,
+    lifecycle: 'delegated',
+    lifecycleAssertions: {
+      expiry: `${owner} bounds expiry through fixture-controlled credentials.`,
+      revocation: `${owner} revokes by clearing or ignoring fixture credentials.`,
+      rotation: `${owner} rotates or reissues fixture credentials when the test signs in.`,
+      validation: `${owner} validates fixture credentials before populating request.session.`,
+    },
+    provider,
+  };
 }
 
 /** Narrow an SSR-loaded module's default export to a fixture descriptor. */

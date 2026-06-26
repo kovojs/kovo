@@ -1,7 +1,10 @@
 // SPEC §6.5: null/undefined sessionProvider results mean anonymous, not a
 // malformed session value.
 import { createApp, guards, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  delegatedFixtureSessionProvider,
+} from '@kovojs/test/internal/integration/define';
 
 interface AppSession {
   user: { id: string; roles: readonly string[] };
@@ -22,11 +25,11 @@ const accountRoute = route('/account', {
 export default defineFixture({
   app: createApp<AppSession>({
     routes: [publicRoute, accountRoute],
-    sessionProvider: (request) => {
+    sessionProvider: delegatedFixtureSessionProvider((request) => {
       const mode = new URL(request.url).searchParams.get('mode');
       if (mode === 'user') return { user: { id: 'ada@example.com', roles: [] } };
       if (mode === 'undefined') return undefined;
       return null;
-    },
+    }),
   }),
 });

@@ -2,7 +2,11 @@
 // from the resolved session and avoid serving cross-user rows.
 import { createApp, domain, guards, query, route, s } from '@kovojs/server';
 import { runQuery } from '@kovojs/server/internal/execution';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  delegatedFixtureSessionProvider,
+  type KovoFixtureRequest,
+} from '@kovojs/test/internal/integration/define';
 
 interface OwnerSession {
   user: { id: string; roles: readonly string[] };
@@ -77,7 +81,7 @@ export default defineFixture({
   app: createApp<OwnerSession>({
     queries: [ownerInvoiceQuery],
     routes: [invoiceRoute],
-    sessionProvider: (request) => readSessionCookie(request),
+    sessionProvider: delegatedFixtureSessionProvider((request) => readSessionCookie(request)),
   }),
   schema: `create table invoices (
     id text primary key,

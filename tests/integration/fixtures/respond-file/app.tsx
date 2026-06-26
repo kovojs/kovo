@@ -1,7 +1,10 @@
 // SPEC.md §6.4: file route outcomes are ordinary guarded routes that return
 // declared content type, attachment disposition, and ETag semantics.
 import { createApp, guards, respond, route } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  delegatedFixtureSessionProvider,
+} from '@kovojs/test/internal/integration/define';
 
 interface FileSession {
   user: { id: string; roles: readonly string[] };
@@ -27,6 +30,6 @@ const exportRoute = route('/downloads/orders.pdf', {
 export default defineFixture({
   app: createApp<FileSession>({
     routes: [exportRoute],
-    sessionProvider: (request) => readSessionCookie(request),
+    sessionProvider: delegatedFixtureSessionProvider((request) => readSessionCookie(request)),
   }),
 });

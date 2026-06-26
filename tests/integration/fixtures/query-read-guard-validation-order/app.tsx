@@ -1,7 +1,10 @@
 // SPEC.md §6.5/§9.4: direct typed reads parse search args before query guards,
 // so malformed anonymous reads do not leak protected data existence through auth.
 import { createApp, domain, guards, query, s } from '@kovojs/server';
-import { defineFixture } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  delegatedFixtureSessionProvider,
+} from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {
   user: { id: string; roles: readonly string[] };
@@ -39,6 +42,6 @@ export const secretQuery = query('secret', {
 export default defineFixture({
   app: createApp<AuthSession>({
     queries: [secretQuery],
-    sessionProvider: (request) => readSessionCookie(request),
+    sessionProvider: delegatedFixtureSessionProvider((request) => readSessionCookie(request)),
   }),
 });
