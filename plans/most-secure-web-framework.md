@@ -158,7 +158,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       response-fragment raw HTML route is now centrally registered as `browser:response-fragment-html`, and
       `scripts/check-sink-policy-gate.mjs` pins it to the `trustedHtml()`/`kovo` Trusted Types/template
       sanitizer path; focused sink-policy/browser gate tests, `pnpm run check:sink-policy`, `git diff --check`,
-      and `pnpm run check:vp` passed. Remaining gap: other
+      and `pnpm run check:vp` passed. KV439 now has an internal `neutralizeLogValue()`/`formatLogMessage()`
+      control-character neutralizer plus a sink-policy gate for raw request-derived `console.*` logging in
+      server source; focused log/gate tests, `pnpm run check:sink-policy`, `git diff --check`, and
+      `pnpm run check:vp` passed. Remaining gap: other
       §3 candidates and static by-construction analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
