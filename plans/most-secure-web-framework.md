@@ -5,8 +5,8 @@ the most secure web framework, benchmarked against Rails, Laravel, Django, Next.
 meta-frameworks (SvelteKit/Remix/Astro), Spring Security / ASP.NET Core / Phoenix, the modern browser
 security platform, supply-chain SOTA (SLSA/Sigstore/pnpm), and the OWASP Top 10 / API Top 10 / LLM Top 10.
 
-**Latest local verification (2026-06-25 PDT):** after the OPP-07/08, OPP-11, OPP-28, and sink-token
-batch, `pnpm run check`, `pnpm run check:api-surface` (baseline unchanged:
+**Latest local verification (2026-06-25 PDT):** after the latest OPP-07/08, OPP-11, OPP-28, and sink-token
+worker batches, `pnpm run check`, `pnpm run check:api-surface` (baseline unchanged:
 1338/1804), `pnpm run check:build`, and `pnpm run check:kovo` passed.
 
 This plan is the forward roadmap; it does **not** restate shipped work. Prior security ledgers:
