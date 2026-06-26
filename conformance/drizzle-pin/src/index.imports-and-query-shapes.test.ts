@@ -317,6 +317,7 @@ describe('Drizzle pinned subset conformance', () => {
                 }).from(products);
               },
               output: {},
+              reads: [products],
             });
           `,
         },
