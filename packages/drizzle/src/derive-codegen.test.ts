@@ -6,7 +6,11 @@ import type {
 import { describe, expect, it } from 'vitest';
 
 import { deriveOptimistic } from './derive.js';
-import { lowerTransform, serializeDerivedOptimistic } from './derive-codegen.js';
+import {
+  lowerTransform,
+  serializeCoreRegistryModule,
+  serializeDerivedOptimistic,
+} from './derive-codegen.js';
 
 // SPEC.md §10.4 Phase 3 — the generated module is committed, reviewable, and
 // overridable. These tests pin the DO-NOT-EDIT header, the `satisfies
@@ -539,5 +543,56 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
       );
       expect(generated).toEqual(interpreted);
     }
+  });
+});
+
+// SPEC.md §6.1/§10.6/§11.1 — the generated `@kovojs/core` registry augmentation drives KV310 /
+// `OptimisticFor` exhaustiveness without a hand-authored `declare module` (capability-gaps §3).
+describe('serializeCoreRegistryModule', () => {
+  it('emits a module-augmentation .d.ts with sorted QueryRegistry + InvalidationSets', () => {
+    const source = serializeCoreRegistryModule({
+      headerImports: [`import type { QueryResult } from '@kovojs/server';`],
+      invalidations: {
+        voteUp: ['questionScore', 'questionList', 'questionDetail'],
+        postQuestion: ['questionList', 'questionDetail'],
+      },
+      queries: [
+        {
+          name: 'questionScore',
+          type: `QueryResult<typeof import('../queries.js').questionScore>`,
+        },
+        { name: 'questionList', type: `QueryResult<typeof import('../queries.js').questionList>` },
+      ],
+    });
+
+    // Top-level import makes the file a module, so `declare module` is a merging augmentation.
+    expect(source).toContain(`import type { QueryResult } from '@kovojs/server';`);
+    expect(source).toContain(`declare module '@kovojs/core' {`);
+    expect(source).toContain(`interface QueryRegistry {`);
+    expect(source).toContain(
+      `questionList: QueryResult<typeof import('../queries.js').questionList>;`,
+    );
+    // InvalidationSets entries are mutation→query unions, deterministically sorted.
+    expect(source).toContain(`voteUp: 'questionDetail' | 'questionList' | 'questionScore';`);
+    expect(source).toContain(`postQuestion: 'questionDetail' | 'questionList';`);
+    // Keys are emitted in sorted order (postQuestion before voteUp; questionList before score).
+    expect(source.indexOf('postQuestion:')).toBeLessThan(source.indexOf('voteUp:'));
+    expect(source.indexOf('questionList:')).toBeLessThan(source.indexOf('questionScore:'));
+  });
+
+  it('emits an empty OptimisticDerivationSets when no derivations are supplied', () => {
+    const source = serializeCoreRegistryModule({
+      invalidations: { voteUp: ['questionList'] },
+      queries: [{ name: 'questionList', type: 'unknown' }],
+    });
+    expect(source).toMatch(/interface OptimisticDerivationSets \{\s*\}/);
+  });
+
+  it('quotes registry keys that are not valid identifiers', () => {
+    const source = serializeCoreRegistryModule({
+      invalidations: { 'cart/add': ['cart'] },
+      queries: [{ name: 'cart', type: 'unknown' }],
+    });
+    expect(source).toContain(`"cart/add": 'cart';`);
   });
 });

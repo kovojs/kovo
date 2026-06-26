@@ -1,8 +1,9 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, relative, resolve } from 'node:path';
 
 import {
   analyzeSqlSafetyFromProject,
+  deriveInvalidationRegistry,
   deriveMutationTouchRegistry,
   diagnosticsForQueryFacts,
   extractQueryFactsFromProject,
@@ -10,11 +11,36 @@ import {
   extractTouchGraphFromProject,
   type SourceFileInput,
 } from '../packages/drizzle/src/static.ts';
+import { serializeCoreRegistryModule } from '../packages/drizzle/src/derive-codegen.ts';
 import { registerGeneratedMutationTouchRegistry } from '../packages/server/src/generated-mutation-registry.ts';
 import { registerGeneratedQueryReadRegistry } from '../packages/server/src/generated-query-registry.ts';
 
 interface ExampleDrizzleRegistryOptions {
   mutationTouchGraphKeys?: Readonly<Record<string, string>>;
+  sourceRoot: string;
+}
+
+/** One declared query read fact: a query key and the domains its loader reads. */
+export interface ExampleQueryReadSpec {
+  domains: readonly string[];
+  query: string;
+}
+
+/** Options for {@link emitExampleCoreRegistry}/{@link writeExampleCoreRegistry}. */
+export interface ExampleCoreRegistryOptions {
+  /**
+   * Compact declared query → read-domain graph. SPEC.md §10.2/§11.1: the project query-fact
+   * analyzer cannot prove reads through the example's `Reader<Db>` + `requireDb(context)` loader
+   * indirection (capability-gaps §3), so the read set is declared here. The mutation→query
+   * `InvalidationSets` union is still DERIVED from this read set folded against the analyzer-derived
+   * Drizzle write/touch graph, so the union itself never drifts by hand.
+   */
+  queries: readonly ExampleQueryReadSpec[];
+  /** Import specifier (relative to the generated out file) exporting the query loaders by key. */
+  queryModule: string;
+  /** Mutation key → touch-graph function name, folded against the touch graph (SPEC.md §10.3). */
+  mutationTouchGraphKeys: Readonly<Record<string, string>>;
+  /** App source root analyzed for the Drizzle touch graph. */
   sourceRoot: string;
 }
 
@@ -44,6 +70,51 @@ export function registerExampleDrizzleRegistries(options: ExampleDrizzleRegistry
 
   registerGeneratedQueryReadRegistry(queryRegistry);
   registerGeneratedMutationTouchRegistry(mutationTouchRegistry);
+}
+
+/**
+ * SPEC.md §6.1/§10.6/§11.1 — emit the example's `@kovojs/core` registry augmentation source
+ * (`QueryRegistry` + `InvalidationSets` + empty `OptimisticDerivationSets`) so the app's `tsc`
+ * program enforces KV310/`OptimisticFor` WITHOUT a hand-authored `declare module` that can drift
+ * from the real invalidation graph (capability-gaps §3). The mutation→query union is DERIVED from
+ * the analyzer-derived Drizzle touch graph folded against the declared query read set; each query's
+ * result type is taken from its loader (`QueryResult<typeof loader>`), the single source of truth.
+ */
+export function emitExampleCoreRegistry(options: ExampleCoreRegistryOptions): string {
+  const files = sourceFilesForDrizzleRegistry(options.sourceRoot);
+  // Defense-in-depth: never emit a registry for a project with error-severity data-plane findings.
+  assertNoDataPlaneErrors(files, extractQueryFactsFromProject({ files }));
+
+  const touchGraph = extractTouchGraphFromProject({ files });
+  const invalidationRegistry = deriveInvalidationRegistry({
+    mutations: Object.entries(options.mutationTouchGraphKeys).map(([mutation, touchGraphKey]) => ({
+      mutation,
+      touchGraphKey,
+    })),
+    queries: options.queries.map((spec) => ({ domains: [...spec.domains], query: spec.query })),
+    touchGraph,
+  });
+  const invalidations: Record<string, string[]> = {};
+  for (const [mutation, entries] of Object.entries(invalidationRegistry)) {
+    invalidations[mutation] = [...new Set(entries.map((entry) => entry.query))].sort();
+  }
+
+  return serializeCoreRegistryModule({
+    headerImports: [`import type { QueryResult } from '@kovojs/server';`],
+    invalidations,
+    queries: options.queries.map((spec) => ({
+      name: spec.query,
+      type: `QueryResult<typeof import('${options.queryModule}').${spec.query}>`,
+    })),
+  });
+}
+
+/** Write {@link emitExampleCoreRegistry} to `outPath` (a gitignored `src/generated/` artifact). */
+export function writeExampleCoreRegistry(
+  options: ExampleCoreRegistryOptions & { outPath: string },
+): void {
+  mkdirSync(dirname(options.outPath), { recursive: true });
+  writeFileSync(options.outPath, emitExampleCoreRegistry(options), 'utf8');
 }
 
 /**

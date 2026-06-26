@@ -7,11 +7,12 @@ import type {
 import { reportRuntimeError } from './error-policy.js';
 import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import { refetchQueries } from './query-refetch.js';
-import type { QueryRefetchOptions } from './query-refetch.js';
+import { deriveRefetchOnFocusOptOut, refetchQueries } from './query-refetch.js';
+import type { QueryRefetchOptions, RefetchOnFocusDeclaration } from './query-refetch.js';
 import { readPageBuildToken } from './build-token.js';
 import { createQueryScriptHydrationLedger } from './query-script-hydration.js';
 import type { QueryScriptLike } from './query-script-hydration.js';
+import { splitQueryWireKey } from './query-store.js';
 import type { QueryStore } from './query-store.js';
 
 export interface RefetchQueryLedger {
@@ -27,6 +28,14 @@ export interface QueryVisibleReturnRefetchRoot
 
 export interface QueryVisibleReturnRefetchOptions {
   applyQuery?: QueryApplyInterposition;
+  /**
+   * SPEC §9.3/§9.4: declared queries whose `refetchOnFocus: false` opt-out drives the runtime
+   * exclusion set. The declared opt-out (derived via {@link deriveRefetchOnFocusOptOut}) is unioned
+   * with any explicit {@link refetchOnFocusOptOut}, so an app author opting a query out at the
+   * `@kovojs/core` `query(key, { refetchOnFocus: false })` declaration site actually excludes it
+   * from focus refetch.
+   */
+  declaredQueries?: readonly RefetchOnFocusDeclaration[];
   onError?: (error: unknown) => void;
   queryPlans?: CompiledQueryUpdatePlans;
   queryRefetch?: QueryRefetchOptions;
@@ -60,7 +69,11 @@ export function createRefetchQueryLedger(
       const eligible: string[] = [];
 
       for (const query of queries) {
-        if (!excluded.has(query)) {
+        // SPEC §9.3/§9.4: the declared `refetchOnFocus: false` opt-out is per query NAME
+        // (typed reads dispatch `/_q/` by name), so a keyed query's every instance key is
+        // excluded when its name is opted out. Exact wire-key entries still match too.
+        const { name } = splitQueryWireKey(query);
+        if (!excluded.has(query) && !excluded.has(name)) {
           eligible.push(query);
         }
       }
@@ -108,6 +121,14 @@ export function installQueryVisibleReturnRefetch(
 
   hydrateNewQueryScripts();
 
+  // SPEC §9.3/§9.4: the runtime opt-out is the union of any explicit `refetchOnFocusOptOut` and
+  // the set derived from declared `refetchOnFocus: false` queries, so the declarative opt-out at
+  // the `query(key, { refetchOnFocus: false })` site actually drives focus-refetch behavior.
+  const refetchOnFocusOptOut: readonly string[] = [
+    ...(options.refetchOnFocusOptOut ?? []),
+    ...deriveRefetchOnFocusOptOut(options.declaredQueries ?? []),
+  ];
+
   if (!options.refetchOnFocus && (!options.queryRefetch || !options.queryStore)) {
     let disposed = false;
 
@@ -130,7 +151,7 @@ export function installQueryVisibleReturnRefetch(
     // query scripts introduced by later fragment/stream DOM updates.
     hydrateNewQueryScripts();
     if (disposed) return;
-    const queries = ledger.eligible(options.refetchOnFocusOptOut);
+    const queries = ledger.eligible(refetchOnFocusOptOut);
     try {
       await options.refetchOnFocus?.(queries);
     } catch (error) {

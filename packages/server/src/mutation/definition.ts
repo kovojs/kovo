@@ -1,4 +1,9 @@
-import type { InvalidationSets, OptimisticDerivationSets, QueryRegistry } from '@kovojs/core';
+import type {
+  InvalidationSets,
+  OptimisticDerivationSets,
+  QueryRegistry,
+  Redirect,
+} from '@kovojs/core';
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
 import type { AccessDecision } from '../access.js';
 import type { CookieOptions } from '../cookies.js';
@@ -215,8 +220,24 @@ export interface MutationDefinition<
   key: Key;
   optimistic?: MutationOptimisticMap<Key, InputSchema>;
   queue?: string;
-  /** Mutation-local success redirect policy for dynamic POST-redirect-GET targets. */
-  redirectTo?: string | ((result: MutationSuccess<Value, InferSchema<InputSchema>>) => string);
+  /**
+   * Mutation-local success redirect policy for dynamic POST-redirect-GET targets (SPEC §9.1 PRG).
+   * Accepts three forms:
+   * - a plain `string` path (legacy/back-compat, not route-table validated);
+   * - a typed {@link Redirect} value from `redirect('/chat/:id', { params })` (`@kovojs/core`,
+   *   SPEC §6.4:724) — the preferred create-then-navigate form. Because the typed value can only be
+   *   minted by a path-typed `redirect()` call, the target participates in KV220 route-table path
+   *   typing and route-rename propagation: a wrong path or param is a type error at the `redirect()`
+   *   call, and renaming the route turns every such `redirect()` red (SPEC §6.2/§6.4:724);
+   * - a function of the success `result` returning either form, for the common create-then-navigate
+   *   case where the new row id is only known after the handler runs, e.g.
+   *   `redirectTo: (r) => redirect('/chat/:id', { params: { id: r.value.id } })`.
+   * The resolved `location` is re-sanitized at the framework Location sink (SPEC §6.6).
+   */
+  redirectTo?:
+    | string
+    | Redirect
+    | ((result: MutationSuccess<Value, InferSchema<InputSchema>>) => string | Redirect);
   registry?: MutationRegistry;
   stream?: (
     context: MutationStreamContext<Value, InferSchema<InputSchema>, GuardedRequest>,

@@ -11,6 +11,39 @@ import { queryWireKey, splitQueryWireKey } from './query-store.js';
 import { readQueryChunks } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
 
+/**
+ * @internal A declared query whose refetch-on-focus opt-out drives the runtime exclusion set
+ * (SPEC §9.3/§9.4). Mirrors the `@kovojs/core` `Query` handle shape produced by
+ * `query(key, { refetchOnFocus: false })`.
+ */
+export interface RefetchOnFocusDeclaration {
+  key: string;
+  refetchOnFocus?: false;
+}
+
+/**
+ * @internal Derive the refetch-on-focus opt-out NAME set from declared queries (SPEC §9.3/§9.4).
+ *
+ * A query whose declaration sets `refetchOnFocus: false` (the `@kovojs/core` `query()` config) is
+ * excluded from the visible-return/focus typed-read refetch (§9.4). This maps that per-query
+ * declaration into the `refetchOnFocusOptOut` set the loader runtime consumes, so the declared
+ * value actually drives behavior instead of being dead metadata. Matching is by query NAME
+ * (SPEC §9.4 dispatches `/_q/` by name), so opting a keyed query out excludes every instance key.
+ */
+export function deriveRefetchOnFocusOptOut(
+  queries: Iterable<RefetchOnFocusDeclaration>,
+): readonly string[] {
+  const optOut: string[] = [];
+  const seen = new Set<string>();
+  for (const query of queries) {
+    if (query.refetchOnFocus === false && !seen.has(query.key)) {
+      seen.add(query.key);
+      optOut.push(query.key);
+    }
+  }
+  return optOut;
+}
+
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryRefetchOptions {
   /**

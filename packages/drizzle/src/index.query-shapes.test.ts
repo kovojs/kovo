@@ -2232,3 +2232,169 @@ describe('@kovojs/drizzle algebraic field classification — Lane C extractor fi
     });
   });
 });
+
+// SPEC §10.2/§11.1: the declared `reads:` set is `readonly Domain[]` (packages/server/src/query.ts),
+// so the canonical form lists Domain VALUES (`domain('x')`). Those values must resolve to their
+// domain key and fold into the query's read set (§11.1) — not stay decorative while the read set is
+// derived only from `.from()`. A fully-raw opaque read whose `reads:` resolves to no domain has an
+// empty folded read set (silent staleness) and is itself a KV410 error (§10.2).
+describe('declared reads: Domain-value resolution (SPEC §10.2/§11.1)', () => {
+  it('folds a declared Domain VALUE (const reference) into the query read set', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'post.queries.ts',
+          source: `
+          const tagDomain = domain("tag");
+          export const posts = pgTable("posts", { id: text("id").primaryKey() }, kovo({ domain: "post", key: "id" }));
+
+          export const postQuery = query("post", {
+            output: s.object({ id: s.string(), tagCount: s.number() }),
+            // The raw subquery reads the \`tags\` table (domain "tag"), invisible to static table
+            // extraction; the declared Domain value must fold "tag" into the read set (§11.1).
+            reads: [tagDomain],
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db
+                .select({ id: posts.id, tagCount: sql<number>\`(SELECT count(*) FROM tags WHERE tags.post_id = posts.id)\` })
+                .from(posts);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'post',
+        // "post" is the `.from()`-derived domain; "tag" is the declared Domain value (§11.1 fold).
+        reads: ['post', 'tag'],
+        shape: { id: 'string', tagCount: 'number' },
+        site: 'post.queries.ts:5',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('folds an inline domain("x") Domain VALUE without firing the dynamic-reads guard', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'post.queries.ts',
+          source: `
+          export const posts = pgTable("posts", { id: text("id").primaryKey() }, kovo({ domain: "post", key: "id" }));
+
+          export const postQuery = query("post", {
+            output: s.object({ id: s.string(), tagCount: s.number() }),
+            reads: [domain("tag")],
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db
+                .select({ id: posts.id, tagCount: sql<number>\`(SELECT count(*) FROM tags)\` })
+                .from(posts);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    const fact = facts[0];
+    expect(fact?.reads).toEqual(['post', 'tag']);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('reports KV410 for a fully-raw opaque read whose reads: resolves to no domain', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<unknown[]>;']),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          // A Domain-typed value the analyzer cannot trace to a domain key (no domain()/tag() call):
+          // the declared opaque read suppresses the generic KV406, so the empty folded read set must
+          // surface as KV410 (§10.2) instead of becoming silent staleness.
+          declare const externalDomain: { key: string };
+
+          export const rawQuery = query("product/raw", {
+            output: s.object({ n: s.number() }),
+            reads: [externalDomain],
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.execute(sql\`SELECT count(*) AS n FROM things\`);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts[0]?.reads).toEqual([]);
+    expect(diagnosticsForQueryFacts(facts)).toMatchObject([
+      {
+        code: 'KV410',
+        message: expect.stringContaining('resolves to no invalidation domain'),
+        severity: 'error',
+      },
+    ]);
+  });
+
+  it('reports KV411 for a declared reads: entry naming an exempt table', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          export const auditLog = pgTable("audit_log", { id: text("id").primaryKey() }, kovo({ exempt: true }));
+          export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, kovo({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            output: s.object({ name: s.string() }),
+            // An exempt table named in reads: is KV411, exactly as a statically-visible join would be.
+            reads: [auditLog],
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.select({ name: products.name }).from(products);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV411',
+        message: 'Query read set includes an exempt table. Tables: audit_log.',
+        severity: 'error',
+        site: 'product.queries.ts:5',
+      },
+    ]);
+  });
+
+  it('leaves a builder-derived read set unchanged when no reads: is declared', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, kovo({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.select({ name: products.name }).from(products);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: { name: 'string' },
+        site: 'product.queries.ts:4',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+});
