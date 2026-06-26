@@ -29,8 +29,9 @@ export interface AgentToolModuleSource {
  * invokes that callback parameter, a simple `const` alias of that parameter, a static `const`
  * object property alias of that parameter, a static `const` array index alias of that parameter,
  * a readonly array wrapper method that directly invokes each proven callback element, or a static
- * object wrapper around a proven callback array. It does not inspect raw source text after parse and it
- * skips non-invoked nested function bodies, so ordinary callbacks, computed namespace access,
+ * object wrapper around a proven or inline const-literal callback array. It does not inspect raw
+ * source text after parse and it skips non-invoked nested function bodies, so ordinary callbacks,
+ * computed namespace access,
  * computed/spread object/array aliases and exports, export-star namespaces, ambiguous export-star
  * names, reassigned callback aliases, mutated callback property/index aliases, mutable/defaulted/
  * nested destructuring, mutating/dynamic array methods, and dynamic paths remain outside the
@@ -1210,6 +1211,7 @@ function simpleCallbackParameterArrayObjectWrappers(
       const properties = callbackParameterArrayObjectWrapperProperties(
         initializer,
         arrayAliasElements,
+        parameterNames,
       );
       if (!properties) continue;
 
@@ -1233,6 +1235,7 @@ function simpleCallbackParameterArrayObjectWrappers(
 function callbackParameterArrayObjectWrapperProperties(
   expression: ts.ObjectLiteralExpression,
   arrayAliasElements: ReadonlyMap<string, ReadonlyMap<string, string>>,
+  parameterNames: ReadonlySet<string>,
 ): ReadonlyMap<string, ReadonlyMap<string, string>> | undefined {
   const properties = new Map<string, ReadonlyMap<string, string>>();
   for (const property of expression.properties) {
@@ -1254,9 +1257,11 @@ function callbackParameterArrayObjectWrapperProperties(
     if (propertyName === undefined || properties.has(propertyName)) return undefined;
 
     const arrayAlias = unwrapParentheses(initializer);
-    if (!ts.isIdentifier(arrayAlias)) return undefined;
-
-    const elements = arrayAliasElements.get(arrayAlias.text);
+    const elements = ts.isIdentifier(arrayAlias)
+      ? arrayAliasElements.get(arrayAlias.text)
+      : ts.isArrayLiteralExpression(arrayAlias)
+        ? callbackParameterArrayAliasElements(arrayAlias, parameterNames)
+        : undefined;
     if (!elements) return undefined;
 
     properties.set(propertyName, elements);
