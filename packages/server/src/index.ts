@@ -29,6 +29,12 @@ export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governa
 export type { AdminAssignFact, AdminAssignOptions } from './write-governance.js';
 export { encryptAtRest } from './confidential-at-rest.js';
 export type { EncryptedAtRest, EncryptAtRestOptions } from './confidential-at-rest.js';
+// SPEC §6.6 / KV424 and plans/most-secure-web-framework.md SINK-02: shell command
+// execution is exposed as a framework-owned `execFile` primitive. This is a
+// runtime-DiD floor plus a type-only Command surface; raw `child_process` remains
+// an app-authored dangerous sink.
+export { cmd, runCommand } from './command.js';
+export type { Command, CommandResult, CommandRunOptions } from './command.js';
 // SPEC §6.6 / plans/secure-framework.md Phase 5: outbound-egress private-network deny floor
 // (runtime defense-in-depth, NOT a by-construction proof). `EgressBlockedError` is the typed
 // 502-class error a blocked outbound connection throws; `installEgressFloor`/`selfProbe` let a

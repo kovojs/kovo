@@ -16,6 +16,7 @@ export const FRAMEWORK_BLESSED_SINK_KINDS = [
   'core:route-redirect',
   'parameterized-sql',
   'rooted-file-serve',
+  'server:command-exec-file',
   'server:redirect-location',
   'sql-identifier',
   'sql-keyword',
