@@ -973,6 +973,56 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects SQL blessed-brand laundering through object spreads outside constructors', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/server/src/unsafe-sql.ts',
+        `
+          import type { TrustedSql } from '@kovojs/core/internal/sql-safety';
+          const statement: TrustedSql = { ...requestBody };
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand laundering via object-spread contextual brand; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/server/src/unsafe-sql.ts',
+        `
+          import type { StaticSqlText } from '@kovojs/core/internal/sql-safety';
+          function clause(): StaticSqlText & { readonly text: string } {
+            return { ...runtimeConfig };
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand laundering via object-spread contextual brand; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+  });
+
+  it('allows ordinary object spreads and constructor-owned SQL brand spreads', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/server/src/safe-config.ts',
+        `
+          import type { TrustedSql } from '@kovojs/core/internal/sql-safety';
+          type View = { readonly text: string };
+          const view: View = { ...source };
+          const statement = makeSql<TrustedSql>({ text: 'select 1' });
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/core/src/internal/sql-safety.ts',
+        'const statement: TrustedSql = { ...value };',
+        { allowedConstructorFile: true },
+      ),
+    ).toEqual([]);
+  });
+
   it('does not treat generic type arguments or TSX tags as SQL blessed-brand assertions', () => {
     expect(
       sqlBlessedBrandLaunderingFindings(

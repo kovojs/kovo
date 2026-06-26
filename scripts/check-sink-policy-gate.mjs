@@ -530,6 +530,7 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
   const brandType = String.raw`(?:${brandNames})\b`;
   const anyOrUnknown = String.raw`(?:any|unknown)\b`;
   const sqlBrandAssertionType = String.raw`(?:[^;\n<>]*&\s*)?${brandType}(?:\s*&[^;\n<>]*)?`;
+  const sqlBrandAnnotationType = String.raw`(?:[^=;\n{}()]*&\s*)?${brandType}(?:\s*&[^=;\n{}()]*)?`;
   const brandFieldValue = String.raw`(?:parameterized|static|trusted|identifier|keyword)`;
 
   // Narrow KV440 floor: catch local TypeScript assertion/satisfies escape hatches that mint a
@@ -604,6 +605,30 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
   }
 
   for (const { pattern, description } of brandFieldPatterns) {
+    if (pattern.test(source)) {
+      findings.push(
+        `${filePath}: KV440 SQL blessed-brand laundering via ${description}; use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor`,
+      );
+    }
+  }
+
+  const objectSpreadBrandPatterns = [
+    {
+      pattern: new RegExp(
+        String.raw`\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*:\s*${sqlBrandAnnotationType}\s*=\s*\{(?=[^}]*\.\.\.)`,
+        'g',
+      ),
+      description: 'object-spread contextual brand',
+    },
+    {
+      pattern: new RegExp(
+        String.raw`\b(?:function\s+[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)\s*[^:{=]*:\s*${sqlBrandAnnotationType}\s*\{[\s\S]*?\breturn\s+\{(?=[^}]*\.\.\.)`,
+        'g',
+      ),
+      description: 'object-spread contextual brand',
+    },
+  ];
+  for (const { pattern, description } of objectSpreadBrandPatterns) {
     if (pattern.test(source)) {
       findings.push(
         `${filePath}: KV440 SQL blessed-brand laundering via ${description}; use sql\`...\`, staticSql\`...\`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor`,
