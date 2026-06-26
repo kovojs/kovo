@@ -796,6 +796,19 @@ function eqOperandsAreTableColumnArgKeyed(
       };
     }
 
+    const destructuredObjectProperty = localConstObjectBindingPrivateScope(
+      expression,
+      sessionContext,
+    );
+    if (destructuredObjectProperty) {
+      return {
+        privateKey: privateScopeKey(destructuredObjectProperty),
+        ...(destructuredObjectProperty.kind === 'session'
+          ? { sessionKey: destructuredObjectProperty.path }
+          : {}),
+      };
+    }
+
     // SPEC §11.1 / KV414 (minimal session-via-local tracing): recognize a session
     // value bound to a local const and then used in the scoping predicate, e.g.
     // `const uid = req.session.userId; …where(eq(orders.userId, uid))`. The shared
@@ -886,6 +899,80 @@ function localConstArrayBindingPrivateScope(
     privateScopeForExpression(value, sessionContext) ??
     summarizedStaticCallPrivateScope(value, sessionContext)
   );
+}
+
+function localConstObjectBindingPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isBindingElement(declaration)) return undefined;
+  if (isRestBindingElement(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+  if (declaration.getInitializer()) return undefined;
+
+  const pattern = declaration.getParent();
+  if (!Node.isObjectBindingPattern(pattern)) return undefined;
+  const variable = pattern.getParent();
+  if (!Node.isVariableDeclaration(variable)) return undefined;
+  const declarationList = variable.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = variable.getInitializer();
+  const object = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
+
+  const propertyName = objectBindingPropertyName(declaration);
+  if (!propertyName) return undefined;
+
+  const value = objectLiteralSingleStaticPropertyValue(object, propertyName);
+  if (!value) return undefined;
+  return (
+    privateScopeForExpression(value, sessionContext) ??
+    summarizedStaticCallPrivateScope(value, sessionContext)
+  );
+}
+
+function objectBindingPropertyName(
+  declaration: Node & { getNameNode(): Node },
+): string | undefined {
+  if (!Node.isBindingElement(declaration)) return undefined;
+  const name = declaration.getPropertyNameNode() ?? declaration.getNameNode();
+  return staticPlainPropertyName(name);
+}
+
+function objectLiteralSingleStaticPropertyValue(
+  object: ObjectLiteralExpression,
+  name: string,
+): Node | undefined {
+  let value: Node | undefined;
+  for (const property of object.getProperties()) {
+    if (Node.isSpreadAssignment(property)) return undefined;
+
+    if (Node.isPropertyAssignment(property)) {
+      if (staticPlainPropertyName(property.getNameNode()) !== name) continue;
+      if (value) return undefined;
+      value = property.getInitializer();
+      continue;
+    }
+
+    if (Node.isShorthandPropertyAssignment(property)) {
+      if (staticPlainPropertyName(property.getNameNode()) !== name) continue;
+      if (value) return undefined;
+      value = property.getNameNode();
+    }
+  }
+  return value;
+}
+
+function staticPlainPropertyName(name: Node): string | undefined {
+  if (name.getKind() === SyntaxKind.ComputedPropertyName) return undefined;
+  return propertyNameText(name);
 }
 
 function summarizedStaticCallPrivateScope(
