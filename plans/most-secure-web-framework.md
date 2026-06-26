@@ -312,7 +312,11 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       exports such as `const mail = { sendMail }; export default Object.freeze(mail)` now preserve enforced
       reachability for already-proven static aliases, while computed, spread, mutable, shadowed, unresolved, and
       ambiguous default-object shapes remain outside the proof; focused registry/check tests, `git diff --check`,
-      and `pnpm run check:vp` passed.
+      and `pnpm run check:vp` passed. Static default array/tuple helper exports such as
+      `const helpers = [sendMail] as const; export default helpers` now preserve enforced reachability through
+      literal numeric default-import calls, including frozen proven aliases, while spread, hole, non-helper,
+      dynamic-index, and mutated shapes remain outside the proof; focused registry/check tests,
+      `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
