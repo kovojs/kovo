@@ -2,7 +2,6 @@ import type { SessionProvider, SessionProviderResult } from '@kovojs/server';
 
 import {
   getBetterAuthSetCookie,
-  hasBetterAuthJwtSessionCookie,
   isBetterAuthSessionRevocationSetCookie,
   type BetterAuthGetSessionWithHeadersResult,
   type BetterAuthLike,
@@ -88,9 +87,13 @@ export function betterAuthSession<
       : undefined;
     const setCookies = getBetterAuthSetCookie(headers);
     const revoked = setCookies.some(isBetterAuthSessionRevocationSetCookie);
-    const jwtDenied =
-      (options.sessionCookieMode ?? 'opaque') === 'opaque' &&
-      hasBetterAuthJwtSessionCookie(request.headers);
+    // bugz-3 M5 (SPEC.md §6.5; OPP-11): JWT-shaped session credentials are handled
+    // PER-CREDENTIAL, never as a request-global taint. `hasBetterAuthAcceptedSessionCookie`
+    // returns true only when the request carries a credential the mode accepts (in `opaque`
+    // mode, a non-JWT-shaped session cookie). A separately-tossed JWT-shaped *session*-named
+    // cookie therefore no longer nulls a valid opaque session (forced-logout DoS): it is
+    // simply not an accepted credential, while the real opaque session is honored. This
+    // mirrors the per-cookie handling the Set-Cookie establish path already uses.
     const acceptedBrowserCredential = hasBetterAuthAcceptedSessionCookie(
       request.headers,
       options.sessionCookieMode ?? 'opaque',
@@ -99,8 +102,7 @@ export function betterAuthSession<
     // own this provider boundary. If Better Auth emits a session-clearing cookie while
     // returning a stale payload, treat the browser credential as instantly revoked for
     // this request instead of projecting that payload into `req.session`.
-    const value =
-      payload && acceptedBrowserCredential && !revoked && !jwtDenied ? map(payload) : null;
+    const value = payload && acceptedBrowserCredential && !revoked ? map(payload) : null;
     const forwardSetCookies = acceptedBrowserCredential || revoked;
 
     // Forward refresh/cookie-cache Set-Cookie headers only when the instance actually

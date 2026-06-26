@@ -25,7 +25,13 @@ import { authTable } from './test-fakes.js';
 describe('schema bridge', () => {
   it('exposes schema bridge annotations and keeps declared touches domain-aligned', () => {
     expect(betterAuthSchemaBridge).toEqual({
-      account: { domain: 'auth', key: 'userId' },
+      // bugz-3 M6 (SPEC.md §10.1): the credential/token columns of `account`/`session` are
+      // classified `secret:` so KV435 brands any projection that reaches them.
+      account: {
+        domain: 'auth',
+        key: 'userId',
+        secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
+      },
       deviceCode: {
         exempt: true,
         rationale:
@@ -48,7 +54,7 @@ describe('schema bridge', () => {
         rationale:
           'Better Auth database-backed rate-limit counters are adapter enforcement state; SPEC.md §10.1 forbids app queries from reading exempt tables.',
       },
-      session: { domain: 'auth', key: 'userId' },
+      session: { domain: 'auth', key: 'userId', secret: ['token'] },
       team: { domain: 'organization', key: 'organizationId' },
       teamMember: { domain: 'organization', key: 'teamId' },
       twoFactor: { domain: 'auth', key: 'userId' },
@@ -905,7 +911,7 @@ describe('schema bridge', () => {
       "export const authUsers = pgTable('auth_users', {}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(result.source).toContain(
-      "export const authSessions = pgTable('auth_sessions', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const authSessions = pgTable('auth_sessions', {}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
     );
     expect(result.source).toContain(
       "export const authOrganizations = pgTable('auth_organizations', {}, kovo({ domain: 'organization', key: 'id' }));",

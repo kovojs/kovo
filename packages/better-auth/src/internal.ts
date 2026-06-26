@@ -51,7 +51,6 @@ import {
   credentialMutationDefinitionOptions,
   forwardBetterAuthSetCookie,
   getBetterAuthSetCookie,
-  hasBetterAuthJwtSessionCookie,
   hasBetterAuthSessionRevocationSetCookie,
   isBetterAuthCredentialFailureError,
   isBetterAuthCredentialFailureResponse,
@@ -107,7 +106,6 @@ export {
   credentialMutationDefinitionOptions,
   forwardBetterAuthSetCookie,
   getBetterAuthSetCookie,
-  hasBetterAuthJwtSessionCookie,
   hasBetterAuthSessionRevocationSetCookie,
   isBetterAuthCredentialFailureError,
   isBetterAuthCredentialFailureResponse,
@@ -1518,8 +1516,16 @@ function betterAuthSchemaAnnotationCall(
 
   if ('domain' in annotation) {
     const key = annotation.key === undefined ? '' : `, key: ${quoteTsString(annotation.key)}`;
+    // bugz-3 M6 (SPEC.md §10.1): emit the credential/token/bearer columns as a `secret:` list so
+    // the Drizzle confidentiality gate (KV435) brands any projection that reads them. The list is
+    // over-approximated to the bridge's fixed column set; columns absent from a given app's table
+    // are simply ignored by the Drizzle analyzer (it matches secret names against real columns).
+    const secret =
+      annotation.secret === undefined || annotation.secret.length === 0
+        ? ''
+        : `, secret: [${annotation.secret.map((column) => quoteTsString(column)).join(', ')}]`;
 
-    return `${annotationCallee}({ domain: ${quoteTsString(annotation.domain)}${key} })`;
+    return `${annotationCallee}({ domain: ${quoteTsString(annotation.domain)}${key}${secret} })`;
   }
 
   return `${annotationCallee}({ exempt: true })`;

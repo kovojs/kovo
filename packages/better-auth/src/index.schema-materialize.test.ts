@@ -130,7 +130,7 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  expiresAt: timestamp('expires_at').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
     );
     expect(result.source).toContain(
       "export const verification = pgTable('verification', {\n" +
@@ -561,7 +561,7 @@ describe('schema.ts materialization', () => {
     expect(result.existingExtraConfigTables).toEqual(['session']);
     expect(result.missingSourceTables).toEqual(['verification']);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
     );
     expect(result.source).toContain("export const session = pgTable('session', {}, auditConfig);");
   });
@@ -658,7 +658,7 @@ describe('schema.ts materialization', () => {
     expect(result.duplicateSourceTables).toEqual(['user']);
     expect(result.missingSourceTables).toEqual(['session', 'verification']);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
     );
     expect(result.source).toContain("export const primaryUser = pgTable('user', {});");
     expect(result.source).toContain("export const auditUser = pgTable('user', {});");
@@ -693,7 +693,7 @@ describe('schema.ts materialization', () => {
       [
         "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
-        "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
+        "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
       ].join('\n'),
     );
 
@@ -715,7 +715,7 @@ describe('schema.ts materialization', () => {
       suggestedImport: "import { kovo as markKovo } from '@kovojs/drizzle';",
     });
     expect(aliased.source).toContain(
-      "export const account = pgTable('account', {}, markKovo({ domain: 'auth', key: 'userId' }));",
+      "export const account = pgTable('account', {}, markKovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
     );
 
     const existingKovoModuleImport = annotateBetterAuthSchemaSource(
@@ -738,7 +738,7 @@ describe('schema.ts materialization', () => {
       [
         "import { domain, kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
-        "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
+        "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
       ].join('\n'),
     );
   });
@@ -776,7 +776,7 @@ describe('schema.ts materialization', () => {
       "export const user = authPgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(result.source).toContain(
-      "export const session = sqlite.sqliteTable('session', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const session = sqlite.sqliteTable('session', {}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
     );
     expect(result.source).toContain(
       "export const verification = sqlite.sqliteTable('verification', {}, kovo({ exempt: true }));",
@@ -839,7 +839,7 @@ describe('schema.ts materialization', () => {
         "  expiresAt: timestamp('expiresAt').notNull(),\n" +
         "  token: text('token').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
     );
     expect(result.source).toContain(
       "export const verification = pgTable('verification', {\n" +
@@ -902,7 +902,7 @@ describe('schema.ts materialization', () => {
         "  expiresAt: text('expiresAt').notNull(),\n" +
         "  token: text('token').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
     );
     expect(result.source).toContain(
       "export const verification = sqliteTable('verification', {\n" +
@@ -943,7 +943,7 @@ describe('schema.ts materialization', () => {
       "export const session = pgTable('session', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
     );
     expect(result.source).toContain(
       "export const user = pgTable('user', {\n" +
@@ -951,6 +951,59 @@ describe('schema.ts materialization', () => {
         "  email: text('email_address').notNull(),\n" +
         "}, kovo({ domain: 'user', key: 'id' }));",
     );
+  });
+
+  // bugz-3 M6 (SPEC.md §10.1): the blessed bridge classifies the `account` credential columns
+  // (password hash + OAuth access/refresh/id tokens) and the `session.token` bearer credential
+  // as `secret:`. The emitted schema.ts annotation carries that list verbatim, so the Drizzle
+  // confidentiality gate brands any projection that reads them `kind:'secret'` and fires KV435 —
+  // a natural owner-scoped `query(db => db.select().from(account).where(eq(account.userId, …)))`
+  // can no longer serialize a long-lived credential to client JS. The Drizzle analyzer matches
+  // these secret names against the real generated columns (`secret:[…]` -> `kind:'secret'`), which
+  // its own KV435 query-shape tests prove; here we lock in that better-auth EMITS the gate.
+  it('classifies account credential and session bearer columns as secret in the emitted annotation', () => {
+    const result = generateBetterAuthSchemaSource({
+      account: {
+        fields: {
+          userId: { fieldName: 'user_id', required: true, type: 'string' },
+          accountId: { required: true, type: 'string' },
+          providerId: { required: true, type: 'string' },
+          accessToken: { type: 'string' },
+          refreshToken: { type: 'string' },
+          idToken: { type: 'string' },
+          password: { type: 'string' },
+        },
+      },
+      session: {
+        fields: {
+          token: { required: true, type: 'string' },
+          userId: { fieldName: 'user_id', required: true, type: 'string' },
+        },
+      },
+      user: authTable(),
+      verification: authTable(),
+    });
+
+    expect(result.validation.ok).toBe(true);
+    expect(result.skippedTables).toEqual([]);
+    // The credential columns the secret list names are present in the generated table body, so
+    // the Drizzle gate has real columns to brand `kind:'secret'`.
+    expect(result.source).toContain("accessToken: text('accessToken'),");
+    expect(result.source).toContain("refreshToken: text('refreshToken'),");
+    expect(result.source).toContain("idToken: text('idToken'),");
+    expect(result.source).toContain("password: text('password'),");
+    expect(result.source).toContain("token: text('token').notNull(),");
+    // The emitted annotation classifies them secret. KV435 fires on any projection that reads
+    // these columns once the Drizzle compiler ingests this annotation.
+    expect(result.source).toContain(
+      "}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+    );
+    expect(result.source).toContain(
+      "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
+    );
+    // A non-secret owner-scoped column (provider/account ids) stays unbranded, so legitimate
+    // reads still work — only the credential columns are gated.
+    expect(result.source).toContain("providerId: text('providerId').notNull(),");
   });
 
   it('degrades generated schema.ts when explicit id metadata has an unsupported type', () => {

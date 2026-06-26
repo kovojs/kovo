@@ -230,8 +230,12 @@ describe('betterAuthSession', () => {
     });
   });
 
-  it('treats JWT-shaped Better Auth session cookies as anonymous by default', async () => {
+  it('treats a JWT-shaped Better Auth session cookie as anonymous by default', async () => {
     const auth = new FakeBetterAuth();
+    // Even if Better Auth returns a live payload, a request whose ONLY session credential is
+    // JWT-shaped is anonymous in opaque mode (SPEC.md §6.5; OPP-11): the JWT credential is not
+    // an accepted browser credential, so nothing is mapped.
+    auth.forceAuthenticated = true;
     const provider = betterAuthSession(auth, () => {
       throw new Error('JWT-backed sessions must not be mapped without opt-in');
     });
@@ -239,10 +243,27 @@ describe('betterAuthSession', () => {
     await expect(
       provider({
         headers: new Headers({
-          cookie: `kovo_session=s1; better-auth.session_token=${jwtSessionValue()}`,
+          cookie: `better-auth.session_token=${jwtSessionValue()}`,
         }),
       }),
     ).resolves.toBeNull();
+  });
+
+  // bugz-3 M5 (SPEC.md §6.5; OPP-11): a JWT-shaped *session*-named cookie is handled
+  // per-credential, never as a request-global taint. A user with a separately-valid opaque
+  // session that better-auth validated must NOT be forced anonymous because an attacker tossed
+  // a JWT-shaped cookie (`asession=…`) onto a shared cookie domain (forced-logout DoS).
+  it('honors a valid opaque session when a JWT-shaped session cookie is also tossed in', async () => {
+    const auth = new FakeBetterAuth();
+    const provider = betterAuthSession(auth, mapSession);
+
+    await expect(
+      provider({
+        headers: new Headers({
+          cookie: `better-auth.session_token=opaque-session-1; asession=${jwtSessionValue()}`,
+        }),
+      }),
+    ).resolves.toEqual(mappedAppSession);
   });
 
   it('maps JWT-shaped Better Auth session cookies only with explicit opt-in', async () => {
