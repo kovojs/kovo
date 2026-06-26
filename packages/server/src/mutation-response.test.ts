@@ -1206,6 +1206,58 @@ describe('server mutation primitives', () => {
     expect(body).toContain(bufferedResponse.body as string);
   });
 
+  it('fails closed for forged stream.fragment html objects while accepting rendered and trusted HTML', async () => {
+    const sendMessage = mutation('chat/send-fragment-witnesses', {
+      input: s.object({ body: s.string() }),
+      handler(input) {
+        return input;
+      },
+      *stream() {
+        yield stream.fragment({
+          html: { html: '<img src=x onerror=alert(1)>' } as unknown as Parameters<
+            typeof stream.fragment
+          >[0]['html'],
+          mode: 'append',
+          target: 'messages',
+        });
+        yield stream.fragment({
+          html: renderedHtml('<article data-safe="rendered">Rendered</article>'),
+          mode: 'append',
+          target: 'messages',
+        });
+        yield stream.fragment({
+          html: trustedHtml('<article data-safe="trusted">Trusted</article>'),
+          mode: 'append',
+          target: 'messages',
+        });
+        yield stream.done();
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(sendMessage, {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Stream': 'true',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      request: {},
+    });
+
+    expect(response.body).toBeInstanceOf(ReadableStream);
+    const body = await readResponseBody(response.body);
+    expect(body).toBe(
+      [
+        '<kovo-fragment target="messages" mode="append"></kovo-fragment>',
+        '<kovo-fragment target="messages" mode="append"><article data-safe="rendered">Rendered</article></kovo-fragment>',
+        '<kovo-fragment target="messages" mode="append"><article data-safe="trusted">Trusted</article></kovo-fragment>',
+        '<kovo-done></kovo-done>',
+        '',
+      ].join('\n'),
+    );
+    expect(body).not.toContain('<img src=x onerror=alert(1)>');
+  });
+
   it('keeps the buffered enhanced mutation path when Kovo-Stream is absent', async () => {
     const chat = domain('chat-buffered');
     const chatQuery = query('chatBuffered', {

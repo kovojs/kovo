@@ -4,6 +4,7 @@ import type { TrustedHtml } from '@kovojs/browser';
 import { reportServerError } from '../diagnostics.js';
 import type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
 import { isRenderedHtml } from '../html.js';
+import type { RenderedHtml } from '../html.js';
 import type { BufferedMutationWireResponse, MutationWireResponse } from '../mutation-wire.js';
 import type { MutationReplayReservation } from '../replay.js';
 import {
@@ -15,13 +16,7 @@ import {
 import type { MutationSuccess } from './definition.js';
 
 /** Rendered JSX or explicit trusted HTML accepted by `stream.fragment()` (SPEC §9.1, KV236). */
-export type MutationStreamFragmentHtml =
-  | TrustedHtml
-  | {
-      readonly html: string;
-      [Symbol.toPrimitive](): string;
-      toString(): string;
-    };
+export type MutationStreamFragmentHtml = RenderedHtml | TrustedHtml;
 
 /** A server-rendered fragment chunk for a SPEC §9.1 streaming mutation response. */
 export interface MutationStreamFragmentChunk {
@@ -373,13 +368,5 @@ function renderMutationStreamFragmentHtml(html: MutationStreamFragmentHtml): str
   if (isRenderedHtml(html)) return html.html;
   const trustedHtml = kovoTrustedHtmlContent(html);
   if (trustedHtml !== '') return trustedHtml;
-  if (
-    typeof html === 'object' &&
-    html !== null &&
-    'html' in html &&
-    typeof html.html === 'string'
-  ) {
-    return html.html;
-  }
   return '';
 }
