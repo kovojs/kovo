@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   blessedSinkKindsReferencedByFile,
   checkSinkPolicyGate,
+  commandExecutionSinkFindings,
+  commandPrimitiveInvariantFindings,
   exportedNames,
   extractRegisteredBlessedSinkKinds,
   publicSinkPolicyEscapeFindings,
@@ -21,6 +23,7 @@ export function isBlessedSink(sink, value) { return true; }
 function runFixture(files) {
   return checkSinkPolicyGate({
     blessedSinkFiles: Object.keys(files).filter((file) => file !== 'public.ts'),
+    commandExecutionFiles: [],
     exists: (file) => Object.hasOwn(files, file),
     publicEntrypointFiles: Object.hasOwn(files, 'public.ts') ? ['public.ts'] : [],
     readText: (file) => files[file],
@@ -111,6 +114,115 @@ describe('sink-policy gate', () => {
     ).toEqual([
       'public.ts: public export reviewedSinkFactory aliases internal sink-policy blessSink and would create a generic blessed-sink escape hatch',
       'public.ts: public export checkedSink aliases internal sink-policy isBlessedSink and would create a generic blessed-sink escape hatch',
+    ]);
+  });
+
+  it('rejects command execution imports outside the server command primitive', () => {
+    expect(
+      commandExecutionSinkFindings(
+        'packages/server/src/unsafe.ts',
+        `
+          import { exec as shell, execFile } from "node:child_process";
+          shell("git status");
+          execFile("git", ["status"]);
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: forbidden child_process.exec import; use cmd()/runCommand() so command execution stays shell-free and witnessed',
+      'packages/server/src/unsafe.ts: raw child_process.execFile import is outside the command primitive; use cmd()/runCommand()',
+      'packages/server/src/unsafe.ts: raw child_process.execFile call is outside the command primitive; use cmd()/runCommand()',
+    ]);
+
+    expect(
+      commandExecutionSinkFindings(
+        'packages/server/src/unsafe.ts',
+        `
+          import * as childProcess from "child_process";
+          childProcess.execSync("git status");
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: raw child_process.execSync call is outside the command primitive; use cmd()/runCommand()',
+    ]);
+  });
+
+  it('allows only the command primitive to hold execFile while keeping shell sinks forbidden', () => {
+    expect(
+      commandExecutionSinkFindings(
+        'packages/server/src/command.ts',
+        'import { execFile } from "node:child_process";',
+        { allowedExecutionSink: true },
+      ),
+    ).toEqual([]);
+
+    expect(
+      commandExecutionSinkFindings(
+        'packages/server/src/command.ts',
+        'import { execSync } from "node:child_process";',
+        { allowedExecutionSink: true },
+      ),
+    ).toEqual([
+      'packages/server/src/command.ts: forbidden child_process.execSync import; use cmd()/runCommand() so command execution stays shell-free and witnessed',
+    ]);
+  });
+
+  it('asserts runCommand keeps its witness check and shell-free execFile options', () => {
+    expect(
+      commandPrimitiveInvariantFindings(
+        'packages/server/src/command.ts',
+        `
+          const COMMAND_EXEC_FILE_SINK = 'server:command-exec-file';
+          export function cmd(value) {
+            return blessSink(COMMAND_EXEC_FILE_SINK, value);
+          }
+          export function isCommand(value) {
+            return isBlessedSink(COMMAND_EXEC_FILE_SINK, value);
+          }
+          export function runCommand(command) {
+            if (!isCommand(command)) throw new TypeError();
+            const execOptions = { shell: false };
+            execFile(command.program, [...command.argv], execOptions, () => {});
+          }
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      commandPrimitiveInvariantFindings(
+        'packages/server/src/command.ts',
+        `
+          const COMMAND_EXEC_FILE_SINK = 'server:command-exec-file';
+          export function cmd(value) {
+            return value;
+          }
+          export function runCommand(command) {
+            execFile(command.program, command.argv, {}, () => {});
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/command.ts: cmd() must mint Command values with the registered command execution witness',
+      'packages/server/src/command.ts: runCommand() must re-check the registered command execution witness',
+      'packages/server/src/command.ts: runCommand() must execute the minted program/argv through execFile with explicit options',
+      'packages/server/src/command.ts: runCommand() execFile options must set shell: false',
+    ]);
+  });
+
+  it('runs the command execution gate over configured server source files', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: ['packages/server/src/unsafe.ts'],
+        exists: (file) => file === 'packages/server/src/unsafe.ts' || file === 'sink-policy.ts',
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'import { execSync } from "node:child_process";',
+        sinkPolicyPath: 'sink-policy.ts',
+      }),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: forbidden child_process.execSync import; use cmd()/runCommand() so command execution stays shell-free and witnessed',
     ]);
   });
 });
