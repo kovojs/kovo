@@ -18,16 +18,20 @@ const questionDetailTarget = 'question-detail-region';
 const questionDetailComponent = 'components/question-detail/question-detail-region';
 const demoSessionHeader = 'x-kovo-demo-sid';
 
-function withCsrf(fields: Record<string, string>): Record<string, string> {
-  return withSessionCsrf('demo-session', fields);
+function withCsrf(mutation: string, fields: Record<string, string>): Record<string, string> {
+  return withSessionCsrf('demo-session', mutation, fields);
 }
 
 function withSessionCsrf(
   sessionId: string,
+  mutation: string,
   fields: Record<string, string>,
 ): Record<string, string> {
   return {
-    csrf: csrfToken({ session: { id: sessionId } }, soCsrf),
+    // Bind the token audience to the targeted mutation key. Mutation dispatch
+    // validates `{ audience: definition.key }` (SPEC §6.5/§9.1, mutation.ts:150),
+    // so an unbound `field:csrf` token is rejected with a bare 422.
+    csrf: csrfToken({ session: { id: sessionId } }, soCsrf, { mutation }),
     ...fields,
   };
 }
@@ -116,6 +120,9 @@ async function postForm(
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
+        // Same-origin Origin header a real browser always sends; the CSRF Origin
+        // floor (SPEC §9.5) rejects header-less POSTs with 422. Node fetch omits it.
+        Origin: 'http://example.test',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
         'Kovo-Live-Targets': liveTargets,
@@ -224,13 +231,14 @@ describe('stackoverflow interactive app', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
+          Origin: 'http://example.test',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': 'test-vote-1',
           'Kovo-Live-Targets': liveHeader(questionListTarget, questionListComponent),
           'Kovo-Targets': `${questionListTarget}=questionList questionScore`,
         },
         body: new URLSearchParams(
-          withCsrf({ id: 'v-test', targetId: first.id, userId: 'demo-viewer' }),
+          withCsrf('voteUp', { id: 'v-test', targetId: first.id, userId: 'demo-viewer' }),
         ),
       }),
     );
@@ -278,7 +286,7 @@ describe('stackoverflow interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'postAnswer',
-      withCsrf({
+      withCsrf('postAnswer', {
         id: 'a-test-1',
         questionId: question.id,
         body: 'A fresh demo answer.',
@@ -321,7 +329,7 @@ describe('stackoverflow interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'postAnswer',
-      withCsrf({
+      withCsrf('postAnswer', {
         id: 'a-browser-header-1',
         questionId: question.id,
         body: 'Visible without refresh.',
@@ -343,7 +351,7 @@ describe('stackoverflow interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'postQuestion',
-      withCsrf({
+      withCsrf('postQuestion', {
         id: 'q-test-1',
         title: 'How do I demo Kovo?',
         body: 'Asking for a friend.',
@@ -370,7 +378,7 @@ describe('stackoverflow interactive app', () => {
     const { status, html } = await postForm(
       handler,
       'postQuestion',
-      withCsrf({
+      withCsrf('postQuestion', {
         id: 'q-duplicate-title',
         title: question.title,
         body: 'Asking again should surface a typed form failure.',
@@ -406,7 +414,7 @@ describe('stackoverflow interactive app', () => {
     const { status } = await postForm(
       handler,
       'postQuestion',
-      withSessionCsrf(sessionA, {
+      withSessionCsrf(sessionA, 'postQuestion', {
         id: 'q-session-a-only',
         title,
         body: 'This should not appear in another browser session.',
