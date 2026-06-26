@@ -61,11 +61,12 @@ ledger's H1-H9/M1-M4/L1-L5 list.
   - **Verified:** server sub-agent throwaway vitest with `maxBodyBytes:4` and no `Content-Length` produced `{ status: 413, sideEffects: 1 }`.
   - **Fix:** for raw endpoints, drain/check the limited body before handler dispatch when a body is present, or expose a separate declared streaming endpoint class whose side-effect ordering is explicitly opt-in.
 
-- [ ] **M2 - Inline loader writes `false` boolean-presence attrs as present.** `packages/browser/src/inline-loader-build.ts:220-255`, generated `packages/browser/src/inline-loader.ts:8`; contrast `packages/browser/src/query-bindings.ts:610-669`
+- [x] **M2 - Inline loader writes `false` boolean-presence attrs as present.** `packages/browser/src/inline-loader-build.ts:220-255`, generated `packages/browser/src/inline-loader.ts:8`; contrast `packages/browser/src/query-bindings.ts:610-669`
   - The module runtime treats all boolean-presence attributes (`hidden`, `disabled`, `required`, `selected`, etc.) as remove-on-false. The inline loader only special-cases `checked` and `indeterminate`; `data-bind:hidden=false` becomes `hidden="false"`, which is still present in HTML.
   - **Impact:** after inline delegated handlers run, panels can remain hidden and controls disabled/required/selected despite false state, diverging from the module runtime and SPEC §4.8 binding semantics.
   - **Verified:** browser sub-agent throwaway simulation observed `{"hidden":"false","disabled":"false","checked":null}`; source contrast shows the full `BOOLEAN_PRESENCE_ATTRIBUTES` set exists only in `query-bindings.ts`.
   - **Fix:** share or inline the full boolean-presence attribute set in `inline-loader-build.ts`, regenerate `inline-loader.ts`, and pin parity tests for false/null/true.
+  - Evidence 2026-06-26: inline `data-bind:*` now applies the full boolean-presence set with property parity for `checked`/`indeterminate`; `pnpm --filter @kovojs/browser exec vitest run src/inline-loader-security.test.ts src/inline-loader-delegated.test.ts`, `pnpm run check:inline-loader`, `git diff --check`, and `pnpm run check:vp` passed after integration.
 
 - [x] **M3 - `create-kovo` starter CI calls `kovo` as a bare command.** `packages/create-kovo/templates/.github/workflows/ci.yml:14-20`, `rules/github-workflows.md:5-16`
   - The generated workflow installs via `voidzero-dev/setup-vp` and `vp install`, then runs `kovo build ./src/app.tsx` directly. The workflow rules explicitly say setup actions should not assume underlying package binaries are available as bare commands in later steps.
@@ -74,11 +75,12 @@ ledger's H1-H9/M1-M4/L1-L5 list.
   - **Fix:** run through the installed toolchain/package manager, e.g. `vp exec pnpm run build:prod` or `vp exec pnpm exec kovo build ./src/app.tsx`.
   - Evidence 2026-06-26: starter CI now runs `vp exec pnpm run build:prod`; `pnpm exec vitest --run packages/create-kovo/src/index.test.ts -t "declares the building-block dependencies"`, `git diff --check`, and `pnpm run check:vp` passed.
 
-- [ ] **M4 - Inline dynamic-import guard is wider than the module guard.** `packages/browser/src/inline-loader-build.ts:197-213`, generated `packages/browser/src/inline-loader.ts:8`; contrast `packages/browser/src/dynamic-import-url.ts:29-50`
+- [x] **M4 - Inline dynamic-import guard is wider than the module guard.** `packages/browser/src/inline-loader-build.ts:197-213`, generated `packages/browser/src/inline-loader.ts:8`; contrast `packages/browser/src/dynamic-import-url.ts:29-50`
   - The inline guard allows any same-origin pathname starting `/c/` or merely ending with the two letters `ts`. The module guard allows local-dev TS/TSX only on localhost and otherwise restricts to `/c/` plus any available modulepreload manifest. On production origins, inline accepts paths like `/admin/upload.ts` and `/assets`.
   - **Impact:** if a DOM-control attribute (`on:*`, stream renderer, or derive ref) can be introduced by another bug or app-owned CMS markup, the inline loader may import same-origin modules outside the compiler-emitted client-module surface.
   - **Verified:** browser sub-agent reproduced guard drift: module guard rejected `/admin/upload.ts` and `/assets`; inline predicate accepted both.
   - **Fix:** make the inline predicate byte-equivalent to `isAllowedKovoDynamicImportUrl`, including localhost-only dev TS modules and production `/c/`/manifest restrictions.
+  - Evidence 2026-06-26: inline import validation now matches the module runtime's same-origin, localhost TS/TSX dev, `/c/`, and modulepreload-manifest restrictions; `pnpm --filter @kovojs/browser exec vitest run src/inline-loader-security.test.ts src/inline-loader-delegated.test.ts`, `pnpm run check:inline-loader`, `git diff --check`, and `pnpm run check:vp` passed after integration.
 
 ---
 
