@@ -49,6 +49,32 @@ describe('agent tool capability primitive', () => {
     expect(() =>
       tool({
         ...base,
+        ambientCredentials: {
+          allow: true,
+          credentialKinds: ['cookie'],
+          justification: {
+            authorityBoundary: '',
+            reason: 'legacy browser-authenticated assistant action under review',
+          },
+        },
+      }),
+    ).toThrow('tool.ambientCredentials.justification.authorityBoundary must be a non-empty string');
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: {
+          allow: true,
+          credentialKinds: [],
+          justification: {
+            authorityBoundary: 'handler re-checks the bound principal before every read',
+            reason: 'legacy browser-authenticated assistant action under review',
+          },
+        },
+      }),
+    ).toThrow('tool.ambientCredentials.credentialKinds must declare at least one credential kind');
+    expect(() =>
+      tool({
+        ...base,
         reachableSinks: [
           {
             capability: 'email.send',
@@ -81,6 +107,20 @@ describe('agent tool capability primitive', () => {
         },
       ),
     ).rejects.toThrow('rejects ambient browser/session credentials by default');
+
+    await expect(
+      runAgentTool(
+        updateOrder,
+        { id: 'ord_1' },
+        {
+          authority: principalAuthority,
+          request: new Request('https://example.test/tool', {
+            headers: { 'x-auth-request-user': 'user_123' },
+          }),
+          value: {},
+        },
+      ),
+    ).rejects.toThrow('auth-proxy(header:x-auth-request-user)');
 
     const request = new Request('https://example.test/tool') as Request & {
       session?: { userId: string };
@@ -119,17 +159,25 @@ describe('agent tool capability primitive', () => {
     ).rejects.toThrow('cannot run with undeclared authority "capability:orders:wide"');
   });
 
-  it('allows ambient credentials only with an explicit justification and strips session from context', async () => {
+  it('allows only declared ambient credential kinds and normalizes the request', async () => {
     const ambientTool = tool({
       ambientCredentials: {
         allow: true,
-        justification: 'legacy browser-authenticated assistant action under review',
+        credentialKinds: ['cookie'],
+        justification: {
+          authorityBoundary: 'handler re-checks the bound principal before reading profile data',
+          reason: 'legacy browser-authenticated assistant action under review',
+        },
       },
       audit: { owner: 'security', review: 'SEC-123' },
       authority: [principalAuthority],
       capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
       handler: (_input: undefined, context) => ({
+        authorization: context.request?.headers.get('authorization') ?? null,
+        cookie: context.request?.headers.get('cookie') ?? null,
+        credentials: context.request?.credentials,
         hasSession: context.request === undefined ? false : 'session' in context.request,
+        proxyUser: context.request?.headers.get('x-auth-request-user') ?? null,
       }),
       name: 'profile.summary',
       purpose: 'Read the current user profile summary for an agent response.',
@@ -145,7 +193,92 @@ describe('agent tool capability primitive', () => {
         request,
         value: {},
       }),
-    ).resolves.toEqual({ hasSession: false });
+    ).rejects.toThrow('session(property:session)');
+
+    delete request.session;
+
+    await expect(
+      runAgentTool(ambientTool, undefined, {
+        authority: principalAuthority,
+        request,
+        value: {},
+      }),
+    ).resolves.toEqual({
+      authorization: null,
+      cookie: 'session=ambient',
+      credentials: 'omit',
+      hasSession: false,
+      proxyUser: null,
+    });
+  });
+
+  it('rejects undeclared ambient credential classes even when another class is justified', async () => {
+    const ambientTool = tool({
+      ambientCredentials: {
+        allow: true,
+        credentialKinds: ['cookie'],
+        justification: {
+          authorityBoundary: 'handler re-checks the bound principal before reading profile data',
+          reason: 'legacy browser-authenticated assistant action under review',
+        },
+      },
+      audit: { owner: 'security', review: 'SEC-123' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: () => undefined,
+      name: 'profile.summary',
+      purpose: 'Read the current user profile summary for an agent response.',
+    });
+
+    await expect(
+      runAgentTool(ambientTool, undefined, {
+        authority: principalAuthority,
+        request: new Request('https://example.test/tool', {
+          headers: {
+            authorization: 'Bearer ambient',
+            cookie: 'session=ambient',
+            'x-auth-request-user': 'user_123',
+          },
+        }),
+        value: {},
+      }),
+    ).rejects.toThrow(
+      'authorization(header:authorization), auth-proxy(header:x-auth-request-user)',
+    );
+  });
+
+  it('strips session from a request even when session-bearing invocation is justified', async () => {
+    const sessionTool = tool({
+      ambientCredentials: {
+        allow: true,
+        credentialKinds: ['session'],
+        justification: {
+          authorityBoundary: 'handler uses only the explicit principal authority from context',
+          reason: 'legacy adapter still invokes tools with a session-bearing request object',
+        },
+      },
+      audit: { owner: 'security', review: 'SEC-124' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: (_input: undefined, context) => ({
+        hasSession: context.request === undefined ? false : 'session' in context.request,
+        session: (context.request as unknown as { session?: unknown } | undefined)?.session,
+      }),
+      name: 'profile.sessionSummary',
+      purpose: 'Read the current user profile summary for an agent response.',
+    });
+    const request = new Request('https://example.test/tool') as Request & {
+      session?: { userId: string };
+    };
+    request.session = { userId: 'user_123' };
+
+    await expect(
+      runAgentTool(sessionTool, undefined, {
+        authority: principalAuthority,
+        request,
+        value: {},
+      }),
+    ).resolves.toEqual({ hasSession: false, session: undefined });
   });
 
   it('enumerates purpose, authority, allowed capabilities, and ambient posture for audit output', () => {
@@ -221,7 +354,11 @@ describe('agent tool capability primitive', () => {
     const profile = tool({
       ambientCredentials: {
         allow: true,
-        justification: 'legacy browser-authenticated assistant action under review',
+        credentialKinds: ['cookie', 'auth-proxy'],
+        justification: {
+          authorityBoundary: 'handler re-checks the bound principal before reading profile data',
+          reason: 'legacy browser-authenticated assistant action under review',
+        },
       },
       audit: { owner: 'security', review: 'SEC-123', site: 'app/tools/profile.ts:12' },
       authority: [principalAuthority],
@@ -234,7 +371,11 @@ describe('agent tool capability primitive', () => {
     expect(agentToolAuditFacts([profile])).toEqual([
       {
         ambientBrowserCredentials: 'allowed',
-        ambientJustification: 'legacy browser-authenticated assistant action under review',
+        ambientCredentialKinds: ['cookie', 'auth-proxy'],
+        ambientJustification: {
+          authorityBoundary: 'handler re-checks the bound principal before reading profile data',
+          reason: 'legacy browser-authenticated assistant action under review',
+        },
         authority: ['principal:user:123'],
         declaredCapabilities: ['profile.read'],
         kind: 'agentTool',

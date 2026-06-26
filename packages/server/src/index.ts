@@ -13,6 +13,8 @@ export { publicAccess, verifiedAccess } from './access.js';
 // not prompt-injection immunity or a compiler proof.
 export { AgentToolCapabilityError, agentToolAuditFacts, runAgentTool, tool } from './agent-tool.js';
 export type {
+  AgentToolAmbientCredentialJustification,
+  AgentToolAmbientCredentialKind,
   AgentToolAmbientCredentials,
   AgentToolAuditFact,
   AgentToolAuditMetadata,
