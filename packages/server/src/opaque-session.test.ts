@@ -313,6 +313,67 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
   });
 
+  it.each([
+    ['NaN createdAt', { createdAt: Number.NaN }],
+    ['Infinity createdAt', { createdAt: Number.POSITIVE_INFINITY }],
+    ['fractional createdAt', { createdAt: 1.5 }],
+    ['NaN expiresAt', { expiresAt: Number.NaN }],
+    ['Infinity expiresAt', { expiresAt: Number.POSITIVE_INFINITY }],
+    ['fractional expiresAt', { expiresAt: 2.5 }],
+  ])('fails closed when a custom store validates %s', async (_label, timestampPatch) => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        async validate(id: string) {
+          const result = await baseStore.validate(id);
+          if (!result.ok) return result;
+          return {
+            ok: true,
+            session: { ...result.session, ...timestampPatch },
+          };
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+    await expect(
+      manager.provider(new Request('https://app.test/account', { headers: { cookie } })),
+    ).resolves.toBeNull();
+  });
+
+  it('accepts valid integer lifecycle timestamps from a custom store', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        async validate(id: string) {
+          const result = await baseStore.validate(id);
+          if (!result.ok) return result;
+          return {
+            ok: true,
+            session: {
+              ...result.session,
+              createdAt: Math.trunc(result.session.createdAt),
+              expiresAt: Math.trunc(result.session.expiresAt),
+            },
+          };
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(manager.validate(established.session.id)).resolves.toMatchObject({
+      ok: true,
+      session: { value: { user: { id: 'u1' } } },
+    });
+  });
+
   it('fails closed when a custom store returns a malformed validation result', async () => {
     const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
     const manager = createOpaqueSessionManager({
@@ -429,6 +490,44 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     await expect(manager.establish({ user: { id: 'u1' } })).rejects.toThrow(
       'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
     );
+  });
+
+  it.each([
+    ['NaN createdAt', { createdAt: Number.NaN }],
+    ['Infinity createdAt', { createdAt: Number.POSITIVE_INFINITY }],
+    ['fractional createdAt', { createdAt: 1.5 }],
+    ['NaN expiresAt', { expiresAt: Number.NaN }],
+    ['Infinity expiresAt', { expiresAt: Number.POSITIVE_INFINITY }],
+    ['fractional expiresAt', { expiresAt: 2.5 }],
+  ])(
+    'refuses to set a browser cookie when a custom store creates %s',
+    async (_label, timestampPatch) => {
+      const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+      const validSession = baseStore.create({ user: { id: 'u1' } });
+      const malformedStore: OpaqueSessionStore<{ user: { id: string } }> = {
+        ...baseStore,
+        create: async () => ({
+          ...validSession,
+          ...timestampPatch,
+        }),
+      };
+      const manager = createOpaqueSessionManager({ store: malformedStore });
+
+      await expect(manager.establish({ user: { id: 'u1' } })).rejects.toThrow(
+        'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
+      );
+    },
+  );
+
+  it('rejects incoherent Kovo memory-store clock timestamps before creating a session record', () => {
+    const store = createMemoryOpaqueSessionStore<{ user: { id: string } }>({
+      now: () => Number.NaN,
+    });
+
+    expect(() => store.create({ user: { id: 'u1' } })).toThrow(
+      'Opaque session clock must return a non-negative safe integer epoch millisecond',
+    );
+    expect(store.size()).toBe(0);
   });
 
   it('does not serialize a browser cookie beyond the store-backed absolute expiry', async () => {

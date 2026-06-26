@@ -195,7 +195,13 @@ export function createMemoryOpaqueSessionStore<SessionValue>(
     let id = mintOpaqueSessionId();
     while (records.has(id) || revoked.has(id)) id = mintOpaqueSessionId();
     const createdAt = now();
-    const record = { id, createdAt, expiresAt: createdAt + ttlMs, value };
+    const expiresAt = createdAt + ttlMs;
+    if (!isCoherentEpochMillisecond(createdAt) || !isCoherentEpochMillisecond(expiresAt)) {
+      throw new Error(
+        'Opaque session clock must return a non-negative safe integer epoch millisecond',
+      );
+    }
+    const record = { id, createdAt, expiresAt, value };
     records.set(id, record);
     evict();
     return record;
@@ -425,14 +431,17 @@ function isCoherentOpaqueSessionRecord<SessionValue>(
   return (
     typeof id === 'string' &&
     isOpaqueSessionId(id) &&
-    typeof createdAt === 'number' &&
-    typeof expiresAt === 'number' &&
-    Number.isSafeInteger(createdAt) &&
-    Number.isSafeInteger(expiresAt) &&
-    createdAt >= 0 &&
+    isCoherentEpochMillisecond(createdAt) &&
+    isCoherentEpochMillisecond(expiresAt) &&
     expiresAt > createdAt &&
     'value' in record
   );
+}
+
+function isCoherentEpochMillisecond(value: unknown): value is number {
+  // SPEC §6.5 / OPP-11: owned session lifecycle times are store facts used to decide whether a
+  // browser credential may remain live. Non-finite or fractional values fail closed.
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 function snapshotCoherentOpaqueSessionRecord<SessionValue>(
