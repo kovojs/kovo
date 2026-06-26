@@ -27,6 +27,8 @@ export const defaultCommandExecutionSinkFiles = ['packages/server/src/command.ts
 
 export const defaultDynamicCodeExecutionSinkFiles = [];
 
+export const defaultDeserializationRoots = ['packages/server/src'];
+
 export const defaultLogChannelRoots = ['packages/server/src'];
 
 export const defaultLogChannelNeutralizerFiles = ['packages/server/src/logging.ts'];
@@ -118,6 +120,8 @@ export function checkSinkPolicyGate(options = {}) {
     options.commandExecutionSinkFiles ?? defaultCommandExecutionSinkFiles;
   const dynamicCodeExecutionSinkFiles =
     options.dynamicCodeExecutionSinkFiles ?? defaultDynamicCodeExecutionSinkFiles;
+  const deserializationFiles =
+    options.deserializationFiles ?? collectSourceFiles(root, defaultDeserializationRoots);
   const logChannelRoots = options.logChannelRoots ?? defaultLogChannelRoots;
   const logChannelNeutralizerFiles =
     options.logChannelNeutralizerFiles ?? defaultLogChannelNeutralizerFiles;
@@ -235,9 +239,21 @@ export function checkSinkPolicyGate(options = {}) {
         allowedExecutionSink: dynamicCodeExecutionSinkFileSet.has(filePath),
       }),
     );
+    if (deserializationFiles.includes(filePath)) {
+      findings.push(...deserializationSinkFindings(filePath, text));
+    }
     if (commandExecutionSinkFileSet.has(filePath)) {
       findings.push(...commandPrimitiveInvariantFindings(filePath, text));
     }
+  }
+
+  for (const filePath of deserializationFiles) {
+    if (commandExecutionFiles.includes(filePath)) continue;
+    if (!exists(filePath)) {
+      findings.push(`${filePath}: deserialization gate input is missing`);
+      continue;
+    }
+    findings.push(...deserializationSinkFindings(filePath, readText(filePath)));
   }
 
   for (const filePath of logChannelFiles) {
@@ -615,6 +631,46 @@ export function dynamicCodeExecutionSinkFindings(filePath, text, options = {}) {
   return dedupe(findings);
 }
 
+export function deserializationSinkFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+
+  for (const call of callArgumentLists(source, /\bJSON\s*\.\s*parse\s*\(/g)) {
+    const args = splitTopLevelArguments(call.argumentsText);
+    if (args.length >= 2 && args[1].trim() !== '' && args[1].trim() !== 'undefined') {
+      findings.push(
+        `${filePath}: KV442 unsafe deserialization sink JSON.parse reviver; keep body/wire decode reviver-free and route request shapes through schema validation`,
+      );
+    }
+  }
+
+  const importedDeserializers = deserializationImportLocals(source);
+  for (const imported of importedDeserializers.named) {
+    findings.push(
+      `${filePath}: KV442 unsafe deserialization import ${imported.imported}; avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation`,
+    );
+    const pattern = new RegExp(`\\b${escapeRegExp(imported.local)}\\s*\\(`);
+    if (pattern.test(source)) {
+      findings.push(
+        `${filePath}: KV442 unsafe deserialization call ${imported.local}(); avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation`,
+      );
+    }
+  }
+
+  for (const local of importedDeserializers.namespaces) {
+    for (const name of deserializationImportNames) {
+      const pattern = new RegExp(`\\b${escapeRegExp(local)}\\s*\\.\\s*${name}\\s*\\(`);
+      if (pattern.test(source)) {
+        findings.push(
+          `${filePath}: KV442 unsafe deserialization call ${local}.${name}(); avoid unowned deserialize/unserialize APIs and use JSON.parse without reviver plus schema validation`,
+        );
+      }
+    }
+  }
+
+  return dedupe(findings);
+}
+
 export function logChannelSinkFindings(filePath, text, options = {}) {
   const source = stripComments(text);
   const findings = [];
@@ -857,6 +913,7 @@ const commandExecutionImportNames = new Set([
   'spawn',
   'spawnSync',
 ]);
+const deserializationImportNames = new Set(['deserialize', 'unserialize']);
 
 function consoleLogCalls(text) {
   const calls = [];
@@ -942,6 +999,134 @@ function childProcessImportLocals(text) {
   }
 
   return { named, namespaces };
+}
+
+function deserializationImportLocals(text) {
+  const named = [];
+  const namespaces = new Set();
+
+  const namedImportPattern = /\bimport\s*\{([^}]+)\}\s*from\s*(['"])([^'"]+)\2/g;
+  let namedImport;
+  while ((namedImport = namedImportPattern.exec(text)) !== null) {
+    for (const specifier of parseNamedSpecifiers(namedImport[1])) {
+      if (deserializationImportNames.has(specifier.imported)) named.push(specifier);
+    }
+  }
+
+  const namespaceImportPattern =
+    /\bimport\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*(['"])([^'"]+)\2/g;
+  let namespaceImport;
+  while ((namespaceImport = namespaceImportPattern.exec(text)) !== null) {
+    if (moduleNameSuggestsDeserialization(namespaceImport[3])) namespaces.add(namespaceImport[1]);
+  }
+
+  const destructuredRequirePattern =
+    /\b(?:const|let|var)\s*\{([^}]+)\}\s*=\s*require\s*\(\s*(['"])([^'"]+)\2\s*\)/g;
+  let destructuredRequire;
+  while ((destructuredRequire = destructuredRequirePattern.exec(text)) !== null) {
+    for (const specifier of parseObjectBindingSpecifiers(destructuredRequire[1])) {
+      if (deserializationImportNames.has(specifier.imported)) named.push(specifier);
+    }
+  }
+
+  const namespaceRequirePattern =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*require\s*\(\s*(['"])([^'"]+)\2\s*\)/g;
+  let namespaceRequire;
+  while ((namespaceRequire = namespaceRequirePattern.exec(text)) !== null) {
+    if (moduleNameSuggestsDeserialization(namespaceRequire[3])) namespaces.add(namespaceRequire[1]);
+  }
+
+  return { named, namespaces };
+}
+
+function moduleNameSuggestsDeserialization(moduleName) {
+  return /(?:^|[/@_-])(?:node:v8|v8|serialize|serializer|deserialize|deserializer|unserialize)(?:$|[/._-])/i.test(
+    moduleName,
+  );
+}
+
+function callArgumentLists(text, callPattern) {
+  const calls = [];
+  let match;
+  while ((match = callPattern.exec(text)) !== null) {
+    const openParenIndex = text.indexOf('(', match.index);
+    const closeParenIndex = matchingCloseParen(text, openParenIndex);
+    if (closeParenIndex < 0) continue;
+    calls.push({ argumentsText: text.slice(openParenIndex + 1, closeParenIndex) });
+    callPattern.lastIndex = closeParenIndex + 1;
+  }
+  return calls;
+}
+
+function matchingCloseParen(text, openParenIndex) {
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  for (let index = openParenIndex; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char === ')') {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+function splitTopLevelArguments(text) {
+  const args = [];
+  let start = 0;
+  let parenDepth = 0;
+  let bracketDepth = 0;
+  let braceDepth = 0;
+  let quote = '';
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '(') parenDepth += 1;
+    else if (char === ')') parenDepth -= 1;
+    else if (char === '[') bracketDepth += 1;
+    else if (char === ']') bracketDepth -= 1;
+    else if (char === '{') braceDepth += 1;
+    else if (char === '}') braceDepth -= 1;
+    else if (char === ',' && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+      args.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  args.push(text.slice(start));
+  return args;
 }
 
 function parseObjectBindingSpecifiers(text) {
