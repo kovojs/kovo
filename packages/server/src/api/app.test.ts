@@ -768,6 +768,33 @@ describe('server app-shell public API barrels', () => {
       }
     }
     expect(publicApi.isKovoApp(markerlessOwnedSessionApp)).toBe(true);
+    const markerlessDelegatedSessionApp = publicApi.createApp({
+      sessionProvider: {
+        justification: 'test fixture owns its request-scoped session lifecycle',
+        lifecycle: 'delegated',
+        lifecycleAssertions: {
+          expiry: 'test fixture expires with the request',
+          revocation: 'test fixture revokes by ending the request',
+          rotation: 'test fixture never elevates credentials',
+          validation: 'test fixture validates the request header directly',
+        },
+        provider: async () => null,
+      },
+    });
+    for (const symbol of Object.getOwnPropertySymbols(
+      markerlessDelegatedSessionApp.sessionProvider!,
+    )) {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        markerlessDelegatedSessionApp.sessionProvider!,
+        symbol,
+      );
+      if (descriptor?.configurable === true) {
+        delete (markerlessDelegatedSessionApp.sessionProvider as { [key: symbol]: unknown })[
+          symbol
+        ];
+      }
+    }
+    expect(publicApi.isKovoApp(markerlessDelegatedSessionApp)).toBe(true);
     expect(() =>
       publicApi.createApp({ document: { template: () => '<html></html>' } as any }),
     ).toThrow('createApp({ document.template }) is not supported');
@@ -787,7 +814,7 @@ describe('server app-shell public API barrels', () => {
         ...app,
         session: undefined,
         sessionProvider: () => null,
-        sessionProviderBoundary: 'delegated',
+        sessionProviderBoundary: 'owned',
       }),
     ).toBe(false);
     expect(

@@ -96,7 +96,7 @@ describe('create-kovo starter (metadata)', () => {
       const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
       expect(agents).toContain('# Agent Instructions');
       expect(agents).toContain('<!-- BEGIN:kovo-rules -->');
-      expect(agents).toContain('<!-- kovo-rules-version: 0.1.1 -->');
+      expect(agents).toContain('<!-- kovo-rules-version: 0.1.2 -->');
       expect(agents).toContain('`kovo check`');
       expect(agents).toContain('Docs root: `./.kovo/docs/`.');
       expect(agents).toContain('- Getting Started (`getting-started/`): why-kovo, quickstart');
@@ -119,7 +119,7 @@ describe('create-kovo starter (metadata)', () => {
         source?: string;
         version?: string;
       };
-      expect(metadata).toMatchObject({ source: 'bundled', version: '0.1.1' });
+      expect(metadata).toMatchObject({ source: 'bundled', version: '0.1.2' });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

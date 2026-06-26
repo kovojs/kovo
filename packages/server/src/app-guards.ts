@@ -48,6 +48,14 @@ function isNormalizedSessionProviderForBoundary(
 ): boolean {
   if (provider === undefined) return boundary === undefined;
   if (!isSessionProviderBoundary(boundary)) return false;
+  if (boundary === 'delegated' && session === undefined && isSessionProviderFunction(provider)) {
+    // Static export/dev servers may load the app and server runtime through distinct Vite module
+    // instances. A closed app aggregate with a delegated boundary has already passed createApp()'s
+    // lifecycle assertion gate; stamp this module instance's private marker so lower-level request
+    // lifecycle helpers still reject raw provider functions outside an app aggregate.
+    markNormalizedSessionProvider(provider, boundary);
+    return true;
+  }
   if (
     (boundary === 'default-owned' || boundary === 'owned') &&
     isOptionalOpaqueSessionManager(session) &&
@@ -67,6 +75,12 @@ function isNormalizedSessionProviderForBoundary(
 
 function isSessionProviderBoundary(value: unknown): value is SessionProviderBoundary {
   return value === 'default-owned' || value === 'delegated' || value === 'owned';
+}
+
+function isSessionProviderFunction(
+  value: unknown,
+): value is NonNullable<KovoApp['sessionProvider']> {
+  return typeof value === 'function';
 }
 
 function isAppDiagnostics(value: unknown): value is KovoApp['diagnostics'] {
