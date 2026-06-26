@@ -42,12 +42,13 @@ ledger's H1-H9/M1-M4/L1-L5 list.
   - **Fix:** collect `@kovojs/server` import bindings for `route`/`layout`, accept namespace members, and remove raw text prefilters that skip aliased route modules.
   - Evidence 2026-06-26: route-page scanning now resolves aliased and namespace `route`/`layout` imports; focused compiler/CLI tests, `git diff --check`, and `pnpm run check:vp` passed after integration.
 
-- [ ] **H4 - Structured document primitives render attacker-shaped attribute names verbatim.** `packages/server/src/document-structured.ts:125-132,151-166,261-275,366-376,379-394`
+- [x] **H4 - Structured document primitives render attacker-shaped attribute names verbatim.** `packages/server/src/document-structured.ts:125-132,151-166,261-275,366-376,379-394`
   - `renderShellAttributes` and `renderAttributes` escape values but concatenate attribute names directly. `HtmlAttrs`/`BodyAttrs` allow arbitrary `data-*` keys, and `Link(props)` renders all own props, so a spread object can inject a name like `data-x><script>alert(1)</script>` into the framework-owned document shell/head. This is the same sink class as `bugz.md` H1, but in the structured document API rather than JSX runtime spreads.
   - **Exploit:** `BodyAttrs({ 'data-x><script>alert(1)</script>': 'y' } as any)` renders an unescaped attribute name into `<body ...>`, breaking out of the tag in the top-level document shell. A spread into `Link({ href:'/safe.css', rel:'stylesheet', ...record })` has the same name sink.
   - **Verified:** main-thread source proof: allowed-name filtering checks only `allowed.has(name) || name.startsWith('data-')`; both renderers interpolate `${name}` without a token-name allowlist.
   - **Distinct from `bugz.md`:** not the server JSX runtime attribute-name spread path; this is the structured `createApp({ document })` surface.
   - **Fix:** use a shared attribute-name validator for all document renderers; reject names containing whitespace, quotes, `=`, `<`, `>`, `/`, or invalid XML/HTML token characters before rendering.
+  - Evidence 2026-06-26: structured document renderers now validate attribute-name tokens before rendering; `pnpm exec vitest --run packages/server/src/document.test.ts`, `git diff --check`, and `pnpm run check:vp` passed after integration.
 
 ---
 
@@ -88,10 +89,11 @@ ledger's H1-H9/M1-M4/L1-L5 list.
   - **Fix:** remove the string prefilter or broaden it to import-aware AST scanning.
   - Evidence 2026-06-26: CSS target extraction no longer skips modules that import `@kovojs/server` without literal `route(`; `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/package-styles.test.ts packages/compiler/src/registry.test.ts`, `git diff --check`, and `pnpm run check:vp` passed.
 
-- [ ] **L2 - Structured document `Link` accepts extra props despite a fixed primitive contract.** `packages/server/src/document-structured.ts:151-166,366-376`
+- [x] **L2 - Structured document `Link` accepts extra props despite a fixed primitive contract.** `packages/server/src/document-structured.ts:151-166,366-376`
   - `Link`'s public type lists a fixed attribute set, but the implementation passes the whole `props` object to `renderAttributes`, so any extra own property supplied via spread or `as any` is rendered. This is folded into H4 for XSS when the extra prop name is malicious; independently, it undermines the structured-document contract by permitting unreviewed head attributes.
   - **Verified:** main-thread source proof.
   - **Fix:** render only the explicit known `Link` fields, not arbitrary `Object.entries(props)`.
+  - Evidence 2026-06-26: `Link` now filters to explicit supported fields, and focused document tests prove extra props are dropped; `git diff --check` and `pnpm run check:vp` passed.
 
 ---
 
