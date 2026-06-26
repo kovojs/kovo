@@ -1069,11 +1069,12 @@ function localConstLiteralStaticAccessValue(expression: Node, depth = 0): Node |
 
   const base = localConstLiteralStaticAccessBaseValue(node.getExpression(), depth + 1);
   if (!base) return undefined;
-  if (Node.isObjectLiteralExpression(base)) {
+  const baseValue = localConstLiteralAliasValue(base) ?? base;
+  if (Node.isObjectLiteralExpression(baseValue)) {
     const property = staticAccessName(node);
-    return property ? objectLiteralSingleStaticPropertyValue(base, property) : undefined;
+    return property ? objectLiteralSingleStaticPropertyValue(baseValue, property) : undefined;
   }
-  if (!Node.isArrayLiteralExpression(base) || !Node.isElementAccessExpression(node)) {
+  if (!Node.isArrayLiteralExpression(baseValue) || !Node.isElementAccessExpression(node)) {
     return undefined;
   }
 
@@ -1081,7 +1082,7 @@ function localConstLiteralStaticAccessValue(expression: Node, depth = 0): Node |
   if (!Node.isNumericLiteral(argument)) return undefined;
   const index = Number(argument.getText());
   if (!Number.isInteger(index) || index < 0) return undefined;
-  const value = base.getElements()[index];
+  const value = baseValue.getElements()[index];
   return value && !Node.isSpreadElement(value) ? value : undefined;
 }
 
@@ -1105,6 +1106,11 @@ function localConstLiteralStaticAccessBaseValue(expression: Node, depth: number)
   const initializer = declaration.getInitializer();
   const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
   return literalStaticWrapperValue(value);
+}
+
+function localConstLiteralAliasValue(value: Node): Node | undefined {
+  const node = unwrappedStaticExpressionNode(value);
+  return Node.isIdentifier(node) ? localConstLiteralRootValue(node) : undefined;
 }
 
 function localConstLiteralRootValue(expression: Node): Node | undefined {
@@ -1140,12 +1146,16 @@ function objectLiteralStaticPathPrivateScope(
       const provenance =
         privateScopeForExpression(current, sessionContext) ??
         summarizedStaticCallPrivateScope(current, sessionContext);
-      return provenance
-        ? {
-            ...provenance,
-            path: appendPrivateScopePath(provenance.path, path.slice(index).join('.')),
-          }
-        : undefined;
+      if (provenance) {
+        return {
+          ...provenance,
+          path: appendPrivateScopePath(provenance.path, path.slice(index).join('.')),
+        };
+      }
+      const alias = localConstLiteralAliasValue(current);
+      if (!alias || !Node.isObjectLiteralExpression(alias)) return undefined;
+      value = alias;
+      continue;
     }
     value = objectLiteralSingleStaticPropertyValue(current, segment);
     if (!value) return undefined;

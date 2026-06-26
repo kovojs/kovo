@@ -916,6 +916,143 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('accepts a const alias to a readonly nested guard-object wrapper', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
+              '',
+              'export const ordersForPrincipal = query("ordersForPrincipal", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '    const principal = { userId: currentPrincipal(ctx).userId } as const;',
+              '    const wrapper = { principal } as const;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({ detail: a.detail, domain: a.domain, scope: a.scope })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'order',
+        scope: 'session',
+      },
+    ]);
+  });
+
+  it('keeps unsafe const-alias guard-object wrappers scope:unknown', () => {
+    const cases = [
+      {
+        helper: [
+          'function currentPrincipal(ctx: { guard: { actorId: string } }) { return ctx.guard; }',
+          'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
+        ],
+        predicate: 'eq(orders.userId, wrapper.principal.actorId)',
+        wrapper: [
+          'const principal = { actorId: currentPrincipal(ctx).actorId } as const;',
+          'const wrapper = { principal } as const;',
+        ],
+      },
+      {
+        helper: [
+          'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+        ],
+        predicate: 'eq(orders.userId, wrapper.principal.userId)',
+        wrapper: [
+          'const principal = { userId: currentPrincipal(ctx).userId } as const;',
+          'const wrapper = { principal } as const;',
+        ],
+      },
+      {
+        helper: [
+          'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+          'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
+        ],
+        predicate: 'eq(orders.userId, wrapper.principal.userId)',
+        wrapper: [
+          'let principal = { userId: currentPrincipal(ctx).userId } as const;',
+          'const wrapper = { principal } as const;',
+        ],
+      },
+      {
+        helper: [
+          'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+          'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
+        ],
+        predicate: 'eq(orders.userId, wrapper.principal[ownerKey])',
+        wrapper: [
+          'const principal = { userId: currentPrincipal(ctx).userId } as const;',
+          'const wrapper = { principal } as const;',
+          'const ownerKey = "userId";',
+        ],
+      },
+    ];
+
+    for (const testCase of cases) {
+      const audit = extractOwnerAuditFromProject(
+        withPgDatabaseTypes({
+          files: [
+            pgDatabaseTypes([
+              'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+            ]),
+            {
+              fileName: 'order.queries.ts',
+              source: [
+                'import { eq } from "drizzle-orm";',
+                'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+                'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+                '',
+                'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+                '',
+                ...testCase.helper,
+                '',
+                'export const ordersForPrincipal = query("ordersForPrincipal", {',
+                '  output: s.object({ id: s.string() }),',
+                '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: Record<string, string> }) {',
+                ...testCase.wrapper.map((line) => `    ${line}`),
+                `    return db.select({ id: orders.id }).from(orders).where(${testCase.predicate});`,
+                '  },',
+                '});',
+              ].join('\n'),
+            },
+          ],
+        }),
+      );
+
+      expect(
+        audit.scopeAudits.map((a) => ({ detail: a.detail, domain: a.domain, scope: a.scope })),
+      ).toEqual([
+        {
+          detail:
+            'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+          domain: 'order',
+          scope: 'unknown',
+        },
+      ]);
+    }
+  });
+
   it('accepts an Object.freeze wrapper around an explicitly summarized guard object', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
