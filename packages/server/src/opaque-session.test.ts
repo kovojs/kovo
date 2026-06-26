@@ -448,6 +448,46 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     ).resolves.toBeNull();
   });
 
+  it('rejects cookie value whitespace before consulting the opaque session store', async () => {
+    let validateCalls = 0;
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        validate(id: string) {
+          validateCalls += 1;
+          return baseStore.validate(id);
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(
+      manager.validateRequest(
+        new Request('https://app.test/account', {
+          headers: { cookie: `kovo_session=${established.session.id}` },
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(validateCalls).toBe(1);
+
+    await expect(
+      manager.validateRequest(
+        new Request('https://app.test/account', {
+          headers: { cookie: `kovo_session= ${established.session.id}; other=1` },
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    await expect(
+      manager.validateRequest(
+        new Request('https://app.test/account', {
+          headers: { cookie: `kovo_session=${established.session.id} ; other=1` },
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    expect(validateCalls).toBe(1);
+  });
+
   it('does not treat unrelated authorization schemes as opaque session credentials', async () => {
     const manager = createOpaqueSessionManager({
       acceptAuthorizationHeader: true,

@@ -694,13 +694,17 @@ function readCookie(header: string, cookieName: string): string | null {
 }
 
 function readOpaqueSessionCookieValue(rawValue: string): string {
-  const value = rawValue.trim();
   // SPEC §6.5 / OPP-11: Kovo emits opaque ids with only cookie-safe token characters. Do not
   // percent-decode, unquote, or otherwise normalize browser credentials across this boundary.
-  if (value.includes('%') || value.startsWith('"') || value.endsWith('"')) {
+  if (
+    rawValue !== rawValue.trim() ||
+    rawValue.includes('%') ||
+    rawValue.startsWith('"') ||
+    rawValue.endsWith('"')
+  ) {
     return AMBIGUOUS_OPAQUE_SESSION_ID;
   }
-  return value;
+  return rawValue;
 }
 
 function base64url(bytes: Uint8Array): string {
