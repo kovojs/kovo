@@ -358,7 +358,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       post-declaration mutation cannot widen audit facts; focused agent-tool tests, `git diff --check`, and
       `pnpm run check:vp` passed. `kovo explain --capabilities` now emits explicit `AGENT_TOOL_SINK` rows for
       audit-grade and sound reachable agent-tool sinks, including grade, kind, target, required capability, site,
-      and evidence; focused explain tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
+      and evidence; focused explain tests, `git diff --check`, and `pnpm run check:vp` passed. Declaration arrays
+      for authority, capabilities, reachable sinks, and ambient credential kinds now require dense own data
+      elements before snapshotting, avoiding sparse/accessor-backed array slots and post-declaration slot
+      mutation; focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
       framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
