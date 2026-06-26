@@ -334,10 +334,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `pnpm run check:vp` passed. Static local default re-export barrels now forward already-proven default
       helper, default-object, and default-array summaries, including named `default as ...` re-exports, while
       unproven default shapes remain outside the proof; focused registry/check tests, `git diff --check`, and
-      `pnpm run check:vp` passed. Parenthesized and type-only wrapped helper call targets now preserve enforced
-      egress/secret-read reachability for proven helpers, namespace/object helpers, and literal tuple helpers,
-      while computed object access remains outside the proof; focused registry/check tests and `git diff --check`
-      passed.
+      `pnpm run check:vp` passed. Parenthesized, type-only wrapped, and static optional helper call targets now
+      preserve enforced egress/secret-read reachability for proven helpers, namespace/object helpers, and literal
+      tuple helpers, while computed object access remains outside the proof; focused registry/check tests and
+      `git diff --check` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
