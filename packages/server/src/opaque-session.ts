@@ -256,7 +256,7 @@ export function createOpaqueSessionManager<SessionValue>(
   ): Promise<OpaqueSessionValidation<SessionValue>> => {
     if (id === null || id === undefined || id === '') return { ok: false, reason: 'missing' };
     if (!isOpaqueSessionId(id)) return { ok: false, reason: 'malformed' };
-    return options.store.validate(id);
+    return normalizeOpaqueSessionValidation(id, await options.store.validate(id));
   };
   const provider: SessionProvider<Request, SessionValue> = async (
     request: Request,
@@ -288,6 +288,7 @@ export function createOpaqueSessionManager<SessionValue>(
       const session = establishOptions.priorId
         ? await options.store.rotate(establishOptions.priorId, value, establishOptions)
         : await options.store.create(value, establishOptions);
+      assertEstablishedOpaqueSession(session);
       return {
         session,
         setCookie: serializeCookie(cookieName, session.id, {
@@ -307,6 +308,46 @@ export function createOpaqueSessionManager<SessionValue>(
       };
     },
   };
+}
+
+function normalizeOpaqueSessionValidation<SessionValue>(
+  presentedId: string,
+  result: OpaqueSessionValidation<SessionValue>,
+): OpaqueSessionValidation<SessionValue> {
+  if (!result.ok) return result;
+  if (!isCoherentOpaqueSessionRecord(result.session) || result.session.id !== presentedId) {
+    return { ok: false, reason: 'malformed' };
+  }
+  return result;
+}
+
+function assertEstablishedOpaqueSession<SessionValue>(
+  session: OpaqueSessionRecord<SessionValue>,
+): void {
+  if (!isCoherentOpaqueSessionRecord(session)) {
+    throw new Error(
+      'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
+    );
+  }
+}
+
+function isCoherentOpaqueSessionRecord<SessionValue>(
+  value: unknown,
+): value is OpaqueSessionRecord<SessionValue> {
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Partial<OpaqueSessionRecord<SessionValue>>;
+  const { createdAt, expiresAt, id } = record;
+  return (
+    typeof id === 'string' &&
+    isOpaqueSessionId(id) &&
+    typeof createdAt === 'number' &&
+    typeof expiresAt === 'number' &&
+    Number.isSafeInteger(createdAt) &&
+    Number.isSafeInteger(expiresAt) &&
+    createdAt >= 0 &&
+    expiresAt > createdAt &&
+    'value' in record
+  );
 }
 
 function assertOpaqueSessionManagerOptions<SessionValue>(
