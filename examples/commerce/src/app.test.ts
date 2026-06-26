@@ -185,7 +185,10 @@ describe('commerce app HTTP entry', () => {
     const origin = serverOrigin(server);
 
     const failedForm = new URLSearchParams();
-    failedForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf, { mutation: commerceSignIn }));
+    failedForm.set(
+      'csrf',
+      csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf, { mutation: commerceSignIn }),
+    );
     failedForm.set('email', 'ada@example.com');
     failedForm.set('password', 'wrong');
     failedForm.set('next', '/cart');
@@ -213,7 +216,10 @@ describe('commerce app HTTP entry', () => {
     expect(htmlFormFields(failedBody, 'next')).toMatchObject([{ name: 'next', value: '/cart' }]);
 
     const loginForm = new URLSearchParams();
-    loginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf, { mutation: commerceSignIn }));
+    loginForm.set(
+      'csrf',
+      csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf, { mutation: commerceSignIn }),
+    );
     loginForm.set('email', 'ada@example.com');
     loginForm.set('password', 'correct');
     loginForm.set('next', '/cart');
