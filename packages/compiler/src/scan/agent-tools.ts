@@ -18,13 +18,10 @@ export interface AgentToolModuleSource {
  * This scanner intentionally accepts a narrow subset: a named `tool` import from `@kovojs/server`,
  * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
  * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
- * helpers reached through static named/default imports including static local re-export barrels,
- * default exports that alias a summarized local helper, static namespace-property calls into
- * exported local helpers, default object exports whose properties statically point at summarized
- * local helpers, and handler properties that reference a summarized local/imported helper
- * function. It does not inspect raw source text after parse and it skips non-invoked nested
- * function bodies, so ordinary callbacks, computed namespace access, computed/spread object
- * exports, export-star namespaces, and dynamic paths remain outside the SPEC.md §6.6 sound subset
+ * helpers reached through static named imports including static local re-export barrels, and static
+ * namespace-property calls into exported local helpers. It does not inspect raw source text after
+ * parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace
+ * access, export-star namespaces, and dynamic paths remain outside the SPEC.md §6.6 sound subset
  * until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
@@ -56,10 +53,10 @@ export function agentToolSinksFromSource(
     const name = stringPropertyValue(definition, 'name');
     if (name === undefined) return;
 
-    const handler = handlerTarget(definition, moduleFacts);
+    const handler = handlerBody(definition);
     if (handler === undefined) return;
 
-    facts.push(...handlerSinkFacts(name, handler));
+    facts.push(...handlerSinkFacts(sourceFile, name, handler, moduleFacts));
   };
 
   visit(sourceFile);
@@ -67,7 +64,6 @@ export function agentToolSinksFromSource(
 }
 
 interface ModuleFacts {
-  defaultObjectHelpers: ReadonlyMap<string, HelperDefinition>;
   helpers: ReadonlyMap<string, HelperDefinition>;
   namespaceImports: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
   sourceFile: ts.SourceFile;
@@ -79,12 +75,6 @@ interface HelperDefinition {
   id: string;
   moduleFacts: ModuleFacts;
   node: ts.FunctionLikeDeclaration;
-}
-
-interface HandlerTarget {
-  moduleFacts: ModuleFacts;
-  node: ts.FunctionLikeDeclaration;
-  origin: AgentToolSinkOrigin;
 }
 
 interface ModuleSummaries {
@@ -118,17 +108,10 @@ function summarizeModules(moduleSources: readonly AgentToolModuleSource[]): Modu
 }
 
 function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
-  const defaultObjectHelpers = new Map<string, HelperDefinition>();
   const helpers = new Map<string, HelperDefinition>();
   const namespaceImports = new Map<string, ReadonlyMap<string, HelperDefinition>>();
   const topLevelBindings = new Set<string>();
-  const moduleFacts: ModuleFacts = {
-    defaultObjectHelpers,
-    helpers,
-    namespaceImports,
-    sourceFile,
-    topLevelBindings,
-  };
+  const moduleFacts: ModuleFacts = { helpers, namespaceImports, sourceFile, topLevelBindings };
 
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement)) {
@@ -139,20 +122,10 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
     if (ts.isFunctionDeclaration(statement) && statement.name) {
       topLevelBindings.add(statement.name.text);
       helpers.set(statement.name.text, {
-        exported: hasExportModifier(statement) && !hasDefaultModifier(statement),
+        exported: hasExportModifier(statement),
         id: helperId(sourceFile, statement.name.text),
         moduleFacts,
         node: statement,
-      });
-    }
-
-    const defaultExportedFunction = defaultExportedFunctionHelper(statement);
-    if (defaultExportedFunction) {
-      helpers.set('default', {
-        exported: true,
-        id: helperId(sourceFile, 'default'),
-        moduleFacts,
-        node: defaultExportedFunction,
       });
       continue;
     }
@@ -179,11 +152,6 @@ function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
         });
       }
     }
-  }
-
-  for (const statement of sourceFile.statements) {
-    collectDefaultHelperAlias(statement, moduleFacts);
-    collectDefaultObjectHelperBindings(statement, moduleFacts);
   }
 
   return moduleFacts;
@@ -216,19 +184,6 @@ function linkImportedHelpers(
 
       const importedFacts = facts.get(importedSourceFile);
       if (!importedFacts) continue;
-
-      const defaultBinding = statement.importClause?.name;
-      if (
-        defaultBinding &&
-        (linkHelperBinding(helpers, defaultBinding.text, importedFacts.helpers.get('default')) ||
-          linkNamespaceBinding(
-            namespaceImports,
-            defaultBinding.text,
-            importedFacts.defaultObjectHelpers,
-          ))
-      ) {
-        changed = true;
-      }
 
       const bindings = statement.importClause?.namedBindings;
       if (!bindings) continue;
@@ -324,85 +279,6 @@ function linkHelperBinding(
   return true;
 }
 
-function linkNamespaceBinding(
-  namespaceImports: Map<string, ReadonlyMap<string, HelperDefinition>>,
-  localName: string,
-  helpers: ReadonlyMap<string, HelperDefinition>,
-): boolean {
-  if (helpers.size === 0) return false;
-  if (namespaceImports.has(localName)) return false;
-
-  namespaceImports.set(localName, helpers);
-  return true;
-}
-
-function collectDefaultObjectHelperBindings(
-  statement: ts.Statement,
-  moduleFacts: ModuleFacts,
-): void {
-  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return;
-
-  const expression = unwrapParentheses(statement.expression);
-  if (!ts.isObjectLiteralExpression(expression)) return;
-
-  const helperBindings = new Map<string, HelperDefinition>();
-  for (const property of expression.properties) {
-    if (ts.isSpreadAssignment(property)) return;
-    if (ts.isShorthandPropertyAssignment(property)) {
-      const helper = moduleFacts.helpers.get(property.name.text);
-      if (!helper) return;
-      helperBindings.set(property.name.text, exportedHelperAlias(helper));
-      continue;
-    }
-
-    if (!ts.isPropertyAssignment(property)) return;
-    if (property.name === undefined || ts.isComputedPropertyName(property.name)) return;
-
-    const propertyName = staticPropertyName(property.name);
-    if (propertyName === undefined) return;
-
-    const initializer = unwrapParentheses(property.initializer);
-    if (!ts.isIdentifier(initializer)) return;
-
-    const helper = moduleFacts.helpers.get(initializer.text);
-    if (!helper) return;
-
-    helperBindings.set(propertyName, exportedHelperAlias(helper));
-  }
-
-  const defaultObjectHelpers = moduleFacts.defaultObjectHelpers as Map<string, HelperDefinition>;
-  for (const [propertyName, helper] of helperBindings) {
-    defaultObjectHelpers.set(propertyName, helper);
-  }
-}
-
-function collectDefaultHelperAlias(statement: ts.Statement, moduleFacts: ModuleFacts): void {
-  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return;
-
-  const expression = unwrapParentheses(statement.expression);
-  if (!ts.isIdentifier(expression)) return;
-
-  const helper = moduleFacts.helpers.get(expression.text);
-  if (!helper) return;
-
-  (moduleFacts.helpers as Map<string, HelperDefinition>).set(
-    'default',
-    exportedHelperAlias(helper),
-  );
-}
-
-function staticPropertyName(name: ts.PropertyName): string | undefined {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text;
-  }
-
-  return undefined;
-}
-
-function exportedHelperAlias(helper: HelperDefinition): HelperDefinition {
-  return helper.exported ? helper : { ...helper, exported: true };
-}
-
 function importedLocalSourceFile(
   sourceFile: ts.SourceFile,
   moduleSpecifier: string,
@@ -447,34 +323,6 @@ function hasExportModifier(node: ts.Node): boolean {
     : false;
 }
 
-function hasDefaultModifier(node: ts.Node): boolean {
-  return ts.canHaveModifiers(node)
-    ? (ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ??
-        false)
-    : false;
-}
-
-function defaultExportedFunctionHelper(
-  statement: ts.Statement,
-): ts.FunctionLikeDeclaration | undefined {
-  if (
-    ts.isFunctionDeclaration(statement) &&
-    hasExportModifier(statement) &&
-    hasDefaultModifier(statement)
-  ) {
-    return statement;
-  }
-
-  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return undefined;
-
-  const expression = unwrapParentheses(statement.expression);
-  if (ts.isFunctionExpression(expression) || ts.isArrowFunction(expression)) {
-    return expression;
-  }
-
-  return undefined;
-}
-
 function collectImportBindingNames(statement: ts.ImportDeclaration, names: Set<string>): void {
   const clause = statement.importClause;
   if (!clause) return;
@@ -516,18 +364,13 @@ function frameworkToolImportNames(sourceFile: ts.SourceFile): Set<string> {
 }
 
 function handlerSinkFacts(
+  sourceFile: ts.SourceFile,
   tool: string,
-  handler: HandlerTarget,
+  handler: ts.FunctionLikeDeclaration,
+  moduleFacts: ModuleFacts,
 ): CoreGraph.AgentToolReachableSinkFact[] {
-  if (!handler.node.body) return [];
-  return reachableSinkFacts(
-    handler.moduleFacts.sourceFile,
-    tool,
-    handler.node,
-    handler.moduleFacts,
-    new Set(),
-    handler.origin,
-  );
+  if (!handler.body) return [];
+  return reachableSinkFacts(sourceFile, tool, handler, moduleFacts, new Set(), 'handler');
 }
 
 function reachableSinkFacts(
@@ -766,43 +609,21 @@ function secretReadEvidence(origin: AgentToolSinkOrigin): string {
   }
 }
 
-function handlerTarget(
+function handlerBody(
   definition: ts.ObjectLiteralExpression,
-  moduleFacts: ModuleFacts,
-): HandlerTarget | undefined {
+): ts.FunctionLikeDeclaration | undefined {
   const property = propertyNamed(definition, 'handler');
   if (property === undefined) return undefined;
 
-  if (ts.isMethodDeclaration(property)) {
-    return { moduleFacts, node: property, origin: 'handler' };
-  }
-
-  if (ts.isShorthandPropertyAssignment(property)) {
-    return helperHandlerTarget(property.name.text, moduleFacts);
-  }
-
+  if (ts.isMethodDeclaration(property)) return property;
   if (!ts.isPropertyAssignment(property)) return undefined;
 
   const initializer = property.initializer;
   if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
-    return { moduleFacts, node: initializer, origin: 'handler' };
+    return initializer;
   }
 
-  if (ts.isIdentifier(initializer)) return helperHandlerTarget(initializer.text, moduleFacts);
-
   return undefined;
-}
-
-function helperHandlerTarget(name: string, moduleFacts: ModuleFacts): HandlerTarget | undefined {
-  const helper = moduleFacts.helpers.get(name);
-  if (!helper) return undefined;
-
-  return {
-    moduleFacts: helper.moduleFacts,
-    node: helper.node,
-    origin:
-      helper.moduleFacts.sourceFile === moduleFacts.sourceFile ? 'handler' : 'imported-helper',
-  };
 }
 
 function stringPropertyValue(
