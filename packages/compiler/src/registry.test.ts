@@ -3416,6 +3416,66 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('produces sound agent-tool sink rows from frozen existing default object helper exports', () => {
+    const derived = deriveAppGraph({
+      agentToolModules: [
+        {
+          fileName: 'src/tools/default-frozen-existing-object.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-frozen-existing-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultFrozenExistingObject',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-existing-mail.ts',
+          source: [
+            "import { sendMail } from './mail';",
+            'const mail = { sendMail };',
+            'export default Object.freeze(mail);',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/mail.ts',
+          source: [
+            'export function sendMail() {',
+            '  const token = process.env.SENDGRID_TOKEN;',
+            "  return fetch('https://api.sendgrid.com/v3/mail/send', {",
+            '    headers: { authorization: token },',
+            '  });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(derived.graph.agentToolSinks).toEqual([
+      {
+        capability: 'egress:api.sendgrid.com',
+        evidence: 'static-tool-imported-helper-fetch',
+        grade: 'sound',
+        kind: 'egress',
+        site: 'src/tools/mail.ts:3:10',
+        target: 'api.sendgrid.com',
+        tool: 'orders.defaultFrozenExistingObject',
+      },
+      {
+        capability: 'secrets.read',
+        evidence: 'static-tool-imported-helper-env',
+        grade: 'sound',
+        kind: 'secret-read',
+        site: 'src/tools/mail.ts:2:17',
+        target: 'env.SENDGRID_TOKEN',
+        tool: 'orders.defaultFrozenExistingObject',
+      },
+    ]);
+  });
+
   it('does not produce enforced agent-tool sink rows from unproven namespace helper shapes', () => {
     const derived = deriveAppGraph({
       agentToolModules: [
@@ -4006,6 +4066,147 @@ export const ProductGrid = component({
             '}',
             'const mail = { sendMail };',
             'export default { ...mail };',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-computed.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-frozen-computed-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultFrozenComputed',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-computed-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-frozen-computed.example.test/mail');",
+            '}',
+            "const mail = { ['sendMail']: sendMail };",
+            'export default Object.freeze(mail);',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-spread.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-frozen-spread-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultFrozenSpread',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-spread-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-frozen-spread.example.test/mail');",
+            '}',
+            'const helpers = { sendMail };',
+            'const mail = { ...helpers };',
+            'export default Object.freeze(mail);',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-mutable.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-frozen-mutable-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultFrozenMutable',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-mutable-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-frozen-mutable.example.test/mail');",
+            '}',
+            'let mail = { sendMail };',
+            'export default Object.freeze(mail);',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-shadowed-object.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-frozen-shadowed-object-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultFrozenShadowedObject',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-shadowed-object-mail.ts',
+          source: [
+            'function sendMail() {',
+            "  return fetch('https://default-frozen-shadowed.example.test/mail');",
+            '}',
+            'const mail = { sendMail };',
+            'const Object = { freeze<T>(value: T): T { return value; } };',
+            'export default Object.freeze(mail);',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-unresolved.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-frozen-unresolved-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultFrozenUnresolved',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-unresolved-mail.ts',
+          source: [
+            'const sendMail = 1;',
+            'const mail = { sendMail };',
+            'export default Object.freeze(mail);',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-ambiguous.ts',
+          source: [
+            "import { tool } from '@kovojs/server';",
+            "import mail from './default-frozen-ambiguous-mail';",
+            'export const notify = tool({',
+            "  name: 'orders.defaultFrozenAmbiguous',",
+            '  handler() {',
+            '    return mail.sendMail();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'src/tools/default-frozen-ambiguous-mail.ts',
+          source: [
+            'function firstMail() {',
+            "  return fetch('https://default-frozen-first.example.test/mail');",
+            '}',
+            'function secondMail() {',
+            "  return fetch('https://default-frozen-second.example.test/mail');",
+            '}',
+            'const mail = { sendMail: firstMail, sendMail: secondMail };',
+            'export default Object.freeze(mail);',
           ].join('\n'),
         },
       ],

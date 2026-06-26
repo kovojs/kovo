@@ -26,7 +26,8 @@ export interface AgentToolModuleSource {
  * assigned or mutated, local `const` array/tuple aliases whose literal indexes statically point at
  * summarized helpers, `Object.freeze(...)` wrappers around those same static array/tuple aliases
  * or already-proven array aliases that are not assigned or mutated, default object exports whose
- * properties statically point at summarized local helpers, top-level `const` destructuring from
+ * properties statically point at summarized helpers or freeze an already-proven object alias,
+ * top-level `const` destructuring from
  * already-proven helper object/array aliases or namespaces, handler properties that reference a
  * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
  * that directly invokes that callback parameter,
@@ -337,6 +338,7 @@ function linkImportedHelpers(
     changed = collectArrayAliasHelperBindings(statement, moduleFacts) || changed;
     changed = collectObjectAliasHelperBindings(statement, moduleFacts) || changed;
     changed = collectNestedObjectAliasHelperBindings(statement, moduleFacts) || changed;
+    changed = collectDefaultObjectHelperBindings(statement, moduleFacts) || changed;
     changed = collectDestructuredHelperBindings(statement, moduleFacts) || changed;
   }
 
@@ -631,16 +633,20 @@ function linkDestructuredHelperBindings(
 function collectDefaultObjectHelperBindings(
   statement: ts.Statement,
   moduleFacts: ModuleFacts,
-): void {
-  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return;
+): boolean {
+  if (!ts.isExportAssignment(statement) || statement.isExportEquals) return false;
 
   const helperBindings = objectHelperBindingsFromInitializer(statement.expression, moduleFacts);
-  if (!helperBindings) return;
+  if (!helperBindings) return false;
 
   const defaultObjectHelpers = moduleFacts.defaultObjectHelpers as Map<string, HelperDefinition>;
+  if (helperBindingMapsEqual(defaultObjectHelpers, helperBindings)) return false;
+
+  defaultObjectHelpers.clear();
   for (const [propertyName, helper] of helperBindings) {
     defaultObjectHelpers.set(propertyName, helper);
   }
+  return true;
 }
 
 function arrayHelperBindingsFromInitializer(
