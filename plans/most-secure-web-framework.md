@@ -537,7 +537,10 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       focused opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed. When authorization
       header sessions are enabled, malformed `Bearer` session material now fails closed instead of being ignored
       in favor of a valid cookie, while unrelated auth schemes remain outside opaque-session extraction; focused
-      opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed.
+      opaque-session/app tests, `git diff --check`, and `pnpm run check:vp` passed. Owned opaque-session cookie
+      credentials must now be presented exactly as Kovo emits them, with percent-encoded or quoted cookie values
+      failing closed instead of normalizing across the credential boundary; focused opaque-session/app tests and
+      `git diff --check` passed.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
