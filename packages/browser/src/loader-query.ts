@@ -8,7 +8,10 @@ import type { QueryEventHydrationTarget } from './query-events.js';
 import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryBindingRoot } from './query-bindings.js';
-import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
+import {
+  installBfcacheSessionReload,
+  installQueryVisibleReturnRefetch,
+} from './query-visible-return.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
 
@@ -37,6 +40,18 @@ export function installLoaderQueryRuntime(
   const reportQueryHydrationError = (error: unknown): void => {
     reportRuntimeContextError(options.onError, error, { phase: 'query-hydration' });
   };
+
+  // SPEC §780: the second bfcache defense is loader-level and runs for EVERY document,
+  // including a query-less guarded route with no query store. A persisted restore of a
+  // session-dependent document reloads from the server rather than presenting the prior
+  // principal's restored DOM. `document-core`'s `Cache-Control: no-store` is the first
+  // defense; this covers UAs (Safari/WebKit) that keep a `no-store` page in the in-memory
+  // bfcache. Registered before query refetch so the full reload wins over a stale refetch.
+  const bfcacheReload = installBfcacheSessionReload();
+  disposers.push(() => {
+    bfcacheReload.dispose();
+  });
+
   const queryVisibleReturn = installQueryVisibleReturnRefetch({
     onError: reportQueryHydrationError,
     ...definedProps({

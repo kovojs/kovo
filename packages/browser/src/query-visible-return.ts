@@ -1,5 +1,6 @@
 import { definedProps } from './defined-props.js';
 import type {
+  AttributeReaderLike,
   ListenerTargetLike,
   OptionalQuerySelectorAllRootLike,
   VisibilityStateLike,
@@ -216,4 +217,96 @@ function globalPageShowTarget(
 ): ListenerTargetLike<unknown> | undefined {
   const target = globalThis as unknown as ListenerTargetLike<unknown>;
   return target !== root && typeof target.addEventListener === 'function' ? target : undefined;
+}
+
+/** The `querySelector` slice used to detect the per-principal `kovo-session` posture meta. */
+interface SessionMetaDocumentLike {
+  querySelector(selector: string): AttributeReaderLike | null;
+}
+
+/**
+ * Options for {@link installBfcacheSessionReload}. All are injectable for tests; in the browser
+ * they default to the ambient `document`, `globalThis` (the `pageshow` Window event target), and
+ * `globalThis.location.reload()`.
+ */
+export interface BfcacheSessionReloadOptions {
+  /**
+   * SPEC §780: the document used to detect the per-principal `kovo-session` fingerprint meta
+   * that `document-core` stamps for session-dependent documents
+   * (`packages/server/src/document-core.ts`). Defaults to the ambient `document`.
+   */
+  document?: SessionMetaDocumentLike;
+  /** The `pageshow` lifecycle event target (a Window event). Defaults to `globalThis`. */
+  pageShowTarget?: ListenerTargetLike<unknown>;
+  /** The full server reload performed on a persisted restore. Defaults to `globalThis.location.reload()`. */
+  reload?: () => void;
+}
+
+/** A running bfcache session-reload guard; `dispose` removes the `pageshow` listener. */
+export interface InstalledBfcacheSessionReload {
+  dispose(): void;
+}
+
+/**
+ * SPEC §780: the second bfcache defense. A bfcache restore is a history traversal that bypasses
+ * the loader, `sessionProvider` (§6.5), and the route guard, so a persisted authenticated document
+ * would otherwise reappear after logout, expiry, or revocation. `Cache-Control: no-store` (stamped
+ * by `document-core`) is the first defense, but some user agents (Safari/WebKit) still keep a
+ * `no-store` page in the in-memory bfcache. So the loader registers a `pageshow` handler that, when
+ * `event.persisted === true` and the document is session-dependent, revalidates by reloading from
+ * the server (a full GET that re-runs `sessionProvider` and the guard) rather than presenting the
+ * restored DOM of the prior principal.
+ *
+ * Session-dependence is read from the per-principal `kovo-session` fingerprint meta that
+ * `document-core` stamps only for guarded/session-dependent documents; an anonymous/exportable
+ * document carries no such meta, so this handler is a no-op for it and the page stays fully
+ * bfcache-eligible. This is a loader-level defense: it runs even when no query store is configured
+ * (e.g. a query-less guarded route), and it adds no `unload` handler (SPEC §780).
+ */
+export function installBfcacheSessionReload(
+  options: BfcacheSessionReloadOptions = {},
+): InstalledBfcacheSessionReload {
+  const sessionMetaDocument = options.document ?? globalSessionMetaDocument();
+  const sessionDependent =
+    sessionMetaDocument?.querySelector('meta[name="kovo-session"]') != null;
+  const pageShowTarget = options.pageShowTarget ?? globalEventTarget();
+  const reload = options.reload ?? globalLocationReload();
+
+  // SPEC §780: anonymous/exportable documents carry no `kovo-session` posture, so the handler is
+  // a no-op and the page remains fully bfcache-eligible.
+  if (!sessionDependent || !pageShowTarget || !reload) {
+    return { dispose() {} };
+  }
+
+  let disposed = false;
+  const listener = (event: unknown): void => {
+    if (disposed) return;
+    // SPEC §780: only a persisted restore bypassed the network/guard. A normal (non-persisted)
+    // navigation already ran the loader and `sessionProvider`, so it is left untouched.
+    if ((event as { persisted?: boolean } | null | undefined)?.persisted !== true) return;
+    reload();
+  };
+  pageShowTarget.addEventListener('pageshow', listener);
+
+  return {
+    dispose() {
+      disposed = true;
+      pageShowTarget.removeEventListener?.('pageshow', listener);
+    },
+  };
+}
+
+function globalSessionMetaDocument(): SessionMetaDocumentLike | undefined {
+  const doc = (globalThis as { document?: SessionMetaDocumentLike }).document;
+  return doc !== undefined && typeof doc.querySelector === 'function' ? doc : undefined;
+}
+
+function globalEventTarget(): ListenerTargetLike<unknown> | undefined {
+  const target = globalThis as unknown as ListenerTargetLike<unknown>;
+  return typeof target.addEventListener === 'function' ? target : undefined;
+}
+
+function globalLocationReload(): (() => void) | undefined {
+  const location = (globalThis as { location?: { reload?: () => void } }).location;
+  return typeof location?.reload === 'function' ? () => location.reload?.() : undefined;
 }

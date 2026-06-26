@@ -1065,6 +1065,19 @@ function installInlineKovoLoader(im) {
     sf(cu);
     void an(location.href, true);
   });
+  // SPEC.md §780: second bfcache defense. A bfcache restore (event.persisted) is a history
+  // traversal that bypassed the loader, sessionProvider, and route guard, so a persisted
+  // session-dependent document would otherwise reappear after logout/expiry/revocation. Some
+  // user agents (Safari/WebKit) keep a no-store page in the in-memory bfcache, so a document
+  // carrying the per-principal kovo-session fingerprint meta (stamped by document-core only for
+  // guarded/session-dependent docs) MUST revalidate with a full server GET (location.reload)
+  // rather than presenting the restored DOM. Anonymous documents carry no kovo-session meta, so
+  // this is a no-op and they stay fully bfcache-eligible. Adds no unload handler.
+  if (doc.querySelector?.('meta[name="kovo-session"]')) {
+    addEventListener('pageshow', (event) => {
+      if (event.persisted) location.reload?.();
+    });
+  }
   // SPEC.md §4.7: declared triggers are legible in body markup, while the default
   // document emits the loader in <head>. Defer the scan one task so the parser can
   // continue into the body; event delegation above is installed immediately.
