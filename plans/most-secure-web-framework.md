@@ -817,7 +817,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       scope-audit test and `git diff --check` passed. Negated range predicates such as `not(gt(...))`,
       `not(gte(...))`, and `not(between(...))` now feed the fail-closed arg-candidate path for read/write owner
       audits, while session/guard negated ranges remain excluded from exact `scope: session` proof; the focused
-      scope-audit test and `git diff --check` passed.
+      scope-audit test and `git diff --check` passed. Nonliteral membership predicates such as
+      `inArray(ownerColumn, input.userIds)` and `notInArray(ownerColumn, input.userIds)` now feed the fail-closed
+      arg-candidate path while dynamic session/guard arrays remain excluded from exact `scope: session` proof;
+      the focused scope-audit test and `git diff --check` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
