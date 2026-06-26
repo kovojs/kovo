@@ -6,6 +6,7 @@ import {
   renderHttpGuardFailureResponse,
   resolveLifecycleRequest,
   runGuard,
+  withGuardArgs,
   type GuardFailureResponseOptions,
   type GuardResult,
   type RequestLifecycleOptions,
@@ -446,7 +447,17 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   // `query()` loader runs in read mode (KV433 read-only proxy); the audited `query.elevated(...)`
   // escape runs in write mode so a GET that must be idempotent-safe-to-repeat can perform its write.
   const dbMode = definition.elevated ? 'write' : 'read';
-  const lifecycleRequest = await resolveLifecycleRequest(request, { ...options, dbMode });
+  const resolvedRequest = await resolveLifecycleRequest(request, { ...options, dbMode });
+  // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §9.4: thread the query's *validated*
+  // args onto the request BEFORE the guard chain so an ownership guard (`guards.owns` reading
+  // `req.args`) can authorize a client-visible key and discharge KV414 — without this merge
+  // `keyOf(request)` reads `undefined` and a key-ignoring predicate authorizes everyone (IDOR).
+  // Only on the validated path (a declared `args` schema, parsed above); a query without args never
+  // fabricates an unvalidated `req.args`. The loader/guard then see the same coerced values.
+  const lifecycleRequest =
+    definition.args === undefined
+      ? resolvedRequest
+      : (withGuardArgs(resolvedRequest, argsResult.value) as typeof resolvedRequest);
   const guardFailure = await runGuard(definition.guard, lifecycleRequest);
   if (guardFailure) {
     return {

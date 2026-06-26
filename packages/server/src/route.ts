@@ -8,6 +8,7 @@ import {
   resolveLifecycleRequest,
   runGuard,
   sanitizeNext,
+  withGuardParams,
   type Guard,
   type GuardFailureResponseOptions,
   type RequestLifecycleOptions,
@@ -480,7 +481,19 @@ async function runRoutePageInternal<
 ): Promise<RoutePageInternalResult<Page>> {
   const routeRequest = parseRouteRequest(definition, input);
 
-  const lifecycleRequest = await resolveLifecycleRequest(request, options);
+  // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §6.4: thread the route's *validated*
+  // params (parsed/coerced by `parseRouteRequest` above against the route's `params` schema) onto
+  // the request BEFORE the layout/route guard chain, so an ownership guard (`guards.owns` reading
+  // `req.params`) can authorize a route-instance key and discharge KV414. Without it
+  // `keyOf(request)` reads `undefined` and a key-ignoring predicate authorizes everyone (IDOR).
+  // Gated on a declared `params` schema (the validated path, mirroring `runQuery`'s `args` gate) so
+  // a paramless route never fabricates a `req.params` key. The page/regions/layouts then see the
+  // same coerced `req.params` the guards saw.
+  const resolvedRequest = await resolveLifecycleRequest(request, options);
+  const lifecycleRequest =
+    definition.params === undefined
+      ? resolvedRequest
+      : (withGuardParams(resolvedRequest, routeRequest.params) as typeof resolvedRequest);
   const layouts = routeLayoutChain(definition.layout);
 
   for (let index = 0; index < layouts.length; index += 1) {

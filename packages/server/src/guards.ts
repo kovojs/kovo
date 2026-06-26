@@ -107,6 +107,26 @@ export type AuthenticatedRequest<Request extends SessionRequestLike> = Request &
   };
 };
 
+/**
+ * A guard request carrying the query's/mutation's framework-merged **validated args** an arg-aware
+ * guard inspects (SPEC §10.3:1155-1157 "Guards (arg-aware, normative)", §9.4). The query/mutation
+ * runners thread the same `s.*`-coerced `args` the loader/handler see onto the request *after*
+ * schema parse/coerce and *before* the guard chain, so an ownership guard's `keyOf` can read
+ * `req.args` without a cast and discharge the KV414 IDOR obligation for that key. Compose over the
+ * app request, e.g. `guards.owns<GuardArgsRequest<AppRequest, { id: string }>, string>(...)`.
+ */
+export type GuardArgsRequest<Request, Args = unknown> = Request & { args: Args };
+
+/**
+ * A guard request carrying the framework-merged **resolved route params** an arg-aware route guard
+ * inspects (SPEC §10.3:1155-1157, §6.4). `runRoutePage` threads the route's parsed/coerced `params`
+ * onto the request before the layout/route guard chain, so an ownership guard's `keyOf` can read
+ * `req.params` without a cast and discharge KV414 for a route-instance key.
+ */
+export type GuardParamsRequest<Request, Params = Record<string, string>> = Request & {
+  params: Params;
+};
+
 /** The app's session declaration returned by `session()`: `parse`, `provider`, and `schema`. */
 export interface SessionDefinition<Value> {
   parse(request: { session?: unknown }): Value;
@@ -347,22 +367,39 @@ export const guards = {
     };
   },
   /**
-   * Ownership guard (SPEC §10.3): passes only when the authenticated principal
-   * owns the row the validated key selects, discharging the KV414 IDOR obligation
-   * for that key. `keyOf` reads the owned-row key from the request (which carries
-   * the validated args / resolved instance key, §10.3); `ownsRow` is the
-   * app-provided ownership predicate — the app owns the data layer, so the guard
-   * stays decoupled from Drizzle (the SPEC `owns((a) => a.id, table.col)`
-   * column-form is compile-time sugar over this runtime contract). Composes with
-   * the other guards, e.g. `all(authed, owns((req) => req.args.id, ownsOrder))`.
+   * Ownership guard (SPEC §10.3:1155-1157 "Guards (arg-aware, normative)", §9.4): passes only
+   * when the authenticated principal owns the row the validated key selects, discharging the
+   * KV414 IDOR obligation for that key. `keyOf` reads the owned-row key from the request, which —
+   * because guards run *after* schema parse/coerce — carries the query's/mutation's validated
+   * `args` (queries/mutations) or the route's resolved `params` (route pages) the framework
+   * merges on before the guard chain (the query/mutation/route runners do this; without it
+   * `req.args` is `undefined` and a correct predicate would deny every owner — latent IDOR). Type
+   * the keyed request with {@link GuardArgsRequest}/{@link GuardParamsRequest} so `req.args`/
+   * `req.params` need no cast. The returned guard is a `Guard<Request>` over the *base* (app)
+   * request, so it attaches to a query/route/mutation typed on the app request without a
+   * contravariant-assignment cast — only `keyOf`/`ownsRow` see the merged `KeyedRequest`. `ownsRow`
+   * is the app-provided ownership predicate — the app owns the data layer, so the guard stays
+   * decoupled from Drizzle (the SPEC `owns((a) => a.id, table.col)` column-form is the planned
+   * compile-time sugar over this runtime contract). Composes with the other guards, e.g.
+   * `all(authed, owns((req) => req.args.id, ownsOrder))`.
    */
-  owns<Request extends SessionRequestLike, Key>(
-    keyOf: (request: Request) => Key,
-    ownsRow: (request: Request, key: Key) => boolean | Promise<boolean>,
+  owns<
+    Request extends SessionRequestLike,
+    KeyedRequest extends Request = Request,
+    Key = unknown,
+  >(
+    keyOf: (request: KeyedRequest) => Key,
+    ownsRow: (request: KeyedRequest, key: Key) => boolean | Promise<boolean>,
   ): Guard<Request> {
     return async (request) => {
       if (!request.session?.user) return unauthenticatedGuardFailure();
-      return (await ownsRow(request, keyOf(request))) ? true : unauthorizedGuardFailure();
+      // The query/mutation/route runners merge the validated args / resolved params onto `request`
+      // BEFORE this guard runs (SPEC §10.3:1155-1157), so the runtime value is a `KeyedRequest`
+      // even though the guard's *attachment* type is the base request. View it as such for `keyOf`.
+      const keyedRequest = request as unknown as KeyedRequest;
+      return (await ownsRow(keyedRequest, keyOf(keyedRequest)))
+        ? true
+        : unauthorizedGuardFailure();
     };
   },
 };
@@ -581,6 +618,34 @@ function requestWithProperty<Request, Key extends string, Value>(
       return keys.includes(key) ? keys : [...keys, key];
     },
   }) as Request & Record<Key, Value>;
+}
+
+/**
+ * @internal Merge the query's/mutation's **validated args** onto the lifecycle request BEFORE the
+ * guard chain, so an arg-aware guard (`guards.owns` reading `req.args`) sees the same `s.*`-coerced
+ * values the loader/handler see (SPEC §10.3:1155-1157 "Guards (arg-aware, normative)", §9.4). The
+ * runners call this only on the validated path (after a declared `args`/`input` schema parsed), so
+ * it never fabricates an unvalidated `req.args` on the no-args path. Returns a non-mutating Proxy
+ * view (the existing {@link requestWithProperty} machinery), so the caller's request is untouched.
+ */
+export function withGuardArgs<Request, Args>(
+  request: Request,
+  args: Args,
+): GuardArgsRequest<Request, Args> {
+  return requestWithProperty(request, 'args', args) as GuardArgsRequest<Request, Args>;
+}
+
+/**
+ * @internal Merge a route page's **resolved params** onto the lifecycle request BEFORE the
+ * layout/route guard chain, so an arg-aware route guard (`guards.owns` reading `req.params`) can
+ * authorize a route-instance key (SPEC §10.3:1155-1157, §6.4). `parseRouteRequest` already
+ * parsed/coerced the params via the route's `params` schema before this runs.
+ */
+export function withGuardParams<Request, Params>(
+  request: Request,
+  params: Params,
+): GuardParamsRequest<Request, Params> {
+  return requestWithProperty(request, 'params', params) as GuardParamsRequest<Request, Params>;
 }
 
 function defaultOnUnauthenticated<Request>(

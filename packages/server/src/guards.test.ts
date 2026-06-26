@@ -13,9 +13,12 @@ import {
   resolveLifecycleRequest,
   sanitizeNext,
   session,
+  type GuardArgsRequest,
+  type GuardParamsRequest,
 } from './guards.js';
 import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
-import { route } from './route.js';
+import { query, runQuery } from './query.js';
+import { route, runRoutePage } from './route.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
@@ -815,18 +818,20 @@ describe('server guard and session primitives', () => {
 });
 
 describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
-  type Req = { session?: { user?: { id: string } | null } | null; args: { id: string } };
+  // GuardArgsRequest types the framework-merged `req.args` so `keyOf` reads it without a cast
+  // (SPEC §10.3:1155-1157, §9.4).
+  type Req = GuardArgsRequest<{ session?: { user?: { id: string } | null } | null }, { id: string }>;
   const ownsRow = (req: Req, key: string) => req.session?.user?.id === `owner-of-${key}`;
 
   it('passes when the authenticated principal owns the row', async () => {
-    const guard = guards.owns<Req, string>((req) => req.args.id, ownsRow);
+    const guard = guards.owns<Req, Req, string>((req) => req.args.id, ownsRow);
     await expect(
       guard({ session: { user: { id: 'owner-of-r1' } }, args: { id: 'r1' } }),
     ).resolves.toBe(true);
   });
 
   it('forbids when the principal does not own the row (IDOR)', async () => {
-    const guard = guards.owns<Req, string>((req) => req.args.id, ownsRow);
+    const guard = guards.owns<Req, Req, string>((req) => req.args.id, ownsRow);
     await expect(
       guard({ session: { user: { id: 'someone-else' } }, args: { id: 'r1' } }),
     ).resolves.toEqual({ kind: 'forbidden', payload: {} });
@@ -834,7 +839,7 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
 
   it('rejects an unauthenticated caller before consulting the ownership check', async () => {
     const consulted: string[] = [];
-    const guard = guards.owns<Req, string>(
+    const guard = guards.owns<Req, Req, string>(
       (req) => req.args.id,
       (_req, key) => {
         consulted.push(key);
@@ -851,7 +856,7 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
   it('composes with all(authed, owns(...))', async () => {
     const guard = guards.all<Req>(
       guards.authed<Req>(),
-      guards.owns<Req, string>((req) => req.args.id, ownsRow),
+      guards.owns<Req, Req, string>((req) => req.args.id, ownsRow),
     );
     await expect(
       guard({ session: { user: { id: 'owner-of-r1' } }, args: { id: 'r1' } }),
@@ -862,12 +867,130 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
   });
 
   it('awaits an async ownership predicate', async () => {
-    const guard = guards.owns<Req, string>(
+    const guard = guards.owns<Req, Req, string>(
       (req) => req.args.id,
       async (req, key) => Promise.resolve(req.session?.user?.id === `owner-of-${key}`),
     );
     await expect(
       guard({ session: { user: { id: 'owner-of-r9' } }, args: { id: 'r9' } }),
     ).resolves.toBe(true);
+  });
+});
+
+describe('guards.owns production-path: runners thread validated args/params (SPEC §10.3:1155-1157, §9.4)', () => {
+  // Drives the REAL runners end-to-end (NOT the synthetic `{ args }` object the unit tests pass),
+  // so a regression where a runner fails to merge the validated args/params onto the guard request
+  // — the latent KV414 IDOR — is caught. The request value passed to each runner carries NO
+  // `args`/`params`; the only way an owner-specific predicate can pass is if the runner merged the
+  // schema-coerced key onto `req` before the guard. Ownership model: principal `owner-of-<key>`
+  // owns row `<key>`; a non-owner sending a foreign key is the real IDOR case.
+  type AppReq = { session?: { user?: { id: string } | null } | null };
+  const ownsRowById = (req: GuardArgsRequest<AppReq, { id: string }>, key: string): boolean =>
+    req.session?.user?.id === `owner-of-${key}`;
+  const ownsRouteRow = (req: GuardParamsRequest<AppReq, { id: string }>, key: string): boolean =>
+    req.session?.user?.id === `owner-of-${key}`;
+
+  const orderQuery = query('order', {
+    args: s.object({ id: s.string() }),
+    // `owns` returns a Guard<AppReq>; only keyOf/ownsRow see the merged GuardArgsRequest, so no cast.
+    guard: guards.owns<AppReq, GuardArgsRequest<AppReq, { id: string }>, string>(
+      (req) => req.args.id,
+      ownsRowById,
+    ),
+    load: (input: { id: string }) => ({ id: input.id }),
+    reads: [],
+  });
+
+  it('runQuery allows the owner of the row the validated arg key selects', async () => {
+    await expect(
+      runQuery(orderQuery, { id: 'r1' }, { session: { user: { id: 'owner-of-r1' } } }),
+    ).resolves.toMatchObject({ ok: true, value: { id: 'r1' } });
+  });
+
+  it('runQuery denies a non-owner whose foreign arg key targets another row (the IDOR case)', async () => {
+    await expect(
+      runQuery(orderQuery, { id: 'r1' }, { session: { user: { id: 'intruder' } } }),
+    ).resolves.toMatchObject({
+      auth: 'unauthorized',
+      error: { code: 'UNAUTHORIZED' },
+      ok: false,
+      status: 422,
+    });
+  });
+
+  const orderRoute = route('/orders/:id', {
+    params: s.object({ id: s.string() }),
+    guard: guards.owns<AppReq, GuardParamsRequest<AppReq, { id: string }>, string>(
+      (req) => req.params.id,
+      ownsRouteRow,
+    ),
+    page: ({ params }) => trustedHtml(`<h1>order ${params.id}</h1>`),
+  });
+
+  it('runRoutePage allows the owner of the resolved route-param key', async () => {
+    await expect(
+      runRoutePage(orderRoute, { params: { id: 'r1' } }, { session: { user: { id: 'owner-of-r1' } } }),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it('runRoutePage denies a non-owner for a foreign route-param key (the IDOR case)', async () => {
+    await expect(
+      runRoutePage(orderRoute, { params: { id: 'r1' } }, { session: { user: { id: 'intruder' } } }),
+    ).resolves.toMatchObject({ auth: 'unauthorized', ok: false, status: 422 });
+  });
+
+  const orderMutation = mutation('order/touch', {
+    guard: guards.owns<AppReq, GuardArgsRequest<AppReq, { id: string }>, string>(
+      (req) => req.args.id,
+      ownsRowById,
+    ),
+    input: s.object({ id: s.string() }),
+    handler: (input: { id: string }) => ({ id: input.id }),
+  });
+
+  it('runMutation (direct path: in-handler guard) allows the owner and denies the foreign key', async () => {
+    await expect(
+      runMutation(orderMutation, { id: 'r1' }, { session: { user: { id: 'owner-of-r1' } } }),
+    ).resolves.toMatchObject({ ok: true, value: { id: 'r1' } });
+    await expect(
+      runMutation(orderMutation, { id: 'r1' }, { session: { user: { id: 'intruder' } } }),
+    ).resolves.toEqual({ error: { code: 'UNAUTHORIZED', payload: {} }, ok: false, status: 422 });
+  });
+
+  it('renderNoJsMutationResponse (production no-JS path: pre-replay guard) discharges KV414', async () => {
+    // Owner → 303 PRG redirect; the foreign-key non-owner is denied with the 403 forbidden page,
+    // proving the arg-aware guard ran with the validated args in the real dispatch path.
+    await expect(
+      renderNoJsMutationResponse(orderMutation, {
+        rawInput: { id: 'r1' },
+        redirectTo: '/orders/r1',
+        request: { session: { user: { id: 'owner-of-r1' } } },
+      }),
+    ).resolves.toMatchObject({ status: 303 });
+    await expect(
+      renderNoJsMutationResponse(orderMutation, {
+        rawInput: { id: 'r1' },
+        redirectTo: '/orders/r1',
+        request: { session: { user: { id: 'intruder' } } },
+      }),
+    ).resolves.toMatchObject({ status: 403 });
+  });
+
+  it('renderMutationResponse (production enhanced path: pre-replay guard) discharges KV414', async () => {
+    // Owner → 200 fragment; foreign-key non-owner → 403 forbidden fragment in the enhanced path.
+    await expect(
+      renderMutationResponse(orderMutation, {
+        buildToken: 'owns-build',
+        rawInput: { id: 'r1' },
+        request: { session: { user: { id: 'owner-of-r1' } } },
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+    await expect(
+      renderMutationResponse(orderMutation, {
+        buildToken: 'owns-build',
+        rawInput: { id: 'r1' },
+        request: { session: { user: { id: 'intruder' } } },
+      }),
+    ).resolves.toMatchObject({ status: 403 });
   });
 });
