@@ -293,7 +293,10 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       and `pnpm run check:vp` passed. One static const object wrapper around already-proven helper object aliases
       or namespace imports now preserves enforced egress/secret-read reachability, while computed, spread,
       property-mutated, and non-const wrapper shapes remain outside the proof; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed.
+      `git diff --check`, and `pnpm run check:vp` passed. Global `Object.freeze(...)` static helper wrappers now
+      preserve enforced reachability for proven object, array/tuple, nested-object, and default-object literal
+      shapes, while computed, spread, mutable, duplicate, unresolved, and shadowed-`Object.freeze` shapes remain
+      outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed.
 
 - [ ] **OPP-08 — Confused-deputy floor for agent tools (forbid ambient credentials).** audit-only, with a
       narrow by-construction sub-claim only if a framework-owned `tool()` + ambient-credential symbols exist ·
