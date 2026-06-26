@@ -215,6 +215,78 @@ describe('server mutation response replay', () => {
     });
   });
 
+  // L3 (SPEC §9.1): the replay fingerprint must be body-sensitive for FormData/multipart
+  // submissions. Before the fix, canonicalJson(formData) === "{}" for EVERY multipart body,
+  // so two DIFFERENT FormData bodies under one Kovo-Idem silently replayed the first response
+  // instead of raising MutationReplayConflictError. The enhanced JS client always submits
+  // FormData, so this defeated the conflict defense in the common case.
+  it('returns a conflict when the same Kovo-Idem is reused with a different FormData body', async () => {
+    const cart = domain('cart');
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: { touches: [cart] },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const baseRequest = {
+      idem: 'idem_formdata_body',
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+    const firstBody = new FormData();
+    firstBody.set('productId', 'p1');
+    const secondBody = new FormData();
+    secondBody.set('productId', 'p2');
+
+    const first = await renderMutationResponse(addToCart, { ...baseRequest, rawInput: firstBody });
+    const second = await renderMutationResponse(addToCart, { ...baseRequest, rawInput: secondBody });
+
+    // The handler ran exactly once; the divergent second multipart body is a 409 conflict,
+    // NOT a silent replay of the first response.
+    expect(writes).toBe(1);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(409);
+    expect(second.body).toContain('IDEMPOTENCY_CONFLICT');
+  });
+
+  // L3: identical FormData bodies under one idem must still REPLAY (match), proving the
+  // fingerprint is body-sensitive rather than indiscriminately distinct.
+  it('replays identical FormData bodies under one Kovo-Idem without re-running the handler', async () => {
+    const cart = domain('cart');
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: { touches: [cart] },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const baseRequest = {
+      idem: 'idem_formdata_replay',
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+    const makeBody = () => {
+      const body = new FormData();
+      body.set('productId', 'p1');
+      return body;
+    };
+
+    const first = await renderMutationResponse(addToCart, { ...baseRequest, rawInput: makeBody() });
+    const second = await renderMutationResponse(addToCart, { ...baseRequest, rawInput: makeBody() });
+
+    expect(writes).toBe(1);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(second.body).toBe(first.body);
+  });
+
   it('scopes replay records by mutation key so a sibling mutation does not replay another', async () => {
     const cart = domain('cart');
     const replayStore = createMemoryMutationReplayStore();

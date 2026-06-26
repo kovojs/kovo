@@ -137,8 +137,10 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
         {
           count: 2,
           report: {
-            blocked: 'https://cdn.example.test/script.js',
-            document: 'https://app.example.test/orders',
+            // L14 (SPEC §6.6): redaction now keeps only the origin (path/query/fragment
+            // dropped) so a path-embedded secret can never persist in the "redacted" aggregate.
+            blocked: 'https://cdn.example.test',
+            document: 'https://app.example.test',
             type: 'csp-violation',
             violatedDirective: 'script-src',
           },
@@ -146,6 +148,42 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
       ],
       dropped: 0,
     });
+  });
+
+  // L14 (SPEC §6.6): redaction must strip secrets carried in URL *path* segments
+  // (reset/magic-link/capability tokens), not only the query/fragment. The stored
+  // aggregate the framework labels "redacted" must keep only the origin.
+  it('redacts secrets embedded in CSP report URL path segments', async () => {
+    const app = createApp();
+    const handler = createRequestHandler(app);
+    const response = await handler(
+      new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`, {
+        body: JSON.stringify({
+          'csp-report': {
+            'blocked-uri': 'https://evil.example.test/exfil/PATHSECRET-blocked-9f3a1c',
+            'document-uri':
+              'https://app.example.test/reset-password/PATHSECRET-9f3a1c?token=QUERYSECRET#QUERYSECRET',
+            'violated-directive': 'img-src',
+          },
+        }),
+        headers: { 'Content-Type': 'application/reports+json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    const snapshot = kovoSecurityReportSnapshot(app);
+    expect(snapshot.aggregates[0]?.report).toMatchObject({
+      blocked: 'https://evil.example.test',
+      document: 'https://app.example.test',
+      type: 'csp-violation',
+      violatedDirective: 'img-src',
+    });
+    // The path/query/fragment secrets must not survive anywhere in the stored aggregate.
+    const serialized = JSON.stringify(snapshot);
+    expect(serialized).not.toContain('PATHSECRET-9f3a1c');
+    expect(serialized).not.toContain('PATHSECRET-blocked-9f3a1c');
+    expect(serialized).not.toContain('QUERYSECRET');
   });
 
   it('normalizes legacy CSP, COOP, and Permissions Policy reports without storing raw samples', async () => {
@@ -187,7 +225,8 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
       {
         report: {
           blocked: 'data:',
-          document: 'https://app.example.test/account',
+          // L14 (SPEC §6.6): origin-only redaction drops the `/account` path segment.
+          document: 'https://app.example.test',
           type: 'csp-violation',
           violatedDirective: 'img-src',
         },
@@ -212,8 +251,10 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
   it('bounds per-request report items and drops malformed oversized input quietly', async () => {
     const app = createApp();
     const handler = createRequestHandler(app);
+    // Vary by ORIGIN, not path: L14 redaction keeps only the origin, so distinct reports
+    // must differ by origin to remain distinct aggregates after redaction.
     const reports = Array.from({ length: 25 }, (_unused, index) => ({
-      body: { blockedURL: `https://cdn.example.test/${index}.js` },
+      body: { blockedURL: `https://cdn-${index}.example.test/script.js` },
       type: 'csp-violation',
     }));
 

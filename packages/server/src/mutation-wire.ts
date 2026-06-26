@@ -6,7 +6,7 @@ import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
 import type { RegisteredQueryDefinition } from './query.js';
-import type { MutationReplayStore } from './replay.js';
+import { canonicalRequestFingerprint, type MutationReplayStore } from './replay.js';
 import {
   readHeader,
   type HeaderSource,
@@ -327,7 +327,10 @@ export function mutationWireRequestFromHeaders<Request>(
     fragment: headers.fragment,
     rawInput: options.rawInput,
     request: options.request,
-    requestFingerprint: canonicalJson(options.rawInput),
+    // L3 (SPEC §9.1): use the shared FormData/upload-aware fingerprint so a multipart body
+    // produces a body-sensitive value instead of "{}" (the local canonicalJson below stays
+    // for the attestation payload, which only ever sees plain objects).
+    requestFingerprint: canonicalRequestFingerprint(options.rawInput),
     ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
     ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),

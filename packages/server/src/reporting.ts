@@ -304,8 +304,12 @@ function redactedUrl(value: string | undefined): string | undefined {
     return `${token.split(':', 1)[0] ?? 'opaque'}:`;
   }
   try {
-    const url = new URL(token);
-    return `${url.origin}${url.pathname}`;
+    // L14 (SPEC §6.6): the stored aggregate is the framework's "redacted" telemetry, but
+    // returning origin+pathname retained the full path verbatim — so a secret embedded in a
+    // path segment (reset/magic-link/capability tokens, e.g. `/reset-password/<token>`)
+    // persisted unredacted at rest. Keep only the origin; drop the path, query, and fragment
+    // so no path-embedded secret is ever stored.
+    return new URL(token).origin;
   } catch {
     return token.slice(0, 160);
   }
