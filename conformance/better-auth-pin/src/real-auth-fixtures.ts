@@ -27,7 +27,7 @@ export interface ReferenceSession {
     email: string;
     id: string;
     name: string;
-    roles: readonly ('admin' | 'member')[];
+    roles: ('admin' | 'member')[];
   };
 }
 
