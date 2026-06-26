@@ -50,6 +50,10 @@ export type {
   ResolvedAppRequestRateLimitOptions,
 } from './app-types.js';
 import type { SessionProvider } from './guards.js';
+import {
+  markNormalizedSessionProvider,
+  type SessionProviderBoundary,
+} from './session-provider-boundary.js';
 import type { EgressOptions } from './egress.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryDefinition } from './query.js';
@@ -133,9 +137,13 @@ export function createApp<
     options.sessionProvider === undefined
       ? undefined
       : resolveDelegatedSessionProvider(options.sessionProvider);
-  const sessionProvider =
+  const rawSessionProvider =
     session === undefined ? delegatedSessionProvider : resolveAppSessionProvider(session);
-  const sessionProviderBoundary = appSessionProviderBoundary(options, sessionProvider);
+  const sessionProviderBoundary = appSessionProviderBoundary(options, rawSessionProvider);
+  const sessionProvider =
+    rawSessionProvider === undefined || sessionProviderBoundary === undefined
+      ? undefined
+      : markNormalizedSessionProvider(rawSessionProvider, sessionProviderBoundary);
 
   return {
     clientModules,
@@ -171,7 +179,7 @@ function appSessionProviderBoundary<
 >(
   options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>,
   sessionProvider: unknown,
-): 'default-owned' | 'delegated' | 'owned' | undefined {
+): SessionProviderBoundary | undefined {
   if (sessionProvider === undefined) return undefined;
   if (options.sessionProvider !== undefined) return 'delegated';
   if (options.session !== undefined) return 'owned';

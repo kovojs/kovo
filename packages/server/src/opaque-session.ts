@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import { serializeCookie, type CookieOptions } from './cookies.js';
 import type { SessionProvider } from './guards.js';
+import { markNormalizedSessionProvider } from './session-provider-boundary.js';
 
 const OPAQUE_SESSION_PROVIDER = Symbol('kovo.opaqueSessionProvider');
 
@@ -269,6 +270,7 @@ export function createOpaqueSessionManager<SessionValue>(
   Object.defineProperty(provider, OPAQUE_SESSION_PROVIDER, {
     value: true,
   });
+  markNormalizedSessionProvider(provider, 'owned');
 
   return {
     cookieName,

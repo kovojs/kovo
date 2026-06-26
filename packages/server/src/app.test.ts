@@ -378,6 +378,18 @@ describe('server createApp request shell', () => {
     );
   });
 
+  it('rejects hand-built app aggregates that attach a raw sessionProvider below createApp', () => {
+    const app = createApp();
+
+    expect(() =>
+      createRequestHandler({
+        ...app,
+        sessionProvider: (() => ({ user: { id: 'raw' } })) as never,
+        sessionProviderBoundary: 'delegated',
+      }),
+    ).toThrow('createRequestHandler() requires a Kovo app aggregate');
+  });
+
   it('rejects delegated sessionProvider declarations without justification', () => {
     expect(() =>
       createApp({
