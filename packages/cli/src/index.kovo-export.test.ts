@@ -11,6 +11,7 @@ const repoRoot = process.cwd();
 function symlinkServerPackage(root: string): void {
   mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
   symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+  symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
 }
 
 function appModuleSource(options: {
@@ -24,8 +25,8 @@ function appModuleSource(options: {
 
   return [
     ...(closed ? ["import { createApp } from '@kovojs/server';"] : []),
+    "import { trustedHtml } from '@kovojs/browser';",
     ...(options.prelude ?? []),
-    'const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });',
     ...(closed
       ? []
       : [

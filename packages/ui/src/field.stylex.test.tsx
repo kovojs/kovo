@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { trustedHtml } from '@kovojs/browser';
 import * as style from '@kovojs/style';
 
 import {
@@ -15,10 +16,6 @@ import {
   FieldsetLegend,
   fieldStyles,
 } from './field.js';
-
-function trustedHtml(value: string) {
-  return { __kovoTrustedHtml: true, value };
-}
 
 describe('@kovojs/ui Field StyleX styles', () => {
   it('matches semantic field markup with StyleX output', () => {

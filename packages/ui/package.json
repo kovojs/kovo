@@ -252,6 +252,7 @@
     "@kovojs/style": "workspace:*"
   },
   "devDependencies": {
+    "@kovojs/browser": "workspace:*",
     "vitest": "4.1.8"
   },
   "kovo": {

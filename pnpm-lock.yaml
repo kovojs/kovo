@@ -677,6 +677,9 @@ importers:
         specifier: workspace:*
         version: link:../style
     devDependencies:
+      '@kovojs/browser':
+        specifier: workspace:*
+        version: link:../browser
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))

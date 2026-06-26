@@ -18,13 +18,7 @@ const repoRoot = process.cwd();
 function appSource(): string {
   return `
 import { createApp, createMemoryVersionedClientModuleRegistry, route } from '@kovojs/server';
-
-const trustedHtml = (value) => ({
-  __kovoTrustedHtml: true,
-  value,
-  [Symbol.toPrimitive]: () => String(value),
-  toString: () => String(value),
-});
+import { trustedHtml } from '@kovojs/browser';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
 clientModules.put({
@@ -88,6 +82,7 @@ describe('kovo build — browser drive (S1)', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, appSource(), 'utf8');
       writeClientEntry(root);
       writeRetentionProofConfig(root);

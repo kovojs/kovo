@@ -42,6 +42,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, appModuleSource(), 'utf8');
       writeClientEntry(root);
       writeRetentionProofConfig(root);
@@ -123,6 +124,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, typescriptAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
@@ -164,6 +166,7 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
       writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, staticStylesheetRouteComponentAppModuleSource(), 'utf8');
@@ -206,6 +209,7 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
       writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, splitStylesheetRouteAppModuleSource(), 'utf8');
@@ -286,6 +290,7 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
       writeReactJsxRuntimeStub(root);
       writeSplitStyleCreateComponentClientEntry(root);
@@ -346,6 +351,7 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
       writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, documentShellRouteSplitAppModuleSource(), 'utf8');
@@ -391,6 +397,7 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
       writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, mutationFragmentStylesheetAppModuleSource(), 'utf8');
@@ -480,6 +487,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, appModuleSource(), 'utf8');
       writeClientEntry(root);
       writeRetentionProofConfig(root);
@@ -561,6 +569,7 @@ describe('kovo build', () => {
       try {
         mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
         symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
         writeFileSync(appPath, appModuleSource(), 'utf8');
         writeClientEntry(root);
         writeRetentionProofConfig(root);
@@ -632,6 +641,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(join(root, 'app.mjs'), dynamicAppModuleSource(), 'utf8');
       writeClientEntry(root);
       writeFileSync(
@@ -672,6 +682,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(join(root, 'app.mjs'), databaseEnvAppModuleSource(), 'utf8');
       writeClientEntry(root);
       writeFileSync(
@@ -726,6 +737,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, dynamicAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
@@ -792,6 +804,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, staticAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
@@ -846,6 +859,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, dynamicAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
@@ -882,6 +896,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, dynamicAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
@@ -915,6 +930,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, databaseEnvAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
@@ -952,6 +968,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, blockedCloudflareApiAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
@@ -989,12 +1006,7 @@ import {
   s,
 } from '@kovojs/server';
 
-const trustedHtml = (value) => ({
-  __kovoTrustedHtml: true,
-  value,
-  [Symbol.toPrimitive]: () => String(value),
-  toString: () => String(value),
-});
+import { trustedHtml } from '@kovojs/browser';
 
 const cart = domain('cart');
 const db = { count: 0 };
@@ -1053,12 +1065,7 @@ import {
   s,
 } from '@kovojs/server';
 
-const trustedHtml = (value) => ({
-  __kovoTrustedHtml: true,
-  value,
-  [Symbol.toPrimitive]: () => String(value),
-  toString: () => String(value),
-});
+import { trustedHtml } from '@kovojs/browser';
 
 const cart = domain('cart');
 const db = { count: 0 };
@@ -1118,12 +1125,7 @@ function staticAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
 
-const trustedHtml = (value) => ({
-  __kovoTrustedHtml: true,
-  value,
-  [Symbol.toPrimitive]: () => String(value),
-  toString: () => String(value),
-});
+import { trustedHtml } from '@kovojs/browser';
 
 export default createApp({
   routes: [
@@ -1229,12 +1231,7 @@ import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 
-const trustedHtml = (value) => ({
-  __kovoTrustedHtml: true,
-  value,
-  [Symbol.toPrimitive]: () => String(value),
-  toString: () => String(value),
-});
+import { trustedHtml } from '@kovojs/browser';
 
 function homeLiveTargetHeader() {
   const target = 'home-panel';
@@ -1291,12 +1288,7 @@ function databaseEnvAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
 
-const trustedHtml = (value) => ({
-  __kovoTrustedHtml: true,
-  value,
-  [Symbol.toPrimitive]: () => String(value),
-  toString: () => String(value),
-});
+import { trustedHtml } from '@kovojs/browser';
 
 export default createApp({
   routes: [
@@ -1696,12 +1688,7 @@ function typescriptAppModuleSource(): string {
   return `
 import { createApp, domain, query, route } from '@kovojs/server';
 
-const trustedHtml = (value) => ({
-  __kovoTrustedHtml: true,
-  value,
-  [Symbol.toPrimitive]: () => String(value),
-  toString: () => String(value),
-});
+import { trustedHtml } from '@kovojs/browser';
 
 const db: { count: number } = { count: 4 };
 const typed = domain('typed');

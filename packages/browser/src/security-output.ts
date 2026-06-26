@@ -67,12 +67,16 @@ export interface TrustedHtml {
 // DEFENSE-IN-DEPTH brand for source/`kovo explain`, NOT the enforcement check. A
 // structural property is JSON-reproducible, so a value decoded from the wire/query
 // JSON (`{"__kovoTrustedUrl":true,"value":"javascript:…"}`) would forge author trust
-// and bypass scheme neutralization / SSR HTML escaping. The non-forgeable witness is
-// these module-private WeakSets, minted only at `trustedUrl()` / `trustedHtml()`
-// creation — mirroring `blessSink` in core/internal/sink-policy.ts. JSON cannot add a
-// value to a WeakSet, so a wire-decoded object is never treated as author-vouched.
-const trustedHtmlWitnesses = new WeakSet<object>();
-const trustedUrlWitnesses = new WeakSet<object>();
+// and bypass scheme neutralization / SSR HTML escaping. The non-forgeable witness is a
+// process-global `Symbol.for` marker stamped (non-enumerable) only at `trustedUrl()` /
+// `trustedHtml()` creation — mirroring `Symbol.for('kovo.renderedHtml')`. JSON/wire data
+// carries only string keys, so a decoded object can never bear this symbol and is never
+// treated as author-vouched. Using `Symbol.for` (not a per-instance WeakSet) also keeps the
+// brand valid across module instances — e.g. an app loaded through a separate Vite SSR graph
+// still renders trusted on the host renderer — and the non-enumerable symbol never serializes
+// onto the wire.
+const trustedHtmlWitness = Symbol.for('kovo.security.trustedHtml');
+const trustedUrlWitness = Symbol.for('kovo.security.trustedUrl');
 
 /**
  * Marks intentional raw HTML for Kovo sinks that require an explicit escape hatch.
@@ -90,8 +94,8 @@ export function trustedHtml(
   Object.defineProperties(trusted, {
     [Symbol.toPrimitive]: { value: stringify },
     toString: { value: stringify },
+    [trustedHtmlWitness]: { value: true },
   });
-  trustedHtmlWitnesses.add(trusted);
   return trusted;
 }
 
@@ -133,7 +137,11 @@ export function sanitizeRichHtml(value: string, options?: SafeRichHtmlOptions): 
  * the property shape is never honored as author-vouched raw HTML.
  */
 export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
-  return typeof value === 'object' && value !== null && trustedHtmlWitnesses.has(value);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<symbol, unknown>)[trustedHtmlWitness] === true
+  );
 }
 
 /**
@@ -158,7 +166,7 @@ export interface TrustedUrl {
  */
 export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput): TrustedUrl {
   const trusted: TrustedUrl = { __kovoTrustedUrl: true, ...trustedOutputMetadata(metadata), value };
-  trustedUrlWitnesses.add(trusted);
+  Object.defineProperty(trusted, trustedUrlWitness, { value: true });
   return trusted;
 }
 
@@ -169,7 +177,11 @@ export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput)
  * the property shape is never honored as an author-vouched URL.
  */
 export function isKovoTrustedUrl(value: unknown): value is TrustedUrl {
-  return typeof value === 'object' && value !== null && trustedUrlWitnesses.has(value);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<symbol, unknown>)[trustedUrlWitness] === true
+  );
 }
 
 /**
