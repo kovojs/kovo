@@ -781,35 +781,200 @@ export function commandExecutionSinkFindings(filePath, text, options = {}) {
 export function dynamicCodeExecutionSinkFindings(filePath, text, options = {}) {
   if (options.allowedExecutionSink === true) return [];
 
-  const source = stripComments(text);
+  const source = stripCommentsAndStringContents(text);
   const findings = [];
 
-  if (/(^|[^\w$.])eval\s*\(/.test(source)) {
+  if (hasForbiddenEvalCall(source)) {
     findings.push(
       `${filePath}: forbidden dynamic code execution sink eval(); server source must not execute generated code`,
     );
   }
 
-  if (/\bnew\s+Function\s*\(/.test(source)) {
+  if (hasForbiddenFunctionConstructorCall(source, { newOnly: true })) {
     findings.push(
       `${filePath}: forbidden dynamic code execution sink new Function(); server source must not execute generated code`,
     );
   }
 
-  const sourceWithoutNewFunction = source.replace(/\bnew\s+Function\s*\(/g, '');
-  if (/(^|[^\w$.])Function\s*\(/.test(sourceWithoutNewFunction)) {
+  if (hasForbiddenFunctionConstructorCall(source, { callOnly: true })) {
     findings.push(
       `${filePath}: forbidden dynamic code execution sink Function(); server source must not execute generated code`,
     );
   }
 
-  if (vmModuleImportPattern().test(source)) {
+  if (hasVmModuleImport(text)) {
     findings.push(
       `${filePath}: forbidden dynamic code execution sink node:vm/vm import or require; server source must not execute generated code`,
     );
   }
 
   return dedupe(findings);
+}
+
+function hasForbiddenEvalCall(source) {
+  const patterns = [
+    /(^|[^\w$.])(?:eval|\(\s*eval\s*\))\s*\(/g,
+    /(^|[^\w$])\(\s*0\s*,\s*eval\s*\)\s*\(/g,
+    /(^|[^\w$])(?:globalThis\s*\.\s*eval|\(\s*globalThis\s*\.\s*eval\s*\))\s*\(/g,
+  ];
+  for (const alias of dynamicCodeGlobalAliasNames(source, 'eval').keys()) {
+    patterns.push(
+      new RegExp(
+        String.raw`(^|[^\w$.])(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(alias)}\s*\))\s*\(`,
+        'g',
+      ),
+    );
+  }
+
+  for (const pattern of patterns) {
+    for (const call of callArgumentLists(source, pattern)) {
+      if (isShadowedDynamicCodeCall(source, call, 'eval')) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasForbiddenFunctionConstructorCall(source, options = {}) {
+  const aliases = dynamicCodeGlobalAliasNames(source, 'Function');
+  const patterns = [];
+
+  if (options.newOnly !== true) {
+    patterns.push(
+      /(^|[^\w$.])(?:Function|\(\s*Function\s*\))\s*\(/g,
+      /(^|[^\w$])(?:globalThis\s*\.\s*Function|\(\s*globalThis\s*\.\s*Function\s*\))\s*\(/g,
+    );
+    for (const alias of aliases.keys()) {
+      patterns.push(
+        new RegExp(
+          String.raw`(^|[^\w$.])(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(alias)}\s*\))\s*\(`,
+          'g',
+        ),
+      );
+    }
+  }
+
+  if (options.callOnly !== true) {
+    patterns.push(
+      /(^|[^\w$.])new\s+(?:Function|\(\s*Function\s*\))\s*\(/g,
+      /(^|[^\w$])new\s+(?:globalThis\s*\.\s*Function|\(\s*globalThis\s*\.\s*Function\s*\))\s*\(/g,
+    );
+    for (const alias of aliases.keys()) {
+      patterns.push(
+        new RegExp(
+          String.raw`(^|[^\w$.])new\s+(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(
+            alias,
+          )}\s*\))\s*\(`,
+          'g',
+        ),
+      );
+    }
+  }
+
+  for (const pattern of patterns) {
+    for (const call of callArgumentLists(source, pattern)) {
+      if (options.callOnly === true && hasNewPrefixBeforeCall(source, call.index)) continue;
+      if (isShadowedDynamicCodeCall(source, call, 'Function', aliases)) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+function dynamicCodeGlobalAliasNames(source, targetName) {
+  const aliases = new Map();
+  const targetExpression = String.raw`(?:${targetName}|globalThis\s*\.\s*${targetName}|globalThis\s*\[\s*['"]${targetName}['"]\s*\])`;
+  const declarationPatterns = [
+    new RegExp(
+      String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(${targetExpression})\s*(?=;|\n|$)`,
+      'g',
+    ),
+    new RegExp(
+      String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*\(\s*(${targetExpression})\s*\)\s*(?=;|\n|$)`,
+      'g',
+    ),
+  ];
+
+  for (const declarationPattern of declarationPatterns) {
+    let declaration;
+    while ((declaration = declarationPattern.exec(source)) !== null) {
+      const expression = declaration[2].trim();
+      if (
+        expression === targetName &&
+        hasLocalBindingBefore(source, targetName, declaration.index)
+      ) {
+        continue;
+      }
+      if (
+        expression.startsWith('globalThis') &&
+        hasLocalBindingBefore(source, 'globalThis', declaration.index)
+      ) {
+        continue;
+      }
+      aliases.set(declaration[1], declarationPattern.lastIndex);
+    }
+  }
+
+  return aliases;
+}
+
+function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()) {
+  const openParenIndex = source.indexOf('(', call.index);
+  const callPrefix =
+    openParenIndex < 0 ? source.slice(call.index) : source.slice(call.index, openParenIndex);
+  const nearbyPrefix = source.slice(Math.max(0, call.index - 40), openParenIndex);
+  if (
+    new RegExp(String.raw`\bfunction\s+${escapeRegExp(targetName)}\s*$`).test(callPrefix) ||
+    new RegExp(String.raw`\bfunction\s+${escapeRegExp(targetName)}\s*$`).test(nearbyPrefix)
+  ) {
+    return true;
+  }
+  if (
+    /\bglobalThis\b/.test(callPrefix) &&
+    hasLocalBindingBefore(source, 'globalThis', call.index)
+  ) {
+    return true;
+  }
+
+  if (call.name === 'globalThis') {
+    return hasLocalBindingBefore(source, 'globalThis', call.index);
+  }
+
+  if (call.name === targetName) {
+    const aliasDeclarationEnd = aliases.get(targetName);
+    const isGlobalAlias =
+      aliasDeclarationEnd !== undefined &&
+      call.index > aliasDeclarationEnd &&
+      !isReboundAfterAliasDeclaration(source, targetName, aliasDeclarationEnd, call.index);
+    if (!isGlobalAlias && hasLocalBindingBefore(source, targetName, call.index)) return true;
+    return false;
+  }
+
+  const aliasDeclarationEnd = aliases.get(call.name);
+  if (aliasDeclarationEnd === undefined || call.index <= aliasDeclarationEnd) return false;
+  return isReboundAfterAliasDeclaration(source, call.name, aliasDeclarationEnd, call.index);
+}
+
+function hasNewPrefixBeforeCall(source, callIndex) {
+  return /\bnew\s*$/.test(source.slice(Math.max(0, callIndex - 12), callIndex));
+}
+
+function isReboundAfterAliasDeclaration(source, name, declarationEnd, callIndex) {
+  const betweenDeclarationAndCall = source.slice(declarationEnd, callIndex);
+  return new RegExp(
+    String.raw`\b(?:function|class)\s+${escapeRegExp(name)}\b|\b(?:const|let|var)\s+${escapeRegExp(
+      name,
+    )}\s*=|(^|[^\w$])${escapeRegExp(name)}\s*=(?!=)`,
+  ).test(betweenDeclarationAndCall);
+}
+
+function hasVmModuleImport(text) {
+  const pattern = vmModuleImportPattern();
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    if (!isInsideStringOrComment(text, match.index)) return true;
+  }
+  return false;
 }
 
 export function rootedFileServeRawSinkFindings(filePath, text, options = {}) {

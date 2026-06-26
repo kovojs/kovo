@@ -495,6 +495,23 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects indirect, member, and aliased eval dynamic code execution in server source', () => {
+    const finding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink eval(); server source must not execute generated code';
+
+    for (const source of [
+      'export const run = (0, eval)(code);',
+      'export const run = globalThis.eval(code);',
+      'const run = eval; export const result = run(code);',
+      'const run = (eval); export const result = (run)(code);',
+      'const run = globalThis.eval; export const result = run(code);',
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        finding,
+      ]);
+    }
+  });
+
   it('rejects Function constructor and call dynamic code execution in server source', () => {
     expect(
       dynamicCodeExecutionSinkFindings(
@@ -510,6 +527,41 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects member and aliased Function constructor dynamic code execution in server source', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/unsafe.ts',
+        `
+          const Make = Function;
+          const MakeGlobal = globalThis.Function;
+          export const made = new Make(code);
+          export const called = MakeGlobal(code);
+          export const globalMade = new globalThis.Function(code);
+          export const globalCalled = globalThis.Function(code);
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink new Function(); server source must not execute generated code',
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code',
+    ]);
+  });
+
+  it('keeps new Function aliases classified as constructor findings', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/unsafe.ts',
+        `
+          const Make = Function;
+          export const direct = new Function(code);
+          export const aliased = new Make(code);
+          export const member = new globalThis.Function(code);
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink new Function(); server source must not execute generated code',
+    ]);
+  });
+
   it('rejects vm imports and requires in server source', () => {
     expect(
       dynamicCodeExecutionSinkFindings(
@@ -522,6 +574,26 @@ describe('sink-policy gate', () => {
     ).toEqual([
       'packages/server/src/unsafe-import.ts: forbidden dynamic code execution sink node:vm/vm import or require; server source must not execute generated code',
     ]);
+  });
+
+  it('allows locally shadowed dynamic-code names and explanatory strings/comments', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/safe.ts',
+        `
+          // (0, eval)(code); globalThis.Function(code);
+          const note = "eval(code); new Function(code); globalThis.eval(code)";
+          export function safe(eval, globalThis) {
+            const run = eval;
+            function Function(value) {
+              return value;
+            }
+            const Make = Function;
+            return [run("value"), new Make("value"), globalThis.eval("value")];
+          }
+        `,
+      ),
+    ).toEqual([]);
   });
 
   it('allows benign server source without dynamic code sinks', () => {
