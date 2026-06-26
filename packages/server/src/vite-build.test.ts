@@ -55,7 +55,7 @@ const runtimeClientModuleManifestItem = expect.objectContaining({
   status: 200,
 });
 const staticExportDocumentCsp =
-  "default-src 'self'; script-src 'self' 'sha256-zOxaGi2tH4BAw0NScAj/WNUTb87gArEmBY868nVHP9g='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo";
+  "default-src 'self'; script-src 'self' 'sha256-iHP25LIxv4ZbGeZ3JgGcDCEcZd1Wx85r9TDFuQF2zJg='; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo";
 const staticExportReportingHeaders = {
   'report-to':
     '{"endpoints":[{"url":"https://kovo.local/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',

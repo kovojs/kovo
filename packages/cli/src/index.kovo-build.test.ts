@@ -764,7 +764,13 @@ describe('kovo build', () => {
           },
           {
             continue: true,
-            headers: { 'x-content-type-options': 'nosniff' },
+            headers: {
+              'cross-origin-opener-policy': 'same-origin-allow-popups',
+              'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+              'referrer-policy': 'strict-origin-when-cross-origin',
+              'x-content-type-options': 'nosniff',
+              'x-frame-options': 'DENY',
+            },
             src: '/(.*)',
           },
           { handle: 'filesystem' },
@@ -835,7 +841,13 @@ describe('kovo build', () => {
           },
           {
             continue: true,
-            headers: { 'x-content-type-options': 'nosniff' },
+            headers: {
+              'cross-origin-opener-policy': 'same-origin-allow-popups',
+              'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+              'referrer-policy': 'strict-origin-when-cross-origin',
+              'x-content-type-options': 'nosniff',
+              'x-frame-options': 'DENY',
+            },
             src: '/(.*)',
           },
           { handle: 'filesystem' },

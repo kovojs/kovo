@@ -342,7 +342,7 @@ describe('server mutation lifecycle', () => {
         'Kovo-Build': 'mutation-test-build',
         'Set-Cookie': [
           'kovo_session=s1; Path=/; HttpOnly; SameSite=Lax',
-          'kovo_csrf=c1; Path=/; HttpOnly; Secure; SameSite=Strict',
+          '__Host-kovo_csrf=c1; Path=/; HttpOnly; Secure; SameSite=Strict',
         ],
         Vary: 'Cookie',
       },
