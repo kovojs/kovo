@@ -332,7 +332,11 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `credentialKinds` as rejected while preserving valid multi-kind opt-ins; focused agent-tool tests,
       `git diff --check`, and `pnpm run check:vp` passed. Runtime invocation and audit now reject structurally
       forged declarations that did not originate from `tool()`, so a forged object cannot widen ambient posture;
-      focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
+      focused agent-tool tests, `git diff --check`, and `pnpm run check:vp` passed. `tool()` now reads declaration
+      metadata, authority, capabilities, ambient posture, and reachable sinks only from own data properties, then
+      snapshots and freezes the rows before runtime/audit consumption so inherited/accessor-backed or
+      post-declaration mutation cannot widen audit facts; focused agent-tool tests, `git diff --check`, and
+      `pnpm run check:vp` passed. Remaining gap: broader analyzer integration beyond the
       framework-owned `tool()` boundary.
 
 - [x] **OPP-04 — Confidential-AT-REST classification.** by-construction (plaintext-write-inexpressible
