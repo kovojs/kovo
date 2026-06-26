@@ -880,16 +880,19 @@ export function deserializationSinkFindings(filePath, text) {
   );
   const regExpAliases = regExpConstructorAliasNames(source);
   const regExpCallPatterns = [
-    { globalObject: undefined, pattern: /(^|[^\w$.])(?:new\s+)?(?:RegExp|\(\s*RegExp\s*\))\s*\(/g },
     {
-      globalObject: 'globalThis',
-      pattern:
-        /(^|[^\w$])(?:new\s+)?(?:globalThis\s*\.\s*RegExp|\(\s*globalThis\s*\.\s*RegExp\s*\))\s*\(/g,
+      globalObject: undefined,
+      pattern: /(^|[^\w$.])(?:new\s+)?(?:RegExp|\(\s*RegExp\s*\))\s*(?:\?\.)?\s*\(/g,
     },
     {
       globalObject: 'globalThis',
       pattern:
-        /(^|[^\w$])(?:new\s+)?(?:globalThis\s*\[\s*(['"])RegExp\2\s*\]|\(\s*globalThis\s*\[\s*(['"])RegExp\3\s*\]\s*\))\s*\(/g,
+        /(^|[^\w$])(?:new\s+)?(?:globalThis\s*\.\s*RegExp|\(\s*globalThis\s*\.\s*RegExp\s*\))\s*(?:\?\.)?\s*\(/g,
+    },
+    {
+      globalObject: 'globalThis',
+      pattern:
+        /(^|[^\w$])(?:new\s+)?(?:globalThis\s*\[\s*(['"])RegExp\2\s*\]|\(\s*globalThis\s*\[\s*(['"])RegExp\3\s*\]\s*\))\s*(?:\?\.)?\s*\(/g,
     },
   ];
   for (const alias of regExpAliases.keys()) {
@@ -898,7 +901,7 @@ export function deserializationSinkFindings(filePath, text) {
       pattern: new RegExp(
         String.raw`(^|[^\w$.])(?:new\s+)?(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(
           alias,
-        )}\s*\))\s*\(`,
+        )}\s*\))\s*(?:\?\.)?\s*\(`,
         'g',
       ),
     });
@@ -1735,6 +1738,7 @@ function callCalleeName(callPrefix) {
     .trim()
     .replace(/^\(\s*/, '')
     .replace(/\s*\)$/, '')
+    .replace(/\?\.\s*$/, '')
     .trim();
   return normalized.match(/([A-Za-z_$][\w$]*)\s*$/)?.[1] ?? '';
 }
