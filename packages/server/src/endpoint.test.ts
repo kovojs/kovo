@@ -264,6 +264,47 @@ describe('server endpoints', () => {
     );
   });
 
+  it('neutralizes ambient browser authority so a csrf-exempt handler cannot read the inbound Cookie header (SPEC §9.1, bugz-3 L16)', async () => {
+    // bugz-3 L16: a csrf:false endpoint (and every webhook()) skips both the synchronizer
+    // token and the Origin floor, so the exemption is sound ONLY if the handler cannot ride
+    // ambient browser authority (SPEC.md §9.1: "cookies are not interpreted ... A CSRF
+    // exemption is sound only because endpoint/webhook auth does not ride ambient browser
+    // authority"). Stripping only req.session left the raw Cookie header readable — the same
+    // unsoundness mutations reject at compile time via KV418.
+    let seenCookie: string | null = 'unset';
+    let seenCookieViaClone: string | null = 'unset';
+    let seenSignature = '';
+    const signedWebhook = endpoint('/webhooks/signed', {
+      csrf: false,
+      csrfJustification: 'signed webhook validates raw body',
+      async handler(request) {
+        seenCookie = request.headers.get('cookie');
+        // A handler must not be able to recover the cookie via request.clone() either.
+        seenCookieViaClone = request.clone().headers.get('cookie');
+        seenSignature = request.headers.get('x-signature') ?? '';
+        return new Response(await request.text(), { status: 202 });
+      },
+      method: 'POST',
+      reason: 'signed webhook raw body dispatch',
+      response: rawTextResponse,
+    });
+    const request = new Request('https://example.test/webhooks/signed', {
+      body: '{"event":"ok"}',
+      headers: { Cookie: 'sid=victim-session-secret', 'x-signature': 'sig_abc' },
+      method: 'POST',
+    });
+
+    const response = await runEndpoint(signedWebhook, request);
+
+    expect(response.status).toBe(202);
+    await expect(response.text()).resolves.toBe('{"event":"ok"}');
+    // The ambient browser Cookie header is gone — directly and across clone() — while the
+    // endpoint's explicit machine credential (x-signature) survives untouched.
+    expect(seenCookie).toBeNull();
+    expect(seenCookieViaClone).toBeNull();
+    expect(seenSignature).toBe('sig_abc');
+  });
+
   it('verifies raw endpoint response posture when runtime verification is enabled', async () => {
     const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
     process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';

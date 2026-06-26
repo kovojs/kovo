@@ -241,13 +241,45 @@ export function endpointMatches(
   return input.pathname === definition.path;
 }
 
-export function endpointRequestWithoutSession(request: Request): EndpointRequest {
-  if (!('session' in request)) return request as EndpointRequest;
+/**
+ * Inbound header carrying ambient *browser* authority that a cross-site page can make
+ * the browser auto-attach with the victim's credentials. Per SPEC.md §9.1 ("cookies are
+ * not interpreted ... A CSRF exemption is sound only because endpoint/webhook auth does
+ * not ride ambient browser authority") this is the Cookie header. Explicit machine
+ * credentials (`Authorization`, API-key headers, webhook signatures) are NOT browser-
+ * ambient — a cross-site page cannot force them with the victim's secret — and remain the
+ * endpoint's declared auth surface, so they are deliberately preserved.
+ */
+const AMBIENT_BROWSER_AUTHORITY_HEADERS: readonly string[] = ['cookie'];
 
-  // SPEC.md §9.1: raw endpoints do not receive the app session request extension.
+function endpointHeadersWithoutAmbientAuthority(headers: Headers): Headers {
+  const sanitized = new Headers(headers);
+  for (const name of AMBIENT_BROWSER_AUTHORITY_HEADERS) sanitized.delete(name);
+  return sanitized;
+}
+
+export function endpointRequestWithoutSession(request: Request): EndpointRequest {
+  // bugz-3 L16 / SPEC.md §9.1: raw endpoints "do not receive the app session request
+  // extension" AND "cookies are not interpreted". A `csrf: false` endpoint (and every
+  // webhook()) skips the synchronizer-token check and the Origin floor, so the exemption
+  // is sound only if the handler cannot ride ambient browser authority. Stripping the
+  // session property alone left the raw Cookie header readable, letting a cookie-trusting
+  // exempt handler act as a confused deputy with the caller's browser credentials —
+  // exactly the unsoundness mutations reject at compile time with KV418. Neutralize the
+  // Cookie header here so the exemption is sound by construction. (The framework's own
+  // CSRF cookie is consumed by validateEndpointCsrf on the ORIGINAL request before the
+  // handler runs, so this does not affect default-CSRF validation.)
+  const sanitizedHeaders = endpointHeadersWithoutAmbientAuthority(request.headers);
+
   return new Proxy(request, {
     get(target, property) {
       if (property === 'session') return undefined;
+      if (property === 'headers') return sanitizedHeaders;
+      // A handler could otherwise recover the Cookie header via request.clone(); re-wrap
+      // the clone so the neutralization holds across clones too.
+      if (property === 'clone') {
+        return () => endpointRequestWithoutSession(target.clone());
+      }
 
       const value = Reflect.get(target, property, target) as unknown;
       return typeof value === 'function' ? value.bind(target) : value;
