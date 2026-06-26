@@ -4,7 +4,11 @@ import { createApp } from './app.js';
 import { renderAppRouteDocumentResponse } from './app-document.js';
 import { guards, type RequestWithSession } from './guards.js';
 import { renderedHtml } from './html.js';
-import { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
+import {
+  createMemoryOpaqueSessionStore,
+  createOpaqueSessionManager,
+  type OpaqueSessionStore,
+} from './opaque-session.js';
 import { route } from './route.js';
 
 describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
@@ -154,6 +158,44 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
         }),
       ),
     ).resolves.toBeNull();
+  });
+
+  it('rejects malformed or prefix-ambiguous owned-session configuration at manager creation', () => {
+    const store = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+
+    expect(() => createOpaqueSessionManager({ store, cookieName: 'kovo session' })).toThrow(
+      'Opaque session cookieName must be an HTTP token',
+    );
+    expect(() => createOpaqueSessionManager({ store, cookieName: '__Host-kovo_session' })).toThrow(
+      'Opaque session cookieName must be the unprefixed base name',
+    );
+    expect(() =>
+      createOpaqueSessionManager({
+        store: {
+          create: store.create,
+          validate: store.validate,
+          rotate: store.rotate,
+        } as unknown as OpaqueSessionStore<{ user: { id: string } }>,
+      }),
+    ).toThrow('createOpaqueSessionManager requires an opaque session store');
+  });
+
+  it('accepts Kovo-managed secure cookie aliases for a valid custom base name', async () => {
+    const manager = createOpaqueSessionManager({
+      cookieName: 'app_session',
+      cookie: { productionSecure: true },
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    expect(established.setCookie).toMatch(/^__Host-app_session=/);
+    await expect(
+      manager.provider(
+        new Request('https://app.test/account', {
+          headers: { cookie: established.setCookie.split(';')[0]! },
+        }),
+      ),
+    ).resolves.toEqual({ user: { id: 'u1' } });
   });
 
   it('binds Kovo-owned opaque sessions to one validated request lifecycle', async () => {

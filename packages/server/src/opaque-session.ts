@@ -243,6 +243,7 @@ export function createMemoryOpaqueSessionStore<SessionValue>(
 export function createOpaqueSessionManager<SessionValue>(
   options: OpaqueSessionManagerOptions<SessionValue>,
 ): OpaqueSessionManager<SessionValue> {
+  assertOpaqueSessionManagerOptions(options);
   const cookieName = options.cookieName ?? 'kovo_session';
   const cookieOptions: CookieOptions = {
     ...options.cookie,
@@ -306,6 +307,35 @@ export function createOpaqueSessionManager<SessionValue>(
       };
     },
   };
+}
+
+function assertOpaqueSessionManagerOptions<SessionValue>(
+  options: OpaqueSessionManagerOptions<SessionValue>,
+): void {
+  const store = options.store as Partial<OpaqueSessionStore<SessionValue>> | undefined;
+  if (
+    store === undefined ||
+    typeof store.create !== 'function' ||
+    typeof store.validate !== 'function' ||
+    typeof store.rotate !== 'function' ||
+    typeof store.revoke !== 'function'
+  ) {
+    throw new Error(
+      'createOpaqueSessionManager requires an opaque session store with create, validate, rotate, and revoke methods',
+    );
+  }
+  if (options.cookieName !== undefined) assertOpaqueSessionCookieName(options.cookieName);
+}
+
+function assertOpaqueSessionCookieName(cookieName: string): void {
+  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(cookieName)) {
+    throw new Error('Opaque session cookieName must be an HTTP token');
+  }
+  if (cookieName.startsWith('__Host-') || cookieName.startsWith('__Secure-')) {
+    throw new Error(
+      'Opaque session cookieName must be the unprefixed base name; Kovo owns __Host-/__Secure- aliases for the session credential',
+    );
+  }
 }
 
 function mintOpaqueSessionId(): string {
