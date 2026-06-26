@@ -989,12 +989,47 @@ function localConstLiteralAccessPrivateScope(
   expression: Node,
   sessionContext: SessionProvenanceContext,
 ): PrivateScopeProvenance | undefined {
+  const staticPropertyAccess = localConstLiteralStaticAccessPrivatePropertyScope(
+    expression,
+    sessionContext,
+  );
+  if (staticPropertyAccess) return staticPropertyAccess;
+
   const value = localConstLiteralStaticAccessValue(expression);
   if (!value) return undefined;
   return (
     privateScopeForExpression(value, sessionContext) ??
     summarizedStaticCallPrivateScope(value, sessionContext)
   );
+}
+
+function localConstLiteralStaticAccessPrivatePropertyScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
+    return undefined;
+  }
+
+  const property = staticAccessName(node);
+  if (!property) return undefined;
+
+  const baseValue = localConstLiteralStaticAccessValue(node.getExpression());
+  if (!baseValue) return undefined;
+  const provenance =
+    privateScopeForExpression(baseValue, sessionContext) ??
+    summarizedStaticCallPrivateScope(baseValue, sessionContext);
+  if (!provenance) return undefined;
+
+  return {
+    ...provenance,
+    path: appendPrivateScopePath(provenance.path, property),
+  };
+}
+
+function appendPrivateScopePath(base: string, segment: string): string {
+  return base.length === 0 ? segment : `${base}.${segment}`;
 }
 
 function localConstLiteralStaticAccessValue(expression: Node, depth = 0): Node | undefined {
@@ -1041,8 +1076,27 @@ function localConstLiteralStaticAccessBaseValue(expression: Node, depth: number)
 
   const initializer = declaration.getInitializer();
   const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  return value && (Node.isObjectLiteralExpression(value) || Node.isArrayLiteralExpression(value))
-    ? value
+  return literalStaticWrapperValue(value);
+}
+
+function literalStaticWrapperValue(value: Node | undefined): Node | undefined {
+  if (!value) return undefined;
+  if (Node.isObjectLiteralExpression(value) || Node.isArrayLiteralExpression(value)) return value;
+
+  if (!Node.isCallExpression(value)) return undefined;
+  const expression = unwrappedStaticExpressionNode(value.getExpression());
+  if (!Node.isPropertyAccessExpression(expression)) return undefined;
+  if (expression.getName() !== 'freeze') return undefined;
+  const receiver = unwrappedStaticExpressionNode(expression.getExpression());
+  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'Object') return undefined;
+
+  const args = value.getArguments();
+  if (args.length !== 1) return undefined;
+  const argument = args[0];
+  if (!argument) return undefined;
+  const frozen = unwrappedStaticExpressionNode(argument);
+  return frozen && (Node.isObjectLiteralExpression(frozen) || Node.isArrayLiteralExpression(frozen))
+    ? frozen
     : undefined;
 }
 
