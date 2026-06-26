@@ -6,6 +6,7 @@ import {
   runAgentTool,
   tool,
   type AgentToolAmbientCredentialKind,
+  type AgentToolAuditFact,
   type AgentToolAuthority,
 } from './agent-tool.js';
 
@@ -545,5 +546,72 @@ describe('agent tool capability primitive', () => {
         target: 'profile.summary',
       },
     ]);
+  });
+
+  it('returns immutable audit fact snapshots for ambient credential review data', () => {
+    const profile = tool({
+      ambientCredentials: {
+        allow: true,
+        credentialKinds: ['cookie'],
+        justification: {
+          authorityBoundary: 'handler re-checks the bound principal before reading profile data',
+          reason: 'legacy browser-authenticated assistant action under review',
+        },
+      },
+      audit: { owner: 'security', review: 'SEC-126', site: 'app/tools/profile.ts:18' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: () => undefined,
+      name: 'profile.immutableSummary',
+      purpose: 'Read the current user profile summary for an agent response.',
+      reachableSinks: [
+        {
+          capability: 'profile.read',
+          evidence: 'handler reads the profile table through a constrained query',
+          kind: 'secret-read',
+          target: 'db.profile',
+        },
+      ],
+    });
+
+    const facts = agentToolAuditFacts([profile]);
+    const fact = facts[0]!;
+    const sinkFact = fact.reachableSinks?.[0];
+
+    expect(Object.isFrozen(facts)).toBe(true);
+    expect(Object.isFrozen(fact)).toBe(true);
+    expect(Object.isFrozen(fact.ambientCredentialKinds)).toBe(true);
+    expect(Object.isFrozen(fact.ambientJustification)).toBe(true);
+    expect(Object.isFrozen(fact.authority)).toBe(true);
+    expect(Object.isFrozen(fact.declaredCapabilities)).toBe(true);
+    expect(Object.isFrozen(fact.reachableSinks)).toBe(true);
+    expect(Object.isFrozen(sinkFact)).toBe(true);
+
+    expect(() => {
+      (facts as AgentToolAuditFact[]).push(fact);
+    }).toThrow(TypeError);
+    expect(() => {
+      (fact.ambientCredentialKinds as AgentToolAmbientCredentialKind[]).push('session');
+    }).toThrow(TypeError);
+    expect(() => {
+      (fact.ambientJustification as { reason: string }).reason = 'mutated after render';
+    }).toThrow(TypeError);
+    expect(() => {
+      (fact.reachableSinks as NonNullable<AgentToolAuditFact['reachableSinks']>).push(sinkFact!);
+    }).toThrow(TypeError);
+
+    expect(agentToolAuditFacts([profile])[0]).toMatchObject({
+      ambientCredentialKinds: ['cookie'],
+      ambientJustification: {
+        authorityBoundary: 'handler re-checks the bound principal before reading profile data',
+        reason: 'legacy browser-authenticated assistant action under review',
+      },
+      reachableSinks: [
+        {
+          capability: 'profile.read',
+          target: 'db.profile',
+        },
+      ],
+    });
   });
 });

@@ -219,33 +219,40 @@ export async function runAgentTool<Input, Output, Context = unknown>(
 export function agentToolAuditFacts(
   tools: readonly AgentToolDeclaration<unknown, unknown, unknown>[],
 ): readonly AgentToolAuditFact[] {
-  return tools.map((declaration) => {
-    const ambient = declaration.ambientCredentials;
-    return {
-      ambientBrowserCredentials: ambient.allow === true ? 'allowed' : 'rejected',
-      ...(ambient.allow === true
-        ? {
-            ambientCredentialKinds: [...ambient.credentialKinds],
-            ambientJustification: ambient.justification,
-          }
-        : {}),
-      authority: declaration.authority.map(describeAuthority),
-      declaredCapabilities: declaration.capabilities.map((capability) => capability.name),
-      kind: 'agentTool',
-      name: declaration.name,
-      owner: declaration.audit.owner,
-      purpose: declaration.purpose,
-      ...(declaration.reachableSinks === undefined || declaration.reachableSinks.length === 0
-        ? {}
-        : {
-            reachableSinks: declaration.reachableSinks.map((sink) =>
-              reachableSinkAuditFact(declaration, sink),
-            ),
-          }),
-      site: declaration.audit.site ?? `agent-tool:${declaration.name}`,
-      target: declaration.name,
-    };
-  });
+  return Object.freeze(
+    tools.map((declaration) => {
+      const ambient = declaration.ambientCredentials;
+      return Object.freeze({
+        ambientBrowserCredentials: ambient.allow === true ? 'allowed' : 'rejected',
+        ...(ambient.allow === true
+          ? {
+              ambientCredentialKinds: Object.freeze([...ambient.credentialKinds]),
+              ambientJustification: Object.freeze({
+                authorityBoundary: ambient.justification.authorityBoundary,
+                reason: ambient.justification.reason,
+              }),
+            }
+          : {}),
+        authority: Object.freeze(declaration.authority.map(describeAuthority)),
+        declaredCapabilities: Object.freeze(
+          declaration.capabilities.map((capability) => capability.name),
+        ),
+        kind: 'agentTool',
+        name: declaration.name,
+        owner: declaration.audit.owner,
+        purpose: declaration.purpose,
+        ...(declaration.reachableSinks === undefined || declaration.reachableSinks.length === 0
+          ? {}
+          : {
+              reachableSinks: Object.freeze(
+                declaration.reachableSinks.map((sink) => reachableSinkAuditFact(declaration, sink)),
+              ),
+            }),
+        site: declaration.audit.site ?? `agent-tool:${declaration.name}`,
+        target: declaration.name,
+      });
+    }),
+  );
 }
 
 function assertAuthorityAllowed(
@@ -520,7 +527,7 @@ function reachableSinkAuditFact(
   declaration: AgentToolDeclaration<unknown, unknown, unknown>,
   sink: AgentToolReachableSink,
 ): AgentToolReachableSinkAuditFact {
-  return {
+  return Object.freeze({
     capability: sink.capability,
     evidence: sink.evidence,
     grade: 'audit',
@@ -528,7 +535,7 @@ function reachableSinkAuditFact(
     site: sink.site ?? declaration.audit.site ?? `agent-tool:${declaration.name}`,
     target: sink.target,
     tool: declaration.name,
-  };
+  });
 }
 
 function assertNonEmpty(value: string | undefined, field: string): void {
