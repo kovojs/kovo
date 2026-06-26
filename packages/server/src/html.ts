@@ -225,18 +225,22 @@ export function safeUrlValue(value: string): string {
  * safe-by-default; it is a no-op for values without HTML metacharacters. Exported only
  * for compiler-emitted code, not app authors.
  *
- * NOTE (bugz M2, deferred): this returns a plain escaped string, so a compiler-injected
- * `{escapeText(expr)}` child is HTML-escaped a *second* time by `renderServerRenderable`
- * (`&` → `&amp;amp;`) — a known, fail-safe over-escape (never under-escapes, so no XSS).
- * The attempted fix (branding the result as {@link RenderedHtml} so the second pass is a
- * pass-through) leaked unresolved coerced-rendered-html markers into the list-stamp /
- * live-component server-render boundary, which does not run the marker resolver. The
- * correct fix is to resolve coerced-rendered-html at that emit boundary (or drop the
- * compiler `escapeText(` injection and update the §5.2 equivalence gate); tracked in
- * plans/bugz.md M2.
+ * bugz.md M2 (SPEC.md §4.5/§5.2): the result is branded as {@link RenderedHtml} so the
+ * compiler-injected `{escapeText(expr)}` child is escaped exactly ONCE — `renderServerRenderable`
+ * (and `renderHtmlValue`/`renderComponentValue`) short-circuit on `isRenderedHtml` and pass the
+ * already-escaped `.html` through instead of escaping `&`/`<`/`>` a second time (`&` → `&amp;amp;`).
+ * The escaped text is materialized eagerly and any embedded coerced-rendered-html marker is
+ * resolved up front (`unwrapCoercedRenderedHtml`), so the branded `.html` is a complete,
+ * marker-free string. That removes the historical leak: the previous attempt branded the value
+ * but left it referencing deferred markers, which the list-stamp / live-component server-render
+ * boundary never resolved and shipped verbatim. `RenderedHtml` is `string & {...}`, so callers
+ * that consume the value directly as text (e.g. the §4.10 render-tree text-node join) still see
+ * the single-escaped string via `toString()`. The §5.2 escapeText-presence signal in the lowered
+ * source is preserved because the compiler still emits the `escapeText(...)` call verbatim.
  */
-export function escapeText(value: unknown): string {
-  return escapeTextWithRenderedHtml(value);
+export function escapeText(value: unknown): RenderedHtml {
+  if (isRenderedHtml(value)) return value;
+  return renderedHtml(unwrapCoercedRenderedHtml(escapeTextWithRenderedHtml(value)));
 }
 
 /**

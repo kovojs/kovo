@@ -33,6 +33,8 @@ import {
   serverRenderLowering,
   type ServerRenderLowering,
 } from './emit/server.js';
+// bugz-3 L5: the authored→lowered structural leg lives in the owned render-equivalence module.
+import { authoredStaticTextEquivalenceCheck } from './emit/render-equivalence.js';
 import { componentGraphFact, findFragmentTargetFacts, findLiveTargetFacts } from './app-graph.js';
 import { cssIrHeader } from './ir.js';
 import { createComponentHmrImpactMetadata } from './hmr-impact.js';
@@ -522,21 +524,54 @@ function verifyComponentPhase(
     ),
   ];
 
+  const registryFactsOptions = parsed.compileOptions.registryFacts
+    ? { registryFacts: parsed.compileOptions.registryFacts }
+    : {};
+
+  // SPEC §5.2 rule 3. The gate combines two complementary legs into ONE check:
+  //   1. semanticRenderEquivalenceCheck: the lowered model vs the executed lowered server
+  //      render-source round-trip — proves the emitted server module renders the lowered model
+  //      transparently on top of the generated runtime stamps (allowlisted away).
+  //   2. authoredStaticTextEquivalenceCheck (bugz-3 L5): the authored→lowered leg. A
+  //      byte-identical authored↔lowered gate is infeasible — lowering deliberately rewrites
+  //      visible HTML (escapeText text wrapping, mixed-text <span data-bind> insertion,
+  //      style={…} → class="kv-…" extraction), so re-deriving it here would be the forbidden
+  //      source-normalization gate. This conservative leg instead fails closed when lowering
+  //      DROPS or reorders author-written literal text — a class of divergence leg 1 cannot see
+  //      (both of its sides are already lowered). Coupled to bugz.md M2 (runtime escapeText
+  //      single-escape), now fixed in @kovojs/server.
+  const loweredRoundTrip = semanticRenderEquivalenceCheck(
+    registryFileName(parsed),
+    lowered.model,
+    server.serverModule.executableSource,
+    registryFactsOptions,
+  );
+  const authoredStaticText = authoredStaticTextEquivalenceCheck(
+    registryFileName(parsed),
+    parsed.originalModel,
+    lowered.model,
+    registryFactsOptions,
+  );
+
   return {
     diagnostics,
-    // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
-    // independently, then ignore only generated runtime stamps with an explicit allowlist.
-    renderEquivalenceChecks: [
-      semanticRenderEquivalenceCheck(
-        registryFileName(parsed),
-        lowered.model,
-        server.serverModule.executableSource,
-        parsed.compileOptions.registryFacts
-          ? { registryFacts: parsed.compileOptions.registryFacts }
-          : {},
-      ),
-    ],
+    renderEquivalenceChecks: [combineRenderEquivalenceChecks(loweredRoundTrip, authoredStaticText)],
   };
+}
+
+/**
+ * Fold the two SPEC §5.2 rule-3 legs into a single render-equivalence check. The lowered
+ * round-trip leg is the primary signal; the authored→lowered static-text leg (bugz-3 L5) fails the
+ * combined check closed when lowering drops author copy. A failing leg surfaces its own
+ * expected/actual/detail so `assertRenderEquivalence` reports the actionable divergence.
+ */
+function combineRenderEquivalenceChecks(
+  loweredRoundTrip: RenderEquivalenceCheck,
+  authoredStaticText: RenderEquivalenceCheck,
+): RenderEquivalenceCheck {
+  if (!loweredRoundTrip.ok) return loweredRoundTrip;
+  if (!authoredStaticText.ok) return authoredStaticText;
+  return loweredRoundTrip;
 }
 
 function assembleCompileResult(
@@ -921,10 +956,14 @@ export function assertFixpoint(result: CompileResult): void {
 }
 
 /**
- * Assert the SPEC.md §5.2 rule 3 render-equivalence property: the lowered server render
- * matches the authored reference render once generated-only runtime attributes are
- * normalized. Throws on the first failing check in a compileComponentModule result. Public
- * verification helper used by `create-kovo` templates and example apps.
+ * Assert the SPEC.md §5.2 rule 3 render-equivalence property. Two legs (see
+ * `verifyComponentPhase`): (1) the emitted server module renders the lowered model
+ * transparently over generated-only runtime stamps, and (2) the authored→lowered leg
+ * (bugz-3 L5) — lowering never drops or reorders author-written literal text. Throws on the
+ * first failing check in a compileComponentModule result. Public verification helper used by
+ * `create-kovo` templates and example apps. (Note: leg 1 compares the LOWERED model against the
+ * executed lowered render-source, not the authored source — a byte-identical authored↔lowered
+ * render gate is infeasible because lowering rewrites visible HTML; see render-equivalence.ts.)
  */
 export function assertRenderEquivalence(result: CompileResult): void {
   for (const check of result.renderEquivalenceChecks) {

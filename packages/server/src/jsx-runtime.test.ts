@@ -208,17 +208,20 @@ describe('server jsx runtime', () => {
     expect(JSON.stringify(events)).not.toContain('><b>');
   });
 
-  // bugz M2 (SPEC.md §4.5/§5.2, DEFERRED): the compiler injects `{escapeText(expr)}`; its
-  // already-escaped result is escaped a SECOND time by the server JSX runtime
-  // (`&` -> `&amp;amp;`). This is a known, fail-safe over-escape (never under-escapes, so no
-  // XSS). The runtime-branding fix leaked coerced-rendered-html markers into the list-stamp
-  // server-render boundary, so it is reverted; the proper fix resolves markers at that
-  // boundary (or drops the escapeText injection). This test pins the CURRENT double-escape so
-  // the regression is visible until M2 lands. See plans/bugz.md M2.
-  it('M2 (deferred): a compiler-injected escapeText value is double-escaped through the runtime', () => {
+  // bugz.md M2 (SPEC.md §4.5/§5.2, FIXED): the compiler injects `{escapeText(expr)}`. `escapeText`
+  // now brands its already-escaped result as RenderedHtml, so the server JSX runtime passes it
+  // through the `isRenderedHtml` fast-path instead of escaping `&`/`<`/`>` a SECOND time
+  // (`&` -> `&amp;amp;`). The branded value materializes the escaped text up front and resolves any
+  // coerced-rendered-html marker, so nothing leaks into the list-stamp / live-component boundary.
+  // This test pins the corrected SINGLE-escape so the M2 regression cannot return.
+  it('M2 (fixed): a compiler-injected escapeText value is single-escaped through the runtime', () => {
     const child = escapeText('AT&T <b> R&D');
     expect(html(jsx('h2', { 'data-bind': 'x', children: child }))).toBe(
-      '<h2 data-bind="x">AT&amp;amp;T &amp;lt;b&amp;gt; R&amp;amp;D</h2>',
+      '<h2 data-bind="x">AT&amp;T &lt;b&gt; R&amp;D</h2>',
+    );
+    // The marker sentinel must never reach shipped HTML.
+    expect(html(jsx('h2', { 'data-bind': 'x', children: child }))).not.toContain(
+      'kovo-rendered-html',
     );
   });
 
