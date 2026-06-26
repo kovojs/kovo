@@ -246,8 +246,12 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       `packages/server/src/opaque-session.ts` now exposes a Kovo-owned opaque session store/manager with
       non-JWT ids, rotation, expiry, immediate revocation, and a `sessionProvider` adapter. Focused Better
       Auth/keyring/capability/env tests plus `pnpm exec vitest run packages/server/src/opaque-session.test.ts
---run`, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. Remaining gap:
-      the owned opaque primitive is not yet the framework-wide default session lifecycle.
+--run`, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface` passed. `createApp({
+session: manager })` now wires the Kovo-owned opaque manager into the request shell and rejects ambiguous
+      `session` plus delegated `sessionProvider`; `pnpm exec vitest run packages/server/src/app.test.ts
+packages/server/src/opaque-session.test.ts packages/server/src/api/app.test.ts` passed. Remaining gap:
+      Better Auth delegation and explicit `sessionProvider` remain supported boundaries, so opaque sessions are
+      not yet the only framework-wide default lifecycle.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
