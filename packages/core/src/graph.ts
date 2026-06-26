@@ -245,6 +245,15 @@ export interface PlatformSubstitutionExplain {
 export interface MutationExplain {
   access?: AccessDecisionFact;
   auth?: string;
+  // SPEC §6.6/§9.1: CSRF posture for the mutation POST. `checked` (the default) means the
+  // synchronizer token is verified before the guard chain; `exempt` is the `csrf: false`
+  // opt-out reserved for non-browser/externally-authenticated writes. A `csrf: 'exempt'`
+  // mutation MUST NOT reference ambient browser authority (KV418): it cannot read
+  // `req.session` (surfaced here as `session`) or run a session/cookie-derived guard
+  // (`authed`, `role()`, `owns()`), because such a mutation would skip CSRF yet still ride
+  // the victim's ambient cookie — the unsound exemption §9.1 forbids for endpoints.
+  csrf?: 'checked' | 'exempt';
+  csrfJustification?: string;
   enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';
   fileFields?: readonly string[];
   guards?: readonly string[];

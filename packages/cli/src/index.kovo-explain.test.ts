@@ -631,6 +631,46 @@ describe('kovo explain', () => {
     `);
   });
 
+  it('lists every mutation CSRF posture in --endpoints alongside endpoints (SPEC §11.4)', () => {
+    const result = kovoExplain(
+      {
+        endpoints: [
+          {
+            auth: 'verifier:stripe-signature',
+            csrf: 'exempt',
+            csrfJustification: 'signed webhook',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+            surface: 'webhook',
+            writes: ['order'],
+          },
+        ],
+        mutations: [
+          { guards: ['authed'], key: 'cart/add', session: 'commerceSession', writes: ['cart'] },
+          {
+            csrf: 'exempt',
+            csrfJustification: 'machine ingest, no session',
+            key: 'ingest/rows',
+            writes: ['inventory'],
+          },
+        ],
+      },
+      { endpoints: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      ENDPOINTS
+      ENDPOINT stripe/webhook surface=webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed webhook cache=- body=- bodySize=- rateLimit=- headers=- files=- dynamic=- writes=order
+      MUTATION cart/add method=POST auth=authed csrf=checked session=commerceSession writes=cart
+      MUTATION ingest/rows method=POST auth=- csrf=exempt:machine ingest, no session session=- writes=inventory
+      SUMMARY total=3
+      "
+    `);
+  });
+
   it('accepts kovo explain --endpoints as a CLI audit mode', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-endpoints-'));
     const graphPath = join(tempDir, 'graph.json');

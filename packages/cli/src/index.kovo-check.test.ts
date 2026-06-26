@@ -1754,6 +1754,87 @@ describe('kovo check', () => {
     ).not.toContain('KV418');
   });
 
+  it('flags KV418 when a csrf-exempt mutation references the session (SPEC §6.6/§9.1)', () => {
+    // (a) reads req.session in the handler/guard — surfaced as the session schema name.
+    const viaSessionRead = kovoCheck({
+      mutations: [
+        {
+          csrf: 'exempt',
+          csrfJustification: 'mobile client sync',
+          key: 'cart/sync',
+          session: 'commerceSession',
+        },
+      ],
+    });
+    expect(viaSessionRead.output).toContain('KV418');
+    expect(viaSessionRead.output).toContain('MUTATION cart/sync');
+    expect(viaSessionRead.exitCode).not.toBe(0);
+
+    // (b) runs a session/cookie-derived guard (authed / role() / owns()).
+    for (const guard of ['authed', 'role:admin', 'owns:cartId']) {
+      const viaGuard = kovoCheck({
+        mutations: [
+          { csrf: 'exempt', csrfJustification: 'mobile client', guards: [guard], key: 'cart/sync' },
+        ],
+      });
+      expect(viaGuard.output, guard).toContain('KV418');
+      expect(viaGuard.exitCode, guard).not.toBe(0);
+    }
+
+    // (c) a session-derived auth posture.
+    expect(
+      kovoCheck({
+        mutations: [
+          { auth: 'authed', csrf: 'exempt', csrfJustification: 'mobile client', key: 'cart/sync' },
+        ],
+      }).output,
+    ).toContain('KV418');
+
+    // A genuinely non-browser write keeps csrf:false and references no ambient session → OK.
+    const nonBrowser = kovoCheck({
+      mutations: [
+        { csrf: 'exempt', csrfJustification: 'machine ingest, no session', key: 'ingest/rows' },
+      ],
+    });
+    expect(nonBrowser.output).not.toContain('KV418');
+    expect(nonBrowser.exitCode).toBe(0);
+
+    // A verifier-authed (machine-auth, not session-derived) exempt mutation is also OK.
+    expect(
+      kovoCheck({
+        mutations: [
+          {
+            auth: 'verifier:partner-signature',
+            csrf: 'exempt',
+            csrfJustification: 'signed partner callback',
+            key: 'partner/sync',
+          },
+        ],
+      }).output,
+    ).not.toContain('KV418');
+
+    // A csrf-checked (default) session mutation is the normal, safe case → no KV418.
+    expect(
+      kovoCheck({
+        mutations: [{ guards: ['authed'], key: 'cart/add', session: 'commerceSession' }],
+      }).output,
+    ).not.toContain('KV418');
+    expect(
+      kovoCheck({
+        mutations: [
+          { csrf: 'checked', guards: ['authed'], key: 'cart/add', session: 'commerceSession' },
+        ],
+      }).output,
+    ).not.toContain('KV418');
+  });
+
+  it('warns when a csrf-exempt mutation omits a named justification (SPEC §11.4)', () => {
+    const result = kovoCheck({ mutations: [{ csrf: 'exempt', key: 'ingest/rows' }] });
+    expect(result.output).toContain(
+      'WARN MUTATION ingest/rows csrf exemption requires a named justification.',
+    );
+  });
+
   it('audits manual invalidate escape-hatch usage', () => {
     expect(
       kovoCheck({
