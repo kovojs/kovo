@@ -10,6 +10,14 @@ export interface InlineOptimisticTransformFact {
   query: string;
   source: string;
   status: 'await-fragment' | 'hand-written';
+  /**
+   * SPEC §10.2/§10.4: the source of the instance-key derivation when this transform targets a
+   * keyed query INSTANCE (`questionDetail:q3` vs `questionDetail:q7`). Captured as a typed
+   * lowering fact (§5.2 #9) — from the per-entry `{ keys, transform }` object form or a sibling
+   * `keys` map — so the emitter can lower it into `OptimisticPlan.keys` rather than re-deriving it
+   * from a source-string heuristic. Absent for unkeyed transforms.
+   */
+  keys?: string;
 }
 
 /** @internal A source-level optimistic plan lowered to the shared transform-plan IR. */
@@ -56,7 +64,12 @@ export function serializeInlineOptimisticPlanIr(plan: InlineOptimisticPlanFact):
   const lines = [
     `plan ${plan.localName}${plan.mutation ? ` mutation=${JSON.stringify(plan.mutation)}` : ''}`,
     ...(plan.queue === undefined ? [] : [`queue ${JSON.stringify(plan.queue)}`]),
-    ...plan.transforms.map((transform) => `${transform.query} ${transform.source}`),
+    ...plan.transforms.flatMap((transform) => [
+      `${transform.query} ${transform.source}`,
+      // SPEC §10.2/§10.4: a keyed transform's instance-key derivation is part of the lowered
+      // plan, so it must appear in the fixpoint IR or recompilation would drop the instance key.
+      ...(transform.keys === undefined ? [] : [`${transform.query} keys ${transform.keys}`]),
+    ]),
   ];
   return `${lines.join('\n')}\n`;
 }
@@ -111,16 +124,41 @@ function standaloneOptimisticPlan(
 ): InlineOptimisticPlanFact | null {
   if (!ts.isObjectLiteralExpression(initializer)) return null;
 
-  const transforms = objectPropertyExpression(initializer, 'transforms');
-  const transformsObject = unwrapTsExpression(transforms);
+  const transformsObject = unwrapTsExpression(objectPropertyExpression(initializer, 'transforms'));
   if (!transformsObject || !ts.isObjectLiteralExpression(transformsObject)) return null;
 
   const queue = stringPropertyValue(initializer, 'queue');
+  const transforms = optimisticTransformsFromObject(sourceFile, transformsObject);
+  // SPEC §10.2/§10.4: the standalone `OptimisticFor` object form carries instance-key derivations
+  // in a sibling `keys` map (mirroring the runtime `OptimisticPlan.keys`); fold each into its
+  // transform fact so both authoring shapes lower the same keyed plan.
+  const keysObject = unwrapTsExpression(objectPropertyExpression(initializer, 'keys'));
+  const merged =
+    keysObject && ts.isObjectLiteralExpression(keysObject)
+      ? mergeSiblingKeyDerivations(sourceFile, transforms, keysObject)
+      : transforms;
   return {
     localName,
     ...(queue === undefined ? {} : { queue }),
-    transforms: optimisticTransformsFromObject(sourceFile, transformsObject),
+    transforms: merged,
   };
+}
+
+function mergeSiblingKeyDerivations(
+  sourceFile: ts.SourceFile,
+  transforms: readonly InlineOptimisticTransformFact[],
+  keysObject: ts.ObjectLiteralExpression,
+): InlineOptimisticTransformFact[] {
+  const derivations = new Map<string, string>();
+  for (const property of keysObject.properties) {
+    const query = propertyNameText(property.name);
+    const valueNode = objectMemberValueNode(property);
+    if (query && valueNode) derivations.set(query, valueNode.getText(sourceFile));
+  }
+  return transforms.map((transform) => {
+    const keys = derivations.get(transform.query);
+    return keys === undefined ? transform : { ...transform, keys };
+  });
 }
 
 function optimisticTransformsFromObject(
@@ -136,6 +174,12 @@ function optimisticTransformsFromObject(
       if (initializer && isAwaitFragmentLiteral(initializer)) {
         return [{ query, source: `${query}: 'await-fragment'`, status: 'await-fragment' }];
       }
+      // SPEC §10.2/§10.4: the per-entry keyed form `{ keys, transform }` co-locates the
+      // instance-key derivation with the transform it targets — capture both as typed facts.
+      if (initializer && ts.isObjectLiteralExpression(initializer)) {
+        const keyed = keyedEntryFromObject(sourceFile, query, initializer);
+        if (keyed) return [keyed];
+      }
     }
 
     return [
@@ -146,6 +190,42 @@ function optimisticTransformsFromObject(
       },
     ];
   });
+}
+
+function keyedEntryFromObject(
+  sourceFile: ts.SourceFile,
+  query: string,
+  object: ts.ObjectLiteralExpression,
+): InlineOptimisticTransformFact | null {
+  const keys = objectMemberValueNode(findObjectMember(object, 'keys'));
+  const transform = objectMemberValueNode(findObjectMember(object, 'transform'));
+  if (!keys || !transform) return null;
+  return {
+    query,
+    source: transform.getText(sourceFile),
+    status: 'hand-written',
+    keys: keys.getText(sourceFile),
+  };
+}
+
+function findObjectMember(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): ts.ObjectLiteralElementLike | undefined {
+  return object.properties.find((property) => propertyNameText(property.name) === name);
+}
+
+/**
+ * The source-bearing node for an object member's value: a property assignment's initializer,
+ * or the whole member for a method shorthand (`transform(draft, input) { … }`).
+ */
+function objectMemberValueNode(
+  member: ts.ObjectLiteralElementLike | undefined,
+): ts.Node | undefined {
+  if (!member) return undefined;
+  if (ts.isPropertyAssignment(member)) return member.initializer;
+  if (ts.isMethodDeclaration(member)) return member;
+  return undefined;
 }
 
 function objectPropertyExpression(

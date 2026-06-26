@@ -182,8 +182,19 @@ export const voteUpMutation = mutation('voteUp', {
     questionScore(draft, _input) {
       draft.score += 1;
     },
-    // The question detail region reconciles to the refreshed server fragment (SPEC §10.4).
-    questionDetail: 'await-fragment',
+    // The question-detail page is a KEYED query: `questionDetail:q3` vs `questionDetail:q7`
+    // coexist (SPEC §10.2). Optimism is keyed to the query (§10.4), so the transform must say
+    // WHICH instance it predicts — `keys` derives that instance key from the voted question id
+    // (`input.targetId`), exactly as `questionDetail`'s own WHERE eq-predicate resolves `id` from
+    // args (§10.2). The detail view now bumps the score INSTANTLY for the right question instead
+    // of a full `'await-fragment'` round-trip; server truth reconciles by `kovo-key` (§13.2).
+    // `draft` is `QuestionDetailResult | null` (the loader returns `row ?? null`), so guard null.
+    questionDetail: {
+      keys: (input) => ({ id: input.targetId }),
+      transform(draft, _input) {
+        if (draft) draft.score += 1;
+      },
+    },
   },
   handler: voteUp,
 });
