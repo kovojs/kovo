@@ -61,7 +61,7 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...publishToClientCapabilities,
   ].sort(compareCapabilityFacts);
   const analyzedAgentToolSinks = (options.agentToolModules ?? []).flatMap((moduleSource) =>
-    agentToolSinksFromSource(moduleSource, options.agentToolModules),
+    agentToolSinksFromSource(moduleSource),
   );
   const derivedRoutePages = derivedPageFactsFromRoutePages(routePages, components);
   const mergedPages =

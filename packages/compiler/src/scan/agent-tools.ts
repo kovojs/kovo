@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import * as ts from 'typescript';
 
 import type * as CoreGraph from '@kovojs/core/internal/graph';
@@ -13,35 +11,22 @@ export interface AgentToolModuleSource {
 }
 
 /**
- * @internal Produce sound, reachable sink rows from framework-owned `tool()` handlers.
+ * @internal Produce sound, directly reachable sink rows from framework-owned `tool()` handlers.
  *
  * This scanner intentionally accepts a narrow subset: a named `tool` import from `@kovojs/server`,
- * a literal `name`, direct handler-body reads/calls, direct calls to top-level same-module helper
- * functions that are visible in the parsed AST, directly-invoked inline function bodies, and local
- * helpers reached through static named imports including static local re-export barrels, and static
- * namespace-property calls into exported local helpers. It does not inspect raw source text after
- * parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace
- * access, export-star namespaces, and dynamic paths remain outside the SPEC.md §6.6 sound subset
- * until a dedicated analyzer proves them.
+ * a literal `name`, and direct handler-body reads/calls that are visible in the parsed AST. It does
+ * not inspect raw source text after parse and it skips nested function bodies, so callbacks and
+ * interprocedural paths remain outside the enforced subset until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
-  moduleSources: readonly AgentToolModuleSource[] = [moduleSource],
 ): CoreGraph.AgentToolReachableSinkFact[] {
-  const modules = summarizeModules(moduleSources);
-  const sourceFile = modules.sourceFiles.get(normalizeModuleFileName(moduleSource.fileName));
-  if (!sourceFile) return [];
-
+  const sourceFile = parseSourceFile(moduleSource.fileName, moduleSource.source);
   const toolLocalNames = frameworkToolImportNames(sourceFile);
   if (toolLocalNames.size === 0) return [];
 
-  const moduleFacts = modules.facts.get(sourceFile);
-  if (!moduleFacts) return [];
-
   const facts: CoreGraph.AgentToolReachableSinkFact[] = [];
   const visit = (node: ts.Node): void => {
-    if (node !== sourceFile && ts.isFunctionLike(node)) return;
-
     if (!ts.isCallExpression(node) || !isIdentifierNamed(node.expression, toolLocalNames)) {
       ts.forEachChild(node, visit);
       return;
@@ -56,288 +41,11 @@ export function agentToolSinksFromSource(
     const handler = handlerBody(definition);
     if (handler === undefined) return;
 
-    facts.push(...handlerSinkFacts(sourceFile, name, handler, moduleFacts));
+    facts.push(...handlerSinkFacts(sourceFile, name, handler));
   };
 
   visit(sourceFile);
-  return uniqueAgentToolSinkFacts(facts).sort(compareAgentToolSinkFact);
-}
-
-interface ModuleFacts {
-  helpers: ReadonlyMap<string, HelperDefinition>;
-  namespaceImports: ReadonlyMap<string, ReadonlyMap<string, HelperDefinition>>;
-  sourceFile: ts.SourceFile;
-  topLevelBindings: ReadonlySet<string>;
-}
-
-interface HelperDefinition {
-  exported: boolean;
-  id: string;
-  moduleFacts: ModuleFacts;
-  node: ts.FunctionLikeDeclaration;
-}
-
-interface ModuleSummaries {
-  facts: ReadonlyMap<ts.SourceFile, ModuleFacts>;
-  sourceFiles: ReadonlyMap<string, ts.SourceFile>;
-}
-
-function summarizeModules(moduleSources: readonly AgentToolModuleSource[]): ModuleSummaries {
-  const sourceFiles = new Map<string, ts.SourceFile>();
-  for (const moduleSource of moduleSources) {
-    const fileName = normalizeModuleFileName(moduleSource.fileName);
-    if (!sourceFiles.has(fileName)) {
-      sourceFiles.set(fileName, parseSourceFile(moduleSource.fileName, moduleSource.source));
-    }
-  }
-
-  const facts = new Map<ts.SourceFile, ModuleFacts>();
-  for (const sourceFile of sourceFiles.values()) {
-    facts.set(sourceFile, summarizeModule(sourceFile));
-  }
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const moduleFacts of facts.values()) {
-      changed = linkImportedHelpers(moduleFacts, sourceFiles, facts) || changed;
-    }
-  }
-
-  return { facts, sourceFiles };
-}
-
-function summarizeModule(sourceFile: ts.SourceFile): ModuleFacts {
-  const helpers = new Map<string, HelperDefinition>();
-  const namespaceImports = new Map<string, ReadonlyMap<string, HelperDefinition>>();
-  const topLevelBindings = new Set<string>();
-  const moduleFacts: ModuleFacts = { helpers, namespaceImports, sourceFile, topLevelBindings };
-
-  for (const statement of sourceFile.statements) {
-    if (ts.isImportDeclaration(statement)) {
-      collectImportBindingNames(statement, topLevelBindings);
-      continue;
-    }
-
-    if (ts.isFunctionDeclaration(statement) && statement.name) {
-      topLevelBindings.add(statement.name.text);
-      helpers.set(statement.name.text, {
-        exported: hasExportModifier(statement),
-        id: helperId(sourceFile, statement.name.text),
-        moduleFacts,
-        node: statement,
-      });
-      continue;
-    }
-
-    if ((ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) && statement.name) {
-      topLevelBindings.add(statement.name.text);
-      continue;
-    }
-
-    if (!ts.isVariableStatement(statement)) continue;
-    for (const declaration of statement.declarationList.declarations) {
-      collectBindingNames(declaration.name, topLevelBindings);
-      if (
-        ts.isIdentifier(declaration.name) &&
-        declaration.initializer &&
-        (ts.isArrowFunction(declaration.initializer) ||
-          ts.isFunctionExpression(declaration.initializer))
-      ) {
-        helpers.set(declaration.name.text, {
-          exported: hasExportModifier(statement),
-          id: helperId(sourceFile, declaration.name.text),
-          moduleFacts,
-          node: declaration.initializer,
-        });
-      }
-    }
-  }
-
-  return moduleFacts;
-}
-
-function linkImportedHelpers(
-  moduleFacts: ModuleFacts,
-  sourceFiles: ReadonlyMap<string, ts.SourceFile>,
-  facts: ReadonlyMap<ts.SourceFile, ModuleFacts>,
-): boolean {
-  const helpers = moduleFacts.helpers as Map<string, HelperDefinition>;
-  const namespaceImports = moduleFacts.namespaceImports as Map<
-    string,
-    ReadonlyMap<string, HelperDefinition>
-  >;
-  let changed = false;
-
-  for (const statement of moduleFacts.sourceFile.statements) {
-    if (ts.isImportDeclaration(statement)) {
-      if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier))
-        continue;
-      if (statement.importClause?.isTypeOnly) continue;
-
-      const importedSourceFile = importedLocalSourceFile(
-        moduleFacts.sourceFile,
-        statement.moduleSpecifier.text,
-        sourceFiles,
-      );
-      if (!importedSourceFile) continue;
-
-      const importedFacts = facts.get(importedSourceFile);
-      if (!importedFacts) continue;
-
-      const bindings = statement.importClause?.namedBindings;
-      if (!bindings) continue;
-
-      if (ts.isNamespaceImport(bindings)) {
-        const exportedHelpers = exportedHelperBindings(importedFacts.helpers);
-        if (!helperBindingMapsEqual(namespaceImports.get(bindings.name.text), exportedHelpers)) {
-          namespaceImports.set(bindings.name.text, exportedHelpers);
-          changed = true;
-        }
-        continue;
-      }
-
-      if (!ts.isNamedImports(bindings)) continue;
-
-      for (const element of bindings.elements) {
-        if (element.isTypeOnly) continue;
-
-        const importedName = element.propertyName?.text ?? element.name.text;
-        const localName = element.name.text;
-        if (linkHelperBinding(helpers, localName, importedFacts.helpers.get(importedName))) {
-          changed = true;
-        }
-      }
-
-      continue;
-    }
-
-    if (!ts.isExportDeclaration(statement)) continue;
-    if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
-    if (statement.isTypeOnly) continue;
-
-    const importedSourceFile = importedLocalSourceFile(
-      moduleFacts.sourceFile,
-      statement.moduleSpecifier.text,
-      sourceFiles,
-    );
-    if (!importedSourceFile) continue;
-
-    const importedFacts = facts.get(importedSourceFile);
-    if (!importedFacts) continue;
-
-    const exportClause = statement.exportClause;
-    if (!exportClause || !ts.isNamedExports(exportClause)) continue;
-
-    for (const element of exportClause.elements) {
-      if (element.isTypeOnly) continue;
-
-      const importedName = element.propertyName?.text ?? element.name.text;
-      const exportedName = element.name.text;
-      if (linkHelperBinding(helpers, exportedName, importedFacts.helpers.get(importedName))) {
-        changed = true;
-      }
-    }
-  }
-
-  return changed;
-}
-
-function exportedHelperBindings(
-  helpers: ReadonlyMap<string, HelperDefinition>,
-): ReadonlyMap<string, HelperDefinition> {
-  const exportedHelpers = new Map<string, HelperDefinition>();
-  for (const [name, helper] of helpers) {
-    if (helper.exported) exportedHelpers.set(name, helper);
-  }
-
-  return exportedHelpers;
-}
-
-function helperBindingMapsEqual(
-  left: ReadonlyMap<string, HelperDefinition> | undefined,
-  right: ReadonlyMap<string, HelperDefinition>,
-): boolean {
-  if (!left || left.size !== right.size) return false;
-
-  for (const [name, helper] of right) {
-    if (left.get(name)?.id !== helper.id) return false;
-  }
-
-  return true;
-}
-
-function linkHelperBinding(
-  helpers: Map<string, HelperDefinition>,
-  localName: string,
-  helper: HelperDefinition | undefined,
-): boolean {
-  if (!helper?.exported) return false;
-  if (helpers.has(localName)) return false;
-
-  helpers.set(localName, helper);
-  return true;
-}
-
-function importedLocalSourceFile(
-  sourceFile: ts.SourceFile,
-  moduleSpecifier: string,
-  sourceFiles: ReadonlyMap<string, ts.SourceFile>,
-): ts.SourceFile | undefined {
-  if (!moduleSpecifier.startsWith('.')) return undefined;
-
-  const fromDirectory = path.posix.dirname(normalizeModuleFileName(sourceFile.fileName));
-  const resolved = path.posix.normalize(path.posix.join(fromDirectory, moduleSpecifier));
-  const candidates = [
-    resolved,
-    `${resolved}.ts`,
-    `${resolved}.tsx`,
-    `${resolved}.js`,
-    `${resolved}.jsx`,
-    path.posix.join(resolved, 'index.ts'),
-    path.posix.join(resolved, 'index.tsx'),
-    path.posix.join(resolved, 'index.js'),
-    path.posix.join(resolved, 'index.jsx'),
-  ];
-
-  for (const candidate of candidates) {
-    const sourceFile = sourceFiles.get(candidate);
-    if (sourceFile) return sourceFile;
-  }
-
-  return undefined;
-}
-
-function normalizeModuleFileName(fileName: string): string {
-  return path.posix.normalize(fileName.replaceAll('\\', '/'));
-}
-
-function helperId(sourceFile: ts.SourceFile, name: string): string {
-  return `${normalizeModuleFileName(sourceFile.fileName)}\0${name}`;
-}
-
-function hasExportModifier(node: ts.Node): boolean {
-  return ts.canHaveModifiers(node)
-    ? (ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
-        false)
-    : false;
-}
-
-function collectImportBindingNames(statement: ts.ImportDeclaration, names: Set<string>): void {
-  const clause = statement.importClause;
-  if (!clause) return;
-  if (clause.name) names.add(clause.name.text);
-
-  const bindings = clause.namedBindings;
-  if (!bindings) return;
-  if (ts.isNamespaceImport(bindings)) {
-    names.add(bindings.name.text);
-    return;
-  }
-
-  for (const element of bindings.elements) {
-    names.add(element.name.text);
-  }
+  return facts.sort(compareAgentToolSinkFact);
 }
 
 function frameworkToolImportNames(sourceFile: ts.SourceFile): Set<string> {
@@ -348,12 +56,10 @@ function frameworkToolImportNames(sourceFile: ts.SourceFile): Set<string> {
     if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     if (statement.moduleSpecifier.text !== '@kovojs/server') continue;
 
-    if (statement.importClause?.isTypeOnly) continue;
     const bindings = statement.importClause?.namedBindings;
     if (!bindings || !ts.isNamedImports(bindings)) continue;
 
     for (const element of bindings.elements) {
-      if (element.isTypeOnly) continue;
       if ((element.propertyName?.text ?? element.name.text) === 'tool') {
         names.add(element.name.text);
       }
@@ -366,62 +72,18 @@ function frameworkToolImportNames(sourceFile: ts.SourceFile): Set<string> {
 function handlerSinkFacts(
   sourceFile: ts.SourceFile,
   tool: string,
-  handler: ts.FunctionLikeDeclaration,
-  moduleFacts: ModuleFacts,
+  body: ts.ConciseBody,
 ): CoreGraph.AgentToolReachableSinkFact[] {
-  if (!handler.body) return [];
-  return reachableSinkFacts(sourceFile, tool, handler, moduleFacts, new Set(), 'handler');
-}
-
-function reachableSinkFacts(
-  sourceFile: ts.SourceFile,
-  tool: string,
-  fn: ts.FunctionLikeDeclaration,
-  moduleFacts: ModuleFacts,
-  activeHelpers: ReadonlySet<string>,
-  origin: AgentToolSinkOrigin,
-): CoreGraph.AgentToolReachableSinkFact[] {
-  const body = fn.body;
-  if (!body) return [];
-
   const facts: CoreGraph.AgentToolReachableSinkFact[] = [];
-  const blockedNames = namesBlockedInFunctionBody(fn, moduleFacts.topLevelBindings);
 
   const visit = (node: ts.Node): void => {
     if (node !== body && ts.isFunctionLike(node)) return;
 
-    const egress = egressSinkFact(sourceFile, tool, node, blockedNames, origin);
+    const egress = egressSinkFact(sourceFile, tool, node);
     if (egress) facts.push(egress);
 
-    const secret = secretReadSinkFact(sourceFile, tool, node, blockedNames, origin);
+    const secret = secretReadSinkFact(sourceFile, tool, node);
     if (secret) facts.push(secret);
-
-    const inlineCall = directlyInvokedInlineFunction(node);
-    if (inlineCall !== undefined) {
-      facts.push(
-        ...reachableSinkFacts(sourceFile, tool, inlineCall, moduleFacts, activeHelpers, 'inline'),
-      );
-    }
-
-    const helper = calledHelper(node, moduleFacts, blockedNames);
-    if (helper !== undefined && !activeHelpers.has(helper.id)) {
-      const helperOrigin =
-        origin === 'imported-helper'
-          ? 'imported-helper'
-          : helper.moduleFacts.sourceFile === moduleFacts.sourceFile
-            ? 'helper'
-            : 'imported-helper';
-      facts.push(
-        ...reachableSinkFacts(
-          helper.moduleFacts.sourceFile,
-          tool,
-          helper.node,
-          helper.moduleFacts,
-          new Set([...activeHelpers, helper.id]),
-          helperOrigin,
-        ),
-      );
-    }
 
     ts.forEachChild(node, visit);
   };
@@ -430,113 +92,12 @@ function reachableSinkFacts(
   return facts;
 }
 
-type AgentToolSinkOrigin = 'handler' | 'helper' | 'imported-helper' | 'inline';
-
-function directlyInvokedInlineFunction(node: ts.Node): ts.FunctionLikeDeclaration | undefined {
-  if (!ts.isCallExpression(node)) return undefined;
-
-  const expression = unwrapParentheses(node.expression);
-  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
-    return expression;
-  }
-
-  return undefined;
-}
-
-function unwrapParentheses(expression: ts.Expression): ts.Expression {
-  let current = expression;
-  while (ts.isParenthesizedExpression(current)) current = current.expression;
-  return current;
-}
-
-function namesBlockedInFunctionBody(
-  fn: ts.FunctionLikeDeclaration,
-  topLevelBindings: ReadonlySet<string>,
-): ReadonlySet<string> {
-  const names = new Set<string>();
-  for (const parameter of fn.parameters) {
-    collectBindingNames(parameter.name, names);
-  }
-
-  const body = fn.body;
-  if (!body) return names;
-
-  const visit = (node: ts.Node): void => {
-    if (node !== body && ts.isFunctionLike(node)) {
-      if (ts.isFunctionDeclaration(node) && node.name) names.add(node.name.text);
-      return;
-    }
-
-    if (ts.isVariableDeclaration(node)) {
-      collectBindingNames(node.name, names);
-      return;
-    }
-
-    if (ts.isFunctionDeclaration(node) && node.name) {
-      names.add(node.name.text);
-      return;
-    }
-
-    if (ts.isCatchClause(node) && node.variableDeclaration) {
-      collectBindingNames(node.variableDeclaration.name, names);
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(body);
-
-  for (const globalName of ['fetch', 'process']) {
-    if (topLevelBindings.has(globalName)) names.add(globalName);
-  }
-
-  return names;
-}
-
-function collectBindingNames(name: ts.BindingName, names: Set<string>): void {
-  if (ts.isIdentifier(name)) {
-    names.add(name.text);
-    return;
-  }
-
-  for (const element of name.elements) {
-    if (ts.isOmittedExpression(element)) continue;
-    collectBindingNames(element.name, names);
-  }
-}
-
-function calledHelper(
-  node: ts.Node,
-  moduleFacts: ModuleFacts,
-  blockedNames: ReadonlySet<string>,
-): HelperDefinition | undefined {
-  if (!ts.isCallExpression(node)) return undefined;
-
-  if (ts.isPropertyAccessExpression(node.expression)) {
-    const namespaceName = node.expression.expression;
-    if (!ts.isIdentifier(namespaceName)) return undefined;
-    if (blockedNames.has(namespaceName.text)) return undefined;
-
-    const namespaceHelpers = moduleFacts.namespaceImports.get(namespaceName.text);
-    return namespaceHelpers?.get(node.expression.name.text);
-  }
-
-  if (!ts.isIdentifier(node.expression)) return undefined;
-
-  const name = node.expression.text;
-  if (blockedNames.has(name)) return undefined;
-  return moduleFacts.helpers.get(name);
-}
-
 function egressSinkFact(
   sourceFile: ts.SourceFile,
   tool: string,
   node: ts.Node,
-  blockedNames: ReadonlySet<string>,
-  origin: AgentToolSinkOrigin,
 ): CoreGraph.AgentToolReachableSinkFact | undefined {
   if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return undefined;
-  if (blockedNames.has('fetch')) return undefined;
   if (node.expression.text !== 'fetch') return undefined;
 
   const [url] = node.arguments;
@@ -547,7 +108,7 @@ function egressSinkFact(
 
   return {
     capability: `egress:${target}`,
-    evidence: egressEvidence(origin),
+    evidence: 'static-tool-body-fetch',
     grade: 'sound',
     kind: 'egress',
     site: siteForNode(sourceFile, node),
@@ -560,8 +121,6 @@ function secretReadSinkFact(
   sourceFile: ts.SourceFile,
   tool: string,
   node: ts.Node,
-  blockedNames: ReadonlySet<string>,
-  origin: AgentToolSinkOrigin,
 ): CoreGraph.AgentToolReachableSinkFact | undefined {
   if (!ts.isPropertyAccessExpression(node)) return undefined;
   if (!ts.isIdentifier(node.name)) return undefined;
@@ -569,12 +128,11 @@ function secretReadSinkFact(
   const env = node.expression;
   if (!ts.isPropertyAccessExpression(env) || env.name.text !== 'env') return undefined;
   if (!ts.isIdentifier(env.expression) || env.expression.text !== 'process') return undefined;
-  if (blockedNames.has('process')) return undefined;
 
   const target = `env.${node.name.text}`;
   return {
     capability: 'secrets.read',
-    evidence: secretReadEvidence(origin),
+    evidence: 'static-tool-body-env',
     grade: 'sound',
     kind: 'secret-read',
     site: siteForNode(sourceFile, node),
@@ -583,44 +141,16 @@ function secretReadSinkFact(
   };
 }
 
-function egressEvidence(origin: AgentToolSinkOrigin): string {
-  switch (origin) {
-    case 'handler':
-      return 'static-tool-body-fetch';
-    case 'helper':
-      return 'static-tool-helper-fetch';
-    case 'imported-helper':
-      return 'static-tool-imported-helper-fetch';
-    case 'inline':
-      return 'static-tool-inline-fetch';
-  }
-}
-
-function secretReadEvidence(origin: AgentToolSinkOrigin): string {
-  switch (origin) {
-    case 'handler':
-      return 'static-tool-body-env';
-    case 'helper':
-      return 'static-tool-helper-env';
-    case 'imported-helper':
-      return 'static-tool-imported-helper-env';
-    case 'inline':
-      return 'static-tool-inline-env';
-  }
-}
-
-function handlerBody(
-  definition: ts.ObjectLiteralExpression,
-): ts.FunctionLikeDeclaration | undefined {
+function handlerBody(definition: ts.ObjectLiteralExpression): ts.ConciseBody | undefined {
   const property = propertyNamed(definition, 'handler');
   if (property === undefined) return undefined;
 
-  if (ts.isMethodDeclaration(property)) return property;
+  if (ts.isMethodDeclaration(property)) return property.body;
   if (!ts.isPropertyAssignment(property)) return undefined;
 
   const initializer = property.initializer;
   if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
-    return initializer;
+    return initializer.body;
   }
 
   return undefined;
@@ -674,28 +204,4 @@ function compareAgentToolSinkFact(
     left.target.localeCompare(right.target) ||
     left.site.localeCompare(right.site)
   );
-}
-
-function uniqueAgentToolSinkFacts(
-  facts: readonly CoreGraph.AgentToolReachableSinkFact[],
-): CoreGraph.AgentToolReachableSinkFact[] {
-  const seen = new Set<string>();
-  const unique: CoreGraph.AgentToolReachableSinkFact[] = [];
-
-  for (const fact of facts) {
-    const key = [
-      fact.tool,
-      fact.kind,
-      fact.target,
-      fact.capability,
-      fact.site,
-      fact.evidence ?? '',
-      fact.grade,
-    ].join('\0');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(fact);
-  }
-
-  return unique;
 }
