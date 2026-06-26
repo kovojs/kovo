@@ -513,6 +513,11 @@ function insertRow(
     list.push(row);
     return;
   }
+  // M11 (SPEC.md §10.5) — a sorted position reaches here only for a PROVABLY numeric
+  // orderBy column: the deriver (drizzle `insertPosition`) punts a non-numeric (text)
+  // orderBy to `await-fragment`, because `asNumber('Mango')` is NaN (every compare false
+  // ⇒ row appended ⇒ divergence from the server's lexical ORDER BY). The `asNumber`
+  // coercion here is byte-identical to the codegen `lowerPush` so codegen ≡ interpreter.
   const target = asNumber(row[position.column] ?? 0);
   const index = list.findIndex((existing) => {
     if (existing === null || typeof existing !== 'object' || Array.isArray(existing)) return false;

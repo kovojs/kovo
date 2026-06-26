@@ -263,6 +263,11 @@ function lowerPush(op: Extract<PatchOp, { op: 'push-row' }>): string[] {
     .join(', ')} }`;
   if (op.position === 'start') return [`draft.${op.path}.unshift(${rowLiteral});`];
   if (op.position === 'end') return [`draft.${op.path}.push(${rowLiteral});`];
+  // M11 (SPEC.md §10.5) — a sorted `push-row` position reaches codegen only for a PROVABLY
+  // numeric orderBy column: the deriver (`insertPosition`) punts a non-numeric (text)
+  // orderBy to `await-fragment` (NaN compare ⇒ append ⇒ divergence from the server's
+  // lexical ORDER BY). So the numeric `n(...)` compare below is sound and matches the
+  // interpreter's `insertRow`.
   // C5 — coerce both sides of the orderBy compare numerically (the interpreter
   // compares `asNumber(...)` on both), so a string-numeric orderBy column does not
   // sort lexically ("10" before "9"); codegen ≡ interpreter (SPEC.md §10.5:1172).
