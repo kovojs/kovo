@@ -184,7 +184,7 @@ export function tool<const Input, Output, Context = unknown>(
 
   return {
     ...definition,
-    ambientCredentials: definition.ambientCredentials ?? { allow: false },
+    ambientCredentials: snapshotAmbientCredentials(definition.ambientCredentials),
   };
 }
 
@@ -219,33 +219,40 @@ export async function runAgentTool<Input, Output, Context = unknown>(
 export function agentToolAuditFacts(
   tools: readonly AgentToolDeclaration<unknown, unknown, unknown>[],
 ): readonly AgentToolAuditFact[] {
-  return tools.map((declaration) => {
-    const ambient = declaration.ambientCredentials;
-    return {
-      ambientBrowserCredentials: ambient.allow === true ? 'allowed' : 'rejected',
-      ...(ambient.allow === true
-        ? {
-            ambientCredentialKinds: [...ambient.credentialKinds],
-            ambientJustification: ambient.justification,
-          }
-        : {}),
-      authority: declaration.authority.map(describeAuthority),
-      declaredCapabilities: declaration.capabilities.map((capability) => capability.name),
-      kind: 'agentTool',
-      name: declaration.name,
-      owner: declaration.audit.owner,
-      purpose: declaration.purpose,
-      ...(declaration.reachableSinks === undefined || declaration.reachableSinks.length === 0
-        ? {}
-        : {
-            reachableSinks: declaration.reachableSinks.map((sink) =>
-              reachableSinkAuditFact(declaration, sink),
-            ),
-          }),
-      site: declaration.audit.site ?? `agent-tool:${declaration.name}`,
-      target: declaration.name,
-    };
-  });
+  return Object.freeze(
+    tools.map((declaration) => {
+      const ambient = declaration.ambientCredentials;
+      return Object.freeze({
+        ambientBrowserCredentials: ambient.allow === true ? 'allowed' : 'rejected',
+        ...(ambient.allow === true
+          ? {
+              ambientCredentialKinds: Object.freeze([...ambient.credentialKinds]),
+              ambientJustification: Object.freeze({
+                authorityBoundary: ambient.justification.authorityBoundary,
+                reason: ambient.justification.reason,
+              }),
+            }
+          : {}),
+        authority: Object.freeze(declaration.authority.map(describeAuthority)),
+        declaredCapabilities: Object.freeze(
+          declaration.capabilities.map((capability) => capability.name),
+        ),
+        kind: 'agentTool',
+        name: declaration.name,
+        owner: declaration.audit.owner,
+        purpose: declaration.purpose,
+        ...(declaration.reachableSinks === undefined || declaration.reachableSinks.length === 0
+          ? {}
+          : {
+              reachableSinks: Object.freeze(
+                declaration.reachableSinks.map((sink) => reachableSinkAuditFact(declaration, sink)),
+              ),
+            }),
+        site: declaration.audit.site ?? `agent-tool:${declaration.name}`,
+        target: declaration.name,
+      });
+    }),
+  );
 }
 
 function assertAuthorityAllowed(
@@ -276,6 +283,8 @@ const ambientCredentialHeaders = [
   { header: 'cf-access-authenticated-user-email', kind: 'auth-proxy' },
   { header: 'cf-access-jwt-assertion', kind: 'auth-proxy' },
   { header: 'proxy-authorization', kind: 'proxy-authorization' },
+  { header: 'remote-email', kind: 'auth-proxy' },
+  { header: 'remote-user', kind: 'auth-proxy' },
   { header: 'x-amzn-oidc-accesstoken', kind: 'auth-proxy' },
   { header: 'x-amzn-oidc-data', kind: 'auth-proxy' },
   { header: 'x-amzn-oidc-identity', kind: 'auth-proxy' },
@@ -284,11 +293,15 @@ const ambientCredentialHeaders = [
   { header: 'x-auth-request-user', kind: 'auth-proxy' },
   { header: 'x-forwarded-access-token', kind: 'auth-proxy' },
   { header: 'x-forwarded-authorization', kind: 'authorization' },
+  { header: 'x-forwarded-email', kind: 'auth-proxy' },
+  { header: 'x-forwarded-user', kind: 'auth-proxy' },
   { header: 'x-goog-authenticated-user-email', kind: 'auth-proxy' },
   { header: 'x-goog-authenticated-user-id', kind: 'auth-proxy' },
   { header: 'x-ms-client-principal', kind: 'auth-proxy' },
   { header: 'x-ms-client-principal-id', kind: 'auth-proxy' },
   { header: 'x-ms-client-principal-name', kind: 'auth-proxy' },
+  { header: 'x-remote-email', kind: 'auth-proxy' },
+  { header: 'x-remote-user', kind: 'auth-proxy' },
 ] as const satisfies readonly AmbientCredentialHeader[];
 
 const ambientCredentialKinds = [
@@ -394,13 +407,75 @@ function assertCapabilities(capabilities: readonly AgentToolCapability[] | undef
 }
 
 function assertAmbientCredentials(ambient: AgentToolAmbientCredentials | undefined): void {
-  if (ambient?.allow === true) {
-    assertAmbientCredentialKinds(ambient.credentialKinds);
-    assertNonEmpty(ambient.justification?.reason, 'tool.ambientCredentials.justification.reason');
-    assertNonEmpty(
-      ambient.justification?.authorityBoundary,
+  if (ambient === undefined) return;
+
+  const allow = optionalOwnDataProperty(
+    ambient,
+    'allow',
+    'tool.ambientCredentials.allow',
+  ) as unknown;
+
+  if (allow !== true) {
+    if (hasOwnProperty(ambient, 'credentialKinds') || hasOwnProperty(ambient, 'justification')) {
+      throw new AgentToolCapabilityError(
+        'tool.ambientCredentials must not declare credentialKinds or justification unless allow is true.',
+      );
+    }
+    return;
+  }
+
+  const credentialKinds = requiredOwnDataProperty(
+    ambient,
+    'credentialKinds',
+    'tool.ambientCredentials.credentialKinds',
+  ) as readonly AgentToolAmbientCredentialKind[] | undefined;
+  const justification = requiredOwnDataProperty(
+    ambient,
+    'justification',
+    'tool.ambientCredentials.justification',
+  );
+
+  assertAmbientCredentialKinds(credentialKinds);
+  assertObject(justification, 'tool.ambientCredentials.justification');
+  assertNonEmpty(
+    requiredOwnDataProperty(
+      justification,
+      'reason',
+      'tool.ambientCredentials.justification.reason',
+    ) as string | undefined,
+    'tool.ambientCredentials.justification.reason',
+  );
+  assertNonEmpty(
+    requiredOwnDataProperty(
+      justification,
+      'authorityBoundary',
       'tool.ambientCredentials.justification.authorityBoundary',
-    );
+    ) as string | undefined,
+    'tool.ambientCredentials.justification.authorityBoundary',
+  );
+}
+
+function snapshotAmbientCredentials(
+  ambient: AgentToolAmbientCredentials | undefined,
+): AgentToolAmbientCredentials {
+  if (ambient?.allow !== true) return Object.freeze({ allow: false });
+
+  return Object.freeze({
+    allow: true,
+    credentialKinds: Object.freeze([...ambient.credentialKinds]),
+    justification: Object.freeze({
+      authorityBoundary: ambient.justification.authorityBoundary,
+      reason: ambient.justification.reason,
+    }),
+  });
+}
+
+function assertObject(
+  value: unknown,
+  field: string,
+): asserts value is Record<PropertyKey, unknown> {
+  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
+    throw new AgentToolCapabilityError(`${field} must be an object.`);
   }
 }
 
@@ -452,7 +527,7 @@ function reachableSinkAuditFact(
   declaration: AgentToolDeclaration<unknown, unknown, unknown>,
   sink: AgentToolReachableSink,
 ): AgentToolReachableSinkAuditFact {
-  return {
+  return Object.freeze({
     capability: sink.capability,
     evidence: sink.evidence,
     grade: 'audit',
@@ -460,13 +535,37 @@ function reachableSinkAuditFact(
     site: sink.site ?? declaration.audit.site ?? `agent-tool:${declaration.name}`,
     target: sink.target,
     tool: declaration.name,
-  };
+  });
 }
 
 function assertNonEmpty(value: string | undefined, field: string): void {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new AgentToolCapabilityError(`${field} must be a non-empty string.`);
   }
+}
+
+function requiredOwnDataProperty(value: object, property: PropertyKey, field: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) {
+    throw new AgentToolCapabilityError(`${field} must be declared as an own data property.`);
+  }
+  if (!('value' in descriptor)) {
+    throw new AgentToolCapabilityError(`${field} must be declared as an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function optionalOwnDataProperty(value: object, property: PropertyKey, field: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new AgentToolCapabilityError(`${field} must be declared as an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function hasOwnProperty(value: object, property: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(value, property);
 }
 
 function describeAuthority(authority: AgentToolAuthority): string {

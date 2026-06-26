@@ -287,15 +287,25 @@ export function createOpaqueSessionManager<SessionValue>(
         priorId?: string | null | undefined;
       } = {},
     ): Promise<OpaqueSessionEstablishResult<SessionValue>> {
-      const session = establishOptions.priorId
-        ? await options.store.rotate(establishOptions.priorId, value, establishOptions)
-        : await options.store.create(value, establishOptions);
-      assertEstablishedOpaqueSession(session);
+      const rawSession =
+        establishOptions.priorId === null || establishOptions.priorId === undefined
+          ? await options.store.create(value, establishOptions)
+          : await rotateOpaqueSession(
+              options.store,
+              establishOptions.priorId,
+              value,
+              establishOptions.ttlMs === undefined ? {} : { ttlMs: establishOptions.ttlMs },
+            );
+      const session = assertEstablishedOpaqueSession(rawSession);
       return {
         session,
         setCookie: serializeCookie(cookieName, session.id, {
           ...cookieOptions,
-          maxAge: Math.max(1, Math.floor((session.expiresAt - session.createdAt) / 1000)),
+          // SPEC §6.5 / OPP-11: the browser credential must not outlive the store-backed
+          // lifecycle. Derive cookie expiry from the store's absolute expiry at emission time,
+          // not from a store-supplied createdAt delta.
+          expires: new Date(session.expiresAt),
+          maxAge: resolveOpaqueSessionCookieMaxAge(session),
         }),
       };
     },
@@ -312,25 +322,91 @@ export function createOpaqueSessionManager<SessionValue>(
   };
 }
 
+async function rotateOpaqueSession<SessionValue>(
+  store: OpaqueSessionStore<SessionValue>,
+  priorId: string,
+  value: SessionValue,
+  options?: OpaqueSessionEstablishOptions,
+): Promise<OpaqueSessionRecord<SessionValue>> {
+  if (priorId === '') {
+    throw new Error(
+      'Opaque session rotation requires a live prior session; validation rejected it as missing',
+    );
+  }
+  const prior = normalizeOpaqueSessionValidation(priorId, await store.validate(priorId));
+  if (!prior.ok) {
+    throw new Error(
+      `Opaque session rotation requires a live prior session; validation rejected it as ${prior.reason}`,
+    );
+  }
+
+  const next = assertEstablishedOpaqueSession(await store.rotate(priorId, value, options));
+  if (next.id === priorId) {
+    throw new Error(
+      'Opaque session store returned the prior id during rotation; refusing to set a browser session cookie',
+    );
+  }
+
+  const revokedPrior = normalizeOpaqueSessionValidation(priorId, await store.validate(priorId));
+  if (revokedPrior.ok) {
+    throw new Error(
+      'Opaque session store did not immediately revoke the prior id during rotation; refusing to set a browser session cookie',
+    );
+  }
+  return next;
+}
+
 function normalizeOpaqueSessionValidation<SessionValue>(
   presentedId: string,
-  result: OpaqueSessionValidation<SessionValue>,
+  result: unknown,
 ): OpaqueSessionValidation<SessionValue> {
-  if (!result.ok) return result;
-  if (!isCoherentOpaqueSessionRecord(result.session) || result.session.id !== presentedId) {
+  // SPEC §6.5 / OPP-11: custom stores sit on the owned session trust boundary. Treat
+  // malformed validation outcomes as anonymous/malformed instead of throwing or accepting an
+  // undeclared lifecycle reason.
+  if (result === null || typeof result !== 'object') return { ok: false, reason: 'malformed' };
+  const validation = result as {
+    ok?: unknown;
+    reason?: unknown;
+    session?: unknown;
+  };
+  if (validation.ok !== true) {
+    return isOpaqueSessionRejectReason(validation.reason)
+      ? { ok: false, reason: validation.reason }
+      : { ok: false, reason: 'malformed' };
+  }
+  const session = snapshotCoherentOpaqueSessionRecord<SessionValue>(validation.session);
+  if (session === undefined || session.id !== presentedId) {
     return { ok: false, reason: 'malformed' };
   }
-  return result;
+  return { ok: true, session };
+}
+
+function isOpaqueSessionRejectReason(value: unknown): value is OpaqueSessionRejectReason {
+  return value === 'missing' || value === 'malformed' || value === 'expired' || value === 'revoked';
 }
 
 function assertEstablishedOpaqueSession<SessionValue>(
   session: OpaqueSessionRecord<SessionValue>,
-): void {
-  if (!isCoherentOpaqueSessionRecord(session)) {
+): OpaqueSessionRecord<SessionValue> {
+  const snapshot = snapshotCoherentOpaqueSessionRecord<SessionValue>(session);
+  if (snapshot === undefined) {
     throw new Error(
       'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
     );
   }
+  return snapshot;
+}
+
+function resolveOpaqueSessionCookieMaxAge<SessionValue>(
+  session: OpaqueSessionRecord<SessionValue>,
+): number {
+  const remainingMs = session.expiresAt - Date.now();
+  if (remainingMs <= 0) {
+    throw new Error(
+      'Opaque session store returned an expired session record; refusing to set a browser session cookie',
+    );
+  }
+  return Math.max(1, Math.floor(remainingMs / 1000));
 }
 
 function isCoherentOpaqueSessionRecord<SessionValue>(
@@ -350,6 +426,22 @@ function isCoherentOpaqueSessionRecord<SessionValue>(
     expiresAt > createdAt &&
     'value' in record
   );
+}
+
+function snapshotCoherentOpaqueSessionRecord<SessionValue>(
+  value: unknown,
+): OpaqueSessionRecord<SessionValue> | undefined {
+  if (!isCoherentOpaqueSessionRecord<SessionValue>(value)) return undefined;
+  try {
+    return {
+      id: value.id,
+      createdAt: value.createdAt,
+      expiresAt: value.expiresAt,
+      value: structuredClone(value.value) as SessionValue,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function assertOpaqueSessionManagerOptions<SessionValue>(

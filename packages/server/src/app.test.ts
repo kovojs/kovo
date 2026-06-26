@@ -381,6 +381,53 @@ describe('server createApp request shell', () => {
     );
   });
 
+  it('rejects delegated sessionProvider accessors that could change after validation', () => {
+    const manager = createOpaqueSessionManager({
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
+    });
+    let reads = 0;
+    const declaration = {
+      justification: 'test delegates session lifecycle to an app-owned provider',
+      lifecycle: 'delegated' as const,
+      lifecycleAssertions: {
+        expiry: 'test provider enforces session expiration',
+        revocation: 'test provider revokes sessions on sign-out',
+        rotation: 'test provider rotates credentials after authentication',
+        validation: 'test provider validates browser session credentials',
+      },
+      get provider() {
+        reads += 1;
+        return reads === 1 ? () => ({ user: { id: 'delegated' } }) : manager.provider;
+      },
+    };
+
+    expect(() => createApp({ sessionProvider: declaration as never })).toThrow(
+      'requires delegated `provider` to be an own data property',
+    );
+  });
+
+  it('rejects delegated lifecycle assertion accessors', () => {
+    const lifecycleAssertions = {
+      expiry: 'test provider enforces session expiration',
+      revocation: 'test provider revokes sessions on sign-out',
+      get rotation() {
+        return 'test provider rotates credentials after authentication';
+      },
+      validation: 'test provider validates browser session credentials',
+    };
+
+    expect(() =>
+      createApp({
+        sessionProvider: {
+          justification: 'test delegates session lifecycle to an app-owned provider',
+          lifecycle: 'delegated',
+          lifecycleAssertions,
+          provider: () => ({ user: { id: 'delegated' } }),
+        } as never,
+      }),
+    ).toThrow('requires delegated `rotation` to be an own data property');
+  });
+
   it('does not treat forged global-symbol opaque provider markers as framework-owned', () => {
     const forgedProvider = (() => ({ user: { id: 'delegated' } })) as (() => {
       user: { id: string };
@@ -1057,6 +1104,33 @@ describe('server createApp request shell', () => {
     await expect(response.text()).resolves.toBe('Payload Too Large');
     expect(endpointHandler).not.toHaveBeenCalled();
     expect(sideEffects).toBe(0);
+  });
+
+  it('preserves request extensions after endpoint body-limit preflight', async () => {
+    const upload = endpoint('/extension-upload', {
+      csrf: false,
+      csrfJustification: 'test endpoint uses a non-browser caller',
+      handler(request) {
+        return new Response(String((request as Request & { db?: string }).db));
+      },
+      method: 'POST',
+      reason: 'request extension preservation test',
+      response: rawTextResponse,
+    });
+    const handler = createRequestHandler(createApp({ endpoints: [upload] }));
+    const request = new Request('https://example.test/extension-upload', {
+      body: 'ok',
+      method: 'POST',
+    });
+    Object.defineProperty(request, 'db', {
+      configurable: true,
+      value: 'fixture-db',
+    });
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('fixture-db');
   });
 
   // SPEC §9.5 / §10.3: coarse per-IP mutation limiting runs before replay, parse,

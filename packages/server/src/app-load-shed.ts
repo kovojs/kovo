@@ -337,12 +337,23 @@ export async function requestWithVerifiedBodyLimit(
 ): Promise<Request> {
   if (maxBodyBytes === false || request.body === null) return request;
   const body = await readLimitedArrayBuffer(request, maxBodyBytes);
-  return new Request(request.url, {
+  const verified = new Request(request.url, {
     body,
     headers: request.headers,
     method: request.method,
     signal: request.signal,
   });
+  copyRequestOwnProperties(request, verified);
+  return verified;
+}
+
+function copyRequestOwnProperties(source: Request, target: Request): void {
+  for (const key of Reflect.ownKeys(source)) {
+    if (Object.prototype.hasOwnProperty.call(target, key)) continue;
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (!descriptor) continue;
+    Object.defineProperty(target, key, descriptor);
+  }
 }
 
 async function readLimitedArrayBuffer(

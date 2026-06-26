@@ -32,8 +32,16 @@ describe('compiler diagnostic coverage matrix', () => {
     expect(outOfScopeCompilerDiagnostics).toMatchInlineSnapshot(`
       [
         {
+          "code": "KV229",
+          "reason": "Compiler-owned in the registry, but static-export non-exportability is emitted by server/export replay and output-target validation rather than component compilation or app graph derivation.",
+        },
+        {
           "code": "KV310",
           "reason": "Compiler-owned, but emitted by the optimistic coverage/check path (\`tests/kovo-check.node.mjs\`) rather than compileComponentModule/deriveAppGraph/query-shape validation.",
+        },
+        {
+          "code": "KV313",
+          "reason": "Compiler-owned in the registry, but optimistic rebase discard reporting is emitted by the browser runtime rather than component compilation, app graph derivation, or query-shape validation.",
         },
         {
           "code": "KV314",

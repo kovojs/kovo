@@ -48,6 +48,75 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
   });
 
+  it('refuses to rotate from a missing, malformed, or expired prior session', async () => {
+    let now = Date.now();
+    const manager = createOpaqueSessionManager({
+      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>({
+        now: () => now,
+        ttlMs: 100,
+      }),
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(
+      manager.establish({ user: { id: 'u2' } }, { priorId: 'not-an-opaque-session-id' }),
+    ).rejects.toThrow(
+      'Opaque session rotation requires a live prior session; validation rejected it as malformed',
+    );
+    await expect(manager.establish({ user: { id: 'u2' } }, { priorId: '' })).rejects.toThrow(
+      'Opaque session rotation requires a live prior session; validation rejected it as missing',
+    );
+
+    now += 100;
+
+    await expect(
+      manager.establish({ user: { id: 'u2' } }, { priorId: established.session.id }),
+    ).rejects.toThrow(
+      'Opaque session rotation requires a live prior session; validation rejected it as expired',
+    );
+  });
+
+  it('refuses to set a rotated browser cookie when a custom store leaves the prior id live', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        rotate: (_priorId, value, options) => baseStore.create(value, options),
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(
+      manager.establish({ user: { id: 'u2' } }, { priorId: established.session.id }),
+    ).rejects.toThrow(
+      'Opaque session store did not immediately revoke the prior id during rotation; refusing to set a browser session cookie',
+    );
+  });
+
+  it('refuses to set a rotated browser cookie when a custom store reuses the prior id', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        rotate: async (priorId, value) => {
+          const prior = await baseStore.validate(priorId);
+          if (!prior.ok) throw new Error('test setup expected a live prior session');
+          return {
+            ...prior.session,
+            value,
+          };
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(
+      manager.establish({ user: { id: 'u2' } }, { priorId: established.session.id }),
+    ).rejects.toThrow(
+      'Opaque session store returned the prior id during rotation; refusing to set a browser session cookie',
+    );
+  });
+
   it('validates revoked sessions as anonymous immediately', async () => {
     const manager = createOpaqueSessionManager({
       store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
@@ -67,7 +136,7 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
   });
 
   it('distinguishes expired stored sessions from unknown ids on first validation', async () => {
-    let now = 1_000;
+    let now = Date.now();
     const manager = createOpaqueSessionManager({
       store: createMemoryOpaqueSessionStore<{ user: { id: string } }>({
         now: () => now,
@@ -76,7 +145,7 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
     const established = await manager.establish({ user: { id: 'u1' } });
 
-    now = 1_100;
+    now += 100;
 
     await expect(manager.validate(established.session.id)).resolves.toEqual({
       ok: false,
@@ -244,6 +313,84 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
   });
 
+  it('fails closed when a custom store returns a malformed validation result', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        validate: async () => undefined as never,
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+    await expect(
+      manager.provider(new Request('https://app.test/account', { headers: { cookie } })),
+    ).resolves.toBeNull();
+  });
+
+  it('fails closed when a custom store returns an unknown validation rejection reason', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        validate: async () => ({ ok: false, reason: 'active' }) as never,
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(manager.validate(established.session.id)).resolves.toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+  });
+
+  it('snapshots custom-store records so post-validation mutation cannot change the request session', async () => {
+    type Session = { user: { id: string } };
+    const baseStore = createMemoryOpaqueSessionStore<Session>();
+    let validatedRecord:
+      | { id: string; createdAt: number; expiresAt: number; value: Session }
+      | undefined;
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        async validate(id: string) {
+          const result = await baseStore.validate(id);
+          if (!result.ok) return result;
+          validatedRecord = {
+            ...result.session,
+            value: structuredClone(result.session.value),
+          };
+          return { ok: true, session: validatedRecord };
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const cookie = established.setCookie.split(';')[0]!;
+
+    const validation = await manager.validate(established.session.id);
+
+    if (!validation.ok || validatedRecord === undefined) {
+      throw new Error('test setup expected a live validated session');
+    }
+    validatedRecord.value.user.id = 'attacker';
+    expect(validation.session.value.user.id).toBe('u1');
+
+    const requestSession = await manager.provider(
+      new Request('https://app.test/account', { headers: { cookie } }),
+    );
+
+    if (requestSession === null || validatedRecord === undefined) {
+      throw new Error('test setup expected a live request session');
+    }
+    validatedRecord.value.user.id = 'mutated-again';
+    expect(requestSession.user.id).toBe('u1');
+  });
+
   it('refuses to set a browser cookie when a custom store creates a malformed session record', async () => {
     const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
     const malformedStore: OpaqueSessionStore<{ user: { id: string } }> = {
@@ -259,6 +406,50 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
 
     await expect(manager.establish({ user: { id: 'u1' } })).rejects.toThrow(
       'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
+    );
+  });
+
+  it('does not serialize a browser cookie beyond the store-backed absolute expiry', async () => {
+    const now = Math.floor(Date.now() / 1000) * 1000;
+    const store = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      cookie: { expires: new Date(now + 60_000) },
+      store: {
+        ...store,
+        create: async (_value) => ({
+          id: (await store.create({ user: { id: 'u1' } })).id,
+          createdAt: now - 60 * 60 * 1000,
+          expiresAt: now + 5_000,
+          value: { user: { id: 'u1' } },
+        }),
+      },
+    });
+
+    const established = await manager.establish({ user: { id: 'u1' } });
+    const maxAge = Number(/(?:^|; )Max-Age=(\d+)(?:;|$)/.exec(established.setCookie)?.[1]);
+    const expires = /(?:^|; )Expires=([^;]+)(?:;|$)/.exec(established.setCookie)?.[1];
+
+    expect(maxAge).toBeGreaterThan(0);
+    expect(maxAge).toBeLessThanOrEqual(5);
+    expect(Date.parse(expires ?? '')).toBe(established.session.expiresAt);
+  });
+
+  it('refuses to set a browser cookie for an already-expired custom-store record', async () => {
+    const store = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...store,
+        create: async (_value) => ({
+          id: (await store.create({ user: { id: 'u1' } })).id,
+          createdAt: 1,
+          expiresAt: 2,
+          value: { user: { id: 'u1' } },
+        }),
+      },
+    });
+
+    await expect(manager.establish({ user: { id: 'u1' } })).rejects.toThrow(
+      'Opaque session store returned an expired session record; refusing to set a browser session cookie',
     );
   });
 
@@ -280,6 +471,7 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
       { user: { id: 'u1' } },
       { priorId: anonymous.session.id },
     );
+    validateCalls = 0;
     const anonymousCookie = anonymous.setCookie.split(';')[0]!;
     const authenticatedCookie = authenticated.setCookie.split(';')[0]!;
     const guardSessions: string[] = [];

@@ -13,7 +13,10 @@ import {
   logChannelSinkFindings,
   publicSinkPolicyEscapeFindings,
   responseFragmentApplyInvariantFindings,
+  rootedFileServeRawSinkFindings,
+  rootedFileServeInvariantFindings,
   sqlBlessedBrandLaunderingFindings,
+  sqlBlessedBrandStampFindings,
   sqlGuardDowngradeFindings,
   sqlSafetyInvariantFindings,
 } from './check-sink-policy-gate.mjs';
@@ -39,6 +42,7 @@ function runFixture(files) {
     publicEntrypointFiles: Object.hasOwn(files, 'public.ts') ? ['public.ts'] : [],
     readText: (file) => files[file],
     responseFragmentApplyPath: undefined,
+    rootedFileServeSinkFiles: [],
     sinkPolicyPath: 'sink-policy.ts',
     sqlBlessedBrandFiles: [],
     sqlGuardDowngradeFiles: [],
@@ -224,6 +228,183 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('asserts rootedFiles keeps constructor-owned root and witness checks', () => {
+    expect(
+      rootedFileServeInvariantFindings(
+        'packages/server/src/file.ts',
+        `
+          const ROOTED_FILE_SERVE_SINK = 'rooted-file-serve';
+          export async function rootedFiles(root) {
+            const realRoot = await realpath(root);
+            const capability = {
+              root: realRoot,
+              serve: (path, options) => serveRootedFile(realRoot, path, options),
+            };
+            return blessSink(ROOTED_FILE_SERVE_SINK, Object.freeze(capability));
+          }
+          export function isRootedFileServeCapability(value) {
+            return isBlessedSink(ROOTED_FILE_SERVE_SINK, value);
+          }
+          async function serveRootedFile(realRoot, requestedPath, options) {
+            const candidate = rootedCandidate(realRoot, requestedPath);
+            const resolved = await safeRealpath(candidate);
+            if (!containsPath(realRoot, resolved)) return undefined;
+            const handle = await safeOpen(resolved);
+            const [stat, postOpenResolved] = await Promise.all([
+              handle.stat(),
+              safeRealpath(resolved),
+            ]);
+            if (!stat.isFile() || !containsPath(realRoot, postOpenResolved)) return undefined;
+            return respond.stream(await handle.readFile(), options);
+          }
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      rootedFileServeInvariantFindings(
+        'packages/server/src/file.ts',
+        `
+          export async function rootedFiles(root) {
+            const capability = {
+              root,
+              serve: (path, options) => serveRootedFile(root, path, options),
+            };
+            return capability;
+          }
+          export function isRootedFileServeCapability(_value) {
+            return true;
+          }
+          async function serveRootedFile(realRoot, requestedPath, options) {
+            const candidate = rootedCandidate(realRoot, requestedPath);
+            const handle = await safeOpen(candidate);
+            const stat = await handle.stat();
+            if (!stat.isFile()) return undefined;
+            return respond.stream(await handle.readFile(), options);
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/file.ts: rooted file primitive must declare the registered rooted-file-serve sink kind',
+      'packages/server/src/file.ts: rootedFiles() must normalize the constructor root through realpath() before minting a capability',
+      'packages/server/src/file.ts: rootedFiles() must close serve() over the constructor-owned realRoot',
+      'packages/server/src/file.ts: rootedFiles() must mint a frozen RootedFiles capability with the registered sink witness',
+      'packages/server/src/file.ts: isRootedFileServeCapability() must re-check the registered rooted-file-serve witness',
+      'packages/server/src/file.ts: rooted file serving must realpath the candidate before opening it',
+      'packages/server/src/file.ts: rooted file serving must reject candidate realpaths outside the constructor root',
+      'packages/server/src/file.ts: rooted file serving must re-stat and re-realpath after open',
+      'packages/server/src/file.ts: rooted file serving must reject post-open realpaths outside the constructor root',
+    ]);
+  });
+
+  it('runs the rooted file-serve ownership gate over the configured sink file', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: [],
+        deserializationFiles: [],
+        exists: (file) => file === 'sink-policy.ts' || file === 'packages/server/src/file.ts',
+        logChannelFiles: [],
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : `
+              const ROOTED_FILE_SERVE_SINK = 'rooted-file-serve';
+              export async function rootedFiles(root) {
+                const capability = {
+                  root,
+                  serve: (path, options) => serveRootedFile(root, path, options),
+                };
+                return blessSink(ROOTED_FILE_SERVE_SINK, capability);
+              }
+            `,
+        responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: ['packages/server/src/file.ts'],
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([
+      'packages/server/src/file.ts: rootedFiles() must normalize the constructor root through realpath() before minting a capability',
+      'packages/server/src/file.ts: rootedFiles() must close serve() over the constructor-owned realRoot',
+      'packages/server/src/file.ts: rootedFiles() must mint a frozen RootedFiles capability with the registered sink witness',
+      'packages/server/src/file.ts: isRootedFileServeCapability() must re-check the registered rooted-file-serve witness',
+      'packages/server/src/file.ts: rooted file serving must realpath the candidate before opening it',
+      'packages/server/src/file.ts: rooted file serving must reject candidate realpaths outside the constructor root',
+      'packages/server/src/file.ts: rooted file serving must re-stat and re-realpath after open',
+      'packages/server/src/file.ts: rooted file serving must reject post-open realpaths outside the constructor root',
+    ]);
+  });
+
+  it('rejects raw filesystem file-serve sinks outside the rooted file primitive', () => {
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/server/src/unsafe-file.ts',
+        `
+          import { createReadStream, open as rawOpen } from "node:fs";
+          import fs from "fs";
+          import * as fsPromises from "node:fs/promises";
+          export { open as rawOpenPromise } from "node:fs/promises";
+          const stream = createReadStream(requestedPath);
+          fs.createWriteStream(requestedPath);
+          rawOpen(requestedPath, "r", () => {});
+          await fsPromises.open(requestedPath);
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createReadStream import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createReadStream call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem open import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem open call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createWriteStream call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem open re-export is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+    ]);
+  });
+
+  it('allows raw filesystem file-serve sinks only in the rooted file primitive owner', () => {
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/server/src/file.ts',
+        `
+          import { open } from "node:fs/promises";
+          export async function safeOpen(path) {
+            return await open(path);
+          }
+        `,
+        { allowedFileServeSink: true },
+      ),
+    ).toEqual([]);
+  });
+
+  it('runs the raw filesystem file-serve sink gate over configured server source files', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: ['packages/server/src/unsafe-file.ts'],
+        deserializationFiles: [],
+        exists: (file) =>
+          file === 'packages/server/src/unsafe-file.ts' || file === 'sink-policy.ts',
+        logChannelFiles: [],
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'import { createWriteStream } from "node:fs"; createWriteStream(path);',
+        responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createWriteStream import is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+      'packages/server/src/unsafe-file.ts: KV424 raw filesystem createWriteStream call is outside the rooted file-serve primitive; use rootedFiles().serve() so file/path sinks stay rooted and witnessed',
+    ]);
+  });
+
   it('runs the command execution gate over configured server source files', () => {
     expect(
       checkSinkPolicyGate({
@@ -238,6 +419,7 @@ describe('sink-policy gate', () => {
             ? validPolicy
             : 'import { execSync } from "node:child_process";',
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -325,6 +507,7 @@ describe('sink-policy gate', () => {
               ? 'export const run = Function("return 1");'
               : 'export const ok = 1;',
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -422,6 +605,7 @@ describe('sink-policy gate', () => {
             ? validPolicy
             : 'export const decoded = JSON.parse(payload, revivePayload);',
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -478,6 +662,7 @@ describe('sink-policy gate', () => {
             ? validPolicy
             : 'export function handle(request) { console.info(request.url); }',
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -663,6 +848,7 @@ describe('sink-policy gate', () => {
           export function isBlessedSink(sink, value) { return true; }
         `,
         responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
         sqlGuardDowngradeFiles: [],
@@ -719,6 +905,25 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('rejects direct SQL blessed-brand field laundering outside the owning constructor module', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/server/src/unsafe-sql.ts',
+        `
+          const statement = { text: raw, __kovoSqlBrand: 'parameterized' };
+          const identifier = { "__kovoSqlIdentifierBrand": 'identifier', text: column };
+          const keyword = {};
+          keyword.__kovoSqlKeywordBrand = 'keyword';
+          statement['__kovoSqlBrand'] = 'trusted';
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand laundering via __kovoSqlBrand object field; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand laundering via __kovoSqlIdentifierBrand object field; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand laundering via SQL brand property assignment; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+  });
+
   it('does not treat generic type arguments or TSX tags as SQL blessed-brand assertions', () => {
     expect(
       sqlBlessedBrandLaunderingFindings(
@@ -743,6 +948,25 @@ describe('sink-policy gate', () => {
     ).toEqual([]);
   });
 
+  it('does not treat SQL blessed-brand interface declarations as value laundering', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/runtime.ts',
+        `
+          export interface KovoParameterizedSql {
+            readonly __kovoSqlBrand?: 'parameterized';
+          }
+          export interface KovoSqlIdentifier {
+            readonly __kovoSqlIdentifierBrand?: 'identifier';
+          }
+          export interface KovoSqlKeyword {
+            readonly __kovoSqlKeywordBrand?: 'keyword';
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
   it('allows SQL blessed-brand assertions only in the owning constructor module', () => {
     expect(
       sqlBlessedBrandLaunderingFindings(
@@ -751,6 +975,96 @@ describe('sink-policy gate', () => {
         { allowedConstructorFile: true },
       ),
     ).toEqual([]);
+  });
+
+  it('allows SQL stamp helpers only in owned constructor modules', () => {
+    expect(
+      sqlBlessedBrandStampFindings(
+        'packages/core/src/internal/sql-safety.ts',
+        'export function stampParameterizedSql(value) { return value; }',
+        { allowedStampFile: true },
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlBlessedBrandStampFindings(
+        'packages/drizzle/src/runtime.ts',
+        `
+          import { stampParameterizedSql, stampStaticSql } from '@kovojs/core/internal/sql-safety';
+          export function sql(strings) {
+            return stampParameterizedSql({ strings });
+          }
+          export function staticSql(value) {
+            return stampStaticSql({ value });
+          }
+        `,
+        { allowedStampFile: true },
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects SQL stamp helper import and call drift outside owned constructor modules', () => {
+    expect(
+      sqlBlessedBrandStampFindings(
+        'packages/server/src/unsafe-sql.ts',
+        `
+          import { stampParameterizedSql as stampQuery, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
+          export function launder(value) {
+            stampTrustedSql(value, 'runtime');
+            return stampQuery(value);
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand constructor ownership drift via stampParameterizedSql import; keep SQL stamp helpers confined to core sql-safety.ts and the reviewed Drizzle runtime adapter',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand constructor ownership drift via stampQuery(); use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) instead of minting stamps outside owned constructors',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand constructor ownership drift via stampTrustedSql import; keep SQL stamp helpers confined to core sql-safety.ts and the reviewed Drizzle runtime adapter',
+      'packages/server/src/unsafe-sql.ts: KV440 SQL blessed-brand constructor ownership drift via stampTrustedSql(); use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) instead of minting stamps outside owned constructors',
+    ]);
+  });
+
+  it('rejects SQL stamp helper namespace calls and re-exports outside owned constructor modules', () => {
+    expect(
+      sqlBlessedBrandStampFindings(
+        'packages/core/src/unsafe.ts',
+        `
+          import * as sqlSafety from './internal/sql-safety.js';
+          export { stampStaticSql } from './internal/sql-safety.js';
+          export * as unsafeSqlSafety from './internal/sql-safety.js';
+          const statement = sqlSafety.stampStaticSql({});
+        `,
+      ),
+    ).toEqual([
+      'packages/core/src/unsafe.ts: KV440 SQL blessed-brand constructor ownership drift via sqlSafety.stampStaticSql(); use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) instead of minting stamps outside owned constructors',
+      'packages/core/src/unsafe.ts: KV440 SQL blessed-brand constructor ownership drift via stampStaticSql re-export; do not expose SQL stamp helpers outside owned constructors',
+      'packages/core/src/unsafe.ts: KV440 SQL blessed-brand constructor ownership drift via sql-safety wildcard re-export; do not expose SQL stamp helpers outside owned constructors',
+    ]);
+  });
+
+  it('runs the SQL stamp ownership gate over configured source files', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: [],
+        deserializationFiles: [],
+        exists: (file) => file === 'sink-policy.ts' || file === 'packages/server/src/unsafe.ts',
+        logChannelFiles: [],
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'import { stampStaticSql } from "@kovojs/core/internal/sql-safety";',
+        responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: ['packages/server/src/unsafe.ts'],
+        sqlBlessedBrandStampFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: KV440 SQL blessed-brand constructor ownership drift via stampStaticSql import; keep SQL stamp helpers confined to core sql-safety.ts and the reviewed Drizzle runtime adapter',
+    ]);
   });
 
   it('pins response-fragment raw HTML writes to the Trusted Types and sanitizer path', () => {

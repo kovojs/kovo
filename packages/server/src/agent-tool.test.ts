@@ -5,6 +5,8 @@ import {
   agentToolAuditFacts,
   runAgentTool,
   tool,
+  type AgentToolAmbientCredentialKind,
+  type AgentToolAuditFact,
   type AgentToolAuthority,
 } from './agent-tool.js';
 
@@ -75,6 +77,21 @@ describe('agent tool capability primitive', () => {
     expect(() =>
       tool({
         ...base,
+        ambientCredentials: {
+          allow: false,
+          credentialKinds: ['cookie'],
+          justification: {
+            authorityBoundary: 'handler re-checks the bound principal before every read',
+            reason: 'legacy browser-authenticated assistant action under review',
+          },
+        } as never,
+      }),
+    ).toThrow(
+      'tool.ambientCredentials must not declare credentialKinds or justification unless allow is true',
+    );
+    expect(() =>
+      tool({
+        ...base,
         reachableSinks: [
           {
             capability: 'email.send',
@@ -85,6 +102,81 @@ describe('agent tool capability primitive', () => {
         ],
       }),
     ).toThrow('tool.reachableSinks[].evidence must be a non-empty string');
+  });
+
+  it('requires ambient opt-in review fields to be own data properties', () => {
+    const base = {
+      audit: { owner: 'security' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: () => undefined,
+      name: 'profile.summary',
+      purpose: 'Read the current user profile summary for an agent response.',
+    };
+    let allowGetterRan = false;
+
+    const accessorAmbient = {
+      get allow() {
+        allowGetterRan = true;
+        return true;
+      },
+      credentialKinds: ['cookie'],
+      justification: {
+        authorityBoundary: 'handler re-checks the bound principal before every read',
+        reason: 'legacy browser-authenticated assistant action under review',
+      },
+    };
+
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: accessorAmbient as never,
+      }),
+    ).toThrow('tool.ambientCredentials.allow must be declared as an own data property');
+    expect(allowGetterRan).toBe(false);
+
+    const inheritedKinds = Object.create({
+      credentialKinds: ['cookie'],
+      justification: {
+        authorityBoundary: 'handler re-checks the bound principal before every read',
+        reason: 'legacy browser-authenticated assistant action under review',
+      },
+    }) as {
+      allow: true;
+      credentialKinds: ['cookie'];
+      justification: {
+        authorityBoundary: string;
+        reason: string;
+      };
+    };
+    inheritedKinds.allow = true;
+
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: inheritedKinds,
+      }),
+    ).toThrow('tool.ambientCredentials.credentialKinds must be declared as an own data property');
+
+    const accessorJustification = {
+      allow: true,
+      credentialKinds: ['cookie'],
+      justification: {
+        authorityBoundary: 'handler re-checks the bound principal before every read',
+        get reason() {
+          throw new Error('reason getter must not run');
+        },
+      },
+    };
+
+    expect(() =>
+      tool({
+        ...base,
+        ambientCredentials: accessorJustification as never,
+      }),
+    ).toThrow(
+      'tool.ambientCredentials.justification.reason must be declared as an own data property',
+    );
   });
 
   it('rejects ambient browser/session credentials by default at the invocation boundary', async () => {
@@ -121,6 +213,27 @@ describe('agent tool capability primitive', () => {
         },
       ),
     ).rejects.toThrow('auth-proxy(header:x-auth-request-user)');
+
+    await expect(
+      runAgentTool(
+        updateOrder,
+        { id: 'ord_1' },
+        {
+          authority: principalAuthority,
+          request: new Request('https://example.test/tool', {
+            headers: {
+              'remote-user': 'user_123',
+              'x-forwarded-email': 'user@example.test',
+              'x-forwarded-user': 'user_123',
+              'x-remote-user': 'user_123',
+            },
+          }),
+          value: {},
+        },
+      ),
+    ).rejects.toThrow(
+      'auth-proxy(header:remote-user), auth-proxy(header:x-forwarded-email), auth-proxy(header:x-forwarded-user), auth-proxy(header:x-remote-user)',
+    );
 
     const request = new Request('https://example.test/tool') as Request & {
       session?: { userId: string };
@@ -212,6 +325,52 @@ describe('agent tool capability primitive', () => {
     });
   });
 
+  it('snapshots ambient credential review fields before invocation', async () => {
+    const credentialKinds: AgentToolAmbientCredentialKind[] = ['session'];
+    const justification = {
+      authorityBoundary: 'handler uses only the explicit principal authority from context',
+      reason: 'legacy adapter still invokes tools with a session-bearing request object',
+    };
+    const ambientTool = tool({
+      ambientCredentials: {
+        allow: true,
+        credentialKinds,
+        justification,
+      },
+      audit: { owner: 'security', review: 'SEC-125' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: (_input: undefined, context) => ({
+        cookie: context.request?.headers.get('cookie') ?? null,
+        hasSession: context.request === undefined ? false : 'session' in context.request,
+      }),
+      name: 'profile.snapshotSummary',
+      purpose: 'Read the current user profile summary for an agent response.',
+    });
+
+    credentialKinds.push('cookie');
+    justification.reason = 'mutated after declaration';
+
+    expect(Object.isFrozen(ambientTool.ambientCredentials)).toBe(true);
+    expect(agentToolAuditFacts([ambientTool])[0]).toMatchObject({
+      ambientCredentialKinds: ['session'],
+      ambientJustification: {
+        authorityBoundary: 'handler uses only the explicit principal authority from context',
+        reason: 'legacy adapter still invokes tools with a session-bearing request object',
+      },
+    });
+
+    await expect(
+      runAgentTool(ambientTool, undefined, {
+        authority: principalAuthority,
+        request: new Request('https://example.test/tool', {
+          headers: { cookie: 'session=ambient' },
+        }),
+        value: {},
+      }),
+    ).rejects.toThrow('cookie(header:cookie)');
+  });
+
   it('rejects undeclared ambient credential classes even when another class is justified', async () => {
     const ambientTool = tool({
       ambientCredentials: {
@@ -238,12 +397,13 @@ describe('agent tool capability primitive', () => {
             authorization: 'Bearer ambient',
             cookie: 'session=ambient',
             'x-auth-request-user': 'user_123',
+            'x-forwarded-user': 'user_123',
           },
         }),
         value: {},
       }),
     ).rejects.toThrow(
-      'authorization(header:authorization), auth-proxy(header:x-auth-request-user)',
+      'authorization(header:authorization), auth-proxy(header:x-auth-request-user), auth-proxy(header:x-forwarded-user)',
     );
   });
 
@@ -386,5 +546,72 @@ describe('agent tool capability primitive', () => {
         target: 'profile.summary',
       },
     ]);
+  });
+
+  it('returns immutable audit fact snapshots for ambient credential review data', () => {
+    const profile = tool({
+      ambientCredentials: {
+        allow: true,
+        credentialKinds: ['cookie'],
+        justification: {
+          authorityBoundary: 'handler re-checks the bound principal before reading profile data',
+          reason: 'legacy browser-authenticated assistant action under review',
+        },
+      },
+      audit: { owner: 'security', review: 'SEC-126', site: 'app/tools/profile.ts:18' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: () => undefined,
+      name: 'profile.immutableSummary',
+      purpose: 'Read the current user profile summary for an agent response.',
+      reachableSinks: [
+        {
+          capability: 'profile.read',
+          evidence: 'handler reads the profile table through a constrained query',
+          kind: 'secret-read',
+          target: 'db.profile',
+        },
+      ],
+    });
+
+    const facts = agentToolAuditFacts([profile]);
+    const fact = facts[0]!;
+    const sinkFact = fact.reachableSinks?.[0];
+
+    expect(Object.isFrozen(facts)).toBe(true);
+    expect(Object.isFrozen(fact)).toBe(true);
+    expect(Object.isFrozen(fact.ambientCredentialKinds)).toBe(true);
+    expect(Object.isFrozen(fact.ambientJustification)).toBe(true);
+    expect(Object.isFrozen(fact.authority)).toBe(true);
+    expect(Object.isFrozen(fact.declaredCapabilities)).toBe(true);
+    expect(Object.isFrozen(fact.reachableSinks)).toBe(true);
+    expect(Object.isFrozen(sinkFact)).toBe(true);
+
+    expect(() => {
+      (facts as AgentToolAuditFact[]).push(fact);
+    }).toThrow(TypeError);
+    expect(() => {
+      (fact.ambientCredentialKinds as AgentToolAmbientCredentialKind[]).push('session');
+    }).toThrow(TypeError);
+    expect(() => {
+      (fact.ambientJustification as { reason: string }).reason = 'mutated after render';
+    }).toThrow(TypeError);
+    expect(() => {
+      (fact.reachableSinks as NonNullable<AgentToolAuditFact['reachableSinks']>).push(sinkFact!);
+    }).toThrow(TypeError);
+
+    expect(agentToolAuditFacts([profile])[0]).toMatchObject({
+      ambientCredentialKinds: ['cookie'],
+      ambientJustification: {
+        authorityBoundary: 'handler re-checks the bound principal before reading profile data',
+        reason: 'legacy browser-authenticated assistant action under review',
+      },
+      reachableSinks: [
+        {
+          capability: 'profile.read',
+          target: 'db.profile',
+        },
+      ],
+    });
   });
 });
