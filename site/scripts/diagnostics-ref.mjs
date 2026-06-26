@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -28,6 +28,18 @@ const SEVERITY_BLURB = {
 };
 
 const CORE_DIAGNOSTICS_SOURCE = new URL('packages/core/src/diagnostics.ts', repoRoot);
+const PACKAGES_DIR = new URL('packages/', repoRoot);
+const SPEC_SOURCE = new URL('SPEC.md', repoRoot);
+const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx']);
+const KV_CODE_PATTERN = /\bKV\d{3}\b/g;
+const INTENTIONAL_NON_FRAMEWORK_PLACEHOLDERS = [
+  {
+    code: 'KV999',
+    pathPattern: /packages\/(?:core\/src\/graph|cli\/src\/index\.kovo-check)\.test\.ts$/u,
+    reason:
+      'unknown-diagnostic-code rejection fixtures use a fake code that the framework must not register',
+  },
+];
 
 /** Read the diagnostics registry from core's internal source so the catalog
  * follows the same registry used by framework tooling without keeping that
@@ -56,6 +68,125 @@ function escapeCell(value) {
   // Markdown table cells: escape pipes and collapse newlines to <br> so the
   // multi-line help text stays on one row.
   return String(value).replaceAll('|', '\\|').replace(/\n/g, '<br>');
+}
+
+async function* walkSourceFiles(dir) {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    const child = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      yield* walkSourceFiles(child);
+    } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
+      yield child;
+    }
+  }
+}
+
+function collectKvCodes(text) {
+  return new Set(text.match(KV_CODE_PATTERN) ?? []);
+}
+
+function hasJustifiedPlaceholder(text, code, sourceFile) {
+  const relativeSourceFile = path
+    .relative(fileURLToPath(repoRoot), sourceFile)
+    .replaceAll(path.sep, '/');
+  if (
+    INTENTIONAL_NON_FRAMEWORK_PLACEHOLDERS.some(
+      (placeholder) =>
+        placeholder.code === code &&
+        placeholder.reason.length > 0 &&
+        placeholder.pathPattern.test(relativeSourceFile),
+    )
+  ) {
+    return true;
+  }
+
+  const lines = text.split(/\r?\n/);
+  const ignorePattern = new RegExp(`diagnostics-ref-ignore\\s+${code}\\s*:\\s*\\S`, 'u');
+  return lines.some((line, index) => {
+    if (!line.includes(code)) return false;
+    return ignorePattern.test(line) || (index > 0 && ignorePattern.test(lines[index - 1]));
+  });
+}
+
+async function collectPackageSourceCodes() {
+  const codes = new Set();
+  const packageEntries = await readdir(PACKAGES_DIR, { withFileTypes: true });
+  packageEntries.sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const packageEntry of packageEntries) {
+    if (!packageEntry.isDirectory()) continue;
+    const sourceDir = path.join(fileURLToPath(PACKAGES_DIR), packageEntry.name, 'src');
+    for await (const sourceFile of walkSourceFiles(sourceDir)) {
+      const text = await readFile(sourceFile, 'utf8');
+      for (const code of collectKvCodes(text)) {
+        if (hasJustifiedPlaceholder(text, code, sourceFile)) continue;
+        codes.add(code);
+      }
+    }
+  }
+
+  return codes;
+}
+
+async function collectSpecDiagnosticTableCodes() {
+  const spec = await readFile(SPEC_SOURCE, 'utf8');
+  const sectionStart = spec.indexOf('### 11.3 Diagnostic codes (registry)');
+  if (sectionStart < 0) {
+    throw new Error('diagnostics-ref: SPEC §11.3 diagnostic table is missing');
+  }
+  const nextSection = spec.indexOf('\n### ', sectionStart + 1);
+  const tableText = spec.slice(sectionStart, nextSection < 0 ? undefined : nextSection);
+  const codes = new Set();
+  for (const match of tableText.matchAll(/^\|\s*(KV\d{3})\s*\|/gmu)) {
+    codes.add(match[1]);
+  }
+  return codes;
+}
+
+async function assertCatalogCoversFrameworkCodes(definitions, page) {
+  const registryCodes = new Set(Object.keys(definitions));
+  const [packageSourceCodes, specTableCodes] = await Promise.all([
+    collectPackageSourceCodes(),
+    collectSpecDiagnosticTableCodes(),
+  ]);
+
+  const failures = [];
+  const requiredCodeSources = [
+    { codes: packageSourceCodes, label: 'packages/*/src' },
+    { codes: specTableCodes, label: 'SPEC §11.3 diagnostic table' },
+  ];
+  for (const source of requiredCodeSources) {
+    const missing = Array.from(source.codes)
+      .filter((code) => !registryCodes.has(code))
+      .sort(byCode);
+    if (missing.length > 0) failures.push(`${source.label}: ${missing.join(', ')}`);
+  }
+
+  const missingFromPage = Array.from(registryCodes)
+    .filter((code) => !page.includes(`\`${code}\``))
+    .sort(byCode);
+  if (missingFromPage.length > 0) {
+    failures.push(`generated diagnostics catalog: ${missingFromPage.join(', ')}`);
+  }
+
+  if (failures.length > 0) {
+    throw new Error(
+      [
+        'diagnostics-ref: every framework KV### emitted in packages/*/src or listed in SPEC §11.3 must be present in diagnosticDefinitions and the generated catalog.',
+        ...failures.map((failure) => `- ${failure}`),
+        'Use a comment shaped like `diagnostics-ref-ignore KV000: reason` only for intentional non-framework placeholders.',
+      ].join('\n'),
+    );
+  }
 }
 
 function renderPage(definitions) {
@@ -115,6 +246,7 @@ export async function generateDiagnosticsReference({
   const definitions = await loadDiagnosticDefinitions();
   await mkdir(outDir, { recursive: true });
   const page = renderPage(definitions);
+  await assertCatalogCoversFrameworkCodes(definitions, page);
   await writeFile(path.join(outDir, 'diagnostics.md'), page, 'utf8');
 
   const count = Object.keys(definitions).length;

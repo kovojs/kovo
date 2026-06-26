@@ -107,9 +107,10 @@ When the user submits, the loader runs a fixed sequence:
 5. **On error**, the snapshots are restored and the typed error fragment renders. See the
    [mutations guide](/guides/mutations/) for the 422 path.
 
-If server truth never arrives for an applied transform, the client raises a visible runtime
-diagnostic, then settles that transform without promoting the prediction to authoritative data.
-Fragment-only responses are allowed; silent inconsistency is not.
+If server truth never arrives for an applied transform, the client raises **KV313** and discards the
+prediction. The affected query rolls back to its pre-transform snapshot or refetches from `/_q/<key>`;
+it does not keep the optimistic value on screen as settled data. Fragment-only responses are allowed
+when you declared `'await-fragment'`, but silent inconsistency is not.
 
 ## Rebase concurrent mutations
 
@@ -216,6 +217,8 @@ Derived transforms and explicit punts: SPEC §10.5. The coverage check at both a
 the emitted invalidation sets it reads: SPEC §6.1. A missing optimistic transform is **KV310**;
 anything other than `hand-written`/`await-fragment` is the same code. Every query-dependent DOM
 position needing a declared update status is **KV311** (SPEC §4.9). Fragment-status positions:
-SPEC §4.9. Navigation and `keepalive`: SPEC §8. Property-testing transforms: SPEC §12.
+SPEC §4.9. Missing server truth for an applied transform is **KV313**; SPEC §10.4 requires the
+runtime to discard or refetch the prediction rather than freeze it. Navigation and `keepalive`:
+SPEC §8. Property-testing transforms: SPEC §12.
 
 </details>
