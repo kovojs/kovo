@@ -21,7 +21,13 @@ import {
  */
 export interface FragmentRenderer {
   errorBoundary?: ErrorBoundaryRenderer;
-  mode?: 'append' | 'replace';
+  /**
+   * Patch mode for the rendered `<kovo-fragment>` (SPEC §9.3): `'append'` (END,
+   * pagination/streams), `'prepend'` (START, load-older — keyed rows dedupe by
+   * `kovo-key` and the browser preserves the scroll anchor), or `'replace'`
+   * (default DOM-morph).
+   */
+  mode?: 'append' | 'prepend' | 'replace';
   render(input: unknown): string | Promise<string>;
   stylesheets?: readonly (string | StylesheetAsset)[];
   target: string;
