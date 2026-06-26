@@ -28,10 +28,11 @@ export interface AgentToolModuleSource {
  * imported helper function, and inline callbacks passed to a local/imported helper that directly
  * invokes that callback parameter, a simple `const` alias of that parameter, a static `const`
  * object property alias of that parameter, a static `const` array index alias of that parameter,
- * a readonly array wrapper method that directly invokes each proven callback element, or a static
- * object wrapper around a proven or inline const-literal callback array. It does not inspect raw
- * source text after parse and it skips non-invoked nested function bodies, so ordinary callbacks,
- * computed namespace access,
+ * a readonly array wrapper method that directly invokes each proven callback element, a static
+ * object wrapper around a proven or inline const-literal callback array, or one additional static
+ * const object wrapper around such an object wrapper. It does not inspect raw source text after
+ * parse and it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace
+ * access,
  * computed/spread object/array aliases and exports, export-star namespaces, ambiguous export-star
  * names, reassigned callback aliases, mutated callback property/index aliases, mutable/defaulted/
  * nested destructuring, mutating/dynamic array methods, and dynamic paths remain outside the
@@ -875,6 +876,13 @@ function reachableSinkFacts(
 
 type AgentToolSinkOrigin = 'handler' | 'helper' | 'imported-helper' | 'inline';
 
+type CallbackArrayElements = ReadonlyMap<string, string>;
+type CallbackArrayObjectWrapperProperties = ReadonlyMap<string, CallbackArrayElements>;
+type NestedCallbackArrayObjectWrapperProperties = ReadonlyMap<
+  string,
+  CallbackArrayObjectWrapperProperties
+>;
+
 function directlyInvokedInlineFunction(node: ts.Node): ts.FunctionLikeDeclaration | undefined {
   if (!ts.isCallExpression(node)) return undefined;
 
@@ -930,6 +938,11 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
     arrayAliasElements,
     candidateNames,
   );
+  const nestedArrayObjectWrapperProperties = simpleCallbackParameterNestedArrayObjectWrappers(
+    body,
+    arrayObjectWrapperProperties,
+    candidateNames,
+  );
   const callableParameterNames = new Map<string, string>();
   for (const candidateName of candidateNames) {
     callableParameterNames.set(candidateName, candidateName);
@@ -942,6 +955,7 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
     ...objectAliasProperties.keys(),
     ...arrayAliasElements.keys(),
     ...arrayObjectWrapperProperties.keys(),
+    ...nestedArrayObjectWrapperProperties.keys(),
   ]);
 
   const invokedNames = new Set<string>();
@@ -999,6 +1013,14 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
       invokedNames.add(parameterName);
     }
 
+    for (const parameterName of invokedNestedCallbackArrayObjectWrapperParameters(
+      node,
+      nestedArrayObjectWrapperProperties,
+      nextBlockedNames,
+    )) {
+      invokedNames.add(parameterName);
+    }
+
     const assignedName = assignedIdentifierName(node);
     if (assignedName !== undefined && !nextBlockedNames.has(assignedName)) {
       const parameterName = callableParameterNames.get(assignedName);
@@ -1033,6 +1055,23 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
     );
     if (assignedWrapperElement !== undefined) reassignedNames.add(assignedWrapperElement);
 
+    const assignedNestedWrapperProperty = assignedNestedCallbackArrayObjectWrapperPropertyParameter(
+      node,
+      nestedArrayObjectWrapperProperties,
+      nextBlockedNames,
+    );
+    if (assignedNestedWrapperProperty !== undefined) {
+      reassignedNames.add(assignedNestedWrapperProperty);
+    }
+
+    const assignedNestedWrapperElement = assignedNestedCallbackArrayObjectWrapperElementParameter(
+      node,
+      nestedArrayObjectWrapperProperties,
+      nextBlockedNames,
+    );
+    if (assignedNestedWrapperElement !== undefined)
+      reassignedNames.add(assignedNestedWrapperElement);
+
     for (const unsafeParameter of unsafeCallbackObjectAliasParameters(
       node,
       objectAliasProperties,
@@ -1053,6 +1092,15 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
     for (const unsafeParameter of unsafeCallbackArrayObjectWrapperParameters(
       node,
       arrayObjectWrapperProperties,
+      nestedArrayObjectWrapperProperties,
+      nextBlockedNames,
+    )) {
+      reassignedNames.add(unsafeParameter);
+    }
+
+    for (const unsafeParameter of unsafeNestedCallbackArrayObjectWrapperParameters(
+      node,
+      nestedArrayObjectWrapperProperties,
       nextBlockedNames,
     )) {
       reassignedNames.add(unsafeParameter);
@@ -1193,7 +1241,7 @@ function simpleCallbackParameterArrayObjectWrappers(
   body: ts.ConciseBody,
   arrayAliasElements: ReadonlyMap<string, ReadonlyMap<string, string>>,
   parameterNames: ReadonlySet<string>,
-): ReadonlyMap<string, ReadonlyMap<string, ReadonlyMap<string, string>>> {
+): ReadonlyMap<string, CallbackArrayObjectWrapperProperties> {
   if (!ts.isBlock(body)) return new Map();
 
   const wrappers = new Map<string, ReadonlyMap<string, ReadonlyMap<string, string>>>();
@@ -1236,7 +1284,7 @@ function callbackParameterArrayObjectWrapperProperties(
   expression: ts.ObjectLiteralExpression,
   arrayAliasElements: ReadonlyMap<string, ReadonlyMap<string, string>>,
   parameterNames: ReadonlySet<string>,
-): ReadonlyMap<string, ReadonlyMap<string, string>> | undefined {
+): CallbackArrayObjectWrapperProperties | undefined {
   const properties = new Map<string, ReadonlyMap<string, string>>();
   for (const property of expression.properties) {
     if (ts.isSpreadAssignment(property)) return undefined;
@@ -1265,6 +1313,83 @@ function callbackParameterArrayObjectWrapperProperties(
     if (!elements) return undefined;
 
     properties.set(propertyName, elements);
+  }
+
+  return properties.size === 0 ? undefined : properties;
+}
+
+function simpleCallbackParameterNestedArrayObjectWrappers(
+  body: ts.ConciseBody,
+  arrayObjectWrapperProperties: ReadonlyMap<string, CallbackArrayObjectWrapperProperties>,
+  parameterNames: ReadonlySet<string>,
+): ReadonlyMap<string, NestedCallbackArrayObjectWrapperProperties> {
+  if (!ts.isBlock(body)) return new Map();
+
+  const wrappers = new Map<string, NestedCallbackArrayObjectWrapperProperties>();
+  const ambiguousWrappers = new Set<string>();
+  for (const statement of body.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+
+      const initializer = unwrapParentheses(declaration.initializer);
+      if (!ts.isObjectLiteralExpression(initializer)) continue;
+
+      const properties = nestedCallbackArrayObjectWrapperProperties(
+        initializer,
+        arrayObjectWrapperProperties,
+      );
+      if (!properties) continue;
+
+      const wrapperName = declaration.name.text;
+      if (
+        parameterNames.has(wrapperName) ||
+        arrayObjectWrapperProperties.has(wrapperName) ||
+        wrappers.has(wrapperName)
+      ) {
+        wrappers.delete(wrapperName);
+        ambiguousWrappers.add(wrapperName);
+        continue;
+      }
+      if (!ambiguousWrappers.has(wrapperName)) wrappers.set(wrapperName, properties);
+    }
+  }
+
+  return wrappers;
+}
+
+function nestedCallbackArrayObjectWrapperProperties(
+  expression: ts.ObjectLiteralExpression,
+  arrayObjectWrapperProperties: ReadonlyMap<string, CallbackArrayObjectWrapperProperties>,
+): NestedCallbackArrayObjectWrapperProperties | undefined {
+  const properties = new Map<string, CallbackArrayObjectWrapperProperties>();
+  for (const property of expression.properties) {
+    if (ts.isSpreadAssignment(property)) return undefined;
+
+    let propertyName: string | undefined;
+    let initializer: ts.Expression;
+    if (ts.isShorthandPropertyAssignment(property)) {
+      propertyName = property.name.text;
+      initializer = property.name;
+    } else if (ts.isPropertyAssignment(property)) {
+      if (property.name === undefined || ts.isComputedPropertyName(property.name)) return undefined;
+      propertyName = staticPropertyName(property.name);
+      initializer = property.initializer;
+    } else {
+      return undefined;
+    }
+
+    if (propertyName === undefined || properties.has(propertyName)) return undefined;
+
+    const wrapperAlias = unwrapParentheses(initializer);
+    if (!ts.isIdentifier(wrapperAlias)) return undefined;
+
+    const wrapperProperties = arrayObjectWrapperProperties.get(wrapperAlias.text);
+    if (!wrapperProperties) return undefined;
+
+    properties.set(propertyName, wrapperProperties);
   }
 
   return properties.size === 0 ? undefined : properties;
@@ -1367,10 +1492,7 @@ function assignedCallbackArrayElementParameter(
 
 function assignedCallbackArrayObjectWrapperPropertyParameter(
   node: ts.Node,
-  arrayObjectWrapperProperties: ReadonlyMap<
-    string,
-    ReadonlyMap<string, ReadonlyMap<string, string>>
-  >,
+  arrayObjectWrapperProperties: ReadonlyMap<string, CallbackArrayObjectWrapperProperties>,
   blockedNames: ReadonlySet<string>,
 ): string | undefined {
   let left: ts.Expression | undefined;
@@ -1403,10 +1525,7 @@ function assignedCallbackArrayObjectWrapperPropertyParameter(
 
 function assignedCallbackArrayObjectWrapperElementParameter(
   node: ts.Node,
-  arrayObjectWrapperProperties: ReadonlyMap<
-    string,
-    ReadonlyMap<string, ReadonlyMap<string, string>>
-  >,
+  arrayObjectWrapperProperties: ReadonlyMap<string, CallbackArrayObjectWrapperProperties>,
   blockedNames: ReadonlySet<string>,
 ): string | undefined {
   let left: ts.Expression | undefined;
@@ -1432,6 +1551,90 @@ function assignedCallbackArrayObjectWrapperElementParameter(
   const elements = callbackArrayObjectWrapperPropertyElements(
     left.expression,
     arrayObjectWrapperProperties,
+    blockedNames,
+  );
+  if (!elements) return undefined;
+
+  const index = staticElementIndex(left.argumentExpression);
+  return index === undefined ? undefined : elements.get(index);
+}
+
+function assignedNestedCallbackArrayObjectWrapperPropertyParameter(
+  node: ts.Node,
+  nestedArrayObjectWrapperProperties: ReadonlyMap<
+    string,
+    NestedCallbackArrayObjectWrapperProperties
+  >,
+  blockedNames: ReadonlySet<string>,
+): string | undefined {
+  let left: ts.Expression | undefined;
+  if (
+    ts.isBinaryExpression(node) &&
+    isAssignmentOperator(node.operatorToken.kind) &&
+    ts.isPropertyAccessExpression(node.left)
+  ) {
+    left = node.left;
+  }
+
+  if (
+    (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+    (node.operator === ts.SyntaxKind.PlusPlusToken ||
+      node.operator === ts.SyntaxKind.MinusMinusToken) &&
+    ts.isPropertyAccessExpression(node.operand)
+  ) {
+    left = node.operand;
+  }
+
+  if (!left || !ts.isPropertyAccessExpression(left)) return undefined;
+
+  const elements = nestedCallbackArrayObjectWrapperPropertyElements(
+    left,
+    nestedArrayObjectWrapperProperties,
+    blockedNames,
+  );
+  if (elements) return firstCallbackParameter(elements);
+
+  const nestedWrapperName = left.expression;
+  if (!ts.isIdentifier(nestedWrapperName) || blockedNames.has(nestedWrapperName.text)) {
+    return undefined;
+  }
+
+  return firstNestedCallbackParameter(
+    nestedArrayObjectWrapperProperties.get(nestedWrapperName.text)?.get(left.name.text),
+  );
+}
+
+function assignedNestedCallbackArrayObjectWrapperElementParameter(
+  node: ts.Node,
+  nestedArrayObjectWrapperProperties: ReadonlyMap<
+    string,
+    NestedCallbackArrayObjectWrapperProperties
+  >,
+  blockedNames: ReadonlySet<string>,
+): string | undefined {
+  let left: ts.Expression | undefined;
+  if (
+    ts.isBinaryExpression(node) &&
+    isAssignmentOperator(node.operatorToken.kind) &&
+    ts.isElementAccessExpression(node.left)
+  ) {
+    left = node.left;
+  }
+
+  if (
+    (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+    (node.operator === ts.SyntaxKind.PlusPlusToken ||
+      node.operator === ts.SyntaxKind.MinusMinusToken) &&
+    ts.isElementAccessExpression(node.operand)
+  ) {
+    left = node.operand;
+  }
+
+  if (!left || !ts.isElementAccessExpression(left)) return undefined;
+
+  const elements = nestedCallbackArrayObjectWrapperPropertyElements(
+    left.expression,
+    nestedArrayObjectWrapperProperties,
     blockedNames,
   );
   if (!elements) return undefined;
@@ -1472,10 +1675,7 @@ function unsafeCallbackObjectAliasParameters(
 function unsafeCallbackArrayAliasParameters(
   node: ts.Node,
   arrayAliasElements: ReadonlyMap<string, ReadonlyMap<string, string>>,
-  arrayObjectWrapperProperties: ReadonlyMap<
-    string,
-    ReadonlyMap<string, ReadonlyMap<string, string>>
-  >,
+  arrayObjectWrapperProperties: ReadonlyMap<string, CallbackArrayObjectWrapperProperties>,
   blockedNames: ReadonlySet<string>,
 ): ReadonlySet<string> {
   if (!ts.isIdentifier(node)) return new Set();
@@ -1532,10 +1732,7 @@ function isStaticPropertyNameIdentifier(node: ts.Identifier): boolean {
 
 function isCallbackArrayObjectWrapperInitializer(
   node: ts.Identifier,
-  arrayObjectWrapperProperties: ReadonlyMap<
-    string,
-    ReadonlyMap<string, ReadonlyMap<string, string>>
-  >,
+  arrayObjectWrapperProperties: ReadonlyMap<string, CallbackArrayObjectWrapperProperties>,
 ): boolean {
   const property = node.parent;
   let propertyName: string | undefined;
@@ -1576,11 +1773,58 @@ function isCallbackArrayObjectWrapperInitializer(
   return arrayObjectWrapperProperties.get(initializer.name.text)?.has(propertyName) ?? false;
 }
 
+function isNestedCallbackArrayObjectWrapperInitializer(
+  node: ts.Identifier,
+  nestedArrayObjectWrapperProperties: ReadonlyMap<
+    string,
+    NestedCallbackArrayObjectWrapperProperties
+  >,
+): boolean {
+  const property = node.parent;
+  let propertyName: string | undefined;
+  let objectLiteral: ts.Node | undefined;
+
+  if (ts.isShorthandPropertyAssignment(property) && property.name === node) {
+    propertyName = property.name.text;
+    objectLiteral = property.parent;
+  } else if (ts.isPropertyAssignment(property) && property.initializer === node) {
+    propertyName =
+      property.name === undefined || ts.isComputedPropertyName(property.name)
+        ? undefined
+        : staticPropertyName(property.name);
+    objectLiteral = property.parent;
+  }
+
+  if (
+    propertyName === undefined ||
+    !objectLiteral ||
+    !ts.isObjectLiteralExpression(objectLiteral)
+  ) {
+    return false;
+  }
+
+  let initializer = objectLiteral.parent;
+  while (
+    initializer &&
+    (ts.isParenthesizedExpression(initializer) ||
+      ts.isAsExpression(initializer) ||
+      ts.isTypeAssertionExpression(initializer) ||
+      ts.isSatisfiesExpression(initializer))
+  ) {
+    initializer = initializer.parent;
+  }
+  if (!initializer || !ts.isVariableDeclaration(initializer)) return false;
+  if (!ts.isIdentifier(initializer.name)) return false;
+
+  return nestedArrayObjectWrapperProperties.get(initializer.name.text)?.has(propertyName) ?? false;
+}
+
 function unsafeCallbackArrayObjectWrapperParameters(
   node: ts.Node,
-  arrayObjectWrapperProperties: ReadonlyMap<
+  arrayObjectWrapperProperties: ReadonlyMap<string, CallbackArrayObjectWrapperProperties>,
+  nestedArrayObjectWrapperProperties: ReadonlyMap<
     string,
-    ReadonlyMap<string, ReadonlyMap<string, string>>
+    NestedCallbackArrayObjectWrapperProperties
   >,
   blockedNames: ReadonlySet<string>,
 ): ReadonlySet<string> {
@@ -1596,7 +1840,15 @@ function unsafeCallbackArrayObjectWrapperParameters(
     return new Set();
   }
 
+  if (isStaticPropertyNameIdentifier(node)) {
+    return new Set();
+  }
+
   if (isCallbackArrayObjectWrapperSafeCallTarget(node, blockedNames)) {
+    return new Set();
+  }
+
+  if (isNestedCallbackArrayObjectWrapperInitializer(node, nestedArrayObjectWrapperProperties)) {
     return new Set();
   }
 
@@ -1604,6 +1856,46 @@ function unsafeCallbackArrayObjectWrapperParameters(
   for (const elements of properties.values()) {
     for (const parameterName of elements.values()) {
       parameterNames.add(parameterName);
+    }
+  }
+
+  return parameterNames;
+}
+
+function unsafeNestedCallbackArrayObjectWrapperParameters(
+  node: ts.Node,
+  nestedArrayObjectWrapperProperties: ReadonlyMap<
+    string,
+    NestedCallbackArrayObjectWrapperProperties
+  >,
+  blockedNames: ReadonlySet<string>,
+): ReadonlySet<string> {
+  if (!ts.isIdentifier(node)) return new Set();
+  const properties = nestedArrayObjectWrapperProperties.get(node.text);
+  if (!properties || blockedNames.has(node.text)) return new Set();
+
+  if (
+    ts.isVariableDeclaration(node.parent) &&
+    node.parent.name === node &&
+    ts.isIdentifier(node.parent.name)
+  ) {
+    return new Set();
+  }
+
+  if (isStaticPropertyNameIdentifier(node)) {
+    return new Set();
+  }
+
+  if (isNestedCallbackArrayObjectWrapperSafeCallTarget(node, blockedNames)) {
+    return new Set();
+  }
+
+  const parameterNames = new Set<string>();
+  for (const wrapperProperties of properties.values()) {
+    for (const elements of wrapperProperties.values()) {
+      for (const parameterName of elements.values()) {
+        parameterNames.add(parameterName);
+      }
     }
   }
 
@@ -1648,10 +1940,7 @@ function invokedCallbackArrayWrapperParameters(
 
 function invokedCallbackArrayObjectWrapperParameters(
   node: ts.Node,
-  arrayObjectWrapperProperties: ReadonlyMap<
-    string,
-    ReadonlyMap<string, ReadonlyMap<string, string>>
-  >,
+  arrayObjectWrapperProperties: ReadonlyMap<string, CallbackArrayObjectWrapperProperties>,
   blockedNames: ReadonlySet<string>,
 ): ReadonlySet<string> {
   if (!ts.isCallExpression(node)) return new Set();
@@ -1693,12 +1982,56 @@ function invokedCallbackArrayObjectWrapperParameters(
   return new Set(elements.values());
 }
 
+function invokedNestedCallbackArrayObjectWrapperParameters(
+  node: ts.Node,
+  nestedArrayObjectWrapperProperties: ReadonlyMap<
+    string,
+    NestedCallbackArrayObjectWrapperProperties
+  >,
+  blockedNames: ReadonlySet<string>,
+): ReadonlySet<string> {
+  if (!ts.isCallExpression(node)) return new Set();
+
+  if (ts.isElementAccessExpression(node.expression)) {
+    const elements = nestedCallbackArrayObjectWrapperPropertyElements(
+      node.expression.expression,
+      nestedArrayObjectWrapperProperties,
+      blockedNames,
+    );
+    if (!elements) return new Set();
+
+    const index = staticElementIndex(node.expression.argumentExpression);
+    const parameterName = index === undefined ? undefined : elements.get(index);
+    return parameterName === undefined ? new Set() : new Set([parameterName]);
+  }
+
+  if (!ts.isPropertyAccessExpression(node.expression)) return new Set();
+  if (!readonlyCallbackArrayWrapperMethods.has(node.expression.name.text)) return new Set();
+
+  const elements = nestedCallbackArrayObjectWrapperPropertyElements(
+    node.expression.expression,
+    nestedArrayObjectWrapperProperties,
+    blockedNames,
+  );
+  if (!elements) return new Set();
+
+  const [callback] = node.arguments;
+  if (!callback) return new Set();
+
+  const callbackExpression = unwrapParentheses(callback);
+  if (!ts.isArrowFunction(callbackExpression) && !ts.isFunctionExpression(callbackExpression)) {
+    return new Set();
+  }
+
+  const wrapperParameterName = directlyInvokedWrapperCallbackParameter(callbackExpression);
+  if (wrapperParameterName === undefined) return new Set();
+
+  return new Set(elements.values());
+}
+
 function callbackArrayObjectWrapperPropertyElements(
   expression: ts.Expression,
-  arrayObjectWrapperProperties: ReadonlyMap<
-    string,
-    ReadonlyMap<string, ReadonlyMap<string, string>>
-  >,
+  arrayObjectWrapperProperties: ReadonlyMap<string, CallbackArrayObjectWrapperProperties>,
   blockedNames: ReadonlySet<string>,
 ): ReadonlyMap<string, string> | undefined {
   if (!ts.isPropertyAccessExpression(expression)) return undefined;
@@ -1709,10 +2042,47 @@ function callbackArrayObjectWrapperPropertyElements(
   return arrayObjectWrapperProperties.get(wrapperName.text)?.get(expression.name.text);
 }
 
+function nestedCallbackArrayObjectWrapperPropertyElements(
+  expression: ts.Expression,
+  nestedArrayObjectWrapperProperties: ReadonlyMap<
+    string,
+    NestedCallbackArrayObjectWrapperProperties
+  >,
+  blockedNames: ReadonlySet<string>,
+): ReadonlyMap<string, string> | undefined {
+  if (!ts.isPropertyAccessExpression(expression)) return undefined;
+
+  const wrapperProperty = expression.expression;
+  if (!ts.isPropertyAccessExpression(wrapperProperty)) return undefined;
+
+  const nestedWrapperName = wrapperProperty.expression;
+  if (!ts.isIdentifier(nestedWrapperName) || blockedNames.has(nestedWrapperName.text)) {
+    return undefined;
+  }
+
+  return nestedArrayObjectWrapperProperties
+    .get(nestedWrapperName.text)
+    ?.get(wrapperProperty.name.text)
+    ?.get(expression.name.text);
+}
+
 function firstCallbackParameter(
   elements: ReadonlyMap<string, string> | undefined,
 ): string | undefined {
   return elements?.values().next().value;
+}
+
+function firstNestedCallbackParameter(
+  properties: CallbackArrayObjectWrapperProperties | undefined,
+): string | undefined {
+  if (!properties) return undefined;
+
+  for (const elements of properties.values()) {
+    const parameterName = firstCallbackParameter(elements);
+    if (parameterName !== undefined) return parameterName;
+  }
+
+  return undefined;
 }
 
 function directlyInvokedWrapperCallbackParameter(
@@ -1813,6 +2183,42 @@ function isCallbackArrayObjectWrapperSafeCallTarget(
     return (
       ts.isCallExpression(node.parent.parent.parent) &&
       node.parent.parent.parent.expression === node.parent.parent
+    );
+  }
+
+  return false;
+}
+
+function isNestedCallbackArrayObjectWrapperSafeCallTarget(
+  node: ts.Identifier,
+  blockedNames: ReadonlySet<string>,
+): boolean {
+  if (blockedNames.has(node.text)) return false;
+  if (!ts.isPropertyAccessExpression(node.parent)) return false;
+  if (node.parent.expression !== node) return false;
+
+  const wrapperProperty = node.parent.parent;
+  if (!ts.isPropertyAccessExpression(wrapperProperty)) return false;
+  if (wrapperProperty.expression !== node.parent) return false;
+
+  if (
+    ts.isElementAccessExpression(wrapperProperty.parent) &&
+    wrapperProperty.parent.expression === wrapperProperty &&
+    ts.isCallExpression(wrapperProperty.parent.parent) &&
+    wrapperProperty.parent.parent.expression === wrapperProperty.parent &&
+    staticElementIndex(wrapperProperty.parent.argumentExpression) !== undefined
+  ) {
+    return true;
+  }
+
+  if (
+    ts.isPropertyAccessExpression(wrapperProperty.parent) &&
+    wrapperProperty.parent.expression === wrapperProperty &&
+    readonlyCallbackArrayWrapperMethods.has(wrapperProperty.parent.name.text)
+  ) {
+    return (
+      ts.isCallExpression(wrapperProperty.parent.parent) &&
+      wrapperProperty.parent.parent.expression === wrapperProperty.parent
     );
   }
 
