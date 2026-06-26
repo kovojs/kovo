@@ -171,7 +171,10 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. It also rejects
       TS-only angle-bracket SQL brand assertions such as `<KovoTrustedSql>raw` while avoiding generic type
       arguments and TSX tags; the same focused sink-policy/SQL suite, `pnpm run check:sink-policy`,
-      `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3 candidates and full static
+      `git diff --check`, and `pnpm run check:vp` passed. The sink-policy gate now rejects production fail-open
+      SQL safety drift (`KOVO_SQL_GUARD`, warn/off modes, and warn/off config shapes) while pinning KV422 severity
+      and managed-handle throw behavior; focused sink-policy/SQL tests, `pnpm run check:sink-policy`, staged
+      `git diff --check`, and file-level `vp check` passed. Remaining gap: other §3 candidates and full static
       by-construction value-path analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
@@ -202,10 +205,11 @@ packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts
       and inline-IIFE extensions verified the same focused Vitest command plus `git diff --check` and
       `pnpm run check:vp`. Simple statically resolvable relative named imports now contribute enforced
       imported-helper egress/secret-read rows for exported helper functions; focused registry/check tests,
-      `git diff --check`, and `pnpm run check:vp` passed. Static local named re-export barrels now preserve
-      enforced imported-helper egress/secret-read reachability, while export-star barrels remain outside the
-      sound subset; focused registry/check tests, `git diff --check`, and `pnpm run check:vp` passed. Static
-      namespace imports such as `import * as mail from './mail'` now preserve enforced helper egress/secret-read
+      `git diff --check`, and `pnpm run check:vp` passed. Static local named re-export barrels and unique
+      static `export *` barrels now preserve enforced imported-helper egress/secret-read reachability, while
+      ambiguous export-star names remain outside the sound subset; focused registry/check tests,
+      `git diff --check`, and `pnpm run check:vp` passed. Static namespace imports such as
+      `import * as mail from './mail'` now preserve enforced helper egress/secret-read
       reachability for exported local helper calls, while computed namespace access and export-star namespaces
       remain outside the proof; focused registry/check tests, `git diff --check`, and `pnpm run check:vp`
       passed. Static default imports now preserve enforced helper egress/secret-read reachability for local
@@ -348,8 +352,11 @@ packages/server/src/app.test.ts`, `git diff --check`, and `pnpm run check:vp` pa
       lower-level request-shell helpers now require framework-normalized session provider markers, so raw
       provider functions cannot bypass `createApp()` by calling `resolveLifecycleRequest()` or hand-building app
       aggregates; focused server tests, `git diff --check`, `pnpm run check:vp`, and `pnpm run check:api-surface`
-      passed. Remaining gap: explicitly justified Better Auth/delegated providers remain supported boundaries,
-      so opaque sessions are not yet the only framework-wide lifecycle.
+      passed. Delegated session declarations now also require structured non-empty `lifecycleAssertions` for
+      validation, rotation, expiry, and revocation ownership; focused server/Better Auth tests,
+      `pnpm run check:api-surface`, staged `git diff --check`, and file-level `vp check` passed. Remaining gap:
+      explicitly justified Better Auth/delegated providers remain supported boundaries, so opaque sessions are
+      not yet the only framework-wide lifecycle.
 
 - [x] **OPP-12 — Token verify pins algorithm to KEY TYPE.** by-construction (at the verify sink) · lev 4 ·
       M · non-breaking. If Kovo ever offers a client-parseable token (OPP-11 opt-in), the verify sink must derive
@@ -565,7 +572,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       unsummarized helpers remain `scope: unknown`; the same focused scope-audit test, `git diff --check`, and
       `pnpm run check:vp` passed. Existing const object-wrapper literal element access coverage now proves
       summarized guard provenance for `principal["userId"]`, while a mutable wrapper remains `scope: unknown`;
-      the same focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed.
+      the same focused scope-audit test, `git diff --check`, and `pnpm run check:vp` passed. Const array
+      destructuring from a static tuple literal now preserves summarized guard provenance while
+      spreads/defaults/mismatches remain outside the proof; the focused scope-audit test, staged `git diff --check`,
+      and file-level `vp check` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
