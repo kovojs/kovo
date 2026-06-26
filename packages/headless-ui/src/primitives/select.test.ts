@@ -133,8 +133,10 @@ describe('headless-ui select primitive', () => {
     expect(selectItemAttributes({ ...state, itemLabel: 'Red', itemValue: 'red' })).toEqual({
       'aria-selected': 'true',
       'data-state': 'checked',
-      // J3: synthesized option id (no listboxId → 'select' fallback prefix).
-      id: 'select-option-0',
+      // bugz-3 L17: with no listboxId the synthesized id uses a per-instance
+      // content-fingerprint prefix (`select-<fp>-option-<i>`), not the shared
+      // literal `select` (which collided across id-less instances).
+      id: expect.stringMatching(/^select-[0-9a-z]+-option-0$/),
       label: 'Red',
       role: 'option',
       value: 'red',
@@ -147,7 +149,7 @@ describe('headless-ui select primitive', () => {
       'data-disabled': '',
       'data-highlighted': '',
       'data-state': 'unchecked',
-      id: 'select-option-1',
+      id: expect.stringMatching(/^select-[0-9a-z]+-option-1$/),
       role: 'option',
       value: 'green',
     });

@@ -207,6 +207,36 @@ describe('headless-ui combobox primitive', () => {
     });
   });
 
+  // bugz-3 L17: an unfiltered render must not collide a filtered-out option with
+  // the matching option on `…-option-0`, and two id-less comboboxes on one page
+  // must not share a synthesized prefix.
+  it('synthesizes collision-free, per-instance combobox option ids (L17)', () => {
+    const fruit: readonly ComboboxItem[] = Object.freeze([
+      { label: 'Apple', value: 'apple' },
+      { label: 'Banana', value: 'banana' },
+    ]);
+    // Query 'ban' filters to [banana]; apple is filtered out.
+    const state = { highlightedValue: 'banana', items: fruit, open: true, value: 'ban' };
+    expect(comboboxFilteredItems(state).map(({ value }) => value)).toEqual(['banana']);
+
+    const activeDescendant = comboboxInputAttributes(state)['aria-activedescendant'];
+    const bananaId = comboboxOptionAttributes({ ...state, itemValue: 'banana' }).id;
+    // The matching option carries the referenced id; the filtered-out option gets
+    // no id, so the two cannot both render `…-option-0`.
+    expect(bananaId).toBe(activeDescendant);
+    expect(comboboxOptionAttributes({ ...state, itemValue: 'apple' }).id).toBeUndefined();
+
+    // Two id-less comboboxes with different option sets do not share a prefix.
+    const other: readonly ComboboxItem[] = Object.freeze([
+      { label: 'Cherry', value: 'cherry' },
+      { label: 'Date', value: 'date' },
+    ]);
+    const otherState = { highlightedValue: 'cherry', items: other, open: true, value: 'che' };
+    const otherId = comboboxOptionAttributes({ ...otherState, itemValue: 'cherry' }).id;
+    expect(otherId).toMatch(/-option-0$/);
+    expect(otherId).not.toBe(bananaId);
+  });
+
   it('resolves display text from option labels, text values, raw values, or placeholder', () => {
     expect(comboboxValueText({ items: cityItems, value: 'austin' })).toBe('Austin');
     expect(comboboxValueText({ items: cityItems, value: 'chicago' })).toBe('Chicago city');
