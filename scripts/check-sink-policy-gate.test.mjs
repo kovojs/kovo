@@ -590,6 +590,7 @@ describe('sink-policy gate', () => {
           export function matchesRequest(request) {
             return [
               new RegExp(request.headers.get("x-pattern") ?? ""),
+              RegExp(request.url),
             ];
           }
         `,
@@ -615,6 +616,21 @@ describe('sink-policy gate', () => {
     ]);
   });
 
+  it('dedupes request-derived dynamic RegExp constructor and function call findings', () => {
+    expect(
+      deserializationSinkFindings(
+        'packages/server/src/unsafe-match.ts',
+        `
+          export function matchesRequest(request) {
+            return [RegExp(request.url), new RegExp(request.url)];
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-match.ts: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation',
+    ]);
+  });
+
   it('allows static RegExp construction and reviver-free JSON decode', () => {
     expect(
       deserializationSinkFindings(
@@ -632,6 +648,8 @@ describe('sink-policy gate', () => {
               new RegExp(STATIC_PATTERN),
               new RegExp(RAW_STATIC_PATTERN),
               new RegExp(input),
+              RegExp("^[a-z]+$", "i"),
+              RegExp(STATIC_PATTERN),
             ];
           }
         `,

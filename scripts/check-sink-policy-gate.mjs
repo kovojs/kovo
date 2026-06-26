@@ -878,7 +878,7 @@ export function deserializationSinkFindings(filePath, text) {
     source,
     staticRegExpBindings,
   );
-  for (const call of callArgumentLists(source, /\bnew\s+RegExp\s*\(/g)) {
+  for (const call of callArgumentLists(source, /(^|[^\w$.])(?:new\s+)?RegExp\s*\(/g)) {
     const args = splitTopLevelArguments(call.argumentsText);
     const sourceArg = args[0]?.trim() ?? '';
     if (
