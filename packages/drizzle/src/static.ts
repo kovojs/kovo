@@ -1412,6 +1412,21 @@ function extractQueryFactsFromPreparedFiles(
       const reads = queryReadDomains(query.tableExpressions, fileTables);
       const declaredReads = queryReadDomains(query.declaredReadExpressions, fileTables);
       const helperReads = localHelperSummary.reads.map((read) => read.table.domain);
+      // SPEC §11.1: fold every read-set source — `.from()`-derived tables, declared `reads:` table
+      // identifiers, declared `reads:` Domain VALUES (§10.2), and local-helper reads. Declared
+      // domain values resolve directly to their key (no table lookup), so a `reads: [domain('x')]`
+      // declaration drives invalidation instead of being decorative.
+      const allReads = [
+        ...new Set([...reads, ...declaredReads, ...query.declaredReadDomains, ...helperReads]),
+      ].sort();
+      // SPEC §10.2: a `reads:` entry naming an `exempt` table is KV411 — checked over BOTH the
+      // `.from()`-derived read set AND the author's declared `reads:` table set, so an exempt/outbox
+      // read cannot be smuggled past the static pass through a declared `reads:` entry either.
+      const exemptReadDiagnostics = exemptQueryReadDiagnostics(
+        [...query.tableExpressions, ...query.declaredReadExpressions],
+        fileTables,
+        site,
+      );
       const diagnostics = opaqueProjectionDiagnostics(
         query.query,
         query.opaquePaths,
@@ -1421,7 +1436,8 @@ function extractQueryFactsFromPreparedFiles(
         // schema but NO declared `reads:` set is still a KV410 error. The declared `reads:` set is the
         // only typed-table fact (hard-rule #9) that exposes a secret/exempt table referenced solely in
         // raw SQL text to the confidentiality backstop, so its absence must fail the build closed.
-        query.declaredReadExpressions.length > 0,
+        // A declared `reads:` Domain VALUE counts as a declaration too (§10.2 `reads: readonly Domain[]`).
+        query.declaredReadExpressions.length > 0 || query.declaredReadDomains.length > 0,
       )
         .concat(
           secretProjectionBackstopDiagnostics(
@@ -1433,7 +1449,8 @@ function extractQueryFactsFromPreparedFiles(
             // declared `reads:` set — not `tableExpressions` alone. Otherwise an opaque projection
             // that references a secret table only via raw SQL text (invisible to `tableExpressions`)
             // leaks the secret column to the client wire even when the author honestly declares the
-            // table in `reads:`. Both inputs are symbol-identity table facts (hard-rule #9).
+            // table in `reads:`. Both inputs are symbol-identity table facts (hard-rule #9). Declared
+            // Domain values carry no columns, so they cannot add a secret table here.
             [...query.tableExpressions, ...query.declaredReadExpressions],
             columnShapes,
             fileTables,
@@ -1444,9 +1461,23 @@ function extractQueryFactsFromPreparedFiles(
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
         .concat(unmodeledRelationReadDiagnostics(query.tableExpressions, fileTables, site))
-        .concat(exemptQueryReadDiagnostics(query.tableExpressions, fileTables, site))
+        .concat(exemptReadDiagnostics)
+        // SPEC §10.2/§11.1: an opaque/raw read that takes the declared-opaque-read escape but whose
+        // `reads:` resolves to NO domain has an empty folded read set — silent staleness. KV411 is
+        // the more specific diagnostic for an exempt declared read, so suppress this when it fired.
+        .concat(
+          exemptReadDiagnostics.length > 0
+            ? []
+            : opaqueReadWithoutResolvableReadsDiagnostics(
+                query.query,
+                query.hasOutputSchema,
+                query.declaredReadExpressions,
+                query.declaredReadDomains,
+                allReads,
+                site,
+              ),
+        )
         .concat(localQueryHelperDiagnostics(localHelperSummary));
-      const allReads = [...new Set([...reads, ...declaredReads, ...helperReads])].sort();
       if (!query.hasSelection && allReads.length === 0 && diagnostics.length === 0) continue;
 
       const sessionAnchoredReads = querySessionAnchoredDomains(
@@ -1704,7 +1735,19 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
 }
 
 /** @internal */ export interface ExtractedQueryDefinition {
+  /**
+   * SPEC §10.2/§11.1: declared `reads:` entries that resolved to a Drizzle table identifier (the
+   * `.from()`-derived/test-harness form). Folded into the read set via `queryReadDomains` against
+   * the file's table facts.
+   */
   declaredReadExpressions: readonly string[];
+  /**
+   * SPEC §10.2/§11.1: declared `reads:` entries that resolved to a `Domain` VALUE
+   * (`domain('x')`/`tag('x')`) — the canonical app form, since `reads:` is `readonly Domain[]`.
+   * These are domain keys folded DIRECTLY into the read set (no table lookup), so a declared domain
+   * drives invalidation instead of being decorative.
+   */
+  declaredReadDomains: readonly string[];
   diagnostics?: readonly TouchGraphDiagnostic[];
   hasOutputSchema: boolean;
   hasSelection: boolean;
@@ -1875,6 +1918,7 @@ function extractQueryDefinitionsFromSourceFile(
     if (!bodyResolution.body) {
       if (bodyResolution.unresolved) {
         definitions.push({
+          declaredReadDomains: [],
           declaredReadExpressions: [],
           diagnostics: [unresolvedQueryLoadCallbackDiagnostic()],
           hasOutputSchema: false,
@@ -1916,7 +1960,12 @@ function extractQueryDefinitionsFromSourceFile(
       bodyObject,
       options.readTableIdentifier,
     );
-    const declaredOpaqueRead = hasOutputSchema && declaredReadExpressions.length > 0;
+    // SPEC §10.2/§11.1: `reads:` is `readonly Domain[]`, so the canonical form lists domain VALUES
+    // (`domain('x')`). Resolve those to their domain keys so the declaration folds into the read set
+    // and drives invalidation instead of being decorative.
+    const declaredReadDomains = queryDeclaredReadDomains(bodyObject);
+    const declaredOpaqueRead =
+      hasOutputSchema && (declaredReadExpressions.length > 0 || declaredReadDomains.length > 0);
     const readResolutionOptions: QueryReadResolutionOptions = {
       ...(options.readTableIdentifier ? { readTableIdentifier: options.readTableIdentifier } : {}),
       ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
@@ -1957,6 +2006,7 @@ function extractQueryDefinitionsFromSourceFile(
       continue;
 
     definitions.push({
+      declaredReadDomains,
       declaredReadExpressions,
       ...(selection?.diagnostics || diagnostics.length > 0
         ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
@@ -1996,7 +2046,9 @@ function dynamicDeclaredReadsDiagnostics(body: ObjectLiteralExpression): TouchGr
   }
   for (const element of reads.getElements()) {
     const expression = unwrappedStaticExpressionNode(element);
-    if (Node.isIdentifier(expression) || Node.isPropertyAccessExpression(expression)) continue;
+    // SPEC §10.2: identifier/property-access references and inline `domain('x')`/`tag('x')` Domain
+    // values are static; dynamic or spread entries fail closed as KV410.
+    if (isStaticDeclaredReadEntry(expression)) continue;
     return [dynamicDeclaredReadsDiagnostic()];
   }
   return [];
@@ -2602,6 +2654,7 @@ import {
   isKovoAnnotationCall,
   isProjectDrizzleAliasCall,
   isProjectTableInitializerNode,
+  isStaticDeclaredReadEntry,
   isTableInitializerNode,
   objectAssignmentPropertyName,
   objectAssignmentTargetNode,
@@ -2623,6 +2676,7 @@ import {
   projectUnmodeledRelationNamesBySymbol,
   projectUnresolvedConditionalTableExpressions,
   propertyNameText,
+  queryDeclaredReadDomains,
   queryDeclaredReadExpressions,
   queryOutputShape,
   queryShapeFromSchemaExpression,
@@ -2730,6 +2784,7 @@ import {
   isTouchingForeignKeyAction,
   materializedViewRefreshFactsForFunction,
   mergeSummary,
+  opaqueReadWithoutResolvableReadsDiagnostics,
   pushUnique,
   queryArgScopedDomainKeys,
   queryArgScopedDomains,
@@ -2814,6 +2869,7 @@ export {
   isTouchingForeignKeyAction,
   materializedViewRefreshFactsForFunction,
   mergeSummary,
+  opaqueReadWithoutResolvableReadsDiagnostics,
   pushUnique,
   queryArgScopedDomainKeys,
   queryArgScopedDomains,
@@ -2948,6 +3004,7 @@ export {
   isDrizzleDatabaseTypeAnnotation,
   isDrizzleWriteCall,
   isProjectTableInitializerNode,
+  isStaticDeclaredReadEntry,
   isTableInitializerNode,
   objectAssignmentPropertyName,
   objectAssignmentTargetNode,

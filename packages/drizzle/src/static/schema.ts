@@ -55,7 +55,7 @@ import {
   unwrappedTsExpression,
 } from '../static.js';
 import { projectSourceModuleContext, type SourceModuleContext } from './tables.js';
-import { receiverParameterDeclaration } from './receiver-surface.js';
+import { receiverParameterDeclaration, symbolForIdentifierReference } from './receiver-surface.js';
 
 /** @internal */ export function sourceColumnShapesForTables(
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
@@ -871,6 +871,94 @@ function secretAnnotatedColumnShapes(
     }
     return [];
   });
+}
+
+/**
+ * SPEC §10.2/§11.1: resolve a query's declared `reads:` entries that are `Domain` VALUES
+ * (e.g. `domain('question')`, or a `const question = domain('question')` reference) to their
+ * domain key. The `reads:` type is `readonly Domain[]` (packages/server/src/query.ts), so the
+ * canonical app form lists domain values — NOT Drizzle table identifiers (a table is not a
+ * `Domain`, so `reads: [someTable]` is a `tsc` TS2769 in app source). Those domain keys MUST fold
+ * into the query's read set (§11.1) and drive invalidation; without this, a declared `Domain` value
+ * is decorative — the read set comes only from the `.from()`-derived tables, so a raw subquery /
+ * `db.execute` read the author covers with `reads:` is never invalidated (silent staleness).
+ *
+ * Table identifiers that DO resolve (the `.from()`-derived/test-harness form) stay handled by
+ * {@link queryDeclaredReadExpressions}; this function only reports the keys of entries that resolve
+ * to a `domain(...)`/`tag(...)` value.
+ *
+ * @internal
+ */
+export function queryDeclaredReadDomains(body: ObjectLiteralExpression): string[] {
+  const reads = objectPropertyInitializer(body, 'reads');
+  if (!reads || !Node.isArrayLiteralExpression(reads)) return [];
+
+  const domains: string[] = [];
+  for (const element of reads.getElements()) {
+    const key = declaredReadDomainKey(unwrappedStaticExpressionNode(element));
+    if (key !== undefined) domains.push(key);
+  }
+  return [...new Set(domains)].sort();
+}
+
+/**
+ * SPEC §10.2: is a `reads:` array element a STATIC, resolvable entry — an identifier/property-access
+ * reference, or an inline `domain('x')`/`tag('x')` Domain value? Used by the dynamic-reads guard so
+ * the canonical inline Domain form (`reads: [domain('question')]`) is accepted while a dynamic or
+ * spread entry (`reads: [getReads()]`, `reads: [...more]`) still fails closed as KV410.
+ *
+ * @internal
+ */
+export function isStaticDeclaredReadEntry(expression: Node): boolean {
+  return (
+    Node.isIdentifier(expression) ||
+    Node.isPropertyAccessExpression(expression) ||
+    domainFactoryCallKey(expression) !== undefined
+  );
+}
+
+function declaredReadDomainKey(expression: Node): string | undefined {
+  // Inline `domain('x')` / `tag('x')` value passed directly into `reads:`.
+  const inline = domainFactoryCallKey(expression);
+  if (inline !== undefined) return inline;
+
+  // Identifier / property access referencing a `const x = domain('y')` / `tag('y')` declaration.
+  if (Node.isIdentifier(expression) || Node.isPropertyAccessExpression(expression)) {
+    const initializer = domainValueDeclarationInitializer(expression);
+    if (initializer) return domainFactoryCallKey(initializer);
+  }
+  return undefined;
+}
+
+function domainFactoryCallKey(expression: Node): string | undefined {
+  if (!Node.isCallExpression(expression)) return undefined;
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  // `domain(...)` and `tag(...)` are the @kovojs/server domain constructors (`tag` is a `Domain`
+  // alias). Mirror the textual-name convention used for domain extraction in static/domain-writes.ts.
+  const name = Node.isIdentifier(callee)
+    ? callee.getText()
+    : Node.isPropertyAccessExpression(callee)
+      ? callee.getName()
+      : undefined;
+  if (name !== 'domain' && name !== 'tag') return undefined;
+
+  const argument = expression.getArguments()[0];
+  const argNode = argument ? unwrappedStaticExpressionNode(argument) : undefined;
+  if (
+    argNode &&
+    (Node.isStringLiteral(argNode) || Node.isNoSubstitutionTemplateLiteral(argNode))
+  ) {
+    return argNode.getLiteralText();
+  }
+  return undefined;
+}
+
+function domainValueDeclarationInitializer(node: Node): Node | undefined {
+  const symbol = symbolForIdentifierReference(node);
+  const declaration = symbol?.getDeclarations()[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  const initializer = declaration.getInitializer();
+  return initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
 }
 
 /** @internal */ export function queryOutputShape(
