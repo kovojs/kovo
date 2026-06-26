@@ -23,10 +23,11 @@ export interface AgentToolModuleSource {
  * helper, static namespace-property calls into exported local helpers, default object exports whose
  * properties statically point at summarized local helpers, handler properties that reference a
  * summarized local/imported helper function, and inline callbacks passed to a local/imported helper
- * that directly invokes that callback parameter. It does not inspect raw source text after parse and
- * it skips non-invoked nested function bodies, so ordinary callbacks, computed namespace access,
- * computed/spread object exports, export-star namespaces, ambiguous export-star names, and dynamic
- * paths remain outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
+ * that directly invokes that callback parameter or a simple `const` alias of that parameter. It does
+ * not inspect raw source text after parse and it skips non-invoked nested function bodies, so
+ * ordinary callbacks, computed namespace access, computed/spread object exports, export-star
+ * namespaces, ambiguous export-star names, reassigned callback aliases, and dynamic paths remain
+ * outside the SPEC.md §6.6 sound subset until a dedicated analyzer proves them.
  */
 export function agentToolSinksFromSource(
   moduleSource: AgentToolModuleSource,
@@ -694,34 +695,137 @@ function directlyInvokedCallbackParameters(fn: ts.FunctionLikeDeclaration): Read
   }
   if (candidateNames.size === 0) return new Set();
 
+  const aliasNames = simpleCallbackParameterAliases(body, candidateNames);
+  const callableParameterNames = new Map<string, string>();
+  for (const candidateName of candidateNames) {
+    callableParameterNames.set(candidateName, candidateName);
+  }
+  for (const [aliasName, parameterName] of aliasNames) {
+    callableParameterNames.set(aliasName, parameterName);
+  }
+
   const invokedNames = new Set<string>();
   const reassignedNames = new Set<string>();
-  const visit = (node: ts.Node): void => {
+  const visit = (node: ts.Node, blockedNames: ReadonlySet<string>): void => {
     if (node !== body && ts.isFunctionLike(node)) return;
+
+    const nextBlockedNames =
+      node !== body && isLexicalScopeNode(node)
+        ? blockedNamesForLexicalScope(node, callableParameterNames.keys(), blockedNames)
+        : blockedNames;
 
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
-      candidateNames.has(node.expression.text)
+      !nextBlockedNames.has(node.expression.text)
     ) {
-      invokedNames.add(node.expression.text);
+      const parameterName = callableParameterNames.get(node.expression.text);
+      if (parameterName !== undefined) invokedNames.add(parameterName);
     }
 
     const assignedName = assignedIdentifierName(node);
-    if (assignedName !== undefined && candidateNames.has(assignedName)) {
-      reassignedNames.add(assignedName);
+    if (assignedName !== undefined && !nextBlockedNames.has(assignedName)) {
+      const parameterName = callableParameterNames.get(assignedName);
+      if (parameterName !== undefined) reassignedNames.add(parameterName);
     }
 
-    ts.forEachChild(node, visit);
+    ts.forEachChild(node, (child) => visit(child, nextBlockedNames));
   };
 
-  visit(body);
+  visit(body, new Set());
 
   for (const reassignedName of reassignedNames) {
     invokedNames.delete(reassignedName);
   }
 
   return invokedNames;
+}
+
+function simpleCallbackParameterAliases(
+  body: ts.ConciseBody,
+  parameterNames: ReadonlySet<string>,
+): ReadonlyMap<string, string> {
+  if (!ts.isBlock(body)) return new Map();
+
+  const aliases = new Map<string, string>();
+  const ambiguousAliases = new Set<string>();
+  for (const statement of body.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+
+      const initializer = unwrapParentheses(declaration.initializer);
+      if (!ts.isIdentifier(initializer) || !parameterNames.has(initializer.text)) continue;
+
+      const aliasName = declaration.name.text;
+      if (parameterNames.has(aliasName) || aliases.has(aliasName)) {
+        aliases.delete(aliasName);
+        ambiguousAliases.add(aliasName);
+        continue;
+      }
+      if (!ambiguousAliases.has(aliasName)) aliases.set(aliasName, initializer.text);
+    }
+  }
+
+  return aliases;
+}
+
+function isLexicalScopeNode(node: ts.Node): boolean {
+  return (
+    ts.isBlock(node) ||
+    ts.isCaseBlock(node) ||
+    ts.isCaseClause(node) ||
+    ts.isDefaultClause(node) ||
+    ts.isCatchClause(node) ||
+    ts.isForStatement(node) ||
+    ts.isForInStatement(node) ||
+    ts.isForOfStatement(node)
+  );
+}
+
+function blockedNamesForLexicalScope(
+  node: ts.Node,
+  callableNames: Iterable<string>,
+  inheritedBlockedNames: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const scopeBindingNames = new Set<string>();
+  collectLexicalScopeBindingNames(node, scopeBindingNames);
+
+  let blockedNames: Set<string> | undefined;
+  for (const callableName of callableNames) {
+    if (!scopeBindingNames.has(callableName)) continue;
+
+    blockedNames ??= new Set(inheritedBlockedNames);
+    blockedNames.add(callableName);
+  }
+
+  return blockedNames ?? inheritedBlockedNames;
+}
+
+function collectLexicalScopeBindingNames(node: ts.Node, names: Set<string>): void {
+  const visit = (child: ts.Node): void => {
+    if (child !== node && ts.isFunctionLike(child)) return;
+
+    if (ts.isVariableDeclaration(child)) {
+      collectBindingNames(child.name, names);
+      return;
+    }
+
+    if (ts.isFunctionDeclaration(child) && child.name) {
+      names.add(child.name.text);
+      return;
+    }
+
+    if (ts.isCatchClause(child) && child.variableDeclaration) {
+      collectBindingNames(child.variableDeclaration.name, names);
+    }
+
+    ts.forEachChild(child, visit);
+  };
+
+  visit(node);
 }
 
 function assignedIdentifierName(node: ts.Node): string | undefined {
