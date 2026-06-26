@@ -135,6 +135,47 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
   });
 
+  it('refuses to emit a clearing cookie when a custom store leaves a revoked id live', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        revoke: async () => {
+          // Store bug: the id remains live after the lifecycle revocation sink runs.
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(manager.revoke(established.session.id)).rejects.toThrow(
+      'Opaque session store did not immediately revoke the id; refusing to emit a browser session clearing cookie',
+    );
+    await expect(manager.validate(established.session.id)).resolves.toMatchObject({
+      ok: true,
+      session: { value: { user: { id: 'u1' } } },
+    });
+  });
+
+  it('refuses to emit a clearing cookie when revocation cannot be verified', async () => {
+    const baseStore = createMemoryOpaqueSessionStore<{ user: { id: string } }>();
+    const manager = createOpaqueSessionManager({
+      store: {
+        ...baseStore,
+        async revoke(id: string) {
+          await baseStore.revoke(id);
+        },
+        validate: async () => {
+          throw new Error('revocation verifier unavailable');
+        },
+      },
+    });
+    const established = await manager.establish({ user: { id: 'u1' } });
+
+    await expect(manager.revoke(established.session.id)).rejects.toThrow(
+      'Opaque session store could not verify revocation; refusing to emit a browser session clearing cookie',
+    );
+  });
+
   it('distinguishes expired stored sessions from unknown ids on first validation', async () => {
     let now = Date.now();
     const manager = createOpaqueSessionManager({
@@ -638,11 +679,12 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     expect(pageSessions).toEqual(['u1']);
 
     await manager.revoke(authenticated.session.id);
+    expect(validateCalls).toBe(3);
     const revokedResponse = await renderAccount(authenticatedCookie);
 
     expect(revokedResponse.status).toBe(303);
     expect(revokedResponse.headers.Location).toBe('/login?next=%2Faccount');
-    expect(validateCalls).toBe(3);
+    expect(validateCalls).toBe(4);
     expect(guardSessions).toEqual(['u1', 'anonymous', 'anonymous']);
     expect(pageSessions).toEqual(['u1']);
   });

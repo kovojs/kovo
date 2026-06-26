@@ -323,7 +323,9 @@ export function createOpaqueSessionManager<SessionValue>(
       };
     },
     async revoke(id: string | null | undefined): Promise<OpaqueSessionRevokeResult> {
-      if (id !== null && id !== undefined && id !== '') await options.store.revoke(id);
+      if (id !== null && id !== undefined && id !== '') {
+        await revokeOpaqueSession(options.store, id);
+      }
       return {
         setCookie: serializeCookie(cookieName, '', {
           ...cookieOptions,
@@ -333,6 +335,28 @@ export function createOpaqueSessionManager<SessionValue>(
       };
     },
   };
+}
+
+async function revokeOpaqueSession<SessionValue>(
+  store: OpaqueSessionStore<SessionValue>,
+  id: string,
+): Promise<void> {
+  await store.revoke(id);
+  if (!isOpaqueSessionId(id)) return;
+
+  let revoked: OpaqueSessionValidation<SessionValue>;
+  try {
+    revoked = normalizeOpaqueSessionValidation(id, await store.validate(id));
+  } catch {
+    throw new Error(
+      'Opaque session store could not verify revocation; refusing to emit a browser session clearing cookie',
+    );
+  }
+  if (revoked.ok) {
+    throw new Error(
+      'Opaque session store did not immediately revoke the id; refusing to emit a browser session clearing cookie',
+    );
+  }
 }
 
 async function rotateOpaqueSession<SessionValue>(
