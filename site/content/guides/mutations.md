@@ -339,6 +339,10 @@ Then update with a compare-and-set predicate. The predicate can guard the atomic
 separate version column that you also increment:
 
 ```ts
+import { compareAndSet } from '@kovojs/drizzle';
+import { StaleVersionError } from '@kovojs/server';
+import { and, eq, sql } from 'drizzle-orm';
+
 const cas = await compareAndSet(
   db
     .update(products)

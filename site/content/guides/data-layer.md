@@ -281,6 +281,10 @@ A write that subtracts from `stock` should include the check in the same `UPDATE
 Guard either the `atomic` column itself or a declared `version` column that the statement increments:
 
 ```ts
+import { compareAndSet } from '@kovojs/drizzle';
+import { StaleVersionError } from '@kovojs/server';
+import { and, eq, sql } from 'drizzle-orm';
+
 const cas = await compareAndSet(
   db
     .update(products)
