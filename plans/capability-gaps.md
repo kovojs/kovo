@@ -183,9 +183,24 @@ a resolvable non-empty`reads:` for opaque projections.
       diagnostic. Kills all cross-user realtime: live vote counts, new-answer push, presence/typing,
       notifications. Roadmap `plans/data-layer-roadmap.md:28`; SPEC §9.3:905. _Workaround:_ poll `/_q/` on a
       timer + BroadcastChannel (same-user only). _Also:_ emit a compiler diagnostic for the inert tag.
-- [ ] **Compiler-derived optimism unshipped for app builds.** Machinery exists in-package
-      (`packages/drizzle/src/derive-codegen.ts`, `OptimisticDerivationSets`) but is not wired into example
-      builds; hand-written transforms are the only exercised path (KV310 is enforced).
+- [ ] **Compiler-derived optimism wired into the StackOverflow build (partial — keyed shape residual open).** The §10.5 deriver now
+      runs over the example's real Drizzle source in the registry generate path
+      (`examples/drizzle-registry-runtime.ts` `deriveExampleOptimisticSets` → `extractSymbolicEffectsFromProject` + `extractAlgebraicShapesFromProject` + `deriveOptimistic`) and folds the soundly-derived pairs into the
+      generated `OptimisticDerivationSets`. For `voteUp`, `questionScore` (INSERT × SUM ⇒ `score += 1`) and
+      `questionList` (UPDATE × AGG ⇒ guarded exact-row `score += 1`) are now COMPILER-DERIVED and removed from the
+      hand-written `optimistic` map (`examples/stackoverflow/src/mutations.ts`); KV310 stays green via
+      `typecheck-examples` (those entries are now optional/derived, `questionDetail` stays required). The commuting
+      diagram `patch(clientShape(s),i) ≡ clientShape(apply(effect,s,i))` is property-tested over a generated state
+      sweep for both pairs (`packages/drizzle/src/derive.so-voteup.commuting.test.ts`), and the source→facts pipeline
+      is asserted in `examples/stackoverflow/src/optimism-derivation.test.ts`.
+      _Residual (named punts, not yet implemented):_ (1) the **keyed scalar-from-keyed-row whole-row return** shape —
+      `questionDetail`'s loader returns a single keyed row (`const [row] = await select(...).limit(1); return row ?? null`),
+      which Stage-2 does not classify, AND a derived **keyed `{ keys, transform }`** transform is not emittable by
+      `serializeDerivedOptimistic` (the unkeyed `(draft,$input)=>void` form only); so `questionDetail` stays a NAMED
+      hand-written punt (`PUNT voteUp -> questionDetail (... no in-grammar §10.5 query shape ...)`, surfaced by the
+      generate script and `kovo explain --optimistic`). (2) The generated `generated/optimistic/*.ts` runtime module is
+      not yet imported into the server `mutation({optimistic})` surface (the SO example is server-rendered; derivation
+      relaxes the KV310 type requirement rather than shipping a client plan here).
 - [ ] **Stream resume-after-reload** — `streaming.ts` is a single-pass iterator over one POST; no job
       registry / Last-Event-ID / GET resume. §8:823 defines interruption as fail/refetch-to-server-truth.
       _Workaround:_ persist assistant output incrementally (a real chat persists messages anyway).
