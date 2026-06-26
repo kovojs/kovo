@@ -202,7 +202,11 @@ packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and
       module; focused sink-policy tests, `pnpm run check:sink-policy`, `git diff --check`, and
       `pnpm run check:vp` passed. KV442 now flags `RegExp(...)`/`new RegExp(...)` built from request/input-derived values
       while keeping literal/template/static-constant pattern construction quiet; focused sink-policy tests,
-      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. Remaining gap: other §3 candidates and full
+      `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed. One-hop local
+      constructor aliases such as `const Pattern = RegExp; Pattern(request.url)` now hit the same KV442
+      dynamic-RegExp gate while static patterns, non-RegExp aliases, and local shadowing stay quiet; focused
+      sink-policy tests, `pnpm run check:sink-policy`, `git diff --check`, and `pnpm run check:vp` passed.
+      Remaining gap: other §3 candidates and full
       static by-construction value-path analyzer integration are not complete.
 
 - [ ] **OPP-07 — Agent tool-capability least-privilege by construction (LLM06).** by-construction
