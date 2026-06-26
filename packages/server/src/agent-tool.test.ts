@@ -5,6 +5,7 @@ import {
   agentToolAuditFacts,
   runAgentTool,
   tool,
+  type AgentToolAmbientCredentialKind,
   type AgentToolAuthority,
 } from './agent-tool.js';
 
@@ -321,6 +322,52 @@ describe('agent tool capability primitive', () => {
       hasSession: false,
       proxyUser: null,
     });
+  });
+
+  it('snapshots ambient credential review fields before invocation', async () => {
+    const credentialKinds: AgentToolAmbientCredentialKind[] = ['session'];
+    const justification = {
+      authorityBoundary: 'handler uses only the explicit principal authority from context',
+      reason: 'legacy adapter still invokes tools with a session-bearing request object',
+    };
+    const ambientTool = tool({
+      ambientCredentials: {
+        allow: true,
+        credentialKinds,
+        justification,
+      },
+      audit: { owner: 'security', review: 'SEC-125' },
+      authority: [principalAuthority],
+      capabilities: [{ name: 'profile.read', reason: 'read caller profile summary' }],
+      handler: (_input: undefined, context) => ({
+        cookie: context.request?.headers.get('cookie') ?? null,
+        hasSession: context.request === undefined ? false : 'session' in context.request,
+      }),
+      name: 'profile.snapshotSummary',
+      purpose: 'Read the current user profile summary for an agent response.',
+    });
+
+    credentialKinds.push('cookie');
+    justification.reason = 'mutated after declaration';
+
+    expect(Object.isFrozen(ambientTool.ambientCredentials)).toBe(true);
+    expect(agentToolAuditFacts([ambientTool])[0]).toMatchObject({
+      ambientCredentialKinds: ['session'],
+      ambientJustification: {
+        authorityBoundary: 'handler uses only the explicit principal authority from context',
+        reason: 'legacy adapter still invokes tools with a session-bearing request object',
+      },
+    });
+
+    await expect(
+      runAgentTool(ambientTool, undefined, {
+        authority: principalAuthority,
+        request: new Request('https://example.test/tool', {
+          headers: { cookie: 'session=ambient' },
+        }),
+        value: {},
+      }),
+    ).rejects.toThrow('cookie(header:cookie)');
   });
 
   it('rejects undeclared ambient credential classes even when another class is justified', async () => {

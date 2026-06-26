@@ -184,7 +184,7 @@ export function tool<const Input, Output, Context = unknown>(
 
   return {
     ...definition,
-    ambientCredentials: definition.ambientCredentials ?? { allow: false },
+    ambientCredentials: snapshotAmbientCredentials(definition.ambientCredentials),
   };
 }
 
@@ -446,6 +446,21 @@ function assertAmbientCredentials(ambient: AgentToolAmbientCredentials | undefin
     ) as string | undefined,
     'tool.ambientCredentials.justification.authorityBoundary',
   );
+}
+
+function snapshotAmbientCredentials(
+  ambient: AgentToolAmbientCredentials | undefined,
+): AgentToolAmbientCredentials {
+  if (ambient?.allow !== true) return Object.freeze({ allow: false });
+
+  return Object.freeze({
+    allow: true,
+    credentialKinds: Object.freeze([...ambient.credentialKinds]),
+    justification: Object.freeze({
+      authorityBoundary: ambient.justification.authorityBoundary,
+      reason: ambient.justification.reason,
+    }),
+  });
 }
 
 function assertObject(
