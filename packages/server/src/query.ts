@@ -38,6 +38,11 @@ interface QueryDeltaListMeta {
 
 const DEFAULT_QUERY_LIST_ITEMS = 100;
 
+/** Explicit cache posture for proven public, session-independent typed reads (SPEC §9.4). */
+export interface QueryReadConfig {
+  cacheControl?: string;
+}
+
 /**
  * The context a query's `load` receives: the current request value plus the framework-owned
  * read-only managed db handle (SPEC §9.4 KV433 Stage 1 / §10.3). The framework threads `db` as a
@@ -117,6 +122,7 @@ export interface QueryDefinition<
   load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
   key: Key;
   output?: Schema<Value>;
+  read?: QueryReadConfig;
   reads?: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
@@ -146,6 +152,7 @@ interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Reque
   key?: Key;
   load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
   output?: Schema<Value>;
+  read?: QueryReadConfig;
   reads?: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
@@ -182,6 +189,7 @@ export interface RegisteredQueryDefinition {
   key: string;
   load?: BivariantQueryLoad;
   output?: Schema<unknown>;
+  read?: QueryReadConfig;
   reads?: readonly Domain[];
   version?: BivariantQueryVersion | number | string;
 }
@@ -206,6 +214,7 @@ export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue
     call(input: any, context?: QueryLoadContext<Request>): Value | Promise<Value>;
   }['call'];
   output?: Schema<Value>;
+  read?: QueryReadConfig;
   reads?: readonly Domain[];
   version?: ((input: any, value: any) => number | string | undefined) | number | string;
 }
@@ -619,13 +628,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
     body,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      // SPEC §9.4 (bugs-1 F35): /_q reads return per-user, session-dependent query JSON and
-      // the query guard is checked on every read. Default to a private, uncacheable posture
-      // keyed on the cookie so a shared/intermediary cache can never replay one user's data
-      // to another and bypass that guard. (Relaxing to a cacheable posture for queries proven
-      // session-independent is a later optimization; the safe default is unconditional.)
-      'Cache-Control': 'private, no-store',
-      Vary: 'Cookie',
+      ...querySuccessCacheHeaders(definition),
       // SPEC §5.2.1 rule 2(d): stamp the build token so a background refetch into a stale
       // tab can detect deploy skew and avoid merging new-build data into a stale document.
       ...queryBuildHeaders(endpointRequest),
@@ -884,6 +887,38 @@ function queryBuildHeaders<Request>(
   endpointRequest: QueryEndpointRequest<Request>,
 ): Record<string, string> {
   return endpointRequest.buildToken ? { 'Kovo-Build': endpointRequest.buildToken } : {};
+}
+
+function querySuccessCacheHeaders(definition: {
+  access?: AccessDecision;
+  guard?: unknown;
+  read?: QueryReadConfig;
+}): Record<string, string> {
+  const cacheControl = definition.read?.cacheControl;
+  if (
+    cacheControl &&
+    definition.guard === undefined &&
+    definition.access?.kind === 'public' &&
+    safeHeaderValue(cacheControl)
+  ) {
+    return { 'Cache-Control': cacheControl };
+  }
+
+  // SPEC §9.4: guarded or otherwise session-dependent /_q reads stay private and uncacheable.
+  // The public cache-control relaxation is accepted only on explicitly public, unguarded query
+  // declarations; errors and guard failures use the same private posture above.
+  return {
+    'Cache-Control': 'private, no-store',
+    Vary: 'Cookie',
+  };
+}
+
+function safeHeaderValue(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 0 || code === 0x7f || code < 0x20) return false;
+  }
+  return true;
 }
 
 function queryWarningHeaders(

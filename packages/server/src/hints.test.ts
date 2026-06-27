@@ -344,10 +344,22 @@ describe('page hints', () => {
       earlyHints: {},
       html: '',
     });
-    expect(renderPageHints({ prefetch: 'moderate', prerenderUrls: ['', ''] })).toEqual({
-      earlyHints: {},
-      html: '',
-    });
+  });
+
+  it('emits document-link speculation rules for bare route prefetch opt-ins', () => {
+    const conservative = renderPageHints({ prefetch: 'conservative' });
+    expect(conservative.earlyHints).toEqual({});
+    expect(conservative.csp?.scripts).toHaveLength(1);
+    expect(conservative.html).toContain('<script type="speculationrules"');
+    expect(conservative.html).toContain(
+      '{"prefetch":[{"eagerness":"conservative","where":{"href_matches":"/*"}}]}',
+    );
+
+    const moderate = renderPageHints({ prefetch: 'moderate' });
+    expect(moderate.csp?.scripts).toHaveLength(1);
+    expect(moderate.html).toContain(
+      '{"prefetch":[{"eagerness":"moderate","where":{"href_matches":"/*"}}]}',
+    );
   });
 
   // L2-early-hints-1 (bugs-part3): a speculation rule prerenders/prefetches with the

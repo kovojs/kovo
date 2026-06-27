@@ -12,6 +12,24 @@ import { layout, notFound, renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
 
 describe('route JSX pages', () => {
+  it('renders typed GET form sugar as native form controls', async () => {
+    const productFilter = form.get('/products');
+    const productRoute = route('/products', {
+      page: () => (
+        <product-search>
+          <productFilter.Form class="search-form">
+            <productFilter.input name="max" type="number" />
+          </productFilter.Form>
+        </product-search>
+      ),
+    });
+
+    await expect(renderRoutePageResponse(productRoute, {}, {})).resolves.toMatchObject({
+      body: '<product-search><form class="search-form" action="/products" method="get"><input name="max" type="number"></form></product-search>',
+      status: 200,
+    });
+  });
+
   it('renders the nearest ErrorBoundary fallback for unexpected component render failures', async () => {
     const ProductGrid = component({
       render: () => {

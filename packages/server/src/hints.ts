@@ -577,18 +577,28 @@ function renderSpeculationRules(
   // authority-forming) and any value carrying a scheme. `SAFE_URL_SCHEMES` alone would
   // not block cross-origin https, so an explicit same-origin path check is required.
   const prerenderUrls = dedupe(urls).filter(isSameOriginPrerenderUrl);
-  if (!prefetch || prerenderUrls.length === 0) return { html: '' };
+  if (!prefetch) return { html: '' };
+  if (urls.length > 0 && prerenderUrls.length === 0) return { html: '' };
 
-  const scriptText = escapeScriptJson(
-    JSON.stringify({
-      prerender: [
-        {
-          eagerness: prefetch,
-          urls: prerenderUrls,
-        },
-      ],
-    }),
-  );
+  const rules =
+    prerenderUrls.length > 0
+      ? {
+          prerender: [
+            {
+              eagerness: prefetch,
+              urls: prerenderUrls,
+            },
+          ],
+        }
+      : {
+          prefetch: [
+            {
+              eagerness: prefetch,
+              where: { href_matches: '/*' },
+            },
+          ],
+        };
+  const scriptText = escapeScriptJson(JSON.stringify(rules));
   const hash = cspSha256(scriptText);
 
   return {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedReveal, type Secret } from '@kovojs/core';
 
+import { publicAccess } from './access.js';
 import { domain } from './domain.js';
 import {
   query,
@@ -169,6 +170,40 @@ describe('query endpoints', () => {
 
     await expect(renderQueryEndpointResponse(catalogQuery, { request: {} })).resolves.toEqual({
       body: '<kovo-query name="catalogLimited">{"rows":[{"id":0},{"id":1},{"id":2}]}</kovo-query>',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
+      status: 200,
+    });
+  });
+
+  it('allows explicit Cache-Control only for public unguarded query reads', async () => {
+    const publicQuery = query('publicCatalog', {
+      access: publicAccess('public product catalog'),
+      load: () => ({ items: ['p1'] }),
+      read: { cacheControl: 'public, max-age=60' },
+      reads: [domain('catalog')],
+    });
+    const guardedQuery = query('privateCatalog', {
+      access: publicAccess('audit metadata is not enough when a guard exists'),
+      guard: () => true,
+      load: () => ({ items: ['p1'] }),
+      read: { cacheControl: 'public, max-age=60' },
+      reads: [domain('catalog')],
+    });
+
+    await expect(renderQueryEndpointResponse(publicQuery, { request: {} })).resolves.toEqual({
+      body: '<kovo-query name="publicCatalog">{"items":["p1"]}</kovo-query>',
+      headers: {
+        'Cache-Control': 'public, max-age=60',
+        'Content-Type': 'text/html; charset=utf-8',
+      },
+      status: 200,
+    });
+    await expect(renderQueryEndpointResponse(guardedQuery, { request: {} })).resolves.toEqual({
+      body: '<kovo-query name="privateCatalog">{"items":["p1"]}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',

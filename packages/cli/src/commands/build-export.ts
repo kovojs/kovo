@@ -11,7 +11,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { DiagnosticCode } from '@kovojs/core';
@@ -1350,7 +1350,9 @@ export async function runExportCommand(options: KovoExportOptions): Promise<CliC
 }
 
 async function loadExportAppModule(options: KovoExportOptions): Promise<unknown> {
-  if (!options.vite) return await import(pathToFileURL(resolve(options.appModulePath)).href);
+  if (!options.vite && !exportAppModuleNeedsVite(options.appModulePath)) {
+    return await import(pathToFileURL(resolve(options.appModulePath)).href);
+  }
 
   const { createServer } = await import('vite-plus');
   const server = await createServer({
@@ -1364,6 +1366,10 @@ async function loadExportAppModule(options: KovoExportOptions): Promise<unknown>
   } finally {
     await server.close();
   }
+}
+
+function exportAppModuleNeedsVite(appModulePath: string): boolean {
+  return ['.ts', '.tsx', '.jsx'].includes(extname(appModulePath));
 }
 
 interface ExportManifestPlan {

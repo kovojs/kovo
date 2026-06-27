@@ -421,7 +421,16 @@ export function href<const Path extends RegistryKey<RouteRegistry>>(
   );
 }
 
-/** Result of `Link()`: a resolved `href` string ready to spread onto an anchor. */
+/** Props accepted by the compiler-bound `<Link />` navigation sugar (SPEC §6.4). */
+export interface LinkProps {
+  children?: ComponentRenderResult;
+  params?: Record<string, string>;
+  search?: Record<string, JsonValue>;
+  to: keyof RouteRegistry extends never ? string : Extract<keyof RouteRegistry, string>;
+  [attribute: string]: unknown;
+}
+
+/** Result of `Link(path, options)`: a resolved `href` string ready to spread onto an anchor. */
 export interface LinkDescriptor {
   href: string;
 }
@@ -440,11 +449,18 @@ export interface LinkDescriptor {
  * const link = Link('/products/:id', { params: { id: 'p1' } });
  * const anchor = `<a href="${link.href}">View</a>`;
  */
+export function Link(props: LinkProps): ComponentRenderResult;
 export function Link<const Path extends RegistryKey<RouteRegistry>>(
   path: Path,
   options: RouteHrefOptions<RouteFor<Path>>,
-): LinkDescriptor {
-  return { href: href(path, options) };
+): LinkDescriptor;
+export function Link<const Path extends RegistryKey<RouteRegistry>>(
+  pathOrProps: Path | LinkProps,
+  options?: RouteHrefOptions<RouteFor<Path>>,
+): ComponentRenderResult | LinkDescriptor {
+  const path = pathOrProps;
+  if (typeof path === 'object' && path !== null) return undefined;
+  return { href: href(path, options as RouteHrefOptions<RouteFor<Path>>) };
 }
 
 /** A 303 redirect outcome returned by `redirect()`. */
@@ -608,10 +624,31 @@ export interface GetFormInput<Name extends string> {
   name: Name;
 }
 
+/** Props accepted by the compiler/runtime-bound `<f.Form />` GET-form sugar (SPEC §6.4). */
+export interface GetFormProps {
+  children?: ComponentRenderResult;
+  [attribute: string]: unknown;
+}
+
+/** Props accepted by the compiler/runtime-bound `<f.input />` GET-form sugar (SPEC §6.4). */
+export interface GetFormInputProps<Name extends string> {
+  name: Name;
+  [attribute: string]: unknown;
+}
+
 /** Renderable descriptor for a GET form element: its `action` and `method`. */
 export interface GetFormDescriptor {
+  (props: GetFormProps): ComponentRenderResult;
   action: string;
   method: 'get';
+}
+
+/** Typed GET-form input descriptor and JSX component. */
+export interface GetFormInputHelper<Search extends Record<string, JsonValue>> {
+  <const Name extends Extract<keyof Search, string>>(name: Name): GetFormInput<Name>;
+  <const Name extends Extract<keyof Search, string>>(
+    props: GetFormInputProps<Name>,
+  ): ComponentRenderResult;
 }
 
 /** A GET-route search form: its action, `Form` descriptor, and typed `input(name)` accessors. */
@@ -621,7 +658,7 @@ export interface GetForm<
 > {
   action: string;
   Form: GetFormDescriptor;
-  input<const Name extends Extract<keyof Search, string>>(name: Name): GetFormInput<Name>;
+  input: GetFormInputHelper<Search>;
   method: 'get';
   path: Path;
 }
@@ -664,6 +701,7 @@ interface MutationFormHelperRegistry {
 }
 
 const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
+const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
 
 function mutationFormHelperRegistry(): MutationFormHelperRegistry {
   const global = globalThis as typeof globalThis & Record<symbol, unknown>;
@@ -745,15 +783,23 @@ function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(
     search: {},
   });
 
+  const Form = Object.assign((_props: GetFormProps) => undefined, {
+    action,
+    [getRouteFormHelperKindKey]: 'form',
+    method: 'get' as const,
+  });
+  const input = Object.assign(
+    (nameOrProps: string | GetFormInputProps<string>) =>
+      typeof nameOrProps === 'string' ? { name: nameOrProps } : undefined,
+    {
+      [getRouteFormHelperKindKey]: 'input',
+    },
+  ) as GetFormInputHelper<RouteSearch<RouteFor<Path>>>;
+
   return {
     action,
-    Form: {
-      action,
-      method: 'get',
-    },
-    input(name) {
-      return { name };
-    },
+    Form,
+    input,
     method: 'get',
     path,
   };
