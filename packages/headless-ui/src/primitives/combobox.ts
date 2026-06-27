@@ -1059,7 +1059,10 @@ function comboboxFallbackOptionId(
 // fingerprint is identical within an instance and the IDREF always resolves.
 // `state.id` is intentionally NOT used: it is the *input* id on the active-
 // descendant path but the *item* id on the option path, which would diverge.
-function comboboxFallbackPrefix(state: { items?: readonly ComboboxItem[]; listboxId?: string }): string {
+function comboboxFallbackPrefix(state: {
+  items?: readonly ComboboxItem[];
+  listboxId?: string;
+}): string {
   if (state.listboxId !== undefined) return state.listboxId;
   return `combobox-${optionSetFingerprint(state.items)}`;
 }

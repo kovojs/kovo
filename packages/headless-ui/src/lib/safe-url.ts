@@ -59,7 +59,8 @@ export function safeUrl(value: string | undefined, fallback = '#'): string {
   // reference and is kept verbatim (the previous check over-blocked it to `#`).
   const pathBoundary = stripped.search(/[/?]/);
   const schemePosition = pathBoundary < 0 ? stripped : stripped.slice(0, pathBoundary);
-  if (/&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/.test(schemePosition)) return fallback;
+  if (/&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/.test(schemePosition))
+    return fallback;
 
   const schemeMatch = SCHEME_PATTERN.exec(stripped);
   if (schemeMatch === null) {

@@ -51,7 +51,12 @@ function withStubbedGlobals(
 
     run({ pageShowListeners, reload });
   } finally {
-    for (const key of ['addEventListener', 'removeEventListener', 'document', 'location'] as const) {
+    for (const key of [
+      'addEventListener',
+      'removeEventListener',
+      'document',
+      'location',
+    ] as const) {
       if (original[key] === undefined) delete globalRecord[key];
       else globalRecord[key] = original[key];
     }

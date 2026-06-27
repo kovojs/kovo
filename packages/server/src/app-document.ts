@@ -149,9 +149,7 @@ export async function renderAppRouteDocumentResponse({
   //      on the RESOLVED session identity, not on whether a refresh cookie happened to be emitted.
   // (We do NOT change the cookie forwarding itself.)
   const noStore =
-    route.guard !== undefined ||
-    refreshSetCookies.length > 0 ||
-    sessionFingerprint !== undefined;
+    route.guard !== undefined || refreshSetCookies.length > 0 || sessionFingerprint !== undefined;
   const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
     request.headers.get('accept'),
   );

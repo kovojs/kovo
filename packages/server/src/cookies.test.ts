@@ -12,10 +12,7 @@ import {
 // regression (Secure on an HTTPS request) is asserted here because opaque-session.test.ts is owned
 // by a different slice. The behavior under test (the credential floor + per-request HTTPS signal)
 // belongs to this module's cookie story.
-import {
-  createMemoryOpaqueSessionStore,
-  createOpaqueSessionManager,
-} from './opaque-session.js';
+import { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
 
 describe('cookie header helpers', () => {
   it('serializes structured Set-Cookie values', () => {
@@ -256,9 +253,9 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
   // under NODE_ENV=production (an un-audited insecure session cookie). It must now reject.
   it('emits KV432 on a productionSecure:false credential downgrade in production (M1)', () => {
     process.env.NODE_ENV = 'production';
-    expect(() => serializeCookie('sid', 'abc', { class: 'session', productionSecure: false })).toThrow(
-      CookieDowngradeError,
-    );
+    expect(() =>
+      serializeCookie('sid', 'abc', { class: 'session', productionSecure: false }),
+    ).toThrow(CookieDowngradeError);
     expect(() => serializeCookie('sid', 'abc', { class: 'auth', productionSecure: false })).toThrow(
       'KV432',
     );

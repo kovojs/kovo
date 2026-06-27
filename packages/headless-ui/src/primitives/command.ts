@@ -1382,10 +1382,7 @@ function commandItemId(state: CommandState, value: string): string | undefined {
   return state.items?.find((item) => item.value === value)?.id;
 }
 
-function commandOptionId(
-  options: CommandItemAttributeOptions,
-  value: string,
-): string | undefined {
+function commandOptionId(options: CommandItemAttributeOptions, value: string): string | undefined {
   if (options.id !== undefined) return options.id;
   const itemId = commandItemId(options, value);
   if (itemId !== undefined) return itemId;
@@ -1414,7 +1411,10 @@ function commandFallbackOptionId(
 // fingerprint is identical within an instance and the IDREF resolves. `state.id`
 // is intentionally NOT used: it is the *input* id on the active-descendant path
 // but the *item* id on the option path, which would diverge.
-function commandFallbackPrefix(state: { items?: readonly CommandItem[]; listboxId?: string }): string {
+function commandFallbackPrefix(state: {
+  items?: readonly CommandItem[];
+  listboxId?: string;
+}): string {
   if (state.listboxId !== undefined) return state.listboxId;
   return `command-${optionSetFingerprint(state.items)}`;
 }

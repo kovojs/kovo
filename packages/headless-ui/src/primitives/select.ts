@@ -1096,7 +1096,10 @@ function selectFallbackOptionId(
 // fingerprint is identical within an instance and the IDREF resolves. `state.id`
 // is intentionally NOT used: it is the *trigger* id on the active-descendant path
 // but the *item* id on the option path, which would diverge.
-function selectFallbackPrefix(state: { items?: readonly SelectItem[]; listboxId?: string }): string {
+function selectFallbackPrefix(state: {
+  items?: readonly SelectItem[];
+  listboxId?: string;
+}): string {
   if (state.listboxId !== undefined) return state.listboxId;
   return `select-${optionSetFingerprint(state.items)}`;
 }

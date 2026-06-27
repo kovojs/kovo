@@ -102,7 +102,11 @@ describe('egress floor policy', () => {
     });
     expect(targetFromDgramArgs([53, 'attacker.com'])).toEqual({ host: 'attacker.com' });
     expect(() =>
-      assertAllowed('dgram.Socket.send', targetFromDgramArgs([Buffer.from('x'), 53, 'attacker.com']), []),
+      assertAllowed(
+        'dgram.Socket.send',
+        targetFromDgramArgs([Buffer.from('x'), 53, 'attacker.com']),
+        [],
+      ),
     ).toThrowError(/KOVO egress floor blocked dgram\.Socket\.send to attacker\.com/);
 
     // Loopback default (no explicit destination), localhost, and allowlisted
@@ -113,7 +117,9 @@ describe('egress floor policy', () => {
     ).not.toThrow();
     expect(() => assertAllowed('dns.lookup', targetFromDnsArgs(['localhost']), [])).not.toThrow();
     expect(() =>
-      assertAllowed('dns.resolve', targetFromDnsArgs(['registry.npmjs.org']), ['registry.npmjs.org']),
+      assertAllowed('dns.resolve', targetFromDnsArgs(['registry.npmjs.org']), [
+        'registry.npmjs.org',
+      ]),
     ).not.toThrow();
   });
 });

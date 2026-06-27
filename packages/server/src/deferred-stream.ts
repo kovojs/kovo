@@ -141,7 +141,10 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
  * markers and apply/cleanup scripts are NOT included — only content an author/attacker controls —
  * so a line that CONTAINS `--<boundary>` (the client's substring test) is the forged-boundary case.
  */
-function collectContentLines(shell: string, serializedChunks: readonly (readonly string[])[]): string[] {
+function collectContentLines(
+  shell: string,
+  serializedChunks: readonly (readonly string[])[],
+): string[] {
   const lines: string[] = [];
   for (const line of shell.split('\n')) lines.push(line);
   for (const chunkLines of serializedChunks) {

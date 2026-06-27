@@ -267,8 +267,7 @@ export function installBfcacheSessionReload(
   options: BfcacheSessionReloadOptions = {},
 ): InstalledBfcacheSessionReload {
   const sessionMetaDocument = options.document ?? globalSessionMetaDocument();
-  const sessionDependent =
-    sessionMetaDocument?.querySelector('meta[name="kovo-session"]') != null;
+  const sessionDependent = sessionMetaDocument?.querySelector('meta[name="kovo-session"]') != null;
   const pageShowTarget = options.pageShowTarget ?? globalEventTarget();
   const reload = options.reload ?? globalLocationReload();
 

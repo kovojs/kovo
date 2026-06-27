@@ -213,8 +213,7 @@ function applyCookieFloor(
   // `secure: false` as a downgrade). A suppression is only a *downgrade* where the floor would
   // otherwise force `Secure` (`secureRequired`); in plain-http dev the floor sets no `Secure`, so
   // suppressing it there is the dev default and must not trip KV432 (else dev login breaks).
-  const secureSuppressionRequested =
-    options.secure === false || options.productionSecure === false;
+  const secureSuppressionRequested = options.secure === false || options.productionSecure === false;
   const secureDowngrade = secureRequired && secureSuppressionRequested;
 
   const hasDowngrade = httpOnlyDowngrade || sameSiteDowngrade || secureDowngrade;

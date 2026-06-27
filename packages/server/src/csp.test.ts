@@ -43,9 +43,9 @@ describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
       'evil\tcom',
       'evil.com\x00',
     ]) {
-      expect(() =>
-        renderContentSecurityPolicy(metadata, { connectSrc: ["'self'", bad] }),
-      ).toThrow(/Content-Security-Policy/);
+      expect(() => renderContentSecurityPolicy(metadata, { connectSrc: ["'self'", bad] })).toThrow(
+        /Content-Security-Policy/,
+      );
     }
   });
 
@@ -53,7 +53,7 @@ describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
     const metadata = emptyCspInlineMetadata();
     expect(() =>
       renderDefaultDocumentCsp(metadata, {
-        allowlist: { connectSrc: ["https://api.example.com; base-uri https://evil.example"] },
+        allowlist: { connectSrc: ['https://api.example.com; base-uri https://evil.example'] },
       }),
     ).toThrow(/directive separator/);
   });
@@ -82,6 +82,8 @@ describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
       scripts: ['sha256-AB+cd/ef12345678901234567890123456789012345='],
       styles: [],
     });
-    expect(policy).toContain("script-src 'self' 'sha256-AB+cd/ef12345678901234567890123456789012345='");
+    expect(policy).toContain(
+      "script-src 'self' 'sha256-AB+cd/ef12345678901234567890123456789012345='",
+    );
   });
 });

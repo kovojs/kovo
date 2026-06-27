@@ -243,7 +243,10 @@ describe('server mutation response replay', () => {
     secondBody.set('productId', 'p2');
 
     const first = await renderMutationResponse(addToCart, { ...baseRequest, rawInput: firstBody });
-    const second = await renderMutationResponse(addToCart, { ...baseRequest, rawInput: secondBody });
+    const second = await renderMutationResponse(addToCart, {
+      ...baseRequest,
+      rawInput: secondBody,
+    });
 
     // The handler ran exactly once; the divergent second multipart body is a 409 conflict,
     // NOT a silent replay of the first response.
@@ -279,7 +282,10 @@ describe('server mutation response replay', () => {
     };
 
     const first = await renderMutationResponse(addToCart, { ...baseRequest, rawInput: makeBody() });
-    const second = await renderMutationResponse(addToCart, { ...baseRequest, rawInput: makeBody() });
+    const second = await renderMutationResponse(addToCart, {
+      ...baseRequest,
+      rawInput: makeBody(),
+    });
 
     expect(writes).toBe(1);
     expect(first.status).toBe(200);

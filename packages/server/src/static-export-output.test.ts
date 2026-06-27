@@ -692,7 +692,10 @@ describe('server static export output boundary', () => {
       expect(headersFile).toContain('/assets/*');
 
       // Both wildcard stanzas carry the full immutable floor that every server preset applies.
-      const cBlock = headersFile.slice(headersFile.indexOf('/c/*'), headersFile.indexOf('/assets/*'));
+      const cBlock = headersFile.slice(
+        headersFile.indexOf('/c/*'),
+        headersFile.indexOf('/assets/*'),
+      );
       const assetBlock = headersFile.slice(headersFile.indexOf('/assets/*'));
       for (const block of [cBlock, assetBlock]) {
         expect(block).toContain('x-content-type-options: nosniff');

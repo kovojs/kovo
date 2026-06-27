@@ -263,7 +263,8 @@ function staticExportPlannedWrite(
   if (target.itemKind === 'header-sidecar') {
     return {
       ...target,
-      write: async (writePath) => writeTextStaticExportFile(buildNetlifyHeadersSidecar(plan), writePath),
+      write: async (writePath) =>
+        writeTextStaticExportFile(buildNetlifyHeadersSidecar(plan), writePath),
     };
   }
 

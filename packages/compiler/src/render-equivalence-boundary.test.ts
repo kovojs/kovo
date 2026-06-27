@@ -65,7 +65,9 @@ describe('render-equivalence production boundary', () => {
     expect(compileSource).toMatch(
       /authoredStaticTextEquivalenceCheck\(\s*registryFileName\(parsed\),\s*parsed\.originalModel,\s*lowered\.model,/,
     );
-    expect(compileSource).toContain('combineRenderEquivalenceChecks(loweredRoundTrip, authoredStaticText)');
+    expect(compileSource).toContain(
+      'combineRenderEquivalenceChecks(loweredRoundTrip, authoredStaticText)',
+    );
   });
 });
 

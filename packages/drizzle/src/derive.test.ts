@@ -608,7 +608,10 @@ describe('deriveOptimistic — M10: UPSERT (onConflictDoUpdate) punts, never ins
   it('punts an UPSERT over a COUNT (no phantom +1 on the conflict path)', () => {
     const shape: AlgebraicQueryShape = {
       fields: {
-        count: { kind: 'count', rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' } },
+        count: {
+          kind: 'count',
+          rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' },
+        },
       },
       query: 'cartCount',
     };
@@ -685,7 +688,9 @@ describe('deriveOptimistic — M11: sorted INSERT on a non-numeric orderBy punts
     // OLD behavior: emitted a derived push-row with position {column:'title'}; the
     // interpreter/codegen compare via asNumber(title)=NaN ⇒ row appended to the END,
     // diverging from the server's lexical ORDER BY title. The fix punts the pair.
-    expect(deriveOptimistic([insertTitle], textOrderByShape({ id: 'string', title: 'string' }))).toEqual({
+    expect(
+      deriveOptimistic([insertTitle], textOrderByShape({ id: 'string', title: 'string' })),
+    ).toEqual({
       kind: 'punt',
       reason: { code: 'opaque-orderby', column: 'title' },
     });

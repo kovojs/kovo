@@ -15,9 +15,9 @@ the end), then the worktree was removed. Each item is **distinct** from every `b
 
 ## Severity summary
 
-| Severity | Count | Items |
-| -------- | ----: | ----- |
-| High     |     1 | H1 |
+| Severity | Count | Items  |
+| -------- | ----: | ------ |
+| High     |     1 | H1     |
 | Medium   |    13 | M1-M13 |
 | Low      |    18 | L1-L18 |
 
@@ -70,7 +70,7 @@ the cache/bfcache family.
   - **Distinct:** new gap class (an unparsed Drizzle config key), not the literal-callee pattern and not H1.
   - **Fix:** parse `extras` in `relationalQueryProjection` and classify each computed field against the source columns it references; over-approximate to `kind:'secret'` when it cannot be resolved.
 
-- [ ] **M5 — `betterAuthSession` (default opaque mode): one tossed JWT-shaped *session*-named cookie forces a valid user anonymous (forced-logout DoS).** `packages/better-auth/src/session.ts:91-103`, `packages/better-auth/src/internal/credential.ts:232-238,326-332,351-366`
+- [ ] **M5 — `betterAuthSession` (default opaque mode): one tossed JWT-shaped _session_-named cookie forces a valid user anonymous (forced-logout DoS).** `packages/better-auth/src/session.ts:91-103`, `packages/better-auth/src/internal/credential.ts:232-238,326-332,351-366`
   - `jwtDenied = hasBetterAuthJwtSessionCookie(request.headers)` nulls the **entire** session when **any** incoming cookie whose normalized name merely `.includes('session')` (and isn't `*session_data`) carries a 3-segment JWT value — even when better-auth validated a real opaque `session_token` and returned a live payload. The sibling sink `hasSessionEstablishingSetCookie` applies the same check **per-cookie**; only the session provider taints request-globally.
   - **Exploit:** on a shared-cookie-domain SaaS deployment, an attacker sets `asession=eyJhbGciOiJub25lIn0.x.y; Domain=.example.com`; the browser sends it on the victim's requests; the victim's real session still validates upstream but Kovo returns null → persistent silent forced-logout until cookies are cleared. `__Host-` on the real cookie does not help (the tossed cookie is separately named). **Fail-safe direction (denies, never grants), gated to cookie-tossing reach, hence MEDIUM.**
   - **Verified:** Round-1 + skeptic worktrees (3/3, 6/6) drove the real `betterAuthSession` against a `FakeBetterAuth` validating only `session_token`: control → authenticated; `…; asession=<jwt>` → null; control `tok=<jwt>` (no `session` substring) → still authenticated.

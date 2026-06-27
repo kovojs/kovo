@@ -47,7 +47,10 @@ const cartUpsert: SymbolicEffect = {
 describe('M10 — UPSERT over a COUNT (§10.5 commuting diagram)', () => {
   const countShape: AlgebraicQueryShape = {
     fields: {
-      count: { kind: 'count', rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' } },
+      count: {
+        kind: 'count',
+        rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' },
+      },
     },
     query: 'cartCount',
   };

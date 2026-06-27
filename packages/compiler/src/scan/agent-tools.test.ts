@@ -133,7 +133,9 @@ describe('agentToolSinksFromSource — nested non-invoked callbacks (bugz-3 L6; 
   });
 
   it('reports audit-grade sinks for .map and .then callbacks, including globalThis.fetch and process.env[...]', () => {
-    const mapFacts = sinks("    [1].map(() => globalThis.fetch('https://api.openai.com/v1/chat'));");
+    const mapFacts = sinks(
+      "    [1].map(() => globalThis.fetch('https://api.openai.com/v1/chat'));",
+    );
     expect(mapFacts).toEqual([
       {
         capability: 'egress:api.openai.com',

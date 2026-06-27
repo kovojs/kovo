@@ -148,9 +148,9 @@ describe('instance-keyed optimistic bridge', () => {
 
     // The lowered derivation produces the FULL `product:p1`, NOT the bare `p1` (the fixed bug).
     const derive = plan.keys?.product;
-    expect(typeof derive === 'function' && derive({ domain: 'mutation', input: { id: 'p1', qty: 1 } })).toBe(
-      'product:p1',
-    );
+    expect(
+      typeof derive === 'function' && derive({ domain: 'mutation', input: { id: 'p1', qty: 1 } }),
+    ).toBe('product:p1');
 
     const pending = applyOptimisticTransforms(store, { id: 'p1', qty: 1 }, plan);
 

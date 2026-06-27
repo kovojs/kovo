@@ -1197,12 +1197,7 @@ function reachableSinkFacts(
   return facts;
 }
 
-type AgentToolSinkOrigin =
-  | 'handler'
-  | 'helper'
-  | 'imported-helper'
-  | 'inline'
-  | 'nested-callback';
+type AgentToolSinkOrigin = 'handler' | 'helper' | 'imported-helper' | 'inline' | 'nested-callback';
 
 type CallbackArrayElements = ReadonlyMap<string, string>;
 type CallbackArrayObjectWrapperProperties = ReadonlyMap<string, CallbackArrayElements>;
@@ -3012,10 +3007,7 @@ function processEnvSecretName(
 }
 
 /** True when `expression` is `process.env` (property or `process['env']` element access). */
-function isProcessEnvAccess(
-  expression: ts.Expression,
-  blockedNames: ReadonlySet<string>,
-): boolean {
+function isProcessEnvAccess(expression: ts.Expression, blockedNames: ReadonlySet<string>): boolean {
   const env = unwrapParentheses(expression);
 
   let base: ts.Expression | undefined;

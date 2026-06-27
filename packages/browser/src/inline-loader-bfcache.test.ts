@@ -68,29 +68,32 @@ function withInstalledInlineLoader(
   }
 }
 
-describe.each(inlineSourceInstallCases)('inline loader bfcache reload — %s (SPEC §780)', (_label, install) => {
-  it('reloads a persisted bfcache restore of a session-dependent document', () => {
-    withInstalledInlineLoader({ sessionDependent: true, install }, ({ pageShow, reload }) => {
-      // The kovo-session meta is present, so the inline bootstrap registers the pageshow handler.
-      expect(pageShow).toBeTypeOf('function');
+describe.each(inlineSourceInstallCases)(
+  'inline loader bfcache reload — %s (SPEC §780)',
+  (_label, install) => {
+    it('reloads a persisted bfcache restore of a session-dependent document', () => {
+      withInstalledInlineLoader({ sessionDependent: true, install }, ({ pageShow, reload }) => {
+        // The kovo-session meta is present, so the inline bootstrap registers the pageshow handler.
+        expect(pageShow).toBeTypeOf('function');
 
-      pageShow?.({ persisted: true, type: 'pageshow' });
-      // SPEC §780: a persisted restore revalidates from the server.
-      expect(reload).toHaveBeenCalledTimes(1);
+        pageShow?.({ persisted: true, type: 'pageshow' });
+        // SPEC §780: a persisted restore revalidates from the server.
+        expect(reload).toHaveBeenCalledTimes(1);
 
-      reload.mockClear();
-      // A non-persisted pageshow already ran the loader/sessionProvider — no reload.
-      pageShow?.({ persisted: false, type: 'pageshow' });
-      pageShow?.({ type: 'pageshow' });
-      expect(reload).not.toHaveBeenCalled();
+        reload.mockClear();
+        // A non-persisted pageshow already ran the loader/sessionProvider — no reload.
+        pageShow?.({ persisted: false, type: 'pageshow' });
+        pageShow?.({ type: 'pageshow' });
+        expect(reload).not.toHaveBeenCalled();
+      });
     });
-  });
 
-  it('registers no pageshow handler for an anonymous document (no kovo-session meta)', () => {
-    withInstalledInlineLoader({ sessionDependent: false, install }, ({ pageShow, reload }) => {
-      // SPEC §780: anonymous/exportable documents stay fully bfcache-eligible.
-      expect(pageShow).toBeUndefined();
-      expect(reload).not.toHaveBeenCalled();
+    it('registers no pageshow handler for an anonymous document (no kovo-session meta)', () => {
+      withInstalledInlineLoader({ sessionDependent: false, install }, ({ pageShow, reload }) => {
+        // SPEC §780: anonymous/exportable documents stay fully bfcache-eligible.
+        expect(pageShow).toBeUndefined();
+        expect(reload).not.toHaveBeenCalled();
+      });
     });
-  });
-});
+  },
+);
