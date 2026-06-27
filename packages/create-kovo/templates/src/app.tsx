@@ -39,29 +39,79 @@ const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;
 
 const styles = style.create({
   shell: {
+    backgroundColor: style.tokens.sys.color.surface,
     color: style.tokens.sys.color.onSurface,
     marginInline: 'auto',
-    maxWidth: 768,
+    maxWidth: 1040,
     minHeight: '100dvh',
     paddingBlock: 32,
-    paddingInline: 24,
+    paddingInline: 28,
+    '@media (max-width: 640px)': {
+      paddingBlock: 20,
+      paddingInline: 16,
+    },
   },
   header: {
     alignItems: 'center',
     display: 'flex',
     gap: 16,
     justifyContent: 'space-between',
-    marginBlockEnd: 24,
+    marginBlockEnd: 32,
+    '@media (max-width: 640px)': {
+      alignItems: 'flex-start',
+      flexDirection: 'column',
+      gap: 14,
+      marginBlockEnd: 28,
+    },
   },
-  brand: { fontSize: 18, fontWeight: 700 },
+  brandGroup: { alignItems: 'center', display: 'flex', gap: 12 },
+  mark: {
+    alignItems: 'center',
+    backgroundColor: style.tokens.sys.color.primary,
+    borderRadius: style.tokens.sys.shape.cornerMedium,
+    color: style.tokens.sys.color.onPrimary,
+    display: 'inline-flex',
+    flexShrink: 0,
+    fontSize: 13,
+    fontWeight: 700,
+    height: 34,
+    justifyContent: 'center',
+    letterSpacing: 0,
+    width: 34,
+  },
+  brandCopy: { display: 'grid', gap: 2 },
+  brand: { fontSize: 17, fontWeight: 700, letterSpacing: 0, lineHeight: 1.25 },
+  tagline: {
+    color: style.tokens.sys.color.onSurfaceVariant,
+    fontSize: 14,
+    lineHeight: 1.5,
+    margin: 0,
+  },
   who: {
     alignItems: 'center',
     color: style.tokens.sys.color.onSurfaceVariant,
     display: 'flex',
     fontSize: 14,
-    gap: 12,
+    gap: 10,
+    justifyContent: 'space-between',
+    maxWidth: '100%',
+    minWidth: 0,
+    '@media (max-width: 640px)': {
+      width: '100%',
+    },
   },
-  loginMain: { marginInline: 'auto', maxWidth: 384, paddingBlock: 48 },
+  userName: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  loginMain: {
+    alignItems: 'center',
+    display: 'grid',
+    marginInline: 'auto',
+    maxWidth: 440,
+    minHeight: 'calc(100dvh - 80px)',
+  },
 });
 
 const AppLayout = layout({
@@ -88,9 +138,17 @@ function HomePage({ request }: { request: AppRequest }): string {
   return (
     <div>
       <header style={styles.header}>
-        <span style={styles.brand}>Kovo Starter</span>
+        <div style={styles.brandGroup}>
+          <span aria-hidden="true" style={styles.mark}>
+            K
+          </span>
+          <div style={styles.brandCopy}>
+            <span style={styles.brand}>Kovo Starter</span>
+            <p style={styles.tagline}>A clean starting point for your next Kovo app.</p>
+          </div>
+        </div>
         <span style={styles.who}>
-          {request.session?.user.name ?? 'Guest'}
+          <span style={styles.userName}>{request.session?.user.name ?? 'Guest'}</span>
           <SignOutForm />
         </span>
       </header>

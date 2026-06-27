@@ -514,6 +514,7 @@ describe('create-kovo starter (CLI)', () => {
       expect(CREATE_KOVO_HELP).toContain('Default: postgres.');
       expect(CREATE_KOVO_HELP).toContain('package manager             pnpm@10.12.1.');
       expect(CREATE_KOVO_HELP).toContain('create-kovo my-app --dialect sqlite');
+      expect(CREATE_KOVO_HELP).toContain('--disable-git');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -555,6 +556,7 @@ describe('create-kovo starter (CLI)', () => {
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
+      expect(existsSync(join(root, '.git'))).toBe(true);
     } finally {
       stdout.mockRestore();
       rmSync(parent, { force: true, recursive: true });
@@ -570,6 +572,54 @@ describe('create-kovo starter (CLI)', () => {
       expect(main([root, '--dialect', 'sqlite'])).toBe(0);
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     sqlite'));
       expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain("provider: 'sqlite'");
+    } finally {
+      stdout.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('skips Git initialization when requested', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-disable-git-'));
+    const root = join(parent, 'No Git');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main([root, '--disable-git'])).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Kovo app created'));
+      expect(existsSync(join(root, '.git'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('skips nested Git initialization inside an existing Git repository', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-parent-git-'));
+    const root = join(parent, 'Nested App');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      execFileSync('git', ['init'], { cwd: parent, stdio: 'ignore' });
+      expect(main([root])).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Kovo app created'));
+      expect(existsSync(join(parent, '.git'))).toBe(true);
+      expect(existsSync(join(root, '.git'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('skips nested Git initialization inside an existing Mercurial repository', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-parent-hg-'));
+    const root = join(parent, 'Nested App');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(parent, '.hg'));
+      expect(main([root])).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Kovo app created'));
+      expect(existsSync(join(root, '.git'))).toBe(false);
     } finally {
       stdout.mockRestore();
       rmSync(parent, { force: true, recursive: true });

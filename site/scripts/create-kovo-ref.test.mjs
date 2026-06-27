@@ -19,6 +19,8 @@ describe('create-kovo reference generator', () => {
       );
 
       expect(page).toContain(CREATE_KOVO_USAGE);
+      expect(page).toContain('--disable-git');
+      expect(page).toContain('already inside a Git or Mercurial repository');
       expect(page).toContain('## Generated project');
       expect(sidebar.package).toBe('create-kovo');
       expect(sidebar.subpaths[0].categories[0].symbols[0]).toMatchObject({

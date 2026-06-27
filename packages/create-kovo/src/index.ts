@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
   existsSync,
@@ -43,6 +44,10 @@ export interface WriteKovoProjectResult {
   root: string;
 }
 
+export interface WriteKovoProjectOptions extends Partial<CreateKovoOptions> {
+  disableGit?: boolean;
+}
+
 /** Usage line emitted by the `create-kovo` bin and consumed by the docs generator. */
 export const CREATE_KOVO_USAGE = 'create-kovo <target-directory> [options]';
 
@@ -63,6 +68,7 @@ export const CREATE_KOVO_HELP = [
   '',
   '  --postgres                  Alias for --dialect postgres.',
   '  --sqlite                    Alias for --dialect sqlite.',
+  '  --disable-git               Do not initialize a Git repository.',
   '',
   '  -h, --help                  Show this help.',
   '',
@@ -202,7 +208,7 @@ export function createKovoProject(options: CreateKovoOptions): CreateKovoProject
 
 export function writeKovoProject(
   targetDirectory: string,
-  options: Partial<CreateKovoOptions> = {},
+  options: WriteKovoProjectOptions = {},
 ): WriteKovoProjectResult {
   const root = resolve(targetDirectory);
   const name = options.name ?? basename(root);
@@ -239,6 +245,10 @@ export function writeKovoProject(
     writeFileSync(destination, file.source, 'utf8');
   }
 
+  if (!options.disableGit) {
+    tryGitInit(root);
+  }
+
   return {
     files: project.files.map((file) => file.path),
     name: project.name,
@@ -268,6 +278,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     const result = writeKovoProject(options.targetDirectory, {
       ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
       ...(options.name === undefined ? {} : { name: options.name }),
+      ...(options.disableGit === undefined ? {} : { disableGit: options.disableGit }),
     });
     process.stdout.write(renderSuccess(result, options.dialect ?? 'postgres'));
     return 0;
@@ -365,13 +376,53 @@ function assertWritableTarget(root: string): void {
   }
 }
 
+function tryGitInit(root: string): boolean {
+  if (isInsideVersionControl(root)) {
+    return false;
+  }
+
+  try {
+    execFileSync('git', ['--version'], { stdio: 'ignore' });
+  } catch {
+    return false;
+  }
+
+  try {
+    execFileSync('git', ['init', '-b', 'main'], { cwd: root, stdio: 'ignore' });
+    return true;
+  } catch {
+    try {
+      execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function isInsideVersionControl(root: string): boolean {
+  let current = resolve(root);
+
+  while (true) {
+    if (existsSync(resolve(current, '.git')) || existsSync(resolve(current, '.hg'))) {
+      return true;
+    }
+
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+
 interface CliOptions {
+  disableGit?: boolean;
   dialect?: CreateKovoDialect;
   name?: string;
   targetDirectory: string;
 }
 
 function readCliOptions(args: readonly string[]): CliOptions {
+  let disableGit: boolean | undefined;
   let targetDirectory: string | undefined;
   let name: string | undefined;
   let dialect: CreateKovoDialect | undefined;
@@ -403,6 +454,11 @@ function readCliOptions(args: readonly string[]): CliOptions {
       continue;
     }
 
+    if (arg === '--disable-git') {
+      disableGit = true;
+      continue;
+    }
+
     if (arg === '--postgres') {
       dialect = 'postgres';
       continue;
@@ -428,6 +484,7 @@ function readCliOptions(args: readonly string[]): CliOptions {
   }
 
   return {
+    ...(disableGit === undefined ? {} : { disableGit }),
     ...(dialect === undefined ? {} : { dialect }),
     ...(name === undefined ? {} : { name }),
     targetDirectory,

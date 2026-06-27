@@ -37,11 +37,13 @@ pnpm create kovo my-app -- --dialect sqlite
 The CLI accepts:
 
 ```txt
-create-kovo <target-directory> [--name <package-name>] [--dialect postgres|sqlite]
+create-kovo <target-directory> [--name <package-name>] [--dialect postgres|sqlite] [--disable-git]
 ```
 
 `--postgres` and `--sqlite` are accepted aliases. The target directory must be empty when it already
-exists; the command refuses to merge into a non-empty app.
+exists; the command refuses to merge into a non-empty app. By default, `create-kovo` initializes a
+Git repository after writing the scaffold. Pass `--disable-git` to skip that. If the target is
+already inside a Git or Mercurial repository, the command does not create a nested Git repository.
 
 > **Pre-v1:** not on npm yet. These commands describe the intended flow and work today inside the
 > [Kovo repository](https://github.com/kovojs/kovo) as workspace packages - clone the repo and work
@@ -57,6 +59,8 @@ The scaffold is intentionally real, not a blank page. It writes:
 - A contact schema, seeded database, typed contact query, and guarded add-contact mutation.
 - Styled UI components, theme tokens, document CSS, Vitest coverage, Vite/Kovo config, and CI.
 - `.env.example`, `.gitignore`, and a gitignored `.env` with a fresh local CSRF secret.
+- A Git repository for the new app, unless you passed `--disable-git` or scaffolded inside an
+  existing Git/Mercurial repository.
 
 The generated `.env` is for local development only. Set `BETTER_AUTH_SECRET` or
 `KOVO_CSRF_SECRET` to a strong deployment secret before serving the app outside your machine.
