@@ -707,7 +707,7 @@ describe('server app document boundary', () => {
     });
     expect(context.request).toBeInstanceOf(Request);
     expect(context.request.url).toBe(request.url);
-    expect((context.request as Request & { session: unknown }).session).toBeNull();
+    expect('session' in context.request).toBe(false);
   });
 
   it('renders route guard forbidden failures through the configured 403 shell', async () => {

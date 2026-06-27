@@ -10,13 +10,16 @@ test('guarded mutation reauths anonymous submits and permits signed-in writes', 
   kovoApp,
 }) => {
   await page.goto('/');
+  const origin = new URL(page.url()).origin;
+  const csrfToken = await page.locator('input[name="kovo-csrf"]').inputValue();
   await expect(page.locator('[data-count]')).toHaveText('0');
 
   const enhancedDenied = await request.post('/_m/guarded-mutation/increment', {
-    form: {},
+    form: { 'kovo-csrf': csrfToken },
     headers: {
       'Kovo-Fragment': 'true',
       'Kovo-Targets': 'guarded-count',
+      origin,
     },
   });
 
@@ -30,8 +33,8 @@ test('guarded mutation reauths anonymous submits and permits signed-in writes', 
   );
 
   const noJsDenied = await request.post('/_m/guarded-mutation/increment', {
-    form: {},
-    headers: { Referer: '/' },
+    form: { 'kovo-csrf': csrfToken },
+    headers: { origin, Referer: '/' },
     maxRedirects: 0,
   });
   expect(noJsDenied.status()).toBe(303);
