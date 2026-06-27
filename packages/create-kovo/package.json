@@ -9,7 +9,8 @@
     "create-kovo": "./src/index.ts"
   },
   "files": [
-    "dist"
+    "dist",
+    "templates"
   ],
   "type": "module",
   "publishConfig": {

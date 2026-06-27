@@ -14,6 +14,7 @@ import {
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { kovoDocsMirrorRemotes } from '@kovojs/core/internal/agent-docs';
 import { describe, expect, it, vi } from 'vitest';
@@ -56,6 +57,7 @@ const SQLITE_TEMPLATE_FILES = [
   'src/db.sqlite.ts',
   'src/auth.sqlite.ts',
 ];
+const createKovoPackageRoot = dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
 
 describe('create-kovo starter (metadata)', () => {
   it('scaffolds the real template file set with no unrendered placeholders', () => {
@@ -542,6 +544,46 @@ describe('create-kovo starter (CLI)', () => {
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it('ships templates in the packed CLI tarball', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-packed-'));
+    const extractRoot = join(parent, 'extract');
+    const target = join(parent, 'Packed App');
+
+    try {
+      execFileSync('pnpm', ['pack', '--pack-destination', parent], {
+        cwd: createKovoPackageRoot,
+        stdio: 'pipe',
+      });
+      const tarball = readdirSync(parent).find((entry) => entry.endsWith('.tgz'));
+      expect(tarball).toBeTruthy();
+
+      mkdirSync(extractRoot, { recursive: true });
+      execFileSync('tar', ['-xzf', join(parent, tarball ?? ''), '-C', extractRoot], {
+        stdio: 'pipe',
+      });
+
+      const packedPackageRoot = join(extractRoot, 'package');
+      mkdirSync(join(packedPackageRoot, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(
+        resolveDependencyRoot('@kovojs/core'),
+        join(packedPackageRoot, 'node_modules/@kovojs/core'),
+      );
+
+      const stdout = execFileSync(process.execPath, [
+        join(packedPackageRoot, 'dist/index.mjs'),
+        target,
+        '--name',
+        'Packed App',
+      ]).toString('utf8');
+
+      expect(stdout).toContain(`create-kovo: wrote ${ALL_FILES.length} files to ${target}`);
+      expect(readFileSync(join(target, 'package.json'), 'utf8')).toContain('"name": "packed-app"');
+      expect(readFileSync(join(target, 'src/app.tsx'), 'utf8')).toContain('createApp(');
+    } finally {
+      rmSync(parent, { force: true, recursive: true });
+    }
+  }, 30_000);
 
   it('refuses to write into a non-empty target directory', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-collision-'));

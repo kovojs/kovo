@@ -4,13 +4,14 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  realpathSync,
   readFileSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import {
   bundledKovoDocsMirrorFiles,
@@ -395,6 +396,16 @@ function parseDialectOption(value: string | undefined): CreateKovoDialect {
   throw new Error(`Unsupported create-kovo dialect: ${value ?? '<missing>'}`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+function isMainModule(): boolean {
+  if (!process.argv[1]) return false;
+
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+  }
+}
+
+if (isMainModule()) {
   process.exitCode = main();
 }

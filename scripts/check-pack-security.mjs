@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -109,6 +110,7 @@ export function validatePackedPackage({ files, manifest, packageName, readTextFi
     const rel = file.path;
     const base = path.posix.basename(rel);
     const segments = rel.split('/').map((segment) => segment.toLowerCase());
+    const starterTemplate = isAllowedStarterTemplate(packageName, rel);
 
     if (base === '.env' || base.startsWith('.env.')) {
       findings.push(`${packageName}: tarball includes environment file ${rel}`);
@@ -119,11 +121,11 @@ export function validatePackedPackage({ files, manifest, packageName, readTextFi
       findings.push(`${packageName}: tarball includes ${forbiddenSegment} path ${rel}`);
     }
 
-    if (!rel.startsWith('dist/') && !allowedTopLevelFiles.has(rel)) {
+    if (!rel.startsWith('dist/') && !allowedTopLevelFiles.has(rel) && !starterTemplate) {
       findings.push(`${packageName}: unexpected top-level tarball file ${rel}`);
     }
 
-    if (sourceFilePattern.test(rel) && !declarationPattern.test(rel)) {
+    if (sourceFilePattern.test(rel) && !declarationPattern.test(rel) && !starterTemplate) {
       findings.push(`${packageName}: unexpected source file ${rel}`);
     }
 
@@ -133,7 +135,7 @@ export function validatePackedPackage({ files, manifest, packageName, readTextFi
       );
     }
 
-    if (!textFilePattern.test(rel)) continue;
+    if (!textFilePattern.test(rel) && !starterTemplate) continue;
     const text = readTextFile(rel);
     if (text === undefined) continue;
 
@@ -163,6 +165,10 @@ export function validatePackedPackage({ files, manifest, packageName, readTextFi
   }
 
   return findings;
+}
+
+function isAllowedStarterTemplate(packageName, rel) {
+  return packageName === 'create-kovo' && rel.startsWith('templates/');
 }
 
 export function collectManifestTargets(manifest) {
@@ -415,6 +421,7 @@ function readSnapshot() {
 function readWorkspacePackageNames() {
   return readdirSync(path.join(repoRoot, 'packages'))
     .map((dir) => path.join(repoRoot, 'packages', dir, 'package.json'))
+    .filter((manifestPath) => existsSync(manifestPath))
     .map((manifestPath) => JSON.parse(readFileSync(manifestPath, 'utf8')).name)
     .filter((name) => typeof name === 'string');
 }

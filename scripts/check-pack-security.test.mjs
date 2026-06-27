@@ -22,7 +22,7 @@ function validateFixture(files, overrides = {}) {
     manifest: overrides.manifest ?? {
       exports: { '.': { default: './dist/index.mjs', types: './dist/index.d.mts' } },
     },
-    packageName: '@kovojs/example',
+    packageName: overrides.packageName ?? '@kovojs/example',
     readTextFile: (rel) => text.get(rel),
     targetFiles: overrides.targetFiles ?? ['dist/index.d.mts', 'dist/index.mjs'],
   });
@@ -47,6 +47,24 @@ describe('pack-security gate', () => {
         expect.stringContaining('unexpected source file dist/debug.ts'),
       ]),
     );
+  });
+
+  it('allows create-kovo to ship starter template source files', () => {
+    const findings = validateFixture(
+      [
+        { path: 'package.json', text: '{}' },
+        { path: 'dist/index.mjs', text: 'export {};' },
+        { path: 'dist/index.d.mts', text: 'export {};' },
+        {
+          path: 'templates/src/app.tsx',
+          text: 'export function App() { return <main>Hello</main>; }',
+        },
+        { path: 'templates/package.json', text: '{"name":"{{name}}"}' },
+      ],
+      { packageName: 'create-kovo' },
+    );
+
+    expect(findings).toEqual([]);
   });
 
   it('rejects declaration and source maps that expose absolute local paths', () => {

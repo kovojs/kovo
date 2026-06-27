@@ -26,7 +26,8 @@ import { publicPackages, repoRoot } from './public-packages.mjs';
  *
  * Modes:
  *   --write   Write each public package.json: `publishConfig` (exports/bin → dist),
- *             `files: ["dist"]`, `scripts["build:dist"]` = `vp pack <entries> --dts`,
+ *             publish `files` (dist, plus starter templates for `create-kovo`),
+ *             `scripts["build:dist"]` = `vp pack <entries> --dts`,
  *             and `scripts.prepack` = `pnpm run build:dist` (a dedicated script name so
  *             a package's existing `build` — e.g. runtime's inline-loader build — is
  *             never clobbered; prepack runs on pack/publish, NOT install: zero in-repo risk).
@@ -177,7 +178,7 @@ function write() {
     const pkgJson = JSON.parse(readFileSync(pkgPath, 'utf8'));
     const plan = derivePublishPlan(pkgJson);
 
-    pkgJson.files = ['dist'];
+    pkgJson.files = publishFiles(pkg);
     // Use a dedicated `build:dist` script so we never clobber a package's existing
     // `build` (e.g. @kovojs/browser's `build` = inline-loader generation).
     pkgJson.scripts = {
@@ -194,6 +195,10 @@ function write() {
         `${plan.publishConfig.bin !== undefined ? ', bin' : ''}`,
     );
   }
+}
+
+function publishFiles(pkg) {
+  return pkg.name === 'create-kovo' ? ['dist', 'templates'] : ['dist'];
 }
 
 function buildAndVerify() {
