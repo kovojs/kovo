@@ -853,6 +853,27 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq: equals }) => equals(order.id, req.session.userId) });',
               '  },',
               '});',
+              '',
+              'export const relationalOrdersDestructuredTableMine = query("relationalOrdersDestructuredTableMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: ({ userId }, { eq }) => eq(userId, req.session.userId) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersRenamedTableColumnMine = query("relationalOrdersRenamedTableColumnMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: ({ userId: ownerId }, { eq }) => eq(ownerId, req.session.userId) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersDefaultedTableColumn = query("relationalOrdersDefaultedTableColumn", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: ({ userId = orders.userId }, { eq }) => eq(userId, req.session.userId) });',
+              '  },',
+              '});',
             ].join('\n'),
           },
         ],
@@ -913,9 +934,30 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       },
       {
         detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalOrdersDefaultedTableColumn',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        name: 'relationalOrdersDestructuredTableMine',
+        scope: 'session',
+      },
+      {
+        detail:
           'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
         domain: 'order',
         name: 'relationalOrdersMine',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        name: 'relationalOrdersRenamedTableColumnMine',
         scope: 'session',
       },
       {

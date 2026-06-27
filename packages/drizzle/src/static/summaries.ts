@@ -833,7 +833,7 @@ function relationalWherePredicate(
   if (!predicate) return undefined;
 
   const tableParameter = node.getParameters()[0]?.getNameNode();
-  const readTableIdentifier = Node.isIdentifier(tableParameter)
+  const readTableIdentifier = tableParameter
     ? relationalTableParameterIdentifier(tableParameter, tableIdentifier)
     : undefined;
   const predicateCallName = relationalPredicateCallNameResolver(node);
@@ -857,15 +857,34 @@ function relationalTableParameterIdentifier(
   parameter: Node,
   tableIdentifier: string,
 ): (node: Node) => string | undefined {
-  const parameterKey = resolvedSymbolKey(parameter.getSymbol());
+  const aliases = new Map<string, string>();
+  if (Node.isIdentifier(parameter)) {
+    const key = resolvedSymbolKey(parameter.getSymbol());
+    if (key) aliases.set(key, tableIdentifier);
+  } else if (Node.isObjectBindingPattern(parameter)) {
+    for (const element of parameter.getElements()) {
+      if (isRestBindingElement(element) || element.getInitializer()) continue;
+
+      const column = objectBindingPropertyName(element);
+      if (!column) continue;
+
+      const name = element.getNameNode();
+      if (!Node.isIdentifier(name)) continue;
+
+      const key = resolvedSymbolKey(name.getSymbol());
+      if (key) aliases.set(key, `${tableIdentifier}.${column}`);
+    }
+  }
+  if (aliases.size === 0) return () => undefined;
+
   return (node: Node) => {
     const expression = unwrappedStaticExpressionNode(node);
-    if (!parameterKey || !Node.isIdentifier(expression)) return undefined;
+    if (!Node.isIdentifier(expression)) return undefined;
 
     const symbolKey = resolvedSymbolKey(
       symbolForIdentifierReference(expression) ?? expression.getSymbol(),
     );
-    return symbolKey === parameterKey ? tableIdentifier : undefined;
+    return symbolKey ? aliases.get(symbolKey) : undefined;
   };
 }
 
@@ -1674,7 +1693,19 @@ function sessionSegmentExpression(node: Node): Node | undefined {
     staticAccessExpression(expression),
     readTableIdentifier,
   );
-  if (!tableIdentifier || !key) return {};
+  if (!tableIdentifier || !key) {
+    const resolvedPath = readTableIdentifier?.(expression);
+    if (!resolvedPath) return {};
+
+    const keyStart = resolvedPath.lastIndexOf('.');
+    if (keyStart <= 0 || keyStart === resolvedPath.length - 1) return {};
+    return {
+      tableKey: {
+        key: resolvedPath.slice(keyStart + 1),
+        tableIdentifier: resolvedPath.slice(0, keyStart),
+      },
+    };
+  }
 
   return {
     tableKey: {
