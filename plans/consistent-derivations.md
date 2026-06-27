@@ -190,7 +190,11 @@ packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-i
     `pnpm exec vitest run packages/server/src/mutation.test.ts
 packages/compiler/src/scan/optimistic-inline.test.ts examples/crm/src/interactive-app.test.ts`,
     `pnpm run check:api-surface`, `pnpm run check`, and `git diff --check HEAD~1..HEAD`.
-    Remaining gap: imported query value references are still outside the source-only scanner.
+    The scanner now also resolves imported query value references when the caller supplies static
+    imported source, including explicit-key queries and source-derived object-form query exports;
+    `pnpm exec vitest run packages/compiler/src/scan/optimistic-inline.test.ts`, `pnpm run
+check:vp`, and `git diff --check` passed. Remaining gap: the production lowering caller still needs
+    to pass the resolver, so this authoring-surface item remains open.
 
 - [x] **Add query key drift and collision diagnostics.**
   - Duplicate derived query keys and changed derived query keys must be reported before generated
@@ -341,3 +345,6 @@ vitest run packages/compiler/src/spec-coverage-map.test.ts`, `pnpm run test`, an
 packages/compiler/src/diagnostic-coverage-matrix.test.ts
 packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.test.ts`,
   `pnpm run check:vp`, and `git diff --check` passed.
+- 2026-06-27: Added optional static-import resolution for optimistic query value refs; `pnpm exec
+vitest run packages/compiler/src/scan/optimistic-inline.test.ts`, `pnpm run check:vp`, and
+  `git diff --check` passed.

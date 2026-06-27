@@ -31,6 +31,14 @@ export interface InlineOptimisticPlanFact {
   transforms: readonly InlineOptimisticTransformFact[];
 }
 
+/** @internal Optional module resolver used when optimistic plans reference imported query values. */
+export interface InlineOptimisticScanOptions {
+  resolveStaticImport?: (
+    fromFileName: string,
+    moduleSpecifier: string,
+  ) => { fileName: string; source: string } | null;
+}
+
 /**
  * @internal Extract inline `mutation({ optimistic })` plans and standalone
  * draft-style `{ queue, transforms }` plans into the same canonical IR.
@@ -42,6 +50,7 @@ export interface InlineOptimisticPlanFact {
 export function inlineOptimisticPlansFromSource(
   fileName: string,
   source: string,
+  options: InlineOptimisticScanOptions = {},
 ): readonly InlineOptimisticPlanFact[] {
   const sourceFile = ts.createSourceFile(
     fileName,
@@ -51,7 +60,7 @@ export function inlineOptimisticPlansFromSource(
     ts.ScriptKind.TSX,
   );
   const facts: InlineOptimisticPlanFact[] = [];
-  const localQueryKeys = collectLocalQueryKeys(sourceFile);
+  const localQueryKeys = collectQueryKeys(sourceFile, options);
   const localQueueNames = collectLocalQueueNames(sourceFile);
 
   const visit = (node: ts.Node): void => {
@@ -331,8 +340,15 @@ function collectLocalQueueNames(sourceFile: ts.SourceFile): ReadonlyMap<string, 
   return bindings;
 }
 
-function collectLocalQueryKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+function collectQueryKeys(
+  sourceFile: ts.SourceFile,
+  options: InlineOptimisticScanOptions,
+): ReadonlyMap<string, string> {
   const bindings = new Map<string, string>();
+  for (const [localName, key] of collectImportedQueryKeys(sourceFile, options)) {
+    bindings.set(localName, key);
+  }
+
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     for (const declaration of statement.declarationList.declarations) {
@@ -346,6 +362,55 @@ function collectLocalQueryKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, s
         initializer,
       );
       if (derivedKey) bindings.set(declaration.name.text, derivedKey);
+    }
+  }
+  return bindings;
+}
+
+function collectImportedQueryKeys(
+  sourceFile: ts.SourceFile,
+  options: InlineOptimisticScanOptions,
+): ReadonlyMap<string, string> {
+  const resolveStaticImport = options.resolveStaticImport;
+  if (!resolveStaticImport) return new Map();
+
+  const bindings = new Map<string, string>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!statement.importClause?.namedBindings) continue;
+    if (!ts.isNamedImports(statement.importClause.namedBindings)) continue;
+    if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+
+    const imported = resolveStaticImport(sourceFile.fileName, statement.moduleSpecifier.text);
+    if (!imported) continue;
+    const importedSourceFile = ts.createSourceFile(
+      imported.fileName,
+      imported.source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const exportedQueryKeys = collectExportedQueryKeys(importedSourceFile);
+    for (const element of statement.importClause.namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      const key = exportedQueryKeys.get(importedName);
+      if (key) bindings.set(element.name.text, key);
+    }
+  }
+  return bindings;
+}
+
+function collectExportedQueryKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+  const bindings = new Map<string, string>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    if (!isExportedStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name)) continue;
+      const initializer = unwrapTsExpression(declaration.initializer);
+      if (!initializer || !ts.isCallExpression(initializer)) continue;
+      const key = queryKeyFromCall(sourceFile, declaration.name.text, statement, initializer);
+      if (key) bindings.set(declaration.name.text, key);
     }
   }
   return bindings;

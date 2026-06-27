@@ -167,6 +167,45 @@ describe('inline optimistic mutation lowering', () => {
     );
   });
 
+  it('resolves imported query value references when the imported source is available', () => {
+    const queriesSource = `
+      export const cartSummary = query({
+        load: () => ({ count: 0 }),
+        reads: [],
+      });
+      export const productGrid = query('productGrid', {
+        load: () => ({ items: [] }),
+        reads: [],
+      });
+    `;
+    const source = `
+      import { cartSummary as summary, productGrid } from './queries';
+
+      export const addToCart = mutation({
+        optimistic: {
+          [summary.key](draft, input) {
+            draft.count = (draft.count ?? 0) + input.quantity;
+          },
+          [productGrid.key]: 'await-fragment',
+        },
+        handler() {},
+      });
+    `;
+    const [plan] = inlineOptimisticPlansFromSource('src/features/cart/mutations.ts', source, {
+      resolveStaticImport(fromFileName, moduleSpecifier) {
+        expect(fromFileName).toBe('src/features/cart/mutations.ts');
+        expect(moduleSpecifier).toBe('./queries');
+        return { fileName: 'src/features/cart/queries.ts', source: queriesSource };
+      },
+    });
+    if (!plan) throw new Error('expected optimistic plan');
+
+    expect(plan.transforms.map((transform) => transform.query)).toEqual([
+      'features/cart/queries/cart-summary',
+      'productGrid',
+    ]);
+  });
+
   it('captures the per-entry keyed `{ keys, transform }` instance-key derivation (SPEC §10.2/§10.4)', () => {
     const source = `
       export const voteUpMutation = mutation('voteUp', {
@@ -248,6 +287,39 @@ describe('inline optimistic mutation lowering', () => {
 
     expect(plan.transforms).toHaveLength(1);
     expect(plan.transforms[0]?.query).toBe('questions/optimistic/question-detail');
+    expect(plan.transforms[0]?.keys).toBe('(input) => ({ id: input.targetId })');
+  });
+
+  it('resolves imported query value references in standalone keys and transforms', () => {
+    const queriesSource = `
+      export const questionDetail = query({
+        load: () => ({ score: 0 }),
+        reads: [],
+      });
+    `;
+    const source = `
+      import { questionDetail } from './queries';
+
+      export const voteOptimistic = {
+        keys: {
+          [questionDetail.key]: (input) => ({ id: input.targetId }),
+        },
+        transforms: {
+          [questionDetail.key]: {
+            transform(draft, _input) {
+              if (draft) draft.score += 1;
+            },
+          },
+        },
+      };
+    `;
+    const [plan] = inlineOptimisticPlansFromSource('src/questions/optimistic.ts', source, {
+      resolveStaticImport: () => ({ fileName: 'src/questions/queries.ts', source: queriesSource }),
+    });
+    if (!plan) throw new Error('expected optimistic plan');
+
+    expect(plan.transforms).toHaveLength(1);
+    expect(plan.transforms[0]?.query).toBe('questions/queries/question-detail');
     expect(plan.transforms[0]?.keys).toBe('(input) => ({ id: input.targetId })');
   });
 });
