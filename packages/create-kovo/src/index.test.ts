@@ -302,6 +302,8 @@ describe('create-kovo starter (metadata)', () => {
       );
       const gitignore = readFileSync(join(root, '.gitignore'), 'utf8');
       expect(gitignore).toContain('.env');
+      expect(gitignore).toContain('.kovo/');
+      expect(gitignore).not.toContain('.kovo/endpoint-posture.json');
       expect(gitignore).not.toContain('graph.json');
     } finally {
       rmSync(root, { force: true, recursive: true });

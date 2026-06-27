@@ -18,7 +18,7 @@ ledger.
 - [ ] **SQLite starter omits pnpm native-build approval for `better-sqlite3`.**
   - Observed behavior: after linking generated `@kovojs/*` dependencies to local
     packages, `pnpm install` completed but warned `Ignored build scripts:
-    better-sqlite3`; `pnpm run test` then failed before tests ran with
+better-sqlite3`; `pnpm run test` then failed before tests ran with
     `Could not locate the bindings file` from `better-sqlite3`.
   - Root cause: the generated SQLite app depends on a native package but its
     `package.json` does not include the pnpm allowlist that the monorepo root has:
@@ -37,7 +37,7 @@ ledger.
 - [ ] **SQLite Better Auth seed uses incompatible date column types.**
   - Observed behavior: `pnpm run build:prod` exited 0 but logged Better Auth
     `Failed to create user TypeError: SQLite3 can only bind numbers, strings,
-    bigints, buffers, and null` twice during `seedDemoUser()`.
+bigints, buffers, and null` twice during `seedDemoUser()`.
   - Root cause: the SQLite template hand-authors Better Auth tables with text date
     columns such as `createdAt`, `updatedAt`, `expiresAt`, and token expiry fields,
     while Better Auth's Drizzle adapter passes Date-like values that this
@@ -73,21 +73,26 @@ ledger.
     `next`/default route even when the adapter records an `auth` change rather
     than returning a raw 303 response.
 
-- [ ] **Compiler cache JSON is regenerated in a format that `vp check` rejects.**
+- [x] **Compiler cache JSON is regenerated in a format that `vp check` rejects.**
   - Observed behavior: after running tests/dev/browser flows, `pnpm run check`
     failed on formatting for `.kovo/cache/compiler/blobs/*.json`,
     `.kovo/cache/compiler/entries/*.json`, and `.kovo/cache/compiler/manifest.json`.
-  - Root cause: Kovo compiler cache artifacts are emitted as compact JSON under
-    `.kovo/cache/`, the generated `.gitignore` does not ignore that cache, and
-    the default `vp check` scans the directory.
+  - Root cause: generated apps only ignored `.kovo/endpoint-posture.json`, even
+    though `.kovo/` is framework-owned generated state: bundled agent docs,
+    endpoint-posture output, compiler caches, and other CLI artifacts. Because
+    `.kovo/cache/` remained visible, the default `vp check` scanned compact JSON
+    cache files.
   - Why it matters: an app can go from green to red just by running normal dev or
     test flows before `check`, and the reported files are framework cache
     artifacts rather than authored source.
   - Repro evidence: `pnpm run check` failed twice on `.kovo/cache/compiler/*`;
     `pnpm exec vp check --fix` formatted those artifacts, after which
     `pnpm run check` passed.
-  - Acceptance: generated apps should ignore `.kovo/cache/`, the formatter should
-    exclude it, or the compiler should emit cache JSON in formatter-stable shape.
+  - Acceptance: generated apps should ignore the entire `.kovo/` directory.
+  - Evidence: `packages/create-kovo/src/index.ts` now emits `.kovo/` in generated
+    `.gitignore`; `pnpm exec vitest run packages/create-kovo/src/index.test.ts`
+    passed and asserts `.kovo/` is present while the old
+    `.kovo/endpoint-posture.json` partial ignore is absent.
 
 - [ ] **Query-read extraction misses helper-mediated `context.db` reads, yielding empty mutation fragments.**
   - Observed behavior: before explicit registry wiring, enhanced `addTodo` posted

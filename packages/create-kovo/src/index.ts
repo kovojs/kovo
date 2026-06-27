@@ -164,7 +164,7 @@ const gitignoreEntries = [
   '.env',
   '.env.*',
   '!.env.example',
-  '.kovo/endpoint-posture.json',
+  '.kovo/',
   '',
 ].join('\n');
 
