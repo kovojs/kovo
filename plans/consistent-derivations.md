@@ -183,6 +183,16 @@ packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-i
 
   - The derived name remains the invalidation currency used by `reads`, `touches`, change records,
     generated touch graphs, and explain output.
+  - Integrated evidence (2026-06-27): `packages/server/src/domain.ts` allows zero-argument
+    `domain()` and `tag()` as compiler-derived placeholders; `packages/drizzle/src/static/schema.ts`
+    derives exported zero-argument domain/tag names from module path plus exported binding in static
+    extraction; `packages/server/src/generated-query-registry.ts` folds generated read domains into
+    unresolved query reads; `packages/server/src/change-record.ts` fails closed if unresolved
+    derived domains reach manual change/touch emission. Focused verification passed `pnpm exec
+    vitest run packages/server/src/generated-query-registry.test.ts
+packages/server/src/change-record.test.ts packages/drizzle/src/index.writes-receivers.test.ts`,
+    `pnpm run check:vp`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD`.
+    Remaining gap: starter/docs defaults and explicit escape-hatch guidance are not updated.
 
 - [ ] **Keep explicit domain/tag names only as an escape hatch for intentionally shared external vocabulary.**
   - Document when `domain('billing')` is still clearer than deriving from a local binding.
@@ -245,3 +255,7 @@ packages/compiler/src/registry.test.ts`, `pnpm run check:vp`, and `git diff --ch
 packages/server/src/query-endpoint.test.ts packages/server/src/app.test.ts
 packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-identities.test.ts`,
   `pnpm run check:vp`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD` passed.
+- 2026-06-27: Integrated domain/tag derivation slice `a8286f4d1`; `pnpm exec vitest run
+packages/server/src/generated-query-registry.test.ts packages/server/src/change-record.test.ts
+packages/drizzle/src/index.writes-receivers.test.ts`, `pnpm run check:vp`,
+  `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD` passed.
