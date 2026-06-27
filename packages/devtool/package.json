@@ -1,6 +1,6 @@
 {
   "name": "@kovojs/devtool",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Reusable dataflow devtool for Kovo apps — visual graph + MCP agent surface over a host app's graph.",
   "bin": {
