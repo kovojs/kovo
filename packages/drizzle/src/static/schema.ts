@@ -238,12 +238,30 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
 /** @internal */ export function isDrizzleDatabaseType(type: MorphType): boolean {
   // SPEC §11.1: project receiver proof comes from ts-morph type identity. Avoid source-text
   // membership checks that can promote arbitrary aliases like `NotPgDatabase`.
+  if (isKovoReaderOfDrizzleDatabaseType(type)) return true;
+
   return (
     drizzleDatabaseTypeNames(type, new Set()).some(isDrizzleDatabaseTypeName) &&
     drizzleDatabaseTypeDeclarations(type, new Set()).some((declaration) =>
       isDrizzleOrmDeclaration(declaration),
     )
   );
+}
+
+/** @internal */ export function isKovoReaderOfDrizzleDatabaseType(type: MorphType): boolean {
+  // SPEC §9.4/§11.1: Kovo threads query loaders a `Reader<Db>` handle at `context.db`; it is the
+  // read-only mirror of the same framework-owned Drizzle database and remains valid read proof.
+  const alias = type.getAliasSymbol();
+  if (alias?.getName() !== 'Reader') return false;
+  const declarations = alias.getDeclarations();
+  if (
+    declarations.length > 0 &&
+    !declarations.some((declaration) => isKovoServerDeclaration(declaration))
+  ) {
+    return false;
+  }
+
+  return type.getAliasTypeArguments().some((argument) => isDrizzleDatabaseType(argument));
 }
 
 /** @internal */ export function drizzleDatabaseTypeNames(
@@ -571,6 +589,17 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
   const moduleDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ModuleDeclaration);
   const moduleName = moduleDeclaration?.getNameNode();
   return Node.isStringLiteral(moduleName) && moduleName.getLiteralText().startsWith('drizzle-orm');
+}
+
+/** @internal */ export function isKovoServerDeclaration(declaration: Node): boolean {
+  if (declaration.getSourceFile().getFilePath().includes('@kovojs/server')) return true;
+
+  const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+  if (importDeclaration?.getModuleSpecifierValue() === '@kovojs/server') return true;
+
+  const moduleDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ModuleDeclaration);
+  const moduleName = moduleDeclaration?.getNameNode();
+  return Node.isStringLiteral(moduleName) && moduleName.getLiteralText() === '@kovojs/server';
 }
 
 /** @internal */ export function projectColumnShapesByTable(

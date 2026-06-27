@@ -907,6 +907,92 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('extracts starter helper-mediated context.db query-loader reads', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        queryReceiverTypes,
+        {
+          fileName: 'todo.queries.ts',
+          source: [
+            'import type { QueryLoadContext, Reader } from "@kovojs/server";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'type AppDb = PgAsyncDatabase<any, any>;',
+            'type AppQueryLoadContext = QueryLoadContext<{ session?: { userId: string } | null }, AppDb>;',
+            '',
+            'export const todos = pgTable("todos", {',
+            '  id: text("id").primaryKey(),',
+            '  title: text("title").notNull(),',
+            '}, kovo({ domain: "todo", key: "id" }));',
+            '',
+            'export const todosQuery = query("todos", {',
+            '  async load(_input: unknown, context?: AppQueryLoadContext) {',
+            '    const db = requireDb(context);',
+            '    const items = await db.select({ id: todos.id, title: todos.title }).from(todos);',
+            '    return { items };',
+            '  },',
+            '});',
+            '',
+            'function requireDb(context?: AppQueryLoadContext): Reader<AppDb> {',
+            '  const db = context?.db;',
+            '  if (!db) {',
+            '    throw new Error("todos query requires the framework-provided context.db");',
+            '  }',
+            '  return db;',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'todos',
+        reads: ['todo'],
+        shape: {
+          id: 'string',
+          title: 'string',
+        },
+        site: 'todo.queries.ts:12',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('does not promote local Reader aliases to query-loader receiver proof', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        queryReceiverTypes,
+        {
+          fileName: 'todo.queries.ts',
+          source: [
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'type AppDb = PgAsyncDatabase<any, any>;',
+            'type Reader<T> = { select(value?: unknown): { from(table: unknown): Promise<unknown[]> } };',
+            '',
+            'export const todos = pgTable("todos", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "todo", key: "id" }));',
+            '',
+            'export const todosQuery = query("todos/local-reader", {',
+            '  load(_input: unknown) {',
+            '    const db = localReader();',
+            '    return db.select({ id: todos.id }).from(todos);',
+            '  },',
+            '});',
+            '',
+            'function localReader(): Reader<AppDb> {',
+            '  throw new Error("opaque local reader");',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([]);
+  });
+
   it('folds destructured local helper members into query and touch summaries', () => {
     const files = [
       {

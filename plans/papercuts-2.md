@@ -107,7 +107,7 @@ bigints, buffers, and null` twice during `seedDemoUser()`.
     passed and asserts `.kovo/` is present while the old
     `.kovo/endpoint-posture.json` partial ignore is absent.
 
-- [ ] **Query-read extraction misses helper-mediated `context.db` reads, yielding empty mutation fragments.**
+- [x] **Query-read extraction misses helper-mediated `context.db` reads, yielding empty mutation fragments.**
   - Observed behavior: before explicit registry wiring, enhanced `addTodo` posted
     `Kovo-Targets: todos-region=todos` and a live target, wrote to the database,
     then returned `200 text/vnd.kovo.fragment+html` with
@@ -134,6 +134,9 @@ bigints, buffers, and null` twice during `seedDemoUser()`.
     `requireDb(context)` pattern, or the starter should generate explicit
     domain/read/touch wiring until inference is complete. Add a regression using
     the helper-mediated loader shape.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.query-loader-receivers.test.ts`
+    passes with a regression where `todosQuery` loads through
+    `const db = requireDb(context)` and emits `reads: ["todo"]`.
 
 ## Refuted / Not Carried Forward
 
