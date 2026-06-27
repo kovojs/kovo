@@ -101,7 +101,8 @@ contacts Invalidated query lacks optimistic transform.` — although `schema.ts`
     feed the already-computed static `touchGraph` into both sides of the
     KV402/KV310 check). Covered by the same fresh-scaffold `kovo build` test as A1.
 
-- [ ] **A3 — `kovo build` flags drizzle `count()` as KV406 with a misleading write-side message and a dead-end remedy.** (LOW, framework; found by l3-A8)
+- [x] **A3 — `kovo build` flags drizzle `count()` as KV406 with a misleading write-side message and a dead-end remedy.** (LOW, framework; found by l3-A8)
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/runtime-surface.test.ts packages/cli/src/index.kovo-check.test.ts --run` proves imported `count`/`sum`/`avg` route through the KV410 opaque-projection path with `output`+`reads`, while local aggregate-named helpers remain KV406; `pnpm exec vitest run examples/stackoverflow/src/optimism-derivation.test.ts examples/crm/src/interactive-app.test.ts --run` proves the example aggregate queries build with explicit output/read domains.
   - Observed: a `count()` projection in a query → `KV406` ("un-analyzable write
     site / not a typed `sql<T>`"). (Note: KV410 on a `sql<T>` sum is _expected_ —
     it has an `output`+`reads` authoring path at `packages/server/src/query.ts:119-120`.)
@@ -116,7 +117,8 @@ contacts Invalidated query lacks optimistic transform.` — although `schema.ts`
   - Acceptance: route `count`/`sum`/`avg` helpers to the KV410 opaque-projection
     path (with `output`+`reads`) instead of KV406.
 
-- [ ] **A4 — KV407 makes a read-only / externally-seeded content domain (the §4.10 "stored rich text" shape) a hard build error.** (LOW, framework; found by registry-A6)
+- [x] **A4 — KV407 makes a read-only / externally-seeded content domain (the §4.10 "stored rich text" shape) a hard build error.** (LOW, framework; found by registry-A6)
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/runtime-surface.test.ts packages/cli/src/index.kovo-check.test.ts --run` proves `kovo({ domain, readOnly: true })` propagates read-only domains and suppresses KV407 while keeping `exempt` on the read-side KV411 path.
   - Observed: a query over a `notes` table seeded out-of-band (no Kovo mutation
     writes it) → `ERROR KV407 notes reads note. Query read from undeclared domain.`
   - Root cause: `missedQueryInvalidations` (`packages/cli/src/graph-output.ts:2601-2617`)
