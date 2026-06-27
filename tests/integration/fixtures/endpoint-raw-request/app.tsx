@@ -2,10 +2,7 @@
 // before body parsing, without ambient session, and dispatch before page routes.
 import { hmacSignature } from '@kovojs/core';
 import { createApp, endpoint, route } from '@kovojs/server';
-import {
-  defineFixture,
-  delegatedFixtureSessionProvider,
-} from '@kovojs/test/internal/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface RawSession {
   user: { id: string; roles: readonly string[] };
@@ -77,6 +74,6 @@ export default defineFixture({
   app: createApp<RawSession>({
     endpoints: [exactEndpoint, prefixEndpoint],
     routes: [exactRoute],
-    sessionProvider: delegatedFixtureSessionProvider((request) => readSessionCookie(request)),
+    sessionProvider: (request) => readSessionCookie(request),
   }),
 });

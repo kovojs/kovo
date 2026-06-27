@@ -162,12 +162,6 @@ export function createCommerceApp(options: CommerceAppOptions = {}): CommerceApp
       justification:
         'The commerce example delegates validation, rotation, expiry, and revocation to its auth module.',
       lifecycle: 'delegated',
-      lifecycleAssertions: {
-        expiry: 'The commerce auth module owns session expiry in its credential store.',
-        revocation: 'The commerce sign-out mutation delegates revocation to the auth module.',
-        rotation: 'The commerce auth module issues fresh credentials after sign-in.',
-        validation: 'The commerce auth module validates incoming browser credentials.',
-      },
       provider: (request) => commerceSessionProvider(request as CommerceRouteRequest),
     },
   });

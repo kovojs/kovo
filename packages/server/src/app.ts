@@ -42,7 +42,6 @@ export type {
   AppRouteDeclaration,
   AppRouteRenderContext,
   CreateAppOptions,
-  DelegatedSessionLifecycleAssertions,
   ErrorShellRenderer,
   KovoApp,
   RequestHandler,
@@ -51,10 +50,6 @@ export type {
   ResolvedAppRequestRateLimitOptions,
 } from './app-types.js';
 import type { SessionProvider } from './guards.js';
-import {
-  markNormalizedSessionProvider,
-  type SessionProviderBoundary,
-} from './session-provider-boundary.js';
 import type { EgressOptions } from './egress.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryDefinition } from './query.js';
@@ -64,7 +59,6 @@ import type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
   DelegatedSessionProvider,
-  DelegatedSessionLifecycleAssertions,
   AppLifecycleRequest,
   AppMutationDeclaration,
   CreateAppOptions,
@@ -139,13 +133,9 @@ export function createApp<
     options.sessionProvider === undefined
       ? undefined
       : resolveDelegatedSessionProvider(options.sessionProvider);
-  const rawSessionProvider =
-    session === undefined ? delegatedSessionProvider : resolveAppSessionProvider(session);
-  const sessionProviderBoundary = appSessionProviderBoundary(options, rawSessionProvider);
   const sessionProvider =
-    rawSessionProvider === undefined || sessionProviderBoundary === undefined
-      ? undefined
-      : markNormalizedSessionProvider(rawSessionProvider, sessionProviderBoundary);
+    session === undefined ? delegatedSessionProvider : resolveAppSessionProvider(session);
+  const sessionProviderBoundary = appSessionProviderBoundary(options, sessionProvider);
 
   return {
     clientModules,
@@ -181,7 +171,7 @@ function appSessionProviderBoundary<
 >(
   options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>,
   sessionProvider: unknown,
-): SessionProviderBoundary | undefined {
+): 'default-owned' | 'delegated' | 'owned' | undefined {
   if (sessionProvider === undefined) return undefined;
   if (options.sessionProvider !== undefined) return 'delegated';
   if (options.session !== undefined) return 'owned';
@@ -224,8 +214,7 @@ function resolveDelegatedSessionProvider<SessionValue, RawRequest extends global
   if (typeof value === 'function') {
     throw new Error(
       'createApp({ sessionProvider }) now requires an explicit delegated lifecycle declaration: ' +
-        "{ lifecycle: 'delegated', provider, justification, lifecycleAssertions }. Kovo owns " +
-        'opaque sessions by ' +
+        "{ lifecycle: 'delegated', provider, justification }. Kovo owns opaque sessions by " +
         'default; use `session` for Kovo-owned opaque lifecycle or declare why a delegated ' +
         'provider owns validation, rotation, expiry, and revocation (SPEC §6.5 / OPP-11).',
     );
@@ -239,34 +228,27 @@ function resolveDelegatedSessionProvider<SessionValue, RawRequest extends global
   const record = value as {
     justification?: unknown;
     lifecycle?: unknown;
-    lifecycleAssertions?: unknown;
     provider?: unknown;
   };
-  assertDelegatedDataProperty(value, 'lifecycle');
   if (record.lifecycle !== 'delegated') {
     throw new Error(
       "createApp({ sessionProvider }) requires `lifecycle: 'delegated'` for non-opaque " +
         'session ownership (SPEC §6.5 / OPP-11).',
     );
   }
-  assertDelegatedDataProperty(value, 'provider');
-  const provider = record.provider;
-  if (typeof provider !== 'function') {
+  if (typeof record.provider !== 'function') {
     throw new Error(
       'createApp({ sessionProvider }) requires a callable delegated `provider` ' +
         '(SPEC §6.5 / OPP-11).',
     );
   }
-  assertDelegatedDataProperty(value, 'justification');
   if (typeof record.justification !== 'string' || record.justification.trim() === '') {
     throw new Error(
       'createApp({ sessionProvider }) requires a non-empty delegated session justification ' +
         'covering validation, rotation, expiry, and revocation ownership (SPEC §6.5 / OPP-11).',
     );
   }
-  assertDelegatedDataProperty(value, 'lifecycleAssertions');
-  assertDelegatedLifecycleAssertions(record.lifecycleAssertions);
-  if (isOpaqueSessionProvider(provider)) {
+  if (isOpaqueSessionProvider(record.provider)) {
     throw new Error(
       'createApp() received a Kovo-owned opaque session provider through `sessionProvider`. ' +
         'Pass the manager as `session` so the request shell records an owned opaque session ' +
@@ -274,41 +256,7 @@ function resolveDelegatedSessionProvider<SessionValue, RawRequest extends global
         'ownership (SPEC §6.5 / OPP-11).',
     );
   }
-  return provider as SessionProvider<RawRequest, SessionValue>;
-}
-
-function assertDelegatedDataProperty(value: object, field: string): void {
-  const descriptor = Object.getOwnPropertyDescriptor(value, field);
-  if (descriptor === undefined || !('value' in descriptor)) {
-    throw new Error(
-      `createApp({ sessionProvider }) requires delegated \`${field}\` to be an own data property ` +
-        'so lifecycle ownership cannot change during createApp validation (SPEC §6.5 / OPP-11).',
-    );
-  }
-}
-
-function assertDelegatedLifecycleAssertions(
-  value: unknown,
-): asserts value is DelegatedSessionLifecycleAssertions {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(
-      'createApp({ sessionProvider }) requires delegated `lifecycleAssertions` with ' +
-        'non-empty validation, rotation, expiry, and revocation ownership fields ' +
-        '(SPEC §6.5 / OPP-11).',
-    );
-  }
-  for (const field of ['validation', 'rotation', 'expiry', 'revocation'] as const) {
-    assertDelegatedDataProperty(value, field);
-  }
-  for (const field of ['validation', 'rotation', 'expiry', 'revocation'] as const) {
-    const assertion = (value as Record<string, unknown>)[field];
-    if (typeof assertion !== 'string' || assertion.trim() === '') {
-      throw new Error(
-        `createApp({ sessionProvider }) requires a non-empty delegated lifecycleAssertions.${field} ` +
-          'ownership assertion (SPEC §6.5 / OPP-11).',
-      );
-    }
-  }
+  return record.provider as SessionProvider<RawRequest, SessionValue>;
 }
 
 function resolveAppSessionProvider<SessionValue, RawRequest extends globalThis.Request>(

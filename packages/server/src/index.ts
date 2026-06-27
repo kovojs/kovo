@@ -161,7 +161,6 @@ export type {
   AppRequestRateLimitOptions,
   AppRouteRenderContext,
   CreateAppOptions,
-  DelegatedSessionLifecycleAssertions,
   DelegatedSessionProvider,
   ErrorShellRenderer,
   KovoApp,

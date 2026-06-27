@@ -9,12 +9,6 @@ function delegatedSessionProvider(provider: (request: Request) => unknown) {
   return {
     justification: 'test delegates session lifecycle to an app-owned provider',
     lifecycle: 'delegated' as const,
-    lifecycleAssertions: {
-      expiry: 'test provider enforces session expiration',
-      revocation: 'test provider revokes sessions on sign-out',
-      rotation: 'test provider rotates credentials after authentication',
-      validation: 'test provider validates browser session credentials',
-    },
     provider,
   };
 }

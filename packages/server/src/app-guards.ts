@@ -1,10 +1,5 @@
 import type { KovoApp } from './app-types.js';
 import { isDocumentConfig } from './document-structured.js';
-import {
-  markNormalizedSessionProvider,
-  sessionProviderBoundary,
-  type SessionProviderBoundary,
-} from './session-provider-boundary.js';
 
 /**
  * Return whether a dynamically loaded value is a closed Kovo app aggregate.
@@ -31,56 +26,17 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isOptionalFunction(value.renderRoute) &&
     isAppRequestLimits(value.requestLimits) &&
     isOptionalOpaqueSessionManager(value.session) &&
-    isNormalizedSessionProviderForBoundary(
-      value.sessionProvider,
-      value.sessionProviderBoundary,
-      value.session,
-    ) &&
+    isOptionalSessionProviderBoundary(value.sessionProviderBoundary) &&
+    isOptionalFunction(value.sessionProvider) &&
     isStylesheets(value.stylesheets) &&
     isOptionalCsrfOptions(value.csrf)
   );
 }
 
-function isNormalizedSessionProviderForBoundary(
-  provider: unknown,
-  boundary: unknown,
-  session: unknown,
-): boolean {
-  if (provider === undefined) return boundary === undefined;
-  if (!isSessionProviderBoundary(boundary)) return false;
-  if (boundary === 'delegated' && session === undefined && isSessionProviderFunction(provider)) {
-    // Static export/dev servers may load the app and server runtime through distinct Vite module
-    // instances. A closed app aggregate with a delegated boundary has already passed createApp()'s
-    // lifecycle assertion gate; stamp this module instance's private marker so lower-level request
-    // lifecycle helpers still reject raw provider functions outside an app aggregate.
-    markNormalizedSessionProvider(provider, boundary);
-    return true;
-  }
-  if (
-    (boundary === 'default-owned' || boundary === 'owned') &&
-    isOptionalOpaqueSessionManager(session) &&
-    session !== undefined
-  ) {
-    const normalizedProvider = session.provider;
-    if (normalizedProvider !== provider) return false;
-    // Static export/dev servers may load the app and server runtime through distinct Vite module
-    // instances. The app aggregate proves owned session lifecycle structurally by carrying the same
-    // provider on `session` and `sessionProvider`; stamp this module instance's private marker so
-    // lower-level lifecycle helpers still reject raw delegated functions without breaking replay.
-    markNormalizedSessionProvider(normalizedProvider, boundary);
-    return true;
-  }
-  return sessionProviderBoundary(provider) === boundary;
-}
-
-function isSessionProviderBoundary(value: unknown): value is SessionProviderBoundary {
-  return value === 'default-owned' || value === 'delegated' || value === 'owned';
-}
-
-function isSessionProviderFunction(
-  value: unknown,
-): value is NonNullable<KovoApp['sessionProvider']> {
-  return typeof value === 'function';
+function isOptionalSessionProviderBoundary(value: unknown): boolean {
+  return (
+    value === undefined || value === 'default-owned' || value === 'delegated' || value === 'owned'
+  );
 }
 
 function isAppDiagnostics(value: unknown): value is KovoApp['diagnostics'] {
@@ -182,7 +138,9 @@ function isMutationResponses(value: unknown): value is KovoApp['mutationResponse
 function isMutationResponseOptions(value: unknown): boolean {
   return (
     isRecord(value) &&
-    isRedirectToOption(value.redirectTo) &&
+    (value.redirectTo === undefined ||
+      typeof value.redirectTo === 'string' ||
+      typeof value.redirectTo === 'function') &&
     isOptionalFunction(value.renderFailureFragment) &&
     isOptionalFunction(value.renderFailurePage) &&
     (value.failureTarget === undefined || typeof value.failureTarget === 'string') &&
@@ -192,7 +150,7 @@ function isMutationResponseOptions(value: unknown): boolean {
   );
 }
 
-function isOptionalOpaqueSessionManager(value: unknown): value is KovoApp['session'] {
+function isOptionalOpaqueSessionManager(value: unknown): boolean {
   return (
     value === undefined ||
     (isRecord(value) &&
@@ -265,7 +223,9 @@ function isMutationDeclarations(value: unknown): value is KovoApp['mutations'] {
         isOptionalFunction(mutation.guard) &&
         (mutation.defaultRedirectTo === undefined ||
           typeof mutation.defaultRedirectTo === 'string') &&
-        isRedirectToOption(mutation.redirectTo) &&
+        (mutation.redirectTo === undefined ||
+          typeof mutation.redirectTo === 'string' ||
+          typeof mutation.redirectTo === 'function') &&
         (mutation.registry === undefined || isRecord(mutation.registry)) &&
         isOptionalFunction(mutation.transaction),
     )
@@ -354,20 +314,6 @@ function isSchemaLike(value: unknown): boolean {
 
 function isOptionalFunction(value: unknown): boolean {
   return value === undefined || typeof value === 'function';
-}
-
-/**
- * Validate a mutation/response `redirectTo` (SPEC §9.1 PRG / §6.4): a plain `string` path, a
- * function of the result, or a typed `redirect()` {@link import('@kovojs/core').Redirect} value
- * (`{ location: string; status: 303 }`). Mirrors the type union on `MutationDefinition.redirectTo`.
- */
-function isRedirectToOption(value: unknown): boolean {
-  return (
-    value === undefined ||
-    typeof value === 'string' ||
-    typeof value === 'function' ||
-    (isRecord(value) && typeof value.location === 'string' && value.status === 303)
-  );
 }
 
 function isOptionalCsrfOptions(value: unknown): boolean {

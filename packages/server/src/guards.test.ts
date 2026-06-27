@@ -17,7 +17,6 @@ import {
   type GuardParamsRequest,
 } from './guards.js';
 import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
-import { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
 import { query, runQuery } from './query.js';
 import { route, runRoutePage } from './route.js';
 import { s } from './schema.js';
@@ -85,53 +84,6 @@ describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
 });
 
 describe('server guard and session primitives', () => {
-  it('rejects raw session providers passed directly to lower-level lifecycle helpers', async () => {
-    await expect(
-      resolveLifecycleRequest(new Request('https://app.test/account'), {
-        sessionProvider: () => ({ user: { id: 'raw' } }),
-      }),
-    ).rejects.toThrow('Plain session provider functions cannot be passed directly');
-  });
-
-  it('rejects forged global-symbol session provider normalization markers', async () => {
-    const forged = (() => ({ user: { id: 'forged' } })) as (() => {
-      user: { id: string };
-    }) & {
-      [key: symbol]: string;
-    };
-    forged[Symbol.for('kovo.normalizedSessionProvider')] = 'delegated';
-
-    await expect(
-      resolveLifecycleRequest(new Request('https://app.test/account'), {
-        sessionProvider: forged,
-      }),
-    ).rejects.toThrow('Plain session provider functions cannot be passed directly');
-  });
-
-  it('accepts explicitly wrapped session providers in lower-level lifecycle helpers', async () => {
-    const appSession = session(s.object({ user: s.object({ id: s.string() }) }));
-    const request = await resolveLifecycleRequest(new Request('https://app.test/account'), {
-      sessionProvider: appSession.provider(() => ({ user: { id: 'wrapped' } })),
-    });
-
-    expect(request.session).toEqual({ user: { id: 'wrapped' } });
-  });
-
-  it('accepts Kovo-owned opaque session providers in lower-level lifecycle helpers', async () => {
-    const manager = createOpaqueSessionManager({
-      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
-    });
-    const established = await manager.establish({ user: { id: 'opaque' } });
-    const request = await resolveLifecycleRequest(
-      new Request('https://app.test/account', {
-        headers: { cookie: established.setCookie.split(';')[0]! },
-      }),
-      { sessionProvider: manager.provider },
-    );
-
-    expect(request.session).toEqual({ user: { id: 'opaque' } });
-  });
-
   it('guards managed DB handles from unbranded raw SQL strings before driver execution', async () => {
     const calls: unknown[] = [];
     const request = await resolveLifecycleRequest(

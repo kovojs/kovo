@@ -1184,7 +1184,7 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
     ],
     exitCode: 0,
     subject: 'ENDPOINTS',
-    summary: { total: '3' },
+    summary: { total: '2' },
     version: 'kovo-explain/v1',
   });
   assert.deepEqual(kovoExplainUnguardedAssertionFact(kovoExplain(graph, { unguarded: true })), {

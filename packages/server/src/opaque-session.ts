@@ -2,9 +2,8 @@ import { randomBytes } from 'node:crypto';
 
 import { serializeCookie, type CookieOptions } from './cookies.js';
 import type { SessionProvider } from './guards.js';
-import { markNormalizedSessionProvider } from './session-provider-boundary.js';
 
-const OPAQUE_SESSION_PROVIDER = Symbol('kovo.opaqueSessionProvider');
+const OPAQUE_SESSION_PROVIDER = Symbol.for('kovo.opaqueSessionProvider');
 
 /** Stable rejection code for an opaque session lookup that did not produce a live session. */
 export type OpaqueSessionRejectReason = 'missing' | 'malformed' | 'expired' | 'revoked';
@@ -195,13 +194,7 @@ export function createMemoryOpaqueSessionStore<SessionValue>(
     let id = mintOpaqueSessionId();
     while (records.has(id) || revoked.has(id)) id = mintOpaqueSessionId();
     const createdAt = now();
-    const expiresAt = createdAt + ttlMs;
-    if (!isCoherentEpochMillisecond(createdAt) || !isCoherentEpochMillisecond(expiresAt)) {
-      throw new Error(
-        'Opaque session clock must return a non-negative safe integer epoch millisecond',
-      );
-    }
-    const record = { id, createdAt, expiresAt, value };
+    const record = { id, createdAt, expiresAt: createdAt + ttlMs, value };
     records.set(id, record);
     evict();
     return record;
@@ -251,48 +244,39 @@ export function createOpaqueSessionManager<SessionValue>(
   options: OpaqueSessionManagerOptions<SessionValue>,
 ): OpaqueSessionManager<SessionValue> {
   assertOpaqueSessionManagerOptions(options);
-  const cookieName = snapshotOpaqueSessionCookieName(options);
-  const store = snapshotOpaqueSessionStore(options.store);
-  const cookieOptions = snapshotOpaqueSessionCookieOptions(options);
-  const emittedCookieOptions: CookieOptions = {
-    ...cookieOptions,
+  const cookieName = options.cookieName ?? 'kovo_session';
+  const cookieOptions: CookieOptions = {
+    ...options.cookie,
     class: 'session',
-    path: cookieOptions.path ?? '/',
+    path: options.cookie?.path ?? '/',
   };
-  const acceptAuthorizationHeader = snapshotOpaqueSessionAcceptAuthorizationHeader(options);
 
   const validate = async (
     id: string | null | undefined,
   ): Promise<OpaqueSessionValidation<SessionValue>> => {
     if (id === null || id === undefined || id === '') return { ok: false, reason: 'missing' };
     if (!isOpaqueSessionId(id)) return { ok: false, reason: 'malformed' };
-    try {
-      return normalizeOpaqueSessionValidation(id, await store.validate(id));
-    } catch {
-      // SPEC §6.5 / OPP-11: the request shell treats absent or invalid owned-session material as
-      // anonymous. A store outage or adapter bug must not turn browser credentials into a request
-      // lifecycle exception.
-      return { ok: false, reason: 'malformed' };
-    }
+    return normalizeOpaqueSessionValidation(id, await options.store.validate(id));
   };
   const provider: SessionProvider<Request, SessionValue> = async (
     request: Request,
   ): Promise<SessionValue | null> => {
     const result = await validate(
-      extractOpaqueSessionId(request, cookieName, acceptAuthorizationHeader),
+      extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
     );
     return result.ok ? result.session.value : null;
   };
   Object.defineProperty(provider, OPAQUE_SESSION_PROVIDER, {
     value: true,
   });
-  markNormalizedSessionProvider(provider, 'owned');
 
   return {
     cookieName,
     validate,
     async validateRequest(request: Request): Promise<OpaqueSessionValidation<SessionValue>> {
-      return validate(extractOpaqueSessionId(request, cookieName, acceptAuthorizationHeader));
+      return validate(
+        extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
+      );
     },
     provider,
     async establish(
@@ -301,38 +285,23 @@ export function createOpaqueSessionManager<SessionValue>(
         priorId?: string | null | undefined;
       } = {},
     ): Promise<OpaqueSessionEstablishResult<SessionValue>> {
-      const rawSession =
-        establishOptions.priorId === null || establishOptions.priorId === undefined
-          ? await store.create(value, establishOptions)
-          : await rotateOpaqueSession(
-              store,
-              establishOptions.priorId,
-              value,
-              establishOptions.ttlMs === undefined ? {} : { ttlMs: establishOptions.ttlMs },
-            );
-      const session = assertEstablishedOpaqueSession(rawSession);
+      const session = establishOptions.priorId
+        ? await options.store.rotate(establishOptions.priorId, value, establishOptions)
+        : await options.store.create(value, establishOptions);
+      assertEstablishedOpaqueSession(session);
       return {
         session,
         setCookie: serializeCookie(cookieName, session.id, {
-          ...emittedCookieOptions,
-          // SPEC §6.5 / OPP-11: the browser credential must not outlive the store-backed
-          // lifecycle. Derive cookie expiry from the store's absolute expiry at emission time,
-          // not from a store-supplied createdAt delta.
-          expires: new Date(session.expiresAt),
-          maxAge: resolveOpaqueSessionCookieMaxAge(session),
+          ...cookieOptions,
+          maxAge: Math.max(1, Math.floor((session.expiresAt - session.createdAt) / 1000)),
         }),
       };
     },
     async revoke(id: string | null | undefined): Promise<OpaqueSessionRevokeResult> {
-      // SPEC §6.5 / OPP-11: revocation accepts browser-sourced credential material, but custom
-      // stores only receive ids that satisfy Kovo's opaque-id grammar. A malformed logout input
-      // still clears the browser cookie without delegating untrusted strings into store code.
-      if (id !== null && id !== undefined && id !== '' && isOpaqueSessionId(id)) {
-        await revokeOpaqueSession(store, id);
-      }
+      if (id !== null && id !== undefined && id !== '') await options.store.revoke(id);
       return {
         setCookie: serializeCookie(cookieName, '', {
-          ...emittedCookieOptions,
+          ...cookieOptions,
           expires: new Date(0),
           maxAge: 0,
         }),
@@ -341,205 +310,44 @@ export function createOpaqueSessionManager<SessionValue>(
   };
 }
 
-async function revokeOpaqueSession<SessionValue>(
-  store: OpaqueSessionStore<SessionValue>,
-  id: string,
-): Promise<void> {
-  await store.revoke(id);
-  if (!isOpaqueSessionId(id)) return;
-
-  let revoked: OpaqueSessionValidation<SessionValue>;
-  try {
-    revoked = normalizeOpaqueSessionValidation(id, await store.validate(id));
-  } catch {
-    throw new Error(
-      'Opaque session store could not verify revocation; refusing to emit a browser session clearing cookie',
-    );
-  }
-  if (!revoked.ok && revoked.reason === 'malformed') {
-    throw new Error(
-      'Opaque session store could not verify revocation; refusing to emit a browser session clearing cookie',
-    );
-  }
-  if (revoked.ok) {
-    throw new Error(
-      'Opaque session store did not immediately revoke the id; refusing to emit a browser session clearing cookie',
-    );
-  }
-}
-
-async function rotateOpaqueSession<SessionValue>(
-  store: OpaqueSessionStore<SessionValue>,
-  priorId: string,
-  value: SessionValue,
-  options?: OpaqueSessionEstablishOptions,
-): Promise<OpaqueSessionRecord<SessionValue>> {
-  if (priorId === '') {
-    throw new Error(
-      'Opaque session rotation requires a live prior session; validation rejected it as missing',
-    );
-  }
-  if (!isOpaqueSessionId(priorId)) {
-    throw new Error(
-      'Opaque session rotation requires a live prior session; validation rejected it as malformed',
-    );
-  }
-  const prior = normalizeOpaqueSessionValidation(priorId, await store.validate(priorId));
-  if (!prior.ok) {
-    throw new Error(
-      `Opaque session rotation requires a live prior session; validation rejected it as ${prior.reason}`,
-    );
-  }
-
-  const next = assertEstablishedOpaqueSession(await store.rotate(priorId, value, options));
-  if (next.id === priorId) {
-    throw new Error(
-      'Opaque session store returned the prior id during rotation; refusing to set a browser session cookie',
-    );
-  }
-
-  let revokedPrior: OpaqueSessionValidation<SessionValue>;
-  try {
-    revokedPrior = normalizeOpaqueSessionValidation(priorId, await store.validate(priorId));
-  } catch {
-    throw new Error(
-      'Opaque session store could not verify rotation; refusing to set a browser session cookie',
-    );
-  }
-  if (!revokedPrior.ok && revokedPrior.reason === 'malformed') {
-    throw new Error(
-      'Opaque session store could not verify rotation; refusing to set a browser session cookie',
-    );
-  }
-  if (revokedPrior.ok) {
-    throw new Error(
-      'Opaque session store did not immediately revoke the prior id during rotation; refusing to set a browser session cookie',
-    );
-  }
-  return next;
-}
-
 function normalizeOpaqueSessionValidation<SessionValue>(
   presentedId: string,
-  result: unknown,
+  result: OpaqueSessionValidation<SessionValue>,
 ): OpaqueSessionValidation<SessionValue> {
-  // SPEC §6.5 / OPP-11: custom stores sit on the owned session trust boundary. Treat
-  // malformed validation outcomes as anonymous/malformed instead of throwing or accepting an
-  // undeclared lifecycle reason.
-  if (result === null || typeof result !== 'object') return { ok: false, reason: 'malformed' };
-  const validation = snapshotOpaqueSessionValidationResult(result);
-  if (validation === undefined) return { ok: false, reason: 'malformed' };
-  if (validation.ok !== true) {
-    return isOpaqueSessionRejectReason(validation.reason)
-      ? { ok: false, reason: validation.reason }
-      : { ok: false, reason: 'malformed' };
-  }
-  const session = snapshotCoherentOpaqueSessionRecord<SessionValue>(validation.session);
-  if (session === undefined || session.id !== presentedId) {
+  if (!result.ok) return result;
+  if (!isCoherentOpaqueSessionRecord(result.session) || result.session.id !== presentedId) {
     return { ok: false, reason: 'malformed' };
   }
-  return { ok: true, session };
-}
-
-function isOpaqueSessionRejectReason(value: unknown): value is OpaqueSessionRejectReason {
-  return value === 'missing' || value === 'malformed' || value === 'expired' || value === 'revoked';
-}
-
-function snapshotOpaqueSessionValidationResult(
-  value: object,
-): { ok: unknown; reason: unknown; session: unknown } | undefined {
-  try {
-    return {
-      ok: getOwnDataPropertyValue(value, 'ok', 'Opaque session validation.ok'),
-      reason: getOwnDataPropertyValue(value, 'reason', 'Opaque session validation.reason'),
-      session: getOwnDataPropertyValue(value, 'session', 'Opaque session validation.session'),
-    };
-  } catch {
-    return undefined;
-  }
+  return result;
 }
 
 function assertEstablishedOpaqueSession<SessionValue>(
   session: OpaqueSessionRecord<SessionValue>,
-): OpaqueSessionRecord<SessionValue> {
-  const snapshot = snapshotCoherentOpaqueSessionRecord<SessionValue>(session);
-  if (snapshot === undefined) {
+): void {
+  if (!isCoherentOpaqueSessionRecord(session)) {
     throw new Error(
       'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
     );
   }
-  return snapshot;
 }
 
-function resolveOpaqueSessionCookieMaxAge<SessionValue>(
-  session: OpaqueSessionRecord<SessionValue>,
-): number {
-  const remainingMs = session.expiresAt - Date.now();
-  if (remainingMs <= 0) {
-    throw new Error(
-      'Opaque session store returned an expired session record; refusing to set a browser session cookie',
-    );
-  }
-  return Math.max(1, Math.floor(remainingMs / 1000));
-}
-
-function snapshotOpaqueSessionRecordFields(value: unknown):
-  | {
-      id: string;
-      createdAt: number;
-      expiresAt: number;
-      value: unknown;
-    }
-  | undefined {
-  if (value === null || typeof value !== 'object') return undefined;
-  let id: unknown;
-  let createdAt: unknown;
-  let expiresAt: unknown;
-  let sessionValue: unknown;
-  try {
-    id = getOwnDataPropertyValue(value, 'id', 'Opaque session record.id');
-    createdAt = getOwnDataPropertyValue(value, 'createdAt', 'Opaque session record.createdAt');
-    expiresAt = getOwnDataPropertyValue(value, 'expiresAt', 'Opaque session record.expiresAt');
-    const sessionValueDescriptor = getOwnDataPropertyDescriptor(
-      value,
-      'value',
-      'Opaque session record.value',
-    );
-    if (sessionValueDescriptor === undefined) return undefined;
-    sessionValue = sessionValueDescriptor.value;
-  } catch {
-    return undefined;
-  }
-  return typeof id === 'string' &&
-    isOpaqueSessionId(id) &&
-    isCoherentEpochMillisecond(createdAt) &&
-    isCoherentEpochMillisecond(expiresAt) &&
-    expiresAt > createdAt
-    ? { id, createdAt, expiresAt, value: sessionValue }
-    : undefined;
-}
-
-function isCoherentEpochMillisecond(value: unknown): value is number {
-  // SPEC §6.5 / OPP-11: owned session lifecycle times are store facts used to decide whether a
-  // browser credential may remain live. Non-finite or fractional values fail closed.
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-}
-
-function snapshotCoherentOpaqueSessionRecord<SessionValue>(
+function isCoherentOpaqueSessionRecord<SessionValue>(
   value: unknown,
-): OpaqueSessionRecord<SessionValue> | undefined {
-  const record = snapshotOpaqueSessionRecordFields(value);
-  if (record === undefined) return undefined;
-  try {
-    return {
-      id: record.id,
-      createdAt: record.createdAt,
-      expiresAt: record.expiresAt,
-      value: structuredClone(record.value) as SessionValue,
-    };
-  } catch {
-    return undefined;
-  }
+): value is OpaqueSessionRecord<SessionValue> {
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Partial<OpaqueSessionRecord<SessionValue>>;
+  const { createdAt, expiresAt, id } = record;
+  return (
+    typeof id === 'string' &&
+    isOpaqueSessionId(id) &&
+    typeof createdAt === 'number' &&
+    typeof expiresAt === 'number' &&
+    Number.isSafeInteger(createdAt) &&
+    Number.isSafeInteger(expiresAt) &&
+    createdAt >= 0 &&
+    expiresAt > createdAt &&
+    'value' in record
+  );
 }
 
 function assertOpaqueSessionManagerOptions<SessionValue>(
@@ -557,112 +365,7 @@ function assertOpaqueSessionManagerOptions<SessionValue>(
       'createOpaqueSessionManager requires an opaque session store with create, validate, rotate, and revoke methods',
     );
   }
-  snapshotOpaqueSessionCookieName(options);
-  snapshotOpaqueSessionCookieOptions(options);
-  snapshotOpaqueSessionAcceptAuthorizationHeader(options);
-}
-
-type DataPropertyDescriptorWithValue = PropertyDescriptor & {
-  value: unknown;
-};
-
-function getOwnDataPropertyDescriptor(
-  value: object,
-  property: PropertyKey,
-  label: string,
-): DataPropertyDescriptorWithValue | undefined {
-  const descriptor = Object.getOwnPropertyDescriptor(value, property);
-  if (descriptor === undefined) return undefined;
-  if (!('value' in descriptor)) {
-    throw new Error(`${label} must be an own data property`);
-  }
-  return descriptor as DataPropertyDescriptorWithValue;
-}
-
-function getOwnDataPropertyValue(value: object, property: PropertyKey, label: string): unknown {
-  return getOwnDataPropertyDescriptor(value, property, label)?.value;
-}
-
-function snapshotOpaqueSessionCookieName<SessionValue>(
-  options: OpaqueSessionManagerOptions<SessionValue>,
-): string {
-  // SPEC §6.5 / OPP-11: manager construction accepts session knobs once through own data
-  // properties. Prototype or accessor-backed options must not validate under one value and later
-  // influence credential extraction under another.
-  const cookieName = getOwnDataPropertyValue(options, 'cookieName', 'Opaque session cookieName');
-  if (cookieName === undefined) return 'kovo_session';
-  if (typeof cookieName !== 'string') {
-    throw new Error('Opaque session cookieName must be an HTTP token');
-  }
-  assertOpaqueSessionCookieName(cookieName);
-  return cookieName;
-}
-
-function snapshotOpaqueSessionAcceptAuthorizationHeader<SessionValue>(
-  options: OpaqueSessionManagerOptions<SessionValue>,
-): boolean {
-  const acceptAuthorizationHeader = getOwnDataPropertyValue(
-    options,
-    'acceptAuthorizationHeader',
-    'Opaque session acceptAuthorizationHeader',
-  );
-  return acceptAuthorizationHeader === true;
-}
-
-function snapshotOpaqueSessionCookieOptions<SessionValue>(
-  options: OpaqueSessionManagerOptions<SessionValue>,
-): Omit<CookieOptions, 'class' | 'maxAge'> {
-  const cookie = getOwnDataPropertyValue(options, 'cookie', 'Opaque session cookie');
-  if (cookie === undefined) return {};
-  if (cookie === null || typeof cookie !== 'object') {
-    throw new Error('Opaque session cookie must be an object');
-  }
-
-  const snapshot: Omit<CookieOptions, 'class' | 'maxAge'> = {};
-  snapshotCookieOptionField(cookie, snapshot, 'domain');
-  snapshotCookieOptionField(cookie, snapshot, 'expires');
-  snapshotCookieOptionField(cookie, snapshot, 'httpOnly');
-  snapshotCookieOptionField(cookie, snapshot, 'partitioned');
-  snapshotCookieOptionField(cookie, snapshot, 'path');
-  snapshotCookieOptionField(cookie, snapshot, 'priority');
-  snapshotCookieOptionField(cookie, snapshot, 'productionSecure');
-  snapshotCookieOptionField(cookie, snapshot, 'sameSite');
-  snapshotCookieOptionField(cookie, snapshot, 'secure');
-  snapshotCookieOptionField(cookie, snapshot, 'unsafe');
-  return snapshot;
-}
-
-function snapshotCookieOptionField<Key extends keyof Omit<CookieOptions, 'class' | 'maxAge'>>(
-  source: object,
-  target: Omit<CookieOptions, 'class' | 'maxAge'>,
-  key: Key,
-): void {
-  const descriptor = getOwnDataPropertyDescriptor(source, key, `Opaque session cookie.${key}`);
-  if (descriptor !== undefined) {
-    target[key] = descriptor.value as Omit<CookieOptions, 'class' | 'maxAge'>[Key];
-  }
-}
-
-function snapshotOpaqueSessionStore<SessionValue>(
-  store: OpaqueSessionStore<SessionValue>,
-): OpaqueSessionStore<SessionValue> {
-  // SPEC §6.5 / OPP-11: the manager-facing lifecycle methods are accepted once at construction.
-  // Later mutation of a store object must not swap validation, rotation, or revocation semantics.
-  const { create, validate, rotate, revoke } = store;
-  return {
-    create(value, options) {
-      return create.call(store, value, options);
-    },
-    validate(id) {
-      return validate.call(store, id);
-    },
-    rotate(priorId, value, options) {
-      return rotate.call(store, priorId, value, options);
-    },
-    revoke(id) {
-      return revoke.call(store, id);
-    },
-  };
+  if (options.cookieName !== undefined) assertOpaqueSessionCookieName(options.cookieName);
 }
 
 function assertOpaqueSessionCookieName(cookieName: string): void {
@@ -695,20 +398,10 @@ function extractOpaqueSessionId(
   if (!acceptAuthorizationHeader) return cookieId;
   const authorization = request.headers.get('authorization');
   if (authorization === null) return cookieId;
-  const headerId = readAuthorizationBearer(authorization);
+  const match = /^Bearer\s+([^\s]+)$/i.exec(authorization);
+  const headerId = match?.[1] ?? null;
   if (cookieId !== null && headerId !== null) return AMBIGUOUS_OPAQUE_SESSION_ID;
   return cookieId ?? headerId;
-}
-
-function readAuthorizationBearer(header: string): string | null {
-  if (!/^(?:Bearer|[\s]+Bearer)(?:[\s,]|$)/i.test(header)) return null;
-  const match = /^Bearer (kos_[A-Za-z0-9_-]{43})$/i.exec(header);
-  // SPEC §6.5 / OPP-11: a malformed Bearer session credential must not be ignored in favor of a
-  // simultaneously presented cookie, because that would accept ambiguous browser credential state.
-  // Accept only the exact Kovo-owned credential shape; folded, comma-joined, control-character,
-  // padded, or otherwise normalized variants fail before custom store validation.
-  if (match === null) return AMBIGUOUS_OPAQUE_SESSION_ID;
-  return match[1] ?? AMBIGUOUS_OPAQUE_SESSION_ID;
 }
 
 function readCookie(header: string, cookieName: string): string | null {
@@ -722,23 +415,13 @@ function readCookie(header: string, cookieName: string): string | null {
     // SPEC §6.5 / OPP-11: owned sessions fail closed on ambiguous credentials instead of
     // choosing a cookie alias by header order and silently changing session provenance.
     if (value !== null) return AMBIGUOUS_OPAQUE_SESSION_ID;
-    value = readOpaqueSessionCookieValue(part.slice(index + 1));
+    try {
+      value = decodeURIComponent(part.slice(index + 1).trim());
+    } catch {
+      value = part.slice(index + 1).trim();
+    }
   }
   return value;
-}
-
-function readOpaqueSessionCookieValue(rawValue: string): string {
-  // SPEC §6.5 / OPP-11: Kovo emits opaque ids with only cookie-safe token characters. Do not
-  // percent-decode, unquote, or otherwise normalize browser credentials across this boundary.
-  if (
-    rawValue !== rawValue.trim() ||
-    rawValue.includes('%') ||
-    rawValue.startsWith('"') ||
-    rawValue.endsWith('"')
-  ) {
-    return AMBIGUOUS_OPAQUE_SESSION_ID;
-  }
-  return rawValue;
 }
 
 function base64url(bytes: Uint8Array): string {

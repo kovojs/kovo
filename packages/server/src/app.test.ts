@@ -49,12 +49,6 @@ function delegatedSessionProvider(provider: (request: Request) => unknown) {
   return {
     justification: 'test delegates session lifecycle to an app-owned provider',
     lifecycle: 'delegated' as const,
-    lifecycleAssertions: {
-      expiry: 'test provider enforces session expiration',
-      revocation: 'test provider revokes sessions on sign-out',
-      rotation: 'test provider rotates credentials after authentication',
-      validation: 'test provider validates browser session credentials',
-    },
     provider,
   };
 }
@@ -381,68 +375,6 @@ describe('server createApp request shell', () => {
     );
   });
 
-  it('rejects delegated sessionProvider accessors that could change after validation', () => {
-    const manager = createOpaqueSessionManager({
-      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
-    });
-    let reads = 0;
-    const declaration = {
-      justification: 'test delegates session lifecycle to an app-owned provider',
-      lifecycle: 'delegated' as const,
-      lifecycleAssertions: {
-        expiry: 'test provider enforces session expiration',
-        revocation: 'test provider revokes sessions on sign-out',
-        rotation: 'test provider rotates credentials after authentication',
-        validation: 'test provider validates browser session credentials',
-      },
-      get provider() {
-        reads += 1;
-        return reads === 1 ? () => ({ user: { id: 'delegated' } }) : manager.provider;
-      },
-    };
-
-    expect(() => createApp({ sessionProvider: declaration as never })).toThrow(
-      'requires delegated `provider` to be an own data property',
-    );
-  });
-
-  it('rejects delegated lifecycle assertion accessors', () => {
-    const lifecycleAssertions = {
-      expiry: 'test provider enforces session expiration',
-      revocation: 'test provider revokes sessions on sign-out',
-      get rotation() {
-        return 'test provider rotates credentials after authentication';
-      },
-      validation: 'test provider validates browser session credentials',
-    };
-
-    expect(() =>
-      createApp({
-        sessionProvider: {
-          justification: 'test delegates session lifecycle to an app-owned provider',
-          lifecycle: 'delegated',
-          lifecycleAssertions,
-          provider: () => ({ user: { id: 'delegated' } }),
-        } as never,
-      }),
-    ).toThrow('requires delegated `rotation` to be an own data property');
-  });
-
-  it('does not treat forged global-symbol opaque provider markers as framework-owned', () => {
-    const forgedProvider = (() => ({ user: { id: 'delegated' } })) as (() => {
-      user: { id: string };
-    }) & {
-      [key: symbol]: true;
-    };
-    forgedProvider[Symbol.for('kovo.opaqueSessionProvider')] = true;
-
-    const app = createApp({ sessionProvider: delegatedSessionProvider(forgedProvider) });
-
-    expect(app.session).toBeUndefined();
-    expect(app.sessionProvider).toBe(forgedProvider);
-    expect(app.sessionProviderBoundary).toBe('delegated');
-  });
-
   it('rejects ambiguous delegated sessionProvider shorthand without lifecycle posture', () => {
     expect(() =>
       createApp({
@@ -453,64 +385,16 @@ describe('server createApp request shell', () => {
     );
   });
 
-  it('rejects hand-built app aggregates that attach a raw sessionProvider below createApp', () => {
-    const app = createApp();
-
-    expect(() =>
-      createRequestHandler({
-        ...app,
-        sessionProvider: (() => ({ user: { id: 'raw' } })) as never,
-        sessionProviderBoundary: 'delegated',
-      }),
-    ).toThrow('createRequestHandler() requires a Kovo app aggregate');
-  });
-
   it('rejects delegated sessionProvider declarations without justification', () => {
     expect(() =>
       createApp({
         sessionProvider: {
           justification: '   ',
           lifecycle: 'delegated',
-          lifecycleAssertions: {
-            expiry: 'test provider enforces session expiration',
-            revocation: 'test provider revokes sessions on sign-out',
-            rotation: 'test provider rotates credentials after authentication',
-            validation: 'test provider validates browser session credentials',
-          },
           provider: () => ({ user: { id: 'delegated' } }),
         },
       }),
     ).toThrow('requires a non-empty delegated session justification');
-  });
-
-  it('rejects delegated sessionProvider declarations without lifecycle assertions', () => {
-    expect(() =>
-      createApp({
-        sessionProvider: {
-          justification: 'delegated provider under migration',
-          lifecycle: 'delegated',
-          provider: () => ({ user: { id: 'delegated' } }),
-        } as never,
-      }),
-    ).toThrow('requires delegated `lifecycleAssertions`');
-  });
-
-  it('rejects delegated sessionProvider declarations with empty lifecycle assertions', () => {
-    expect(() =>
-      createApp({
-        sessionProvider: {
-          justification: 'delegated provider under migration',
-          lifecycle: 'delegated',
-          lifecycleAssertions: {
-            expiry: 'test provider enforces session expiration',
-            revocation: 'test provider revokes sessions on sign-out',
-            rotation: '   ',
-            validation: 'test provider validates browser session credentials',
-          },
-          provider: () => ({ user: { id: 'delegated' } }),
-        },
-      }),
-    ).toThrow('requires a non-empty delegated lifecycleAssertions.rotation');
   });
 
   it('rejects ambiguous owned and delegated session lifecycles', () => {
