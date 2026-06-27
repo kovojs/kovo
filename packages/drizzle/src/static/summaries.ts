@@ -3338,13 +3338,20 @@ function singleGlobalArrayOfElement(node: Node): Node | undefined {
   if (!Node.isCallExpression(expression)) return undefined;
 
   const args = expression.getArguments();
-  if (args.length !== 1 || Node.isSpreadElement(args[0])) return undefined;
+  if (args.length !== 1) return undefined;
 
   const callee = unwrappedStaticExpressionNode(expression.getExpression());
   if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'of') return undefined;
 
   const receiver = unwrappedStaticExpressionNode(callee.getExpression());
-  return unshadowedGlobalArrayIdentifier(receiver) ? args[0] : undefined;
+  if (!unshadowedGlobalArrayIdentifier(receiver)) return undefined;
+
+  const [arg] = args;
+  if (!arg) return undefined;
+  if (!Node.isSpreadElement(arg)) return arg;
+
+  const elements = literalArrayElements(arg.getExpression());
+  return elements?.length === 1 ? elements[0] : undefined;
 }
 
 function singleGlobalArrayFromElement(node: Node): Node | undefined {
