@@ -89,13 +89,13 @@ const commerceGraph = {
         {
           domain: 'cart',
           keys: null,
-          site: 'examples/commerce/src/domain.ts:254',
+          site: 'examples/commerce/src/domain.ts:253',
           via: 'cart_items',
         },
         {
           domain: 'order',
           keys: null,
-          site: 'examples/commerce/src/domain.ts:259',
+          site: 'examples/commerce/src/domain.ts:258',
           via: 'orders',
         },
         {

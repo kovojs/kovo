@@ -38,13 +38,10 @@ jobs:
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp run build
-      - run: vp run --no-cache export
-        working-directory: site
-      - run: vp run check-links
-        working-directory: site
+      - run: vp run --no-cache @kovojs/site#export
+      - run: vp run @kovojs/site#check-links
       - run: vp exec playwright install --with-deps chromium
-      - run: vp run smoke
-        working-directory: site
+      - run: vp run @kovojs/site#smoke
       - run: touch site/dist/.nojekyll
 
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa

@@ -579,6 +579,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
     'Registry atomicity',
     'TSX-only authoring',
     'Public imports in app source',
+    'Production build preflights',
     'Post-parse decisions use typed facts, not source strings',
   ]);
   assert.deepEqual(fact.hardRuleTitlesCovered, [
