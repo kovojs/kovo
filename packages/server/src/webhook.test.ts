@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
 import { runEndpoint, type EndpointRequest } from './endpoint.js';
+import { assignDerivedWebhookName } from './internal/wire.js';
 import { s, SchemaValidationError } from './schema.js';
 import {
   createMemoryWebhookReplayStore as createPublicMemoryWebhookReplayStore,
@@ -333,6 +334,62 @@ describe('server webhook primitive', () => {
     expect(refundedSecond.replayed).toBe(true);
     expect(paidCalls).toBe(1);
     expect(refundedCalls).toBe(1);
+  });
+
+  it('scopes replay and audit metadata by compiler-assigned webhook identity', async () => {
+    const seenScopes: string[] = [];
+    const replayStore = createMemoryWebhookReplayStore();
+    const tracingReplayStore: WebhookReplayStore = {
+      get(scope, idem) {
+        seenScopes.push(`get:${scope}:${idem}`);
+        return replayStore.get(scope, idem);
+      },
+      reserve(scope, idem) {
+        seenScopes.push(`reserve:${scope}:${idem}`);
+        return replayStore.reserve(scope, idem);
+      },
+      set(scope, idem, response) {
+        seenScopes.push(`set:${scope}:${idem}`);
+        replayStore.set(scope, idem, response);
+      },
+    };
+    let calls = 0;
+    const orderPaid = assignDerivedWebhookName(
+      webhook('/webhooks/order-paid', {
+        handler: () => {
+          calls += 1;
+          return { ok: true };
+        },
+        idempotency: (input) => input.id,
+        input: s.object({ id: s.string() }),
+        replayStore: tracingReplayStore,
+        verify: 'none',
+        verifyJustification: 'fixture-only webhook test',
+      }),
+      'webhooks/order-paid/order-paid',
+    );
+    const body = JSON.stringify({ id: 'evt_derived' });
+    const request = () =>
+      new Request('https://example.test/webhooks/order-paid', { body, method: 'POST' });
+
+    const first = await runWebhook(orderPaid, request());
+    const second = await runWebhook(orderPaid, request());
+
+    expect(orderPaid).toMatchObject({
+      csrf: {
+        exempt: true,
+        justification: 'fixture-only webhook test',
+      },
+      name: 'webhooks/order-paid/order-paid',
+      path: '/webhooks/order-paid',
+      reason: 'webhook:webhooks/order-paid/order-paid',
+    });
+    expect(first.replayed).toBe(false);
+    expect(second.replayed).toBe(true);
+    expect(calls).toBe(1);
+    expect(seenScopes).toContain('get:webhook:webhooks/order-paid/order-paid:evt_derived');
+    expect(seenScopes).toContain('reserve:webhook:webhooks/order-paid/order-paid:evt_derived');
+    expect(seenScopes).not.toContain('get:webhook:/webhooks/order-paid:evt_derived');
   });
 
   it('fails closed when a write-reaching webhook lacks idempotency replay posture', async () => {

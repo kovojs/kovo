@@ -5,6 +5,7 @@ import { createMemoryStorage } from '@kovojs/core/internal/storage';
 import { invalidate } from './change-record.js';
 import { domain, tag } from './domain.js';
 import { guards } from './guards.js';
+import { assignDerivedMutationKey } from './internal/wire.js';
 import {
   mutation as defineMutation,
   mutationFormAttributes,
@@ -116,17 +117,19 @@ describe('server mutation lifecycle', () => {
   });
 
   it('uses compiler-derived keys on object-form mutation values', () => {
-    const addToCart = defineMutation({
-      csrf: false,
-      input: s.object({ productId: s.string() }),
-      handler() {
-        return 'ok';
-      },
-    });
-    // Internal generated path: compileComponentModule emits this assignment from the exported
-    // binding because runtime JavaScript cannot prove source names (SPEC §6.3).
-    addToCart.key = 'components/cart/add-to-cart';
+    const addToCart = assignDerivedMutationKey(
+      defineMutation({
+        csrf: false,
+        input: s.object({ productId: s.string() }),
+        queue: true,
+        handler() {
+          return 'ok';
+        },
+      }),
+      'components/cart/add-to-cart',
+    );
 
+    expect(addToCart.queue).toBe('components/cart/add-to-cart');
     expect(mutationFormAttributes(addToCart)).toMatchObject({
       action: '/_m/components/cart/add-to-cart',
       'data-mutation': 'components/cart/add-to-cart',
@@ -134,6 +137,22 @@ describe('server mutation lifecycle', () => {
     });
     expect(renderMutationFormAttributes(addToCart)).toContain(
       'action="/_m/components/cart/add-to-cart"',
+    );
+  });
+
+  it('rejects conflicting compiler-derived mutation keys', () => {
+    const addToCart = defineMutation({
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    assignDerivedMutationKey(addToCart, 'components/cart/add-to-cart');
+
+    expect(() => assignDerivedMutationKey(addToCart, 'components/cart/other-add-to-cart')).toThrow(
+      'Cannot assign derived mutation key "components/cart/other-add-to-cart" to mutation already keyed as "components/cart/add-to-cart".',
     );
   });
 

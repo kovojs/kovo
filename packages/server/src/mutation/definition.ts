@@ -449,6 +449,30 @@ export function mutation(
 }
 
 /**
+ * @internal Compiler-emitted/generated ABI for SPEC §4.1 source-derived mutation identities.
+ *
+ * Runtime-only `mutation({ ... })` cannot know the source module path or exported binding. Generated
+ * modules call this before `createApp()` consumes exported declarations so `/_m/<key>`, CSRF
+ * audience binding, replay scopes, forms, and invalidation registries observe the derived key.
+ */
+export function assignDerivedMutationKey<Mutation extends MutationDefinition<string>>(
+  definition: Mutation,
+  key: string,
+): Mutation {
+  if (!key) {
+    throw new TypeError('assignDerivedMutationKey() requires a non-empty mutation key.');
+  }
+  if (typeof definition.key === 'string' && definition.key.length > 0 && definition.key !== key) {
+    throw new TypeError(
+      `Cannot assign derived mutation key "${key}" to mutation already keyed as "${definition.key}".`,
+    );
+  }
+  definition.key = key;
+  if (definition.queue === true) definition.queue = key;
+  return definition;
+}
+
+/**
  * Render the no-JS/enhanced form attributes for a typed mutation value
  * (SPEC §6.3). Component-authored `<form mutation={...}>` is still compiler
  * lowered when submitted-form targets are needed; this helper keeps direct

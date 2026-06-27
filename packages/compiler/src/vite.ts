@@ -22,6 +22,7 @@ import {
   readPersistentCompileCacheEntryForInput,
   writePersistentCompileCacheEntry,
 } from './persistent-compile-cache.js';
+import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 import type {
   HmrImpactClassification,
   HmrImpactMetadata,
@@ -273,7 +274,14 @@ export function createKovoVitePlugin(
       // re-lowered as app source. The registry is process-scoped, so it is shared across plugin
       // instances and cannot be forged from authored source.
       if (isKovoEmittedServerModuleReentry(fileName, source)) return null;
-      if (!shouldTransformViteComponentSource(fileName, source, options)) return null;
+      const standaloneRegistrySource = shouldTransformViteAuthoredSource(fileName, source, options)
+        ? lowerStandaloneSourceDerivedRegistryDeclarations({ fileName, source })
+        : null;
+      if (!shouldTransformViteComponentSource(fileName, source, options)) {
+        return standaloneRegistrySource === null
+          ? null
+          : { code: standaloneRegistrySource, map: null };
+      }
 
       const result = compileCachedViteComponentModule(
         compileComponentModule,
@@ -446,7 +454,18 @@ function shouldTransformViteComponentSource(
   source: string,
   options: KovoVitePluginOptions,
 ): boolean {
-  if (!/\.[cm]?tsx?$/.test(fileName) || !source.includes('component(')) return false;
+  if (!shouldTransformViteAuthoredSource(fileName, source, options)) return false;
+  if (!source.includes('component(')) return false;
+
+  return true;
+}
+
+function shouldTransformViteAuthoredSource(
+  fileName: string,
+  source: string,
+  options: KovoVitePluginOptions,
+): boolean {
+  if (!/\.[cm]?tsx?$/.test(fileName)) return false;
   if (matchesAnyViteFilter(options.exclude, fileName, source)) return false;
   if (options.include !== undefined && !matchesAnyViteFilter(options.include, fileName, source))
     return false;

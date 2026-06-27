@@ -93,6 +93,48 @@ export function renderSource() {
     });
   });
 
+  it('lowers standalone source-derived registry declarations without component compilation', async () => {
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      include: ['src'],
+    });
+    const transformed = await plugin.transform(
+      `
+import { mutation, query, webhook } from '@kovojs/server';
+
+export const addToCart = mutation({ handler() {}, input: {} });
+export const cartQuery = query({ load: () => ({ count: 1 }), reads: [] });
+export const auditQuery = query.elevated({ load: () => ({ ok: true }), reads: [] });
+export const orderPaid = webhook('/webhooks/order-paid', {
+  handler() {},
+  input: {},
+  verify: 'none',
+  verifyJustification: 'fixture',
+});
+`,
+      'src/app-shell.ts',
+    );
+
+    expect(compileComponentModule).not.toHaveBeenCalled();
+    expect(transformed).toMatchObject({ map: null });
+    expect(transformed?.code).toContain(
+      "import { assignDerivedMutationKey as __kovoAssignDerivedMutationKey, assignDerivedQueryKey as __kovoAssignDerivedQueryKey, assignDerivedWebhookName as __kovoAssignDerivedWebhookName } from '@kovojs/server/internal/wire';",
+    );
+    expect(transformed?.code).toContain(
+      'export const addToCart = __kovoAssignDerivedMutationKey(mutation({ handler() {}, input: {} }), "app-shell/add-to-cart")',
+    );
+    expect(transformed?.code).toContain(
+      'export const cartQuery = __kovoAssignDerivedQueryKey(query({ load: () => ({ count: 1 }), reads: [] }), "app-shell/cart-query")',
+    );
+    expect(transformed?.code).toContain(
+      'export const auditQuery = __kovoAssignDerivedQueryKey(query.elevated({ load: () => ({ ok: true }), reads: [] }), "app-shell/audit-query")',
+    );
+    expect(transformed?.code).toContain(
+      'export const orderPaid = __kovoAssignDerivedWebhookName(webhook',
+    );
+    expect(transformed?.code).toContain('"app-shell/order-paid"');
+  });
+
   it('throws registry-error diagnostics from the Vite transform with teaching text', async () => {
     const onModuleDiagnostics = vi.fn();
     const plugin = createKovoVitePlugin(

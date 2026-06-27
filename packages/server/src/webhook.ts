@@ -303,6 +303,36 @@ export function webhook<
   return declaration;
 }
 
+/**
+ * @internal Compiler-emitted/generated ABI for SPEC §4.1 source-derived webhook identities.
+ *
+ * Runtime-only `webhook('/path', { ... })` can know the public receiver path but not the source
+ * module path or exported binding. Generated modules call this before `createApp()` consumes the
+ * endpoint so audit records and idempotency replay scopes use the derived registry identity while
+ * `path` remains the public HTTP address.
+ */
+export function assignDerivedWebhookName<
+  const Name extends string,
+  const Path extends string,
+  InputSchema extends Schema<unknown>,
+  Value,
+  Tx,
+>(
+  declaration: WebhookDeclaration<string, Path, InputSchema, Value, Tx>,
+  name: Name,
+): WebhookDeclaration<Name, Path, InputSchema, Value, Tx> {
+  if (!name) {
+    throw new TypeError('assignDerivedWebhookName() requires a non-empty webhook name.');
+  }
+  declaration.name = name;
+  declaration.reason = `webhook:${name}`;
+  declaration.csrf = {
+    exempt: true,
+    justification: webhookCsrfJustification(name, declaration.webhookDefinition),
+  };
+  return declaration as WebhookDeclaration<Name, Path, InputSchema, Value, Tx>;
+}
+
 function webhookNameFromPath<const Path extends string>(path: Path): Path {
   return path;
 }

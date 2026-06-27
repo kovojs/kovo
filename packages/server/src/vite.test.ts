@@ -3,13 +3,23 @@ import type { AddressInfo } from 'node:net';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
+import {
+  assignDerivedMutationKey,
+  assignDerivedQueryKey,
+  assignDerivedWebhookName,
+} from './internal/wire.js';
+import { mutation } from './mutation.js';
+import { query } from './query.js';
 import { route } from './route.js';
+import { s } from './schema.js';
 import { kovo } from './vite.js';
 import type { KovoAppShellViteMiddleware } from './vite-dev.js';
+import { webhook } from './webhook.js';
 
 interface KovoViteConfigureServer {
   configResolved?(config: { root: string }): void | Promise<void>;
@@ -49,6 +59,83 @@ export const CartButton = component({
         /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/src\/cart-button\.client\.js#CartButton\$button_click"/,
       );
       expect(transformed?.code).not.toContain('onClick');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('assigns source-derived registry identities before createApp consumes app modules', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-derived-registry-'));
+    const source = `
+import { createApp, mutation, query, s, webhook } from '@kovojs/server';
+
+export const addToCart = mutation({
+  csrf: false,
+  input: s.object({ productId: s.string() }),
+  handler() {
+    return 'ok';
+  },
+});
+
+export const cartQuery = query({
+  load: () => ({ count: 1 }),
+  reads: [],
+});
+
+export const orderPaid = webhook('/webhooks/order-paid', {
+  handler: () => undefined,
+  input: s.object({ id: s.string() }),
+  verify: 'none',
+  verifyJustification: 'fixture-only app shell test',
+});
+
+export default createApp({
+  endpoints: [orderPaid],
+  mutations: [addToCart],
+  queries: [cartQuery],
+});
+`;
+
+    try {
+      const plugin = kovo({ app: '/src/app-shell.ts' }) as unknown as KovoViteConfigureServer;
+
+      await plugin.configResolved?.({ root });
+      const transformed = await plugin.transform?.(source, join(root, 'src/app-shell.ts'));
+
+      expect(transformed).toMatchObject({ map: null });
+      expect(transformed?.code).toContain(
+        "import { assignDerivedMutationKey as __kovoAssignDerivedMutationKey, assignDerivedQueryKey as __kovoAssignDerivedQueryKey, assignDerivedWebhookName as __kovoAssignDerivedWebhookName } from '@kovojs/server/internal/wire';",
+      );
+      expect(transformed?.code).toContain(
+        'export const addToCart = __kovoAssignDerivedMutationKey(mutation({',
+      );
+      expect(transformed?.code).toContain('"app-shell/add-to-cart"');
+      expect(transformed?.code).toContain(
+        'export const cartQuery = __kovoAssignDerivedQueryKey(query({',
+      );
+      expect(transformed?.code).toContain('"app-shell/cart-query"');
+      expect(transformed?.code).toContain(
+        "export const orderPaid = __kovoAssignDerivedWebhookName(webhook('/webhooks/order-paid', {",
+      );
+      expect(transformed?.code).toContain('"app-shell/order-paid"');
+      expect(transformed?.code).toContain('export default createApp({');
+      const lowered = evaluateLoweredAppShell(transformed?.code ?? '');
+      expect(lowered.addToCart.key).toBe('app-shell/add-to-cart');
+      expect(lowered.cartQuery.key).toBe('app-shell/cart-query');
+      expect(lowered.orderPaid).toMatchObject({
+        name: 'app-shell/order-paid',
+        path: '/webhooks/order-paid',
+        reason: 'webhook:app-shell/order-paid',
+      });
+      expect(lowered.app.mutations.map((candidate) => candidate.key)).toEqual([
+        'app-shell/add-to-cart',
+      ]);
+      expect(lowered.app.queries.map((candidate) => candidate.key)).toEqual([
+        'app-shell/cart-query',
+      ]);
+      expect(lowered.app.endpoints.map((candidate) => candidate.name)).toEqual([
+        'app-shell/order-paid',
+      ]);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -270,6 +357,38 @@ function runMiddlewareChain(
     middleware(request, response, next);
   };
   next();
+}
+
+function evaluateLoweredAppShell(source: string): {
+  addToCart: { key: string };
+  app: {
+    endpoints: Array<{ name?: string }>;
+    mutations: Array<{ key: string }>;
+    queries: Array<{ key: string }>;
+  };
+  cartQuery: { key: string };
+  orderPaid: { name: string; path: string; reason: string };
+} {
+  const executable = source
+    .replace(/^import .*;\n/gm, '')
+    .replace('export const addToCart =', 'const addToCart =')
+    .replace('export const cartQuery =', 'const cartQuery =')
+    .replace('export const orderPaid =', 'const orderPaid =')
+    .replace('export default createApp(', 'const app = createApp(');
+  return runInNewContext(
+    `${executable}\n;({ app, addToCart, cartQuery, orderPaid });`,
+    {
+      __kovoAssignDerivedMutationKey: assignDerivedMutationKey,
+      __kovoAssignDerivedQueryKey: assignDerivedQueryKey,
+      __kovoAssignDerivedWebhookName: assignDerivedWebhookName,
+      createApp,
+      mutation,
+      query,
+      s,
+      webhook,
+    },
+    { timeout: 1000 },
+  );
 }
 
 function stylesheetHref(html: string, pattern: RegExp): string {

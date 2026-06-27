@@ -29,6 +29,7 @@ export {
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from '../mutation-wire.js';
+export { assignDerivedMutationKey } from '../mutation/definition.js';
 export {
   renderMutationEndpointResponse,
   renderMutationResponse,
@@ -52,3 +53,4 @@ export type {
   WebhookReplayStore,
   WebhookWireResponse,
 } from '../webhook.js';
+export { assignDerivedWebhookName } from '../webhook.js';
