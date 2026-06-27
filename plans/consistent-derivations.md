@@ -183,6 +183,13 @@ packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-i
     scope.
   - Component `queries` object keys remain render-local names; the backing query identity should come
     from the query definition.
+  - Integrated evidence (2026-06-27): `packages/compiler/src/scan/optimistic-inline.ts` now resolves
+    same-file query value references such as `[cartQuery.key]`, including exported object-form
+    `query({ ... })` declarations, and tests cover the local value form. Verification passed
+    `pnpm exec vitest run packages/server/src/mutation.test.ts
+packages/compiler/src/scan/optimistic-inline.test.ts examples/crm/src/interactive-app.test.ts`,
+    `pnpm run check:api-surface`, `pnpm run check`, and `git diff --check HEAD~1..HEAD`.
+    Remaining gap: imported query value references are still outside the source-only scanner.
 
 - [ ] **Add query key drift and collision diagnostics.**
   - Duplicate derived query keys and changed derived query keys must be reported before generated
@@ -227,7 +234,7 @@ packages/server/src/change-record.test.ts packages/drizzle/src/index.writes-rece
 
 ## Phase 5 - Queues And Shared Groups
 
-- [ ] **Clarify mutation queue naming separately from registry identity.**
+- [x] **Clarify mutation queue naming separately from registry identity.**
   - `queue: 'cart'` is a conceptual grouping, not a declaration identity.
   - Add a derived per-mutation queue option such as `queue: true` if the common case is one queue per
     mutation.
@@ -246,7 +253,12 @@ packages/server/src/change-record.test.ts packages/drizzle/src/index.writes-rece
     accepts the widened queue posture. Focused verification passed `pnpm exec vitest run
 packages/server/src/mutation.test.ts packages/compiler/src/scan/optimistic-inline.test.ts
 packages/compiler/src/registry.test.ts`, `pnpm run check:vp`, and `git diff --check`.
-    Remaining gap: a first-class named queue object is not implemented.
+    `packages/server/src/mutation/definition.ts` now also exposes first-class `queue('name')` values
+    and `MutationQueue`; `examples/crm/src/mutations.ts` uses `queue('crm')` for its intentionally
+    shared CRM queue; public guides now distinguish `queue: true` from named queue values.
+    Verification passed `pnpm exec vitest run packages/server/src/mutation.test.ts
+packages/compiler/src/scan/optimistic-inline.test.ts examples/crm/src/interactive-app.test.ts`,
+    `pnpm run check:api-surface`, `pnpm run check`, and `git diff --check HEAD~1..HEAD`.
 
 ## Phase 6 - Migration And Verification
 
@@ -315,4 +327,8 @@ packages/cli/src/index.kovo-explain.test.ts`, `pnpm run check:vp`, and `git diff
 - 2026-06-27: Integrated query collision graph diagnostics `937e281af`; `pnpm exec vitest run
 packages/compiler/src/registry.test.ts packages/server/src/app.test.ts
 packages/cli/src/index.kovo-explain.test.ts`, `pnpm run check:vp`, and
+  `git diff --check HEAD~1..HEAD` passed.
+- 2026-06-27: Integrated queue values and local optimistic query references `45bbec954`; `pnpm exec
+vitest run packages/server/src/mutation.test.ts packages/compiler/src/scan/optimistic-inline.test.ts
+examples/crm/src/interactive-app.test.ts`, `pnpm run check:api-surface`, `pnpm run check`, and
   `git diff --check HEAD~1..HEAD` passed.
