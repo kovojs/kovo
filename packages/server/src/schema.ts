@@ -278,6 +278,8 @@ export interface StoredFileSchemaOptions {
  * the audited escape surfaced in `kovo explain --capabilities`.
  */
 export interface StringSchema extends Schema<string> {
+  default(value: string): StringSchema;
+  optional(): Schema<string | undefined>;
   /** Restrict to one of the blessed backtracking-free formats (KV434). */
   format(name: BlessedFormatName): StringSchema;
   email(): StringSchema;
@@ -299,6 +301,7 @@ export interface NumberSchema extends Schema<number> {
   default(value: number): NumberSchema;
   int(): NumberSchema;
   min(value: number): NumberSchema;
+  optional(): Schema<number | undefined>;
 }
 
 interface NumberSchemaOptions {
@@ -342,6 +345,10 @@ class NumberSchemaImpl implements NumberSchema {
     });
   }
 
+  optional(): Schema<number | undefined> {
+    return optionalSchema(this, isMissingNumberInput);
+  }
+
   parse(input: unknown): number {
     const value =
       input === undefined || input === null || input === '' ? this.#defaultValue : input;
@@ -365,13 +372,23 @@ type StringCheck =
 
 class StringSchemaImpl implements StringSchema {
   readonly #checks: readonly StringCheck[];
+  readonly #defaultValue: string | undefined;
 
-  constructor(checks: readonly StringCheck[] = []) {
+  constructor(checks: readonly StringCheck[] = [], defaultValue?: string) {
     this.#checks = checks;
+    this.#defaultValue = defaultValue;
   }
 
   #with(check: StringCheck): StringSchema {
-    return new StringSchemaImpl([...this.#checks, check]);
+    return new StringSchemaImpl([...this.#checks, check], this.#defaultValue);
+  }
+
+  default(value: string): StringSchema {
+    return new StringSchemaImpl(this.#checks, value);
+  }
+
+  optional(): Schema<string | undefined> {
+    return optionalSchema(this, isMissingStringInput);
   }
 
   format(name: BlessedFormatName): StringSchema {
@@ -406,6 +423,9 @@ class StringSchemaImpl implements StringSchema {
   }
 
   parse(input: unknown): string {
+    if (isMissingStringInput(input) && this.#defaultValue !== undefined) {
+      input = this.#defaultValue;
+    }
     if (typeof input !== 'string') throw validationError('Expected string');
 
     for (const check of this.#checks) {
@@ -533,6 +553,25 @@ function createFileOptions(
 function arrayValues(input: unknown): unknown[] {
   if (input === undefined || input === null) return [];
   return Array.isArray(input) ? input : [input];
+}
+
+function optionalSchema<Value>(
+  schema: Schema<Value>,
+  isMissing: (input: unknown) => boolean,
+): Schema<Value | undefined> {
+  return {
+    parse(input: unknown): Value | undefined {
+      return isMissing(input) ? undefined : schema.parse(input);
+    },
+  };
+}
+
+function isMissingStringInput(input: unknown): boolean {
+  return input === undefined || input === null;
+}
+
+function isMissingNumberInput(input: unknown): boolean {
+  return input === undefined || input === null || input === '';
 }
 
 const PROTOTYPE_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);

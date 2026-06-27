@@ -117,7 +117,7 @@ export interface ComponentDefinitionInput {
   errorBoundary?: ComponentErrorBoundary;
   mutations?: Record<string, unknown>;
   queries?: unknown;
-  state?: () => JsonValue;
+  state?: () => unknown;
   render: (...args: never[]) => ComponentRenderResult;
 }
 
@@ -127,6 +127,17 @@ export interface Component<Definition extends ComponentDefinitionInput> {
   definition: Definition;
   name?: string;
 }
+
+/** Recursive JSON-serializability guardrail for authored state/query payload types (SPEC §4.1). */
+export type Serializable<T> = T extends JsonValue
+  ? T
+  : T extends (...args: any[]) => any
+    ? never
+    : T extends readonly (infer Item)[]
+      ? readonly Serializable<Item>[]
+      : T extends object
+        ? { [Key in keyof T]: Serializable<T[Key]> }
+        : never;
 
 /**
  * Declare a UI component with optional query bindings, optional serializable
@@ -157,13 +168,18 @@ export function component<
     render: (...args: any[]) => ComponentRenderResult;
   },
 >(
-  definition: Definition & {
-    render: (
-      queries: any,
-      state: any,
-      slots: ComponentRenderSlots<ComponentDefinitionMutations<Definition>>,
-    ) => ComponentRenderResult;
-  },
+  definition: Definition &
+    (Definition extends { state: () => infer State }
+      ? State extends Serializable<State>
+        ? { state: () => State }
+        : { state: () => never }
+      : { state?: undefined }) & {
+      render: (
+        queries: any,
+        state: any,
+        slots: ComponentRenderSlots<ComponentDefinitionMutations<Definition>>,
+      ) => ComponentRenderResult;
+    },
 ): Component<Definition> {
   const descriptor = (() => undefined) as Component<Definition>;
   Object.defineProperty(descriptor, 'name', {
