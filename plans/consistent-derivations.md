@@ -149,6 +149,17 @@ packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities
 
   - The derived key remains the identity for `<kovo-query name="...">`, `kovo-deps`, query stores,
     query deltas, binding coverage, and generated registries.
+  - Integrated evidence (2026-06-27): `packages/server/src/query.ts` accepts object-form
+    `query({ load, ... })` and `query.elevated({ ... })`; `packages/compiler/src/compile.ts` wraps
+    exported object-form query declarations with compiler-proved keys from the shared
+    `packages/compiler/src/registry-identities.ts` helper; `packages/server/src/app.ts` fails closed
+    when unresolved object-form queries reach `createApp()` and continues to reject duplicate
+    resolved query keys. Focused integration verification passed `pnpm exec vitest run
+packages/server/src/query-endpoint.test.ts packages/server/src/app.test.ts
+packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-identities.test.ts`,
+    `pnpm run check:vp`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD`.
+    Remaining gap: arbitrary standalone server modules still need app-wide source lowering, and
+    previous-graph rename/drift diagnostics are not implemented.
 
 - [ ] **Replace string-keyed query references in authoring surfaces.**
   - Optimistic maps should not require authors to spell query keys manually when query values are in
@@ -230,3 +241,7 @@ packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities
 - 2026-06-27: Added per-mutation queue shorthand `queue: true`; `pnpm exec vitest run
 packages/server/src/mutation.test.ts packages/compiler/src/scan/optimistic-inline.test.ts
 packages/compiler/src/registry.test.ts`, `pnpm run check:vp`, and `git diff --check` passed.
+- 2026-06-27: Integrated query object-form/source-key slice `4351aea0`; `pnpm exec vitest run
+packages/server/src/query-endpoint.test.ts packages/server/src/app.test.ts
+packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-identities.test.ts`,
+  `pnpm run check:vp`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD` passed.
