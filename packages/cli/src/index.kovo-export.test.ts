@@ -99,6 +99,39 @@ describe('kovo export', () => {
     }
   });
 
+  it('loads TypeScript app entries through Vite without an explicit --vite flag', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      symlinkServerPackage(root);
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route:
+            "{ path: '/', page: () => trustedHtml('<main data-export-tsx>TSX export</main>') }",
+        }),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('kovo-export/v1\nHTML /index.html status=200 bytes=');
+      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
+        '<main data-export-tsx>TSX export</main>',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('exports nested routes as directory-index HTML by default', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
     const appPath = join(root, 'app.mjs');

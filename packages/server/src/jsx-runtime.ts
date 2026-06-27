@@ -62,6 +62,7 @@ const voidElements = new Set([
 
 const kovoFormKeyFieldName = 'kovo-form-key';
 const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
+const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
 
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
 export type JsxNode =
@@ -125,6 +126,16 @@ export function jsx(
   if (isMutationFormHelperComponent(type, FormError, 'FormError')) {
     return renderMutationFormHelper('form', props);
   }
+  if (isGetRouteFormHelperComponent(type, 'form')) {
+    return jsx('form', {
+      ...props,
+      action: props.action ?? (type as { action?: unknown }).action,
+      method: props.method ?? 'get',
+    });
+  }
+  if (isGetRouteFormHelperComponent(type, 'input')) {
+    return jsx('input', props);
+  }
   if (isKovoComponent(type)) return renderKovoComponent(type, props, key);
   if (typeof type === 'function') return type(props);
 
@@ -178,6 +189,16 @@ function isMutationFormHelperComponent(
   name: string,
 ): boolean {
   return type === helper || (typeof type === 'function' && type.name === name);
+}
+
+function isGetRouteFormHelperComponent(
+  type: JsxComponent | KovoJsxComponent | string,
+  kind: 'form' | 'input',
+): boolean {
+  return (
+    typeof type === 'function' &&
+    (type as unknown as Record<symbol, unknown>)[getRouteFormHelperKindKey] === kind
+  );
 }
 
 /** @generated JSX automatic-runtime ABI `jsxs` factory (compiler-emitted). */

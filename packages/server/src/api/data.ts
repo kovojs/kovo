@@ -53,6 +53,7 @@ export type {
   QueryDefinitionBoundary,
   QueryDefinition,
   QueryLoadContext,
+  QueryReadConfig,
   QueryResult,
 } from '../query.js';
 export { drainElevatedQueryFacts, query } from '../query.js';

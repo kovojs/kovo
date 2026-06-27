@@ -21,11 +21,11 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
   const targetPaths = new Map<string, StaticExportRouteTarget>();
 
   for (const route of app.routes) {
-    if (app.sessionProvider) {
+    if (app.sessionProvider && route.access?.kind !== 'public') {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
-          `KV229 static export cannot prove '${route.path}' is session-independent while the app has a sessionProvider. Exported sites have no server-side sessions; split this route into an explicitly public app shell or wait for compiler-backed session-dependence metadata.`,
+          `KV229 static export cannot prove '${route.path}' is session-independent while the app has a sessionProvider. Exported sites have no server-side sessions; declare publicAccess(...) on explicitly public routes, split this route into an explicitly public app shell, or wait for compiler-backed session-dependence metadata.`,
         ),
       );
       continue;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
+import { publicAccess } from './access.js';
 import { createApp } from './app.js';
 import { route } from './route.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
@@ -77,6 +78,35 @@ describe('server static export route plan', () => {
         routePath: '/orders/:id',
       },
     ]);
+  });
+
+  it('allows explicitly public routes in an app with a session provider', () => {
+    expect(
+      staticExportRoutePlan(
+        createApp({
+          routes: [
+            route('/login', {
+              access: publicAccess('static login shell'),
+              page: () => trustedHtml('<main>Login</main>'),
+            }),
+            route('/profile', {
+              page: () => trustedHtml('<main>Profile</main>'),
+            }),
+          ],
+          sessionProvider: () => ({ user: { id: 'u1' } }),
+        }),
+      ),
+    ).toEqual({
+      diagnostics: [
+        {
+          code: 'KV229',
+          message:
+            "KV229 static export cannot prove '/profile' is session-independent while the app has a sessionProvider. Exported sites have no server-side sessions; declare publicAccess(...) on explicitly public routes, split this route into an explicitly public app shell, or wait for compiler-backed session-dependence metadata.",
+          routePath: '/profile',
+        },
+      ],
+      targets: [{ path: '/login', routePath: '/login' }],
+    });
   });
 
   it('rejects duplicate concrete export targets before synthetic replay', () => {

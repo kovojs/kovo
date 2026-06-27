@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
+import { publicAccess } from './access.js';
 import { createApp } from './app.js';
 import { guards } from './guards.js';
 import { respond } from './response.js';
@@ -213,6 +214,22 @@ describe('server static export', () => {
           message: expect.stringContaining('sessionProvider'),
         },
       ],
+    });
+  });
+
+  it('exports explicitly public routes from an app with a session provider', async () => {
+    const app = createApp({
+      routes: [
+        route('/login', {
+          access: publicAccess('public login shell'),
+          page: () => trustedHtml('<main>Login</main>'),
+        }),
+      ],
+      sessionProvider: () => ({ user: { id: 'u1' } }),
+    });
+
+    await expect(exportStaticApp(app)).resolves.toMatchObject({
+      artifacts: [{ path: '/login/index.html' }],
     });
   });
 

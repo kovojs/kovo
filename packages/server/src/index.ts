@@ -247,6 +247,7 @@ export type {
   QueryDefinitionBoundary,
   JsonSerializable,
   QueryLoadContext,
+  QueryReadConfig,
   QueryResult,
   Reader,
   Schema,
