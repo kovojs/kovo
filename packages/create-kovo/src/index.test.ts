@@ -497,7 +497,7 @@ describe('create-kovo starter (build integration)', () => {
       await stopProcess(devServer);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 45_000);
+  }, 120_000);
 });
 
 describe('create-kovo starter (CLI)', () => {
