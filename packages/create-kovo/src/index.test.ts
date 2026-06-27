@@ -146,6 +146,7 @@ describe('create-kovo starter (metadata)', () => {
         devDependencies?: Record<string, string>;
         name?: string;
         packageManager?: string;
+        pnpm?: unknown;
         scripts?: Record<string, string>;
       };
 
@@ -164,6 +165,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(Object.values(packageJson.dependencies ?? {})).not.toContain('workspace:*');
       expect(Object.values(packageJson.devDependencies ?? {})).not.toContain('workspace:*');
       expect(packageJson.packageManager).toBe('pnpm@10.12.1');
+      expect(packageJson.pnpm).toBeUndefined();
       expect(packageJson.dependencies).not.toHaveProperty('better-sqlite3');
       expect(packageJson.devDependencies).toMatchObject({
         '@kovojs/cli': expect.stringMatching(/^\d+\.\d+\.\d+/),
@@ -196,9 +198,11 @@ describe('create-kovo starter (metadata)', () => {
   it('keeps Postgres as the default scaffold dialect', () => {
     const project = createKovoProject({ name: 'Default Dialect' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));
+    const packageJson = JSON.parse(files.get('package.json') ?? '{}') as { pnpm?: unknown };
 
     expect(files.get('package.json')).toContain('"@electric-sql/pglite"');
     expect(files.get('package.json')).not.toContain('"better-sqlite3"');
+    expect(packageJson.pnpm).toBeUndefined();
     expect(files.get('src/db.ts')).toContain("import { PGlite } from '@electric-sql/pglite'");
     expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
     expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
@@ -222,9 +226,13 @@ describe('create-kovo starter (metadata)', () => {
   it('emits the SQLite scaffold variant when requested', () => {
     const project = createKovoProject({ dialect: 'sqlite', name: 'Sqlite App' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));
+    const packageJson = JSON.parse(files.get('package.json') ?? '{}') as {
+      pnpm?: { onlyBuiltDependencies?: string[] };
+    };
 
     expect(files.get('package.json')).toContain('"better-sqlite3"');
     expect(files.get('package.json')).not.toContain('"@electric-sql/pglite"');
+    expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['better-sqlite3']);
     expect(files.get('src/db.ts')).toContain("import Database from 'better-sqlite3'");
     expect(files.get('src/db.ts')).toContain("from 'drizzle-orm/better-sqlite3'");
     expect(files.get('src/db.ts')).toContain('"emailVerified" integer NOT NULL DEFAULT 0');
