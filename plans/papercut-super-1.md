@@ -495,7 +495,8 @@ no-store` + `Vary: Cookie`, even for a public, no-`req.session` query.
 
 ### G. Starter template
 
-- [ ] **G1 — A fresh `create-kovo --sqlite` scaffold fails its own `pnpm run check` on package.json formatting.** (MEDIUM, template; found by l1-A7/l3-A6)
+- [x] **G1 — A fresh `create-kovo --sqlite` scaffold fails its own `pnpm run check` on package.json formatting.** (MEDIUM, template; found by l1-A7/l3-A6)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts -t "runs vp check in the generated SQLite app" --run` proves the generated SQLite app passes `vp check` after local linking/install.
   - Observed: `vp check`/`vp fmt --check` reports a formatting failure on an
     untouched `--sqlite` scaffold; `vp check --fix` relocates `packageManager`/`pnpm`.
   - Root cause: `packages/create-kovo/templates/package.sqlite.json:4-7` places
@@ -514,7 +515,8 @@ no-store` + `Vary: Cookie`, even for a public, no-`req.session` query.
     canonical sort; add a create-kovo test that runs `vp check` on a generated
     `--sqlite` app.
 
-- [ ] **G2 — Starter `check:sound-subset` false-positives on multi-line `import { X as Y }` aliases, and the starter formatter forces those imports multi-line.** (MEDIUM, template; found by l3-A5)
+- [x] **G2 — Starter `check:sound-subset` false-positives on multi-line `import { X as Y }` aliases, and the starter formatter forces those imports multi-line.** (MEDIUM, template; found by l3-A5)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts -t "lets check:sound-subset ignore multiline import aliases while still flagging casts" --run` proves multiline import aliases are skipped while real casts remain blocked.
   - Observed: a wrapped aliased import (`taskList as taskListQuery,` on its own
     line) is reported as "SPEC §6.6 sound subset bans unchecked casts."
   - Root cause: `templates/scripts/check-sound-subset.mjs:19`

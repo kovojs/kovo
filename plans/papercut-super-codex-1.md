@@ -22,14 +22,16 @@ production code.
 
 ## Issues
 
-- [ ] **Local dogfood linking breaks for apps scaffolded under `/tmp` on macOS.**
+- [x] **Local dogfood linking breaks for apps scaffolded under `/tmp` on macOS.**
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts -t "writes local link specs that survive symlinked app roots" --run` proves local link specs are realpath-normalized for symlinked app roots.
   - Observed behavior: after `node /Users/mini/kovo/scripts/link-local-kovo.mjs /tmp/kovo-dogfood-super-2026-06-27/sqlite-advanced /Users/mini/kovo && pnpm install`, pnpm warned that every linked Kovo package came from a non-existent `/private/Users/mini/kovo/packages/*` path. `pnpm run check` then failed to resolve `@kovojs/server/vite` from `vite.config.ts`.
   - Root cause: `scripts/link-local-kovo.mjs` resolves the app root through the macOS `/tmp -> /private/tmp` real path but leaves the Kovo root as `/Users/mini/kovo`; `relative(appRoot, kovoRoot)` becomes `../../../Users/mini/kovo/...`, which resolves under `/private/Users/...` from a `/private/tmp/...` app.
   - Why it matters: the dogfood skill recommends `/tmp/kovo-dogfood-*`; following that supported contributor workflow makes the first generated local app fail before framework behavior can be exercised.
   - Repro evidence: `/tmp/.../sqlite-advanced/package.json` contained `link:../../../Users/mini/kovo/packages/server`; `pnpm run check` reported `Could not resolve '@kovojs/server/vite'` and `ERR_MODULE_NOT_FOUND`.
   - Acceptance: `scripts/link-local-kovo.mjs` should write link/workspace paths that survive macOS `/tmp` symlink normalization, with a regression that scaffolds under `os.tmpdir()`, links local packages, and resolves `@kovojs/server/vite`.
 
-- [ ] **Fresh SQLite starter can fail its own formatter gate.**
+- [x] **Fresh SQLite starter can fail its own formatter gate.**
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts -t "runs vp check in the generated SQLite app" --run` proves a generated SQLite starter passes its formatter/check gate.
   - Observed behavior: in `/Users/mini/kovo-dogfood-super-2026-06-27/sqlite-ui-auth`, after local linking and install, `pnpm run check` failed immediately with `Formatting issues found package.json`; `pnpm exec vp check --fix package.json` rewrote the file and the same `pnpm run check` then passed.
   - Root cause: `packages/create-kovo/templates/package.sqlite.json` is not in the order/shape enforced by the generated `vp check` formatter: it places `packageManager`/`pnpm` before `type` and keeps `pnpm.onlyBuiltDependencies` inline, while the formatter moves `packageManager` near the end and expands the array.
   - Why it matters: SQLite is an advertised scaffold dialect, and the starter's first documented validation command should not fail on generated metadata formatting.
