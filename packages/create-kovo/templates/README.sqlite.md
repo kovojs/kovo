@@ -50,9 +50,10 @@ they have a framework-owned audit path.
 
 ## Deploying
 
-`kovo build ./src/app.tsx` emits a self-contained server under `dist/server`
-using the preset in `kovo.config.ts` (Node by default; uncomment Vercel or
-Cloudflare). Set `KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET` to strong values in the
-target environment (a fresh `KOVO_CSRF_SECRET` is generated into `.env` at scaffold
-time and is gitignored). The server is stateless; liveness comes from
-BroadcastChannel + refetch-on-focus, not a live bus (SPEC.md §9.3).
+`kovo build ./src/app.tsx` reruns TypeScript and Kovo graph verification, then
+emits a self-contained server under `dist/server` using the preset in
+`kovo.config.ts` (Node by default; uncomment Vercel or Cloudflare). Set
+`KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET` to strong values in the target
+environment (a fresh `KOVO_CSRF_SECRET` is generated into `.env` at scaffold time
+and is gitignored). The server is stateless; liveness comes from BroadcastChannel
+plus refetch-on-focus, not a live bus (SPEC.md §9.3).

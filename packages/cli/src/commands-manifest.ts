@@ -212,7 +212,8 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   },
   {
     name: 'build',
-    summary: 'Build a Kovo app module into node preset production output.',
+    summary:
+      'Run TypeScript and kovo-check preflights, then build a Kovo app module into preset production output.',
     usage: BUILD_USAGE,
     async: true,
     flags: [

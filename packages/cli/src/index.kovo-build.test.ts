@@ -155,6 +155,86 @@ describe('kovo build', () => {
     }
   });
 
+  it('fails before artifact emission when the app TypeScript project has type errors', async () => {
+    const root = mkdtempSync(join(repoRoot, 'tmp-kovo-build-ts-preflight-'));
+    const appDir = join(root, 'src');
+    const appPath = join(appDir, 'app.ts');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(appDir, { recursive: true });
+      writeFileSync(join(root, 'package.json'), '{"type":"module"}\n', 'utf8');
+      writeFileSync(
+        join(root, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: { module: 'NodeNext', moduleResolution: 'NodeNext', strict: true },
+          include: ['src/**/*.ts'],
+        }),
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        'const count: number = "not a number";\nexport default { count };\n',
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build TypeScript preflight failed');
+      expect(errorOutput).toContain('Type \'string\' is not assignable to type \'number\'');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails before artifact emission when the derived kovo check graph has findings', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-check-preflight-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        appPath,
+        `
+import { createApp, route } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/missing-access', {
+      page: () => '<main>Missing access</main>',
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toContain('ERROR KV436 PAGE /missing-access');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('auto-collects compiled component CSS into the build stylesheet asset', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-app-css-'));
     const appPath = join(root, 'app.tsx');
@@ -1029,12 +1109,15 @@ clientModules.put({
   version: 'cart-v1',
 });
 const cartQuery = query('cart', {
+  access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: db.count }),
   reads: [cart],
 });
 const addToCart = mutation('cart/add', {
+  access: { kind: 'public', reason: 'build fixture mutation' },
   csrf: false,
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
+  optimistic: { cart: 'await-fragment' },
   registry: {
     queries: [cartQuery],
     touches: [cart],
@@ -1051,6 +1134,7 @@ export default createApp({
   queries: [cartQuery],
   routes: [
     route('/cart', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
   ],
@@ -1082,12 +1166,15 @@ import { trustedHtml } from '@kovojs/browser';
 const cart = domain('cart');
 const db = { count: 0 };
 const cartQuery = query('cart', {
+  access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: db.count }),
   reads: [cart],
 });
 const addToCart = mutation('cart/add', {
+  access: { kind: 'public', reason: 'build fixture mutation' },
   csrf: false,
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
+  optimistic: { cart: 'await-fragment' },
   registry: {
     queries: [cartQuery],
     touches: [cart],
@@ -1103,6 +1190,7 @@ export default createApp({
   queries: [cartQuery],
   routes: [
     route('/cart', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
   ],
@@ -1142,6 +1230,7 @@ import { trustedHtml } from '@kovojs/browser';
 export default createApp({
   routes: [
     route('/', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main>Static Home</main>'),
     }),
   ],
@@ -1158,6 +1247,7 @@ import { AutoCssCard } from './src/auto-css-card.js';
 export default createApp({
   routes: [
     route('/', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => <AutoCssCard />,
     }),
   ],
@@ -1177,9 +1267,11 @@ import { SharedCard } from './src/shared-card.js';
 export default createApp({
   routes: [
     route('/', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><HomePanel /></main>,
     }),
     route('/login', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
   ],
@@ -1201,9 +1293,11 @@ export default createApp({
   document: siteDocument,
   routes: [
     route('/', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><HomePanel /></main>,
     }),
     route('/login', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
   ],
@@ -1223,9 +1317,11 @@ import { SharedCard } from './shared-card.js';
 export default createApp({
   routes: [
     route('/', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => <><SharedCard /><HomePanel /></>,
     }),
     route('/login', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => <><SharedCard /><LoginPanel /></>,
     }),
   ],
@@ -1255,12 +1351,15 @@ function homeLiveTargetHeader() {
 
 const home = domain('home');
 const homeQuery = query('home', {
+  access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ ok: true }),
   reads: [home],
 });
 const touchHome = mutation('home/touch', {
+  access: { kind: 'public', reason: 'build fixture mutation' },
   csrf: false,
   input: s.object({}),
+  optimistic: { home: 'await-fragment' },
   registry: {
     queries: [homeQuery],
     touches: [home],
@@ -1282,12 +1381,15 @@ export default createApp({
   queries: [homeQuery],
   routes: [
     route('/', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><HomePanel /></main>,
     }),
     route('/__test/home-live-target', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<code id="home-live-target">' + homeLiveTargetHeader() + '</code>'),
     }),
     route('/login', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
   ],
@@ -1305,6 +1407,7 @@ import { trustedHtml } from '@kovojs/browser';
 export default createApp({
   routes: [
     route('/db', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main>') + (process.env.DATABASE_URL ?? 'missing') + '</main>',
     }),
   ],
@@ -1320,6 +1423,7 @@ import { createApp, route } from '@kovojs/server';
 export default createApp({
   routes: [
     route('/blocked', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => {
         spawnSync('true');
         return '<main>Blocked</main>';
@@ -1698,21 +1802,21 @@ function readBuildJson(filePath: string): unknown {
 
 function typescriptAppModuleSource(): string {
   return `
-import { createApp, domain, query, route } from '@kovojs/server';
+import { createApp, query, route } from '@kovojs/server';
 
 import { trustedHtml } from '@kovojs/browser';
 
 const db: { count: number } = { count: 4 };
-const typed = domain('typed');
 const typedQuery = query('typed', {
+  access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: db.count }),
-  reads: [typed],
 });
 
 export default createApp({
   queries: [typedQuery],
   routes: [
     route('/typed', {
+      access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main>Typed Cart ') + db.count + '</main>',
     }),
   ],
