@@ -520,6 +520,137 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     }
   });
 
+  it('OPP-28: keeps nested destructured and wrapped client-input owner reads scope:args', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const orderNestedInput = query("orderNestedInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { session: { userId: string } }, db: PgAsyncDatabase<any, any>) {',
+              '    const { session: { userId } } = input;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, userId));',
+              '  },',
+              '});',
+              '',
+              'export const orderRenamedNestedInput = query("orderRenamedNestedInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { guard: { userId: string } }, db: PgAsyncDatabase<any, any>) {',
+              '    const { guard: { userId: guardUserId } } = input;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
+              '  },',
+              '});',
+              '',
+              'export const orderWrappedInput = query("orderWrappedInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { guard: { userId: string } }, db: PgAsyncDatabase<any, any>) {',
+              '    const principal = input.guard;',
+              '    const wrapper = Object.freeze({ principal });',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '  },',
+              '});',
+              '',
+              'export const orderNonInput = query("orderNonInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+              '    const local = { guard: { userId: "u1" } } as const;',
+              '    const { guard: { userId } } = local;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, userId));',
+              '  },',
+              '});',
+              '',
+              'export const orderMine = query("orderMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, req.session.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, kind: a.kind, scope: a.scope }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    ).toEqual([
+      { name: 'orderMine', kind: 'query', scope: 'session' },
+      { name: 'orderNestedInput', kind: 'query', scope: 'args' },
+      { name: 'orderNonInput', kind: 'query', scope: 'unknown' },
+      { name: 'orderRenamedNestedInput', kind: 'query', scope: 'args' },
+      { name: 'orderWrappedInput', kind: 'query', scope: 'args' },
+    ]);
+  });
+
+  it('OPP-28: keeps nested destructured and wrapped client-input owner writes scope:args', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export async function closeNestedInput(db: PgAsyncDatabase<any, any>, input: { session: { userId: string } }) {',
+              '  const { session: { userId } } = input;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, userId));',
+              '}',
+              '',
+              'export async function closeRenamedNestedInput(db: PgAsyncDatabase<any, any>, input: { guard: { userId: string } }) {',
+              '  const { guard: { userId: guardUserId } } = input;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, guardUserId));',
+              '}',
+              '',
+              'export async function closeWrappedInput(db: PgAsyncDatabase<any, any>, input: { guard: { userId: string } }) {',
+              '  const principal = input.guard;',
+              '  const wrapper = Object.freeze({ principal });',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, wrapper.principal.userId));',
+              '}',
+              '',
+              'export async function closeNonInput(db: PgAsyncDatabase<any, any>) {',
+              '  const local = { guard: { userId: "u1" } } as const;',
+              '  const { guard: { userId } } = local;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, userId));',
+              '}',
+              '',
+              'export async function closeMine(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, req.session.userId));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, kind: a.kind, scope: a.scope }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    ).toEqual([
+      { name: 'closeMine', kind: 'write', scope: 'session' },
+      { name: 'closeNestedInput', kind: 'write', scope: 'args' },
+      { name: 'closeNonInput', kind: 'write', scope: 'unknown' },
+      { name: 'closeRenamedNestedInput', kind: 'write', scope: 'args' },
+      { name: 'closeWrappedInput', kind: 'write', scope: 'args' },
+    ]);
+  });
+
   it('accepts a write guarded by a summarized principal on the owner-column predicate', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
@@ -1666,7 +1797,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('keeps a const-bound client input.session value untrusted, not session', () => {
+  it('keeps a const-bound client input.session value scope:args, not session', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -1695,7 +1826,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
 
     expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
-      { domain: 'order', scope: 'unknown' },
+      { domain: 'order', scope: 'args' },
     ]);
   });
 

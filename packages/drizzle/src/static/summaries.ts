@@ -1883,26 +1883,73 @@ function tableKeyFromStaticPath(
 /** @internal */ export function queryInputKeyOperand(
   expression: Node,
 ): Pick<QueryInstanceKeyOperand, 'inputKey'> {
-  // SPEC §10.3 (KV414 IDOR): recognize the validated-input bag at ANY depth — `input.id`,
-  // `input.session.userId`, `input.a.b.c` — so a NESTED input value whose field name
-  // happens to be `session`/`guard`/`tenant` is still classified as a client arg (the
-  // args/IDOR branch) instead of being mistaken for trusted session scope (H5). The
-  // depth-1 `input.x` case keys identically to before (`arg:x`).
-  const segments = staticAccessSegments(expression);
-  if (
-    segments &&
-    segments.path.length > 0 &&
-    Node.isIdentifier(segments.root) &&
-    segments.root.getText() === 'input'
-  ) {
-    return { inputKey: `arg:${segments.path.join('.')}` };
-  }
-
-  const destructuredKey = localDestructuredInputKey(expression);
-  return destructuredKey ? { inputKey: `arg:${destructuredKey}` } : {};
+  // SPEC §10.3 (KV414 IDOR): recognize the validated-input bag at ANY depth,
+  // including static const aliases/destructures/wrappers. A nested client value
+  // named `session`/`guard`/`tenant` must stay an `args` signal, never trusted scope.
+  const inputPath = inputKeyPathForExpression(expression);
+  return inputPath ? { inputKey: `arg:${inputPath}` } : {};
 }
 
-function localDestructuredInputKey(expression: Node): string | undefined {
+function inputKeyPathForExpression(expression: Node): string | undefined {
+  const path = inputPathSegmentsForExpression(expression);
+  return path && path.length > 0 ? path.join('.') : undefined;
+}
+
+function inputPathSegmentsForExpression(expression: Node, depth = 0): string[] | undefined {
+  if (depth > 6) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+
+  const segments = staticAccessSegments(expression);
+  if (segments && Node.isIdentifier(segments.root) && segments.root.getText() === 'input') {
+    return segments.path;
+  }
+
+  const destructuredKey = localDestructuredInputPath(node, depth + 1);
+  if (destructuredKey) return destructuredKey;
+
+  if (Node.isIdentifier(node)) return localConstInputAliasPath(node, depth + 1);
+
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const property = staticAccessName(node);
+    if (!property) return undefined;
+
+    if (staticAccessRootHasStableConstBinding(node)) {
+      const accessValue = localConstLiteralStaticAccessValue(node);
+      if (accessValue) return inputPathSegmentsForExpression(accessValue, depth + 1);
+    }
+
+    const base = inputPathSegmentsForExpression(node.getExpression(), depth + 1);
+    return base ? [...base, property] : undefined;
+  }
+
+  if (isObjectFreezeCall(node)) {
+    const argument = singleObjectFreezeArgument(node);
+    return argument ? inputPathSegmentsForExpression(argument, depth + 1) : undefined;
+  }
+
+  return undefined;
+}
+
+function localConstInputAliasPath(expression: Node, depth: number): string[] | undefined {
+  if (depth > 6) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  return initializer ? inputPathSegmentsForExpression(initializer, depth + 1) : undefined;
+}
+
+function localDestructuredInputPath(expression: Node, depth: number): string[] | undefined {
+  if (depth > 6) return undefined;
   const node = unwrappedStaticExpressionNode(expression);
   if (!Node.isIdentifier(node)) return undefined;
 
@@ -1911,23 +1958,49 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   if (!declaration || !Node.isBindingElement(declaration)) return undefined;
   if (isRestBindingElement(declaration)) return undefined;
   if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+  if (declaration.getInitializer()) return undefined;
 
-  const pattern = declaration.getParent();
-  if (!Node.isObjectBindingPattern(pattern)) return undefined;
-
-  const variable = pattern.getParent();
-  if (!Node.isVariableDeclaration(variable)) return undefined;
+  const binding = objectBindingPathAndVariable(declaration);
+  if (!binding) return undefined;
+  const { path, variable } = binding;
   const declarationList = variable.getParent();
   if (!Node.isVariableDeclarationList(declarationList)) return undefined;
   if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
 
   const initializer = variable.getInitializer();
-  const source = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  if (!source || !Node.isIdentifier(source) || source.getText() !== 'input') return undefined;
+  if (!initializer) return undefined;
 
-  const property = declaration.getPropertyNameNode();
-  const key = property ? propertyNameText(property) : declaration.getNameNode().getText();
-  return key && !key.includes('.') ? key : undefined;
+  const base = inputPathSegmentsForExpression(initializer, depth + 1);
+  if (base) return [...base, ...path];
+
+  const object = localConstLiteralRootValue(initializer);
+  if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
+  return objectLiteralStaticPathInputPath(object, path, depth + 1);
+}
+
+function objectLiteralStaticPathInputPath(
+  object: ObjectLiteralExpression,
+  path: readonly string[],
+  depth: number,
+): string[] | undefined {
+  if (depth > 6) return undefined;
+  let value: Node | undefined = object;
+  for (const [index, segment] of path.entries()) {
+    const current = unwrappedStaticExpressionNode(value);
+    if (!Node.isObjectLiteralExpression(current)) {
+      const base = inputPathSegmentsForExpression(current, depth + 1);
+      if (base) return [...base, ...path.slice(index)];
+
+      const alias = localConstLiteralAliasValue(current);
+      if (!alias || !Node.isObjectLiteralExpression(alias)) return undefined;
+      value = alias;
+      continue;
+    }
+
+    value = objectLiteralSingleStaticPropertyValue(current, segment);
+    if (!value) return undefined;
+  }
+  return inputPathSegmentsForExpression(value, depth + 1);
 }
 
 /** @internal */ export function compositeQueryInstanceKey(
