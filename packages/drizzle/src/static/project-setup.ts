@@ -36,6 +36,7 @@ import {
   projectClassStaticMemberCallbacks,
   projectDomainWriteCallbacks,
   projectDrizzleReceivers,
+  projectMutationHandlerCallbacks,
   projectObjectLiteralCallbacks,
   projectNamespaceTableNamesByLocal,
   projectReceiverParameterRequirements,
@@ -148,6 +149,7 @@ import {
     );
     const objectCallbacks = projectObjectLiteralCallbacks(sourceFile);
     const classMemberCallbacks = projectClassStaticMemberCallbacks(sourceFile);
+    const mutationHandlerCallbacks = projectMutationHandlerCallbacks(sourceFile);
 
     for (const fn of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
       const name = fn.getName();
@@ -267,6 +269,44 @@ import {
         receiverParameters: projectReceiverParameterRequirements(callback.fn),
         summaryOnly: true,
         unresolvedCalls: [],
+        writeCalls: extractProjectDrizzleWriteCalls(
+          callback.body,
+          file,
+          extraction.tableNamesBySymbol,
+          extraction.unmodeledRelationNamesBySymbol,
+          namespaceTableNames,
+          receivers,
+          callbackParameterSymbolKeys(callback.fn),
+        ),
+      });
+    }
+
+    for (const callback of mutationHandlerCallbacks) {
+      const receivers = projectDrizzleReceivers(callback.fn);
+      extractionsByFunction.set(callback.key, {
+        bodyStart: bodySourceStart(callback.body),
+        key: callback.key,
+        localCalls: [],
+        name: callback.name,
+        readCalls: [
+          ...extractProjectSelectReadCalls(
+            callback.body,
+            file,
+            receivers,
+            extraction.tableNamesBySymbol,
+            namespaceTableNames,
+          ),
+          ...extractProjectRelationalReadCalls(
+            callback.body,
+            file,
+            receivers,
+            relationalTableNames,
+            relationTargetTableNames,
+          ),
+        ],
+        unresolvedCalls: [],
+        receiverNames: [...receivers.names],
+        receiverParameters: projectReceiverParameterRequirements(callback.fn),
         writeCalls: extractProjectDrizzleWriteCalls(
           callback.body,
           file,

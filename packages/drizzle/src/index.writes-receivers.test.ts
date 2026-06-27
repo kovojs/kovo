@@ -786,4 +786,38 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       },
     });
   });
+
+  it('extracts Drizzle writes from literal Kovo mutation handlers under the mutation key', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'contacts.mutations.ts',
+          source: [
+            'import { mutation } from "@kovojs/server";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface AppRequest { db: PgAsyncDatabase<any, any> }',
+            'export const contacts = pgTable("contacts", {}, kovo({ domain: "contact", key: "id" }));',
+            '',
+            'export const addContact = mutation("addContact", {',
+            '  async handler(_input: { id: string }, request: AppRequest) {',
+            '    const db = request.db;',
+            '    await db.insert(contacts).values({ id: _input.id });',
+            '    return { id: _input.id };',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.addContact).toEqual({
+      reads: [],
+      touches: [
+        { domain: 'contact', keys: null, site: 'contacts.mutations.ts:10', via: 'contacts' },
+      ],
+      unresolved: [],
+    });
+  });
 });

@@ -172,6 +172,47 @@ import {
   return callbacks;
 }
 
+/** @internal */ export function projectMutationHandlerCallbacks(
+  sourceFile: SourceFile,
+): { body: Node; fn: Node; key: string; name: string }[] {
+  const callbacks: { body: Node; fn: Node; key: string; name: string }[] = [];
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!isKovoServerCalleeExpression(call.getExpression(), 'mutation')) continue;
+    const [keyArg, configArg] = call.getArguments();
+    if (!Node.isStringLiteral(keyArg) || !Node.isObjectLiteralExpression(configArg)) continue;
+
+    const mutationKey = keyArg.getLiteralText();
+    for (const property of configArg.getProperties()) {
+      if (Node.isMethodDeclaration(property)) {
+        if (propertyNameText(property.getNameNode()) !== 'handler') continue;
+        callbacks.push({
+          body: functionBody(property),
+          fn: property,
+          key: mutationKey,
+          name: mutationKey,
+        });
+        continue;
+      }
+
+      if (!Node.isPropertyAssignment(property)) continue;
+      if (propertyNameText(property.getNameNode()) !== 'handler') continue;
+      const initializer = property.getInitializer();
+      if (!initializer) continue;
+      const expression = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isArrowFunction(expression) && !Node.isFunctionExpression(expression)) continue;
+      callbacks.push({
+        body: functionBody(expression),
+        fn: expression,
+        key: mutationKey,
+        name: mutationKey,
+      });
+    }
+  }
+
+  return callbacks;
+}
+
 /** @internal */ export function projectClassStaticMemberCallbacks(
   sourceFile: SourceFile,
 ): { body: Node; fn: Node; key: string; name: string }[] {

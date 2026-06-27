@@ -41,6 +41,7 @@ type KovoVitePostHook = () => void | Promise<void>;
 
 /** Vite plugin object returned by {@link kovo}; placed in a `vite.config.ts` plugins array. */
 export interface KovoVitePlugin {
+  buildStart?(): void | Promise<void>;
   configResolved?(config: KovoViteResolvedConfig): void | Promise<void>;
   /** Stable plugin name used by Vite diagnostics. */
   name: 'kovo';
@@ -120,6 +121,8 @@ interface CssSplitChunks {
  */
 export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const app = authoredAppEntry(options.app);
+  const runtimeRegistryPublicId = `virtual:kovo-runtime-registry:${app}`;
+  const runtimeRegistryResolvedId = `\0${runtimeRegistryPublicId}`;
   let root = process.cwd();
   let compilerPluginPromise: Promise<KovoCompilerVitePlugin> | undefined;
   let appShellPlugin: KovoAppShellDevPlugin | undefined;
@@ -272,13 +275,26 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       return integration.plugin.configureServer(server);
     },
     async resolveId(source, importer) {
+      if (source === runtimeRegistryPublicId) return runtimeRegistryResolvedId;
       return (await compilerPlugin()).resolveId?.(source, importer) ?? null;
     },
     async load(id) {
+      if (id === runtimeRegistryResolvedId) {
+        return serializeRuntimeRegistryModule(await collectRuntimeRegistry(root, app));
+      }
       return (await compilerPlugin()).load?.(id) ?? null;
     },
     async transform(source, id) {
-      return (await compilerPlugin()).transform?.(source, id) ?? null;
+      const transformedSource = isAppEntryModuleId(id, app, root)
+        ? insertAfterJsxImportSourcePragma(
+            source,
+            `import ${JSON.stringify(runtimeRegistryPublicId)};\n`,
+          )
+        : source;
+      const transformed = await (await compilerPlugin()).transform?.(transformedSource, id);
+      if (transformed !== null && transformed !== undefined) return transformed;
+      if (transformedSource !== source) return { code: transformedSource, map: null };
+      return null;
     },
     async handleHotUpdate(context) {
       // SPEC.md §9.5.1 / §11.4: an app data-plane file changed — re-run the project-level gate
@@ -313,6 +329,18 @@ function appEntryFileName(app: string, root: string): string {
   const clean = app.split(/[?#]/, 1)[0] ?? app;
   if (isAbsolute(clean)) return resolve(root, clean.slice(1));
   return resolve(root, clean);
+}
+
+function isAppEntryModuleId(id: string, app: string, root: string): boolean {
+  const clean = id.split(/[?#]/, 1)[0] ?? id;
+  return slashPath(resolve(root, clean)) === slashPath(appEntryFileName(app, root));
+}
+
+function insertAfterJsxImportSourcePragma(source: string, insertion: string): string {
+  if (source.includes(insertion)) return source;
+  const pragma = /^\/\*\* @jsxImportSource [\s\S]*?\*\/\s*/.exec(source);
+  if (!pragma) return `${insertion}${source}`;
+  return `${source.slice(0, pragma[0].length)}${insertion}${source.slice(pragma[0].length)}`;
 }
 
 function rootRelativeRouteTargets(
@@ -456,6 +484,25 @@ interface DataPlaneDiagnostic {
   site: string;
 }
 
+interface RuntimeQueryFactLike {
+  reads: readonly string[];
+  query: string;
+}
+
+interface RuntimeMutationTouchSiteLike {
+  crossTable?: true;
+  domain: string;
+  keys: null | string;
+}
+
+interface RuntimeRegistryFacts {
+  mutationTouches: Readonly<Record<string, readonly RuntimeMutationTouchSiteLike[]>>;
+  queryReads: readonly {
+    domains: readonly string[];
+    query: string;
+  }[];
+}
+
 /** Structural shape of a `@kovojs/drizzle` touch-graph diagnostic (KV422/KV410/KV411). */
 interface TouchGraphDiagnosticLike {
   code: string;
@@ -481,9 +528,14 @@ interface KovoDrizzleStaticModule {
   extractQueryFactsFromProject(options: {
     files: readonly DataPlaneSourceFile[];
   }): readonly unknown[];
+  extractTouchGraphFromProject(options: { files: readonly DataPlaneSourceFile[] }): unknown;
   extractToctouFromProject(options: {
     files: readonly DataPlaneSourceFile[];
   }): readonly ToctouFactLike[];
+  deriveMutationTouchRegistry(options: {
+    mutations: readonly { mutation: string; touchGraphKey: string }[];
+    touchGraph: unknown;
+  }): Readonly<Record<string, readonly RuntimeMutationTouchSiteLike[]>>;
 }
 
 /**
@@ -561,6 +613,56 @@ async function collectDataPlaneErrorDiagnostics(
       } satisfies DataPlaneDiagnostic;
     })
     .sort((left, right) => left.site.localeCompare(right.site));
+}
+
+async function collectRuntimeRegistry(root: string, app: string): Promise<RuntimeRegistryFacts> {
+  const sourceDir = dirname(appEntryFileName(app, root));
+  const files = dataPlaneSourceFiles(sourceDir, root);
+  if (files.length === 0) return { mutationTouches: {}, queryReads: [] };
+
+  const drizzle = await importKovoDrizzleStaticModule();
+  const queryReads = runtimeQueryReads(drizzle.extractQueryFactsFromProject({ files }));
+  const touchGraph = drizzle.extractTouchGraphFromProject({ files });
+  const touchGraphKeys =
+    touchGraph && typeof touchGraph === 'object' && !Array.isArray(touchGraph)
+      ? Object.keys(touchGraph)
+      : [];
+  const mutationTouches =
+    touchGraphKeys.length === 0
+      ? {}
+      : drizzle.deriveMutationTouchRegistry({
+          mutations: touchGraphKeys.sort().map((key) => ({
+            mutation: key,
+            touchGraphKey: key,
+          })),
+          touchGraph,
+        });
+
+  return { mutationTouches, queryReads };
+}
+
+function runtimeQueryReads(queryFacts: readonly unknown[]): RuntimeRegistryFacts['queryReads'] {
+  return queryFacts
+    .filter((fact): fact is RuntimeQueryFactLike => {
+      const candidate = fact as RuntimeQueryFactLike;
+      return (
+        typeof candidate.query === 'string' &&
+        Array.isArray(candidate.reads) &&
+        candidate.reads.every((domain) => typeof domain === 'string') &&
+        candidate.reads.length > 0
+      );
+    })
+    .map((fact) => ({ domains: [...fact.reads], query: fact.query }))
+    .sort((left, right) => left.query.localeCompare(right.query));
+}
+
+function serializeRuntimeRegistryModule(registry: RuntimeRegistryFacts): string {
+  return [
+    `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';`,
+    `registerGeneratedQueryReadRegistry(${JSON.stringify(registry.queryReads)});`,
+    `registerGeneratedMutationTouchRegistry(${JSON.stringify(registry.mutationTouches)});`,
+    '',
+  ].join('\n');
 }
 
 /** Split a `fileName:line` diagnostic site into its parts (line defaults to 1). */

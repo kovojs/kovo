@@ -22,6 +22,12 @@ interface DataPlaneGatePlugin {
     read(): Promise<string>;
     server: DataPlaneGateMockServer;
   }): Promise<readonly unknown[]>;
+  load(id: string): null | Promise<null | string> | string;
+  resolveId(source: string, importer?: string): null | Promise<null | string> | string;
+  transform(
+    source: string,
+    id: string,
+  ): null | Promise<null | { code: string; map: null }> | { code: string; map: null };
 }
 
 interface DataPlaneGateMockServer {
@@ -94,6 +100,41 @@ const KV429_DOMAIN = [
   '  await db.update(products).set({ stock: sql`${products.stock} - ${input.qty}` }).where(eq(products.id, input.id));',
   '};',
   '',
+].join('\n');
+
+const DRIZZLE_RUNTIME_REGISTRY_TYPES = [
+  'import "drizzle-orm/pg-core";',
+  'declare module "drizzle-orm/pg-core" {',
+  '  export interface PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> {',
+  '    insert(table: unknown): { values(value: unknown): Promise<void> };',
+  '    select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+  '  }',
+  '}',
+  'declare global {',
+  '  type PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> = import("drizzle-orm/pg-core").PgAsyncDatabase<any, any>;',
+  '}',
+].join('\n');
+
+const DRIZZLE_RUNTIME_REGISTRY_SOURCE = [
+  'import { mutation, query } from "@kovojs/server";',
+  'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+  '',
+  'interface AppRequest { db: PgAsyncDatabase<any, any> }',
+  'export const contacts = pgTable("contacts", { id: text("id").primaryKey() }, kovo({ domain: "contact", key: "id" }));',
+  '',
+  'export const contactsQuery = query("contacts", {',
+  '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+  '    return db.select({ id: contacts.id }).from(contacts);',
+  '  },',
+  '});',
+  '',
+  'export const addContact = mutation("addContact", {',
+  '  async handler(input: { id: string }, request: AppRequest) {',
+  '    const db = request.db;',
+  '    await db.insert(contacts).values({ id: input.id });',
+  '    return { id: input.id };',
+  '  },',
+  '});',
 ].join('\n');
 
 // Synthetic drizzle-orm type augmentation so the KV429 symbolic-effect lowering resolves the
@@ -169,6 +210,32 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     await plugin.configResolved({ command: 'build', root });
 
     await expect(plugin.buildStart()).rejects.toThrow(/ERROR KV429[\s\S]*inventory\.domain\.ts/);
+  });
+
+  it('injects a runtime registry module derived from Drizzle query reads and mutation handlers', async () => {
+    const root = await fixture({
+      'src/contacts.ts': DRIZZLE_RUNTIME_REGISTRY_SOURCE,
+      'src/drizzle-types.d.ts': DRIZZLE_RUNTIME_REGISTRY_TYPES,
+    });
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'build', root });
+
+    const transformed = await plugin.transform(APP_SOURCE, join(root, 'src/app.tsx'));
+    expect(transformed?.code).toContain('virtual:kovo-runtime-registry:/src/app.tsx');
+
+    const registryId = await plugin.resolveId(
+      'virtual:kovo-runtime-registry:/src/app.tsx',
+      join(root, 'src/app.tsx'),
+    );
+    expect(registryId).toBe('\0virtual:kovo-runtime-registry:/src/app.tsx');
+
+    const registrySource = await plugin.load(registryId as string);
+    expect(registrySource).toContain(
+      `registerGeneratedQueryReadRegistry([{"domains":["contact"],"query":"contacts"}]);`,
+    );
+    expect(registrySource).toContain(
+      `registerGeneratedMutationTouchRegistry({"addContact":[{"domain":"contact","keys":null}]});`,
+    );
   });
 
   it('does not throw in dev and surfaces findings as teaching diagnostics in the ledger', async () => {
