@@ -800,10 +800,11 @@ export const ProductGrid = component({
 
   // H1 (SPEC §6.1 key-addressed mutation registry / §9.5 single keyed dispatch): every other
   // registry identity has a uniqueness diagnostic (routes KV228, components KV237, fragment
-  // targets KV238, view transitions KV239, query shapes KV240); mutations had none, so
-  // deriveInvalidationFactsFromGraph silently last-write-wins the invalidation set for a
-  // duplicate key while server dispatch first-match-wins the handler.
-  it('reports KV421 for duplicate mutation-key facts (today none; invalidations last-write-wins)', () => {
+  // targets KV238, view transitions KV239, query shapes/query keys KV240); mutation keys need the
+  // same early graph diagnostic because deriveInvalidationFactsFromGraph otherwise silently
+  // last-write-wins the invalidation set for a duplicate key while server dispatch first-match-wins
+  // the handler.
+  it('reports KV421 for duplicate mutation-key facts before registry emission', () => {
     const registryFacts = deriveRegistryFactsFromGraph({
       mutations: [
         { key: 'cart/add', writes: ['cart'] },
@@ -848,6 +849,54 @@ export const ProductGrid = component({
     });
 
     expect((registryFacts.diagnostics ?? []).filter((d) => d.code === 'KV421')).toEqual([]);
+  });
+
+  // SPEC §4.1/§10.2/§10.3: source-derived query keys are typed read identities and the
+  // invalidation graph currency. Duplicate query facts must fail before generated query
+  // registries, kovo-query hydration, /_q dispatch, or mutation invalidations collapse them.
+  it('reports KV240 for duplicate query-key facts before registry and invalidation emission', () => {
+    const registryFacts = deriveRegistryFactsFromGraph({
+      mutations: [{ key: 'cart/add', writes: ['cart'] }],
+      queries: [
+        { domains: ['cart'], query: 'queries/cart/cart' },
+        { domains: ['order'], query: 'queries/cart/cart' },
+      ],
+    });
+
+    expect(registryFacts.diagnostics ?? []).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV240",
+          "fileName": "app graph query table",
+          "help": "Would lower to: one query read-set fact per source-derived query key for the generated query registry, /_q dispatch, kovo-query hydration, kovo-deps, and mutation invalidation graph.
+      Blocked reason: two query declarations share one key, so graph indexing can silently collapse read sets and generated wire artifacts before the server read endpoint sees the ambiguity.
+      Fixes: emit exactly one query fact per query key, or rename/move one exported query so its source-derived key is unique across the app graph.
+      SPEC §4.1 derives query registry identities from source, §10.2 makes each query key a typed read surface, and §10.3 relies on those stable query identities when mutations compute invalidated reads.",
+          "message": "Duplicate query key. query key "queries/cart/cart" appears 2 times in graph queries.",
+          "severity": "error",
+        },
+      ]
+    `);
+
+    // This is the collapse the diagnostic prevents from being ignored: the duplicate key appears
+    // once in the generated invalidation set even though two different read surfaces claimed it.
+    expect(registryFacts.invalidations).toEqual({ 'cart/add': ['queries/cart/cart'] });
+  });
+
+  it('accepts distinct query-key facts without KV240 from the app graph query table', () => {
+    const registryFacts = deriveRegistryFactsFromGraph({
+      mutations: [{ key: 'cart/add', writes: ['cart'] }],
+      queries: [
+        { domains: ['cart'], query: 'queries/cart/cart' },
+        { domains: ['order'], query: 'queries/order/order' },
+      ],
+    });
+
+    expect(
+      (registryFacts.diagnostics ?? []).filter(
+        (d) => d.code === 'KV240' && d.fileName === 'app graph query table',
+      ),
+    ).toEqual([]);
   });
 
   // SPEC.md §10.2/§6.6: deriveAppGraph populates graph.access so the KV436 consumer

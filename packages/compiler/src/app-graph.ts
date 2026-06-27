@@ -320,7 +320,11 @@ export function deriveRegistryFactsFromGraph(
   options: RegistryTypeFactOptions = {},
 ): RegistryFacts {
   const components = deriveComponentFactsFromGraph(graph);
-  const diagnostics = [...routeFactDiagnostics(graph), ...mutationFactDiagnostics(graph)];
+  const diagnostics = [
+    ...routeFactDiagnostics(graph),
+    ...queryReadSetFactDiagnostics(graph),
+    ...mutationFactDiagnostics(graph),
+  ];
   const fragmentTargets = deriveFragmentTargetsFromGraph(graph);
   const statefulComponents = deriveStatefulComponentsFromGraph(graph);
   const viewTransitions = deriveViewTransitionsFromGraph(graph);
@@ -394,6 +398,47 @@ export function mutationFactDiagnostics(graph: RegistryGraphInput): CompilerDiag
       help: diagnosticDefinitions.KV421.help,
       message: `${diagnosticDefinitions.KV421.message} mutation key "${key}" appears ${count} times in graph mutations.`,
       severity: diagnosticDefinitions.KV421.severity,
+    });
+  }
+
+  return diagnostics;
+}
+
+/**
+ * @internal Report duplicate query read-set facts before invalidation derivation indexes them.
+ * SPEC §4.1 makes app-authored query identities source-derived registry keys, while §10.2 makes
+ * each query key the typed read surface and §10.3 depends on the resulting read-set graph for
+ * mutation invalidation. A duplicate `query` fact is therefore not just a shape collision: it makes
+ * one wire key name two read surfaces, so generated registries and invalidation derivation can
+ * silently collapse facts before the server's `/_q/<key>` route ever sees the ambiguity.
+ *
+ * Drift/rename diagnostics need more provenance than this graph currently carries: query facts
+ * expose only the resolved key and domains, with no exported binding/module identity and no
+ * `previousRegistryFacts.queries` key list equivalent to `previousRegistryFacts.components`.
+ */
+export function queryReadSetFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const queryCounts = new Map<string, number>();
+
+  for (const query of graph.queries ?? []) {
+    queryCounts.set(query.query, (queryCounts.get(query.query) ?? 0) + 1);
+  }
+
+  for (const [query, count] of [...queryCounts].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    if (count < 2) continue;
+    diagnostics.push({
+      code: 'KV240',
+      fileName: 'app graph query table',
+      help: [
+        'Would lower to: one query read-set fact per source-derived query key for the generated query registry, /_q dispatch, kovo-query hydration, kovo-deps, and mutation invalidation graph.',
+        'Blocked reason: two query declarations share one key, so graph indexing can silently collapse read sets and generated wire artifacts before the server read endpoint sees the ambiguity.',
+        'Fixes: emit exactly one query fact per query key, or rename/move one exported query so its source-derived key is unique across the app graph.',
+        'SPEC §4.1 derives query registry identities from source, §10.2 makes each query key a typed read surface, and §10.3 relies on those stable query identities when mutations compute invalidated reads.',
+      ].join('\n'),
+      message: `Duplicate query key. query key "${query}" appears ${count} times in graph queries.`,
+      severity: diagnosticDefinitions.KV240.severity,
     });
   }
 
