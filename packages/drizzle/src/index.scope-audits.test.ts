@@ -348,6 +348,84 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
   });
 
+  it('OPP-28: proves only same-principal disjunctive owner-column write predicates', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { and, eq, inArray, or } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentGuardUser(ctx: { guard: { userId: string; actorId: string } }) { return ctx.guard.userId; }',
+              'function currentActor(ctx: { guard: { userId: string; actorId: string } }) { return ctx.guard.actorId; }',
+              'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(currentActor, { returns: { kind: "guard", path: "actorId" } });',
+              '',
+              'export async function closeMineByStatusDisjunction(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(and(eq(orders.userId, req.session.userId), eq(orders.status, "open")), and(eq(orders.userId, req.session.userId), eq(orders.status, "draft"))));',
+              '}',
+              '',
+              'export async function closeMineByEqOrSingletonMembership(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), inArray(orders.userId, [req.session.userId])));',
+              '}',
+              '',
+              'export async function closeGuardByStatusDisjunction(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(and(eq(orders.userId, currentGuardUser(ctx)), eq(orders.status, "open")), and(eq(orders.userId, currentGuardUser(ctx)), eq(orders.status, "draft"))));',
+              '}',
+              '',
+              'export async function closeMixedClientBranch(db: PgAsyncDatabase<any, any>, input: { userId: string }, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), eq(orders.userId, input.userId)));',
+              '}',
+              '',
+              'export async function closeMismatchedPrivateBranch(db: PgAsyncDatabase<any, any>, req: { session: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), eq(orders.userId, req.session.actorId)));',
+              '}',
+              '',
+              'export async function closeMismatchedGuardBranch(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, currentGuardUser(ctx)), eq(orders.userId, currentActor(ctx))));',
+              '}',
+              '',
+              'export async function closeUnknownBranch(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), eq(orders.status, "open")));',
+              '}',
+              '',
+              'export async function closeWrongColumnBranch(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), eq(orders.id, req.session.userId)));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'closeGuardByStatusDisjunction', scope: 'session' },
+      { name: 'closeMineByEqOrSingletonMembership', scope: 'session' },
+      { name: 'closeMineByStatusDisjunction', scope: 'session' },
+      { name: 'closeMismatchedGuardBranch', scope: 'unknown' },
+      { name: 'closeMismatchedPrivateBranch', scope: 'unknown' },
+      { name: 'closeMixedClientBranch', scope: 'args' },
+      { name: 'closeUnknownBranch', scope: 'unknown' },
+      { name: 'closeWrongColumnBranch', scope: 'unknown' },
+    ]);
+    expect(
+      audit.scopeAudits.find((a) => a.name === 'closeMineByStatusDisjunction')?.detail,
+    ).toContain('owner column compared to session:userId');
+    expect(
+      audit.scopeAudits.find((a) => a.name === 'closeGuardByStatusDisjunction')?.detail,
+    ).toContain('owner column compared to guard:userId');
+  });
+
   it('OPP-28: treats non-equality write predicates as args without proving session scope', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
@@ -866,6 +944,85 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('OPP-28: proves only same-principal disjunctive owner-column read predicates', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { and, eq, inArray, or } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const ordersMineByStatusDisjunction = query("ordersMineByStatusDisjunction", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(and(eq(orders.userId, req.session.userId), eq(orders.status, "open")), and(eq(orders.userId, req.session.userId), eq(orders.status, "draft"))));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMineByEqOrSingletonMembership = query("ordersMineByEqOrSingletonMembership", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), inArray(orders.userId, [req.session.userId])));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMixedClientBranch = query("ordersMixedClientBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), eq(orders.userId, input.userId)));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMismatchedPrivateBranch = query("ordersMismatchedPrivateBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), eq(orders.userId, req.session.actorId)));',
+              '  },',
+              '});',
+              '',
+              'export const ordersUnknownBranch = query("ordersUnknownBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), eq(orders.status, "open")));',
+              '  },',
+              '});',
+              '',
+              'export const ordersWrongColumnBranch = query("ordersWrongColumnBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), eq(orders.id, req.session.userId)));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'ordersMineByEqOrSingletonMembership', scope: 'session' },
+      { name: 'ordersMineByStatusDisjunction', scope: 'session' },
+      { name: 'ordersMismatchedPrivateBranch', scope: 'unknown' },
+      { name: 'ordersMixedClientBranch', scope: 'args' },
+      { name: 'ordersUnknownBranch', scope: 'unknown' },
+      { name: 'ordersWrongColumnBranch', scope: 'unknown' },
+    ]);
+    expect(
+      audit.scopeAudits.find((a) => a.name === 'ordersMineByStatusDisjunction')?.detail,
+    ).toContain('owner column compared to session:userId');
+  });
+
   // A3 (SPEC §10.3 / KV414): an owner-table arg key escapes detection when it lands on
   // the `owner:` column instead of the declared `key:` column (the canonical case
   // `key:id, owner:userId`). `where(eq(orders.userId, input.userId))` must be scope:'args';
@@ -924,7 +1081,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
           {
             fileName: 'order.queries.ts',
             source: [
-              'import { eq } from "drizzle-orm";',
+              'import { and, eq, inArray, or } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
@@ -947,6 +1104,48 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '  output: s.object({ id: s.string() }),',
               '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
               '    return db.query.orders.findFirst({ columns: { id: true }, where: (order, { eq }) => { return eq(order.userId, req.session.userId); } });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrMine = query("relationalOrdersCallbackOrMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { and, eq, or }) => or(and(eq(order.userId, req.session.userId), eq(order.status, "open")), and(eq(order.userId, req.session.userId), eq(order.status, "draft"))) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrInArrayMine = query("relationalOrdersCallbackOrInArrayMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, inArray, or }) => or(eq(order.userId, req.session.userId), inArray(order.userId, [req.session.userId])) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrMixedClientBranch = query("relationalOrdersCallbackOrMixedClientBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, or }) => or(eq(order.userId, req.session.userId), eq(order.userId, input.userId)) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrMismatchedBranch = query("relationalOrdersCallbackOrMismatchedBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string; actorId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, or }) => or(eq(order.userId, req.session.userId), eq(order.userId, req.session.actorId)) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrUnknownBranch = query("relationalOrdersCallbackOrUnknownBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, or }) => or(eq(order.userId, req.session.userId), eq(order.status, "open")) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrWrongColumnBranch = query("relationalOrdersCallbackOrWrongColumnBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, or }) => or(eq(order.userId, req.session.userId), eq(order.id, req.session.userId)) });',
               '  },',
               '});',
               '',
@@ -1145,6 +1344,47 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
           'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
         domain: 'order',
         name: 'relationalOrdersCallbackMutableOwnerAlias',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrInArrayMine',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrMine',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrMismatchedBranch',
+        scope: 'unknown',
+      },
+      {
+        detail: undefined,
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrMixedClientBranch',
+        scope: 'args',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrUnknownBranch',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrWrongColumnBranch',
         scope: 'unknown',
       },
       {

@@ -496,14 +496,72 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): readonly OwnerPrivateScopeKey[] {
   const keys = new Map<string, OwnerPrivateScopeKey>();
-  for (const comparison of comparisons.instanceKey) {
-    const scoped = ownerPrivateScopedKeyFromEqOperands(comparison.left, comparison.right, tables);
-    if (scoped) keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+
+  if (comparisons.ownerScopePredicates) {
+    for (const predicate of comparisons.ownerScopePredicates) {
+      for (const scoped of ownerPrivateScopedKeysFromComparisonPnf(predicate, tables)) {
+        keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+      }
+    }
+  } else {
+    for (const comparison of comparisons.instanceKey) {
+      const scoped = ownerPrivateScopedKeyFromEqOperands(comparison.left, comparison.right, tables);
+      if (scoped) keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+    }
   }
+
   return [...keys.values()].sort(
     (left, right) =>
       left.domain.localeCompare(right.domain) || left.privateKey.localeCompare(right.privateKey),
   );
+}
+
+function ownerPrivateScopedKeysFromComparisonPnf(
+  pnf: QueryPredicateComparisonPnf,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): readonly OwnerPrivateScopeKey[] {
+  if (pnf.kind === 'eq') {
+    const scoped = ownerPrivateScopedKeyFromEqOperands(
+      pnf.comparison.left,
+      pnf.comparison.right,
+      tables,
+    );
+    return scoped ? [scoped] : [];
+  }
+
+  if (pnf.kind === 'and') {
+    return uniqueOwnerPrivateScopedKeys(
+      pnf.nodes.flatMap((node) => ownerPrivateScopedKeysFromComparisonPnf(node, tables)),
+    );
+  }
+
+  if (pnf.kind !== 'or' || pnf.nodes.length === 0) return [];
+
+  let proven: OwnerPrivateScopeKey | undefined;
+  for (const node of pnf.nodes) {
+    const branchKeys = uniqueOwnerPrivateScopedKeys(
+      ownerPrivateScopedKeysFromComparisonPnf(node, tables),
+    );
+    const branchKey = branchKeys.length === 1 ? branchKeys[0] : undefined;
+    if (!branchKey) return [];
+
+    if (!proven) {
+      proven = branchKey;
+      continue;
+    }
+
+    if (proven.domain !== branchKey.domain || proven.privateKey !== branchKey.privateKey) {
+      return [];
+    }
+  }
+
+  return proven ? [proven] : [];
+}
+
+function uniqueOwnerPrivateScopedKeys(
+  keys: readonly OwnerPrivateScopeKey[],
+): readonly OwnerPrivateScopeKey[] {
+  return [...new Map(keys.map((key) => [`${key.domain}\0${key.privateKey}`, key])).values()];
 }
 
 function ownerPrivateScopedKeyFromEqOperands(
@@ -732,9 +790,12 @@ function eqOperandsAreTableColumnArgKeyed(
 /**
  * SPEC §11.1 / KV414: the `where()`-predicate `eq(...)` operand comparisons of a query.
  *
- * Two tiers, both reusing the write side's `eqPredicateConjuncts` (~:9736):
+ * Three tiers, all reusing the write side's predicate PNF:
  * - `instanceKey`: top-level/`and(...)` conjuncts only — these may discharge a unique
  *   single-row instance key and a `session` scope.
+ * - `ownerScopePredicates`: equality-equivalent predicate trees used only for the
+ *   narrow owner-principal proof. `or(...)` is accepted here only when every branch
+ *   proves the same exact owner-column private key; it never feeds `instanceKey`.
  * - `argCandidates`: every direct comparison operand pair anywhere in the predicate
  *   tree, INCLUDING under `or(...)` (A2, fail-closed), range predicates such as
  *   `gt/gte/lt/lte/between`, and negated membership. An arg-keyed owner operand in
@@ -750,6 +811,7 @@ function eqOperandsAreTableColumnArgKeyed(
 ): QueryInstanceKeyComparisons {
   const instanceKey: QueryInstanceKeyComparison[] = [];
   const argCandidates: QueryInstanceKeyComparison[] = [];
+  const ownerScopePredicates: QueryPredicateComparisonPnf[] = [];
   const sessionContext = sessionProvenanceContextForNodes(
     body.getSourceFile(),
     queryCallbackBodies(body, queryReceiverMode(receiverReferences)),
@@ -770,14 +832,17 @@ function eqOperandsAreTableColumnArgKeyed(
       right: queryInstanceKeyOperand(right, readTableIdentifier, sessionContext),
     });
 
+    const pnf = predicatePnf(predicate);
     // A2: `and(...)`/top-level `eq` conjuncts may discharge a unique instance key.
-    const conjuncts = eqPredicateConjuncts(predicate);
+    const conjuncts = pnfExactConjuncts(pnf);
     if (conjuncts) instanceKey.push(...conjuncts.map(toComparison));
+
+    ownerScopePredicates.push(comparisonPnf(pnf, toComparison));
 
     // A2 fail-closed: any direct comparison operand anywhere (incl. `or(...)`,
     // range predicates, and negated membership) is an `args`/`session` scope
     // candidate, never an instance-key.
-    argCandidates.push(...allEqOperandPairs(predicate).map(toComparison));
+    argCandidates.push(...pnfAllEqOperandPairs(pnf).map(toComparison));
   }
 
   for (const {
@@ -793,13 +858,16 @@ function eqOperandsAreTableColumnArgKeyed(
       right: queryInstanceKeyOperand(right, resolveTableIdentifier, sessionContext),
     });
 
-    const conjuncts = eqPredicateConjuncts(predicate, predicateCallName);
+    const pnf = predicatePnf(predicate, predicateCallName);
+    const conjuncts = pnfExactConjuncts(pnf);
     if (conjuncts) instanceKey.push(...conjuncts.map(toComparison));
 
-    argCandidates.push(...allEqOperandPairs(predicate, predicateCallName).map(toComparison));
+    ownerScopePredicates.push(comparisonPnf(pnf, toComparison));
+
+    argCandidates.push(...pnfAllEqOperandPairs(pnf).map(toComparison));
   }
 
-  return { argCandidates, instanceKey };
+  return { argCandidates, instanceKey, ownerScopePredicates };
 }
 
 interface RelationalWherePredicate {
@@ -1111,7 +1179,15 @@ function relationalWithObjectTableExpressions(
 /** @internal */ export interface QueryInstanceKeyComparisons {
   argCandidates: readonly QueryInstanceKeyComparison[];
   instanceKey: readonly QueryInstanceKeyComparison[];
+  ownerScopePredicates?: readonly QueryPredicateComparisonPnf[];
 }
+
+/** @internal */ export type QueryPredicateComparisonPnf =
+  | { comparison: QueryInstanceKeyComparison; kind: 'eq' }
+  | { kind: 'and'; nodes: readonly QueryPredicateComparisonPnf[] }
+  | { kind: 'non-eq' }
+  | { kind: 'opaque' }
+  | { kind: 'or'; nodes: readonly QueryPredicateComparisonPnf[] };
 
 /**
  * Every direct comparison operand pair nested anywhere under a predicate node (SPEC
@@ -2721,6 +2797,7 @@ function objectLiteralStaticPathInputPath(
   return {
     argCandidates: pnfAllEqOperandPairs(pnf).map(toComparison),
     instanceKey: (pnfExactConjuncts(pnf) ?? []).map(toComparison),
+    ownerScopePredicates: [comparisonPnf(pnf, toComparison)],
   };
 }
 
@@ -3107,6 +3184,24 @@ function mutationTargetRootName(node: Node): string | undefined {
     return conjuncts;
   }
   return null;
+}
+
+function comparisonPnf(
+  pnf: PredicatePnf,
+  toComparison: (conjunct: EqPredicateConjunct) => QueryInstanceKeyComparison,
+): QueryPredicateComparisonPnf {
+  if (pnf.kind === 'eq') {
+    return { comparison: toComparison({ left: pnf.left, right: pnf.right }), kind: 'eq' };
+  }
+
+  if (pnf.kind === 'and' || pnf.kind === 'or') {
+    return {
+      kind: pnf.kind,
+      nodes: pnf.nodes.map((node) => comparisonPnf(node, toComparison)),
+    };
+  }
+
+  return pnf.kind === 'opaque' ? { kind: 'opaque' } : { kind: 'non-eq' };
 }
 
 /** @internal */ export function eqPredicateConjuncts(
