@@ -153,6 +153,25 @@ describe('create-kovo starter (build integration)', () => {
     }
   }, 90_000);
 
+  it('runs the generated production build graph gate', () => {
+    const tempParent = join(process.cwd(), 'node_modules/.tmp');
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-build-prod-'));
+
+    try {
+      writeKovoProject(root, { name: 'Build Prod Proof' });
+      linkStarterBuildDependencies(root);
+
+      execFileSync('pnpm', ['run', 'build:prod'], {
+        cwd: root,
+        env: withRepoBinOnPath(),
+        stdio: 'pipe',
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('serves the generated app through vp dev (redirect + login + styles)', async () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
     mkdirSync(tempParent, { recursive: true });

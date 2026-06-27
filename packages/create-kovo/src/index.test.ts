@@ -175,7 +175,8 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
-        check: 'vp check && pnpm run check:sound-subset && pnpm run check:endpoint-posture',
+        check:
+          'vp check && pnpm run check:sound-subset && pnpm run check:endpoint-posture && pnpm run build:prod',
         'check:endpoint-posture':
           'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
         'check:sound-subset': 'node scripts/check-sound-subset.mjs',
