@@ -2316,6 +2316,11 @@ function extractQueryDefinitionsFromSourceFile(
         options.columnShapes,
         receiverMode,
       ) ?? relationalShapeFromQueryBody(bodyObject, receiverReferences, options.columnShapes);
+    const outputShape = queryOutputShape(bodyObject);
+    const shape =
+      selection && !isEmptyQueryShape(selection.shape)
+        ? selection.shape
+        : (outputShape ?? selection?.shape ?? {});
     const hasOutputSchema = objectHasProperty(bodyObject, 'output');
     const declaredReadExpressions = queryDeclaredReadExpressions(
       bodyObject,
@@ -2387,7 +2392,7 @@ function extractQueryDefinitionsFromSourceFile(
       localHelperCalls,
       opaquePaths: selection?.opaquePaths ?? [],
       query,
-      shape: selection?.shape ?? queryOutputShape(bodyObject) ?? {},
+      shape,
       tableExpressions: queryTableExpressions(
         bodyObject,
         receiverReferences,
@@ -2398,6 +2403,16 @@ function extractQueryDefinitionsFromSourceFile(
   }
 
   return definitions;
+}
+
+function isEmptyQueryShape(shape: QueryShape): boolean {
+  return (
+    typeof shape === 'object' &&
+    shape !== null &&
+    !Array.isArray(shape) &&
+    !('kind' in shape) &&
+    Object.keys(shape).length === 0
+  );
 }
 
 function dynamicDeclaredReadsDiagnostics(body: ObjectLiteralExpression): TouchGraphDiagnostic[] {

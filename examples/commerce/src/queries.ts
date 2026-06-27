@@ -58,8 +58,8 @@ export const cartQuery = query('cart', {
   reads: [cart],
   async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<CartQueryResult> {
     const db = requireCommerceQueryDb(context);
-    const rows = await db.select({ value: sum(cartItems.qty) }).from(cartItems);
-    return { count: Number(rows[0]?.value ?? 0) };
+    const rows = await db.select({ count: sum(cartItems.qty) }).from(cartItems);
+    return { count: Number(rows[0]?.count ?? 0) };
   },
 });
 

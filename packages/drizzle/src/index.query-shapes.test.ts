@@ -998,6 +998,55 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(facts[0]?.reads).toEqual(['cart']);
   });
 
+  it('uses declared output shape when an aggregate loader reaches db through a typed helper', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+          import { sum } from 'drizzle-orm';
+
+          type Reader = PgAsyncDatabase<any, any>;
+          interface LoadContext {
+            db?: Reader;
+          }
+
+          export const cart = { key: "cart" } as const;
+          export const cartItems = pgTable("cart_items", {
+            cartId: text("cart_id").notNull(),
+            qty: integer("qty").notNull(),
+          }, kovo({ domain: "cart", key: "cartId" }));
+
+          export const cartQuery = query("cart", {
+            output: s.object({ count: s.number() }),
+            reads: [cart],
+            async load(_input: unknown, context?: LoadContext) {
+              const db = requireDb(context);
+              const rows = await db.select({ count: sum(cartItems.qty) }).from(cartItems);
+              return { count: Number(rows[0]?.count ?? 0) };
+            },
+          });
+
+          function requireDb(context?: LoadContext): Reader {
+            if (!context?.db) throw new Error("missing db");
+            return context.db;
+          }
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'cart',
+        reads: ['cart'],
+        shape: { count: 'number' },
+        site: 'cart.queries.ts:15',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('keeps local aggregate-named helpers fail-closed as KV406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
