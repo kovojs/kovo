@@ -330,6 +330,19 @@ export interface RunMutationOptions<
 /** App-scoped mutation factory. `createApp()` uses this to contextually type handlers from configured request providers (SPEC §9.5/§10.3). */
 export interface MutationFactory<Request = unknown> {
   <
+    InputSchema extends Schema<unknown>,
+    Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
+    Value = unknown,
+    GuardedRequest extends Request = Request,
+  >(
+    definition: Omit<
+      MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest>,
+      'key'
+    >,
+  ): MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest> & {
+    key: string;
+  };
+  <
     const Key extends string,
     InputSchema extends Schema<unknown>,
     Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
@@ -380,6 +393,20 @@ export interface MutationFactory<Request = unknown> {
  * });
  */
 export function mutation<
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
+  Request = unknown,
+  Value = unknown,
+  GuardedRequest extends Request = Request,
+>(
+  definition: Omit<
+    MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest>,
+    'key'
+  >,
+): MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest> & {
+  key: string;
+};
+export function mutation<
   const Key extends string,
   InputSchema extends Schema<unknown>,
   Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
@@ -392,13 +419,32 @@ export function mutation<
     MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
     'key'
   >,
-): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key } {
-  const fileFields = mutationInputFileFields(definition.input);
+): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key };
+export function mutation(
+  keyOrDefinition: string | Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
+  definition?: Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
+): MutationDefinition<string> & { key: string } {
+  if (typeof keyOrDefinition === 'string') {
+    if (definition === undefined) {
+      throw new TypeError('mutation(key, definition) requires a definition object.');
+    }
+    const fileFields = mutationInputFileFields(definition.input);
+    return {
+      ...definition,
+      ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
+      key: keyOrDefinition,
+    } as MutationDefinition<string> & { key: string };
+  }
+
+  // SPEC §6.3: app authors may write `mutation({ input, handler })`; the stable wire key is
+  // source-derived by the compiler because runtime JavaScript cannot prove export binding names.
+  // Compiler-emitted IR assigns `.key` immediately after the declaration. Until then, helpers that
+  // need a wire endpoint fail closed through `assertMutationKey`.
+  const fileFields = mutationInputFileFields(keyOrDefinition.input);
   return {
-    ...definition,
+    ...keyOrDefinition,
     ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
-    key,
-  };
+  } as MutationDefinition<string> & { key: string };
 }
 
 /**
@@ -410,6 +456,7 @@ export function mutation<
 export function mutationFormAttributes<const Key extends string, Request = unknown>(
   definition: MutationFormDefinition<Key, Request>,
 ): MutationFormAttributes<Key, Request> {
+  assertMutationKey(definition);
   const fileFields =
     definition.fileFields ?? (definition.input ? mutationInputFileFields(definition.input) : []);
   return {
@@ -436,6 +483,17 @@ export function renderMutationFormAttributes<const Key extends string>(
   return `method="${attributes.method}" action="${escapeAttribute(
     attributes.action,
   )}"${attributes.enctype ? ` enctype="${attributes.enctype}"` : ''} enhance data-mutation="${escapeAttribute(attributes['data-mutation'])}"`;
+}
+
+function assertMutationKey<Key extends string, Request>(
+  definition: MutationFormDefinition<Key, Request>,
+): asserts definition is MutationFormDefinition<Key, Request> & { key: Key } {
+  if (typeof definition.key !== 'string' || definition.key.length === 0) {
+    throw new TypeError(
+      'mutation({ input, handler }) has no runtime key until the Kovo compiler derives one from ' +
+        'the exported binding. Use the compiled artifact or keep the internal generated key path.',
+    );
+  }
 }
 
 /**

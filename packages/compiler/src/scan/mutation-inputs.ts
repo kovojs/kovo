@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
+import { deriveMutationKey } from '../mutation-names.js';
 import type { MutationInputFieldCoercion, MutationInputFieldFact } from '../types.js';
 
 const mutableTs = ts as unknown as Record<string, unknown>;
@@ -57,16 +58,17 @@ function mutationInputFactFromVariable(
   }
 
   const [keyArg, optionsArg] = initializer.arguments;
-  if (!keyArg || !ts.isStringLiteralLike(keyArg)) return null;
-  if (!optionsArg || !ts.isObjectLiteralExpression(optionsArg)) return null;
+  const key = keyArg && ts.isStringLiteralLike(keyArg) ? keyArg.text : null;
+  const definitionArg = key === null ? keyArg : optionsArg;
+  if (!definitionArg || !ts.isObjectLiteralExpression(definitionArg)) return null;
 
-  const input = objectPropertyExpression(optionsArg, 'input');
+  const input = objectPropertyExpression(definitionArg, 'input');
   const fields = input ? mutationInputFields(sourceFile, input) : [];
   if (fields.length === 0) return null;
 
   return {
     fields,
-    key: keyArg.text,
+    key: key ?? deriveMutationKey(sourceFile.fileName, node.name.text),
     localName: node.name.text,
   };
 }

@@ -65,4 +65,25 @@ export const addToCart = mutation('cart/add', {
     expect(fact?.fields.every((field) => typeof field.source?.start === 'number')).toBe(true);
     expect(fact?.fields.every((field) => typeof field.source?.length === 'number')).toBe(true);
   });
+
+  it('derives object-form mutation keys from the source file and exported binding', () => {
+    const source = `
+export const addToCart = mutation({
+  input: s.object({
+    productId: s.string(),
+  }),
+  handler() {
+    return null;
+  },
+});
+`;
+
+    const fact = mutationInputFactsFromSource('src/mutations/cart.ts', source).get('addToCart');
+
+    expect(fact).toMatchObject({
+      key: 'mutations/cart/add-to-cart',
+      localName: 'addToCart',
+      fields: [{ name: 'productId', provenance: 'local-mutation' }],
+    });
+  });
 });

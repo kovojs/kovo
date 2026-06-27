@@ -217,6 +217,7 @@ const voidElements = new Set([
 ]);
 
 interface SemanticRenderContext {
+  fileName?: string;
   registryFacts?: RegistryFacts;
 }
 
@@ -278,7 +279,9 @@ function renderSemanticAttributes(
   const formMutation = enhancedMutationFormLowering(
     model,
     element,
-    options.registryFacts ? { registryFacts: options.registryFacts } : {},
+    options.registryFacts || options.fileName
+      ? { fileName: options.fileName, registryFacts: options.registryFacts }
+      : {},
   );
   const viewTransitionStyle = semanticViewTransitionStyle(element);
   const fieldErrorDescribedBy = semanticFieldErrorDescribedByAttribute(model, element);

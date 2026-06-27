@@ -110,7 +110,12 @@ export function mutationFormExplainFacts(
     const binding = enhancedMutationFormBinding(form);
     if (!binding) continue;
 
-    const mutationKey = localMutationKey(model, binding.localName, options.registryFacts);
+    const mutationKey = localMutationKey(
+      model,
+      binding.localName,
+      options.registryFacts,
+      options.fileName,
+    );
     const mutationInput = mutationInputFactForForm(model, binding.localName, options);
     if (!mutationKey && !mutationInput) continue;
 
@@ -455,7 +460,7 @@ function repeatableMutationFormDiagnostic(
 
   const binding = enhancedMutationFormBinding(element);
   if (!binding) return null;
-  if (!localMutationKey(model, binding.localName, options.registryFacts)) {
+  if (!localMutationKey(model, binding.localName, options.registryFacts, options.fileName)) {
     return null;
   }
 
@@ -531,7 +536,7 @@ function mutationInputFactForForm(
   );
   if (localMutation) return localMutation;
 
-  const mutationKey = localMutationKey(model, localName, options.registryFacts);
+  const mutationKey = localMutationKey(model, localName, options.registryFacts, options.fileName);
   const registryFields = mutationKey
     ? options.registryFacts?.mutationInputs?.[mutationKey]
     : undefined;

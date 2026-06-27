@@ -8,6 +8,7 @@ import {
 import type { ComponentModuleModel, JsxAttributeModel, JsxElementModel } from '../scan/parse.js';
 import { componentOptionObjectEntries, componentRenderSlotsParam } from '../scan/parse.js';
 import { mutationInputFactsFromSource } from '../scan/mutation-inputs.js';
+import { deriveMutationKey } from '../mutation-names.js';
 import { escapeAttribute, kebabCase, type SourceReplacement } from '../shared.js';
 import type { MutationInputFieldFact, RegistryFacts } from '../types.js';
 
@@ -131,6 +132,7 @@ export function enhancedMutationFormLowering(
     model,
     mutationAttribute.expressionBareIdentifierName,
     options?.registryFacts,
+    options?.fileName,
   );
   if (!mutationKey) return null;
 
@@ -287,7 +289,7 @@ function mutationInputFieldsForLocalName(
     if (localMutation) return localMutation.fields;
   }
 
-  const mutationKey = localMutationKey(model, localName, options?.registryFacts);
+  const mutationKey = localMutationKey(model, localName, options?.registryFacts, options?.fileName);
   return mutationKey ? (options?.registryFacts?.mutationInputs?.[mutationKey] ?? []) : [];
 }
 
@@ -335,6 +337,7 @@ export function localMutationKey(
   model: ComponentModuleModel,
   localName: string,
   registryFacts?: RegistryFacts,
+  fileName?: string,
 ): string | null {
   const call = model.calls.find(
     (candidate) =>
@@ -344,6 +347,15 @@ export function localMutationKey(
   );
   const key = call?.argumentStaticValues[0];
   if (typeof key === 'string') return key;
+
+  const objectFormCall = model.calls.find(
+    (candidate) =>
+      candidate.name === 'mutation' &&
+      candidate.exportedConstName === localName &&
+      candidate.arguments.length === 1 &&
+      candidate.arguments[0]?.trimStart().startsWith('{') === true,
+  );
+  if (objectFormCall && fileName) return deriveMutationKey(fileName, localName);
 
   const registryEntry = Object.entries(registryFacts?.mutations ?? {}).find(
     ([, typeSource]) => typeSource.trim() === `typeof ${localName}`,

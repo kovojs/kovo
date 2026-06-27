@@ -6,6 +6,7 @@ import { invalidate } from './change-record.js';
 import { domain, tag } from './domain.js';
 import { guards } from './guards.js';
 import {
+  mutation as defineMutation,
   mutationFormAttributes,
   renderMutationFormAttributes,
   renderMutationResponse,
@@ -102,9 +103,43 @@ describe('server mutation lifecycle', () => {
     );
   });
 
-  it('emits multipart form attributes for file upload mutation inputs', () => {
-    const uploadAvatar = mutation('profile/avatar', {
-      input: s.object({ avatar: s.file(), caption: s.string() }),
+  it('uses compiler-derived keys on object-form mutation values', () => {
+    const addToCart = defineMutation({
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+    // Internal generated path: compileComponentModule emits this assignment from the exported
+    // binding because runtime JavaScript cannot prove source names (SPEC §6.3).
+    addToCart.key = 'components/cart/add-to-cart';
+
+    expect(mutationFormAttributes(addToCart)).toMatchObject({
+      action: '/_m/components/cart/add-to-cart',
+      'data-mutation': 'components/cart/add-to-cart',
+      mutation: addToCart,
+    });
+    expect(renderMutationFormAttributes(addToCart)).toContain(
+      'action="/_m/components/cart/add-to-cart"',
+    );
+  });
+
+  it('fails closed when object-form mutation values are used before compiler key derivation', () => {
+    const addToCart = defineMutation({
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    expect(() => mutationFormAttributes(addToCart)).toThrow(/compiler derives one/);
+  });
+
+  it('derives multipart form attributes for file-upload mutations', () => {
+    const uploadAvatar = mutation('avatar/upload', {
+      input: s.object({ avatar: s.file(), caption: s.string().optional() }),
       handler() {
         return 'ok';
       },

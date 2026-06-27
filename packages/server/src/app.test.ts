@@ -422,6 +422,18 @@ describe('server createApp request shell', () => {
     );
   });
 
+  it('rejects object-form mutations before compiler-derived key metadata is attached', () => {
+    const addToCart = mutation({
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    expect(() => createApp({ mutations: [addToCart] })).toThrow(/without a derived key/);
+  });
+
   it('accepts distinct mutation keys at createApp build time', () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),

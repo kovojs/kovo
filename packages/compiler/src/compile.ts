@@ -21,6 +21,7 @@ import {
   type ComponentCssAsset,
 } from './css.js';
 import { deriveComponentNames } from './component-names.js';
+import { deriveMutationKey } from './mutation-names.js';
 import { emitClientModule } from './emit/client.js';
 import { removeUnreferencedNamedImports } from './emit/dead-imports.js';
 import { appendLiveTargetRendererExports } from './emit/live-target-renderers.js';
@@ -484,6 +485,7 @@ function emitServerPhase(
   const serverRenderReplacements = [
     ...serverRender.replacements,
     ...componentDescriptorNameAssignments(lowered.model, parsed.componentNames.registryKey),
+    ...derivedMutationKeyAssignments(lowered.model, parsed.options.fileName),
     ...versionStateDeriveReferences(client.stateDeriveReferences),
   ];
   const serverRenderedSource = removeUnreferencedNamedImports(
@@ -525,9 +527,12 @@ function verifyComponentPhase(
     ),
   ];
 
-  const registryFactsOptions = parsed.compileOptions.registryFacts
-    ? { registryFacts: parsed.compileOptions.registryFacts }
-    : {};
+  const registryFactsOptions = {
+    fileName: parsed.compileOptions.fileName,
+    ...(parsed.compileOptions.registryFacts
+      ? { registryFacts: parsed.compileOptions.registryFacts }
+      : {}),
+  };
 
   // SPEC §5.2 rule 3. The gate combines two complementary legs into ONE check:
   //   1. semanticRenderEquivalenceCheck: the lowered model vs the executed lowered server
@@ -874,6 +879,36 @@ function componentDescriptorNameAssignments(
       start: component.declarationEnd,
     },
   ];
+}
+
+function derivedMutationKeyAssignments(
+  model: ComponentModuleModel,
+  fileName: string,
+): SourceReplacement[] {
+  return model.calls.flatMap((call) => {
+    if (!isExportedObjectFormMutationCall(call)) return [];
+
+    return [
+      {
+        end: call.end,
+        replacement: `\n${call.exportedConstName}.key = ${JSON.stringify(
+          deriveMutationKey(fileName, call.exportedConstName),
+        )};`,
+        start: call.end,
+      },
+    ];
+  });
+}
+
+function isExportedObjectFormMutationCall(
+  call: ComponentModuleModel['calls'][number],
+): call is ComponentModuleModel['calls'][number] & { exportedConstName: string } {
+  return (
+    call.name === 'mutation' &&
+    call.exportedConstName !== undefined &&
+    call.arguments.length === 1 &&
+    call.arguments[0]?.trimStart().startsWith('{') === true
+  );
 }
 
 export function collectStateDeriveReferenceFacts(

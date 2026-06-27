@@ -687,6 +687,51 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('lowers object-form mutation values with source-derived keys', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/product-grid.tsx',
+      source: `
+import { component, FieldError } from '@kovojs/core';
+import { mutation, s } from '@kovojs/server';
+
+export const addToCart = mutation({
+  csrf: false,
+  input: s.object({
+    productId: s.string(),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const ProductGrid = component({
+  mutations: { addToCart },
+  render: (_queries, _state, slots) => (
+    <form enhance mutation={addToCart} key="p1">
+      <input name="productId" />
+      <FieldError name="productId" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.loweredSource).toContain(
+      'addToCart.key = "components/product-grid/add-to-cart";',
+    );
+    expect(result.loweredSource).toContain('action="/_m/components/product-grid/add-to-cart"');
+    expect(result.loweredSource).toContain('data-mutation="components/product-grid/add-to-cart"');
+    expect(result.componentGraphFacts[0]?.mutationForms).toEqual([
+      {
+        fieldErrors: [{ id: 'add-to-cart-productId-error-p1', name: 'productId' }],
+        fields: ['productId'],
+        mutation: 'components/product-grid/add-to-cart',
+        slot: 'addToCart',
+      },
+    ]);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('marks duplicate DOM leaves with stable registry-key disambiguation facts', () => {
     const derived = deriveAppGraph({
       graph: {

@@ -258,6 +258,13 @@ function assertUniqueMutationKeys<Mutation extends AppMutationDeclaration<any>>(
 ): readonly Mutation[] {
   const seen = new Set<string>();
   for (const mutation of mutations) {
+    if (typeof mutation.key !== 'string' || mutation.key.length === 0) {
+      throw new Error(
+        'createApp() received a mutation without a derived key. ' +
+          'mutation({ input, handler }) requires compiler-emitted source-derived key metadata; ' +
+          'use the compiled artifact or the internal generated key path (SPEC §6.3).',
+      );
+    }
     if (seen.has(mutation.key)) {
       throw new Error(
         `createApp() received two mutations with the same key "${mutation.key}". ` +
