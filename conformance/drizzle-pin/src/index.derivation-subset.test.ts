@@ -570,7 +570,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
       ITEMS_TABLE,
       "export const q = query('grid', {",
       '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
-      '    return { items: db.select({ id: items.id, stock: items.stock }).from(items).orderBy(items.id) };',
+      '    return { items: db.select({ id: items.id, stock: items.stock }).from(items) };',
       '  },',
       '});',
     );
