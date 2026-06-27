@@ -346,6 +346,42 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     });
   });
 
+  it('requires unsafeCookie to exactly match the downgraded credential attributes', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() =>
+      serializeCookie('sid', 'abc', {
+        class: 'session',
+        httpOnly: false,
+        sameSite: 'none',
+        secure: false,
+        unsafe: unsafeCookie({
+          downgrade: {},
+          justification: 'too broad',
+        }),
+      }),
+    ).toThrow(CookieDowngradeError);
+    expect(() =>
+      serializeCookie('sid', 'abc', {
+        class: 'session',
+        httpOnly: false,
+        sameSite: 'none',
+        secure: false,
+        unsafe: unsafeCookie({
+          downgrade: { httpOnly: false, sameSite: 'none', secure: false },
+          justification: 'legacy embedded session endpoint',
+        }),
+      }),
+    ).not.toThrow();
+
+    const facts = drainCookieDowngradeFacts();
+    expect(facts).toHaveLength(1);
+    expect(facts[0]?.downgrade).toEqual({
+      httpOnly: false,
+      sameSite: 'none',
+      secure: false,
+    });
+  });
+
   it('rejects unsafeCookie without a justification', () => {
     expect(() => unsafeCookie({ downgrade: { httpOnly: false }, justification: '   ' })).toThrow(
       'KV432',

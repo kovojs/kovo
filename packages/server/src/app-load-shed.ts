@@ -23,9 +23,15 @@ interface RateBucket {
   windowStart: number;
 }
 
+type RateBucketScope = 'global' | 'perIp';
+
+interface RateBucketStore {
+  readonly buckets: Map<string, RateBucket>;
+  readonly scope: RateBucketScope;
+}
+
 interface AppRateState {
-  readonly global: Map<string, RateBucket>;
-  readonly perIp: Map<string, RateBucket>;
+  readonly stores: Map<string, RateBucketStore>;
 }
 
 interface RateLimitDecision {
@@ -212,17 +218,18 @@ function rateLimitFailure(
     id: string;
     key: string;
     limit: ResolvedAppRateLimitOptions | false;
-    store: Map<string, RateBucket>;
+    scope: RateBucketScope;
   }> = [
-    { id: 'all:global', key: 'global', limit: limits.global, store: state.global },
-    { id: 'all:per-ip', key: ip || 'unknown', limit: limits.perIp, store: state.perIp },
-    { id: `${surface}:global`, key: 'global', limit: scoped.global, store: state.global },
-    { id: `${surface}:per-ip`, key: ip || 'unknown', limit: scoped.perIp, store: state.perIp },
+    { id: 'all:global', key: 'global', limit: limits.global, scope: 'global' },
+    { id: 'all:per-ip', key: ip || 'unknown', limit: limits.perIp, scope: 'perIp' },
+    { id: `${surface}:global`, key: 'global', limit: scoped.global, scope: 'global' },
+    { id: `${surface}:per-ip`, key: ip || 'unknown', limit: scoped.perIp, scope: 'perIp' },
   ];
 
   for (const check of checks) {
     if (check.limit === false) continue;
-    const decision = consumeRateLimit(check.store, `${check.id}:${check.key}`, check.limit, now);
+    const store = appRateBucketStore(state, check.id, check.scope);
+    const decision = consumeRateLimit(store, check.key, check.limit, now);
     if (decision) return decision;
   }
 
@@ -280,15 +287,36 @@ function evictExpiredRateBuckets(
 function appRateState(app: KovoApp): AppRateState {
   const existing = rateStates.get(app);
   if (existing) return existing;
-  const next = { global: new Map<string, RateBucket>(), perIp: new Map<string, RateBucket>() };
+  const next = { stores: new Map<string, RateBucketStore>() };
   rateStates.set(app, next);
   return next;
+}
+
+function appRateBucketStore(
+  state: AppRateState,
+  id: string,
+  scope: RateBucketScope,
+): Map<string, RateBucket> {
+  const existing = state.stores.get(id);
+  if (existing) return existing.buckets;
+  const next: RateBucketStore = { buckets: new Map<string, RateBucket>(), scope };
+  state.stores.set(id, next);
+  return next.buckets;
 }
 
 /** @internal */
 export function appRateLimitKeyCounts(app: KovoApp): { global: number; perIp: number } {
   const state = appRateState(app);
-  return { global: state.global.size, perIp: state.perIp.size };
+  let global = 0;
+  let perIp = 0;
+  for (const store of state.stores.values()) {
+    if (store.scope === 'global') {
+      global += store.buckets.size;
+    } else {
+      perIp += store.buckets.size;
+    }
+  }
+  return { global, perIp };
 }
 
 /** @internal */
@@ -424,13 +452,31 @@ export function resolveRequestClientIp(app: KovoApp, request: Request): string |
 
 function requestClientIp(request: Request, options: { trustedProxy: boolean }): string | undefined {
   if (!options.trustedProxy) return undefined;
-  const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const forwardedFor = rightmostHeaderListValue(request.headers.get('x-forwarded-for'));
   if (forwardedFor) return forwardedFor;
 
   const realIp = request.headers.get('x-real-ip')?.trim();
   if (realIp) return realIp;
 
   const forwarded = request.headers.get('forwarded');
-  const match = forwarded?.match(/(?:^|;|,)\s*for="?([^";,\s]+)"?/i);
-  return match?.[1];
+  return rightmostForwardedForValue(forwarded);
+}
+
+function rightmostHeaderListValue(value: string | null): string | undefined {
+  if (value === null) return undefined;
+  for (const entry of value.split(',').reverse()) {
+    const trimmed = entry.trim();
+    if (trimmed !== '') return trimmed;
+  }
+  return undefined;
+}
+
+function rightmostForwardedForValue(value: string | null): string | undefined {
+  if (value === null) return undefined;
+  for (const entry of value.split(',').reverse()) {
+    const match = entry.match(/(?:^|;)\s*for="?([^";,\s]+)"?/i);
+    const client = match?.[1]?.trim();
+    if (client) return client;
+  }
+  return undefined;
 }

@@ -338,7 +338,7 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     expect(csp).toContain("img-src 'self' data: https://images.cdn.test");
   });
 
-  it('emits absolute same-origin Reporting API headers for the framework-owned CSP group', async () => {
+  it('emits relative same-origin Reporting API headers for the framework-owned CSP group', async () => {
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
     const app = createApp({ routes: [homeRoute] });
 
@@ -353,11 +353,9 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     const csp = cspHeader(response.headers);
     expect(csp).toContain('report-to kovo-csp');
     expect(response.headers['Report-To']).toBe(
-      '{"endpoints":[{"url":"https://example.test/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
+      '{"endpoints":[{"url":"/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
     );
-    expect(response.headers['Reporting-Endpoints']).toBe(
-      'kovo-csp="https://example.test/_kovo/reports/csp"',
-    );
+    expect(response.headers['Reporting-Endpoints']).toBe('kovo-csp="/_kovo/reports/csp"');
     expect(response.headers).not.toHaveProperty('Content-Security-Policy-Report-Only');
   });
 
