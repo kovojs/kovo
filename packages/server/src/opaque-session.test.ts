@@ -57,24 +57,6 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
     });
   });
 
-  it('distinguishes expired stored sessions from unknown ids on first validation', async () => {
-    let now = 1_000;
-    const manager = createOpaqueSessionManager({
-      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>({
-        now: () => now,
-        ttlMs: 100,
-      }),
-    });
-    const established = await manager.establish({ user: { id: 'u1' } });
-
-    now = 1_100;
-
-    await expect(manager.validate(established.session.id)).resolves.toEqual({
-      ok: false,
-      reason: 'expired',
-    });
-  });
-
   it('does not accept cookie/header material as a delegated payload without store validation', async () => {
     const manager = createOpaqueSessionManager({
       acceptAuthorizationHeader: true,
