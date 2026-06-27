@@ -179,18 +179,6 @@ describe('server static export', () => {
   });
 
   it('fails loudly for guarded and session-provider routes', async () => {
-    const defaultSessionApp = createApp({
-      routes: [route('/public', { page: () => trustedHtml('<main>Public</main>') })],
-    });
-
-    await expect(exportStaticApp(defaultSessionApp)).resolves.toMatchObject({
-      artifacts: [
-        {
-          path: '/public/index.html',
-        },
-      ],
-    });
-
     const guardedApp = createApp({
       routes: [
         route('/account', {

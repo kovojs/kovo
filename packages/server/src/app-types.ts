@@ -15,7 +15,6 @@ import type { QueryFactory } from './query.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
-import type { OpaqueSessionManager } from './opaque-session.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 
@@ -241,13 +240,6 @@ export interface CreateAppOptions<
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
   requestLimits?: AppRequestLimitOptions | false;
   routes?: AppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>;
-  /**
-   * Kovo-owned opaque session lifecycle for the request shell. When present, `createApp()`
-   * wires `sessionProvider` from this manager so `req.session` is populated only after
-   * store-backed opaque-id validation (SPEC §6.5 / OPP-11). Use `sessionProvider` only for
-   * explicit delegated/legacy session ownership.
-   */
-  session?: OpaqueSessionManager<SessionValue>;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
   stylesheets?: readonly (string | StylesheetAsset)[];
@@ -291,8 +283,6 @@ export interface KovoApp<
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
   requestLimits: ResolvedAppRequestLimitOptions;
   routes: readonly AppRouteDeclaration<any>[];
-  session?: OpaqueSessionManager<any>;
-  sessionProviderBoundary?: 'default-owned' | 'delegated' | 'owned';
   sessionProvider?: SessionProvider<any, any>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
   stylesheets: readonly (string | StylesheetAsset)[];

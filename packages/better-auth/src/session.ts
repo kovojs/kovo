@@ -101,13 +101,10 @@ export function betterAuthSession<
     // this request instead of projecting that payload into `req.session`.
     const value =
       payload && acceptedBrowserCredential && !revoked && !jwtDenied ? map(payload) : null;
-    const forwardSetCookies = acceptedBrowserCredential || revoked;
 
     // Forward refresh/cookie-cache Set-Cookie headers only when the instance actually
-    // produced them for an accepted browser credential. Revocation cookies still pass
-    // through even when the incoming credential is missing or no longer accepted, so the
-    // browser can clear stale Better Auth state without letting getSession mint a
-    // credential for a request Kovo treated as anonymous (SPEC.md §6.5; OPP-11).
-    return setCookies.length > 0 && forwardSetCookies ? { setCookies, value } : value;
+    // produced them; otherwise resolve to the plain mapped value so the contract is fully
+    // backward compatible (no envelope unless there is something to forward).
+    return setCookies.length > 0 ? { setCookies, value } : value;
   };
 }

@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createApp } from './app.js';
-import { renderAppRouteDocumentResponse } from './app-document.js';
-import { guards, type RequestWithSession } from './guards.js';
-import { renderedHtml } from './html.js';
 import { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
-import { route } from './route.js';
 
 describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
   it('mints opaque ids that are not JWT-shaped or payload-readable', async () => {
@@ -115,77 +110,5 @@ describe('opaque session primitive (SPEC §6.5 / OPP-11)', () => {
         }),
       ),
     ).resolves.toEqual({ user: { id: 'u1' } });
-  });
-
-  it('binds Kovo-owned opaque sessions to one validated request lifecycle', async () => {
-    type Session = { user: { id: string } | null };
-    type SessionRequest = RequestWithSession<Request, Session>;
-    const baseStore = createMemoryOpaqueSessionStore<Session>();
-    let validateCalls = 0;
-    const store = {
-      ...baseStore,
-      validate(id: string) {
-        validateCalls += 1;
-        return baseStore.validate(id);
-      },
-    };
-    const manager = createOpaqueSessionManager({ store });
-    const anonymous = await manager.establish({ user: null });
-    const authenticated = await manager.establish(
-      { user: { id: 'u1' } },
-      { priorId: anonymous.session.id },
-    );
-    const anonymousCookie = anonymous.setCookie.split(';')[0]!;
-    const authenticatedCookie = authenticated.setCookie.split(';')[0]!;
-    const guardSessions: string[] = [];
-    const pageSessions: string[] = [];
-    const authed = guards.authed<SessionRequest>();
-    const account = route('/account', {
-      async guard(request: SessionRequest) {
-        guardSessions.push(request.session?.user?.id ?? 'anonymous');
-        return authed(request);
-      },
-      page(_context, request: SessionRequest) {
-        pageSessions.push(request.session?.user?.id ?? 'anonymous');
-        return renderedHtml(`account:${request.session?.user?.id ?? 'anonymous'}`);
-      },
-    });
-    const app = createApp({
-      routes: [account],
-      session: manager,
-    });
-    const renderAccount = (cookie: string) =>
-      renderAppRouteDocumentResponse({
-        app,
-        params: {},
-        request: new Request('https://app.test/account', { headers: { cookie } }),
-        route: account,
-        url: new URL('https://app.test/account'),
-      });
-
-    const authenticatedResponse = await renderAccount(authenticatedCookie);
-
-    expect(authenticatedResponse.status).toBe(200);
-    expect(authenticatedResponse.body).toContain('account:u1');
-    expect(validateCalls).toBe(1);
-    expect(guardSessions).toEqual(['u1']);
-    expect(pageSessions).toEqual(['u1']);
-
-    const rotatedPriorResponse = await renderAccount(anonymousCookie);
-
-    expect(rotatedPriorResponse.status).toBe(303);
-    expect(rotatedPriorResponse.headers.Location).toBe('/login?next=%2Faccount');
-    expect(validateCalls).toBe(2);
-    expect(guardSessions).toEqual(['u1', 'anonymous']);
-    expect(pageSessions).toEqual(['u1']);
-
-    await manager.revoke(authenticated.session.id);
-    const revokedResponse = await renderAccount(authenticatedCookie);
-
-    expect(revokedResponse.status).toBe(303);
-    expect(revokedResponse.headers.Location).toBe('/login?next=%2Faccount');
-    expect(validateCalls).toBe(3);
-    expect(guardSessions).toEqual(['u1', 'anonymous', 'anonymous']);
-    expect(pageSessions).toEqual(['u1']);
   });
 });
