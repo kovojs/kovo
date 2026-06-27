@@ -102,12 +102,16 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - **Distinct:** new instance of the H3/H5 invariant on a _different_ function (the const-tracing recovery fallback), not the direct member path H5 fixed.
   - **Fix:** apply the `isPrivateScopeCarrierRoot` anchor in `directNonNullableSessionScopePath` too.
 
-- [ ] **M7 — Better-Auth secret classification (bugz-3 M6) omits plugin credential tables (twoFactor secret/backupCodes, oauthApplication clientSecret, oauthAccessToken access/refresh tokens).** `packages/better-auth/src/internal/contracts.ts:506-551`, emitter `packages/better-auth/src/internal.ts:1497-1523`
+- [x] **M7 — Better-Auth secret classification (bugz-3 M6) omits plugin credential tables (twoFactor secret/backupCodes, oauthApplication clientSecret, oauthAccessToken access/refresh tokens).** `packages/better-auth/src/internal/contracts.ts:506-551`, emitter `packages/better-auth/src/internal.ts:1497-1523`
   - The M6 fix added `secret:` only to the core `account`/`session` tables. The blessed bridge classifies `twoFactor`/`oauthAccessToken`/`oauthApplication`/`oauthConsent` as non-exempt owner-scoped `auth` tables with **no** `secret:` entry, so KV435 never brands their credential columns.
   - **Exploit:** an app enabling the standard two-factor / oidc-provider plugin + Kovo's schema generator, with a "2FA status" or token-list query projecting `twoFactor.secret`/`backupCodes` or `oauthAccessToken.accessToken`, ships those credentials to the wire on a green check.
   - **Verified:** worktree — `betterAuthSchemaBridge.account.secret` defined but `'secret' in twoFactor/oauthApplication/oauthAccessToken` all false.
   - **Distinct:** new instance of the M6 classification on the plugin credential tables specifically.
   - **Fix:** add `secret:` lists for the plugin credential/token columns in the bridge + emitter (or mark those tables exempt).
+  - **Evidence:** `betterAuthSchemaBridge` and generated schema annotations now mark two-factor, OAuth
+    application, and OAuth token credential columns as secret; `pnpm exec vitest run
+packages/better-auth/src/index.schema-bridge.test.ts packages/better-auth/src/index.schema-materialize.test.ts
+--run` passed 44 tests after integration.
 
 - [ ] **M8 — Live-target descriptor attestation falls back to a per-process random secret when no app CSRF is configured, so a minted attestation can't verify across processes (post-mutation live updates silently drop).** `packages/server/src/mutation-wire.ts:490-506,522`
   - When `options.csrf===undefined`, `createLiveTargetAttestation` HMACs with a module-scope `liveTargetAttestationSecret = randomBytes(32)` (per-process, per-import) instead of the deployment-stable secret. SSR mints on one request; a later mutation verifies on another — in multi-process/serverless deploys the secrets differ → `secureEqual` fails → the valid descriptor is filtered out (stale UI). Fails safe (never accepts a forgery).
@@ -116,12 +120,15 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - **Distinct:** no prior item concerns live-target attestation (bugz-3 M5/M6 better-auth machinery was reverted).
   - **Fix:** derive the no-csrf attestation secret from the deployment-stable framework secret (as the csrf branch does), or require a stable secret for live targets.
 
-- [ ] **M9 — One-time capability replay store's eviction horizon (20 min, wall clock) is decoupled from the token `expiresIn`, so a `oneTime` token with TTL>20 min replays after its record evicts.** `packages/server/src/capability-url.ts:92-114,295-303`
+- [x] **M9 — One-time capability replay store's eviction horizon (20 min, wall clock) is decoupled from the token `expiresIn`, so a `oneTime` token with TTL>20 min replays after its record evicts.** `packages/server/src/capability-url.ts:92-114,295-303`
   - `createMemoryCapabilityReplayStore` (the only shipped store) pins each consumed id's eviction to `Date.now()+DEFAULT_CAPABILITY_TTL_MS*4` (20 min), independent of the token's expiry and of `verifyCapability`'s injectable `now`. For `expiresIn>20min` there is a window where the token is still valid but the replay record is gone → `consume()` returns true again.
   - **Exploit:** `ctx.signUrl({ key:'receipts/ord_1.pdf', oneTime:true, expiresIn:1_800_000 })` + the shipped store: the captured single-use URL is burned at minute 0, then replays at minute 21. Gated behind opting into `createStorageDownloadEndpoint` + the memory replay store + TTL>20 min.
   - **Verified:** worktree (2/2, Date.now() spied) — consume at t0 (burned), evict window, consume again past 20 min but before expiry → succeeds.
   - **Distinct:** the mutation/webhook idem store is a different primitive/key shape; this is the capability replay store.
   - **Fix:** key eviction to the token's own expiry (`exp + skew`), not a fixed multiple of the default TTL.
+  - **Evidence:** `CapabilityReplayStore.consume(id, expiresAt)` now records replay IDs until the signed token
+    expiry; `pnpm exec vitest run packages/server/src/capability-url.test.ts packages/server/src/capability-route.test.ts
+packages/server/src/keyring.test.ts packages/server/src/env.test.ts --run` passed 64 tests after integration.
 
 - [ ] **M10 — The coarse per-IP limiter and `guards.rateLimit({per:'ip'})` trust the LEFTMOST `X-Forwarded-For` under `trustedProxy`, enabling per-IP bypass and targeted victim lockout.** `packages/server/src/app-load-shed.ts:417-434`
   - `requestClientIp` takes `x-forwarded-for.split(',')[0]` (and the first `Forwarded for=` element). A trusted proxy/CDN **appends** the real peer at the RIGHT, so the leftmost value is attacker-controlled (CWE-348). There is no trusted-hop count — it is always leftmost.
@@ -233,25 +240,31 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - **Distinct:** bugz-3 L10 fixed the `defineVars`/`createTheme` _value_; this covers the other functions + the NAME path.
   - **Fix:** route all rule-serializing functions (and token/step names) through `assertCssValueSafe`/an identifier validator.
 
-- [ ] **L11 — The capability download route serves private bearer-token files with no `Cache-Control` header (the declared `cache:'private'` is enforced only in dev/CI and never emitted).** `packages/server/src/capability-route.ts:302-311,329`
+- [x] **L11 — The capability download route serves private bearer-token files with no `Cache-Control` header (the declared `cache:'private'` is enforced only in dev/CI and never emitted).** `packages/server/src/capability-route.ts:302-311,329`
   - `createStorageDownloadEndpoint` hand-builds a 200 with an ETag and no Cache-Control; the only consumer of `cache:'private'`, `assertEndpointResponsePosture`, is a dev/CI-only assertion that _throws_ on mismatch — it never injects the header. So in production a shared cache can heuristically store the token-keyed private download.
   - **Verified:** worktree (2/2) — the download Response carries an ETag and no Cache-Control.
   - **Distinct:** bugz-3 M2 was the route/document path; this is the capability endpoint's hand-built response.
   - **Fix:** emit `Cache-Control: private, no-store` from the capability download handler (don't rely on the dev-only posture verifier).
+  - **Evidence:** capability download success and rejection responses now emit `Cache-Control: private, no-store`
+    and `Vary: Cookie`; the integrated server capability/keyring/env Vitest command above passed.
 
-- [ ] **L12 — The signing keyring (the single HMAC chokepoint) enforces no minimum secret length/entropy — only empty material is rejected.** `packages/server/src/keyring.ts:160-175`
+- [x] **L12 — The signing keyring (the single HMAC chokepoint) enforces no minimum secret length/entropy — only empty material is rejected.** `packages/server/src/keyring.ts:160-175`
   - `normalizeSigningKey`/`normalizeSecret` reject only `byteLength===0`; the 32-char `FRAMEWORK_SECRET_MIN_LENGTH` floor lives only in `env.ts` and runs only against `csrf.secret` at the createApp chokepoint. Capability signing and the public `createSigningKeyRing`/`signCapability`/`createSignUrl` paths impose no floor.
   - **Exploit:** `createSigningKeyRing({ keys:[{ id:'k', secret:'x', state:'active' }] })` signs with an ~8-bit key (offline-brute-forceable from one token). Requires an operator to supply the weak secret; no default-config breach.
   - **Verified:** worktree — a 1-byte keyring signs/verifies without throwing.
   - **Distinct:** a DiD/contract gap at the keyring sink, independent of the env-level csrf floor.
   - **Fix:** apply the framework minimum-length/entropy floor at `normalizeSecret` (the actual crypto boundary).
+  - **Evidence:** `normalizeSigningKey` now enforces a 32-byte `SIGNING_SECRET_MIN_BYTES` floor; the integrated
+    server capability/keyring/env Vitest command and `pnpm run check:api-surface` passed.
 
-- [ ] **L13 — `validateAppEnv` false-refuses a valid custom `SigningKeyRing` in production (misparsed as a malformed `{current}` secret object).** `packages/server/src/env.ts:156-206`
+- [x] **L13 — `validateAppEnv` false-refuses a valid custom `SigningKeyRing` in production (misparsed as a malformed `{current}` secret object).** `packages/server/src/env.ts:156-206`
   - `validateFrameworkSecret` treats any non-array object as `{keys:[...]}` or `{current,previous}`; a `SigningKeyRing` instance (a first-class public `SigningSecret` form) has no enumerable `keys`, so it falls to reading `value.current` (undefined) → fatal `csrf.secret.current must be a string`.
   - **Exploit:** `createApp({ csrf: { secret: kmsBackedRing } })` is refused boot in production though the ring signs/verifies fine. Fails closed (bricks a legit deploy); not attacker-reachable.
   - **Verified:** worktree — a `{currentKeyId,sign,verify}` ring → fatal `must be a string` boot error.
   - **Distinct:** FS1/FS2 are missing validation; this is _incorrect_ validation false-positiving on a valid input.
   - **Fix:** detect a `SigningKeyRing` (duck-type `currentKeyId`/`sign`/`verify`) before the `{current}`/`{keys}` parse and accept it.
+  - **Evidence:** `validateFrameworkSecret` now accepts `isSigningKeyRing(value)` before `{current}`/`{keys}`
+    parsing; the integrated server capability/keyring/env Vitest command passed.
 
 - [ ] **L14 — Optimistic queue: a timed-out mutation that later settles applies stale server truth (and cross-tab broadcasts it) out of order, clobbering a later committed mutation.** `packages/browser/src/mutation-optimistic.ts:108-153`
   - On timeout, `MutationQueue` aborts the entry and drains to the next, but the task keeps awaiting its fetch; the CATCH branch guards on `queueState.timedOut` (proving the authors knew), while the SUCCESS and failed-response branches do **not** — a late success applies its (now stale) server truth and broadcasts it after a later mutation committed.
