@@ -37,8 +37,10 @@ export interface EnhancedMutationResponseLike {
     get(name: string): string | null;
   };
   ok?: boolean;
+  redirected?: boolean;
   status?: number;
   text(): Promise<string>;
+  url?: string;
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -109,6 +111,17 @@ export async function fetchEnhancedMutation(
       targets: targetSnapshot.targets,
     };
   }
+  const redirectLocation = readSuccessfulRedirectLocation(response);
+  if (redirectLocation) {
+    followSuccessfulMutationRedirect(redirectLocation);
+    return {
+      body: '',
+      changes: [],
+      idem,
+      response,
+      targets: targetSnapshot.targets,
+    };
+  }
   const changes = readMutationChangeHeader(response, options.onError);
   // SPEC §9.1.1: read build token from response header for delta validation.
   const buildToken =
@@ -130,6 +143,22 @@ function followReauthDirective(location: string): void {
   // mutation equivalent of the no-JS 303 login redirect.
   const globalLocation = (globalThis as { location?: Location }).location;
   globalLocation?.assign(sanitizeReauthDirective(location));
+}
+
+function followSuccessfulMutationRedirect(location: string): void {
+  // SPEC §6.3/§9.1: a successful enhanced mutation may complete with a PRG
+  // redirect instead of a fragment body, such as auth sign-in/sign-out.
+  const globalLocation = (globalThis as { location?: Location }).location;
+  globalLocation?.assign(location);
+}
+
+function readSuccessfulRedirectLocation(response: EnhancedMutationResponseLike): string | undefined {
+  const status = response.status ?? 0;
+  const headerLocation =
+    response.headers?.get('Location') ?? response.headers?.get('location') ?? undefined;
+  if (status >= 300 && status < 400 && headerLocation) return headerLocation;
+  if (response.redirected && response.url) return response.url;
+  return undefined;
 }
 
 function refreshFormDataIdem(formData: unknown): string | undefined {

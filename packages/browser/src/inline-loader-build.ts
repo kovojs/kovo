@@ -945,6 +945,15 @@ function installInlineKovoLoader(im) {
           ng(reauth);
           return;
         }
+        const redirect = response.status >= 300 && response.status < 400
+          ? response.headers?.get('Location')
+          : response.redirected && response.url
+            ? response.url
+            : '';
+        if (redirect) {
+          ng(redirect);
+          return;
+        }
         return streaming && response.body
           ? asr(response.body)
           : response.text().then((body) => ab(body, bh(response)));

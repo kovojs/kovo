@@ -6,6 +6,122 @@ import { inlineSourceInstallCases, InlineParityRoot } from './inline-loader-test
 
 describe('inline loader enhanced submit source', () => {
   it.each(inlineSourceInstallCases)(
+    'navigates after successful inline enhanced auth redirects through %s',
+    async (_name, installSource) => {
+      // SPEC §6.3/§9.1: auth mutations may succeed by PRG redirect instead of
+      // returning mutation fragments; inline interception must preserve that.
+      const cases = [
+        {
+          expected: '/',
+          response: {
+            headers: {
+              get(name: string) {
+                return name.toLowerCase() === 'location' ? '/' : null;
+              },
+            },
+            status: 303,
+          },
+        },
+        {
+          expected: 'https://kovo.test/login',
+          response: {
+            headers: {
+              get() {
+                return null;
+              },
+            },
+            redirected: true,
+            status: 200,
+            url: 'https://kovo.test/login',
+          },
+        },
+      ] as const;
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+      };
+
+      for (const { expected, response } of cases) {
+        const listeners = new Map<string, (event: unknown) => void>();
+        const assign = vi.fn();
+        const preventDefault = vi.fn();
+        const text = vi.fn(async () => '<kovo-fragment target="auth">stale</kovo-fragment>');
+        const form = {
+          action: '/_m/auth/sign-in',
+          getAttribute(name: string) {
+            return name === 'data-enhance' ? '' : null;
+          },
+          method: 'post',
+        };
+
+        try {
+          globalRecord.FormData = function FormData() {
+            return {};
+          };
+          globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+            listeners.set(type, listener);
+          };
+          globalRecord.document = {
+            querySelectorAll() {
+              return [];
+            },
+          };
+          globalRecord.fetch = vi.fn(async () => ({
+            ...response,
+            text,
+          }));
+          globalRecord.location = {
+            assign,
+            href: 'https://kovo.test/login?next=%2F',
+            origin: 'https://kovo.test',
+          };
+
+          installSource(
+            vi.fn(async () => ({})),
+            globalRecord,
+          );
+          listeners.get('submit')?.({
+            preventDefault,
+            target: {
+              closest(selector: string) {
+                return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                  ? form
+                  : null;
+              },
+            },
+            type: 'submit',
+          });
+          await Promise.resolve();
+          await Promise.resolve();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          expect(preventDefault).toHaveBeenCalledTimes(1);
+          expect(assign).toHaveBeenCalledWith(expected);
+          expect(text).not.toHaveBeenCalled();
+        } finally {
+          Object.assign(globalRecord, {
+            FormData: originals.FormData,
+            addEventListener: originals.addEventListener,
+            document: originals.document,
+            fetch: originals.fetch,
+            location: originals.location,
+          });
+          if (originals.importModule === undefined) {
+            delete globalRecord.__kovoInlineImport;
+          } else {
+            globalRecord.__kovoInlineImport = originals.importModule;
+          }
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'sanitizes inline 401 Kovo-Reauth before navigation through %s',
     async (_name, installSource) => {
       // SPEC §6.5: the inline enhanced-submit path treats Kovo-Reauth as an
