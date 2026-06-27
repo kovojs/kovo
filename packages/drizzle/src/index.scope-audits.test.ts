@@ -788,7 +788,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       withPgDatabaseTypes({
         files: [
           pgDatabaseTypes([
-            'query: { orders: { findMany(value?: unknown): Promise<unknown[]> } };',
+            'query: { orders: { findMany(value?: unknown): Promise<unknown[]>; findFirst(value?: unknown): Promise<unknown> } };',
           ]),
           {
             fileName: 'order.queries.ts',
@@ -805,10 +805,38 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '  },',
               '});',
               '',
+              'export const relationalOrdersCallbackMine = query("relationalOrdersCallbackMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq }) => eq(order.userId, req.session.userId) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackBlockMine = query("relationalOrdersCallbackBlockMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findFirst({ columns: { id: true }, where: (order, { eq }) => { return eq(order.userId, req.session.userId); } });',
+              '  },',
+              '});',
+              '',
               'export const relationalOrdersWrongColumn = query("relationalOrdersWrongColumn", {',
               '  output: s.object({ id: s.string() }),',
               '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
               '    return db.query.orders.findMany({ columns: { id: true }, where: eq(orders.id, req.session.userId) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackWrongColumn = query("relationalOrdersCallbackWrongColumn", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq }) => eq(order.id, req.session.userId) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOpaque = query("relationalOrdersCallbackOpaque", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq }) => { const owner = order.userId; return eq(owner, req.session.userId); } });',
               '  },',
               '});',
             ].join('\n'),
@@ -827,6 +855,34 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
         }))
         .sort((x, y) => x.name.localeCompare(y.name)),
     ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        name: 'relationalOrdersCallbackBlockMine',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        name: 'relationalOrdersCallbackMine',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOpaque',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; session predicate does not compare the owner column to the matching session/principal symbol',
+        domain: 'order',
+        name: 'relationalOrdersCallbackWrongColumn',
+        scope: 'unknown',
+      },
       {
         detail:
           'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
