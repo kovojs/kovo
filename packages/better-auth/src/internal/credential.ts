@@ -206,48 +206,18 @@ function isSuccessStatus(status: number): boolean {
   return status >= 200 && status < 300;
 }
 
-interface SetCookieParts {
-  attributes: string;
-  name: string;
-  normalizedName: string;
-  value: string;
-}
-
-function parseSetCookieParts(rawSetCookie: string): SetCookieParts | undefined {
-  const firstPair = rawSetCookie.split(';', 1)[0] ?? '';
-  const separatorIndex = firstPair.indexOf('=');
-  if (separatorIndex <= 0) return undefined;
-
-  const name = firstPair.slice(0, separatorIndex).trim();
-  if (!name) return undefined;
-
-  return {
-    attributes: rawSetCookie.slice(firstPair.length).toLowerCase(),
-    name,
-    normalizedName: normalizeCookieName(name),
-    value: decodeCookieOctet(firstPair.slice(separatorIndex + 1).trim()),
-  };
-}
-
-function isSessionCredentialCookieName(normalizedName: string): boolean {
-  if (!normalizedName.includes('session')) return false;
-
-  // Better Auth's cookie cache/data companions are session-derived state, not the bearer
-  // credential. They must not satisfy the positive session-establishment sink.
-  return !/(?:^|[._-])session[._-]?data(?:$|[._-])/.test(normalizedName);
-}
-
 // A Set-Cookie that establishes a session sets a non-empty value and is not a
 // deletion (`Max-Age=0` / `Expires` in the past / empty value). Sign-out clears
 // cookies this way, so the same predicate cleanly distinguishes establish vs. clear.
 function isSessionEstablishingSetCookie(rawSetCookie: string): boolean {
-  const parsed = parseSetCookieParts(rawSetCookie);
-  if (!parsed) return false;
-  if (!isSessionCredentialCookieName(parsed.normalizedName)) return false;
+  const firstPair = rawSetCookie.split(';', 1)[0] ?? '';
+  const separatorIndex = firstPair.indexOf('=');
+  if (separatorIndex < 0) return false;
 
-  if (parsed.value === '') return false;
+  const value = firstPair.slice(separatorIndex + 1).trim();
+  if (value === '') return false;
 
-  const attributes = parsed.attributes;
+  const attributes = rawSetCookie.slice(firstPair.length).toLowerCase();
   if (/(?:^|;)\s*max-age\s*=\s*0(?:\s*;|\s*$)/.test(attributes)) return false;
   if (/(?:^|;)\s*max-age\s*=\s*-/.test(attributes)) return false;
 
@@ -264,12 +234,16 @@ function isSessionEstablishingSetCookie(rawSetCookie: string): boolean {
 
 /** @internal True when Better Auth is clearing a browser session credential. */
 export function isBetterAuthSessionRevocationSetCookie(rawSetCookie: string): boolean {
-  const parsed = parseSetCookieParts(rawSetCookie);
-  if (!parsed) return false;
-  if (!isSessionCredentialCookieName(parsed.normalizedName)) return false;
+  const firstPair = rawSetCookie.split(';', 1)[0] ?? '';
+  const separatorIndex = firstPair.indexOf('=');
+  if (separatorIndex <= 0) return false;
 
-  const attributes = parsed.attributes;
-  if (parsed.value === '') return true;
+  const normalizedName = normalizeCookieName(firstPair.slice(0, separatorIndex).trim());
+  if (!normalizedName.includes('session')) return false;
+
+  const value = firstPair.slice(separatorIndex + 1).trim();
+  const attributes = rawSetCookie.slice(firstPair.length).toLowerCase();
+  if (value === '') return true;
   if (/(?:^|;)\s*max-age\s*=\s*0(?:\s*;|\s*$)/.test(attributes)) return true;
   if (/(?:^|;)\s*max-age\s*=-/.test(attributes)) return true;
 
@@ -300,96 +274,8 @@ function parseSetCookieExpires(rawSetCookie: string): number | undefined {
   return undefined;
 }
 
-function hasSessionEstablishingSetCookie(
-  headers: Headers,
-  options: {
-    requestHeaders?: Headers;
-    sessionCookieMode?: 'jwt' | 'opaque';
-  },
-): boolean {
-  const incomingCredentials = readIncomingSessionCredentials(options.requestHeaders);
-  const mode = options.sessionCookieMode ?? 'opaque';
-
-  return getBetterAuthSetCookie(headers).some((cookie) => {
-    if (!isSessionEstablishingSetCookie(cookie)) return false;
-
-    const parsed = parseSetCookieParts(cookie);
-    if (!parsed) return false;
-    if (mode === 'opaque' && isJwtShapedSessionValue(parsed.value)) return false;
-    if (incomingCredentials.get(parsed.normalizedName) === parsed.value) return false;
-
-    return true;
-  });
-}
-
-/** @internal True when request cookies include a JWT-shaped session credential. */
-export function hasBetterAuthJwtSessionCookie(headers: Headers | undefined): boolean {
-  for (const value of readIncomingSessionCredentials(headers).values()) {
-    if (isJwtShapedSessionValue(value)) return true;
-  }
-
-  return false;
-}
-
-/** @internal True when the request carries a browser session credential accepted by the mode. */
-export function hasBetterAuthAcceptedSessionCookie(
-  headers: Headers | undefined,
-  mode: 'jwt' | 'opaque' = 'opaque',
-): boolean {
-  for (const value of readIncomingSessionCredentials(headers).values()) {
-    if (mode === 'jwt' || !isJwtShapedSessionValue(value)) return true;
-  }
-
-  return false;
-}
-
-/** @internal True when a Better Auth response clears at least one browser session credential. */
-export function hasBetterAuthSessionRevocationSetCookie(headers: Headers): boolean {
-  return getBetterAuthSetCookie(headers).some(isBetterAuthSessionRevocationSetCookie);
-}
-
-function readIncomingSessionCredentials(headers: Headers | undefined): Map<string, string> {
-  const credentials = new Map<string, string>();
-  const cookieHeader = headers?.get('cookie');
-  if (!cookieHeader) return credentials;
-
-  for (const segment of cookieHeader.split(';')) {
-    const separator = segment.indexOf('=');
-    if (separator <= 0) continue;
-    const name = segment.slice(0, separator).trim();
-    const normalizedName = normalizeCookieName(name);
-    if (!isSessionCredentialCookieName(normalizedName)) continue;
-    credentials.set(normalizedName, decodeCookieOctet(segment.slice(separator + 1).trim()));
-  }
-
-  return credentials;
-}
-
-function isJwtShapedSessionValue(value: string): boolean {
-  const segments = value.split('.');
-  if (segments.length !== 3) return false;
-  if (segments.some((segment) => !/^[A-Za-z0-9_-]+$/.test(segment))) return false;
-
-  const headerSegment = segments[0];
-  if (headerSegment === undefined) return false;
-
-  const header = decodeBase64UrlJson(headerSegment);
-  if (header === null || typeof header !== 'object') return false;
-
-  const record = header as Record<string, unknown>;
-  return typeof record['alg'] === 'string' || record['typ'] === 'JWT';
-}
-
-function decodeBase64UrlJson(segment: string): unknown {
-  const padded = `${segment.replace(/-/g, '+').replace(/_/g, '/')}${'='.repeat(
-    (4 - (segment.length % 4)) % 4,
-  )}`;
-
-  try {
-    return JSON.parse(atob(padded)) as unknown;
-  } catch {
-    return null;
-  }
+function hasSessionEstablishingSetCookie(headers: Headers): boolean {
+  return getBetterAuthSetCookie(headers).some(isSessionEstablishingSetCookie);
 }
 
 interface BetterAuthCredentialResponseWithBody extends BetterAuthResponseLike {
@@ -439,14 +325,10 @@ export async function resolveBetterAuthCredentialSuccess<Status extends string>(
   response: BetterAuthResponseLike,
   context: { setCookie?: (name: string, value: string, options?: CookieOptions) => void },
   success: BetterAuthCredentialMutationValue<Status>,
-  options: {
-    requestHeaders?: Headers;
-    sessionCookieMode?: 'jwt' | 'opaque';
-  } = {},
 ): Promise<BetterAuthCredentialMutationValue<Status> | null> {
   if (!isSuccessStatus(response.status)) return null;
   if (await isBetterAuthTwoFactorPendingResponse(response)) return null;
-  if (!hasSessionEstablishingSetCookie(response.headers, options)) return null;
+  if (!hasSessionEstablishingSetCookie(response.headers)) return null;
 
   forwardBetterAuthSetCookie(response.headers, context);
 

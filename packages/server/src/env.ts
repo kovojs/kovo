@@ -1,5 +1,4 @@
 import type { Schema } from './schema.js';
-import { HMAC_SHA256_SIGNING_KEY_TYPE } from './keyring.js';
 import { isSchemaValidationError } from './schema.js';
 
 /**
@@ -163,7 +162,6 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
     if (Array.isArray(value.keys)) {
       value.keys.forEach((key, index) => {
         if (isRecord(key)) {
-          validateFrameworkSigningKeyType(key.type, `${path}.keys.${index}.type`, issues);
           validateFrameworkSecretValue(key.secret, `${path}.keys.${index}.secret`, issues);
         } else {
           validateFrameworkSecretValue(undefined, `${path}.keys.${index}`, issues);
@@ -179,21 +177,6 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
   }
 
   validateFrameworkSecretValue(value, path, issues);
-}
-
-function validateFrameworkSigningKeyType(
-  value: unknown,
-  path: string,
-  issues: EnvValidationIssue[],
-): void {
-  if (value === undefined) return;
-  if (value === HMAC_SHA256_SIGNING_KEY_TYPE) return;
-  issues.push({
-    code: 'invalid',
-    fatal: true,
-    message: `Framework signing key \`${path}\` must be ${HMAC_SHA256_SIGNING_KEY_TYPE}; Kovo derives token verification algorithms from the key type, never token headers (SPEC §6.6).`,
-    path,
-  });
 }
 
 function validateFrameworkSecretValue(
