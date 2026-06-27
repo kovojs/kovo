@@ -69,7 +69,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
             'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
           ]),
           {
-            fileName: 'order.queries.ts',
+            fileName: 'order.mutations.ts',
             source: [
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
@@ -348,6 +348,84 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
   });
 
+  it('OPP-28: proves only same-principal disjunctive owner-column write predicates', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { and, eq, inArray, or } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentGuardUser(ctx: { guard: { userId: string; actorId: string } }) { return ctx.guard.userId; }',
+              'function currentActor(ctx: { guard: { userId: string; actorId: string } }) { return ctx.guard.actorId; }',
+              'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(currentActor, { returns: { kind: "guard", path: "actorId" } });',
+              '',
+              'export async function closeMineByStatusDisjunction(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(and(eq(orders.userId, req.session.userId), eq(orders.status, "open")), and(eq(orders.userId, req.session.userId), eq(orders.status, "draft"))));',
+              '}',
+              '',
+              'export async function closeMineByEqOrSingletonMembership(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), inArray(orders.userId, [req.session.userId])));',
+              '}',
+              '',
+              'export async function closeGuardByStatusDisjunction(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(and(eq(orders.userId, currentGuardUser(ctx)), eq(orders.status, "open")), and(eq(orders.userId, currentGuardUser(ctx)), eq(orders.status, "draft"))));',
+              '}',
+              '',
+              'export async function closeMixedClientBranch(db: PgAsyncDatabase<any, any>, input: { userId: string }, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), eq(orders.userId, input.userId)));',
+              '}',
+              '',
+              'export async function closeMismatchedPrivateBranch(db: PgAsyncDatabase<any, any>, req: { session: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), eq(orders.userId, req.session.actorId)));',
+              '}',
+              '',
+              'export async function closeMismatchedGuardBranch(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, currentGuardUser(ctx)), eq(orders.userId, currentActor(ctx))));',
+              '}',
+              '',
+              'export async function closeUnknownBranch(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), eq(orders.status, "open")));',
+              '}',
+              '',
+              'export async function closeWrongColumnBranch(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), eq(orders.id, req.session.userId)));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'closeGuardByStatusDisjunction', scope: 'session' },
+      { name: 'closeMineByEqOrSingletonMembership', scope: 'session' },
+      { name: 'closeMineByStatusDisjunction', scope: 'session' },
+      { name: 'closeMismatchedGuardBranch', scope: 'unknown' },
+      { name: 'closeMismatchedPrivateBranch', scope: 'unknown' },
+      { name: 'closeMixedClientBranch', scope: 'args' },
+      { name: 'closeUnknownBranch', scope: 'unknown' },
+      { name: 'closeWrongColumnBranch', scope: 'unknown' },
+    ]);
+    expect(
+      audit.scopeAudits.find((a) => a.name === 'closeMineByStatusDisjunction')?.detail,
+    ).toContain('owner column compared to session:userId');
+    expect(
+      audit.scopeAudits.find((a) => a.name === 'closeGuardByStatusDisjunction')?.detail,
+    ).toContain('owner column compared to guard:userId');
+  });
+
   it('OPP-28: treats non-equality write predicates as args without proving session scope', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
@@ -518,6 +596,137 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
 
       expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'args' }]);
     }
+  });
+
+  it('OPP-28: keeps nested destructured and wrapped client-input owner reads scope:args', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const orderNestedInput = query("orderNestedInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { session: { userId: string } }, db: PgAsyncDatabase<any, any>) {',
+              '    const { session: { userId } } = input;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, userId));',
+              '  },',
+              '});',
+              '',
+              'export const orderRenamedNestedInput = query("orderRenamedNestedInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { guard: { userId: string } }, db: PgAsyncDatabase<any, any>) {',
+              '    const { guard: { userId: guardUserId } } = input;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
+              '  },',
+              '});',
+              '',
+              'export const orderWrappedInput = query("orderWrappedInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { guard: { userId: string } }, db: PgAsyncDatabase<any, any>) {',
+              '    const principal = input.guard;',
+              '    const wrapper = Object.freeze({ principal });',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '  },',
+              '});',
+              '',
+              'export const orderNonInput = query("orderNonInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+              '    const local = { guard: { userId: "u1" } } as const;',
+              '    const { guard: { userId } } = local;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, userId));',
+              '  },',
+              '});',
+              '',
+              'export const orderMine = query("orderMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, req.session.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, kind: a.kind, scope: a.scope }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    ).toEqual([
+      { name: 'orderMine', kind: 'query', scope: 'session' },
+      { name: 'orderNestedInput', kind: 'query', scope: 'args' },
+      { name: 'orderNonInput', kind: 'query', scope: 'unknown' },
+      { name: 'orderRenamedNestedInput', kind: 'query', scope: 'args' },
+      { name: 'orderWrappedInput', kind: 'query', scope: 'args' },
+    ]);
+  });
+
+  it('OPP-28: keeps nested destructured and wrapped client-input owner writes scope:args', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export async function closeNestedInput(db: PgAsyncDatabase<any, any>, input: { session: { userId: string } }) {',
+              '  const { session: { userId } } = input;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, userId));',
+              '}',
+              '',
+              'export async function closeRenamedNestedInput(db: PgAsyncDatabase<any, any>, input: { guard: { userId: string } }) {',
+              '  const { guard: { userId: guardUserId } } = input;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, guardUserId));',
+              '}',
+              '',
+              'export async function closeWrappedInput(db: PgAsyncDatabase<any, any>, input: { guard: { userId: string } }) {',
+              '  const principal = input.guard;',
+              '  const wrapper = Object.freeze({ principal });',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, wrapper.principal.userId));',
+              '}',
+              '',
+              'export async function closeNonInput(db: PgAsyncDatabase<any, any>) {',
+              '  const local = { guard: { userId: "u1" } } as const;',
+              '  const { guard: { userId } } = local;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, userId));',
+              '}',
+              '',
+              'export async function closeMine(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, req.session.userId));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, kind: a.kind, scope: a.scope }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    ).toEqual([
+      { name: 'closeMine', kind: 'write', scope: 'session' },
+      { name: 'closeNestedInput', kind: 'write', scope: 'args' },
+      { name: 'closeNonInput', kind: 'write', scope: 'unknown' },
+      { name: 'closeRenamedNestedInput', kind: 'write', scope: 'args' },
+      { name: 'closeWrappedInput', kind: 'write', scope: 'args' },
+    ]);
   });
 
   it('accepts a write guarded by a summarized principal on the owner-column predicate', () => {
@@ -735,6 +944,85 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('OPP-28: proves only same-principal disjunctive owner-column read predicates', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { and, eq, inArray, or } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const ordersMineByStatusDisjunction = query("ordersMineByStatusDisjunction", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(and(eq(orders.userId, req.session.userId), eq(orders.status, "open")), and(eq(orders.userId, req.session.userId), eq(orders.status, "draft"))));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMineByEqOrSingletonMembership = query("ordersMineByEqOrSingletonMembership", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), inArray(orders.userId, [req.session.userId])));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMixedClientBranch = query("ordersMixedClientBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), eq(orders.userId, input.userId)));',
+              '  },',
+              '});',
+              '',
+              'export const ordersMismatchedPrivateBranch = query("ordersMismatchedPrivateBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), eq(orders.userId, req.session.actorId)));',
+              '  },',
+              '});',
+              '',
+              'export const ordersUnknownBranch = query("ordersUnknownBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), eq(orders.status, "open")));',
+              '  },',
+              '});',
+              '',
+              'export const ordersWrongColumnBranch = query("ordersWrongColumnBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(or(eq(orders.userId, req.session.userId), eq(orders.id, req.session.userId)));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      { name: 'ordersMineByEqOrSingletonMembership', scope: 'session' },
+      { name: 'ordersMineByStatusDisjunction', scope: 'session' },
+      { name: 'ordersMismatchedPrivateBranch', scope: 'unknown' },
+      { name: 'ordersMixedClientBranch', scope: 'args' },
+      { name: 'ordersUnknownBranch', scope: 'unknown' },
+      { name: 'ordersWrongColumnBranch', scope: 'unknown' },
+    ]);
+    expect(
+      audit.scopeAudits.find((a) => a.name === 'ordersMineByStatusDisjunction')?.detail,
+    ).toContain('owner column compared to session:userId');
+  });
+
   // A3 (SPEC §10.3 / KV414): an owner-table arg key escapes detection when it lands on
   // the `owner:` column instead of the declared `key:` column (the canonical case
   // `key:id, owner:userId`). `where(eq(orders.userId, input.userId))` must be scope:'args';
@@ -793,7 +1081,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
           {
             fileName: 'order.queries.ts',
             source: [
-              'import { eq } from "drizzle-orm";',
+              'import { and, eq, inArray, or } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
@@ -816,6 +1104,48 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '  output: s.object({ id: s.string() }),',
               '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
               '    return db.query.orders.findFirst({ columns: { id: true }, where: (order, { eq }) => { return eq(order.userId, req.session.userId); } });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrMine = query("relationalOrdersCallbackOrMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { and, eq, or }) => or(and(eq(order.userId, req.session.userId), eq(order.status, "open")), and(eq(order.userId, req.session.userId), eq(order.status, "draft"))) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrInArrayMine = query("relationalOrdersCallbackOrInArrayMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, inArray, or }) => or(eq(order.userId, req.session.userId), inArray(order.userId, [req.session.userId])) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrMixedClientBranch = query("relationalOrdersCallbackOrMixedClientBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, or }) => or(eq(order.userId, req.session.userId), eq(order.userId, input.userId)) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrMismatchedBranch = query("relationalOrdersCallbackOrMismatchedBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string; actorId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, or }) => or(eq(order.userId, req.session.userId), eq(order.userId, req.session.actorId)) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrUnknownBranch = query("relationalOrdersCallbackOrUnknownBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, or }) => or(eq(order.userId, req.session.userId), eq(order.status, "open")) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersCallbackOrWrongColumnBranch = query("relationalOrdersCallbackOrWrongColumnBranch", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, or }) => or(eq(order.userId, req.session.userId), eq(order.id, req.session.userId)) });',
               '  },',
               '});',
               '',
@@ -1014,6 +1344,47 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
           'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
         domain: 'order',
         name: 'relationalOrdersCallbackMutableOwnerAlias',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrInArrayMine',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrMine',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrMismatchedBranch',
+        scope: 'unknown',
+      },
+      {
+        detail: undefined,
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrMixedClientBranch',
+        scope: 'args',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrUnknownBranch',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalOrdersCallbackOrWrongColumnBranch',
         scope: 'unknown',
       },
       {
@@ -1666,7 +2037,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('keeps a const-bound client input.session value untrusted, not session', () => {
+  it('keeps a const-bound client input.session value scope:args, not session', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -1695,7 +2066,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
 
     expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
-      { domain: 'order', scope: 'unknown' },
+      { domain: 'order', scope: 'args' },
     ]);
   });
 
@@ -4568,6 +4939,208 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
 
     expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
       { domain: 'order', scope: 'unknown' },
+    ]);
+  });
+
+  it('OPP-28: proves summarized guard helpers invoked from static callable containers on reads', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'const guardFns = {',
+              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentActor(ctx: { guard: { actorId: string } }) { return ctx.guard.actorId; },',
+              '  unsummarized(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '};',
+              'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(guardFns.currentActor, { returns: { kind: "guard", path: "actorId" } });',
+              '',
+              'const helperObject = { current: guardFns.currentGuardUser } as const;',
+              'const helperTuple = [guardFns.currentGuardUser] as const;',
+              'const frozenObject = Object.freeze({ current: guardFns.currentGuardUser });',
+              'const frozenTuple = Object.freeze([guardFns.currentGuardUser] as const);',
+              'const helperAlias = helperObject.current;',
+              'const actorObject = { current: guardFns.currentActor } as const;',
+              'const unsummarizedObject = { current: guardFns.unsummarized } as const;',
+              'let mutableObject = { current: guardFns.currentGuardUser };',
+              'const spreadObject = { ...helperObject } as const;',
+              'const computedKey = "current";',
+              '',
+              'export const ordersForObject = query("ordersForObject", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperObject.current(ctx)));',
+              '  },',
+              '});',
+              'export const ordersForTuple = query("ordersForTuple", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperTuple[0](ctx)));',
+              '  },',
+              '});',
+              'export const ordersForFrozenObject = query("ordersForFrozenObject", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, frozenObject.current(ctx)));',
+              '  },',
+              '});',
+              'export const ordersForFrozenTupleAlias = query("ordersForFrozenTupleAlias", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    const currentGuardUser = frozenTuple[0];',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, currentGuardUser(ctx)));',
+              '  },',
+              '});',
+              'export const ordersForAlias = query("ordersForAlias", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperAlias(ctx)));',
+              '  },',
+              '});',
+              'export const ordersForOptionalParenthesized = query("ordersForOptionalParenthesized", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, (helperObject.current)?.(ctx)));',
+              '  },',
+              '});',
+              'export const ordersForActor = query("ordersForActor", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, actorObject.current(ctx)));',
+              '  },',
+              '});',
+              'export const ordersForUnsummarized = query("ordersForUnsummarized", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, unsummarizedObject.current(ctx)));',
+              '  },',
+              '});',
+              'export const ordersForMutable = query("ordersForMutable", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, mutableObject.current(ctx)));',
+              '  },',
+              '});',
+              'export const ordersForSpread = query("ordersForSpread", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, spreadObject.current(ctx)));',
+              '  },',
+              '});',
+              'export const ordersForComputed = query("ordersForComputed", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperObject[computedKey](ctx)));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      { name: 'ordersForActor', scope: 'unknown' },
+      { name: 'ordersForAlias', scope: 'session' },
+      { name: 'ordersForComputed', scope: 'unknown' },
+      { name: 'ordersForFrozenObject', scope: 'session' },
+      { name: 'ordersForFrozenTupleAlias', scope: 'session' },
+      { name: 'ordersForMutable', scope: 'unknown' },
+      { name: 'ordersForObject', scope: 'session' },
+      { name: 'ordersForOptionalParenthesized', scope: 'session' },
+      { name: 'ordersForSpread', scope: 'unknown' },
+      { name: 'ordersForTuple', scope: 'session' },
+      { name: 'ordersForUnsummarized', scope: 'unknown' },
+    ]);
+  });
+
+  it('OPP-28: proves summarized guard helpers invoked from static callable containers on writes', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'function currentActor(ctx: { guard: { actorId: string } }) { return ctx.guard.actorId; }',
+              'function unsummarized(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(currentActor, { returns: { kind: "guard", path: "actorId" } });',
+              '',
+              'const helperObject = Object.freeze({ current: currentGuardUser });',
+              'const helperTuple = [currentGuardUser] as const;',
+              'const helperAlias = helperObject.current;',
+              'const actorObject = { current: currentActor } as const;',
+              'const unsummarizedTuple = [unsummarized] as const;',
+              'let mutableTuple = [currentGuardUser] as const;',
+              'const spreadTuple = [...helperTuple] as const;',
+              'const computedIndex = 0;',
+              '',
+              'export async function closeByObject(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperObject.current(ctx)));',
+              '}',
+              'export async function closeByTuple(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperTuple[0](ctx)));',
+              '}',
+              'export async function closeByAlias(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperAlias(ctx)));',
+              '}',
+              'export async function closeByActor(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, actorObject.current(ctx)));',
+              '}',
+              'export async function closeByUnsummarized(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, unsummarizedTuple[0](ctx)));',
+              '}',
+              'export async function closeByMutable(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, mutableTuple[0](ctx)));',
+              '}',
+              'export async function closeBySpread(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, spreadTuple[0](ctx)));',
+              '}',
+              'export async function closeByComputed(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperTuple[computedIndex](ctx)));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ kind: a.kind, name: a.name, scope: a.scope }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      { kind: 'write', name: 'closeByActor', scope: 'unknown' },
+      { kind: 'write', name: 'closeByAlias', scope: 'session' },
+      { kind: 'write', name: 'closeByComputed', scope: 'unknown' },
+      { kind: 'write', name: 'closeByMutable', scope: 'unknown' },
+      { kind: 'write', name: 'closeByObject', scope: 'session' },
+      { kind: 'write', name: 'closeBySpread', scope: 'unknown' },
+      { kind: 'write', name: 'closeByTuple', scope: 'session' },
+      { kind: 'write', name: 'closeByUnsummarized', scope: 'unknown' },
     ]);
   });
 

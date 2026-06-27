@@ -496,14 +496,72 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): readonly OwnerPrivateScopeKey[] {
   const keys = new Map<string, OwnerPrivateScopeKey>();
-  for (const comparison of comparisons.instanceKey) {
-    const scoped = ownerPrivateScopedKeyFromEqOperands(comparison.left, comparison.right, tables);
-    if (scoped) keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+
+  if (comparisons.ownerScopePredicates) {
+    for (const predicate of comparisons.ownerScopePredicates) {
+      for (const scoped of ownerPrivateScopedKeysFromComparisonPnf(predicate, tables)) {
+        keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+      }
+    }
+  } else {
+    for (const comparison of comparisons.instanceKey) {
+      const scoped = ownerPrivateScopedKeyFromEqOperands(comparison.left, comparison.right, tables);
+      if (scoped) keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+    }
   }
+
   return [...keys.values()].sort(
     (left, right) =>
       left.domain.localeCompare(right.domain) || left.privateKey.localeCompare(right.privateKey),
   );
+}
+
+function ownerPrivateScopedKeysFromComparisonPnf(
+  pnf: QueryPredicateComparisonPnf,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): readonly OwnerPrivateScopeKey[] {
+  if (pnf.kind === 'eq') {
+    const scoped = ownerPrivateScopedKeyFromEqOperands(
+      pnf.comparison.left,
+      pnf.comparison.right,
+      tables,
+    );
+    return scoped ? [scoped] : [];
+  }
+
+  if (pnf.kind === 'and') {
+    return uniqueOwnerPrivateScopedKeys(
+      pnf.nodes.flatMap((node) => ownerPrivateScopedKeysFromComparisonPnf(node, tables)),
+    );
+  }
+
+  if (pnf.kind !== 'or' || pnf.nodes.length === 0) return [];
+
+  let proven: OwnerPrivateScopeKey | undefined;
+  for (const node of pnf.nodes) {
+    const branchKeys = uniqueOwnerPrivateScopedKeys(
+      ownerPrivateScopedKeysFromComparisonPnf(node, tables),
+    );
+    const branchKey = branchKeys.length === 1 ? branchKeys[0] : undefined;
+    if (!branchKey) return [];
+
+    if (!proven) {
+      proven = branchKey;
+      continue;
+    }
+
+    if (proven.domain !== branchKey.domain || proven.privateKey !== branchKey.privateKey) {
+      return [];
+    }
+  }
+
+  return proven ? [proven] : [];
+}
+
+function uniqueOwnerPrivateScopedKeys(
+  keys: readonly OwnerPrivateScopeKey[],
+): readonly OwnerPrivateScopeKey[] {
+  return [...new Map(keys.map((key) => [`${key.domain}\0${key.privateKey}`, key])).values()];
 }
 
 function ownerPrivateScopedKeyFromEqOperands(
@@ -732,9 +790,12 @@ function eqOperandsAreTableColumnArgKeyed(
 /**
  * SPEC §11.1 / KV414: the `where()`-predicate `eq(...)` operand comparisons of a query.
  *
- * Two tiers, both reusing the write side's `eqPredicateConjuncts` (~:9736):
+ * Three tiers, all reusing the write side's predicate PNF:
  * - `instanceKey`: top-level/`and(...)` conjuncts only — these may discharge a unique
  *   single-row instance key and a `session` scope.
+ * - `ownerScopePredicates`: equality-equivalent predicate trees used only for the
+ *   narrow owner-principal proof. `or(...)` is accepted here only when every branch
+ *   proves the same exact owner-column private key; it never feeds `instanceKey`.
  * - `argCandidates`: every direct comparison operand pair anywhere in the predicate
  *   tree, INCLUDING under `or(...)` (A2, fail-closed), range predicates such as
  *   `gt/gte/lt/lte/between`, and negated membership. An arg-keyed owner operand in
@@ -750,6 +811,7 @@ function eqOperandsAreTableColumnArgKeyed(
 ): QueryInstanceKeyComparisons {
   const instanceKey: QueryInstanceKeyComparison[] = [];
   const argCandidates: QueryInstanceKeyComparison[] = [];
+  const ownerScopePredicates: QueryPredicateComparisonPnf[] = [];
   const sessionContext = sessionProvenanceContextForNodes(
     body.getSourceFile(),
     queryCallbackBodies(body, queryReceiverMode(receiverReferences)),
@@ -770,14 +832,17 @@ function eqOperandsAreTableColumnArgKeyed(
       right: queryInstanceKeyOperand(right, readTableIdentifier, sessionContext),
     });
 
+    const pnf = predicatePnf(predicate);
     // A2: `and(...)`/top-level `eq` conjuncts may discharge a unique instance key.
-    const conjuncts = eqPredicateConjuncts(predicate);
+    const conjuncts = pnfExactConjuncts(pnf);
     if (conjuncts) instanceKey.push(...conjuncts.map(toComparison));
+
+    ownerScopePredicates.push(comparisonPnf(pnf, toComparison));
 
     // A2 fail-closed: any direct comparison operand anywhere (incl. `or(...)`,
     // range predicates, and negated membership) is an `args`/`session` scope
     // candidate, never an instance-key.
-    argCandidates.push(...allEqOperandPairs(predicate).map(toComparison));
+    argCandidates.push(...pnfAllEqOperandPairs(pnf).map(toComparison));
   }
 
   for (const {
@@ -793,13 +858,16 @@ function eqOperandsAreTableColumnArgKeyed(
       right: queryInstanceKeyOperand(right, resolveTableIdentifier, sessionContext),
     });
 
-    const conjuncts = eqPredicateConjuncts(predicate, predicateCallName);
+    const pnf = predicatePnf(predicate, predicateCallName);
+    const conjuncts = pnfExactConjuncts(pnf);
     if (conjuncts) instanceKey.push(...conjuncts.map(toComparison));
 
-    argCandidates.push(...allEqOperandPairs(predicate, predicateCallName).map(toComparison));
+    ownerScopePredicates.push(comparisonPnf(pnf, toComparison));
+
+    argCandidates.push(...pnfAllEqOperandPairs(pnf).map(toComparison));
   }
 
-  return { argCandidates, instanceKey };
+  return { argCandidates, instanceKey, ownerScopePredicates };
 }
 
 interface RelationalWherePredicate {
@@ -1111,7 +1179,15 @@ function relationalWithObjectTableExpressions(
 /** @internal */ export interface QueryInstanceKeyComparisons {
   argCandidates: readonly QueryInstanceKeyComparison[];
   instanceKey: readonly QueryInstanceKeyComparison[];
+  ownerScopePredicates?: readonly QueryPredicateComparisonPnf[];
 }
+
+/** @internal */ export type QueryPredicateComparisonPnf =
+  | { comparison: QueryInstanceKeyComparison; kind: 'eq' }
+  | { kind: 'and'; nodes: readonly QueryPredicateComparisonPnf[] }
+  | { kind: 'non-eq' }
+  | { kind: 'opaque' }
+  | { kind: 'or'; nodes: readonly QueryPredicateComparisonPnf[] };
 
 /**
  * Every direct comparison operand pair nested anywhere under a predicate node (SPEC
@@ -1148,7 +1224,7 @@ function relationalWithObjectTableExpressions(
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
   const provenance =
-    privateScopeForExpression(expression, sessionContext) ??
+    privateScopeForOwnerPredicateExpression(expression, sessionContext) ??
     summarizedStaticCallPrivateScope(expression, sessionContext) ??
     awaitedExpressionPrivateScope(expression, sessionContext) ??
     conditionalExpressionPrivateScope(expression, sessionContext) ??
@@ -1568,7 +1644,7 @@ function staticWrapperValuePrivateScope(
       if (provenance || staticAccessRootVariableDeclaration(node)) return provenance;
     }
     return (
-      privateScopeForExpression(node, sessionContext) ??
+      privateScopeForOwnerPredicateExpression(node, sessionContext) ??
       summarizedStaticCallPrivateScope(node, sessionContext)
     );
   }
@@ -1691,6 +1767,13 @@ function objectLiteralSingleStaticPropertyValue(
       if (staticPlainPropertyName(property.getNameNode()) !== name) continue;
       if (value) return undefined;
       value = property.getNameNode();
+      continue;
+    }
+
+    if (Node.isMethodDeclaration(property)) {
+      if (staticPlainPropertyName(property.getNameNode()) !== name) continue;
+      if (value) return undefined;
+      value = property;
     }
   }
   return value;
@@ -1709,12 +1792,67 @@ function summarizedStaticCallPrivateScope(
   if (!Node.isCallExpression(node)) return undefined;
 
   const callee = unwrappedStaticExpressionNode(node.getExpression());
-  const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
-  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  return summarizedStaticCallablePrivateScope(callee, sessionContext);
+}
+
+function privateScopeForOwnerPredicateExpression(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  // OPP-28 owner-principal proof must not inherit the shared call-name fallback:
+  // callable helpers prove scope only when this file pins the callee identity back
+  // to an explicit kovoAnalyzerSummary.
+  return Node.isCallExpression(node) ? undefined : privateScopeForExpression(node, sessionContext);
+}
+
+function summarizedStaticCallablePrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+  depth = 0,
+): PrivateScopeProvenance | undefined {
+  if (depth > 4) return undefined;
+
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const rootDeclaration = staticAccessRootVariableDeclaration(node);
+    if (rootDeclaration && !staticCallableAccessHasStableStaticRoot(node)) return undefined;
+
+    const direct = strictHelperSummaryForStaticReference(node, sessionContext.helpers);
+    if (direct) return direct;
+
+    const value = rootDeclaration ? localConstLiteralStaticAccessValue(node) : undefined;
+    return value
+      ? summarizedStaticCallablePrivateScope(value, sessionContext, depth + 1)
+      : undefined;
+  }
+
+  const direct = strictHelperSummaryForStaticReference(node, sessionContext.helpers);
+  if (direct) return direct;
+
+  if (Node.isIdentifier(node)) {
+    const initializer = stableLocalConstInitializer(node);
+    return initializer
+      ? summarizedStaticCallablePrivateScope(initializer, sessionContext, depth + 1)
+      : undefined;
+  }
+
+  return undefined;
+}
+
+function staticCallableAccessHasStableStaticRoot(node: Node): boolean {
   return (
-    (key ? sessionContext.helpers.get(key) : undefined) ??
-    (name ? sessionContext.helpers.get(`name:${name}`) : undefined)
+    staticAccessRootHasStableConstBinding(node) &&
+    localConstLiteralStaticAccessValue(node) !== undefined
   );
+}
+
+function strictHelperSummaryForStaticReference(
+  expression: Node,
+  helpers: ReadonlyMap<string, PrivateScopeProvenance>,
+): PrivateScopeProvenance | undefined {
+  const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
+  return key ? helpers.get(key) : undefined;
 }
 
 function awaitedExpressionPrivateScope(
@@ -1883,26 +2021,73 @@ function tableKeyFromStaticPath(
 /** @internal */ export function queryInputKeyOperand(
   expression: Node,
 ): Pick<QueryInstanceKeyOperand, 'inputKey'> {
-  // SPEC §10.3 (KV414 IDOR): recognize the validated-input bag at ANY depth — `input.id`,
-  // `input.session.userId`, `input.a.b.c` — so a NESTED input value whose field name
-  // happens to be `session`/`guard`/`tenant` is still classified as a client arg (the
-  // args/IDOR branch) instead of being mistaken for trusted session scope (H5). The
-  // depth-1 `input.x` case keys identically to before (`arg:x`).
-  const segments = staticAccessSegments(expression);
-  if (
-    segments &&
-    segments.path.length > 0 &&
-    Node.isIdentifier(segments.root) &&
-    segments.root.getText() === 'input'
-  ) {
-    return { inputKey: `arg:${segments.path.join('.')}` };
-  }
-
-  const destructuredKey = localDestructuredInputKey(expression);
-  return destructuredKey ? { inputKey: `arg:${destructuredKey}` } : {};
+  // SPEC §10.3 (KV414 IDOR): recognize the validated-input bag at ANY depth,
+  // including static const aliases/destructures/wrappers. A nested client value
+  // named `session`/`guard`/`tenant` must stay an `args` signal, never trusted scope.
+  const inputPath = inputKeyPathForExpression(expression);
+  return inputPath ? { inputKey: `arg:${inputPath}` } : {};
 }
 
-function localDestructuredInputKey(expression: Node): string | undefined {
+function inputKeyPathForExpression(expression: Node): string | undefined {
+  const path = inputPathSegmentsForExpression(expression);
+  return path && path.length > 0 ? path.join('.') : undefined;
+}
+
+function inputPathSegmentsForExpression(expression: Node, depth = 0): string[] | undefined {
+  if (depth > 6) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+
+  const segments = staticAccessSegments(expression);
+  if (segments && Node.isIdentifier(segments.root) && segments.root.getText() === 'input') {
+    return segments.path;
+  }
+
+  const destructuredKey = localDestructuredInputPath(node, depth + 1);
+  if (destructuredKey) return destructuredKey;
+
+  if (Node.isIdentifier(node)) return localConstInputAliasPath(node, depth + 1);
+
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const property = staticAccessName(node);
+    if (!property) return undefined;
+
+    if (staticAccessRootHasStableConstBinding(node)) {
+      const accessValue = localConstLiteralStaticAccessValue(node);
+      if (accessValue) return inputPathSegmentsForExpression(accessValue, depth + 1);
+    }
+
+    const base = inputPathSegmentsForExpression(node.getExpression(), depth + 1);
+    return base ? [...base, property] : undefined;
+  }
+
+  if (isObjectFreezeCall(node)) {
+    const argument = singleObjectFreezeArgument(node);
+    return argument ? inputPathSegmentsForExpression(argument, depth + 1) : undefined;
+  }
+
+  return undefined;
+}
+
+function localConstInputAliasPath(expression: Node, depth: number): string[] | undefined {
+  if (depth > 6) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  const initializer = declaration.getInitializer();
+  return initializer ? inputPathSegmentsForExpression(initializer, depth + 1) : undefined;
+}
+
+function localDestructuredInputPath(expression: Node, depth: number): string[] | undefined {
+  if (depth > 6) return undefined;
   const node = unwrappedStaticExpressionNode(expression);
   if (!Node.isIdentifier(node)) return undefined;
 
@@ -1911,23 +2096,49 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   if (!declaration || !Node.isBindingElement(declaration)) return undefined;
   if (isRestBindingElement(declaration)) return undefined;
   if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+  if (declaration.getInitializer()) return undefined;
 
-  const pattern = declaration.getParent();
-  if (!Node.isObjectBindingPattern(pattern)) return undefined;
-
-  const variable = pattern.getParent();
-  if (!Node.isVariableDeclaration(variable)) return undefined;
+  const binding = objectBindingPathAndVariable(declaration);
+  if (!binding) return undefined;
+  const { path, variable } = binding;
   const declarationList = variable.getParent();
   if (!Node.isVariableDeclarationList(declarationList)) return undefined;
   if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
 
   const initializer = variable.getInitializer();
-  const source = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  if (!source || !Node.isIdentifier(source) || source.getText() !== 'input') return undefined;
+  if (!initializer) return undefined;
 
-  const property = declaration.getPropertyNameNode();
-  const key = property ? propertyNameText(property) : declaration.getNameNode().getText();
-  return key && !key.includes('.') ? key : undefined;
+  const base = inputPathSegmentsForExpression(initializer, depth + 1);
+  if (base) return [...base, ...path];
+
+  const object = localConstLiteralRootValue(initializer);
+  if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
+  return objectLiteralStaticPathInputPath(object, path, depth + 1);
+}
+
+function objectLiteralStaticPathInputPath(
+  object: ObjectLiteralExpression,
+  path: readonly string[],
+  depth: number,
+): string[] | undefined {
+  if (depth > 6) return undefined;
+  let value: Node | undefined = object;
+  for (const [index, segment] of path.entries()) {
+    const current = unwrappedStaticExpressionNode(value);
+    if (!Node.isObjectLiteralExpression(current)) {
+      const base = inputPathSegmentsForExpression(current, depth + 1);
+      if (base) return [...base, ...path.slice(index)];
+
+      const alias = localConstLiteralAliasValue(current);
+      if (!alias || !Node.isObjectLiteralExpression(alias)) return undefined;
+      value = alias;
+      continue;
+    }
+
+    value = objectLiteralSingleStaticPropertyValue(current, segment);
+    if (!value) return undefined;
+  }
+  return inputPathSegmentsForExpression(value, depth + 1);
 }
 
 /** @internal */ export function compositeQueryInstanceKey(
@@ -2648,6 +2859,7 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   return {
     argCandidates: pnfAllEqOperandPairs(pnf).map(toComparison),
     instanceKey: (pnfExactConjuncts(pnf) ?? []).map(toComparison),
+    ownerScopePredicates: [comparisonPnf(pnf, toComparison)],
   };
 }
 
@@ -3034,6 +3246,24 @@ function mutationTargetRootName(node: Node): string | undefined {
     return conjuncts;
   }
   return null;
+}
+
+function comparisonPnf(
+  pnf: PredicatePnf,
+  toComparison: (conjunct: EqPredicateConjunct) => QueryInstanceKeyComparison,
+): QueryPredicateComparisonPnf {
+  if (pnf.kind === 'eq') {
+    return { comparison: toComparison({ left: pnf.left, right: pnf.right }), kind: 'eq' };
+  }
+
+  if (pnf.kind === 'and' || pnf.kind === 'or') {
+    return {
+      kind: pnf.kind,
+      nodes: pnf.nodes.map((node) => comparisonPnf(node, toComparison)),
+    };
+  }
+
+  return pnf.kind === 'opaque' ? { kind: 'opaque' } : { kind: 'non-eq' };
 }
 
 /** @internal */ export function eqPredicateConjuncts(
