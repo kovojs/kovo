@@ -768,6 +768,7 @@ function eqOperandsAreTableColumnArgKeyed(
 
   for (const {
     predicate,
+    predicateCallName,
     readTableIdentifier: relationalReadTableIdentifier,
   } of queryRelationalWherePredicates(body, receiverReferences, relationalTableName)) {
     const resolveTableIdentifier = relationalReadTableIdentifier
@@ -778,19 +779,22 @@ function eqOperandsAreTableColumnArgKeyed(
       right: queryInstanceKeyOperand(right, resolveTableIdentifier, sessionContext),
     });
 
-    const conjuncts = eqPredicateConjuncts(predicate);
+    const conjuncts = eqPredicateConjuncts(predicate, predicateCallName);
     if (conjuncts) instanceKey.push(...conjuncts.map(toComparison));
 
-    argCandidates.push(...allEqOperandPairs(predicate).map(toComparison));
+    argCandidates.push(...allEqOperandPairs(predicate, predicateCallName).map(toComparison));
   }
 
   return { argCandidates, instanceKey };
 }
 
 interface RelationalWherePredicate {
+  predicateCallName?: PredicateCallNameResolver;
   predicate: Node;
   readTableIdentifier?: (node: Node) => string | undefined;
 }
+
+type PredicateCallNameResolver = (callee: Node) => string | undefined;
 
 function queryRelationalWherePredicates(
   body: ObjectLiteralExpression,
@@ -832,7 +836,12 @@ function relationalWherePredicate(
   const readTableIdentifier = Node.isIdentifier(tableParameter)
     ? relationalTableParameterIdentifier(tableParameter, tableIdentifier)
     : undefined;
-  return { predicate, ...(readTableIdentifier ? { readTableIdentifier } : {}) };
+  const predicateCallName = relationalPredicateCallNameResolver(node);
+  return {
+    ...(predicateCallName ? { predicateCallName } : {}),
+    predicate,
+    ...(readTableIdentifier ? { readTableIdentifier } : {}),
+  };
 }
 
 function singleReturnExpression(body: Node): Node | undefined {
@@ -857,6 +866,53 @@ function relationalTableParameterIdentifier(
       symbolForIdentifierReference(expression) ?? expression.getSymbol(),
     );
     return symbolKey === parameterKey ? tableIdentifier : undefined;
+  };
+}
+
+const RELATIONAL_PREDICATE_CALL_NAMES = new Set([
+  'and',
+  'between',
+  'eq',
+  'gt',
+  'gte',
+  'inArray',
+  'lt',
+  'lte',
+  'ne',
+  'not',
+  'notInArray',
+  'or',
+]);
+
+function relationalPredicateCallNameResolver(
+  predicate: ArrowFunction | FunctionExpression,
+): PredicateCallNameResolver | undefined {
+  const operators = predicate.getParameters()[1]?.getNameNode();
+  if (!operators || !Node.isObjectBindingPattern(operators)) return undefined;
+
+  const aliases = new Map<string, string>();
+  for (const element of operators.getElements()) {
+    if (isRestBindingElement(element) || element.getInitializer()) continue;
+
+    const canonical = objectBindingPropertyName(element);
+    if (!canonical || !RELATIONAL_PREDICATE_CALL_NAMES.has(canonical)) continue;
+
+    const name = element.getNameNode();
+    if (!Node.isIdentifier(name)) continue;
+
+    const key = resolvedSymbolKey(name.getSymbol());
+    if (key) aliases.set(key, canonical);
+  }
+  if (aliases.size === 0) return undefined;
+
+  return (callee: Node) => {
+    const expression = unwrappedStaticExpressionNode(callee);
+    if (!Node.isIdentifier(expression)) return undefined;
+
+    const key = resolvedSymbolKey(
+      symbolForIdentifierReference(expression) ?? expression.getSymbol(),
+    );
+    return key ? aliases.get(key) : undefined;
   };
 }
 
@@ -894,8 +950,11 @@ function relationalQueryTableExpression(
  * branches, non-equality/range comparisons, and negated membership are included
  * here but must never discharge an instance key or owner-principal session proof.
  */
-/** @internal */ export function allEqOperandPairs(predicate: Node): EqPredicateConjunct[] {
-  return pnfAllEqOperandPairs(predicatePnf(predicate));
+/** @internal */ export function allEqOperandPairs(
+  predicate: Node,
+  resolveCallName?: PredicateCallNameResolver,
+): EqPredicateConjunct[] {
+  return pnfAllEqOperandPairs(predicatePnf(predicate, resolveCallName));
 }
 
 /** @internal */ export function queryInstanceKeyOperand(
@@ -2445,19 +2504,22 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   | { expr: string; kind: 'opaque' }
   | { expr: string; kind: 'or'; nodes: readonly PredicatePnf[] };
 
-/** @internal */ export function predicatePnf(node: Node): PredicatePnf {
+/** @internal */ export function predicatePnf(
+  node: Node,
+  resolveCallName?: PredicateCallNameResolver,
+): PredicatePnf {
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isCallExpression(expression)) return { expr: expression.getText(), kind: 'opaque' };
 
   const callee = expression.getExpression();
   if (!Node.isIdentifier(callee)) return { expr: expression.getText(), kind: 'opaque' };
-  const name = callee.getText();
+  const name = resolveCallName?.(callee) ?? callee.getText();
 
   if (name === 'and' || name === 'or') {
     return {
       expr: expression.getText(),
       kind: name,
-      nodes: expression.getArguments().map((argument) => predicatePnf(argument)),
+      nodes: expression.getArguments().map((argument) => predicatePnf(argument, resolveCallName)),
     };
   }
 
@@ -2466,7 +2528,7 @@ function localDestructuredInputKey(expression: Node): string | undefined {
     const onlyElement = right ? singleLiteralArrayElement(right) : undefined;
     if (left && onlyElement) return { kind: 'eq', left, right: onlyElement };
     return (
-      nonliteralMembershipPnf(expression, 'inArray') ?? {
+      nonliteralMembershipPnf(expression, 'inArray', resolveCallName) ?? {
         expr: expression.getText(),
         kind: 'opaque',
       }
@@ -2496,8 +2558,8 @@ function localDestructuredInputKey(expression: Node): string | undefined {
 
   if (name === 'notInArray') {
     return (
-      nonEqMembershipPnf(expression) ??
-      nonliteralMembershipPnf(expression, 'notInArray') ?? {
+      nonEqMembershipPnf(expression, undefined, resolveCallName) ??
+      nonliteralMembershipPnf(expression, 'notInArray', resolveCallName) ?? {
         expr: expression.getText(),
         kind: 'opaque',
       }
@@ -2507,11 +2569,12 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   if (name === 'not') {
     const [argument] = expression.getArguments();
     const negatedMembership = argument
-      ? (nonEqMembershipPnf(argument, 'inArray') ?? nonliteralMembershipPnf(argument, 'inArray'))
+      ? (nonEqMembershipPnf(argument, 'inArray', resolveCallName) ??
+        nonliteralMembershipPnf(argument, 'inArray', resolveCallName))
       : undefined;
     if (negatedMembership) return negatedMembership;
 
-    const pnf = argument ? predicatePnf(argument) : undefined;
+    const pnf = argument ? predicatePnf(argument, resolveCallName) : undefined;
     if (pnf?.kind === 'eq') return { kind: 'non-eq-comparison', left: pnf.left, right: pnf.right };
     return pnf && !pnfContainsEq(pnf) ? pnf : { expr: expression.getText(), kind: 'opaque' };
   }
@@ -2532,13 +2595,14 @@ function pnfContainsEq(pnf: PredicatePnf): boolean {
 function nonEqMembershipPnf(
   node: Node,
   expectedName?: 'inArray' | 'notInArray',
+  resolveCallName?: PredicateCallNameResolver,
 ): PredicatePnf | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isCallExpression(expression)) return undefined;
 
   const callee = expression.getExpression();
   if (!Node.isIdentifier(callee)) return undefined;
-  const name = callee.getText();
+  const name = resolveCallName?.(callee) ?? callee.getText();
   if (expectedName ? name !== expectedName : name !== 'notInArray') return undefined;
 
   const [left, right] = expression.getArguments();
@@ -2550,12 +2614,15 @@ function nonEqMembershipPnf(
 function nonliteralMembershipPnf(
   node: Node,
   expectedName: 'inArray' | 'notInArray',
+  resolveCallName?: PredicateCallNameResolver,
 ): PredicatePnf | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isCallExpression(expression)) return undefined;
 
   const callee = expression.getExpression();
-  if (!Node.isIdentifier(callee) || callee.getText() !== expectedName) return undefined;
+  if (!Node.isIdentifier(callee)) return undefined;
+  const name = resolveCallName?.(callee) ?? callee.getText();
+  if (name !== expectedName) return undefined;
 
   const [left, right] = expression.getArguments();
   if (!left || !right || Node.isArrayLiteralExpression(unwrappedStaticExpressionNode(right))) {
@@ -2743,8 +2810,11 @@ function mutationTargetRootName(node: Node): string | undefined {
   return null;
 }
 
-/** @internal */ export function eqPredicateConjuncts(node: Node): EqPredicateConjunct[] | null {
-  return pnfExactConjuncts(predicatePnf(node));
+/** @internal */ export function eqPredicateConjuncts(
+  node: Node,
+  resolveCallName?: PredicateCallNameResolver,
+): EqPredicateConjunct[] | null {
+  return pnfExactConjuncts(predicatePnf(node, resolveCallName));
 }
 
 /** @internal */ export function pnfAllEqOperandPairs(pnf: PredicatePnf): EqPredicateConjunct[] {
