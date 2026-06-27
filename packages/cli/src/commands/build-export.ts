@@ -1,4 +1,13 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -7,11 +16,13 @@ import { pathToFileURL } from 'node:url';
 
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { KovoApp, StaticExportCompileDiagnostic, StylesheetAsset } from '@kovojs/server';
 import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 
 import { BUILD_USAGE, EXPORT_USAGE } from '../commands-manifest.js';
+import { kovoCheck } from '../graph-output.js';
 import {
   buildOutputVersion,
   type CliCommandResult,
@@ -333,6 +344,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     const loadedConfig = await loadKovoBuildConfig(process.cwd());
     const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
     const resolvedAppModulePath = resolve(options.appModulePath);
+    runTypeScriptBuildPreflight(resolvedAppModulePath);
     const [{ cloudflare, node, vercel }, { writeKovoNeutralBuild }, appModule, buildStylesheetCss] =
       await Promise.all([
         import('@kovojs/server/build'),
@@ -341,6 +353,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
         kovoBuildStylesheetCss(resolvedAppModulePath),
       ]);
     const app = appFromModule(appModule, options.appModulePath);
+    await runKovoBuildCheckPreflight(app, resolvedAppModulePath);
     const outDir = resolve(options.outDir);
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
@@ -413,6 +426,336 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
   } catch (error) {
     return buildErrorResult(error);
   }
+}
+
+function runTypeScriptBuildPreflight(appModulePath: string): void {
+  const tsconfigPath = findBuildTsconfig(appModulePath);
+  if (tsconfigPath === undefined) return;
+
+  let tscBin: string;
+  try {
+    tscBin = createRequire(`${dirname(tsconfigPath)}/package.json`).resolve('typescript/bin/tsc');
+  } catch (error) {
+    throw new Error(
+      `kovo build TypeScript preflight could not resolve typescript from ${dirname(
+        tsconfigPath,
+      )}. Install typescript or remove ${tsconfigPath}.\n${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  try {
+    execFileSync(process.execPath, [tscBin, '--noEmit', '--project', tsconfigPath], {
+      cwd: dirname(tsconfigPath),
+      encoding: 'utf8',
+      env: process.env,
+      stdio: 'pipe',
+    });
+  } catch (error) {
+    throw new Error(`kovo build TypeScript preflight failed:\n${execFileErrorOutput(error)}`);
+  }
+}
+
+async function runKovoBuildCheckPreflight(app: KovoApp, appModulePath: string): Promise<void> {
+  const graph = await buildCheckGraph(app, appModulePath);
+  const result = kovoCheck(graph);
+  if (result.exitCode === 0) return;
+
+  throw new Error(`kovo build check preflight failed:\n${result.output.trimEnd()}`);
+}
+
+async function buildCheckGraph(
+  app: KovoApp,
+  appModulePath: string,
+): Promise<CoreGraph.KovoCheckInput> {
+  const [{ accessFactsFromApp }, { deriveAppGraph }] = await Promise.all([
+    import('@kovojs/server/internal/execution'),
+    import('@kovojs/compiler/graph'),
+  ]);
+  const graph = await staticBuildCheckGraph(app, appModulePath);
+  const result = deriveAppGraph({
+    graph: {
+      ...graph,
+      access: accessFactsFromApp(app),
+    },
+  });
+  if (result.diagnostics.length > 0) {
+    return {
+      ...result.graph,
+      diagnostics: [
+        ...(graph.diagnostics ?? []),
+        ...result.diagnostics.map((diagnostic) => ({
+          code: diagnostic.code,
+          message: diagnostic.message,
+          severity: diagnostic.severity ?? 'error',
+          site: diagnostic.fileName,
+          ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+        })),
+      ],
+    };
+  }
+  return result.graph;
+}
+
+async function staticBuildCheckGraph(
+  app: KovoApp,
+  appModulePath: string,
+): Promise<CoreGraph.KovoCheckInput> {
+  const files = buildCheckSourceFiles(appModulePath);
+  const [queries, touchGraphDiagnostics, touchGraph] =
+    files.length === 0
+      ? [[], [], undefined]
+      : await staticDrizzleBuildFacts(files);
+
+  return {
+    ...(touchGraph === undefined ? {} : { touchGraph }),
+    ...(touchGraphDiagnostics.length === 0 ? {} : { sqlSafetyDiagnostics: touchGraphDiagnostics }),
+    endpoints: app.endpoints.map(endpointCheckFact),
+    mutations: app.mutations.map(mutationCheckFact),
+    optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
+    pages: app.routes.map(routeCheckFact),
+    queries: app.queries.map((query) => queryCheckFact(query, queries)),
+  };
+}
+
+interface BuildCheckSourceFile {
+  fileName: string;
+  source: string;
+}
+
+interface QueryReadFactLike {
+  reads?: readonly string[];
+  query?: string;
+}
+
+async function staticDrizzleBuildFacts(
+  files: readonly BuildCheckSourceFile[],
+): Promise<
+  [readonly QueryReadFactLike[], readonly CoreGraph.SqlSafetyDiagnosticFact[], CoreGraph.TouchGraph]
+> {
+  if (!files.some((file) => /from ['"](?:@kovojs\/drizzle|drizzle-orm)/.test(file.source))) {
+    return [[], [], {}];
+  }
+
+  let drizzle: typeof import('@kovojs/drizzle/internal/static');
+  try {
+    drizzle = await import('@kovojs/drizzle/internal/static');
+  } catch {
+    return [[], [], {}];
+  }
+  const {
+    analyzeSqlSafetyFromProject,
+    diagnosticsForQueryFacts,
+    extractQueryFactsFromProject,
+    extractTouchGraphFromProject,
+  } = drizzle;
+  const queryFacts = extractQueryFactsFromProject({ files });
+  const queryReadFacts = queryFacts as readonly QueryReadFactLike[];
+  const diagnostics = [
+    ...analyzeSqlSafetyFromProject({ files }),
+    ...diagnosticsForQueryFacts(queryFacts),
+  ].flatMap(sqlSafetyDiagnosticFact);
+  const touchGraph = extractTouchGraphFromProject({ files }) as CoreGraph.TouchGraph;
+  return [queryReadFacts, diagnostics, touchGraph];
+}
+
+function queryCheckFact(
+  query: KovoApp['queries'][number],
+  queryFacts: readonly QueryReadFactLike[],
+): CoreGraph.QueryReadSet {
+  const factReads =
+    queryFacts.find((fact) => fact.query === query.key)?.reads?.filter(isString) ?? [];
+  const declaredReads = (query.reads ?? []) as readonly { key: string }[];
+  return {
+    domains: uniqueSorted([...declaredReads.map((read) => read.key), ...factReads]),
+    query: query.key,
+    ...(query.access === undefined ? {} : { access: query.access }),
+    ...(query.guard === undefined ? {} : { guards: ['query.guard'] }),
+  };
+}
+
+function mutationCheckFact(mutation: KovoApp['mutations'][number]): CoreGraph.MutationExplain {
+  const registry = mutation.registry;
+  const touches = (registry?.touches ?? []) as readonly { key: string }[];
+  const inferredTouches = (registry?.inferredTouches ?? []) as readonly { domain: string }[];
+  const registryQueries = (registry?.queries ?? []) as readonly { key: string }[];
+  const writes = uniqueSorted(touches.map((touch) => touch.key));
+  const inferredWrites = uniqueSorted(inferredTouches.map((touch) => touch.domain));
+  const invalidates = uniqueSorted(registryQueries.map((query) => query.key));
+  return {
+    ...(mutation.access === undefined ? {} : { access: mutation.access }),
+    csrf: mutation.csrf === false ? 'exempt' : 'checked',
+    ...(mutation.csrf === false ? { csrfJustification: 'csrf:false mutation declaration' } : {}),
+    ...(mutation.guard === undefined ? {} : { guards: ['mutation.guard'] }),
+    ...(invalidates.length === 0 ? {} : { invalidates }),
+    key: mutation.key,
+    ...(writes.length === 0 && inferredWrites.length === 0
+      ? {}
+      : { writes: uniqueSorted([...writes, ...inferredWrites]) }),
+  };
+}
+
+function mutationOptimisticCheckFacts(
+  mutation: KovoApp['mutations'][number],
+): CoreGraph.OptimisticCoverage[] {
+  const optimistic = mutation.optimistic as Record<string, unknown> | undefined;
+  if (optimistic === undefined) return [];
+
+  const registryQueries = (mutation.registry?.queries ?? []) as readonly { key: string }[];
+  return registryQueries.flatMap((query) => {
+    const entry = optimistic[query.key];
+    if (entry === undefined) return [];
+    return [
+      {
+        mutation: mutation.key,
+        query: query.key,
+        status: entry === 'await-fragment' ? 'await-fragment' : 'hand-written',
+      },
+    ];
+  });
+}
+
+function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain {
+  const layoutQueries = Object.values(route.layout?.queries ?? {}) as readonly { key: string }[];
+  return {
+    ...(route.access === undefined ? {} : { access: route.access }),
+    ...(route.guard === undefined ? {} : { guards: ['route.guard'] }),
+    queries: uniqueSorted(layoutQueries.map((query) => query.key)),
+    route: route.path,
+  };
+}
+
+function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {
+  const csrf = endpoint.csrf?.exempt === true ? 'exempt' : 'checked';
+  return {
+    ...(endpoint.access === undefined ? {} : { access: endpoint.access }),
+    appOwnedSafety: endpoint.response.appOwnedSafety,
+    ...(endpoint.auth === undefined
+      ? {}
+      : { auth: endpoint.auth.kind === 'none' ? 'none' : endpoint.auth.name }),
+    body: endpoint.response.body,
+    cache: endpoint.response.cache,
+    csrf,
+    ...(csrf === 'exempt' ? { csrfJustification: endpoint.csrf?.justification ?? '' } : {}),
+    ...(endpoint.response.reservedHeaders === undefined
+      ? {}
+      : { headers: endpoint.response.reservedHeaders }),
+    method: endpoint.method,
+    mount: endpoint.mount,
+    ...(endpoint.mountJustification === undefined
+      ? {}
+      : { mountJustification: endpoint.mountJustification }),
+    path: endpoint.path,
+    reason: endpoint.reason,
+    surface: 'endpoint',
+  };
+}
+
+function buildCheckSourceFiles(appModulePath: string): BuildCheckSourceFile[] {
+  const sourceDir = dirname(appModulePath);
+  return sourceFilesUnder(sourceDir, sourceDir);
+}
+
+function sourceFilesUnder(dir: string, root: string): BuildCheckSourceFile[] {
+  if (!existsSync(dir)) return [];
+  const entries = readdirSafe(dir);
+  return entries.flatMap((entry) => {
+    const path = join(dir, entry);
+    if (entry === 'node_modules' || entry === 'dist' || entry === '.kovo') return [];
+    const stat = statSafe(path);
+    if (!stat) return [];
+    if (stat.isDirectory()) return sourceFilesUnder(path, root);
+    if (!/\.[cm]?[jt]sx?$/.test(entry) || entry.endsWith('.d.ts')) return [];
+    return [
+      {
+        fileName: relative(root, path).split(/[\\/]/).join('/'),
+        source: readFileSync(path, 'utf8'),
+      },
+    ];
+  });
+}
+
+function findBuildTsconfig(appModulePath: string): string | undefined {
+  const relativeAppPath = relative(process.cwd(), appModulePath);
+  if (relativeAppPath.split(/[\\/]/).some((part) => part.startsWith('.'))) return undefined;
+
+  return findNearestFileWithin(dirname(appModulePath), 'tsconfig.json', process.cwd());
+}
+
+function findNearestFileWithin(
+  startDir: string,
+  fileName: string,
+  stopDir: string,
+): string | undefined {
+  const absoluteStopDir = resolve(stopDir);
+  for (let current = resolve(startDir); ; current = dirname(current)) {
+    const relativeToStop = relative(absoluteStopDir, current);
+    if (relativeToStop.startsWith('..') || isAbsolute(relativeToStop)) return undefined;
+    const candidate = join(current, fileName);
+    if (existsSync(candidate)) return candidate;
+    if (current === absoluteStopDir) return undefined;
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+  }
+}
+
+function readdirSafe(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+function statSafe(path: string): ReturnType<typeof statSync> | undefined {
+  try {
+    return statSync(path);
+  } catch {
+    return undefined;
+  }
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort();
+}
+
+function sqlSafetyDiagnosticFact(value: unknown): CoreGraph.SqlSafetyDiagnosticFact[] {
+  if (!isRecord(value)) return [];
+  if (
+    isDiagnosticCode(value.code) &&
+    typeof value.message === 'string' &&
+    typeof value.site === 'string' &&
+    (value.severity === undefined ||
+      value.severity === 'error' ||
+      value.severity === 'warn' ||
+      value.severity === 'lint' ||
+      value.severity === 'notice')
+  ) {
+    return [
+      {
+        code: value.code,
+        message: value.message,
+        severity: value.severity ?? 'error',
+        site: value.site,
+      },
+    ];
+  }
+  return [];
+}
+
+function execFileErrorOutput(error: unknown): string {
+  if (isRecord(error)) {
+    const stdout = typeof error.stdout === 'string' ? error.stdout.trimEnd() : '';
+    const stderr = typeof error.stderr === 'string' ? error.stderr.trimEnd() : '';
+    const output = [stdout, stderr].filter(Boolean).join('\n');
+    if (output) return output;
+  }
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function inspectKovoBuildPreset(

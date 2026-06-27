@@ -145,9 +145,12 @@ The catalog covers the headless-UI family (accordion, alert-dialog, autocomplete
 combobox, dialog, dropdown-menu, popover, select, tabs, toast, toggle, tooltip, and more — see
 [components](/guides/components/)).
 
-### `kovo build` — production build of an app module
+### `kovo build` — verified production build of an app module
 
-Builds a Kovo app module into a preset production output:
+Runs the production preflights, then builds a Kovo app module into a preset output. When the app
+belongs to a TypeScript project, the command runs `tsc --noEmit` for the nearest `tsconfig.json`;
+after loading the app it derives the same graph used by `kovo check` and fails on verifier findings
+before writing deploy artifacts.
 
 ```sh
 kovo build ./src/app.ts                          # → dist/
@@ -238,10 +241,10 @@ npm run check:kovo   →  vp run kovo-check  →  kovo check   (graph consistenc
 npm run test:*       →  vp run <task>                   (project test suites)
 ```
 
-Use `vp` to _run things_; use `kovo` to _ask the graph questions_ and emit artifacts. In CI a typical
-gate is `vp check` (TypeScript proves all wiring) followed by `kovo check` (the framework proves
-touch-graph consistency, optimistic exhaustiveness, and update coverage) — together they make an app's
-wiring proof-carrying without executing a browser.
+Use `vp` to _run things_; use `kovo` to _ask the graph questions_ and emit artifacts. In CI,
+`kovo build` reruns the production TypeScript and graph-verifier preflights before emitting deploy
+output; keep `kovo check` as an explicit earlier step when you want a stable `kovo-check/v1` log or
+to debug touch-graph consistency, optimistic exhaustiveness, and update coverage without building.
 
 ## Next
 
