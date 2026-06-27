@@ -908,6 +908,41 @@ export const ProductGrid = component({
     expect(derived.graph.access?.filter((fact) => fact.decision === 'missing')).toHaveLength(3);
   });
 
+  it('preserves caller-provided access facts when deriving the app graph', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        access: [
+          {
+            decision: 'guard',
+            detail: 'guard=mutation.guard',
+            kind: 'mutation',
+            name: 'cart/add',
+            source: 'legacy-guard',
+          },
+        ],
+        mutations: [{ key: 'cart/add', writes: ['cart'] }],
+        queries: [{ domains: ['cart'], query: 'cart' }],
+      },
+    });
+
+    expect(derived.graph.access).toEqual([
+      {
+        decision: 'guard',
+        detail: 'guard=mutation.guard',
+        kind: 'mutation',
+        name: 'cart/add',
+        source: 'legacy-guard',
+      },
+      {
+        decision: 'missing',
+        detail: 'guard=-',
+        kind: 'query',
+        name: 'cart',
+        source: 'legacy-guard',
+      },
+    ]);
+  });
+
   it('derives page access facts from compiled JSX route pages', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',

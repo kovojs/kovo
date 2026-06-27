@@ -505,13 +505,16 @@ async function staticBuildCheckGraph(
   const files = buildCheckSourceFiles(appModulePath);
   const [queries, touchGraphDiagnostics, touchGraph] =
     files.length === 0 ? [[], [], undefined] : await staticDrizzleBuildFacts(files);
+  const liveTargetQueries = liveTargetQueryDefinitions(app);
 
   return {
     ...(touchGraph === undefined ? {} : { touchGraph }),
     ...(touchGraphDiagnostics.length === 0 ? {} : { sqlSafetyDiagnostics: touchGraphDiagnostics }),
     endpoints: app.endpoints.map(endpointCheckFact),
-    mutations: app.mutations.map(mutationCheckFact),
-    optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
+    mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, liveTargetQueries)),
+    optimistic: app.mutations.flatMap((mutation) =>
+      mutationOptimisticCheckFacts(mutation, liveTargetQueries),
+    ),
     pages: app.routes.map(routeCheckFact),
     queries: app.queries.map((query) => queryCheckFact(query, queries)),
   };
@@ -573,14 +576,19 @@ function queryCheckFact(
   };
 }
 
-function mutationCheckFact(mutation: KovoApp['mutations'][number]): CoreGraph.MutationExplain {
+function mutationCheckFact(
+  mutation: KovoApp['mutations'][number],
+  liveTargetQueries: readonly { key: string }[],
+): CoreGraph.MutationExplain {
   const registry = mutation.registry;
   const touches = (registry?.touches ?? []) as readonly { key: string }[];
   const inferredTouches = (registry?.inferredTouches ?? []) as readonly { domain: string }[];
   const registryQueries = (registry?.queries ?? []) as readonly { key: string }[];
   const writes = uniqueSorted(touches.map((touch) => touch.key));
   const inferredWrites = uniqueSorted(inferredTouches.map((touch) => touch.domain));
-  const invalidates = uniqueSorted(registryQueries.map((query) => query.key));
+  const invalidates = uniqueSorted(
+    [...registryQueries, ...liveTargetQueries].map((query) => query.key),
+  );
   return {
     ...(mutation.access === undefined ? {} : { access: mutation.access }),
     csrf: mutation.csrf === false ? 'exempt' : 'checked',
@@ -596,12 +604,13 @@ function mutationCheckFact(mutation: KovoApp['mutations'][number]): CoreGraph.Mu
 
 function mutationOptimisticCheckFacts(
   mutation: KovoApp['mutations'][number],
+  liveTargetQueries: readonly { key: string }[],
 ): CoreGraph.OptimisticCoverage[] {
   const optimistic = mutation.optimistic as Record<string, unknown> | undefined;
   if (optimistic === undefined) return [];
 
   const registryQueries = (mutation.registry?.queries ?? []) as readonly { key: string }[];
-  return registryQueries.flatMap((query) => {
+  return uniqueQueries([...registryQueries, ...liveTargetQueries]).flatMap((query) => {
     const entry = optimistic[query.key];
     if (entry === undefined) return [];
     return [
@@ -612,6 +621,25 @@ function mutationOptimisticCheckFacts(
       },
     ];
   });
+}
+
+function liveTargetQueryDefinitions(app: KovoApp): readonly { key: string }[] {
+  return uniqueQueries(
+    app.liveTargetRenderers.flatMap(
+      (renderer) => (renderer.queryDefinitions ?? []) as readonly { key: string }[],
+    ),
+  );
+}
+
+function uniqueQueries(queries: readonly { key: string }[]): { key: string }[] {
+  const seen = new Set<string>();
+  const unique: { key: string }[] = [];
+  for (const query of queries) {
+    if (seen.has(query.key)) continue;
+    seen.add(query.key);
+    unique.push(query);
+  }
+  return unique.sort((left, right) => left.key.localeCompare(right.key));
 }
 
 function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain {
@@ -903,10 +931,9 @@ async function loadBuildAppModule(appModulePath: string, root: string): Promise<
   const { createServer } = await import('vite-plus');
   const server = await createServer({
     appType: 'custom',
-    configFile: false,
     logLevel: 'error',
     root,
-    server: { middlewareMode: true },
+    server: { hmr: false, middlewareMode: true },
   });
   try {
     return await server.ssrLoadModule(viteSsrModuleId(appModulePath, root));

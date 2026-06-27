@@ -693,7 +693,7 @@ function mutationAccessFact(mutation: MutationExplain): AccessExplainFact {
   if (explicit) return explicit;
 
   const auth = mutation.auth ?? 'none';
-  const hasGuard = hasAuthGuard(mutation.guards ?? []) || auth !== 'none';
+  const hasGuard = (mutation.guards ?? []).length > 0 || auth !== 'none';
   return {
     decision: hasGuard ? 'guard' : 'missing',
     detail: hasGuard ? `guards=${listFacts(mutation.guards)} auth=${auth}` : 'guard=-',
