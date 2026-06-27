@@ -28,6 +28,7 @@ import type {
   HmrImpactReason,
   CompileDependencyFootprint,
   PackageComponentPrefixFact,
+  QueryShapeFact,
   RegistryFacts,
 } from './types.js';
 
@@ -85,6 +86,11 @@ export type KovoViteRegistryFactsSource =
   | RegistryFacts
   | ((fileName: string) => RegistryFacts | undefined);
 
+/** Query-shape facts passed to the compiler globally or selected per transformed file. */
+export type KovoViteQueryShapeFactsSource =
+  | readonly QueryShapeFact[]
+  | ((fileName: string) => readonly QueryShapeFact[] | undefined);
+
 /**
  * Options for createKovoVitePlugin / the `kovoVitePlugin` helper: diagnostic callbacks and
  * the package component prefixes to thread into compilation. Public plugin configuration
@@ -98,6 +104,7 @@ export interface KovoVitePluginOptions {
   onDiagnostic?: KovoViteDiagnosticReporter;
   onModuleDiagnostics?: KovoViteModuleDiagnosticReporter;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
+  queryShapeFacts?: KovoViteQueryShapeFactsSource;
   registryFacts?: KovoViteRegistryFactsSource;
 }
 
@@ -181,6 +188,7 @@ interface ViteCompileOptions {
   fileName: string;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   packagePrefixDiscoveryRoot?: string;
+  queryShapeFacts?: readonly QueryShapeFact[];
   registryFacts?: RegistryFacts;
   source: string;
 }
@@ -474,6 +482,7 @@ async function compileCachedViteComponentModule(
   fileName: string,
   source: string,
 ): Promise<ViteCompileResult> {
+  const queryShapeFacts = resolveViteQueryShapeFacts(options, fileName);
   const registryFacts = resolveViteRegistryFacts(options, fileName);
   const compileOptions = {
     fileName,
@@ -481,6 +490,7 @@ async function compileCachedViteComponentModule(
       ? {}
       : { packageComponentPrefixes: options.packageComponentPrefixes }),
     packagePrefixDiscoveryRoot: root,
+    ...(queryShapeFacts === undefined ? {} : { queryShapeFacts }),
     ...(registryFacts === undefined ? {} : { registryFacts }),
     source,
   };
@@ -491,6 +501,7 @@ async function compileCachedViteComponentModule(
       root,
       fileName,
       source,
+      queryShapeFacts,
       registryFacts,
     );
   }
@@ -506,6 +517,7 @@ async function compileCachedViteComponentModule(
           root,
           fileName,
           source,
+          queryShapeFacts,
           registryFacts,
         ),
       );
@@ -530,6 +542,7 @@ function compileViteComponentModule(
   root: string,
   fileName: string,
   source: string,
+  queryShapeFacts = resolveViteQueryShapeFacts(options, fileName),
   registryFacts = resolveViteRegistryFacts(options, fileName),
 ): MaybePromise<ViteCompileResult> {
   return compileComponentModule({
@@ -538,6 +551,7 @@ function compileViteComponentModule(
       ? {}
       : { packageComponentPrefixes: options.packageComponentPrefixes }),
     packagePrefixDiscoveryRoot: root,
+    ...(queryShapeFacts === undefined ? {} : { queryShapeFacts }),
     ...(registryFacts === undefined ? {} : { registryFacts }),
     source,
   });
@@ -621,6 +635,14 @@ function resolveViteRegistryFacts(
 ): RegistryFacts | undefined {
   if (typeof options.registryFacts === 'function') return options.registryFacts(fileName);
   return options.registryFacts;
+}
+
+function resolveViteQueryShapeFacts(
+  options: KovoVitePluginOptions,
+  fileName: string,
+): readonly QueryShapeFact[] | undefined {
+  if (typeof options.queryShapeFacts === 'function') return options.queryShapeFacts(fileName);
+  return options.queryShapeFacts;
 }
 
 function reportViteDiagnostics(
