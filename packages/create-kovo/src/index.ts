@@ -479,7 +479,12 @@ function renderCliError(error: unknown): string {
   const lines = [`create-kovo: ${message}`];
 
   if (message === 'Missing target directory.') {
-    lines.push('', `Usage: ${CREATE_KOVO_USAGE}`, '', 'Run `create-kovo --help` for examples and defaults.');
+    lines.push(
+      '',
+      `Usage: ${CREATE_KOVO_USAGE}`,
+      '',
+      'Run `create-kovo --help` for examples and defaults.',
+    );
   } else if (message.startsWith('Target directory is not empty: ')) {
     const root = message.slice('Target directory is not empty: '.length);
     lines.push(

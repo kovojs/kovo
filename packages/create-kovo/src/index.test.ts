@@ -547,7 +547,9 @@ describe('create-kovo starter (CLI)', () => {
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`Directory   ${root}`));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Name        hello-cli'));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     postgres'));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`Files       ${ALL_FILES.length}`));
+      expect(stdout).toHaveBeenCalledWith(
+        expect.stringContaining(`Files       ${ALL_FILES.length}`),
+      );
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Next steps'));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`cd '${root}'`));
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
@@ -644,7 +646,9 @@ describe('create-kovo starter (CLI)', () => {
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unknown option: --template'));
       expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unsupported dialect: mysql.'));
-      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('supported options and defaults'));
+      expect(stderr).toHaveBeenCalledWith(
+        expect.stringContaining('supported options and defaults'),
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
