@@ -232,32 +232,6 @@ function isSessionEstablishingSetCookie(rawSetCookie: string): boolean {
   return true;
 }
 
-/** @internal True when Better Auth is clearing a browser session credential. */
-export function isBetterAuthSessionRevocationSetCookie(rawSetCookie: string): boolean {
-  const firstPair = rawSetCookie.split(';', 1)[0] ?? '';
-  const separatorIndex = firstPair.indexOf('=');
-  if (separatorIndex <= 0) return false;
-
-  const normalizedName = normalizeCookieName(firstPair.slice(0, separatorIndex).trim());
-  if (!normalizedName.includes('session')) return false;
-
-  const value = firstPair.slice(separatorIndex + 1).trim();
-  const attributes = rawSetCookie.slice(firstPair.length).toLowerCase();
-  if (value === '') return true;
-  if (/(?:^|;)\s*max-age\s*=\s*0(?:\s*;|\s*$)/.test(attributes)) return true;
-  if (/(?:^|;)\s*max-age\s*=-/.test(attributes)) return true;
-
-  const expires = parseSetCookieExpires(rawSetCookie);
-  return expires !== undefined && expires <= Date.now();
-}
-
-function normalizeCookieName(name: string): string {
-  return name
-    .replace(/^__host-/i, '')
-    .replace(/^__secure-/i, '')
-    .toLowerCase();
-}
-
 // part-3 I3: extract a `Set-Cookie` `Expires` attribute as epoch ms, or undefined when the
 // attribute is absent or unparseable. Operates on the raw (original-case) header so the
 // HTTP-date is recoverable by `Date.parse`.

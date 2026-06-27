@@ -2,7 +2,6 @@ import type { SessionProvider, SessionProviderResult } from '@kovojs/server';
 
 import {
   getBetterAuthSetCookie,
-  isBetterAuthSessionRevocationSetCookie,
   type BetterAuthGetSessionWithHeadersResult,
   type BetterAuthLike,
   type BetterAuthRequestLike,
@@ -69,17 +68,12 @@ export function betterAuthSession<
     const payload = isEnvelope
       ? (result as BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>).response
       : (result as BetterAuthSessionPayload<AuthSession, AuthUser> | null | undefined);
+    const value = payload ? map(payload) : null;
 
     const headers = isEnvelope
       ? (result as BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>).headers
       : undefined;
     const setCookies = getBetterAuthSetCookie(headers);
-    const revoked = setCookies.some(isBetterAuthSessionRevocationSetCookie);
-    // OPP-11 / SPEC.md §6.5: Kovo does not own Better Auth's session store, but it does
-    // own this provider boundary. If Better Auth emits a session-clearing cookie while
-    // returning a stale payload, treat the browser credential as instantly revoked for
-    // this request instead of projecting that payload into `req.session`.
-    const value = payload && !revoked ? map(payload) : null;
 
     // Forward refresh/cookie-cache Set-Cookie headers only when the instance actually
     // produced them; otherwise resolve to the plain mapped value so the contract is fully
