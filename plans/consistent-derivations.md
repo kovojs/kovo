@@ -1,6 +1,7 @@
 # Consistent Derivations Plan
 
-**Status:** Draft active plan created 2026-06-27. No implementation has landed.
+**Status:** Active implementation started 2026-06-27. Baseline/SPEC contract checkpoint landed;
+runtime/compiler slices are in progress.
 **Source of truth:** `SPEC.md` remains normative. This plan should update `SPEC.md` first, then code,
 tests, generated artifacts, and docs.
 
@@ -19,16 +20,35 @@ This keeps `route('/products/:id', ...)` and `endpoint('/healthz', ...)` explici
 
 ## Baseline
 
-- [ ] **Confirm and snapshot the current named surfaces.**
+- [x] **Confirm and snapshot the current named surfaces.**
   - Evidence needed: cite the exact current signatures and generated wire locations for
     `component`, `route`, `endpoint`, `webhook`, `mutation`, `query`, `domain`/`tag`, and mutation
     `queue` before changing behavior.
+  - Evidence (2026-06-27 source snapshot before behavior changes): `component(definition)` in
+    `packages/core/src/index.ts` already leaves `name` undefined for compiler derivation, with
+    compiler naming in `packages/compiler/src/component-names.ts` and component wire stamps
+    `kovo-c`/`kovo-live-component`/`kovo-fragment-target`; `route(path, definition)` in
+    `packages/server/src/route.ts` and `endpoint(path, definition)` in
+    `packages/server/src/endpoint.ts` keep path strings as public HTTP addresses;
+    `packages/server/src/webhook.ts` uses `webhook(name, { path, ... })` and wires `name`, `path`,
+    endpoint `reason`, and `webhookReplayScope(name)`; `mutation(key, definition)` and
+    `queue?: string` in `packages/server/src/mutation/definition.ts` feed `/_m/${key}`,
+    `data-mutation`, JSX form attributes in `packages/server/src/jsx-runtime.ts`, dispatch in
+    `packages/server/src/app-dispatch.ts`, and replay scope composition in
+    `packages/server/src/replay.ts`; `query(key, definition)` in `packages/server/src/query.ts`
+    feeds `/_q/${key}`, `<kovo-query name>`, `<script kovo-query>`, query stores, and
+    `kovo-deps` stamps; `domain(key)`/`tag(key)` in `packages/server/src/domain.ts` are the current
+    invalidation currency for `reads`, `touches`, `Kovo-Changes`, and touch graphs.
 
-- [ ] **Add the SPEC rule for address strings vs derived registry identities.**
+- [x] **Add the SPEC rule for address strings vs derived registry identities.**
   - Update `SPEC.md` near the component derivation rule and the mutation/query/webhook/data-plane
     sections so the rule is stated once and referenced from each primitive.
   - The rule must preserve the current component behavior: component DOM leaves, registry keys,
     fragment targets, and handler names stay source-derived.
+  - Evidence (2026-06-27): `SPEC.md` now defines the framework-wide address-string vs
+    source-derived registry identity rule in §4.1, references it from §6.1, updates the webhook
+    shape in §9.1, records domain/tag derivation in §10.1, updates query and mutation examples in
+    §10.2/§10.3, and separates queue names from registry identities in §10.4.
 
 ## Phase 1 - Webhook Shape
 
@@ -156,7 +176,5 @@ This keeps `route('/products/:id', ...)` and `endpoint('/healthz', ...)` explici
 
 ## Latest Verification
 
-- 2026-06-27: Plan only. Current source inspection found the relevant existing contracts in
-  `SPEC.md`, `packages/server/src/mutation/definition.ts`, `packages/server/src/query.ts`,
-  `packages/server/src/route.ts`, `packages/server/src/endpoint.ts`, `packages/server/src/webhook.ts`,
-  and `packages/server/src/domain.ts`.
+- 2026-06-27: `pnpm run check:vp` and `git diff --check` passed after the baseline/SPEC ledger
+  update.
