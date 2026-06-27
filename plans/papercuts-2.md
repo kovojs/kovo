@@ -7,28 +7,13 @@ basic todo app at `/Users/mini/kovo-dogfood-todo` from local `create-kovo`.
 ## Scope
 
 The run scaffolded a fresh SQLite app with local `packages/create-kovo/dist/index.mjs`,
+linked generated `@kovojs/*` dependencies to the local monorepo packages,
 converted the generated contact book into a minimal authenticated todo list, and
-exercised install, test, check, build, dev server on `0.0.0.0:5188`, browser login,
-add, and toggle. Production fixes are intentionally out of scope for this ledger.
+exercised install, test, check, build, dev server on `0.0.0.0:5188`, browser
+login, add, and toggle. Production fixes are intentionally out of scope for this
+ledger.
 
 ## Issues
-
-- [ ] **Fresh scaffold can reference unpublished `@kovojs/*` versions.**
-  - Observed behavior: `pnpm install` in `/Users/mini/kovo-dogfood-todo` failed
-    immediately with `ERR_PNPM_NO_MATCHING_VERSION` for `@kovojs/server@0.1.3`;
-    npm reported the latest published `@kovojs/server` as `0.1.2`.
-  - Root cause: `create-kovo` renders the monorepo package version into generated
-    `package.json` dependencies, but the current framework package set has not
-    been published at that exact version. A fresh app outside the monorepo has no
-    local workspace fallback.
-  - Why it matters: the first post-scaffold command from the CLI's "Next steps"
-    fails before the app can run, even though the scaffold itself succeeded.
-  - Repro evidence: `node packages/create-kovo/dist/index.mjs /Users/mini/kovo-dogfood-todo --name kovo-dogfood-todo --dialect sqlite --disable-git`
-    succeeded, then `pnpm install` in the generated app failed fetching
-    `@kovojs/server@0.1.3`.
-  - Acceptance: generated apps should either install from published, mutually
-    available versions or provide an explicit local-development path when run
-    from an unpublished monorepo checkout.
 
 - [ ] **SQLite starter omits pnpm native-build approval for `better-sqlite3`.**
   - Observed behavior: after linking generated `@kovojs/*` dependencies to local
@@ -134,6 +119,10 @@ add, and toggle. Production fixes are intentionally out of scope for this ledger
 
 ## Refuted / Not Carried Forward
 
+- The initial generated app referenced unpublished `@kovojs/*@0.1.3` packages.
+  For dogfood runs this is release-state noise: the intended setup is to test
+  the local Kovo monorepo packages unless the user explicitly asks to validate
+  npm-published installs.
 - Better Auth's peer warning for `drizzle-orm@^0.45.2` versus `1.0.0-rc.3` was
   observed during install, but this run did not prove a direct failure caused by
   the peer range itself after the SQLite date-column workaround.

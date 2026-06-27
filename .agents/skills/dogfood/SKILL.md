@@ -47,9 +47,12 @@ If the user names an existing papercuts file, update that file instead.
 
 ## Dogfood Workflow
 
-1. **Start from local bits.** Use the local package or packed tarball path the user wants tested. If
-   exercising `create-kovo`, prefer a fresh throwaway app outside the repo such as
-   `/tmp/kovo-dogfood-<date>` or the user-specified app path.
+1. **Start from local bits.** Unless the user explicitly asks to test published npm packages, always
+   dogfood against the local Kovo monorepo. Build/run local `packages/create-kovo`, scaffold a fresh
+   app outside the repo such as `/tmp/kovo-dogfood-<date>` or the user-specified app path, then point
+   generated `@kovojs/*` dependencies at the local `packages/*` directories (or use the repo's
+   existing local-link workflow). Do not record "version is not published yet" as a papercut during
+   local dogfood runs; that is release-state noise, not framework/app-author friction.
 2. **Run the real workflow.** Install dependencies, start the dev server bound to the requested host
    when applicable, and use browser automation or direct HTTP calls to cover the ordinary path:
    scaffold, boot, auth, forms/mutations, query-backed regions, HMR edits, tests, and production
