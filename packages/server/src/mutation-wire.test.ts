@@ -74,7 +74,7 @@ describe('mutation wire headers', () => {
 
     const request = { sessionId: 's1' };
     const csrf = {
-      secret: 'live-target-secret',
+      secret: 'live-target-secret-0123456789abcdef',
       sessionId: (value: typeof request) => value.sessionId,
     };
     const descriptor = {
@@ -128,7 +128,7 @@ describe('mutation wire headers', () => {
   it('drops unattested or wrong-principal live-target descriptors before query execution', () => {
     const request = { sessionId: 's1' };
     const csrf = {
-      secret: 'live-target-secret',
+      secret: 'live-target-secret-0123456789abcdef',
       sessionId: (value: typeof request) => value.sessionId,
     };
     const descriptor = {
@@ -153,7 +153,7 @@ describe('mutation wire headers', () => {
     expect(
       mutationWireRequestFromHeaders({
         buildToken: 'build-a',
-        csrf: { ...csrf, secret: 'different-live-target-secret' },
+        csrf: { ...csrf, secret: 'different-live-target-secret-0123456789abcdef' },
         headers: {
           'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
         },

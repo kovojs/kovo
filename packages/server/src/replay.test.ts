@@ -750,7 +750,7 @@ describe('server mutation response replay', () => {
     const request = { session: { id: 's1' } };
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: 'test-secret-0123456789abcdef012345',
       sessionId(candidate: typeof request) {
         return candidate.session.id;
       },
@@ -797,7 +797,7 @@ describe('server mutation response replay', () => {
     const replayStore = createMemoryMutationReplayStore();
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: 'test-secret-0123456789abcdef012345',
       sessionId(candidate: { session: { id: string } }) {
         return candidate.session.id;
       },

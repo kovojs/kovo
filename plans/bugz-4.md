@@ -66,12 +66,14 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - **Distinct:** inverse of bugz-3 M2 (which _lost_ the no-store floor on these outcomes); this _adds_ document wrapping.
   - **Fix:** thread the `routeResponse` marker (or Content-Disposition) into `renderRouteDocumentResponse` and pass non-document outcomes through regardless of content-type.
 
-- [ ] **M2 — Deferred-stream boundary-collision detection scans raw HTML source while the client matches tag-stripped `textContent`; adjacent attacker fields re-open the bugz-3 M3 hazard.** `packages/server/src/deferred-stream.ts:144-156,174-182` vs client at `:94,:192`
+- [x] **M2 — Deferred-stream boundary-collision detection scans raw HTML source while the client matches tag-stripped `textContent`; adjacent attacker fields re-open the bugz-3 M3 hazard.** `packages/server/src/deferred-stream.ts:144-156,174-182` vs client at `:94,:192`
   - The bugz-3 M3 fix re-rolls the boundary by testing `line.includes('--<boundary>')` over raw serialized HTML/shell lines, but the emitted client cleanup/apply scripts test `node.textContent.includes('--<boundary>')` — and `textContent` strips tags and concatenates adjacent element text. A marker split across element boundaries (or formed by two adjacent escaped fields) evades the server re-roll. (Found independently by the mutation-stream and compiler-lowering dimensions.)
   - **Exploit:** default boundary `kovo-boundary`; an attacker plants two adjacent escaped fields (`{comments.map(c => <li>{c.text}</li>)}`), first ending `…x--kovo-`, next starting `boundary…`. Server misses it; the client cleanup removes a top-level body child (page-destroying DoS) and the apply walk breaks early dropping a co-located `<kovo-query>`/fragment.
   - **Verified:** worktree (3/3) — `<span>x--kovo-</span><span>boundaryy</span>` keeps the default boundary server-side, while the emitted client scripts' `textContent` match fires.
   - **Distinct:** bugz-3 M3 was exact-line-vs-substring; this is the residual raw-HTML-vs-`textContent` (tag-stripping) axis its fix didn't model.
   - **Fix:** model the client's check — strip tags / scan concatenated text (or escape the marker out of attacker-reachable text), and include the shell, before deciding to re-roll.
+  - **Evidence:** `pnpm exec vitest run packages/server/src/deferred-stream.test.ts --run` passed
+    after integration; boundary selection now scans tag-stripped textContent-like content before rerolling.
 
 - [x] **M3 — KV426 `trustedHtml` provenance gate misses object destructuring and ternary taint paths (stored/reflected XSS via the escape hatch).** `packages/compiler/src/validate/trusted-html-provenance.ts:132-145,187-221`
   - `classifyExpression` handles only PropertyAccess/ElementAccess/Identifier; a `ConditionalExpression` falls to `return null` (clean), and `classifyIdentifier`→`localConstInitializer` only follows aliases when `ts.isIdentifier(declaration.name)`, so an object-binding-pattern (`const { body } = post`) is invisible.
@@ -118,12 +120,14 @@ packages/browser/src/inline-loader-enhanced-submit.test.ts --run` passed after i
 packages/better-auth/src/index.schema-bridge.test.ts packages/better-auth/src/index.schema-materialize.test.ts
 --run` passed 44 tests after integration.
 
-- [ ] **M8 — Live-target descriptor attestation falls back to a per-process random secret when no app CSRF is configured, so a minted attestation can't verify across processes (post-mutation live updates silently drop).** `packages/server/src/mutation-wire.ts:490-506,522`
+- [x] **M8 — Live-target descriptor attestation falls back to a per-process random secret when no app CSRF is configured, so a minted attestation can't verify across processes (post-mutation live updates silently drop).** `packages/server/src/mutation-wire.ts:490-506,522`
   - When `options.csrf===undefined`, `createLiveTargetAttestation` HMACs with a module-scope `liveTargetAttestationSecret = randomBytes(32)` (per-process, per-import) instead of the deployment-stable secret. SSR mints on one request; a later mutation verifies on another — in multi-process/serverless deploys the secrets differ → `secureEqual` fails → the valid descriptor is filtered out (stale UI). Fails safe (never accepts a forgery).
   - **Exploit:** reachable from the flagship commerce example (no app-level `csrf`, per-mutation csrf, descriptor-gated orderHistory). Correctness/availability of an advertised §9.3 feature in the production-normal multi-process case.
   - **Verified:** worktree — two cache-busted module evaluations (≈ two processes) produce different attestations for the same descriptor in the no-csrf branch; identical in the csrf branch.
   - **Distinct:** no prior item concerns live-target attestation (bugz-3 M5/M6 better-auth machinery was reverted).
   - **Fix:** derive the no-csrf attestation secret from the deployment-stable framework secret (as the csrf branch does), or require a stable secret for live targets.
+  - **Evidence:** `pnpm exec vitest run packages/server/src/mutation-wire.test.ts --run` passed
+    after integration; no-CSRF live-target attestations now use a stable configured secret and fail closed in production without one.
 
 - [x] **M9 — One-time capability replay store's eviction horizon (20 min, wall clock) is decoupled from the token `expiresIn`, so a `oneTime` token with TTL>20 min replays after its record evicts.** `packages/server/src/capability-url.ts:92-114,295-303`
   - `createMemoryCapabilityReplayStore` (the only shipped store) pins each consumed id's eviction to `Date.now()+DEFAULT_CAPABILITY_TTL_MS*4` (20 min), independent of the token's expiry and of `verifyCapability`'s injectable `now`. For `expiresIn>20min` there is a window where the token is still valid but the replay record is gone → `consume()` returns true again.
@@ -156,19 +160,24 @@ packages/server/src/keyring.test.ts packages/server/src/env.test.ts --run` passe
   - **Distinct:** bugz M3 was the _design_ throw for anonymous clients; this is the per:'ip' guard being non-functional outside mutations.
   - **Fix:** thread a `clientIp` resolver into the query and route-page lifecycle requests too.
 
-- [ ] **M13 — bugz-3 M9 residual: a `crossTable` change still carries child-space keys, and the render/delta path narrows by them and drops the changed parent rows → stale at the render stage.** `packages/server/src/mutation/targets.ts:85-178`, `packages/core/src/query-delta.ts:104-150`
+- [x] **M13 — bugz-3 M9 residual: a `crossTable` change still carries child-space keys, and the render/delta path narrows by them and drops the changed parent rows → stale at the render stage.** `packages/server/src/mutation/targets.ts:85-178`, `packages/core/src/query-delta.ts:104-150`
   - M9 over-invalidates only at _target selection_ (`crossTable`→whole). But `mutationRegistryChangeRecords` still attaches resolved child-space `keys` to the crossTable change; `renderQueryChunks`→`buildAffectedKeysByDomain` includes those keys with no crossTable guard, and `renderQueryRerunChunk` ships a §9.1.1 delta keyed by them, so the changed parent rows (different key space) aren't in the delta → stale.
   - **Exploit:** relational `cart` domain (carts+cart_items); `removeCartItem` (writes cart_items) → crossTable change with `keys=[itemId]`; `cartList` (keyed by cart id) is selected whole but the shipped delta narrows by `itemId` and drops the cart rows → stale list. Gated on a delta-eligible relational-domain query.
   - **Verified:** worktree — real `mutationRegistryChangeRecords`+`renderQueryChunks`: crossTable change retains `keys`, the rerun chunk delta-narrows by child keys.
   - **Distinct:** M9 fixed target selection; this is the render/delta stage still narrowing (a different stage of the same fix).
   - **Fix:** drop/ignore `keys` on a `crossTable` change at the render/delta stage (force a full rerun, not a keyed delta).
+  - **Evidence:** `pnpm exec vitest run packages/server/src/mutation-delta.test.ts
+packages/core/src/query-delta.test.ts --run` passed after integration; cross-table child-space keys no
+    longer drive keyed query deltas.
 
-- [ ] **M14 — Static-export stale-document prune deletes declared static assets named `index.html` (silent shipped-output loss).** `packages/server/src/static-export-output.ts:163-212`
+- [x] **M14 — Static-export stale-document prune deletes declared static assets named `index.html` (silent shipped-output loss).** `packages/server/src/static-export-output.ts:163-212`
   - `pruneStaleStaticExportRouteDocuments` builds its owned set from `plan.writes.filter(w => w.itemKind === 'route-document')` only, then `rm()`s every `index.html` under the output root (except `/c/`) not in that set. A declared static-asset write whose basename is `index.html` is excluded → deleted right after being written.
   - **Exploit:** the public API `exportStaticApp(app, { assets: [{ path: '/legacy/index.html', source }] })` copies the page then the prune deletes it → the export silently omits the declared asset. Author-reachable, not attacker.
   - **Verified:** worktree — declared `/legacy/index.html` + `/legacy/page.html`; after `writeStaticExportOutput` the `index.html` asset is gone.
   - **Distinct:** not the `_headers` sidecar items (bugz M4 / bugz-3 L8); this is the prune deleting a declared asset.
   - **Fix:** include static-asset (and client-module) writes in the owned set before pruning.
+  - **Evidence:** `pnpm exec vitest run packages/server/src/static-export-output.test.ts --run`
+    passed after integration; declared static-asset `index.html` writes are retained during stale-route pruning.
 
 - [x] **M15 — `@kovojs/ui` Table structural parts (`Table`/`TableHead`/`TableBody`/`TableRow`) emit children RAW, bypassing the JSX runtime escaper (XSS).** `packages/ui/src/table.tsx:181,271`
   - `table.tsx` is the only `@kovojs/ui` component that hand-builds HTML and returns objects branded `Symbol.for('kovo.renderedHtml')` (trusted, shipped verbatim). `tablePart()` and `Table.render` interpolate `${children ?? ''}` with no escaping, and hand-built children never pass through the server JSX child escaper. Leaf cells (`TableCell`) correctly escape.
@@ -210,12 +219,14 @@ packages/ui/src/xss-escaping.test.tsx --run` passed after integration; structura
   - **Distinct:** bugz-3 L14 was redactedUrl keeping path secrets at rest; this is the outbound report destination via Host.
   - **Fix:** emit the report endpoint as a relative URL (or validate the origin against a configured allowlist), and ensure error docs carry no-store.
 
-- [ ] **L5 — The replay idempotency fingerprint embeds the per-render-rotating masked CSRF token on the enhanced wire path; `canonicalReplayInput`'s neutralization is dead code.** `packages/server/src/replay.ts:270-297`, `packages/server/src/mutation-wire.ts:333`
+- [x] **L5 — The replay idempotency fingerprint embeds the per-render-rotating masked CSRF token on the enhanced wire path; `canonicalReplayInput`'s neutralization is dead code.** `packages/server/src/replay.ts:270-297`, `packages/server/src/mutation-wire.ts:333`
   - `replayFingerprint` returns the precomputed `requestFingerprint` verbatim (from `canonicalRequestFingerprint`, no CSRF neutralization) and only calls `canonicalReplayInput` (which rewrites the csrf field) when it is absent. Because the masked token rotates per mint, identical bodies fingerprint differently across renders.
   - **Exploit:** an app using a _stable_ app-chosen `Kovo-Idem` across renders + two renders of the same form submitting the identical body → spurious 409 instead of an idempotent replay. NOT default-reachable (the default client mints a fresh idem per submit). Fails safe.
   - **Verified:** worktree (2/2) — identical body, two masked tokens → divergent fingerprints.
   - **Distinct:** bugz-3 L3 was the FormData→`{}` collapse; this is the dead CSRF-neutralization on the precomputed path.
   - **Fix:** neutralize the csrf field in `canonicalRequestFingerprint` too (or strip it before fingerprinting on the wire path).
+  - **Evidence:** `pnpm exec vitest run packages/server/src/replay.test.ts --run` passed after
+    integration; replay fingerprints now neutralize rotating CSRF fields even when a precomputed request fingerprint exists.
 
 - [ ] **L6 — bugz-3 H1/L11 residual: `isKovoServerCalleeExpression` still misses const-reassign, renamed local re-export, and re-aliased namespace bindings.** `packages/drizzle/src/static.ts:915-934`
   - The recognizer accepts bare/import-alias/namespace-member callees but not `const q = query`, a local barrel that renamed the re-export (`export { query as q } from '@kovojs/server'`), or `const s = srv; s.query(...)`. Fail-open consumers (derivation.ts, domain-writes.ts) then erase the security gates for that loader.
@@ -241,11 +252,13 @@ packages/ui/src/xss-escaping.test.tsx --run` passed after integration; structura
   - **Evidence:** `pnpm exec vitest run scripts/egress-floor.test.mjs --run` passed after integration;
     `127.evil.example` is no longer treated as loopback.
 
-- [ ] **L9 — The `_headers` sidecar keys the per-document security floor at `/index.html` (never `/`) with no `/*` document catch-all, so pretty-URL/homepage requests can ship without the header floor.** `packages/server/src/static-export-output.ts:308-334`
+- [x] **L9 — The `_headers` sidecar keys the per-document security floor at `/index.html` (never `/`) with no `/*` document catch-all, so pretty-URL/homepage requests can ship without the header floor.** `packages/server/src/static-export-output.ts:308-334`
   - The dynamic presets apply `documentStaticHeaders` to every document via a `/(.*)` catch-all; the sidecar instead emits one stanza per document keyed to its emitted file path (`/index.html`, `/about/index.html`) and no `/*` fallback. On hosts that match `_headers` against the _request_ path (Cloudflare Pages), a request to `/` or `/about/` matches no rule → no X-Frame-Options/COOP/Permissions-Policy/Referrer-Policy.
   - **Verified:** source-proof at HEAD — root artifact path is `/index.html`, pushed verbatim; only `/c/*`+`/assets/*` extra stanzas, no `/*` document fallback.
   - **Distinct:** bugz M4 = whether a sidecar is emitted; bugz-3 L8 = the immutable-asset stanzas; this is the document stanza _key_ and missing catch-all.
   - **Fix:** emit a `/*` document stanza carrying `documentStaticHeaders` (and/or key root document to `/`).
+  - **Evidence:** `pnpm exec vitest run packages/server/src/static-export-output.test.ts --run`
+    passed after integration; `_headers` now includes pretty-route document stanzas and a common `/*` fallback.
 
 - [x] **L10 — bugz-3 L10 residual: the CSS-value guard doesn't cover `style.create`/`keyframes`, nor token/step NAMES — CSS rule injection escapes the guard.** `packages/style/src/engine.ts:629-640,700-726,524-540`
   - `assertCssValueSafe` (rejects `<>{};\\`+controls) is wired into only `defineVars`/`createTheme` and only for the _value_. `style.create()`/`createAtomicStyles()` serialize values into identical `__rules[].rule` strings with no guard, and `keyframes()` serializes both the value and the step NAME, and `defineVars` doesn't guard the token NAME.
