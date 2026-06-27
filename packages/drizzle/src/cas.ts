@@ -50,6 +50,7 @@ export type CasResult = CasConflict | CasSuccess;
  * `rowsAffected`).
  */
 export interface DrizzleUpdateResult {
+  affectedRows?: number | null;
   changes?: number | null;
   rowCount?: number | null;
   rowsAffected?: number | null;
@@ -83,7 +84,8 @@ export async function compareAndSet(
   update: DrizzleUpdateResult | Promise<DrizzleUpdateResult>,
 ): Promise<CasResult> {
   const result = await update;
-  const affected = result.rowCount ?? result.rowsAffected ?? result.changes ?? 0;
+  const affected =
+    result.rowCount ?? result.rowsAffected ?? result.affectedRows ?? result.changes ?? 0;
   if (affected > 0) {
     return { ok: true };
   }

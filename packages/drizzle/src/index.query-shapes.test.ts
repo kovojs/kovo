@@ -2021,7 +2021,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(facts).toEqual([
       {
         query: 'posts',
-        reads: ['post'],
+        reads: ['post', 'user'],
         shape: {
           author: {
             apiToken: {

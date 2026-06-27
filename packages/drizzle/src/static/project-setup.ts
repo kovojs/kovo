@@ -11,6 +11,7 @@ import {
   appendProjectConditionalTableNames,
   columnShapesForFile,
   projectColumnShapesByTable,
+  projectRelationTargetTableNamesByProperty,
   projectRelationalTableNamesByProperty,
   projectTableNamesBySymbol,
   isDrizzleReceiver,
@@ -141,6 +142,10 @@ import {
       sourceFile,
       extraction.tableNamesBySymbol,
     );
+    const relationTargetTableNames = projectRelationTargetTableNamesByProperty(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
     const objectCallbacks = projectObjectLiteralCallbacks(sourceFile);
     const classMemberCallbacks = projectClassStaticMemberCallbacks(sourceFile);
 
@@ -165,7 +170,13 @@ import {
             extraction.tableNamesBySymbol,
             namespaceTableNames,
           ),
-          ...extractProjectRelationalReadCalls(body, file, receivers, relationalTableNames),
+          ...extractProjectRelationalReadCalls(
+            body,
+            file,
+            receivers,
+            relationalTableNames,
+            relationTargetTableNames,
+          ),
         ],
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
@@ -206,7 +217,13 @@ import {
             extraction.tableNamesBySymbol,
             namespaceTableNames,
           ),
-          ...extractProjectRelationalReadCalls(body, file, receivers, relationalTableNames),
+          ...extractProjectRelationalReadCalls(
+            body,
+            file,
+            receivers,
+            relationalTableNames,
+            relationTargetTableNames,
+          ),
         ],
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
@@ -243,6 +260,7 @@ import {
             file,
             receivers,
             relationalTableNames,
+            relationTargetTableNames,
           ),
         ],
         receiverNames: [...receivers.names],
@@ -281,6 +299,7 @@ import {
             file,
             receivers,
             relationalTableNames,
+            relationTargetTableNames,
           ),
         ],
         unresolvedCalls: [],

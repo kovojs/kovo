@@ -913,22 +913,217 @@ function kovoServerImportBindings(sourceFile: SourceFile): KovoServerImportBindi
  * @internal
  */
 export function isKovoServerCalleeExpression(expression: Node, exportName: string): boolean {
+  return kovoServerCalleeExpressionMatches(expression, exportName, new Set(), 0);
+}
+
+function kovoServerCalleeExpressionMatches(
+  expression: Node,
+  exportName: string,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 6) return false;
   const callee = unwrappedStaticExpressionNode(expression);
   if (Node.isIdentifier(callee)) {
     if (callee.getText() === exportName) return true;
-    return (
+    if (
       kovoServerImportBindings(callee.getSourceFile())
         .identifiersByExport.get(exportName)
-        ?.has(callee.getText()) ?? false
-    );
+        ?.has(callee.getText()) ??
+      false
+    ) {
+      return true;
+    }
+    if (identifierImportsKovoServerExport(callee, exportName, seen, depth + 1)) return true;
+    const initializer = localConstIdentifierInitializer(callee);
+    return initializer
+      ? kovoServerCalleeExpressionMatches(initializer, exportName, seen, depth + 1)
+      : false;
   }
   if (Node.isPropertyAccessExpression(callee)) {
     if (callee.getName() !== exportName) return false;
-    const receiver = unwrappedStaticExpressionNode(callee.getExpression());
-    return (
-      Node.isIdentifier(receiver) &&
-      kovoServerImportBindings(callee.getSourceFile()).namespaces.has(receiver.getText())
+    return kovoServerNamespaceExpressionMatches(
+      callee.getExpression(),
+      exportName,
+      seen,
+      depth + 1,
     );
+  }
+  return false;
+}
+
+function kovoServerNamespaceExpressionMatches(
+  expression: Node,
+  exportName: string,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 6) return false;
+  const receiver = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(receiver)) return false;
+  if (kovoServerImportBindings(receiver.getSourceFile()).namespaces.has(receiver.getText())) {
+    return true;
+  }
+  if (namespaceImportsKovoServerExport(receiver, exportName, seen, depth + 1)) return true;
+  const initializer = localConstIdentifierInitializer(receiver);
+  return initializer
+    ? kovoServerNamespaceExpressionMatches(initializer, exportName, seen, depth + 1)
+    : false;
+}
+
+function localConstIdentifierInitializer(identifier: Node): Node | undefined {
+  if (!Node.isIdentifier(identifier)) return undefined;
+  const symbol = symbolForIdentifierReference(identifier) ?? identifier.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+  return declaration.getInitializer();
+}
+
+function identifierImportsKovoServerExport(
+  identifier: Node,
+  exportName: string,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (!Node.isIdentifier(identifier)) return false;
+  const local = identifier.getText();
+  for (const declaration of identifier.getSourceFile().getImportDeclarations()) {
+    for (const named of declaration.getNamedImports()) {
+      const localName = named.getAliasNode()?.getText() ?? named.getName();
+      if (localName !== local) continue;
+      const importedName = named.getName();
+      const specifier = declaration.getModuleSpecifierValue();
+      if (specifier === KOVO_SERVER_MODULE_SPECIFIER) return importedName === exportName;
+      const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
+      if (
+        moduleSourceFile &&
+        moduleExportsKovoServerName(moduleSourceFile, importedName, exportName, seen, depth + 1)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function namespaceImportsKovoServerExport(
+  identifier: Node,
+  exportName: string,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (!Node.isIdentifier(identifier)) return false;
+  const local = identifier.getText();
+  for (const declaration of identifier.getSourceFile().getImportDeclarations()) {
+    const namespace = declaration.getNamespaceImport();
+    if (!namespace || namespace.getText() !== local) continue;
+    const specifier = declaration.getModuleSpecifierValue();
+    if (specifier === KOVO_SERVER_MODULE_SPECIFIER) return true;
+    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
+    if (
+      moduleSourceFile &&
+      moduleExportsKovoServerName(moduleSourceFile, exportName, exportName, seen, depth + 1)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function moduleExportsKovoServerName(
+  sourceFile: SourceFile,
+  importedName: string,
+  exportName: string,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 6) return false;
+  const key = `${sourceFile.getFilePath()}:${importedName}:${exportName}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+
+  for (const declaration of sourceFile.getExportDeclarations()) {
+    const specifier = declaration.getModuleSpecifierValue();
+    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
+    const namedExports = declaration.getNamedExports();
+    if (namedExports.length === 0) {
+      if (specifier === KOVO_SERVER_MODULE_SPECIFIER && importedName === exportName) return true;
+      if (
+        moduleSourceFile &&
+        moduleExportsKovoServerName(moduleSourceFile, importedName, exportName, seen, depth + 1)
+      ) {
+        return true;
+      }
+      continue;
+    }
+
+    for (const named of namedExports) {
+      const exported = named.getAliasNode()?.getText() ?? named.getName();
+      if (exported !== importedName) continue;
+      const local = named.getName();
+      if (specifier === KOVO_SERVER_MODULE_SPECIFIER) return local === exportName;
+      if (
+        moduleSourceFile &&
+        moduleExportsKovoServerName(moduleSourceFile, local, exportName, seen, depth + 1)
+      ) {
+        return true;
+      }
+      if (
+        !specifier &&
+        sourceFileIdentifierResolvesToKovoServerExport(sourceFile, local, exportName)
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return sourceFileExportedConstResolvesToKovoServerExport(sourceFile, importedName, exportName);
+}
+
+function sourceFileIdentifierResolvesToKovoServerExport(
+  sourceFile: SourceFile,
+  local: string,
+  exportName: string,
+): boolean {
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== KOVO_SERVER_MODULE_SPECIFIER) continue;
+    for (const named of declaration.getNamedImports()) {
+      const localName = named.getAliasNode()?.getText() ?? named.getName();
+      if (localName === local && named.getName() === exportName) return true;
+    }
+  }
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    if (declaration.getName() !== local) continue;
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    if (kovoServerCalleeExpressionMatches(initializer, exportName, new Set(), 0)) return true;
+  }
+  return false;
+}
+
+function sourceFileExportedConstResolvesToKovoServerExport(
+  sourceFile: SourceFile,
+  local: string,
+  exportName: string,
+): boolean {
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    if (declaration.getName() !== local) continue;
+    const statement = declaration.getVariableStatement();
+    const exported = statement
+      ?.getModifiers()
+      .some((modifier) => modifier.getKind() === SyntaxKind.ExportKeyword);
+    const initializer = declaration.getInitializer();
+    if (
+      exported &&
+      initializer &&
+      kovoServerCalleeExpressionMatches(initializer, exportName, new Set(), 0)
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -1325,6 +1520,10 @@ function extractTouchGraphFromPreparedFiles(
             extraction.tableNamesBySymbol,
           ),
           relationalTableNames: projectRelationalTableNamesByProperty(
+            sourceFile,
+            extraction.tableNamesBySymbol,
+          ),
+          relationTargetTableNames: projectRelationTargetTableNamesByProperty(
             sourceFile,
             extraction.tableNamesBySymbol,
           ),
@@ -1964,6 +2163,7 @@ interface ProjectQueryDefinitionOptions {
   columnShapes?: Readonly<Record<string, QueryShape>>;
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
   namespaceTableNames: ProjectNamespaceTableNames;
+  relationTargetTableNames: ReadonlyMap<string, string>;
   relationalTableNames: ReadonlyMap<string, string>;
   tableNamesBySymbol: ReadonlyMap<string, string>;
   unmodeledRelationNamesBySymbol: ReadonlyMap<string, string>;
@@ -1984,6 +2184,7 @@ function extractProjectQueryDefinitions(
       : {}),
     readTableIdentifier: resolveTableIdentifier,
     receiverMode: 'project',
+    relationalRelationTableName: (name) => options.relationTargetTableNames.get(name),
     relationalTableName: (name) => options.relationalTableNames.get(name),
   });
 }
@@ -1993,6 +2194,7 @@ interface QueryDefinitionOptions {
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
   readTableIdentifier?: (node: Node) => string | undefined;
   receiverMode?: 'project' | 'source';
+  relationalRelationTableName?: (name: string) => string | undefined;
   relationalTableName?: (name: string) => string | undefined;
 }
 
@@ -2085,6 +2287,9 @@ function extractQueryDefinitionsFromSourceFile(
       hasOutputSchema && (declaredReadExpressions.length > 0 || declaredReadDomains.length > 0);
     const readResolutionOptions: QueryReadResolutionOptions = {
       ...(options.readTableIdentifier ? { readTableIdentifier: options.readTableIdentifier } : {}),
+      ...(options.relationalRelationTableName
+        ? { relationalRelationTableName: options.relationalRelationTableName }
+        : {}),
       ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
     };
     const diagnostics = [
@@ -2786,6 +2991,7 @@ import {
   projectDrizzleCoreIdentifierExportName,
   projectForeignKeyForColumn,
   projectForeignKeysForTable,
+  projectRelationTargetTableNamesByProperty,
   projectRelationalTableNamesByProperty,
   projectTableNameForColumnShapeAccess,
   projectTableNamesBySymbol,

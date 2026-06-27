@@ -1666,6 +1666,39 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('keeps a const-bound client input.session value untrusted, not session', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const ordersForInputSession = query("ordersForInputSession", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { session: { userId: string } }, db: PgAsyncDatabase<any, any>) {',
+              '    const uid = input.session.userId;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, uid));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
+      { domain: 'order', scope: 'unknown' },
+    ]);
+  });
+
   it('accepts an explicitly summarized guard principal on the owner-column predicate', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
