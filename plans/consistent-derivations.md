@@ -71,11 +71,22 @@ This keeps `route('/products/:id', ...)` and `endpoint('/healthz', ...)` explici
     webhook('order-paid', { path: '/webhooks/order-paid', ... })
     ```
 
+  - Integrated evidence (2026-06-27): `packages/server/src/webhook.ts` and
+    `packages/server/src/webhook.test.ts` now accept the path-first shape and reject `options.path`;
+    integrated verification passed `pnpm vitest --run packages/server/src/webhook.test.ts
+packages/server/src/api/app.test.ts`, `pnpm run check:vp`, and `git diff --check HEAD~1..HEAD`.
+    Remaining gap: runtime/audit/replay identity is path-derived until the compiler export/module
+    derivation slice lands, so this checkbox stays open.
+
 - [ ] **Update webhook audit, replay, diagnostics, docs, and tests for derived names.**
   - `kovo explain --endpoints` should still print a stable webhook name, but that name should be
     compiler-derived.
   - Webhook replay/idempotency must continue to scope by the derived webhook identity plus provider
     event id.
+  - Integrated evidence (2026-06-27): `packages/server/src/api/app.test.ts`,
+    `packages/server/src/access.test.ts`, and `packages/server/src/access-graph.test.ts` were updated
+    for path-first webhook audit/access behavior; focused webhook/app tests passed after integration.
+    Remaining gap: audit/replay names are not yet compiler-derived.
 
 ## Phase 2 - Mutation Keys
 
@@ -178,3 +189,6 @@ This keeps `route('/products/:id', ...)` and `endpoint('/healthz', ...)` explici
 
 - 2026-06-27: `pnpm run check:vp` and `git diff --check` passed after the baseline/SPEC ledger
   update.
+- 2026-06-27: Integrated path-first webhook slice `b10bd522b`; `pnpm vitest --run
+packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts`, `pnpm run check:vp`, and
+  `git diff --check HEAD~1..HEAD` passed.
