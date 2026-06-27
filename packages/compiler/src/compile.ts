@@ -53,6 +53,7 @@ import {
   normalizeComponentFileName,
   parseComponentModule as parseComponentModuleModel,
   parseDiagnosticsForSourceFile,
+  parseSourceFile,
   firstComponentModel,
   componentOptionObjectEntries,
   type ComponentModuleModel,
@@ -951,13 +952,7 @@ function insertDerivedQueryKeyImport(source: string, model: ComponentModuleModel
     return source;
   }
 
-  const sourceFile = ts.createSourceFile(
-    'lowered.tsx',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const sourceFile = parseSourceFile('lowered.tsx', source);
   const importDeclarationEnd =
     sourceFile.statements.findLast((statement) => ts.isImportDeclaration(statement))?.end ?? 0;
   const importLine = `import { assignDerivedQueryKey as ${derivedQueryKeyHelper} } from '${derivedQueryKeyWireModule}';\n`;

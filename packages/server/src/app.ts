@@ -333,22 +333,26 @@ function resolveAppAuthoringDeclarations<Declaration, AppRequest>(
 function appQueryRegistry<Request>(
   ...groups: readonly (readonly QueryDefinition<string, unknown, unknown, Request>[])[]
 ): readonly QueryDefinition<string, unknown, unknown, Request>[] {
+  const originals = new Map<string, QueryDefinition<string, unknown, unknown, Request>>();
   const queries = new Map<string, QueryDefinition<string, unknown, unknown, Request>>();
 
-  for (const group of groups) {
+  for (const [groupIndex, group] of groups.entries()) {
     for (const queryDefinition of group) {
-      const generatedQueryDefinition = queryWithGeneratedReads(queryDefinition);
-      assertQueryKeyAssigned(generatedQueryDefinition);
-      const existing = queries.get(generatedQueryDefinition.key);
-      if (existing && existing !== generatedQueryDefinition) {
+      assertQueryKeyAssigned(queryDefinition);
+      const existing = originals.get(queryDefinition.key);
+      if (groupIndex === 0 && existing && existing !== queryDefinition) {
         throw new Error(
-          `createApp() received two queries with the same key "${generatedQueryDefinition.key}". ` +
+          `createApp() received two queries with the same key "${queryDefinition.key}". ` +
             'Query keys address one typed read for /_q dispatch, kovo-query hydration, kovo-deps, ' +
             'and generated query registries (SPEC §4.1, §9.4); duplicate keys are ambiguous. ' +
             'Rename or move one exported query so its derived key is unique.',
         );
       }
-      queries.set(generatedQueryDefinition.key, generatedQueryDefinition);
+      if (existing === queryDefinition) continue;
+      if (existing) continue;
+
+      originals.set(queryDefinition.key, queryDefinition);
+      queries.set(queryDefinition.key, queryWithGeneratedReads(queryDefinition));
     }
   }
 

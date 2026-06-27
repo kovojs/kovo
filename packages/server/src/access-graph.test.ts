@@ -185,7 +185,7 @@ describe('app access graph extraction', () => {
         detail:
           'access=verified-machine-auth method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature',
         kind: 'webhook',
-        name: 'stripe',
+        name: '/webhooks/stripe',
         source: 'access',
       },
     ]);
