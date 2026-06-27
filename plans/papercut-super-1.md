@@ -186,7 +186,8 @@ redacted:true` — the un-lowered `onClick` is stripped by KV236 at SSR. Only a
     `check`-family command (or chain `kovo build`'s diagnostics into the template
     `check` script) and correct the README claim.
 
-- [ ] **B3 — `vp dev` binds IPv6 `::1`, ignores `PORT`, and silently auto-increments the port.** (LOW, dev-tooling; found in Phase 0)
+- [x] **B3 — `vp dev` binds IPv6 `::1`, ignores `PORT`, and silently auto-increments the port.** (LOW, dev-tooling; found in Phase 0)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.test.ts packages/cli/src/index.kovo-build.test.ts --run` proves generated Vite config honors `HOST`/`PORT`, uses `strictPort`, and boots on the requested TCP bind.
   - Observed: `PORT=5301 pnpm run dev` still binds `localhost:5173`; `curl
 127.0.0.1:5301` and `curl 127.0.0.1:5173` both return nothing (server is on
     `[::1]`); when 5173 is busy it silently moves to 5174/5175…

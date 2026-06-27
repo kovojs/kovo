@@ -46,7 +46,8 @@ production code.
   - Repro evidence: `/Users/mini/kovo-dogfood-super-2026-06-27/postgres-prod-static`: `pnpm run check` passed, then `pnpm run build:prod` failed with KV310/KV436/KV402. The same failure reproduced in `/Users/mini/kovo-dogfood-super-2026-06-27/sqlite-ui-auth` after fixing package formatting.
   - Acceptance: unchanged generated Postgres and SQLite starters should pass `pnpm run build:prod`, or the starter should generate the runtime registry/access facts the build preflight requires; create-kovo build integration should include the actual `build:prod` command, not just `tsc`, app tests, and dev boot.
 
-- [ ] **Parallel production builds collide on a dev WebSocket port.**
+- [x] **Parallel production builds collide on a dev WebSocket port.**
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.test.ts packages/cli/src/index.kovo-build.test.ts --run` proves concurrent `kovo build` invocations no longer bind the shared dev HMR WebSocket port or print the port-collision line.
   - Observed behavior: running `pnpm run build:prod` concurrently in two separate generated apps printed `WebSocket server error: Port 24678 is already in use` before the shared build-preflight diagnostics. A serial rerun did not print the WebSocket error.
   - Root cause: the production build path appears to load enough Vite/dev-server plumbing to initialize a fixed HMR WebSocket listener even though the command is `kovo build ./src/app.tsx`; the port collision is unrelated to the app's production preflight failure.
   - Why it matters: CI matrices and agent dogfood runs commonly build multiple apps concurrently. A production build should not expose dev HMR port state or add misleading infrastructure errors ahead of actionable framework diagnostics.
