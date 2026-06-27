@@ -236,8 +236,20 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).toContain("import Database from 'better-sqlite3'");
     expect(files.get('src/db.ts')).toContain("from 'drizzle-orm/better-sqlite3'");
     expect(files.get('src/db.ts')).toContain('"emailVerified" integer NOT NULL DEFAULT 0');
+    expect(files.get('src/db.ts')).toContain('"createdAt" integer NOT NULL DEFAULT');
+    expect(files.get('src/db.ts')).toContain('"expiresAt" integer NOT NULL');
+    expect(files.get('src/db.ts')).toContain('"accessTokenExpiresAt" integer');
+    expect(files.get('src/db.ts')).not.toContain('"createdAt" text');
+    expect(files.get('src/db.ts')).not.toContain('"expiresAt" text');
     expect(files.get('src/schema.ts')).toContain('import { integer, sqliteTable, text }');
     expect(files.get('src/schema.ts')).toContain("integer('emailVerified', { mode: 'boolean' })");
+    expect(files.get('src/schema.ts')).toContain("integer('createdAt', { mode: 'timestamp_ms' })");
+    expect(files.get('src/schema.ts')).toContain("integer('expiresAt', { mode: 'timestamp_ms' })");
+    expect(files.get('src/schema.ts')).toContain(
+      "integer('accessTokenExpiresAt', { mode: 'timestamp_ms' })",
+    );
+    expect(files.get('src/schema.ts')).not.toContain("text('createdAt')");
+    expect(files.get('src/schema.ts')).not.toContain("text('expiresAt')");
     expect(files.get('src/schema.ts')).not.toContain('timestamp(');
     expect(files.get('src/auth.ts')).toContain("provider: 'sqlite'");
     expect(files.get('README.md')).toContain('opt-in SQLite dialect');

@@ -34,9 +34,9 @@ random `KOVO_DEMO_PASSWORD` value in your generated, gitignored `.env` file.
 | `src/theme.ts`         | `defineTheme` — change the seed/custom colors to retheme everything.                                                                                                                |
 
 SQLite caveats: booleans are Drizzle `integer(..., { mode: 'boolean' })` columns,
-timestamps are ISO text columns, and JSON should use `text(..., { mode: 'json' })`
-when you add JSON fields. Those mappings are the blessed SQLite subset described
-by the data-layer policy.
+Better Auth timestamps are `integer(..., { mode: 'timestamp_ms' })` columns, and
+JSON should use `text(..., { mode: 'json' })` when you add JSON fields. Those
+mappings are the blessed SQLite subset described by the data-layer policy.
 
 `vp dev`, `vp check`, and `vp test` run through the `kovo()` Vite plugin, which
 compiles the app and serves route documents and `/c/` handler modules (SPEC.md

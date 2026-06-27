@@ -34,7 +34,7 @@ better-sqlite3`; `pnpm run test` then failed before tests ran with
     or otherwise make the post-scaffold install path build `better-sqlite3`
     noninteractively.
 
-- [ ] **SQLite Better Auth seed uses incompatible date column types.**
+- [x] **SQLite Better Auth seed uses incompatible date column types.**
   - Observed behavior: `pnpm run build:prod` exited 0 but logged Better Auth
     `Failed to create user TypeError: SQLite3 can only bind numbers, strings,
 bigints, buffers, and null` twice during `seedDemoUser()`.
@@ -52,6 +52,13 @@ bigints, buffers, and null` twice during `seedDemoUser()`.
   - Acceptance: the SQLite template should either generate Better Auth's expected
     SQLite column modes or derive/materialize the auth schema from the Better Auth
     table metadata used by the conformance bridge.
+  - Evidence: `packages/create-kovo/templates/src/schema.sqlite.ts` now uses
+    `integer(..., { mode: 'timestamp_ms' })` for Better Auth date fields, and
+    `packages/create-kovo/templates/src/db.sqlite.ts` creates matching integer
+    DDL; `pnpm exec vitest run packages/create-kovo/src/index.test.ts`,
+    temp generated SQLite app `pnpm run test`, and temp generated SQLite app
+    `pnpm run build:prod` passed with no `SQLite3 can only bind` or
+    `Failed to create user` log.
 
 - [x] **Enhanced auth sign-in still succeeds without navigating.**
   - Observed behavior: signing in at
