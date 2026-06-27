@@ -244,6 +244,7 @@ export type {
   NumberSchema,
   QueryDeclarationDefinition,
   QueryDefinition,
+  QueryDefinitionBoundary,
   JsonSerializable,
   QueryLoadContext,
   QueryResult,

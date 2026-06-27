@@ -912,13 +912,13 @@ Kovo separates low-cost liveness from explicit live subscriptions:
 
 - **BroadcastChannel rebroadcast** — a mutation's `<kovo-query>` response is rebroadcast to the user's other tabs; same-user multi-tab sync at zero server cost. Because BroadcastChannel is **origin-scoped, not principal-scoped**, every rebroadcast envelope MUST carry a **session/principal fingerprint** derived from the sender's `req.session` identity. A receiving tab MUST discard any message whose fingerprint ≠ its own current `req.session` identity, and MUST drop the channel on session change — so one user's private query data can never be morphed into a different user's UI on a shared or fast-user-switched device. This receive-side principal check is normative to the same degree as the SSE per-push guard re-check below; rebroadcast must not become a cross-principal disclosure side channel.
 - **Refetch on focus/visibility** — a loader behavior (per-query opt-out) that re-runs queries (over the typed read endpoint, §9.4) when a stale tab returns; it fakes an embarrassing share of "live" UX for one conditional in the loader.
-- **Live queries** — `<kovo-live query="cart">` subscribes over SSE to the identical `<kovo-query>`/`<kovo-fragment>` chunks; guards are re-checked at subscription **and** at each push (a guard that passed at render must pass at patch time — fragments must not become a privilege-escalation side channel); in-process emitter (single node) or Redis pub/sub (multi-node); instance-key routing; `live: true` opt-in per query.
+- **Live queries (roadmap; not shipped in v1 technical preview)** — `<kovo-live query="cart">` will subscribe over SSE to the identical `<kovo-query>`/`<kovo-fragment>` chunks; guards must be re-checked at subscription **and** at each push (a guard that passed at render must pass at patch time — fragments must not become a privilege-escalation side channel); in-process emitter (single node) or Redis pub/sub (multi-node); instance-key routing; `live: true` opt-in per query. Until this transport ships, `live: true` is not a valid `query()` definition field and `<kovo-live>` is not an implemented authoring primitive; accepting either as a silent no-op would violate the no-op-field contract.
 
 The vocabulary is transport-agnostic by construction, so SSE is an additive transport, not a rearchitecture.
 
 ### 9.4 Typed reads: the query endpoint
 
-Every query is addressable over GET — one read surface serving refetch-on-focus (§9.3), GET-form fragment responses (§7), async option/search reads, and the SSE subscription key:
+Every query is addressable over GET — one read surface serving refetch-on-focus (§9.3), GET-form fragment responses (§7), async option/search reads, and the future SSE subscription key:
 
 ```http
 GET /_q/product?id=p1 HTTP/1.1
