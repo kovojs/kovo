@@ -28,6 +28,9 @@
   construction explicit, while preserving `SPEC.md`'s honesty boundary: branded or conditional types
   are author-time guardrails and defense-in-depth, not the security proof. Runtime validation,
   AST/provenance gates, and fail-closed sinks still own enforcement.
+- New framework APIs should reach for these shapes when they naturally encode the contract: make the
+  safe value impossible or awkward to construct casually, and make the validating constructor,
+  posture branch, or generated sentinel the normal path.
 - Good candidates include validated branded constructors for strong signing material/key material,
   module-private `unique symbol` sentinels for framework-owned outcomes, branded escaped/trusted/
   rendered HTML values, precise header-bag types that preserve multi-value headers such as
