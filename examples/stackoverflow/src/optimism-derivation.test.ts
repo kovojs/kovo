@@ -15,9 +15,10 @@ import {
 // hand-written / `'await-fragment'` with a NAMED punt reason (coverage is never silently dropped).
 
 const sourceRoot = dirname(fileURLToPath(import.meta.url));
+let cachedFacts: ExampleOptimisticDerivationFact[] | undefined;
 
 function facts(): ExampleOptimisticDerivationFact[] {
-  return exampleOptimisticDerivationFacts({
+  cachedFacts ??= exampleOptimisticDerivationFacts({
     mutationTouchGraphKeys: {
       postAnswer: 'postAnswer',
       postQuestion: 'postQuestion',
@@ -33,6 +34,7 @@ function facts(): ExampleOptimisticDerivationFact[] {
     queryModule: '../queries.js',
     sourceRoot,
   });
+  return cachedFacts;
 }
 
 function factFor(
