@@ -224,9 +224,18 @@ describe('reference auth adoption', () => {
     );
     const memberCookie = cookiePair(headerValues(memberSignIn.headers, 'Set-Cookie')[0] ?? '');
 
-    await expect(renderReferenceAdminRoute(referenceAuthRequest(memberCookie))).resolves.toEqual({
+    await expect(
+      renderReferenceAdminRoute(referenceAuthRequest(memberCookie)),
+    ).resolves.toMatchObject({
       body: '<main>Forbidden</main>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+      },
       status: 403,
     });
 
@@ -322,9 +331,16 @@ describe('reference auth adoption', () => {
     });
     await expect(
       renderReferenceAdminRoute(referenceAuthRequest(memberCookie), auth),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       body: '<main>Forbidden</main>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+      },
       status: 403,
     });
 

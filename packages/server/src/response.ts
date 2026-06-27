@@ -372,11 +372,12 @@ export function routeOutcomeResponse(
     };
   }
 
-  return {
+  const response: RoutePageResponse = {
     body: outcome.body,
     headers,
     status: 200,
   };
+  return Object.assign(response, { routeResponse: true as const });
 }
 
 export function htmlServerErrorResponse(): RoutePageResponse {

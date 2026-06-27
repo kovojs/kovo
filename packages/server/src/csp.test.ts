@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   emptyCspInlineMetadata,
+  renderCspReportingHeaders,
   renderContentSecurityPolicy,
   renderDefaultDocumentCsp,
 } from './csp.js';
@@ -85,5 +86,14 @@ describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
     expect(policy).toContain(
       "script-src 'self' 'sha256-AB+cd/ef12345678901234567890123456789012345='",
     );
+  });
+
+  it('keeps reporting endpoints relative instead of using the request Host origin', () => {
+    const headers = renderCspReportingHeaders({}, { endpointOrigin: 'https://attacker.example' });
+
+    expect(headers?.['Report-To']).toBe(
+      '{"endpoints":[{"url":"/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
+    );
+    expect(headers?.['Reporting-Endpoints']).toBe('kovo-csp="/_kovo/reports/csp"');
   });
 });

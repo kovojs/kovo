@@ -204,7 +204,7 @@ export function renderCspReportingHeaders(
 ): CspReportingHeaders | undefined {
   const reporting = resolveCspReporting(config.reporting);
   if (reporting === undefined) return undefined;
-  const endpoint = absoluteReportEndpoint(reporting.endpoint, options.endpointOrigin);
+  const endpoint = relativeReportEndpoint(reporting.endpoint, options.endpointOrigin);
   return {
     'Report-To': JSON.stringify({
       endpoints: [{ url: endpoint }],
@@ -380,6 +380,6 @@ function escapeStructuredFieldString(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 }
 
-function absoluteReportEndpoint(endpoint: string, origin: string | undefined): string {
-  return origin === undefined ? endpoint : new URL(endpoint, origin).toString();
+function relativeReportEndpoint(endpoint: string, _origin: string | undefined): string {
+  return endpoint;
 }

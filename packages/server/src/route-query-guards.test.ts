@@ -180,13 +180,25 @@ describe('route and query guard responses', () => {
       headers: { Location: '/signin?continue=%2Faccount%3Ftab%3Dsettings' },
       status: 303,
     });
-    await expect(
-      renderRoutePageResponse(adminRoute, {}, { session: { user: { roles: ['staff'] } } }, String, {
+    const routeForbidden = await renderRoutePageResponse(
+      adminRoute,
+      {},
+      { session: { user: { roles: ['staff'] } } },
+      String,
+      {
         renderForbidden: () => '<main>Forbidden</main>',
-      }),
-    ).resolves.toEqual({
+      },
+    );
+    expect(routeForbidden).toMatchObject({
       body: '<main>Forbidden</main>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        Vary: 'Cookie',
+      },
       status: 403,
     });
     // H3 fix: /_q/ guard-failure responses also carry the private cache posture (SPEC §9.4:895).
@@ -204,16 +216,18 @@ describe('route and query guard responses', () => {
       },
       status: 303,
     });
-    await expect(
-      renderQueryEndpointResponse(adminQuery, {
-        renderForbidden: () => '<main>Query forbidden</main>',
-        request: { session: { user: { roles: ['staff'] } } },
-      }),
-    ).resolves.toEqual({
+    const queryForbidden = await renderQueryEndpointResponse(adminQuery, {
+      renderForbidden: () => '<main>Query forbidden</main>',
+      request: { session: { user: { roles: ['staff'] } } },
+    });
+    expect(queryForbidden).toMatchObject({
       body: '<main>Query forbidden</main>',
       headers: {
         'Cache-Control': 'private, no-store',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
         'Content-Type': 'text/html; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
         Vary: 'Cookie',
       },
       status: 403,

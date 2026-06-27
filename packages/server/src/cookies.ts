@@ -217,15 +217,21 @@ function applyCookieFloor(
   const secureDowngrade = secureRequired && secureSuppressionRequested;
 
   const hasDowngrade = httpOnlyDowngrade || sameSiteDowngrade || secureDowngrade;
+  const actualDowngrade: UnsafeCookieDowngrade['downgrade'] = {
+    ...(httpOnlyDowngrade ? { httpOnly: false } : {}),
+    ...(sameSiteDowngrade ? { sameSite: 'none' as const } : {}),
+    ...(secureDowngrade ? { secure: false } : {}),
+  };
 
   if (hasDowngrade && downgrade === undefined) {
     throw new CookieDowngradeError(diagnosticDefinitions.KV432.message);
   }
 
   if (hasDowngrade && options.unsafe !== undefined) {
+    assertUnsafeCookieDowngradeMatches(actualDowngrade, options.unsafe.downgrade);
     recordCookieDowngradeFact({
       class: cookieClass,
-      downgrade: options.unsafe.downgrade,
+      downgrade: actualDowngrade,
       justification: options.unsafe.justification,
       name,
     });
@@ -239,6 +245,21 @@ function applyCookieFloor(
   const secure = secureRequired && !secureDowngrade;
 
   return { httpOnly, sameSite, secure };
+}
+
+function assertUnsafeCookieDowngradeMatches(
+  actual: UnsafeCookieDowngrade['downgrade'],
+  asserted: UnsafeCookieDowngrade['downgrade'],
+): void {
+  const matches =
+    actual.httpOnly === asserted.httpOnly &&
+    actual.sameSite === asserted.sameSite &&
+    actual.secure === asserted.secure;
+  if (matches) return;
+
+  throw new CookieDowngradeError(
+    'unsafeCookie downgrade attributes must exactly match the credential-cookie floor attributes being weakened.',
+  );
 }
 
 /**

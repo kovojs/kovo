@@ -1,10 +1,12 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
+import { renderErrorDocument, stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import { managedDb, type ManagedDbMode } from './managed-db.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import { matchRoute, type RouteLike } from './match.js';
 import {
   blessRedirectResponse,
   redirectLocationHeader,
+  type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
 import type { Schema } from './schema.js';
@@ -294,11 +296,11 @@ export interface GuardFailureResponseOptions<
   routes?: readonly RouteLike[];
 }
 
-interface HttpGuardFailureResponse extends ServerResponseBase<
-  string,
-  Record<string, string>,
-  303 | 403
-> {}
+interface HttpGuardFailureResponse extends ServerResponseBase<string, ResponseHeaders, 303 | 403> {}
+
+type InternalForbiddenRenderer<Request> = (
+  context: ForbiddenContext<Request>,
+) => string | HttpGuardFailureResponse | Promise<string | HttpGuardFailureResponse>;
 
 /**
  * Options for `guards.rateLimit`: window size, max requests, scope, and key function (SPEC
@@ -549,9 +551,22 @@ export async function renderHttpGuardFailureResponse<Request>(
     });
   }
 
+  const renderForbidden = options.renderForbidden as InternalForbiddenRenderer<Request> | undefined;
+  const rendered = renderForbidden
+    ? await renderForbidden({ request })
+    : renderErrorDocument({ status: 403 });
+  const response =
+    typeof rendered === 'string'
+      ? {
+          body: rendered,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          status: 403 as const,
+        }
+      : { ...rendered, status: 403 as const };
+  const stamped = stampGuardFailureDocumentSecurityFloor(response);
   return {
-    body: options.renderForbidden ? await options.renderForbidden({ request }) : 'Forbidden',
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    ...stamped,
+    body: typeof stamped.body === 'string' ? stamped.body : '',
     status: 403,
   };
 }

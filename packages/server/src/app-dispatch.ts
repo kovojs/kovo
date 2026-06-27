@@ -16,6 +16,7 @@ import {
 } from './app-document.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
 import { resolveLifecycleRequest } from './guards.js';
+import { resolveRequestClientIp } from './app-load-shed.js';
 
 export interface MatchedAppDispatchOptions {
   app: KovoApp;
@@ -59,6 +60,7 @@ export async function dispatchMatchedAppRequest({
       maxListItems: app.requestLimits.maxQueryListItems,
       request,
       search: url.searchParams,
+      clientIp: (req) => resolveRequestClientIp(app, req),
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
     };

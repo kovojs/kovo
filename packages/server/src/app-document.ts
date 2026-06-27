@@ -11,6 +11,7 @@ import {
 import { normalizeForwardedSetCookie } from './cookies.js';
 import { createSignUrl } from './capability-route.js';
 import { signingKeyRingFromCsrfSecret } from './csrf.js';
+import { resolveRequestClientIp } from './app-load-shed.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
 import { isRenderedHtml, renderHtmlValue, unwrapCoercedRenderedHtml } from './html.js';
@@ -19,6 +20,7 @@ import {
   routeResponseToDocumentResponse,
   type RoutePageResponse,
 } from './response.js';
+import type { ForbiddenRenderer } from './guards.js';
 import {
   renderRoutePageResponse,
   routeHasBoundary,
@@ -92,8 +94,15 @@ export async function renderAppRouteDocumentResponse({
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       onSessionSetCookie: (rawSetCookie) => refreshSetCookies.push(rawSetCookie),
-      renderForbidden: async () =>
-        appErrorDocumentResponseBody(await renderAppErrorDocumentResponse(app, request, 403)),
+      clientIp: (req) => resolveRequestClientIp(app, req),
+      renderForbidden: (async () => {
+        const forbidden = await renderAppErrorDocumentResponse(app, request, 403);
+        return {
+          ...forbidden,
+          body: typeof forbidden.body === 'string' ? forbidden.body : '',
+          status: 403 as const,
+        };
+      }) as unknown as ForbiddenRenderer<Request>,
       ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
     },
   );
@@ -241,10 +250,6 @@ const broadcastFingerprintSecret = randomBytes(32);
 
 function hmacSessionFingerprint(input: string): string {
   return createHmac('sha256', broadcastFingerprintSecret).update(input).digest('base64url');
-}
-
-function appErrorDocumentResponseBody(response: RoutePageResponse): string {
-  return typeof response.body === 'string' ? response.body : '';
 }
 
 export async function renderAppErrorDocumentResponse(

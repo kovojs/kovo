@@ -6,6 +6,7 @@ import {
   KOVO_CSP_REPORT_GROUP,
   cspHashAttribute,
   cspSha256,
+  emptyCspInlineMetadata,
   mergeCspInlineMetadata,
   renderCspReportingHeaders,
   renderDefaultDocumentCsp,
@@ -321,6 +322,7 @@ export function renderRouteDocumentResponse(
   const { csp: cspConfig, noStore, reportingOrigin, secure, ...assemblyOptions } = options;
   const contentType = readHeader(response.headers, 'Content-Type');
   if (
+    isRouteResponseOutcome(response) ||
     response.status !== 200 ||
     typeof response.body !== 'string' ||
     (contentType !== undefined && !contentType.toLowerCase().includes('text/html'))
@@ -437,6 +439,10 @@ export function renderRouteDocumentResponse(
   };
 }
 
+function isRouteResponseOutcome(response: DocumentRoutePageResponse): boolean {
+  return (response as { routeResponse?: unknown }).routeResponse === true;
+}
+
 /**
  * bugz-3 M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): stamp the
  * per-principal cache + isolation floor onto a NON-HTML 200 route outcome
@@ -463,6 +469,45 @@ function stampPerPrincipalRouteOutcomeFloor(
   };
   headers = mergeVaryHeader(headers, 'Cookie');
   return { ...response, headers };
+}
+
+/**
+ * SPEC §6.6 / §9.5: authenticated-but-unauthorized guard failures are per-principal HTML
+ * documents. They do not pass through the normal 200 document wrapper, so stamp the same
+ * conservative document security baseline and no-store/Vary:Cookie floor here.
+ *
+ * @internal
+ */
+export function stampGuardFailureDocumentSecurityFloor(
+  response: DocumentRoutePageResponse,
+): DocumentRoutePageResponseWithCsp {
+  const shouldAttachFrameworkCsp =
+    findHeaderRecordName(response.headers, 'Content-Security-Policy') === undefined;
+  const shouldAttachReporting =
+    shouldAttachFrameworkCsp &&
+    findHeaderRecordName(response.headers, 'Report-To') === undefined &&
+    findHeaderRecordName(response.headers, 'Reporting-Endpoints') === undefined;
+  const reportingHeaders = shouldAttachReporting ? renderCspReportingHeaders() : undefined;
+  let headers: ResponseHeaders = {
+    ...response.headers,
+    ...(findHeaderRecordName(response.headers, 'Content-Type') === undefined
+      ? { 'Content-Type': 'text/html; charset=utf-8' }
+      : {}),
+    ...(findHeaderRecordName(response.headers, 'X-Content-Type-Options') === undefined
+      ? { 'X-Content-Type-Options': 'nosniff' }
+      : {}),
+    ...documentIsolationHeaders(
+      response.headers,
+      reportingHeaders === undefined ? undefined : KOVO_CSP_REPORT_GROUP,
+    ),
+    ...(shouldAttachFrameworkCsp
+      ? { 'Content-Security-Policy': renderDefaultDocumentCsp(emptyCspInlineMetadata()) }
+      : {}),
+    ...reportingHeaders,
+    'Cache-Control': 'private, no-store',
+  };
+  headers = mergeVaryHeader(headers, 'Cookie');
+  return { ...response, headers, status: 403 };
 }
 
 /**

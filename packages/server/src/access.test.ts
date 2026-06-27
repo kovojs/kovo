@@ -106,26 +106,34 @@ describe('structured access metadata', () => {
     });
     const request = { session: { user: { roles: ['staff'] } } };
 
-    await expect(
-      renderRoutePageResponse(guardedRoute, {}, request, String, {
-        renderForbidden: () => '<main>Forbidden</main>',
-      }),
-    ).resolves.toEqual({
+    const routeForbidden = await renderRoutePageResponse(guardedRoute, {}, request, String, {
+      renderForbidden: () => '<main>Forbidden</main>',
+    });
+    expect(routeForbidden).toMatchObject({
       body: '<main>Forbidden</main>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+      },
       status: 403,
     });
-    await expect(
-      renderQueryEndpointResponse(guardedQuery, {
-        renderForbidden: () => '<main>Query forbidden</main>',
-        request,
-      }),
-    ).resolves.toEqual({
+    const queryForbidden = await renderQueryEndpointResponse(guardedQuery, {
+      renderForbidden: () => '<main>Query forbidden</main>',
+      request,
+    });
+    expect(queryForbidden).toMatchObject({
       body: '<main>Query forbidden</main>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
         Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
       },
       status: 403,
     });
