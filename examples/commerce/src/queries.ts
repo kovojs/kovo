@@ -1,6 +1,5 @@
-import { guards, publicAccess, query, type QueryLoadContext, type Reader } from '@kovojs/server';
+import { guards, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
 import { eq, gt, sum } from 'drizzle-orm';
-import { domain } from '@kovojs/server';
 
 import type { CommerceDb } from './db.js';
 import { cartItems, orders, products } from './schema.js';
@@ -37,9 +36,9 @@ export interface CommerceQueryRequest {
   session?: { id?: string; user?: { id?: string } | null } | null;
 }
 
-export const cart = domain('cart');
-export const order = domain('order');
-export const product = domain('product');
+export const cart = { key: 'cart' } as const;
+export const order = { key: 'order' } as const;
+export const product = { key: 'product' } as const;
 
 // SPEC §9.4/§10.3 (MARQUEE): a query loader destructures the framework-owned read-only handle
 // `{ db }` (typed `Reader<CommerceDb>` — the write verbs are removed at the type level and throw
@@ -55,6 +54,8 @@ export const cartQuery = query('cart', {
   // Public storefront browsing — the cart/catalog is visible without authentication
   // (KV436 access decision, SPEC §10.2); checkout-class writes stay guarded.
   access: publicAccess('public storefront browsing'),
+  output: s.object({ count: s.number() }),
+  reads: [cart],
   async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<CartQueryResult> {
     const db = requireCommerceQueryDb(context);
     const rows = await db.select({ value: sum(cartItems.qty) }).from(cartItems);
@@ -120,32 +121,6 @@ export const orderHistoryQuery = query('orderHistory', {
   // declares it explicitly today.)
   delta: [{ domain: 'order', key: 'id', path: 'items' }],
 });
-
-// The example/test entrypoints below pass a raw `CommerceDb`. The framework threads a read-only
-// `Reader<CommerceDb>` as `context.db` in production (a loader cannot write); a full `CommerceDb`
-// is structurally a `Reader<CommerceDb>` (it has every read verb), so these direct-load helpers
-// stay type-compatible while the loader body only ever reads.
-export async function loadCartQuery(db: CommerceDb): Promise<CartQueryResult> {
-  return cartQuery.load(undefined, { db, request: {} });
-}
-
-export async function loadProductGrid(
-  db: CommerceDb,
-  input: ProductGridInput = {},
-): Promise<ProductGridResult> {
-  return productGridQuery.load(input, { db, request: {} });
-}
-
-// SECURITY (SECURITY_FINDINGS.md M9): the order-history loader now requires the
-// authenticated user id so it can scope the read; callers thread the session user
-// id from the request.
-export async function loadOrderHistory(
-  db: CommerceDb,
-  userId: string,
-): Promise<OrderHistoryResult> {
-  const session = { id: userId, user: { id: userId } };
-  return orderHistoryQuery.load(undefined, { db, request: { session }, session });
-}
 
 // SPEC §9.4 (MARQUEE): the framework provides `context.db` as the read-only managed handle. A loader
 // destructures it directly; this guard surfaces a clear error when a loader is invoked without the

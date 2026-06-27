@@ -13,7 +13,9 @@ import {
   type ProductGridInput,
 } from './domain.js';
 import { createCommerceApp, type CommerceApp } from './app.js';
+import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
+import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from './queries.js';
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };
 export type CartItemRow = { productId: string; qty: number; unitPrice: number };
@@ -98,6 +100,27 @@ export function queryContext(db = createCommerceDb()) {
     db,
     request: { session: { id: 's-query', user: { id: 'u-query' } } },
   };
+}
+
+// Test entrypoints pass a raw `CommerceDb`. Production loaders receive the framework-owned
+// read-only handle through `context.db`; these helpers stay out of the app module graph.
+export async function loadCartQuery(db: CommerceDb): Promise<CartQueryResult> {
+  return cartQuery.load(undefined, { db, request: {} });
+}
+
+export async function loadProductGrid(
+  db: CommerceDb,
+  input: ProductGridInput = {},
+): Promise<ProductGridResult> {
+  return productGridQuery.load(input, { db, request: {} });
+}
+
+export async function loadOrderHistory(
+  db: CommerceDb,
+  userId: string,
+): Promise<OrderHistoryResult> {
+  const session = { id: userId, user: { id: userId } };
+  return orderHistoryQuery.load(undefined, { db, request: { session }, session });
 }
 
 export function commerceAuthRequest(cookie?: string, db = createCommerceDb()) {

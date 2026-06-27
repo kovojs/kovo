@@ -24,7 +24,6 @@ import { cartItems, orders, products } from './schema.js';
 
 export { commerceCartPageMeta, commerceStylesheetHrefs } from './graph.js';
 export { createCommerceDb, type CommerceDb } from './db.js';
-export { loadCartQuery, loadProductGrid, loadOrderHistory } from './queries.js';
 export type {
   CartQueryResult,
   OrderHistoryResult,

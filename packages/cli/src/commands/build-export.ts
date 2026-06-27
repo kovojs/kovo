@@ -696,6 +696,7 @@ function sourceFilesUnder(dir: string, root: string): BuildCheckSourceFile[] {
     const stat = statSafe(path);
     if (!stat) return [];
     if (stat.isDirectory()) return sourceFilesUnder(path, root);
+    if (isBuildCheckIgnoredSource(entry)) return [];
     if (!/\.[cm]?[jt]sx?$/.test(entry) || entry.endsWith('.d.ts')) return [];
     return [
       {
@@ -704,6 +705,15 @@ function sourceFilesUnder(dir: string, root: string): BuildCheckSourceFile[] {
       },
     ];
   });
+}
+
+function isBuildCheckIgnoredSource(entry: string): boolean {
+  const lower = entry.toLowerCase();
+  return (
+    /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(lower) ||
+    /(?:^|[.-])test-helpers\.[cm]?[jt]sx?$/.test(lower) ||
+    /\.test-support\.[cm]?[jt]sx?$/.test(lower)
+  );
 }
 
 function findBuildTsconfig(appModulePath: string): string | undefined {
