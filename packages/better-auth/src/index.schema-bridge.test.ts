@@ -44,8 +44,12 @@ describe('schema bridge', () => {
           'Better Auth JWT signing-key material is adapter bookkeeping; SPEC.md §10.1 forbids app queries from reading exempt tables.',
       },
       member: { domain: 'organization', key: 'organizationId' },
-      oauthAccessToken: { domain: 'auth', key: 'userId' },
-      oauthApplication: { domain: 'auth', key: 'userId' },
+      oauthAccessToken: {
+        domain: 'auth',
+        key: 'userId',
+        secret: ['accessToken', 'refreshToken'],
+      },
+      oauthApplication: { domain: 'auth', key: 'userId', secret: ['clientSecret'] },
       oauthConsent: { domain: 'auth', key: 'userId' },
       organization: { domain: 'organization', key: 'id' },
       organizationRole: { domain: 'organization', key: 'organizationId' },
@@ -57,7 +61,7 @@ describe('schema bridge', () => {
       session: { domain: 'auth', key: 'userId', secret: ['token'] },
       team: { domain: 'organization', key: 'organizationId' },
       teamMember: { domain: 'organization', key: 'teamId' },
-      twoFactor: { domain: 'auth', key: 'userId' },
+      twoFactor: { domain: 'auth', key: 'userId', secret: ['secret', 'backupCodes'] },
       user: { domain: 'user', key: 'id' },
       verification: {
         exempt: true,

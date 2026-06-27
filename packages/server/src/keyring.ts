@@ -1,5 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+/** Minimum HMAC root secret bytes accepted by framework signing helpers (SPEC §6.6). */
+export const SIGNING_SECRET_MIN_BYTES = 32;
+
 /** Lifecycle state for one framework signing key in a {@link SigningKeyRing}. */
 export type SigningKeyState = 'active' | 'previous' | 'revoked';
 
@@ -164,8 +167,12 @@ function normalizeSigningKey(key: SigningKey): NormalizedSigningKey {
     throw new Error(`SigningKeyRing key "${key.id}" has invalid state`);
   }
   const secret = normalizeSecret(key.secret);
-  if (secret.byteLength === 0)
-    throw new Error(`SigningKeyRing key "${key.id}" has empty signing material`);
+  if (secret.byteLength < SIGNING_SECRET_MIN_BYTES) {
+    throw new Error(
+      `SigningKeyRing key "${key.id}" signing material is ${secret.byteLength} bytes; ` +
+        `minimum is ${SIGNING_SECRET_MIN_BYTES} bytes (SPEC §6.6).`,
+    );
+  }
   return { id: key.id, secret, state: key.state };
 }
 

@@ -81,29 +81,36 @@ export type CapabilityRejectReason =
 
 /** A replay store for one-time capability tokens: returns true iff this token id was unused. */
 export interface CapabilityReplayStore {
-  /** Atomically mark `id` consumed; return true if it was previously unconsumed (first use). */
-  consume(id: string): boolean | Promise<boolean>;
+  /**
+   * Atomically mark `id` consumed until the token's absolute expiry; return true if it was
+   * previously unconsumed (first use). Stores that cannot honor expiry should fail closed outside
+   * this interface rather than retaining replay ids for an unrelated horizon.
+   */
+  consume(id: string, expiresAt: number): boolean | Promise<boolean>;
 }
 
 /**
  * In-memory one-time replay store with TTL eviction. Suitable for single-process apps and tests;
  * a multi-process deployment injects a shared store (Redis &c.) with the same contract.
  */
-export function createMemoryCapabilityReplayStore(): CapabilityReplayStore & {
+export function createMemoryCapabilityReplayStore(
+  options: { now?: () => number } = {},
+): CapabilityReplayStore & {
   size(): number;
 } {
   const consumed = new Map<string, number>();
+  const now = options.now ?? Date.now;
   const evict = (): void => {
-    const now = Date.now();
-    for (const [id, expiry] of consumed) if (expiry <= now) consumed.delete(id);
+    const current = now();
+    for (const [id, expiry] of consumed) if (expiry <= current) consumed.delete(id);
   };
   return {
-    consume(id: string): boolean {
+    consume(id: string, expiresAt: number): boolean {
       evict();
       if (consumed.has(id)) return false;
-      // Hold the id until its own expiry is irrelevant; we keep it for a generous window so a
-      // replayed token within its validity is caught. Tie eviction to a fixed horizon.
-      consumed.set(id, Date.now() + DEFAULT_CAPABILITY_TTL_MS * 4);
+      // Hold the replay id only until the signed token expiry. After that, the expiry check rejects
+      // the token before replay lookup, so retaining the id no longer buys security.
+      consumed.set(id, expiresAt);
       return true;
     },
     size(): number {
@@ -298,7 +305,7 @@ export async function verifyCapability(
       return { ok: false, reason: 'replayed' };
     }
     const replayId = `${TOKEN_VERSION}:${claims.key}:${nonce}`;
-    const fresh = await options.replayStore.consume(replayId);
+    const fresh = await options.replayStore.consume(replayId, claims.expiry);
     if (!fresh) return { ok: false, reason: 'replayed' };
   }
 
