@@ -601,9 +601,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       singleton owner-principal tuples now preserve exact `inArray(ownerColumn, wrapper.userIds)` proof, while
       mutable, mutated, spread, computed, and wrong-column wrappers remain `scope: unknown`; focused
       scope-audit tests, `git diff --check`, and `pnpm run check:vp` passed. Static relational query
-      `where` predicates, relational callback `where: (table, { eq }) => ...` predicates, awaited summarized
-      guard helpers, and unshadowed singleton `Array.of(principal)` membership predicates now feed the same
-      exact owner-column proof; shadowed/unsummarized/wrong-column/opaque callback cases remain
+      `where` predicates, relational callback `where: (table, { eq }) => ...` predicates, renamed callback
+      operator aliases such as `{ and: both, eq: equals }`, awaited summarized guard helpers, and unshadowed
+      singleton `Array.of(principal)` membership predicates now feed the same exact owner-column proof;
+      shadowed/unsummarized/wrong-column/opaque callback cases remain
       `scope: unknown`. Evidence: `pnpm exec vitest run
       packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
