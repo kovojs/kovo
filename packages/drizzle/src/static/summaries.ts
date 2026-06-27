@@ -3307,6 +3307,12 @@ function singleLiteralArrayElement(node: Node): Node | undefined {
   const arrayOfElement = singleGlobalArrayOfElement(node);
   if (arrayOfElement) return arrayOfElement;
 
+  const arrayFromElement = singleGlobalArrayFromElement(node);
+  if (arrayFromElement) return arrayFromElement;
+
+  const concatElement = singleArrayConcatElement(node);
+  if (concatElement) return concatElement;
+
   const elements = literalArrayElements(node);
   return elements?.length === 1 ? elements[0] : undefined;
 }
@@ -3322,14 +3328,60 @@ function singleGlobalArrayOfElement(node: Node): Node | undefined {
   if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'of') return undefined;
 
   const receiver = unwrappedStaticExpressionNode(callee.getExpression());
-  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'Array') return undefined;
+  return unshadowedGlobalArrayIdentifier(receiver) ? args[0] : undefined;
+}
 
-  const symbol = symbolForIdentifierReference(receiver) ?? receiver.getSymbol();
-  const shadowed = (symbol?.getDeclarations() ?? []).some(
+function singleGlobalArrayFromElement(node: Node): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression)) return undefined;
+
+  const args = expression.getArguments();
+  if (args.length !== 1 || Node.isSpreadElement(args[0])) return undefined;
+  const source = args[0];
+  if (!source) return undefined;
+
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'from') return undefined;
+
+  const receiver = unwrappedStaticExpressionNode(callee.getExpression());
+  if (!unshadowedGlobalArrayIdentifier(receiver)) return undefined;
+
+  const elements = literalArrayElements(source);
+  return elements?.length === 1 ? elements[0] : undefined;
+}
+
+function singleArrayConcatElement(node: Node): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression)) return undefined;
+
+  const args = expression.getArguments();
+  if (args.some(Node.isSpreadElement)) return undefined;
+
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'concat') {
+    return undefined;
+  }
+
+  const receiverElements = literalArrayElements(callee.getExpression());
+  if (!receiverElements) return undefined;
+
+  const elements: Node[] = [...receiverElements];
+  for (const arg of args) {
+    const arrayArg = literalArrayElements(arg);
+    elements.push(...(arrayArg ?? [arg]));
+  }
+
+  return elements.length === 1 ? elements[0] : undefined;
+}
+
+function unshadowedGlobalArrayIdentifier(node: Node): boolean {
+  if (!Node.isIdentifier(node) || node.getText() !== 'Array') return false;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  return !(symbol?.getDeclarations() ?? []).some(
     (declaration) =>
-      declaration.getSourceFile().getFilePath() === receiver.getSourceFile().getFilePath(),
+      declaration.getSourceFile().getFilePath() === node.getSourceFile().getFilePath(),
   );
-  return shadowed ? undefined : args[0];
 }
 
 function literalArrayElements(node: Node): readonly Node[] | undefined {

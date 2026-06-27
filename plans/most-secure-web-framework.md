@@ -650,6 +650,11 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       packages/drizzle/src/index.query-loader-receivers.test.ts packages/server/src/guards.test.ts
       packages/server/src/route-query-guards.test.ts --run` passed 5 files / 174 tests, with `git diff --check`,
       `pnpm run check:vp`, and `pnpm run check:api-surface` passing.
+      Latest helper-membership batch proves exact singleton owner predicates through unshadowed
+      `Array.from([principal])`, `Array.from(tupleAlias)`, empty-array `concat(principal)`, and
+      tuple-receiver `concat()` for both read and write audits, while mixed and shadowed forms remain
+      `scope: unknown`; `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts --run`,
+      `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
