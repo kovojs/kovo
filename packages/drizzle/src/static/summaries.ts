@@ -766,14 +766,16 @@ function eqOperandsAreTableColumnArgKeyed(
     argCandidates.push(...allEqOperandPairs(predicate).map(toComparison));
   }
 
-  for (const predicate of queryRelationalWherePredicates(
-    body,
-    receiverReferences,
-    relationalTableName,
-  )) {
+  for (const {
+    predicate,
+    readTableIdentifier: relationalReadTableIdentifier,
+  } of queryRelationalWherePredicates(body, receiverReferences, relationalTableName)) {
+    const resolveTableIdentifier = relationalReadTableIdentifier
+      ? (node: Node) => relationalReadTableIdentifier(node) ?? readTableIdentifier?.(node)
+      : readTableIdentifier;
     const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
-      left: queryInstanceKeyOperand(left, readTableIdentifier, sessionContext),
-      right: queryInstanceKeyOperand(right, readTableIdentifier, sessionContext),
+      left: queryInstanceKeyOperand(left, resolveTableIdentifier, sessionContext),
+      right: queryInstanceKeyOperand(right, resolveTableIdentifier, sessionContext),
     });
 
     const conjuncts = eqPredicateConjuncts(predicate);
@@ -785,21 +787,77 @@ function eqOperandsAreTableColumnArgKeyed(
   return { argCandidates, instanceKey };
 }
 
+interface RelationalWherePredicate {
+  predicate: Node;
+  readTableIdentifier?: (node: Node) => string | undefined;
+}
+
 function queryRelationalWherePredicates(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   relationalTableName?: (name: string) => string | undefined,
-): Node[] {
+): RelationalWherePredicate[] {
   return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
-    if (!relationalQueryTableExpression(call, receiverReferences, relationalTableName)) return [];
+    const tableIdentifier = relationalQueryTableExpression(
+      call,
+      receiverReferences,
+      relationalTableName,
+    );
+    if (!tableIdentifier) return [];
 
     const options = call.getArguments()[0];
     const object = options ? unwrappedStaticExpressionNode(options) : undefined;
     if (!object || !Node.isObjectLiteralExpression(object)) return [];
 
     const where = objectLiteralSingleStaticPropertyValue(object, 'where');
-    return where ? [where] : [];
+    const predicate = where ? relationalWherePredicate(where, tableIdentifier) : undefined;
+    return predicate ? [predicate] : [];
   });
+}
+
+function relationalWherePredicate(
+  where: Node,
+  tableIdentifier: string,
+): RelationalWherePredicate | undefined {
+  const node = unwrappedStaticExpressionNode(where);
+  if (!Node.isArrowFunction(node) && !Node.isFunctionExpression(node)) {
+    return { predicate: where };
+  }
+
+  const body = node.getBody();
+  const predicate = Node.isBlock(body) ? singleReturnExpression(body) : body;
+  if (!predicate) return undefined;
+
+  const tableParameter = node.getParameters()[0]?.getNameNode();
+  const readTableIdentifier = Node.isIdentifier(tableParameter)
+    ? relationalTableParameterIdentifier(tableParameter, tableIdentifier)
+    : undefined;
+  return { predicate, ...(readTableIdentifier ? { readTableIdentifier } : {}) };
+}
+
+function singleReturnExpression(body: Node): Node | undefined {
+  if (!Node.isBlock(body)) return undefined;
+  const statements = body.getStatements();
+  if (statements.length !== 1) return undefined;
+
+  const [statement] = statements;
+  return Node.isReturnStatement(statement) ? statement.getExpression() : undefined;
+}
+
+function relationalTableParameterIdentifier(
+  parameter: Node,
+  tableIdentifier: string,
+): (node: Node) => string | undefined {
+  const parameterKey = resolvedSymbolKey(parameter.getSymbol());
+  return (node: Node) => {
+    const expression = unwrappedStaticExpressionNode(node);
+    if (!parameterKey || !Node.isIdentifier(expression)) return undefined;
+
+    const symbolKey = resolvedSymbolKey(
+      symbolForIdentifierReference(expression) ?? expression.getSymbol(),
+    );
+    return symbolKey === parameterKey ? tableIdentifier : undefined;
+  };
 }
 
 function relationalQueryTableExpression(
