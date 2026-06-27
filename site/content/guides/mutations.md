@@ -112,9 +112,26 @@ export const addToCart = mutation({
 });
 ```
 
-Use a string queue only when the string is intentionally shared vocabulary. For example,
-`queue: 'checkout'` can group several checkout mutations behind one queue even though each mutation
-has its own source-derived registry identity.
+Use a queue value when several mutations intentionally share one queue:
+
+```ts
+export const checkoutQueue = queue('checkout');
+
+export const applyCoupon = mutation({
+  input: applyCouponInput,
+  queue: checkoutQueue,
+  handler: applyCouponHandler,
+});
+
+export const submitOrder = mutation({
+  input: submitOrderInput,
+  queue: checkoutQueue,
+  handler: submitOrderHandler,
+});
+```
+
+The queue name is shared vocabulary. It is separate from each mutation's source-derived registry
+identity.
 
 ## Add optimism
 

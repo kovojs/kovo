@@ -97,6 +97,76 @@ describe('inline optimistic mutation lowering', () => {
     });
   });
 
+  it('resolves local queue values in inline and standalone optimistic plans', () => {
+    const inlineSource = `
+      const checkoutQueue = queue('checkout');
+      export const addToCart = mutation({
+        queue: checkoutQueue,
+        optimistic: {
+          cart(draft, input) {
+            draft.count = (draft.count ?? 0) + input.quantity;
+          },
+        },
+        handler() {},
+      });
+    `;
+    const standaloneSource = `
+      const checkoutQueue = queue('checkout');
+      export const addToCartOptimistic = {
+        queue: checkoutQueue,
+        transforms: {
+          cart(draft, input) {
+            draft.count = (draft.count ?? 0) + input.quantity;
+          },
+        },
+      };
+    `;
+
+    const [inline] = inlineOptimisticPlansFromSource('src/cart/mutations.ts', inlineSource);
+    const [standalone] = inlineOptimisticPlansFromSource(
+      'src/cart/optimistic.ts',
+      standaloneSource,
+    );
+
+    expect(inline?.queue).toBe('checkout');
+    expect(standalone?.queue).toBe('checkout');
+  });
+
+  it('resolves local query value references in inline optimistic maps', () => {
+    const source = `
+      export const cartSummary = query({
+        load: () => ({ count: 0 }),
+        reads: [],
+      });
+      export const productGrid = query('productGrid', {
+        load: () => ({ items: [] }),
+        reads: [],
+      });
+      export const addToCart = mutation({
+        optimistic: {
+          [cartSummary.key](draft, input) {
+            draft.count = (draft.count ?? 0) + input.quantity;
+          },
+          [productGrid.key]: 'await-fragment',
+        },
+        handler() {},
+      });
+    `;
+    const [plan] = inlineOptimisticPlansFromSource('src/features/cart/mutations.ts', source);
+    if (!plan) throw new Error('expected optimistic plan');
+
+    expect(plan.transforms.map((transform) => transform.query)).toEqual([
+      'features/cart/mutations/cart-summary',
+      'productGrid',
+    ]);
+    expect(serializeInlineOptimisticPlanIr(plan)).toContain(
+      'features/cart/mutations/cart-summary [cartSummary.key](draft, input)',
+    );
+    expect(serializeInlineOptimisticPlanIr(plan)).toContain(
+      "productGrid productGrid: 'await-fragment'",
+    );
+  });
+
   it('captures the per-entry keyed `{ keys, transform }` instance-key derivation (SPEC §10.2/§10.4)', () => {
     const source = `
       export const voteUpMutation = mutation('voteUp', {
@@ -151,6 +221,34 @@ describe('inline optimistic mutation lowering', () => {
     expect(detail?.keys).toBe('(input) => ({ id: input.targetId })');
     const list = plan.transforms.find((transform) => transform.query === 'questionList');
     expect(list?.keys).toBeUndefined();
+  });
+
+  it('resolves local query value references in standalone optimistic plans', () => {
+    const source = `
+      export const questionDetail = query({
+        load: () => ({ score: 0 }),
+        reads: [],
+      });
+      export const voteOptimistic = {
+        keys: {
+          [questionDetail.key]: (input) => ({ id: input.targetId }),
+        },
+        transforms: {
+          [questionDetail.key]: {
+            keys: (input) => ({ id: input.targetId }),
+            transform(draft, _input) {
+              if (draft) draft.score += 1;
+            },
+          },
+        },
+      };
+    `;
+    const [plan] = inlineOptimisticPlansFromSource('src/questions/optimistic.ts', source);
+    if (!plan) throw new Error('expected optimistic plan');
+
+    expect(plan.transforms).toHaveLength(1);
+    expect(plan.transforms[0]?.query).toBe('questions/optimistic/question-detail');
+    expect(plan.transforms[0]?.keys).toBe('(input) => ({ id: input.targetId })');
   });
 });
 

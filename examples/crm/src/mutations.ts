@@ -1,9 +1,11 @@
 import {
   guards,
   mutation,
+  queue,
   s,
   SchemaValidationError,
   type MutationContext,
+  type MutationQueue,
   type Schema,
 } from '@kovojs/server';
 import { and, eq, sql } from 'drizzle-orm';
@@ -87,9 +89,9 @@ const dealOwnershipError = s.object({ dealId: s.string() });
 const contactIdSchema = prefixedUuidSchema('c');
 const dealIdSchema = prefixedUuidSchema('d');
 // The CRM demo intentionally serializes contact/deal writes through one conceptual client queue:
-// every pipeline mutation can affect shared dashboard summaries, so the string is a shared queue
+// every pipeline mutation can affect shared dashboard summaries, so this value is shared queue
 // vocabulary, not a registry identity.
-const CRM_QUEUE = 'crm';
+const CRM_QUEUE = queue('crm');
 const crmStageSchema: Schema<CrmStage> = {
   parse(input: unknown): CrmStage {
     if (typeof input !== 'string' || !isCrmStage(input)) {
@@ -351,9 +353,14 @@ export const crmMutations = [addContact, createDeal, moveDeal, closeDeal];
 function optimisticPlan<Input>(definition: {
   key: string;
   optimistic?: Record<string, unknown>;
-  queue?: string | true;
+  queue?: string | true | MutationQueue;
 }): OptimisticPlan<Input> {
-  const queue = definition.queue === true ? definition.key : definition.queue;
+  const queue =
+    definition.queue === true
+      ? definition.key
+      : typeof definition.queue === 'object'
+        ? definition.queue.name
+        : definition.queue;
   return {
     ...(queue ? { queue } : {}),
     transforms: (definition.optimistic ?? {}) as OptimisticPlan<Input>['transforms'],

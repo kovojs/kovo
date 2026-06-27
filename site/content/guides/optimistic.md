@@ -44,8 +44,8 @@ Three things to notice:
   and a forgotten transform are different states, and only the second one is a diagnostic.
 - **`queue: true`** gives this mutation its own FIFO queue. Submissions sharing a queue run strictly
   in submit order — each waits for the previous to settle before its transform and request fire — so
-  two quick "add" clicks can't land out of order or race to a wrong predicted count. Use an explicit
-  string only when several mutations intentionally share one conceptual queue.
+  two quick "add" clicks can't land out of order or race to a wrong predicted count. Use
+  `queue('checkout')` when several mutations intentionally share one conceptual queue.
 
 Transforms receive a cloned draft of the query's inferred result, so mutate the draft and return
 nothing. A column rename breaks the transform in the editor instead of in production.

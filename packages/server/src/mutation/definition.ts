@@ -214,6 +214,45 @@ export type MutationOptimisticMap<Key extends string, InputSchema extends Schema
   : KnownMutationOptimisticMap<Key, InputSchema>;
 
 /**
+ * A first-class shared mutation queue name (SPEC §4.1/§10.4): this is conceptual grouping
+ * vocabulary, not a mutation registry identity. Use {@link queue} to construct one so shared
+ * queues are explicit values instead of ad hoc strings.
+ */
+export class MutationQueue<Name extends string = string> {
+  private readonly __mutationQueueBrand!: Name;
+
+  private constructor(readonly name: Name) {}
+
+  /** @internal */
+  static create<const Name extends string>(name: Name): MutationQueue<Name> {
+    return Object.freeze(new MutationQueue(name)) as MutationQueue<Name>;
+  }
+}
+
+/**
+ * Declare a named client-side FIFO queue shared by one or more mutations (SPEC §10.4). Use
+ * `queue: true` for the common per-mutation queue derived from that mutation's own source identity;
+ * use `queue('checkout')` only when several mutations intentionally share one queue.
+ */
+export function queue<const Name extends string>(name: Name): MutationQueue<Name> {
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new TypeError('queue(name) requires a non-empty queue name.');
+  }
+  return MutationQueue.create(name);
+}
+
+function isMutationQueue(value: unknown): value is MutationQueue {
+  return value instanceof MutationQueue;
+}
+
+function normalizeMutationQueue(
+  queueValue: string | true | MutationQueue | undefined,
+): string | true | undefined {
+  if (isMutationQueue(queueValue)) return queueValue.name;
+  return queueValue;
+}
+
+/**
  * The full definition object passed to {@link mutation} (SPEC §6.3/§9.1/§10.3): the
  * `key`, `input` schema, optional `errors`, `guard`, `csrf` posture, `optimistic` map,
  * `redirectTo`/`defaultRedirectTo` POST-redirect-GET targets, `stream`/`transaction`
@@ -245,7 +284,7 @@ export interface MutationDefinition<
   input: InputSchema;
   key: Key;
   optimistic?: MutationOptimisticMap<Key, InputSchema>;
-  queue?: string | true;
+  queue?: string | true | MutationQueue;
   /**
    * Mutation-local success redirect policy for dynamic POST-redirect-GET targets (SPEC §9.1 PRG).
    * Accepts three forms:
@@ -429,24 +468,28 @@ export function mutation(
       throw new TypeError('mutation(key, definition) requires a definition object.');
     }
     const fileFields = mutationInputFileFields(definition.input);
+    const queue =
+      definition.queue === true ? keyOrDefinition : normalizeMutationQueue(definition.queue);
     return {
       ...definition,
       ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
       key: keyOrDefinition,
-      ...(definition.queue === true ? { queue: keyOrDefinition } : {}),
+      ...(queue === undefined ? {} : { queue }),
     } as MutationDefinition<string> & { key: string };
   }
 
   // SPEC §6.3: app authors may write `mutation({ input, handler })`; the stable wire key is
   // source-derived by the compiler because runtime JavaScript cannot prove export binding names.
-  // Compiler-emitted IR assigns `.key` immediately after the declaration. Until then, helpers that
-  // need a wire endpoint fail closed through `assertMutationKey`.
-  const fileFields = mutationInputFileFields(keyOrDefinition.input);
-  return {
-    ...keyOrDefinition,
-    ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
-  } as MutationDefinition<string> & { key: string };
-}
+	  // Compiler-emitted IR assigns `.key` immediately after the declaration. Until then, helpers that
+	  // need a wire endpoint fail closed through `assertMutationKey`.
+	  const fileFields = mutationInputFileFields(keyOrDefinition.input);
+	  const queue = normalizeMutationQueue(keyOrDefinition.queue);
+	  return {
+	    ...keyOrDefinition,
+	    ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
+	    ...(queue === undefined ? {} : { queue }),
+	  } as MutationDefinition<string> & { key: string };
+	}
 
 /**
  * @internal Compiler-emitted/generated ABI for SPEC §4.1 source-derived mutation identities.
@@ -469,6 +512,11 @@ export function assignDerivedMutationKey<Mutation extends MutationDefinition<str
   }
   definition.key = key;
   if (definition.queue === true) definition.queue = key;
+  else {
+    const queue = normalizeMutationQueue(definition.queue);
+    if (queue === undefined) delete definition.queue;
+    else definition.queue = queue;
+  }
   return definition;
 }
 

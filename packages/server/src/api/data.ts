@@ -17,7 +17,7 @@ export type {
 export { domain, tag } from '../domain.js';
 export type { Domain, Tag } from '../domain.js';
 export type { JsonSerializable } from '../json-boundary.js';
-export { errorBoundary, mutation, stream, write } from '../mutation.js';
+export { errorBoundary, mutation, queue, stream, write } from '../mutation.js';
 // KV429 (SPEC §10.3/§11.1): mutation handler signals a stale-version conflict via
 // StaleVersionError; the lifecycle converts it into a typed HTTP 409 (STALE_VERSION).
 export { StaleVersionError } from '../mutation.js';
@@ -30,6 +30,7 @@ export type {
   MutationDefinition,
   MutationFail,
   MutationFormDefinition,
+  MutationQueue,
   MutationResult,
   MutationStreamChunk,
   MutationStreamContext,

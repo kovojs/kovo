@@ -9,6 +9,7 @@ import { assignDerivedMutationKey } from './internal/wire.js';
 import {
   mutation as defineMutation,
   mutationFormAttributes,
+  queue,
   renderMutationFormAttributes,
   renderMutationResponse,
   renderNoJsMutationResponse,
@@ -94,6 +95,34 @@ describe('server mutation lifecycle', () => {
     });
 
     expect(addContact.queue).toBe('contacts/add');
+  });
+
+  it('normalizes first-class shared queue values without using them as registry identities', () => {
+    const crmQueue = queue('crm');
+    const addContact = mutation('contacts/add', {
+      input: s.object({ id: s.string(), name: s.string() }),
+      queue: crmQueue,
+      handler() {
+        return 'ok';
+      },
+    });
+    const mergeContact = mutation('contacts/merge', {
+      input: s.object({ id: s.string() }),
+      queue: crmQueue,
+      handler() {
+        return 'ok';
+      },
+    });
+
+    expect(crmQueue.name).toBe('crm');
+    expect(addContact.key).toBe('contacts/add');
+    expect(mergeContact.key).toBe('contacts/merge');
+    expect(addContact.queue).toBe('crm');
+    expect(mergeContact.queue).toBe('crm');
+  });
+
+  it('rejects empty first-class queue names', () => {
+    expect(() => queue('')).toThrow('queue(name) requires a non-empty queue name.');
   });
 
   it('derives direct-render form attributes from typed mutation values', () => {

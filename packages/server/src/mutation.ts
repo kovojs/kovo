@@ -85,6 +85,7 @@ export {
   errorBoundary,
   mutation,
   mutationFormAttributes,
+  queue,
   renderMutationFormAttributes,
   write,
 } from './mutation/definition.js';
@@ -98,6 +99,7 @@ export type {
   MutationOptimisticEntry,
   MutationOptimisticMap,
   MutationOptimisticTransform,
+  MutationQueue,
   MutationRegistry,
   MutationResult,
   MutationSuccess,

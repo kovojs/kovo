@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
 import { deriveMutationKey } from '../mutation-names.js';
+import { deriveRegistryIdentity } from '../registry-identities.js';
 
 const mutableTs = ts as unknown as Record<string, unknown>;
 if (!('ScriptTarget' in mutableTs))
@@ -50,9 +51,11 @@ export function inlineOptimisticPlansFromSource(
     ts.ScriptKind.TSX,
   );
   const facts: InlineOptimisticPlanFact[] = [];
+  const localQueryKeys = collectLocalQueryKeys(sourceFile);
+  const localQueueNames = collectLocalQueueNames(sourceFile);
 
   const visit = (node: ts.Node): void => {
-    const fact = optimisticPlanFromVariable(sourceFile, node);
+    const fact = optimisticPlanFromVariable(sourceFile, localQueryKeys, localQueueNames, node);
     if (fact) facts.push(fact);
     ts.forEachChild(node, visit);
   };
@@ -78,6 +81,8 @@ export function serializeInlineOptimisticPlanIr(plan: InlineOptimisticPlanFact):
 
 function optimisticPlanFromVariable(
   sourceFile: ts.SourceFile,
+  localQueryKeys: ReadonlyMap<string, string>,
+  localQueueNames: ReadonlyMap<string, string>,
   node: ts.Node,
 ): InlineOptimisticPlanFact | null {
   if (!ts.isVariableDeclaration(node)) return null;
@@ -86,14 +91,28 @@ function optimisticPlanFromVariable(
   const initializer = unwrapTsExpression(node.initializer);
   if (!initializer) return null;
 
-  const inline = inlineMutationOptimisticPlan(sourceFile, node.name.text, initializer);
+  const inline = inlineMutationOptimisticPlan(
+    sourceFile,
+    localQueryKeys,
+    localQueueNames,
+    node.name.text,
+    initializer,
+  );
   if (inline) return inline;
 
-  return standaloneOptimisticPlan(sourceFile, node.name.text, initializer);
+  return standaloneOptimisticPlan(
+    sourceFile,
+    localQueryKeys,
+    localQueueNames,
+    node.name.text,
+    initializer,
+  );
 }
 
 function inlineMutationOptimisticPlan(
   sourceFile: ts.SourceFile,
+  localQueryKeys: ReadonlyMap<string, string>,
+  localQueueNames: ReadonlyMap<string, string>,
   localName: string,
   initializer: ts.Expression,
 ): InlineOptimisticPlanFact | null {
@@ -122,17 +141,19 @@ function inlineMutationOptimisticPlan(
   const optimisticObject = unwrapTsExpression(optimistic);
   if (!optimisticObject || !ts.isObjectLiteralExpression(optimisticObject)) return null;
 
-  const queue = mutationQueuePropertyValue(optionsArg, key);
+  const queue = mutationQueuePropertyValue(optionsArg, key, localQueueNames);
   return {
     localName,
     mutation: key,
     ...(queue === undefined ? {} : { queue }),
-    transforms: optimisticTransformsFromObject(sourceFile, optimisticObject),
+    transforms: optimisticTransformsFromObject(sourceFile, localQueryKeys, optimisticObject),
   };
 }
 
 function standaloneOptimisticPlan(
   sourceFile: ts.SourceFile,
+  localQueryKeys: ReadonlyMap<string, string>,
+  localQueueNames: ReadonlyMap<string, string>,
   localName: string,
   initializer: ts.Expression,
 ): InlineOptimisticPlanFact | null {
@@ -141,15 +162,15 @@ function standaloneOptimisticPlan(
   const transformsObject = unwrapTsExpression(objectPropertyExpression(initializer, 'transforms'));
   if (!transformsObject || !ts.isObjectLiteralExpression(transformsObject)) return null;
 
-  const queue = stringPropertyValue(initializer, 'queue');
-  const transforms = optimisticTransformsFromObject(sourceFile, transformsObject);
+  const queue = queuePropertyValue(initializer, localQueueNames);
+  const transforms = optimisticTransformsFromObject(sourceFile, localQueryKeys, transformsObject);
   // SPEC §10.2/§10.4: the standalone `OptimisticFor` object form carries instance-key derivations
   // in a sibling `keys` map (mirroring the runtime `OptimisticPlan.keys`); fold each into its
   // transform fact so both authoring shapes lower the same keyed plan.
   const keysObject = unwrapTsExpression(objectPropertyExpression(initializer, 'keys'));
   const merged =
     keysObject && ts.isObjectLiteralExpression(keysObject)
-      ? mergeSiblingKeyDerivations(sourceFile, transforms, keysObject)
+      ? mergeSiblingKeyDerivations(sourceFile, localQueryKeys, transforms, keysObject)
       : transforms;
   return {
     localName,
@@ -161,20 +182,23 @@ function standaloneOptimisticPlan(
 function mutationQueuePropertyValue(
   object: ts.ObjectLiteralExpression,
   mutationKey: string,
+  localQueueNames: ReadonlyMap<string, string>,
 ): string | undefined {
   const unwrapped = unwrapTsExpression(objectPropertyExpression(object, 'queue'));
   if (unwrapped?.kind === ts.SyntaxKind.TrueKeyword) return mutationKey;
-  return unwrapped && ts.isStringLiteralLike(unwrapped) ? unwrapped.text : undefined;
+  if (unwrapped && ts.isStringLiteralLike(unwrapped)) return unwrapped.text;
+  return queueNameFromExpression(unwrapped, localQueueNames);
 }
 
 function mergeSiblingKeyDerivations(
   sourceFile: ts.SourceFile,
+  localQueryKeys: ReadonlyMap<string, string>,
   transforms: readonly InlineOptimisticTransformFact[],
   keysObject: ts.ObjectLiteralExpression,
 ): InlineOptimisticTransformFact[] {
   const derivations = new Map<string, string>();
   for (const property of keysObject.properties) {
-    const query = propertyNameText(property.name);
+    const query = queryNameFromPropertyName(property.name, localQueryKeys);
     const valueNode = objectMemberValueNode(property);
     if (query && valueNode) derivations.set(query, valueNode.getText(sourceFile));
   }
@@ -186,10 +210,11 @@ function mergeSiblingKeyDerivations(
 
 function optimisticTransformsFromObject(
   sourceFile: ts.SourceFile,
+  localQueryKeys: ReadonlyMap<string, string>,
   object: ts.ObjectLiteralExpression,
 ): InlineOptimisticTransformFact[] {
   return object.properties.flatMap<InlineOptimisticTransformFact>((property) => {
-    const query = propertyNameText(property.name);
+    const query = queryNameFromPropertyName(property.name, localQueryKeys);
     if (!query) return [];
 
     if (ts.isPropertyAssignment(property)) {
@@ -262,12 +287,128 @@ function objectPropertyExpression(
   return null;
 }
 
-function stringPropertyValue(
+function queuePropertyValue(
   object: ts.ObjectLiteralExpression,
-  propertyName: string,
+  localQueueNames: ReadonlyMap<string, string>,
 ): string | undefined {
-  const expression = unwrapTsExpression(objectPropertyExpression(object, propertyName));
-  return expression && ts.isStringLiteralLike(expression) ? expression.text : undefined;
+  const expression = unwrapTsExpression(objectPropertyExpression(object, 'queue'));
+  if (expression && ts.isStringLiteralLike(expression)) return expression.text;
+  return queueNameFromExpression(expression, localQueueNames);
+}
+
+function queueNameFromExpression(
+  expression: ts.Expression | null | undefined,
+  localQueueNames: ReadonlyMap<string, string>,
+): string | undefined {
+  if (expression && ts.isIdentifier(expression)) return localQueueNames.get(expression.text);
+  return undefined;
+}
+
+function collectLocalQueueNames(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+  const bindings = new Map<string, string>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name)) continue;
+      const initializer = unwrapTsExpression(declaration.initializer);
+      if (!initializer) continue;
+      if (ts.isStringLiteralLike(initializer)) {
+        bindings.set(declaration.name.text, initializer.text);
+        continue;
+      }
+      if (!ts.isCallExpression(initializer)) continue;
+      const [firstArg] = initializer.arguments;
+      if (
+        ts.isIdentifier(initializer.expression) &&
+        initializer.expression.text === 'queue' &&
+        firstArg &&
+        ts.isStringLiteralLike(firstArg)
+      ) {
+        bindings.set(declaration.name.text, firstArg.text);
+      }
+    }
+  }
+  return bindings;
+}
+
+function collectLocalQueryKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+  const bindings = new Map<string, string>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name)) continue;
+      const initializer = unwrapTsExpression(declaration.initializer);
+      if (!initializer || !ts.isCallExpression(initializer)) continue;
+      const derivedKey = queryKeyFromCall(
+        sourceFile,
+        declaration.name.text,
+        statement,
+        initializer,
+      );
+      if (derivedKey) bindings.set(declaration.name.text, derivedKey);
+    }
+  }
+  return bindings;
+}
+
+function queryKeyFromCall(
+  sourceFile: ts.SourceFile,
+  localName: string,
+  statement: ts.VariableStatement,
+  call: ts.CallExpression,
+): string | null {
+  if (!isQueryCallExpression(call.expression)) return null;
+  const [firstArg] = call.arguments;
+  if (firstArg && ts.isStringLiteralLike(firstArg)) return firstArg.text;
+  if (firstArg && ts.isObjectLiteralExpression(firstArg) && isExportedStatement(statement)) {
+    return deriveRegistryIdentity(sourceFile.fileName, localName).key;
+  }
+  return null;
+}
+
+function isQueryCallExpression(expression: ts.Expression): boolean {
+  if (ts.isIdentifier(expression)) return expression.text === 'query';
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === 'elevated' &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'query'
+  );
+}
+
+function isExportedStatement(statement: ts.VariableStatement): boolean {
+  return (
+    statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true
+  );
+}
+
+function queryNameFromPropertyName(
+  name: ts.PropertyName | undefined,
+  localQueryKeys: ReadonlyMap<string, string>,
+): string | null {
+  if (!name) return null;
+  if (ts.isComputedPropertyName(name))
+    return queryNameFromComputedExpression(name.expression, localQueryKeys);
+  return propertyNameText(name);
+}
+
+function queryNameFromComputedExpression(
+  expression: ts.Expression,
+  localQueryKeys: ReadonlyMap<string, string>,
+): string | null {
+  const unwrapped = unwrapTsExpression(expression);
+  if (unwrapped && ts.isIdentifier(unwrapped)) {
+    return localQueryKeys.get(unwrapped.text) ?? null;
+  }
+  if (
+    unwrapped &&
+    ts.isPropertyAccessExpression(unwrapped) &&
+    unwrapped.name.text === 'key' &&
+    ts.isIdentifier(unwrapped.expression)
+  ) {
+    return localQueryKeys.get(unwrapped.expression.text) ?? null;
+  }
+  return null;
 }
 
 function propertyNameText(name: ts.PropertyName | undefined): string | null {
