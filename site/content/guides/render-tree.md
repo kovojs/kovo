@@ -87,7 +87,7 @@ Render the parsed tree where you would otherwise render rich text:
 ```tsx
 import {
   renderTree,
-  safeRichHtml,
+  trustedHtml,
   type ComponentNode,
   type ComponentRegistry,
 } from '@kovojs/server';
@@ -100,12 +100,15 @@ export async function ProductDescription({ body }: { body: string }) {
     unknownTag: 'text',
   });
   return (
-    <section>
-      {safeRichHtml(html, { reason: 'renderTree escapes text and owns component dispatch' })}
-    </section>
+    <section>{trustedHtml(html, 'renderTree escaped the rich-text tree server-side')}</section>
   );
 }
 ```
+
+`renderTree(...)` returns ordinary `string` bytes, not a branded value. That is intentional. The
+walker already escaped text and kept dispatch inside your closed registry, but the raw-HTML sink
+still needs an explicit `trustedHtml(...)` call so the trust decision stays visible in source and
+`kovo explain`.
 
 `unknownTag: 'text'` drops an unknown wrapper and keeps its children. Use `unknownTag: 'drop'` when
 unknown tags should remove the whole subtree.
