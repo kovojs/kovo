@@ -432,6 +432,29 @@ scripts/kovo-check.mjs` passed.
       Evidence: `secure-framework-3.md` verifies `packages/server/src/app-system-response.ts` centralizes
       reserved system response posture; `pnpm test packages/server/src/app.test.ts` covered 413/429 paths.
 
+- [ ] **OPP-31 — Advanced TypeScript security types for author-time hardening.** type-only ergonomics +
+      runtime-DiD where constructors validate · lev 5 · M · breaking. Add narrow branded/unique-symbol and
+      discriminated-union types to make common security mistakes harder to express in app code and framework
+      tests. _Trade-off:_ TypeScript brands are not security proofs (`any`, casts, JS callers, and runtime data
+      can bypass them), so this must stay an ergonomics layer on top of the existing runtime floors and AST/
+      provenance gates, not a replacement for them.
+  - [ ] **Strong signing material:** introduce a validated `SigningSecret`/key-material constructor and thread it
+        through KeyRing, CSRF, signed-cookie, capability URL, and live-target attestation APIs so casual
+        `{ secret: 'test-secret' }` cannot type-check without explicit validation.
+  - [ ] **Route response sentinels:** replace the enumerable/string-shaped `routeResponse` marker with a
+        module-private `unique symbol` brand, preserve it through document/web response adapter clones, and keep
+        route-outcome detection impossible to satisfy by accidental structural object shape.
+  - [ ] **Escaped vs trusted/rendered HTML:** split table/UI hand-built markup into branded `RenderedHtml` and
+        plain text inputs so structural table children accept only framework-produced rendered table parts, while
+        captions and leaf text stay escaped text. This should catch raw `'<tbody>'` or raw user HTML misuse at
+        compile time before the runtime escaper is involved.
+  - [ ] **Header bags:** tighten framework header types around `ResponseHeaders`/`MutationResponseHeaders` so
+        multi-value headers, especially `Set-Cookie`, cannot be accidentally narrowed from `string | string[]`
+        to `string` across route, mutation, query, and system-response adapters.
+  - [ ] **Capability/security posture unions:** use discriminated unions for explicit posture choices, especially
+        `csrf: false`, so exemptions require the appropriate justification and/or verifier shape at the type
+        boundary instead of relying only on later runtime validation.
+
 - [x] **OPP-22 — Build-time egress deny floor (harden-runner analog).** runtime-DiD (CI scaffolding) +
       audit-only (release-age cooldown) · lev 4 · M · non-breaking. Secure-default CI: script-blocking install +
       egress allowlist for the build/install step (the Shai-Hulud worm vector). _Trade-off:_ genuinely useful
@@ -727,6 +750,8 @@ escaping (KV236), not by TT. Every audited escape records a `kovo explain` prove
 - OPP-07/08: does a first-class `tool()` primitive belong in core, and what is the minimal governed-sink
   annotation that keeps capability-bounding sound without over-claiming Excessive-Agency coverage?
 - OPP-11: resolved out of scope for this roadmap; session lifecycle stays delegated to `better-auth`.
+- OPP-31: which APIs can accept branded author-time types without harming JS users, and where should runtime
+  constructors remain mandatory because type-only evidence would overstate the security guarantee?
 - SINK-01: is flipping native-object SQL fall-through to default-deny acceptable for the Drizzle native path,
   or does it need a one-release blessed-native-statement migration?
 - OPP-28: scope a narrow directly-reachable read-path subset that keeps false positives tolerable.
