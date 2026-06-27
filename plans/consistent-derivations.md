@@ -234,8 +234,10 @@ packages/server/src/change-record.test.ts packages/drizzle/src/index.writes-rece
   - Document when `domain('billing')` is still clearer than deriving from a local binding.
   - The default should favor derivation in starter templates and guides.
   - Integrated evidence (2026-06-27): `site/content/guides/data-layer.md` and
-    `site/content/guides/queries.md` now favor zero-argument domains in public snippets. Remaining
-    gap: starter source and explicit escape-hatch guidance are not fully migrated.
+    `site/content/guides/queries.md` now favor zero-argument domains in public snippets, and
+    `site/content/guides/data-layer.md` documents explicit `domain('billing')`/`tag(...)` as shared
+    external vocabulary rather than local declaration identity. Remaining gap: starter/example source
+    still needs migration.
 
 ## Phase 5 - Queues And Shared Groups
 

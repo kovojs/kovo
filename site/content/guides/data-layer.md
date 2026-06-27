@@ -32,6 +32,23 @@ You never call `invalidate()` here. Calling `addItem` is the invalidation declar
 store or an opaque helper, `touches` is the explicit promise. On the Drizzle path, Kovo can extract
 the touched table from the SQL and map it back to a domain.
 
+## Share a domain name deliberately
+
+Use `domain()` and `tag()` for ordinary app declarations. Their names come from the exported binding
+and module path, so a local rename is visible to the compiler and the graph.
+
+Reach for an explicit string only when the name is shared vocabulary outside one declaration. A
+billing adapter, a generated schema bridge, or a package boundary may need several files to speak the
+same invalidation word:
+
+```ts
+export const billing = domain('billing');
+export const invoice = tag('billing:invoice');
+```
+
+If one module owns the concept, keep the string out of source. If several modules intentionally share
+the concept, make the shared name short, stable, and reviewed like an external API.
+
 ## The `db.<domain>.<write>` access shape
 
 Handlers never reach for raw tables. They go through the domain namespace on the request's `db`, so
