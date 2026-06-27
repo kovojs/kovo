@@ -126,9 +126,24 @@ export async function fetchEnhancedMutation(
   // SPEC §9.1.1: read build token from response header for delta validation.
   const buildToken =
     response.headers?.get('Kovo-Build') ?? response.headers?.get('kovo-build') ?? undefined;
+  const body = options.streaming && response.body ? '' : await response.text();
+  if (
+    !(options.streaming && response.body) &&
+    isSuccessfulEmptyAuthFragmentResponse(response, changes, body)
+  ) {
+    followSuccessfulMutationRedirect(resolveAuthMutationNavigationTarget(options.form, options.formData));
+    return {
+      body: '',
+      buildToken,
+      changes: [],
+      idem,
+      response,
+      targets: targetSnapshot.targets,
+    };
+  }
 
   return {
-    body: options.streaming && response.body ? '' : await response.text(),
+    body,
     buildToken,
     changes,
     idem,
@@ -161,6 +176,58 @@ function readSuccessfulRedirectLocation(
   if (status >= 300 && status < 400 && headerLocation) return headerLocation;
   if (response.redirected && response.url) return response.url;
   return undefined;
+}
+
+function isSuccessfulEmptyAuthFragmentResponse(
+  response: EnhancedMutationResponseLike,
+  changes: readonly MutationChangeRecord[],
+  body: string,
+): boolean {
+  const status = response.status ?? 200;
+  return (
+    status >= 200 &&
+    status < 300 &&
+    response.ok !== false &&
+    body.trim() === '' &&
+    changes.some((change) => change.domain === 'auth')
+  );
+}
+
+function resolveAuthMutationNavigationTarget(form: EnhancedFormLike, formData: unknown): string {
+  const next = safeSameOriginPath(readFormDataString(formData, 'next'));
+  if (next) return next;
+  if (form.action.includes('/auth/sign-in')) return '/';
+  return currentPathTarget() ?? '/';
+}
+
+function readFormDataString(formData: unknown, name: string): string | undefined {
+  if (
+    formData === null ||
+    typeof formData !== 'object' ||
+    typeof (formData as { get?: unknown }).get !== 'function'
+  ) {
+    return undefined;
+  }
+  const value = (formData as { get(name: string): unknown }).get(name);
+  return typeof value === 'string' ? value : undefined;
+}
+
+function safeSameOriginPath(value: string | undefined): string | undefined {
+  if (!value || value[0] !== '/' || value[1] === '/') return undefined;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
+  if (/[\\\x00-\x20\x7f]/.test(decoded)) return undefined;
+  return value;
+}
+
+function currentPathTarget(): string | undefined {
+  const globalLocation = (globalThis as { location?: Location }).location;
+  if (!globalLocation) return undefined;
+  return `${globalLocation.pathname}${globalLocation.search}${globalLocation.hash}`;
 }
 
 function refreshFormDataIdem(formData: unknown): string | undefined {

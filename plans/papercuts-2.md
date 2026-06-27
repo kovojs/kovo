@@ -53,7 +53,7 @@ bigints, buffers, and null` twice during `seedDemoUser()`.
     SQLite column modes or derive/materialize the auth schema from the Better Auth
     table metadata used by the conformance bridge.
 
-- [ ] **Enhanced auth sign-in still succeeds without navigating.**
+- [x] **Enhanced auth sign-in still succeeds without navigating.**
   - Observed behavior: signing in at
     `http://100.108.214.117:5188/login?next=%2F` set
     `better-auth.session_token`, but the browser stayed on the login URL.
@@ -72,6 +72,12 @@ bigints, buffers, and null` twice during `seedDemoUser()`.
   - Acceptance: successful enhanced auth mutations must navigate to the resolved
     `next`/default route even when the adapter records an `auth` change rather
     than returning a raw 303 response.
+  - Evidence: `pnpm exec vitest run packages/browser/src/mutation-submit.test.ts
+    packages/browser/src/mutation-fetch.test.ts` covers modular empty auth
+    fragments with safe `next` and unsafe fallback; `pnpm exec vitest run
+    packages/browser/src/inline-loader-enhanced-submit.test.ts` covers inline
+    loader parity; `pnpm --filter @kovojs/browser run check:inline-loader`
+    verifies the generated inline runtime is current.
 
 - [x] **Compiler cache JSON is regenerated in a format that `vp check` rejects.**
   - Observed behavior: after running tests/dev/browser flows, `pnpm run check`

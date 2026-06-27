@@ -909,6 +909,37 @@ function installInlineKovoLoader(im) {
     form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
     form.setAttribute?.('kovo-error', '');
   };
+  const chg = (response) => {
+    const value = response.headers?.get('Kovo-Changes') ?? response.headers?.get('kovo-changes');
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  const safep = (value) => {
+    if (!value || value[0] !== '/' || value[1] === '/') return '';
+    try {
+      if (/[\\\x00-\x20\x7f]/.test(decodeURIComponent(value))) return '';
+    } catch {
+      return '';
+    }
+    return value;
+  };
+  const ant = (form, body) => {
+    const next = safep(body.get?.('next'));
+    if (next) return next;
+    if ((form.action || '').includes('/auth/sign-in')) return '/';
+    return (location.pathname || '/') + (location.search || '') + (location.hash || '');
+  };
+  const eaf = (response, changes, text) =>
+    (response.status ?? 200) >= 200 &&
+    (response.status ?? 200) < 300 &&
+    response.ok !== false &&
+    text.trim() === '' &&
+    changes.some((change) => change?.domain === 'auth');
   const sef = (event, form) => {
     event.preventDefault();
     const streaming = form.getAttribute?.('data-mutation-stream') !== null;
@@ -956,7 +987,14 @@ function installInlineKovoLoader(im) {
         }
         return streaming && response.body
           ? asr(response.body)
-          : response.text().then((body) => ab(body, bh(response)));
+          : response.text().then((text) => {
+            const changes = chg(response);
+            if (eaf(response, changes, text)) {
+              ng(ant(form, body));
+              return;
+            }
+            ab(text, bh(response));
+          });
       })
       .catch(() => fsb(form));
   };

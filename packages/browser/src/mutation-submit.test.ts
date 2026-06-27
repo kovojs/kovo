@@ -86,6 +86,96 @@ describe('enhanced mutation submit', () => {
     },
   );
 
+  it('navigates after a successful enhanced auth empty-fragment response', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const assign = vi.fn();
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { assign },
+    });
+    const formData = new FormData();
+    formData.set('next', '/dashboard?tab=home');
+    const text = vi.fn(async () => '');
+    const fetch = vi.fn(async () => ({
+      headers: {
+        get(name: string) {
+          return name.toLowerCase() === 'kovo-changes' ? '[{"domain":"auth"}]' : null;
+        },
+      },
+      ok: true,
+      status: 200,
+      text,
+    }));
+
+    try {
+      const result = await submitEnhancedMutation({
+        fetch,
+        form: { action: '/_m/auth/sign-in', method: 'post' },
+        formData,
+        root,
+        store,
+      });
+      expect(result).toEqual({
+        appliedFragments: [],
+        changes: [],
+        fragments: [],
+        idem: expect.any(String),
+        queries: [],
+        targets: [],
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+
+    expect(assign).toHaveBeenCalledWith('/dashboard?tab=home');
+    expect(text).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the auth sign-in default route after unsafe empty-fragment next values', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const assign = vi.fn();
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { assign },
+    });
+    const formData = new FormData();
+    formData.set('next', 'https://evil.example/account');
+    const fetch = vi.fn(async () => ({
+      headers: {
+        get(name: string) {
+          return name.toLowerCase() === 'kovo-changes' ? '[{"domain":"auth"}]' : null;
+        },
+      },
+      ok: true,
+      status: 200,
+      text: vi.fn(async () => ''),
+    }));
+
+    try {
+      await submitEnhancedMutation({
+        fetch,
+        form: { action: '/_m/auth/sign-in', method: 'post' },
+        formData,
+        root,
+        store,
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+
+    expect(assign).toHaveBeenCalledWith('/');
+  });
+
   it('follows 401 Kovo-Reauth without applying mutation fragments', async () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
