@@ -16,32 +16,49 @@ describe('@kovojs/ui Table StyleX slots', () => {
   it('renders semantic table markup with StyleX slot classes', () => {
     const header = TableHead.definition.render({
       children: TableRow.definition.render({
-        children: `${TableHeaderCell.definition.render({
-          children: 'Invoice',
-        })}${TableHeaderCell.definition.render({
-          children: 'Status',
-        })}${TableHeaderCell.definition.render({
-          children: 'Amount',
-        })}`,
+        children: [
+          TableHeaderCell.definition.render({
+            children: 'Invoice',
+          }),
+          TableHeaderCell.definition.render({
+            children: 'Status',
+          }),
+          TableHeaderCell.definition.render({
+            children: 'Amount',
+          }),
+        ],
       }),
     });
     const body = TableBody.definition.render({
-      children: `${TableRow.definition.render({
-        children: `${TableHeaderCell.definition.render({
-          children: 'INV-0042',
-          scope: 'row',
-        })}${TableCell.definition.render({
-          children: 'Paid',
-        })}${TableCell.definition.render({
-          children: '$250.00',
-        })}`,
-      })}${TableRow.definition.render({
-        children: TableCell.definition.render({
-          children: 'Two pending invoices omitted',
-          colSpan: 3,
+      children: [
+        TableRow.definition.render({
+          children: [
+            TableHeaderCell.definition.render({
+              children: 'INV-0042',
+              scope: 'row',
+            }),
+            TableCell.definition.render({
+              children: 'Paid',
+            }),
+            TableCell.definition.render({
+              children: '$250.00',
+            }),
+          ],
         }),
-      })}`,
+        TableRow.definition.render({
+          children: TableCell.definition.render({
+            children: 'Two pending invoices omitted',
+            colSpan: 3,
+          }),
+        }),
+      ],
     });
+    const legacyBody = `${TableRow.definition.render({
+      children: `${TableHeaderCell.definition.render({
+        children: 'INV-0042',
+        scope: 'row',
+      })}`,
+    })}`;
 
     expect({
       bodyClasses: [style.attrs(tableStyles.body).class ?? ''] as const,
@@ -62,7 +79,12 @@ describe('@kovojs/ui Table StyleX slots', () => {
       rendered: String(
         Table.definition.render({
           caption: 'Invoices for the current billing period',
-          children: `${header}${body}`,
+          children: [header, body],
+        }),
+      ),
+      stringComposedChildrenAreText: String(
+        Table.definition.render({
+          children: legacyBody,
         }),
       ),
       rootClasses: [style.attrs(tableStyles.table).class ?? ''] as const,
@@ -109,31 +131,28 @@ describe('@kovojs/ui Table StyleX slots', () => {
       String(
         Table.definition.render({
           caption: 'Custom invoices',
-          children:
-            String(
-              TableHead.definition.render({
-                children: TableRow.definition.render({
-                  children: TableHeaderCell.definition.render({
-                    children: 'Invoice',
-                    styles: { headerCell: overrides.headerCell },
-                  }),
-                  styles: { row: overrides.row },
+          children: [
+            TableHead.definition.render({
+              children: TableRow.definition.render({
+                children: TableHeaderCell.definition.render({
+                  children: 'Invoice',
+                  styles: { headerCell: overrides.headerCell },
                 }),
-                styles: { head: overrides.head },
+                styles: { row: overrides.row },
               }),
-            ) +
-            String(
-              TableBody.definition.render({
-                children: TableRow.definition.render({
-                  children: TableCell.definition.render({
-                    children: 'INV-1000',
-                    styles: { cell: overrides.cell },
-                  }),
-                  styles: { row: overrides.row },
+              styles: { head: overrides.head },
+            }),
+            TableBody.definition.render({
+              children: TableRow.definition.render({
+                children: TableCell.definition.render({
+                  children: 'INV-1000',
+                  styles: { cell: overrides.cell },
                 }),
-                styles: { body: overrides.body },
+                styles: { row: overrides.row },
               }),
-            ),
+              styles: { body: overrides.body },
+            }),
+          ],
           styles: {
             caption: overrides.caption,
             table: overrides.table,

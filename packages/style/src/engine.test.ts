@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createTheme, defineVars, emitAtomicCss } from './engine.js';
+import { create, createKeyframes, createTheme, defineVars, emitAtomicCss } from './engine.js';
 
 // Regression coverage for bugz-3 L10 (SPEC.md §13.1): `defineVars`/`createTheme`
 // used to interpolate `String(value)` verbatim into a CSS rule string, so a
@@ -62,5 +62,39 @@ describe('bugz-3 L10: createTheme/defineVars CSS-value breakout (SPEC.md §13.1)
     const theme = createTheme(vars, { primary: '#15803d' });
     const themeRules = theme.__rules as ReadonlyArray<{ rule: string }>;
     expect(themeRules[0]?.rule).toBe(`.${theme.className}{--kovo-tokens-primary:#15803d}`);
+  });
+
+  it('rejects style.create values that break out of an atomic declaration', () => {
+    expect(() =>
+      create({
+        card: {
+          color: 'red}html{display:none}',
+        },
+      }),
+    ).toThrowError(/style\.create rejected an unsafe CSS value/);
+  });
+
+  it('rejects unsafe token names before they enter CSS custom-property names', () => {
+    expect(() => defineVars({ 'primary}html{display:none': '#fff' })).toThrowError(
+      /style\.defineVars rejected an unsafe CSS token/,
+    );
+  });
+
+  it('rejects keyframe step names and declaration values that break out of @keyframes', () => {
+    expect(() =>
+      createKeyframes({
+        '0%}html{display:none': {
+          opacity: 0,
+        },
+      }),
+    ).toThrowError(/style\.keyframes rejected an unsafe CSS step/);
+
+    expect(() =>
+      createKeyframes({
+        to: {
+          transform: 'translateX(0)}html{display:none}',
+        },
+      }),
+    ).toThrowError(/style\.keyframes rejected an unsafe CSS value/);
   });
 });

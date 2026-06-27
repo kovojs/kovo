@@ -252,6 +252,95 @@ describe('optimistic enhanced mutation queueing', () => {
     expect(queue.pending('cart')).toBe(false);
   });
 
+  it('ignores a timed-out head that later resolves after the tail committed', async () => {
+    vi.useFakeTimers();
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const rebaser = new OptimisticRebaser(store, { onError });
+    const queue = new MutationQueue({ timeoutMs: 10 });
+    const root = new FakeMorphRoot();
+    let releaseFirst: (() => void) | undefined;
+    store.set('cart', { count: 0 });
+
+    const optimistic = {
+      queue: 'cart',
+      transforms: {
+        cart(current: unknown, input: { quantity: number }) {
+          const cart = current as { count: number };
+          return { count: cart.count + input.quantity };
+        },
+      },
+    };
+    const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => {
+      const quantityEntry = (options.body as FormData).get('quantity');
+      const quantity = typeof quantityEntry === 'string' ? quantityEntry : '';
+
+      if (quantity === '1') {
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+        return {
+          async text() {
+            return '<kovo-query name="cart">{"count":1}</kovo-query>';
+          },
+        };
+      }
+
+      return {
+        async text() {
+          return '<kovo-query name="cart">{"count":2}</kovo-query>';
+        },
+      };
+    });
+
+    const firstFormData = new FormData();
+    firstFormData.set('quantity', '1');
+    const secondFormData = new FormData();
+    secondFormData.set('quantity', '2');
+
+    const first = submitOptimisticEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: firstFormData,
+      idem: 'idem_first',
+      input: { quantity: 1 },
+      onError,
+      optimistic,
+      queue,
+      rebaser,
+      root,
+      store,
+    });
+    const firstSettled = first.catch((error: unknown) => error);
+    const second = submitOptimisticEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: secondFormData,
+      idem: 'idem_second',
+      input: { quantity: 2 },
+      onError,
+      optimistic,
+      queue,
+      rebaser,
+      root,
+      store,
+    });
+
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(firstSettled).resolves.toMatchObject({ name: 'AbortError' });
+    await expect(second).resolves.toMatchObject({ idem: 'idem_second', queries: ['cart'] });
+    expect(store.get('cart')).toEqual({ count: 2 });
+
+    releaseFirst?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(queue.pending('cart')).toBe(false);
+  });
+
   it('refuses queue overflow before applying an optimistic prediction', async () => {
     const store = createQueryStore();
     const onError = vi.fn();

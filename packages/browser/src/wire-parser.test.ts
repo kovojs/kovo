@@ -47,6 +47,22 @@ describe('wire parser HTML entity handling', () => {
     ).toEqual({ key: 'product>p1', name: 'product', value: { stock: 7 } });
   });
 
+  it('treats delta as a structural boolean attribute, not quoted key text', () => {
+    expect(
+      readQueryElementChunk({
+        attrs: ' name="cart" key="cart delta fresh"',
+        content: '{"count":1}',
+      }),
+    ).toEqual({ key: 'cart delta fresh', name: 'cart', value: { count: 1 } });
+
+    expect(
+      readQueryElementChunk({
+        attrs: ' name="cart" delta key="cart delta fresh"',
+        content: '{"set":{"count":1}}',
+      }),
+    ).toEqual({ delta: true, key: 'cart delta fresh', name: 'cart', value: { set: { count: 1 } } });
+  });
+
   it('keeps query endpoint instance keys separate from declared query names', () => {
     // SPEC.md §9.4/§10.2: /_q chunks use the declared query key as `name` and
     // the canonical instance identity as `key`, even when that key contains colons.

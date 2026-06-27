@@ -84,6 +84,7 @@ function renderedHtml(html: string): RenderedHtml {
 }
 
 function escapeHtml(value: unknown): string {
+  if (Array.isArray(value)) return value.map((item) => escapeHtml(item)).join('');
   if (
     typeof value === 'object' &&
     value !== null &&
@@ -178,7 +179,7 @@ export const Table = component({
         : `<caption${tableAttributes(captionAttrs)}>${escapeHtml(props.caption)}</caption>`;
 
     return renderedHtml(
-      `<div${tableAttributes(wrapperAttrs)}><table${tableAttributes(tableAttrs)}>${caption}${props.children ?? ''}</table></div>`,
+      `<div${tableAttributes(wrapperAttrs)}><table${tableAttributes(tableAttrs)}>${caption}${escapeHtml(props.children)}</table></div>`,
     );
   },
 });
@@ -238,7 +239,7 @@ export const TableHeaderCell = component({
         colspan: props.colSpan,
         scope: props.scope ?? 'col',
       },
-      props.children === undefined ? undefined : escapeHtml(props.children),
+      props.children,
     );
   },
 });
@@ -255,7 +256,7 @@ export const TableCell = component({
     return tablePart(
       'td',
       { ...style.attrs(tableStyles.cell, props.styles?.cell), colspan: props.colSpan },
-      props.children === undefined ? undefined : escapeHtml(props.children),
+      props.children,
     );
   },
 });
@@ -268,7 +269,7 @@ function tablePart(
   // SPEC.md §5.2 keeps vendored styled components as app-authored TSX source. These table
   // parts still emit semantic HTML, while avoiding isolated JSX <tr>/<td> bodies
   // that the compiler correctly rejects when compiled without their table parent.
-  return renderedHtml(`<${tag}${tableAttributes(attributes)}>${children ?? ''}</${tag}>`);
+  return renderedHtml(`<${tag}${tableAttributes(attributes)}>${escapeHtml(children)}</${tag}>`);
 }
 
 function tableAttributes(attributes: TablePartAttributes | Record<string, unknown>): string {
