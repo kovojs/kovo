@@ -231,6 +231,56 @@ export const CartBadge = component({
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('accepts isomorphic mapped lists with lambda params and render-local consts', () => {
+    const result = compileComponentModule({
+      fileName: 'contact-list.tsx',
+      source: `
+export const ContactList = component({
+  isomorphic: true,
+  queries: { contacts: contactsQuery },
+  state: () => ({ filter: '' }),
+  render: ({ contacts }, state) => {
+    const visible = contacts.items.filter((contact) => contact.name.includes(state.filter));
+    const rows = visible.map((contact) => ({ id: contact.id, label: contact.name }));
+
+    return (
+      <ul>
+        {rows.map((row) => (
+          <li data-id={row.id}>{row.label}</li>
+        ))}
+        <li>{visible.length}</li>
+      </ul>
+    );
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV303')).toEqual([]);
+  });
+
+  it('explains KV303 when render destructuring aliases a declared query key', () => {
+    const result = compileComponentModule({
+      fileName: 'task-list.tsx',
+      source: `
+export const TaskList = component({
+  queries: { taskList: taskListQuery },
+  render: ({ taskList: list }) => <ul kovo-c="task-list">{list.items.map((item) => <li>{item.title}</li>)}</ul>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV303')).toMatchObject([
+      {
+        code: 'KV303',
+        fileName: 'task-list.tsx',
+        help: expect.stringContaining('render destructuring renamed a declared query/prop key'),
+        message: `${kv303.message} list (render destructuring aliases declared key taskList; use the declared key name in the render parameter)`,
+        severity: kv303.severity,
+      },
+    ]);
+  });
+
   it('reports KV303 when isomorphic render inputs are not live-declared', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
