@@ -913,8 +913,8 @@ function dynamicCodeSourceForSinkScanning(text) {
   const chars = source.split('');
   const preservedDynamicCodeLiteralPatterns = [
     /\bglobalThis\s*\[\s*(['"])(eval|Function)\1\s*\]/g,
-    /(?:^|[{\[,])\s*(['"])(eval|Function)\1\s*:/g,
-    /(?:^|[{\[,])\s*\[\s*(['"])(eval|Function)\1\s*\]\s*:/g,
+    /(?:^|[{[,])\s*(['"])(eval|Function)\1\s*:/g,
+    /(?:^|[{[,])\s*\[\s*(['"])(eval|Function)\1\s*\]\s*:/g,
   ];
   let match;
   for (const literalPattern of preservedDynamicCodeLiteralPatterns) {

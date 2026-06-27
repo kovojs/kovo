@@ -59,12 +59,14 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
 
 ## MEDIUM
 
-- [ ] **M1 — `respond.file`/`respond.stream` with a string body + `text/html` content-type is wrongly wrapped in the full document shell (download corrupted, loader/CSP injected).** `packages/server/src/document-core.ts:323-326`, `packages/server/src/response.ts:362-380,530-555`
+- [x] **M1 — `respond.file`/`respond.stream` with a string body + `text/html` content-type is wrongly wrapped in the full document shell (download corrupted, loader/CSP injected).** `packages/server/src/document-core.ts:323-326`, `packages/server/src/response.ts:362-380,530-555`
   - `renderRouteDocumentResponse` decides "page render vs respond() outcome" purely by `status===200 && typeof body==='string' && content-type includes 'text/html'`; the `RouteResponseOutcome.routeResponse` marker + Content-Disposition are stripped by `routeOutcomeResponse` and never consulted, so an HTML file/stream outcome falls into document assembly.
   - **Exploit:** `respond.file('<h1>…</h1>', {contentType:'text/html', filename:'report.html'})` ships `<!doctype html>…<script>(inline loader)</script>…` with a CSP attached and the attachment disposition preserved — corrupted download / doubly-nested inline doc. No XSS (attachment downloads; inline-without-verifiedSafe is refused), so output corruption of a public API, not a breach.
   - **Verified:** worktree (2/2) — real `respond.file(text/html)` → body starts `<!doctype html>` and contains `<script`; `text/plain` control returns the bytes untouched.
   - **Distinct:** inverse of bugz-3 M2 (which _lost_ the no-store floor on these outcomes); this _adds_ document wrapping.
   - **Fix:** thread the `routeResponse` marker (or Content-Disposition) into `renderRouteDocumentResponse` and pass non-document outcomes through regardless of content-type.
+  - **Evidence:** `pnpm exec vitest --run packages/server/src/response.test.ts` passed after
+    integration; `respond.file(text/html)` route outcomes now bypass document wrapping.
 
 - [x] **M2 — Deferred-stream boundary-collision detection scans raw HTML source while the client matches tag-stripped `textContent`; adjacent attacker fields re-open the bugz-3 M3 hazard.** `packages/server/src/deferred-stream.ts:144-156,174-182` vs client at `:94,:192`
   - The bugz-3 M3 fix re-rolls the boundary by testing `line.includes('--<boundary>')` over raw serialized HTML/shell lines, but the emitted client cleanup/apply scripts test `node.textContent.includes('--<boundary>')` — and `textContent` strips tags and concatenates adjacent element text. A marker split across element boundaries (or formed by two adjacent escaped fields) evades the server re-roll. (Found independently by the mutation-stream and compiler-lowering dimensions.)
@@ -139,26 +141,33 @@ packages/better-auth/src/index.schema-bridge.test.ts packages/better-auth/src/in
     expiry; `pnpm exec vitest run packages/server/src/capability-url.test.ts packages/server/src/capability-route.test.ts
 packages/server/src/keyring.test.ts packages/server/src/env.test.ts --run` passed 64 tests after integration.
 
-- [ ] **M10 — The coarse per-IP limiter and `guards.rateLimit({per:'ip'})` trust the LEFTMOST `X-Forwarded-For` under `trustedProxy`, enabling per-IP bypass and targeted victim lockout.** `packages/server/src/app-load-shed.ts:417-434`
+- [x] **M10 — The coarse per-IP limiter and `guards.rateLimit({per:'ip'})` trust the LEFTMOST `X-Forwarded-For` under `trustedProxy`, enabling per-IP bypass and targeted victim lockout.** `packages/server/src/app-load-shed.ts:417-434`
   - `requestClientIp` takes `x-forwarded-for.split(',')[0]` (and the first `Forwarded for=` element). A trusted proxy/CDN **appends** the real peer at the RIGHT, so the leftmost value is attacker-controlled (CWE-348). There is no trusted-hop count — it is always leftmost.
   - **Exploit:** behind a CDN (`trustedProxy:true`): rotate a fresh fake leftmost → every request gets a new bucket (limit bypass); or send the victim's IP → exhaust the victim's bucket (targeted DoS / lockout). Feeds both the pre-dispatch limiter and the mutation `per:'ip'` guard.
   - **Verified:** worktree (5/5) — `resolveRequestClientIp(app, XFF='1.2.3.4, 9.9.9.9')` returns the spoofed `1.2.3.4`; 50 rotating-leftmost requests → 0 shed under `perIp{max:3}`.
   - **Distinct:** no prior item touches the load-shed client-IP derivation (bugz H2 was the runtime egress address[0]; bugz-3 L7/bugz-4 L8 are the CI egress hook).
   - **Fix:** derive the client IP from the RIGHT with a configurable trusted-hop count (or use the platform peer address); never the raw leftmost.
+  - **Evidence:** `pnpm exec vitest --run packages/server/src/app.test.ts
+packages/server/src/guards-rate-limit-ip.test.ts` passed after integration; trusted proxy IP
+    extraction now uses the rightmost forwarded client value.
 
-- [ ] **M11 — The shared rate-limit store + per-check eviction params collapse other surfaces' window and maxKeys to the minimum (under-limits, not fail-safe).** `packages/server/src/app-load-shed.ts:217-277`
+- [x] **M11 — The shared rate-limit store + per-check eviction params collapse other surfaces' window and maxKeys to the minimum (under-limits, not fail-safe).** `packages/server/src/app-load-shed.ts:217-277`
   - `consumeRateLimit`→`evictExpiredRateBuckets` iterates **every** bucket in the store using the _currently-executing_ check's `windowMs`/`maxKeys`. The all/mutation/query checks share `state.global` and `state.perIp`, so a short-window or small-maxKeys check purges the longer-window / larger-capacity buckets of other surfaces.
   - **Exploit:** a plausible config (per-second query burst + per-minute global per-IP) — the 60s query budget is reset every ~1s by the all-check's 1s eviction, collapsing it to ~5 req/s instead of 5/min (under-limiting up to ~60×).
   - **Verified:** worktree (fake timers) — the 60s `queries.perIp{max:5}` budget is reset every ~1s by a 1s `perIp` window on the shared store.
   - **Distinct:** new; H1 above is client-IP trust, this is the eviction-params sharing.
   - **Fix:** namespace buckets per check (separate stores) or scope eviction to the bucket's own check params.
+  - **Evidence:** `pnpm exec vitest --run packages/server/src/app.test.ts` passed after integration;
+    rate-limit buckets are now separated per check so eviction uses the check's own window/maxKeys.
 
-- [ ] **M12 — `guards.rateLimit({per:'ip'})` throws on every request for queries and route pages (guaranteed 500) because only the mutation path threads `req.clientIp`.** `packages/server/src/guards.ts:792-809,498-507`
+- [x] **M12 — `guards.rateLimit({per:'ip'})` throws on every request for queries and route pages (guaranteed 500) because only the mutation path threads `req.clientIp`.** `packages/server/src/guards.ts:792-809,498-507`
   - `req.clientIp` is attached only when a runner passes a `clientIp` resolver into `resolveLifecycleRequest`; only `app-mutation-request.ts` does so. The query channel and route-page render never thread it, so `per:'ip'` (advertised by the JSDoc for routes/queries/mutations) throws "cannot determine client IP" before the access decision.
   - **Exploit:** attaching the documented `guards.rateLimit({per:'ip'})` to a `query()` or `route()` page → 100% outage of that surface (framework 500). Fails closed; developer-reachable via an advertised config, not attacker-reachable.
   - **Verified:** worktree (3/3) — `runQuery` / route-page with `guards.rateLimit({per:'ip'})` rejects "cannot determine client IP"; the same guard on a mutation works.
   - **Distinct:** bugz M3 was the _design_ throw for anonymous clients; this is the per:'ip' guard being non-functional outside mutations.
   - **Fix:** thread a `clientIp` resolver into the query and route-page lifecycle requests too.
+  - **Evidence:** `pnpm exec vitest --run packages/server/src/route-query-guards.test.ts
+packages/server/src/guards-rate-limit-ip.test.ts` passed after integration; route/query guards now receive framework-resolved client IPs.
 
 - [x] **M13 — bugz-3 M9 residual: a `crossTable` change still carries child-space keys, and the render/delta path narrows by them and drops the changed parent rows → stale at the render stage.** `packages/server/src/mutation/targets.ts:85-178`, `packages/core/src/query-delta.ts:104-150`
   - M9 over-invalidates only at _target selection_ (`crossTable`→whole). But `mutationRegistryChangeRecords` still attaches resolved child-space `keys` to the crossTable change; `renderQueryChunks`→`buildAffectedKeysByDomain` includes those keys with no crossTable guard, and `renderQueryRerunChunk` ships a §9.1.1 delta keyed by them, so the changed parent rows (different key space) aren't in the delta → stale.
@@ -193,11 +202,13 @@ packages/ui/src/xss-escaping.test.tsx --run` passed after integration; structura
 
 ## LOW
 
-- [ ] **L1 — Cookie-floor `unsafeCookie()` waiver is not bound to the attributes it weakens: one content-free waiver blanket-authorizes Secure+HttpOnly+SameSite downgrades and records an inaccurate audit fact.** `packages/server/src/cookies.ts:95-100,219-232`
+- [x] **L1 — Cookie-floor `unsafeCookie()` waiver is not bound to the attributes it weakens: one content-free waiver blanket-authorizes Secure+HttpOnly+SameSite downgrades and records an inaccurate audit fact.** `packages/server/src/cookies.ts:95-100,219-232`
   - `applyCookieFloor` gates KV432 on `hasDowngrade && options.unsafe !== undefined` and records `options.unsafe.downgrade` verbatim, never cross-checking it against the actually-weakened attributes; `unsafeCookie()` only requires a non-empty `justification`. So `{downgrade:{}, justification:'…'}` waives _all_ downgrades and the drained fact misstates what was weakened. Reachable only via deliberate use of the public escape on a credential cookie; the by-construction floor still holds without the escape.
   - **Verified:** worktree — `session` cookie with `secure:false, httpOnly:false, sameSite:'none', unsafe:{downgrade:{}}` ships insecure in prod with no throw.
   - **Distinct:** bugz-3 M1 was a _silent_ (no-audit) bypass; here KV432 arms and a fact is produced, but the waiver is coarse and the fact inaccurate.
   - **Fix:** require `unsafe.downgrade` to enumerate (and match) each weakened attribute; reject a waiver that doesn't cover the actual downgrade.
+  - **Evidence:** `pnpm exec vitest --run packages/server/src/cookies.test.ts` passed after
+    integration; unsafe cookie waivers now must enumerate the exact weakened attributes.
 
 - [x] **L2 — `SecretValue.equals`/`RedactedValue.equals` (advertised constant-time) leak operand length via variable loop count and silently return false for byte-equal non-string operands.** `packages/core/src/secret.ts:105-112,296-303`
   - `timingSafeStringEqual` loops `Math.max(a.length,b.length)` iterations (equality is correct, but total time scales with the secret length); `KovoPoisonBox.equals` falls back to `Object.is` for non-strings, so byte-identical `Uint8Array`/`Buffer` tokens compare unequal by reference.
@@ -207,17 +218,22 @@ packages/ui/src/xss-escaping.test.tsx --run` passed after integration; structura
   - **Evidence:** `pnpm exec vitest run packages/core/src/secret.test.ts --run` passed after integration;
     byte-like operands now compare by value through a fixed-width digest before equality.
 
-- [ ] **L3 — Guard-failure 403 forbidden HTML responses miss the entire §6.6 document security baseline and the per-principal cache floor.** `packages/server/src/guards.ts:552-556`, `packages/server/src/app-document.ts:114-120`
+- [x] **L3 — Guard-failure 403 forbidden HTML responses miss the entire §6.6 document security baseline and the per-principal cache floor.** `packages/server/src/guards.ts:552-556`, `packages/server/src/app-document.ts:114-120`
   - `renderHttpGuardFailureResponse` returns a bare `{body, headers:{Content-Type:text/html}, status:403}`; only 404/500 are routed through `renderErrorDocument`, and the status≠200 pass-through skips `stampPerPrincipalRouteOutcomeFloor`. So a 403 ships with no CSP / X-Frame-Options / COOP / Permissions-Policy / nosniff, and (for per-principal forbidden bodies) no no-store/Vary:Cookie.
   - **Verified:** worktree — real 403 outcome → only Content-Type; no CSP/XFO/Cache-Control.
   - **Distinct:** bugz-3 L2/M2 were unguarded-authed docs / file-stream no-store; this is the 403 guard-failure path missing both baselines.
   - **Fix:** route 403 through `renderErrorDocument` (baseline + reporting) and apply the per-principal floor.
+  - **Evidence:** `pnpm exec vitest --run packages/server/src/route-query-guards.test.ts
+packages/server/src/access.test.ts examples/reference/src/app.test.ts` passed after integration; 403 guard responses now carry CSP/isolation and private no-store/Vary floors.
 
-- [ ] **L4 — The CSP/COOP/Permissions report endpoint is absolutized with the untrusted request Host, enabling report-destination redirection.** `packages/server/src/csp.ts:201-216,383-385`
+- [x] **L4 — The CSP/COOP/Permissions report endpoint is absolutized with the untrusted request Host, enabling report-destination redirection.** `packages/server/src/csp.ts:201-216,383-385`
   - The same-origin report path is converted to absolute via `new URL(request.url).origin`, whose authority comes from the inbound Host header by default; a relative endpoint would always be same-origin. Combined with Host-header cache poisoning of a cacheable framework HTML response (e.g. the 404 doc, which carries reporting headers but no Cache-Control/Vary), the Report-To/Reporting-Endpoints become attacker-controllable.
   - **Verified:** worktree — `renderErrorDocument({status:404, reportingOrigin:'https://attacker.example'})` → Report-To/Reporting-Endpoints contain the attacker origin.
   - **Distinct:** bugz-3 L14 was redactedUrl keeping path secrets at rest; this is the outbound report destination via Host.
   - **Fix:** emit the report endpoint as a relative URL (or validate the origin against a configured allowlist), and ensure error docs carry no-store.
+  - **Evidence:** `pnpm exec vitest --run packages/server/src/csp.test.ts
+packages/server/src/static-export-manifest.test.ts packages/server/src/static-export-replay.test.ts
+packages/server/src/vite-build.test.ts` passed after integration; CSP reporting headers now use relative endpoints.
 
 - [x] **L5 — The replay idempotency fingerprint embeds the per-render-rotating masked CSRF token on the enhanced wire path; `canonicalReplayInput`'s neutralization is dead code.** `packages/server/src/replay.ts:270-297`, `packages/server/src/mutation-wire.ts:333`
   - `replayFingerprint` returns the precomputed `requestFingerprint` verbatim (from `canonicalRequestFingerprint`, no CSRF neutralization) and only calls `canonicalReplayInput` (which rewrites the csrf field) when it is absent. Because the masked token rotates per mint, identical bodies fingerprint differently across renders.
