@@ -61,6 +61,7 @@ exports[`@kovojs/ui Table StyleX slots > renders semantic table markup with Styl
   "rowClasses": [
     "kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-ddleab",
   ],
+  "stringComposedChildrenAreText": "<div class="kv-table-overflow-1frfff kv-table-w-1tdux0" data-style-src="table.tsx#wrapper"><table class="kv-table-bd-fz858s kv-table-caption-8lgut2 kv-table-font-1swbvq kv-table-w-1tdux0" data-style-src="table.tsx#table">&lt;tr class="kv-table-bd-1gxhhy kv-table-bd-1i1mjz kv-table-bd-1pnmt5 kv-table-transition-1n2dym kv-table-bg-ddleab" data-style-src="table.tsx#row"&gt;&amp;lt;th class="kv-table-fg-1ra5l7 kv-table-font-1swbvq kv-table-font-5pvibj kv-table-h-jn9m0d kv-table-pad-pv4sxw kv-table-text-1dl5ik kv-table-vertical-7ub3oi" data-style-src="table.tsx#headerCell" scope="row"&amp;gt;INV-0042&amp;lt;/th&amp;gt;&lt;/tr&gt;</table></div>",
   "wrapperClasses": [
     "kv-table-overflow-1frfff kv-table-w-1tdux0",
   ],

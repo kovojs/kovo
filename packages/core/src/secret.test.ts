@@ -80,6 +80,10 @@ describe('runtime Secret poison wrapper (SPEC §6.6 defense-in-depth)', () => {
     expect(token.equals('b'.repeat(32))).toBe(false);
     expect(token.equals('a'.repeat(31))).toBe(false); // length mismatch
     expect(token.equals(secret('a'.repeat(32)))).toBe(true);
+    const bytes = new Uint8Array([1, 2, 3]);
+    expect(secret(bytes).equals(new Uint8Array([1, 2, 3]))).toBe(true);
+    expect(secret(bytes.buffer).equals(new Uint8Array([1, 2, 3]))).toBe(true);
+    expect(secret(new Uint8Array([97])).equals('a' as never)).toBe(false);
     expect(secret(7).equals(7)).toBe(true);
     expect(secret(7).equals(8)).toBe(false);
   });
@@ -173,5 +177,6 @@ describe('runtime redacted PII wrapper (SPEC §6.6 defense-in-depth)', () => {
     expect(r.equals('tok')).toBe(true);
     expect(r.equals('nope')).toBe(false);
     expect(r.equals(redacted('tok'))).toBe(true);
+    expect(redacted(new Uint8Array([4, 5])).equals(new Uint8Array([4, 5]))).toBe(true);
   });
 });

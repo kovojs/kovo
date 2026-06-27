@@ -42,7 +42,8 @@ export interface SecretValue<T> extends Secret<T> {
   /**
    * Constant-time equality against another value or secret. Use this for token /
    * signature checks instead of `reveal() === other`, which both leaks via timing
-   * and un-poisons the value. Non-string operands fall back to `Object.is`.
+   * and un-poisons the value. Strings and byte-like operands compare through a
+   * fixed-width digest; other operands fall back to `Object.is`.
    */
   equals(other: T | Secret<T>): boolean;
 }
@@ -105,8 +106,11 @@ class KovoPoisonBox<T> {
   equals(other: unknown): boolean {
     const right = isPoisonBox(other) ? (other as KovoPoisonBox<T>).reveal() : other;
     const left = this.#value;
-    if (typeof left === 'string' && typeof right === 'string') {
-      return timingSafeStringEqual(left, right);
+    const leftComparable = comparableBytes(left);
+    const rightComparable = comparableBytes(right);
+    if (leftComparable && rightComparable) {
+      if (leftComparable.kind !== rightComparable.kind) return false;
+      return fixedDigestEqual(leftComparable, rightComparable);
     }
     return Object.is(left, right);
   }
@@ -292,14 +296,55 @@ export function publishToClient<T>(value: T, options: PublishToClientOptions): T
   return value;
 }
 
-/** Constant-time string compare (no early-exit on mismatch; mixes in any length difference). */
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const length = Math.max(a.length, b.length);
-  let mismatch = a.length ^ b.length;
-  for (let index = 0; index < length; index += 1) {
-    mismatch |= (a.charCodeAt(index) || 0) ^ (b.charCodeAt(index) || 0);
+interface ComparableBytes {
+  readonly bytes: Uint8Array;
+  readonly kind: 'bytes' | 'string';
+}
+
+function comparableBytes(value: unknown): ComparableBytes | null {
+  if (typeof value === 'string') return { bytes: new TextEncoder().encode(value), kind: 'string' };
+  if (value instanceof ArrayBuffer) return { bytes: new Uint8Array(value), kind: 'bytes' };
+  if (ArrayBuffer.isView(value)) {
+    return {
+      bytes: new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
+      kind: 'bytes',
+    };
+  }
+  return null;
+}
+
+function fixedDigestEqual(left: ComparableBytes, right: ComparableBytes): boolean {
+  const leftDigest = digestComparableBytes(left);
+  const rightDigest = digestComparableBytes(right);
+  let mismatch = 0;
+  for (let index = 0; index < leftDigest.length; index += 1) {
+    mismatch |= (leftDigest[index] ?? 0) ^ (rightDigest[index] ?? 0);
   }
   return mismatch === 0;
+}
+
+function digestComparableBytes(value: ComparableBytes): Uint8Array {
+  const state = new Uint32Array([
+    0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35, 0x27d4eb2f, 0x165667b1, 0xd3a2646c, 0xfd7046c5,
+  ]);
+  digestByte(state, value.kind === 'string' ? 0x73 : 0x62);
+  digestByte(state, 0);
+  for (const byte of value.bytes) digestByte(state, byte);
+
+  const digest = new Uint8Array(32);
+  const view = new DataView(digest.buffer);
+  for (let index = 0; index < state.length; index += 1) {
+    view.setUint32(index * 4, state[index] ?? 0, true);
+  }
+  return digest;
+}
+
+function digestByte(state: Uint32Array, byte: number): void {
+  for (let index = 0; index < state.length; index += 1) {
+    const previous = state[index] ?? 0;
+    const mixed = Math.imul(previous ^ ((byte + index * 0x9e) & 0xff), 0x01000193);
+    state[index] = (mixed ^ (mixed >>> 13) ^ Math.imul(index + 1, 0x85ebca6b)) >>> 0;
+  }
 }
 
 /** Public method labels for audited confidentiality reveals (SPEC §6.2/§10.2). */

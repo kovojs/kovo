@@ -577,6 +577,46 @@ describe('decoded mutation response apply', () => {
     expect(streamTarget.getAttribute('data-rendered-source')).toBe('Hi');
   });
 
+  it('rejects stream renderer module URLs outside the dynamic import allowlist', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      {
+        'data-stream-renderer': 'https://cdn.example.test/markdown.client.js#renderMarkdownStream',
+        'data-stream-text': 'assistant:a1',
+      },
+      { textContent: '' },
+    );
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+    const importModule = vi.fn(async () => ({ renderMarkdownStream: vi.fn() }));
+    const onError = vi.fn();
+
+    await applyStreamingMutationResponseBodyToRuntime({
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode('<kovo-text target="assistant:a1">Hi</kovo-text>'),
+          );
+          controller.enqueue(new TextEncoder().encode('<kovo-done></kovo-done>'));
+          controller.close();
+        },
+      }),
+      importModule,
+      onError,
+      root,
+      store,
+    });
+
+    expect(importModule).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Disallowed Kovo dynamic import URL: https://cdn.example.test/markdown.client.js',
+      }),
+    );
+    expect(streamTarget.textContent).toBe('Hi');
+  });
+
   it('flushes buffered text and marks the stream target failed when a stream read errors', async () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();

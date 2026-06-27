@@ -115,6 +115,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
 
   try {
     const fetched = await fetchEnhancedMutation({ ...options, ...definedProps({ signal }) }, idem);
+    if (queueState?.timedOut) throw lateQueueSettlementAfterTimeoutError();
 
     if (isFailedMutationResponse(fetched.response)) {
       discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
@@ -141,6 +142,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       ...applied,
     };
   } catch (error) {
+    if (queueState?.timedOut) throw error;
     discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
     if (options.pendingRoot) {
       stampPendingQueries(options.pendingRoot, queryNames, false);
@@ -150,6 +152,12 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     }
     throw error;
   }
+}
+
+function lateQueueSettlementAfterTimeoutError(): Error {
+  const error = new Error('Mutation queue result arrived after its timeout and was ignored.');
+  error.name = 'AbortError';
+  return error;
 }
 
 /**

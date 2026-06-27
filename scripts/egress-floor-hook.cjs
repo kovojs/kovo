@@ -27,11 +27,11 @@ function normalizeHost(host) {
 function isLoopbackHost(host) {
   const normalized = normalizeHost(host);
   if (!normalized) return false;
+  const parsedIp = net.isIP(normalized);
   return (
     LOCAL_HOSTNAMES.has(normalized) ||
-    normalized === '::1' ||
-    normalized === '0.0.0.0' ||
-    normalized.startsWith('127.')
+    (parsedIp === 6 && normalized === '::1') ||
+    (parsedIp === 4 && (normalized === '0.0.0.0' || normalized.startsWith('127.')))
   );
 }
 

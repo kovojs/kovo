@@ -158,8 +158,51 @@ export function readQueryElementChunk(
  * valued attributes.
  */
 function hasBooleanAttribute(attrs: string, name: string): boolean {
-  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp('(?:^|\\s)' + escapedName + '(?:\\s|=|$|/|>)', 'i').test(attrs);
+  const expected = name.toLowerCase();
+  let index = 0;
+
+  while (index < attrs.length) {
+    while (index < attrs.length && isHtmlAttributeWhitespace(attrs[index] ?? '')) index += 1;
+    if (index >= attrs.length || attrs[index] === '/' || attrs[index] === '>') return false;
+
+    const nameStart = index;
+    while (index < attrs.length && !isHtmlAttributeNameTerminator(attrs[index] ?? '')) index += 1;
+    const attrName = attrs.slice(nameStart, index).toLowerCase();
+
+    while (index < attrs.length && isHtmlAttributeWhitespace(attrs[index] ?? '')) index += 1;
+    if (attrs[index] === '=') {
+      index += 1;
+      while (index < attrs.length && isHtmlAttributeWhitespace(attrs[index] ?? '')) index += 1;
+      const quote = attrs[index];
+      if (quote === '"' || quote === "'") {
+        index += 1;
+        while (index < attrs.length && attrs[index] !== quote) index += 1;
+        if (attrs[index] === quote) index += 1;
+      } else {
+        while (index < attrs.length && !isHtmlAttributeWhitespace(attrs[index] ?? '')) index += 1;
+      }
+    }
+
+    if (attrName === expected) return true;
+  }
+
+  return false;
+}
+
+function isHtmlAttributeWhitespace(char: string): boolean {
+  return char === ' ' || char === '\n' || char === '\r' || char === '\t' || char === '\f';
+}
+
+function isHtmlAttributeNameTerminator(char: string): boolean {
+  return (
+    isHtmlAttributeWhitespace(char) ||
+    char === '=' ||
+    char === '/' ||
+    char === '>' ||
+    char === '"' ||
+    char === "'" ||
+    char === '<'
+  );
 }
 
 export function readQueryScriptChunks(

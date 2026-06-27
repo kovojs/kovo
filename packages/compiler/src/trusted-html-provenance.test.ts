@@ -64,6 +64,50 @@ export const C = component({
     ).toHaveLength(1);
   });
 
+  it('flags an object-destructured alias of a query result field', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => {
+    const { body } = post;
+    return <article>{trustedHtml(body)}</article>;
+  },
+});
+`),
+    ).toHaveLength(1);
+  });
+
+  it('flags an object-destructured alias of request input', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  render: ({}, _state, { request: input }) => {
+    const { body } = input;
+    return <div>{trustedHtml(body)}</div>;
+  },
+});
+`),
+    ).toHaveLength(1);
+  });
+
+  it('flags ternary branches that carry query-derived data', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => {
+    const html = post.safe ? '<p>ok</p>' : post.body;
+    return <article>{trustedHtml(html)}</article>;
+  },
+});
+`),
+    ).toHaveLength(1);
+  });
+
   it('stays clean for a string literal brand', () => {
     expect(
       kv426(`

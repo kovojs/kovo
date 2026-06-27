@@ -10,7 +10,7 @@ import { DropdownMenuItem } from './dropdown-menu.js';
 import { MenubarItem } from './menubar.js';
 import { SelectItem, SelectValue } from './select.js';
 import { Sheet } from './sheet.js';
-import { Table, TableCell, TableHeaderCell } from './table.js';
+import { Table, TableBody, TableCell, TableHeaderCell, TableRow } from './table.js';
 
 // SECURITY_FINDINGS.md C1: maintained UI components still accept scalar text props
 // in attribute position (e.g. itemLabel={user.name}), so each component must
@@ -246,7 +246,7 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     expect(rendered).not.toContain(RAW_CHILD);
   });
 
-  it('escapes the Table caption but passes the table body children through raw', () => {
+  it('escapes the Table caption and unbranded structural children as text', () => {
     const rendered = html(
       Table.definition.render({
         caption: PAYLOAD,
@@ -256,8 +256,22 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     expect(rendered).toContain(ESCAPED);
     // The payload must not appear unescaped anywhere, including inside <caption>.
     expect(rendered).not.toContain(PAYLOAD);
-    // The app-composed body children are emitted raw.
-    expect(rendered).toContain(RAW_CHILD);
+    // Unbranded structural children are text, not pre-composed framework markup.
+    expect(rendered).toContain(ESCAPED_CHILD);
+    expect(rendered).not.toContain(RAW_CHILD);
+  });
+
+  it('keeps branded Table structural child composition raw', () => {
+    const row = TableRow.definition.render({
+      children: TableCell.definition.render({ children: 'Paid' }),
+    });
+    const body = TableBody.definition.render({ children: row });
+    const rendered = html(Table.definition.render({ children: body }));
+
+    expect(rendered).toContain('<tbody');
+    expect(rendered).toContain('<tr');
+    expect(rendered).toContain('<td');
+    expect(rendered).toContain('Paid');
   });
 
   it('escapes TableCell and TableHeaderCell children as scalar text', () => {

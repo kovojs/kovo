@@ -381,6 +381,7 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
   const rules: AtomicRule[] = [];
 
   for (const [token, value] of Object.entries(tokens)) {
+    assertCssNameSafe(token, 'style.defineVars', 'token');
     const cssProperty = `--kovo-${namespace}-${toKebabCase(token)}`;
     result[token] = `var(${cssProperty})`;
     if (value != null) {
@@ -520,6 +521,7 @@ export function createKeyframes(
   const name = `kv-${slug(identity.namespace ?? identity.source ?? 'keyframes')}-${hash(JSON.stringify(frames))}`;
   const steps = Object.entries(frames)
     .map(([step, declarations]) => {
+      assertCssSyntaxFragmentSafe(step, 'style.keyframes', 'step');
       assertObjectInput(declarations, 'style.keyframes', `frames[${JSON.stringify(step)}]`);
       return `${step}{${keyframeDeclarations(declarations)}}`;
     })
@@ -533,6 +535,8 @@ function keyframeDeclarations(declarations: StyleObject): string {
     // Keyframe steps carry only flat declarations (no pseudos/at-rules/nesting),
     // matching CSS `@keyframes`. Skip null/undefined like atomic compilation does.
     if (value == null || isNestedStyle(value)) continue;
+    assertCssSyntaxFragmentSafe(property, 'style.keyframes', 'property', true);
+    assertCssValueSafe(value, 'style.keyframes', property, { allowBackslash: true });
     const cssProperty = property.startsWith('--') ? property : toKebabCase(property);
     parts.push(`${cssProperty}:${cssLengthValue(cssProperty, value)}`);
   }
@@ -626,14 +630,48 @@ const UNSAFE_CSS_DELIMITERS = new Set(['<', '>', '{', '}', ';', '\\']);
  * `packages/server/src/csp.ts`), so a value carrying any of these is rejected
  * rather than escaped (SPEC.md §13.1).
  */
-function assertCssValueSafe(value: StylePrimitive, apiName: string, token: string): void {
+function assertCssValueSafe(
+  value: StylePrimitive,
+  apiName: string,
+  token: string,
+  options: { allowBackslash?: boolean } = {},
+): void {
   if (typeof value !== 'string') return;
   for (const char of value) {
     const code = char.codePointAt(0) ?? 0;
-    if (code <= 0x1f || UNSAFE_CSS_DELIMITERS.has(char)) {
+    const unsafeDelimiter =
+      UNSAFE_CSS_DELIMITERS.has(char) && !(options.allowBackslash && char === '\\');
+    if (code <= 0x1f || unsafeDelimiter) {
       throw new TypeError(
         `${apiName} rejected an unsafe CSS value for token "${token}": value must not contain ` +
           `${JSON.stringify(char)} (a CSS rule/declaration delimiter or markup/control character).`,
+      );
+    }
+  }
+}
+
+function assertCssNameSafe(value: string, apiName: string, role: string): void {
+  assertCssSyntaxFragmentSafe(value, apiName, role, true);
+}
+
+function assertCssSyntaxFragmentSafe(
+  value: string,
+  apiName: string,
+  role: string,
+  rejectWhitespace = false,
+): void {
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    if (
+      code <= 0x1f ||
+      code === 0x7f ||
+      (rejectWhitespace && /\s/.test(char)) ||
+      UNSAFE_CSS_DELIMITERS.has(char)
+    ) {
+      throw new TypeError(
+        `${apiName} rejected an unsafe CSS ${role} "${value}": names/fragments must not ` +
+          `contain ${JSON.stringify(char)} (a CSS rule/declaration delimiter, markup, or ` +
+          'control character).',
       );
     }
   }
@@ -644,6 +682,7 @@ function compileObject(styleObject: StyleObject, context: CompileContext): Atomi
 
   for (const [property, value] of Object.entries(styleObject)) {
     if (value == null) continue;
+    assertCssSyntaxFragmentSafe(property, 'style.create', 'property');
     if (isNestedStyle(value)) {
       if (property.startsWith('@')) {
         rules.push(
@@ -664,6 +703,7 @@ function compileObject(styleObject: StyleObject, context: CompileContext): Atomi
     }
 
     const cssProperty = property.startsWith('--') ? property : toKebabCase(property);
+    assertCssValueSafe(value, 'style.create', property, { allowBackslash: true });
     const priority = getPriority(cssProperty);
     const key = `${cssProperty}\u0000${String(value)}\u0000${context.selectorSuffix}\u0000${context.atRules.join('\u0001')}`;
     let rule = context.rulesByKey.get(key);
