@@ -773,6 +773,7 @@ import {
   file: SourceFileInput,
   receivers: ProjectDrizzleReceivers,
   relationalTableNames: ReadonlyMap<string, string>,
+  relationTargetTableNames: ReadonlyMap<string, string> = new Map(),
 ): ExtractedReadCall[] {
   const bodyStart = bodySourceStart(body);
   const calls: ExtractedReadCall[] = [];
@@ -781,16 +782,58 @@ import {
     const read = relationalReadCall(call);
     if (!read || !isProjectDrizzleReceiverIdentifier(read.receiver, receivers)) continue;
 
-    calls.push({
-      index: Math.max(0, call.getStart() - bodyStart),
-      operation: 'relational-query',
-      site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
-      tableExpression:
-        relationalTableNames.get(read.tableExpression) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
-    });
+    const tableExpressions = [
+      relationalTableNames.get(read.tableExpression) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
+      ...relationalReadWithTableExpressions(call, relationTargetTableNames),
+    ];
+    for (const tableExpression of tableExpressions) {
+      calls.push({
+        index: Math.max(0, call.getStart() - bodyStart),
+        operation: 'relational-query',
+        site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+        tableExpression,
+      });
+    }
   }
 
   return calls;
+}
+
+function relationalReadWithTableExpressions(
+  call: CallExpression,
+  relationTargetTableNames: ReadonlyMap<string, string>,
+): string[] {
+  const options = call.getArguments()[0];
+  const object = options ? unwrappedStaticExpressionNode(options) : undefined;
+  if (!object || !Node.isObjectLiteralExpression(object)) return [];
+  return relationalReadWithObjectTableExpressions(object, relationTargetTableNames);
+}
+
+function relationalReadWithObjectTableExpressions(
+  config: ObjectLiteralExpression,
+  relationTargetTableNames: ReadonlyMap<string, string>,
+): string[] {
+  const withProperty = config.getProperty('with');
+  if (!withProperty || !Node.isPropertyAssignment(withProperty)) return [];
+
+  const withObject = withProperty.getInitializer();
+  if (!withObject || !Node.isObjectLiteralExpression(withObject)) return [];
+
+  const tables: string[] = [];
+  for (const property of withObject.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    const relation = propertyNameText(property.getNameNode(), true);
+    if (!relation) continue;
+    const table = relationTargetTableNames.get(relation);
+    if (table) tables.push(table);
+
+    const initializer = property.getInitializer();
+    const nested = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+    if (nested && Node.isObjectLiteralExpression(nested)) {
+      tables.push(...relationalReadWithObjectTableExpressions(nested, relationTargetTableNames));
+    }
+  }
+  return tables;
 }
 
 /** @internal */ export function extractProjectUnresolvedCalls(

@@ -182,12 +182,18 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
 ): string[] {
   return [
     ...queryJoinTableExpressions(body, receiverReferences, options.readTableIdentifier),
-    ...queryRelationalTableExpressions(body, receiverReferences, options.relationalTableName),
+    ...queryRelationalTableExpressions(
+      body,
+      receiverReferences,
+      options.relationalTableName,
+      options.relationalRelationTableName,
+    ),
   ];
 }
 
 /** @internal */ export interface QueryReadResolutionOptions {
   readTableIdentifier?: (node: Node) => string | undefined;
+  relationalRelationTableName?: (name: string) => string | undefined;
   relationalTableName?: (name: string) => string | undefined;
 }
 
@@ -215,10 +221,18 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   relationalTableName?: (name: string) => string | undefined,
+  relationalRelationTableName?: (name: string) => string | undefined,
 ): string[] {
   return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
     const table = relationalQueryTableExpression(call, receiverReferences, relationalTableName);
-    return table ? [table] : [];
+    if (!table) return [];
+    return [
+      table,
+      ...relationalQueryWithTableExpressions(
+        call,
+        relationalRelationTableName ?? relationalTableName,
+      ),
+    ];
   });
 }
 
@@ -1059,6 +1073,41 @@ function relationalQueryTableExpression(
   return relationalTableName ? relationalTableName(table) : table;
 }
 
+function relationalQueryWithTableExpressions(
+  call: CallExpression,
+  relationalRelationTableName?: (name: string) => string | undefined,
+): string[] {
+  const options = call.getArguments()[0];
+  const object = options ? unwrappedStaticExpressionNode(options) : undefined;
+  if (!object || !Node.isObjectLiteralExpression(object)) return [];
+  return relationalWithObjectTableExpressions(object, relationalRelationTableName);
+}
+
+function relationalWithObjectTableExpressions(
+  config: ObjectLiteralExpression,
+  relationalRelationTableName?: (name: string) => string | undefined,
+): string[] {
+  const withValue = objectLiteralSingleStaticPropertyValue(config, 'with');
+  const withObject = withValue ? unwrappedStaticExpressionNode(withValue) : undefined;
+  if (!withObject || !Node.isObjectLiteralExpression(withObject)) return [];
+
+  const tables: string[] = [];
+  for (const property of withObject.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    const relation = propertyNameText(property.getNameNode(), true);
+    if (!relation) continue;
+    const table = relationalRelationTableName ? relationalRelationTableName(relation) : relation;
+    if (table) tables.push(table);
+
+    const initializer = property.getInitializer();
+    const nested = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+    if (nested && Node.isObjectLiteralExpression(nested)) {
+      tables.push(...relationalWithObjectTableExpressions(nested, relationalRelationTableName));
+    }
+  }
+  return tables;
+}
+
 /** @internal */ export interface QueryInstanceKeyComparisons {
   argCandidates: readonly QueryInstanceKeyComparison[];
   instanceKey: readonly QueryInstanceKeyComparison[];
@@ -1758,6 +1807,7 @@ function directNonNullableSessionScopePath(node: Node): string | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   const segments = staticAccessSegments(node);
   if (!segments) return undefined;
+  if (!isPrivateScopeCarrierRootName(segments.root)) return undefined;
   const index = segments.path.indexOf('session');
   if (index < 0) return undefined;
   const path = segments.path.slice(index + 1).join('.');
@@ -1774,6 +1824,15 @@ function sessionAccessRequiresGuard(node: Node): boolean {
   const nullable = (type as { isNullable?: () => boolean }).isNullable?.();
   if (nullable) return true;
   return /\bnull\b|\bundefined\b/.test(type.getText());
+}
+
+function isPrivateScopeCarrierRootName(root: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(root);
+  if (Node.isThisExpression(expression)) return true;
+  return (
+    Node.isIdentifier(expression) &&
+    ['req', 'request', 'ctx', 'context'].includes(expression.getText())
+  );
 }
 
 function sessionSegmentExpression(node: Node): Node | undefined {
