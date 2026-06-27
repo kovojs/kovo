@@ -638,6 +638,11 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       `input.session.*` away from trusted session scope, and expanded server callee recognition through const
       aliases/namespace aliases/renamed re-exports; `pnpm exec vitest run packages/drizzle/src --run` passed
       32 files / 584 tests after integration.
+      Latest OPP-28 batch added fail-closed input destructuring/wrapper classification, same-principal
+      disjunctive owner predicates, strict summarized helper-container identity, and advanced analyzer/codegen
+      pipeline proof; `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts
+      packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts --run` passed 99 tests, and
+      `pnpm exec vitest run packages/drizzle/src --run` passed 32 files / 591 tests.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---
