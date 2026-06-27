@@ -1,6 +1,6 @@
 ---
 name: implement-plan
-description: Complete a specified Kovo active plan end to end in a new git worktree, track the effort with a Codex goal, coordinate sub-agent workers for disjoint implementation slices, integrate and verify worker commits in the main agent worktree, push batches, and monitor CI. Use when asked to "implement this plan", "finish plans/foo.md", "complete the roadmap item", or otherwise execute an active `plans/*.md` implementation ledger rather than merely review or update it.
+description: Complete a specified Kovo active plan end to end in a new git worktree, track the effort with a Codex goal, coordinate sub-agent workers for large disjoint implementation chunks, integrate and verify worker commits in the main agent worktree, push substantial batches, and monitor CI. Use when asked to "implement this plan", "finish plans/foo.md", "complete the roadmap item", or otherwise execute an active `plans/*.md` implementation ledger rather than merely review or update it.
 ---
 
 # Implement Plan
@@ -8,11 +8,13 @@ description: Complete a specified Kovo active plan end to end in a new git workt
 ## Overview
 
 Execute a specified active plan as a complete implementation loop. Work in an isolated integration
-branch and worktree, keep the main checkout stable, delegate independent implementation slices to
+branch and worktree, keep the main checkout stable, delegate independent implementation chunks to
 worker-owned worktrees, prove each completed checkbox with current evidence, merge verified batches
-into local `main`, then push local `main` and monitor CI. Once fan-out begins, keep the main agent
-focused on integration, verification, local-main merge, push, and CI follow-through rather than
-owning broad production slices directly.
+into local `main`, then push local `main` and monitor CI. Aim for large chunks that close a meaningful
+plan phase, module family, or proof surface before pushing; do not split the work into tiny
+assertion-sized commits when the same files and tests can support a broader coherent batch. Once fan-out
+begins, keep the main agent focused on integration, verification, local-main merge, push, and CI
+follow-through rather than owning broad production chunks directly.
 
 ## Start The Goal
 
@@ -21,7 +23,7 @@ owning broad production slices directly.
 2. Create a Codex goal when goal tools are available:
 
    ```text
-   Complete <plan path> in a new git worktree, coordinate worker slices, verify integrated batches, merge them into local main before pushing main, monitor CI, and report the final state.
+   Complete <plan path> in a new git worktree, coordinate large worker chunks, verify integrated batches, merge them into local main before pushing main, monitor CI, and report the final state.
    ```
 
 3. Keep the goal active until the implementation is pushed to `main`, CI has been monitored for
@@ -91,15 +93,21 @@ Default to an integration-led strategy when the plan has multiple independent op
 - Treat the main agent/worktree as the integration lane. It should avoid implementing active worker
   slices and should make production edits only for integration fixes, conflict resolution,
   verification fallout, or a deliberately serialized slice that would collide with workers.
-- Spawn 3-5 workers at once when there are enough disjoint open items. Give each worker a coherent
-  production slice, explicit file/module ownership, and instructions to create its own sibling
-  worktree and branch from the current integration `HEAD`.
+- Spawn 3-5 workers at once when there are enough disjoint open items. Give each worker a large,
+  coherent production chunk, explicit file/module ownership, and instructions to create its own
+  sibling worktree and branch from the current integration `HEAD`.
 - For security or hardening plans, good concurrent worker slices are independent areas such as
   runtime sink event drain, inline sanitizer parity or parity gates, endpoint posture starter/CI
   gates, static export symlink/race handling, pack security gates, and egress hardening. Treat this
   as a pattern for slice sizing, not as a fixed checklist.
-- Assign large closure-oriented slices, not tiny research tasks. Each worker should own production
-  changes, focused tests, `git diff --check`, `check:vp`, and a scoped commit in its branch.
+- Assign phase-sized, closure-oriented chunks, not tiny research tasks, single assertion additions,
+  or one-pattern proof slivers. A chunk should normally cover a whole module path, primitive family,
+  analyzer surface, runtime path, or plan phase, including the positive cases, fail-closed negatives,
+  production changes, focused tests, `git diff --check`, `check:vp`, and a scoped commit in its branch.
+- If the next apparent task is small but adjacent gaps share the same files/tests, group them into
+  one larger parity batch before committing or pushing. Prefer "relational callback predicate parity"
+  over separate commits for callback operators, table destructuring, and local aliases; prefer
+  "endpoint posture gate" over separate commits for one fixture or one assertion.
 - Tell workers they are not alone in the codebase, must not edit active plan ledgers, must not
   push, and must not revert or overwrite other workers' changes.
 - Keep worker write sets disjoint. If two plan items would touch the same files or generated
@@ -118,9 +126,10 @@ Default to an integration-led strategy when the plan has multiple independent op
 - Integrate worker branches one at a time with review. Cherry-pick or merge into the integration
   worktree, resolve conflicts, run the focused verification for that slice, update plan evidence
   only after verification, and commit the integrated result.
-- Merge into local `main` and push after a coherent batch of 2-3 integrated slices, or sooner when
-  CI feedback is needed to unblock confidence. Monitor GitHub checks after every push and repair CI
-  failures through the same integration-then-local-main merge path.
+- Merge into local `main` after a coherent verified batch, but do not push every small local commit.
+  Push after a substantial batch that closes a meaningful plan phase or integrates multiple large
+  chunks, or sooner only when CI feedback is needed to unblock confidence. Monitor GitHub checks
+  after every push and repair CI failures through the same integration-then-local-main merge path.
 - Close worker agents and remove worker worktrees only after their commits are integrated or
   explicitly abandoned.
 
@@ -143,7 +152,15 @@ producing local verified slices.
 
 Work from the active plan's unchecked task list.
 
-- Choose coherent slices that materially advance or complete the plan.
+- Choose coherent chunks that materially advance or complete the plan. Bias toward chunks large
+  enough that a reviewer would describe them as closing a phase, surface, subsystem, or family of
+  related gaps.
+- Before starting or delegating a small task, scan for adjacent same-owner gaps that touch the same
+  modules, fixtures, generated artifacts, or gates. Combine them into one larger chunk whenever doing
+  so avoids repeated setup, repeated plan edits, or repeated pushes without creating merge conflicts.
+- Do not stop after a tiny green proof when the same worktree can safely finish the surrounding
+  parity surface. Keep the branch open until the chunk has positive coverage, fail-closed negatives,
+  plan evidence, and focused verification for the whole chunk.
 - Prefer worker sub-agents for independent, non-overlapping plan slices, following the main/worker
   split above and the repository's AGENTS.md worktree and branch rules.
 - Keep implementation aligned with existing package boundaries, helpers, emitted-artifact rules,
@@ -157,15 +174,16 @@ Work from the active plan's unchecked task list.
 - Leave a checkbox open when evidence is indirect, missing, weaker than the claim, or only
   partially proves the item.
 
-Workers make scoped commits for their own slices after focused verification. The main agent makes
-checkpoint commits for coherent integrated batches after reviewing worker commits, resolving
+Workers make scoped commits for their own large chunks after focused verification. The main agent
+makes checkpoint commits for coherent integrated batches after reviewing worker commits, resolving
 conflicts, updating evidence, and running the narrowest useful post-integration verification.
 
 ## Verify Before Integration
 
-Run targeted checks first, then broaden after integrating 2-3 worker slices or whenever the change
-touches shared behavior, package boundaries, compiler/runtime contracts, workflows, public API, or
-user-facing docs. In worker slices, prefer focused tests plus `git diff --check` and `check:vp`;
+Run targeted checks first, then broaden after integrating a substantial batch, after 2-3 large
+worker chunks, or whenever the change touches shared behavior, package boundaries,
+compiler/runtime contracts, workflows, public API, or user-facing docs. In worker chunks, prefer
+focused tests plus `git diff --check` and `check:vp`;
 run `check:api-surface` only when public types, exports, package manifests, or public subpaths
 change. Useful gates:
 
@@ -191,8 +209,9 @@ Integrate continuously in the plan integration worktree as worker commits finish
 cherry-pick worker branches into the integration branch one at a time, review the resulting diff,
 and run focused post-integration checks before taking the next branch. Do not push an integration
 branch directly to `origin/main`. After each coherent verified batch, merge the integration branch
-into a clean local `main` checkout/worktree first, verify the merged result on local `main`, then
-push local `main` to `origin/main`.
+into a clean local `main` checkout/worktree first and verify the merged result on local `main`.
+Push local `main` only once the batch is substantial enough to merit CI, or when CI feedback is
+needed to unblock the next implementation decision.
 
 1. In each worker worktree, require a clean committed branch and a handoff before integration:
 
@@ -243,7 +262,8 @@ push local `main` to `origin/main`.
    verified implementation evidence from the branch.
 7. Run the relevant post-merge verification on local `main`.
 8. Commit conflict resolutions if the merge required them. Push only from local `main` when the
-   user requested push/CI follow-through or the repository workflow for the task requires it:
+   user requested push/CI follow-through, the repository workflow for the task requires it, or the
+   local-main batch is large enough to justify CI:
 
    ```bash
    git push origin main
