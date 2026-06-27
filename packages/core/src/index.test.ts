@@ -17,6 +17,7 @@ import {
   type FormValidationFailure,
   type JsonValue,
   type Secret,
+  type Serializable,
   trustedReveal,
   type TrustedRevealValue,
 } from './index.js';
@@ -165,9 +166,21 @@ describe('core authoring APIs', () => {
   });
 
   it('rejects non-JsonValue component state at authoring time', () => {
+    interface CounterState {
+      count: number;
+      filters: readonly { label: string; selected: boolean }[];
+    }
     const assertLegacyNameArgument = () => {
       // @ts-expect-error component names are compiler-derived; positional strings are not accepted.
       component('cart-badge', { render: () => null });
+    };
+    const assertInterfaceStateAccepted = () => {
+      const Counter = component({
+        render: (_queries, state: CounterState) => ({ state }),
+        state: (): CounterState => ({ count: 0, filters: [] }),
+      });
+      const _state: Serializable<CounterState> = Counter.definition.state();
+      void _state;
     };
     const assertDateState = () => {
       component({
@@ -192,6 +205,7 @@ describe('core authoring APIs', () => {
     };
 
     expect(assertLegacyNameArgument).toBeTypeOf('function');
+    expect(assertInterfaceStateAccepted).toBeTypeOf('function');
     expect(assertDateState).toBeTypeOf('function');
     expect(assertMapState).toBeTypeOf('function');
     expect(assertSecretState).toBeTypeOf('function');

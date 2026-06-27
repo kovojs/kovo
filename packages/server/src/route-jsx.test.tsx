@@ -93,6 +93,24 @@ describe('route JSX pages', () => {
     });
   });
 
+  it('returns 422 when required route search validation fails before rendering', async () => {
+    const productRoute = route('/products', {
+      search: s.object({ q: s.string(), max: s.number().int().min(1).optional() }),
+      page: ({ search }) => <main>{search.q}</main>,
+    });
+
+    await expect(renderRoutePageResponse(productRoute, { search: {} }, {})).resolves.toMatchObject({
+      body: 'Validation Failed',
+      status: 422,
+    });
+    await expect(
+      renderRoutePageResponse(productRoute, { search: { q: 'boots', max: '2' } }, {}),
+    ).resolves.toMatchObject({
+      body: '<main>boots</main>',
+      status: 200,
+    });
+  });
+
   it('stamps named query-backed component roots for source-served morph targets', async () => {
     const product = domain('product');
     const inventory = domain('inventory');
