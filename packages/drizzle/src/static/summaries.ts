@@ -907,7 +907,33 @@ function relationalPredicateCallNameResolver(
   predicate: ArrowFunction | FunctionExpression,
 ): PredicateCallNameResolver | undefined {
   const operators = predicate.getParameters()[1]?.getNameNode();
-  if (!operators || !Node.isObjectBindingPattern(operators)) return undefined;
+  if (!operators) return undefined;
+
+  if (Node.isIdentifier(operators)) {
+    const operatorBagKey = resolvedSymbolKey(operators.getSymbol());
+    return (callee: Node) => {
+      if (!operatorBagKey) return undefined;
+
+      const expression = unwrappedStaticExpressionNode(callee);
+      if (
+        !Node.isPropertyAccessExpression(expression) &&
+        !Node.isElementAccessExpression(expression)
+      ) {
+        return undefined;
+      }
+
+      const name = staticAccessName(expression);
+      if (!name || !RELATIONAL_PREDICATE_CALL_NAMES.has(name)) return undefined;
+
+      const base = unwrappedStaticExpressionNode(expression.getExpression());
+      if (!Node.isIdentifier(base)) return undefined;
+
+      const baseKey = resolvedSymbolKey(symbolForIdentifierReference(base) ?? base.getSymbol());
+      return baseKey === operatorBagKey ? name : undefined;
+    };
+  }
+
+  if (!Node.isObjectBindingPattern(operators)) return undefined;
 
   const aliases = new Map<string, string>();
   for (const element of operators.getElements()) {
@@ -2543,8 +2569,9 @@ function localDestructuredInputKey(expression: Node): string | undefined {
   if (!Node.isCallExpression(expression)) return { expr: expression.getText(), kind: 'opaque' };
 
   const callee = expression.getExpression();
-  if (!Node.isIdentifier(callee)) return { expr: expression.getText(), kind: 'opaque' };
-  const name = resolveCallName?.(callee) ?? callee.getText();
+  const name =
+    resolveCallName?.(callee) ?? (Node.isIdentifier(callee) ? callee.getText() : undefined);
+  if (!name) return { expr: expression.getText(), kind: 'opaque' };
 
   if (name === 'and' || name === 'or') {
     return {
@@ -2632,8 +2659,9 @@ function nonEqMembershipPnf(
   if (!Node.isCallExpression(expression)) return undefined;
 
   const callee = expression.getExpression();
-  if (!Node.isIdentifier(callee)) return undefined;
-  const name = resolveCallName?.(callee) ?? callee.getText();
+  const name =
+    resolveCallName?.(callee) ?? (Node.isIdentifier(callee) ? callee.getText() : undefined);
+  if (!name) return undefined;
   if (expectedName ? name !== expectedName : name !== 'notInArray') return undefined;
 
   const [left, right] = expression.getArguments();
@@ -2651,8 +2679,9 @@ function nonliteralMembershipPnf(
   if (!Node.isCallExpression(expression)) return undefined;
 
   const callee = expression.getExpression();
-  if (!Node.isIdentifier(callee)) return undefined;
-  const name = resolveCallName?.(callee) ?? callee.getText();
+  const name =
+    resolveCallName?.(callee) ?? (Node.isIdentifier(callee) ? callee.getText() : undefined);
+  if (!name) return undefined;
   if (name !== expectedName) return undefined;
 
   const [left, right] = expression.getArguments();
