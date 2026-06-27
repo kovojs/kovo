@@ -44,8 +44,40 @@ export interface WriteKovoProjectResult {
 }
 
 /** Usage line emitted by the `create-kovo` bin and consumed by the docs generator. */
-export const CREATE_KOVO_USAGE =
-  'usage: create-kovo <target-directory> [--name <package-name>] [--dialect postgres|sqlite]';
+export const CREATE_KOVO_USAGE = 'create-kovo <target-directory> [options]';
+
+export const CREATE_KOVO_HELP = [
+  'create-kovo',
+  '',
+  'Create a new Kovo application.',
+  '',
+  'Usage',
+  `  ${CREATE_KOVO_USAGE}`,
+  '',
+  'Options',
+  '  --name <name>               Package name for package.json.',
+  '                              Default: normalized target directory name.',
+  '',
+  '  --dialect <postgres|sqlite> Database scaffold to generate.',
+  '                              Default: postgres.',
+  '',
+  '  --postgres                  Alias for --dialect postgres.',
+  '  --sqlite                    Alias for --dialect sqlite.',
+  '',
+  '  -h, --help                  Show this help.',
+  '',
+  'Examples',
+  '  create-kovo my-app',
+  '  create-kovo my-app --name acme-todos',
+  '  create-kovo my-app --dialect sqlite',
+  '',
+  'Defaults',
+  '  target-directory            Required.',
+  '  name                        basename(target-directory), normalized for npm.',
+  '  dialect                     postgres.',
+  `  package manager             ${rootPackageManager()}.`,
+  '',
+].join('\n');
 
 const templateRoot = new URL('../templates/', import.meta.url);
 interface TemplateFile {
@@ -226,26 +258,21 @@ function renderAgentsFile(kovoRulesBlock: string): string {
 }
 
 export function main(args: readonly string[] = process.argv.slice(2)): number {
-  const [targetDirectory, ...rest] = args;
-
-  if (!targetDirectory || targetDirectory === '--help' || targetDirectory === '-h') {
-    process.stdout.write(`${CREATE_KOVO_USAGE}\n`);
-    return targetDirectory ? 0 : 1;
+  if (args.includes('--help') || args.includes('-h')) {
+    process.stdout.write(CREATE_KOVO_HELP);
+    return 0;
   }
 
   try {
-    const name = readNameOption(rest);
-    const dialect = readDialectOption(rest);
-    const result = writeKovoProject(targetDirectory, {
-      ...(dialect === undefined ? {} : { dialect }),
-      ...(name === undefined ? {} : { name }),
+    const options = readCliOptions(args);
+    const result = writeKovoProject(options.targetDirectory, {
+      ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
+      ...(options.name === undefined ? {} : { name: options.name }),
     });
-    process.stdout.write(`create-kovo: wrote ${result.files.length} files to ${result.root}\n`);
+    process.stdout.write(renderSuccess(result, options.dialect ?? 'postgres'));
     return 0;
   } catch (error) {
-    process.stderr.write(
-      `create-kovo: ${error instanceof Error ? error.message : String(error)}\n`,
-    );
+    process.stderr.write(renderCliError(error));
     return 1;
   }
 }
@@ -338,33 +365,38 @@ function assertWritableTarget(root: string): void {
   }
 }
 
-function readNameOption(args: readonly string[]): string | undefined {
+interface CliOptions {
+  dialect?: CreateKovoDialect;
+  name?: string;
+  targetDirectory: string;
+}
+
+function readCliOptions(args: readonly string[]): CliOptions {
+  let targetDirectory: string | undefined;
   let name: string | undefined;
+  let dialect: CreateKovoDialect | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (!arg) continue;
 
     if (arg === '--name') {
-      name = args[index + 1];
+      name = readRequiredOptionValue(args, index, '--name');
       index += 1;
       continue;
     }
 
     if (arg.startsWith('--name=')) {
       name = arg.slice('--name='.length);
+      if (!name) throw new Error('Missing value for --name.');
+      continue;
     }
-  }
 
-  return name;
-}
-
-function readDialectOption(args: readonly string[]): CreateKovoDialect | undefined {
-  let dialect: CreateKovoDialect | undefined;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
+    if (arg === '--dialect') {
+      dialect = parseDialectOption(readRequiredOptionValue(args, index, '--dialect'));
+      index += 1;
+      continue;
+    }
 
     if (arg === '--sqlite') {
       dialect = 'sqlite';
@@ -376,24 +408,104 @@ function readDialectOption(args: readonly string[]): CreateKovoDialect | undefin
       continue;
     }
 
-    if (arg === '--dialect') {
-      dialect = parseDialectOption(args[index + 1]);
-      index += 1;
+    if (arg.startsWith('--dialect=')) {
+      dialect = parseDialectOption(arg.slice('--dialect='.length));
       continue;
     }
 
-    if (arg.startsWith('--dialect=')) {
-      dialect = parseDialectOption(arg.slice('--dialect='.length));
+    if (arg.startsWith('-')) {
+      throw new Error(`Unknown option: ${arg}`);
     }
+
+    if (targetDirectory) {
+      throw new Error(`Unexpected argument: ${arg}`);
+    }
+    targetDirectory = arg;
   }
 
-  return dialect;
+  if (!targetDirectory) {
+    throw new Error('Missing target directory.');
+  }
+
+  return {
+    ...(dialect === undefined ? {} : { dialect }),
+    ...(name === undefined ? {} : { name }),
+    targetDirectory,
+  };
+}
+
+function readRequiredOptionValue(args: readonly string[], index: number, option: string): string {
+  const value = args[index + 1];
+  if (!value || value.startsWith('-')) {
+    throw new Error(`Missing value for ${option}.`);
+  }
+  return value;
 }
 
 function parseDialectOption(value: string | undefined): CreateKovoDialect {
   if (value === 'postgres' || value === 'sqlite') return value;
 
-  throw new Error(`Unsupported create-kovo dialect: ${value ?? '<missing>'}`);
+  throw new Error(`Unsupported dialect: ${value ?? '<missing>'}.`);
+}
+
+function renderSuccess(result: WriteKovoProjectResult, dialect: CreateKovoDialect): string {
+  return [
+    'Kovo app created',
+    '',
+    `  Directory   ${result.root}`,
+    `  Name        ${result.name}`,
+    `  Dialect     ${dialect}`,
+    `  Files       ${result.files.length}`,
+    '',
+    'Next steps',
+    `  cd ${shellQuote(result.root)}`,
+    `  ${packageManagerCommand()} install`,
+    `  ${packageManagerCommand()} run dev`,
+    '',
+  ].join('\n');
+}
+
+function packageManagerCommand(): string {
+  return rootPackageManager().split('@')[0] ?? 'pnpm';
+}
+
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_/:=.,@%+-]+$/u.test(value)) return value;
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function renderCliError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const lines = [`create-kovo: ${message}`];
+
+  if (message === 'Missing target directory.') {
+    lines.push('', `Usage: ${CREATE_KOVO_USAGE}`, '', 'Run `create-kovo --help` for examples and defaults.');
+  } else if (message.startsWith('Target directory is not empty: ')) {
+    const root = message.slice('Target directory is not empty: '.length);
+    lines.push(
+      '',
+      `  ${root} already contains files.`,
+      '',
+      'Choose an empty directory, or remove the existing directory and try again.',
+    );
+  } else if (message.startsWith('Target exists and is not a directory: ')) {
+    const root = message.slice('Target exists and is not a directory: '.length);
+    lines.push(
+      '',
+      `  ${root} is a file, not a directory.`,
+      '',
+      'Choose a new directory path and try again.',
+    );
+  } else if (
+    message.startsWith('Unsupported dialect: ') ||
+    message.startsWith('Unknown option: ') ||
+    message.startsWith('Missing value for ') ||
+    message.startsWith('Unexpected argument: ')
+  ) {
+    lines.push('', 'Run `create-kovo --help` to see supported options and defaults.');
+  }
+
+  return `${lines.join('\n')}\n`;
 }
 
 function isMainModule(): boolean {

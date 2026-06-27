@@ -19,7 +19,13 @@ import { fileURLToPath } from 'node:url';
 import { kovoDocsMirrorRemotes } from '@kovojs/core/internal/agent-docs';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createKovoProject, demoPasswordEnvVar, main, writeKovoProject } from './index.js';
+import {
+  CREATE_KOVO_HELP,
+  createKovoProject,
+  demoPasswordEnvVar,
+  main,
+  writeKovoProject,
+} from './index.js';
 
 const TEMPLATE_FILES = [
   'package.json',
@@ -58,6 +64,9 @@ const SQLITE_TEMPLATE_FILES = [
   'src/auth.sqlite.ts',
 ];
 const createKovoPackageRoot = dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
+const createKovoPackage = JSON.parse(
+  readFileSync(join(createKovoPackageRoot, 'package.json'), 'utf8'),
+) as { version: string };
 
 describe('create-kovo starter (metadata)', () => {
   it('scaffolds the real template file set with no unrendered placeholders', () => {
@@ -98,7 +107,7 @@ describe('create-kovo starter (metadata)', () => {
       const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
       expect(agents).toContain('# Agent Instructions');
       expect(agents).toContain('<!-- BEGIN:kovo-rules -->');
-      expect(agents).toContain('<!-- kovo-rules-version: 0.1.2 -->');
+      expect(agents).toContain(`<!-- kovo-rules-version: ${createKovoPackage.version} -->`);
       expect(agents).toContain('`kovo check`');
       expect(agents).toContain('Docs root: `./.kovo/docs/`.');
       expect(agents).toContain('- Getting Started (`getting-started/`): why-kovo, quickstart');
@@ -121,7 +130,7 @@ describe('create-kovo starter (metadata)', () => {
         source?: string;
         version?: string;
       };
-      expect(metadata).toMatchObject({ source: 'bundled', version: '0.1.2' });
+      expect(metadata).toMatchObject({ source: 'bundled', version: createKovoPackage.version });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -492,6 +501,41 @@ describe('create-kovo starter (build integration)', () => {
 });
 
 describe('create-kovo starter (CLI)', () => {
+  it('prints polished help with defaults and examples', () => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['--help'])).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      expect(stdout).toHaveBeenCalledWith(CREATE_KOVO_HELP);
+      expect(CREATE_KOVO_HELP).toContain('Create a new Kovo application.');
+      expect(CREATE_KOVO_HELP).toContain('Default: normalized target directory name.');
+      expect(CREATE_KOVO_HELP).toContain('Default: postgres.');
+      expect(CREATE_KOVO_HELP).toContain('package manager             pnpm@10.12.1.');
+      expect(CREATE_KOVO_HELP).toContain('create-kovo my-app --dialect sqlite');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
+
+  it('prints usage guidance when the target directory is missing', () => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main([])).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Missing target directory.'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Usage: create-kovo'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('create-kovo --help'));
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
+
   it('creates a new target directory and derives the package name', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-'));
     const root = join(parent, 'Hello CLI');
@@ -499,9 +543,13 @@ describe('create-kovo starter (CLI)', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(
-        `create-kovo: wrote ${ALL_FILES.length} files to ${root}\n`,
-      );
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Kovo app created'));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`Directory   ${root}`));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Name        hello-cli'));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     postgres'));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`Files       ${ALL_FILES.length}`));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Next steps'));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`cd '${root}'`));
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
@@ -518,9 +566,7 @@ describe('create-kovo starter (CLI)', () => {
 
     try {
       expect(main([root, '--dialect', 'sqlite'])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(
-        `create-kovo: wrote ${ALL_FILES.length} files to ${root}\n`,
-      );
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     sqlite'));
       expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain("provider: 'sqlite'");
     } finally {
       stdout.mockRestore();
@@ -537,7 +583,9 @@ describe('create-kovo starter (CLI)', () => {
       writeFileSync(join(root, 'README.md'), 'existing', 'utf8');
       expect(main([root])).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(stderr).toHaveBeenCalledWith(`create-kovo: Target directory is not empty: ${root}\n`);
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Target directory is not empty'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('already contains files'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Choose an empty directory'));
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -577,13 +625,31 @@ describe('create-kovo starter (CLI)', () => {
         'Packed App',
       ]).toString('utf8');
 
-      expect(stdout).toContain(`create-kovo: wrote ${ALL_FILES.length} files to ${target}`);
+      expect(stdout).toContain('Kovo app created');
+      expect(stdout).toContain(`Files       ${ALL_FILES.length}`);
       expect(readFileSync(join(target, 'package.json'), 'utf8')).toContain('"name": "packed-app"');
       expect(readFileSync(join(target, 'src/app.tsx'), 'utf8')).toContain('createApp(');
     } finally {
       rmSync(parent, { force: true, recursive: true });
     }
   }, 30_000);
+
+  it('rejects unknown options and unsupported dialects with help guidance', () => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['app', '--template', 'demo'])).toBe(1);
+      expect(main(['app', '--dialect', 'mysql'])).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unknown option: --template'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unsupported dialect: mysql.'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('supported options and defaults'));
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
 
   it('refuses to write into a non-empty target directory', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-collision-'));
