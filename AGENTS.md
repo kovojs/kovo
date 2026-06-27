@@ -22,6 +22,21 @@
 - When a plan item or implementation decision offers "compatibility vs stronger default", choose the
   stronger default and update the plan, `SPEC.md`, or tests to make that contract explicit.
 
+## Type-Level Security Ergonomics
+
+- Prefer advanced TypeScript types when they make unsafe call shapes difficult to write and safe
+  construction explicit, while preserving `SPEC.md`'s honesty boundary: branded or conditional types
+  are author-time guardrails and defense-in-depth, not the security proof. Runtime validation,
+  AST/provenance gates, and fail-closed sinks still own enforcement.
+- Good candidates include validated branded constructors for strong signing material/key material,
+  module-private `unique symbol` sentinels for framework-owned outcomes, branded escaped/trusted/
+  rendered HTML values, precise header-bag types that preserve multi-value headers such as
+  `Set-Cookie`, and discriminated unions that force explicit security posture choices such as
+  `csrf: false` plus its justification or verifier shape.
+- Do not use casts, public structural brand fields, or `Symbol.for()` brands as shortcuts around a
+  security invariant. A type helper should either route through a validating constructor or make an
+  already-enforced invariant clearer to authors and reviewers.
+
 ## Progress Discipline
 
 - For GitHub Actions workflow edits, follow `rules/github-workflows.md`.
