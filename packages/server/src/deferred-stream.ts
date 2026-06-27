@@ -146,13 +146,87 @@ function collectContentLines(
   serializedChunks: readonly (readonly string[])[],
 ): string[] {
   const lines: string[] = [];
-  for (const line of shell.split('\n')) lines.push(line);
+  collectHtmlBoundaryScanLines(lines, shell);
   for (const chunkLines of serializedChunks) {
     for (const content of chunkLines) {
-      for (const line of content.split('\n')) lines.push(line);
+      collectHtmlBoundaryScanLines(lines, content);
     }
   }
   return lines;
+}
+
+function collectHtmlBoundaryScanLines(lines: string[], html: string): void {
+  for (const line of html.split('\n')) lines.push(line);
+  const text = htmlTextContent(html);
+  if (text !== html) {
+    for (const line of text.split('\n')) lines.push(line);
+  }
+}
+
+function htmlTextContent(html: string): string {
+  let text = '';
+  let offset = 0;
+
+  while (offset < html.length) {
+    const tagStart = html.indexOf('<', offset);
+    if (tagStart === -1) {
+      text += html.slice(offset);
+      break;
+    }
+
+    text += html.slice(offset, tagStart);
+    if (html.startsWith('<!--', tagStart)) {
+      const commentEnd = html.indexOf('-->', tagStart + 4);
+      offset = commentEnd === -1 ? html.length : commentEnd + 3;
+      continue;
+    }
+
+    const tagEnd = html.indexOf('>', tagStart + 1);
+    if (tagEnd === -1) {
+      text += html.slice(tagStart);
+      break;
+    }
+    offset = tagEnd + 1;
+  }
+
+  return decodeHtmlTextEntities(text);
+}
+
+function decodeHtmlTextEntities(value: string): string {
+  return value.replaceAll(
+    /&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g,
+    (entity, body: string) => {
+      if (body.startsWith('#x')) {
+        return decodeNumericEntity(entity, Number.parseInt(body.slice(2), 16));
+      }
+      if (body.startsWith('#')) {
+        return decodeNumericEntity(entity, Number.parseInt(body.slice(1), 10));
+      }
+      switch (body) {
+        case 'amp':
+          return '&';
+        case 'lt':
+          return '<';
+        case 'gt':
+          return '>';
+        case 'quot':
+          return '"';
+        case 'apos':
+          return "'";
+        default:
+          return entity;
+      }
+    },
+  );
+}
+
+function decodeNumericEntity(entity: string, codePoint: number): string {
+  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return entity;
+  try {
+    return String.fromCodePoint(codePoint);
+  } catch {
+    return entity;
+  }
 }
 
 /**

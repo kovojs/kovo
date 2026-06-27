@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
 import { renderMutationResponse } from './mutation.js';
+import { renderQueryChunks } from './mutation/targets.js';
 import { query } from './query.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
@@ -132,6 +133,29 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     // Should ship the full value without `delta` attribute.
     expect(response.body).not.toContain(' delta>');
     expect(response.body).toContain('"totalPrice":20000');
+  });
+
+  it('emits a full query chunk for crossTable changes whose keys are child-space (M13)', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      delta: [{ domain: 'cart', key: 'cartId', path: 'carts' }],
+      load: () => ({
+        carts: Array.from({ length: 16 }, (_, i) => ({
+          cartId: `c${i}`,
+          label: `Cart ${i} - enough text to make a child-key delta look smaller`,
+        })),
+      }),
+      reads: [cart],
+    });
+
+    const chunks = await renderQueryChunks([cartQuery], [{ key: 'cart' }], {}, {}, [
+      { crossTable: true, domain: 'cart', keys: ['i9'], via: 'cart_items' },
+    ]);
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).not.toContain(' delta>');
+    expect(chunks[0]).toContain('"cartId":"c0"');
+    expect(chunks[0]).toContain('"cartId":"c15"');
   });
 
   it('emits a full query chunk when the delta would be larger than the full value', async () => {

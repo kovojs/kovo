@@ -271,11 +271,12 @@ function replayFingerprint<Request>(
   csrf: CsrfReplayScope<Request>,
   wireRequest: { rawInput?: unknown; request: Request; requestFingerprint?: string },
 ): { fingerprint?: string } {
-  if (wireRequest.requestFingerprint !== undefined)
-    return { fingerprint: wireRequest.requestFingerprint };
-  return wireRequest.rawInput === undefined
-    ? {}
-    : { fingerprint: canonicalJson(canonicalReplayInput(csrf, wireRequest)) };
+  if (wireRequest.rawInput === undefined) {
+    return wireRequest.requestFingerprint === undefined
+      ? {}
+      : { fingerprint: wireRequest.requestFingerprint };
+  }
+  return { fingerprint: canonicalRequestFingerprint(canonicalReplayInput(csrf, wireRequest)) };
 }
 
 function canonicalReplayInput<Request>(

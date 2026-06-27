@@ -327,6 +327,54 @@ describe('server static export output boundary', () => {
     }
   });
 
+  it('preserves declared static assets named index.html while pruning stale route documents (M14)', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-asset-index-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-asset-src-'));
+    try {
+      const assetSource = path.join(sourceDir, 'index.html');
+      await writeFile(assetSource, '<!doctype html><main>asset index</main>', 'utf8');
+
+      await writeStaticExportOutput(
+        createStaticExportOutputPlan({
+          artifacts: [
+            {
+              body: '<!doctype html><main>Old route</main>',
+              headers: {},
+              path: '/old/index.html',
+              status: 200,
+            },
+          ],
+          assets: [],
+          clientModules: [],
+          outDir,
+        }),
+      );
+
+      await writeStaticExportOutput(
+        createStaticExportOutputPlan({
+          artifacts: [],
+          assets: staticExportAssetArtifacts([
+            {
+              contentType: 'text/html; charset=utf-8',
+              path: '/assets/index.html',
+              source: assetSource,
+            },
+          ]),
+          clientModules: [],
+          outDir,
+        }),
+      );
+
+      await expect(readFile(path.join(outDir, 'old', 'index.html'))).rejects.toThrow();
+      await expect(readFile(path.join(outDir, 'assets', 'index.html'), 'utf8')).resolves.toContain(
+        'asset index',
+      );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
   it('validates final output targets before committing staged files', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-commit-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-source-'));
@@ -625,7 +673,11 @@ describe('server static export output boundary', () => {
 
       // Each route-document path gets its own stanza keyed by artifact path.
       expect(headersFile).toContain('/index.html');
+      expect(headersFile).toContain('\n/');
       expect(headersFile).toContain('/about/index.html');
+      expect(headersFile).toContain('/about/');
+      expect(headersFile).toContain('/about');
+      expect(headersFile).toContain('/*');
 
       // The sidecar is at the root, not nested under a route directory.
       await expect(lstat(path.join(outDir, '_headers'))).resolves.toSatisfy((stats) =>
