@@ -58,6 +58,18 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
       ).not.toThrow();
     });
 
+    it('accepts an opaque custom SigningKeyRing in production env validation', () => {
+      const customKeyRing = {
+        currentKeyId: 'external',
+        sign: () => ({ keyId: 'external', signature: 'signature' }),
+        verify: () => ({ ok: false as const, reason: 'bad-signature' as const }),
+      };
+
+      expect(() =>
+        validateAppEnv({ csrfSecret: customKeyRing }, { mode: 'production' }),
+      ).not.toThrow();
+    });
+
     it('validates current and previous CSRF rotation secrets', () => {
       expect(() =>
         validateAppEnv(

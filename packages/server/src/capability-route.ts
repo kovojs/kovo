@@ -209,7 +209,12 @@ export interface StorageDownloadEndpointOptions {
  */
 function downloadRejected(): Response {
   return new Response('Not Found', {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' },
+    headers: {
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      Vary: 'Cookie',
+      'X-Content-Type-Options': 'nosniff',
+    },
     status: 404,
   });
 }
@@ -300,8 +305,10 @@ export function createStorageDownloadEndpoint(
     if (outcome === undefined) return downloadRejected();
 
     const headers: Record<string, string> = {
+      'Cache-Control': 'private, no-store',
       'Content-Type': outcome.contentType,
       'Content-Disposition': outcome.contentDisposition,
+      Vary: 'Cookie',
       'X-Content-Type-Options': 'nosniff',
       ...(outcome.etag === undefined ? {} : { ETag: outcome.etag }),
     };

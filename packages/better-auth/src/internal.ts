@@ -812,7 +812,11 @@ function suggestedUnsupportedPluginTableAnnotation(
   }
   if (fields.has('organizationId')) return { domain: 'organization', key: 'organizationId' };
   if (fields.has('teamId')) return { domain: 'organization', key: 'teamId' };
-  if (fields.has('userId')) return { domain: 'auth', key: 'userId' };
+  if (fields.has('userId'))
+    return withBetterAuthSecretFields(fields, {
+      domain: 'auth',
+      key: 'userId',
+    });
 
   return null;
 }
@@ -851,8 +855,33 @@ function formatBetterAuthSchemaDomainAnnotation(
   annotation: BetterAuthSchemaBridgeDomainAnnotation,
 ): string {
   const key = annotation.key === undefined ? '' : `, key: '${annotation.key}'`;
+  const secret =
+    annotation.secret === undefined || annotation.secret.length === 0
+      ? ''
+      : `, secret: [${annotation.secret.map((column) => `'${column}'`).join(', ')}]`;
 
-  return `{ domain: '${annotation.domain}'${key} }`;
+  return `{ domain: '${annotation.domain}'${key}${secret} }`;
+}
+
+function withBetterAuthSecretFields(
+  fields: ReadonlySet<string>,
+  annotation: BetterAuthSchemaBridgeDomainAnnotation,
+): BetterAuthSchemaBridgeDomainAnnotation {
+  const secret = betterAuthCredentialSecretFields(fields);
+  return secret.length === 0 ? annotation : { ...annotation, secret };
+}
+
+function betterAuthCredentialSecretFields(fields: ReadonlySet<string>): readonly string[] {
+  return [
+    'accessToken',
+    'backupCodes',
+    'clientSecret',
+    'idToken',
+    'password',
+    'refreshToken',
+    'secret',
+    'token',
+  ].filter((field) => fields.has(field));
 }
 
 const betterAuthSchemaTableNames = new Set<string>(Object.keys(betterAuthSchemaBridge));
