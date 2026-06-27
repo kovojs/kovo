@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dogfood Kovo"
+  short_description: "Dogfood Kovo into plans/papercuts-N.md"
+  default_prompt: "Use $dogfood to scaffold or run a real Kovo app, diagnose framework papercuts from the user journey, and write the next plans/papercuts-N.md ledger without fixing them."
