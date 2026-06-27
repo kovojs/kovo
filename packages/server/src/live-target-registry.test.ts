@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { trustedHtml } from '@kovojs/browser';
 
 import {
   collectGeneratedLiveTargetRenderers,
@@ -63,11 +62,7 @@ describe('generated live target registry collection', () => {
     );
   });
 
-  // L2-deferred-4 (bugs-part3): `register` is now collision-aware (parity with
-  // `collect`). The SAME renderer object re-registers idempotently (HMR re-import);
-  // a DIFFERENT object for the same component id throws instead of last-writer-wins
-  // silently cross-contaminating renderers.
-  it('stores generated renderers and is collision-aware on re-register (L2-deferred-4)', () => {
+  it('stores generated renderers idempotently by component id', () => {
     const initial = registeredGeneratedLiveTargetRenderers().filter(
       (renderer) => renderer.component === 'test/auto-registered',
     );
@@ -78,12 +73,6 @@ describe('generated live target registry collection', () => {
       queries: ['cart'],
       render: () => '<cart-badge>1</cart-badge>',
     };
-    const conflicting: LiveTargetRenderer = {
-      component: 'test/auto-registered',
-      queries: ['cart'],
-      render: () => '<cart-badge>2</cart-badge>',
-    };
-
     expect(registerGeneratedLiveTargetRenderer(first)).toBe(first);
     expect(
       registeredGeneratedLiveTargetRenderers().filter(
@@ -99,15 +88,43 @@ describe('generated live target registry collection', () => {
       ),
     ).toEqual([first]);
 
-    // A DIFFERENT object for the same component id is a collision → throw (parity with
-    // `collectGeneratedLiveTargetRenderers`); the first registration is preserved.
-    expect(() => registerGeneratedLiveTargetRenderer(conflicting)).toThrow(
-      'Duplicate generated live target renderer for component "test/auto-registered".',
-    );
     expect(
       registeredGeneratedLiveTargetRenderers().filter(
         (renderer) => renderer.component === 'test/auto-registered',
       ),
     ).toEqual([first]);
+  });
+
+  it('replaces stale generated renderers by component id during dev HMR', async () => {
+    const component = 'test/hmr-auto-registered';
+    const initial = registeredGeneratedLiveTargetRenderers().filter(
+      (renderer) => renderer.component === component,
+    );
+    expect(initial).toEqual([]);
+
+    const first: LiveTargetRenderer = {
+      component,
+      queries: ['cart'],
+      render: () => '<cart-badge>stale</cart-badge>',
+    };
+    const latest: LiveTargetRenderer = {
+      component,
+      queries: ['cart'],
+      render: () => '<cart-badge>latest</cart-badge>',
+    };
+
+    expect(registerGeneratedLiveTargetRenderer(first)).toBe(first);
+    expect(registerGeneratedLiveTargetRenderer(latest)).toBe(latest);
+
+    const active = registeredGeneratedLiveTargetRenderers().filter(
+      (renderer) => renderer.component === component,
+    );
+    expect(active).toEqual([latest]);
+    expect(
+      await active[0]!.render({
+        liveTarget: { component, props: {}, target: 'cart-badge' },
+        request: new Request('http://kovo.test/cart'),
+      }),
+    ).toBe('<cart-badge>latest</cart-badge>');
   });
 });

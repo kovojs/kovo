@@ -12,13 +12,11 @@ const registeredRenderersByComponent = new Map<string, LiveTargetRenderer<unknow
  * consume the compiler-owned registry without app-authored `liveTargetRenderers` imports
  * (SPEC §9.1/§9.5).
  *
- * L2-deferred-4 (bugs-part3): this is now collision-aware, matching
- * {@link collectGeneratedLiveTargetRenderers}. Re-registering the SAME renderer object
- * for a component is idempotent (dev/HMR re-imports of one module reuse the same
- * exported object identity, so this does not fail). Registering a DIFFERENT renderer
- * object for an already-registered component throws — two apps/tenants in one process
- * (or two components claiming the same component id) previously silently
- * cross-contaminated via last-writer-wins.
+ * Vite dev/HMR may re-evaluate a generated component module and create a fresh
+ * renderer object for the same stable component id. Side-effect registration is
+ * therefore idempotent by component id: the latest generated renderer replaces
+ * any stale renderer owned by the previous module instance. Explicit module
+ * collection remains strict in {@link collectGeneratedLiveTargetRenderers}.
  */
 export function registerGeneratedLiveTargetRenderer<Request = unknown>(
   renderer: LiveTargetRenderer<Request>,
@@ -26,14 +24,6 @@ export function registerGeneratedLiveTargetRenderer<Request = unknown>(
   if (!isLiveTargetRenderer(renderer)) {
     throw new TypeError(
       'Generated live target renderer registration received an invalid renderer.',
-    );
-  }
-
-  const existing = registeredRenderersByComponent.get(renderer.component);
-  // Idempotent for the same object identity (HMR re-import of the same module export).
-  if (existing && existing !== (renderer as LiveTargetRenderer<unknown>)) {
-    throw new Error(
-      `Duplicate generated live target renderer for component ${JSON.stringify(renderer.component)}.`,
     );
   }
 
