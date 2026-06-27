@@ -68,11 +68,10 @@ describe('structured access metadata', () => {
       reason: 'read-only status endpoint',
       response: textResponse,
     });
-    const statusWebhook = webhook('status-hook', {
+    const statusWebhook = webhook('/webhooks/status', {
       access: verifiedAccess,
       handler: () => undefined,
       input: s.object({ id: s.string() }),
-      path: '/webhooks/status',
       verify: 'none',
       verifyJustification: 'test fixture',
     });

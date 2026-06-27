@@ -238,22 +238,22 @@ export function createMemoryWebhookReplayStore(): WebhookReplayStore {
 }
 
 /**
- * Declare a webhook endpoint: a named POST receiver that verifies the raw
+ * Declare a webhook endpoint: a path-first POST receiver that verifies the raw
  * payload signature before parsing input, then runs a handler that can record
- * domain changes and is idempotent by construction. Pass a `WebhookVerifier`
- * built from generic helpers such as `hmacSignature`, or `verify: 'none'` with
- * a justification (SPEC §9.1).
+ * domain changes and is idempotent by construction. Until compiler-derived
+ * export identities are available, the registry/replay name is derived from the
+ * declared path. Pass a `WebhookVerifier` built from generic helpers such as
+ * `hmacSignature`, or `verify: 'none'` with a justification (SPEC §9.1).
  *
- * @param name - The webhook's identifier.
- * @param definition - The `path`, `verify`, `input` schema, and `handler` (plus optional idempotency/transaction).
+ * @param path - The webhook receiver path.
+ * @param definition - The `verify`, `input` schema, and `handler` (plus optional idempotency/transaction).
  * @returns A `WebhookDeclaration` (a verified `EndpointDeclaration`).
  * @example
  * import { domain, webhook, s } from '@kovojs/server';
  *
  * const order = domain('order');
  *
- * export const orderPaid = webhook('order-paid', {
- *   path: '/webhooks/order-paid',
+ * export const orderPaid = webhook('/webhooks/order-paid', {
  *   verify: 'none',
  *   verifyJustification: 'internal test fixture',
  *   input: s.object({ orderId: s.string() }),
@@ -263,17 +263,17 @@ export function createMemoryWebhookReplayStore(): WebhookReplayStore {
  * });
  */
 export function webhook<
-  const Name extends string,
   const Path extends string,
   InputSchema extends Schema<unknown>,
   Value = unknown,
   Tx = unknown,
 >(
-  name: Name,
-  definition: WebhookDefinition<InputSchema, Value, Tx> & { path: Path },
-): WebhookDeclaration<Name, Path, InputSchema, Value, Tx> {
+  path: Path,
+  definition: WebhookDefinition<InputSchema, Value, Tx>,
+): WebhookDeclaration<Path, Path, InputSchema, Value, Tx> {
+  const name = webhookNameFromPath(path);
   assertWebhookWritePosture(name, definition);
-  let declaration: WebhookDeclaration<Name, Path, InputSchema, Value, Tx>;
+  let declaration: WebhookDeclaration<Path, Path, InputSchema, Value, Tx>;
   const handler = async (request: EndpointRequest): Promise<Response> =>
     (await runWebhook(declaration, request)).response;
 
@@ -288,7 +288,7 @@ export function webhook<
     method: 'POST' satisfies EndpointMethod,
     mount: 'exact' satisfies EndpointMount,
     name,
-    path: definition.path,
+    path,
     reason: `webhook:${name}`,
     response: {
       appOwnedSafety: false,
@@ -298,9 +298,13 @@ export function webhook<
     },
     webhook: true,
     webhookDefinition: definition,
-  } satisfies WebhookDeclaration<Name, Path, InputSchema, Value, Tx>;
+  } satisfies WebhookDeclaration<Path, Path, InputSchema, Value, Tx>;
 
   return declaration;
+}
+
+function webhookNameFromPath<const Path extends string>(path: Path): Path {
+  return path;
 }
 
 export async function runWebhook<

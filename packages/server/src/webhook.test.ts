@@ -60,11 +60,10 @@ describe('server webhook primitive', () => {
       secret: 'whsec_test',
     });
 
-    const providerWebhook = webhook('provider', {
+    const providerWebhook = webhook('/webhooks/provider', {
       handler: () => undefined,
       idempotency: (input) => input.id as string,
       input: s.object({ id: s.string() }),
-      path: '/webhooks/provider',
       verify: verifier,
     });
 
@@ -72,12 +71,13 @@ describe('server webhook primitive', () => {
       auth: { kind: 'verifier', name: 'test-provider:v1:hmac-sha256' },
       csrf: {
         exempt: true,
-        justification: 'provider webhook verifier test-provider:v1:hmac-sha256',
+        justification: '/webhooks/provider webhook verifier test-provider:v1:hmac-sha256',
       },
       method: 'POST',
       mount: 'exact',
-      name: 'provider',
+      name: '/webhooks/provider',
       path: '/webhooks/provider',
+      reason: 'webhook:/webhooks/provider',
       response: {
         appOwnedSafety: false,
         body: 'text',
@@ -107,12 +107,11 @@ describe('server webhook primitive', () => {
     });
 
     const stripeWebhook = webhook<
-      'stripe',
       '/webhooks/stripe',
       typeof input,
       { received: string },
       { id: string }
-    >('stripe', {
+    >('/webhooks/stripe', {
       async handler(input, context) {
         steps.push(`handler:${context.tx.id}`);
         expect('session' in context.request).toBe(false);
@@ -123,7 +122,6 @@ describe('server webhook primitive', () => {
       },
       idempotency: (input) => input.id,
       input,
-      path: '/webhooks/stripe',
       replayStore,
       async transaction(_context, run) {
         steps.push('begin');
@@ -184,13 +182,12 @@ describe('server webhook primitive', () => {
       secret: 'whsec_test',
     });
     let handled = 0;
-    const stripeWebhook = webhook('stripe', {
+    const stripeWebhook = webhook('/webhooks/stripe', {
       handler() {
         handled += 1;
       },
       idempotency: (input) => input.id as string,
       input: s.object({ id: s.string() }),
-      path: '/webhooks/stripe',
       verify: verifier,
     });
 
@@ -205,14 +202,13 @@ describe('server webhook primitive', () => {
     const replayStore = createMemoryWebhookReplayStore();
     const invoice = domain('invoice');
     const steps: string[] = [];
-    const failingWebhook = webhook('billing', {
+    const failingWebhook = webhook('/webhooks/billing', {
       handler(input, context) {
         context.recordChange(invoice, { keys: [input.id] });
         return context.fail('IGNORED_EVENT', { id: input.id }, { status: 422 });
       },
       idempotency: (input) => input.id,
       input: s.object({ id: s.string() }),
-      path: '/webhooks/billing',
       replayStore,
       async transaction(_context, run) {
         steps.push('begin');
@@ -267,10 +263,9 @@ describe('server webhook primitive', () => {
 
     const assertNoneVerifierRequiresJustification = () => {
       // @ts-expect-error SPEC §9.1 requires a named justification for verify: 'none'.
-      webhook('bad', {
+      webhook('/webhooks/bad', {
         handler: () => undefined,
         input: s.object({ id: s.string() }),
-        path: '/webhooks/bad',
         verify: 'none',
       });
     };
@@ -279,15 +274,75 @@ describe('server webhook primitive', () => {
     expect(assertNoneVerifierRequiresJustification).toBeTypeOf('function');
   });
 
+  it('does not accept the removed options.path public shape', () => {
+    const removedOptionsPath = () =>
+      webhook('/webhooks/path-first-only', {
+        handler: () => undefined,
+        input: s.object({ id: s.string() }),
+        // @ts-expect-error Phase 1 path-first API removed public options.path.
+        path: '/webhooks/legacy-options-path',
+        verify: 'none',
+        verifyJustification: 'compile-time fixture only',
+      });
+
+    expect(removedOptionsPath).toBeTypeOf('function');
+  });
+
+  it('scopes replay by the path-derived webhook identity plus provider event id', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    let paidCalls = 0;
+    let refundedCalls = 0;
+    const paid = webhook('/webhooks/order-paid', {
+      handler: () => {
+        paidCalls += 1;
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+    const refunded = webhook('/webhooks/order-refunded', {
+      handler: () => {
+        refundedCalls += 1;
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+    const body = JSON.stringify({ id: 'evt_same_provider_id' });
+    const request = (path: string) =>
+      new Request(`https://example.test${path}`, { body, method: 'POST' });
+
+    const paidFirst = await runWebhook(paid, request('/webhooks/order-paid'));
+    const paidSecond = await runWebhook(paid, request('/webhooks/order-paid'));
+    const refundedFirst = await runWebhook(refunded, request('/webhooks/order-refunded'));
+    const refundedSecond = await runWebhook(refunded, request('/webhooks/order-refunded'));
+
+    expect(paid.name).toBe('/webhooks/order-paid');
+    expect(refunded.name).toBe('/webhooks/order-refunded');
+    expect(paid.reason).toBe('webhook:/webhooks/order-paid');
+    expect(refunded.reason).toBe('webhook:/webhooks/order-refunded');
+    expect(paidFirst.replayed).toBe(false);
+    expect(paidSecond.replayed).toBe(true);
+    expect(refundedFirst.replayed).toBe(false);
+    expect(refundedSecond.replayed).toBe(true);
+    expect(paidCalls).toBe(1);
+    expect(refundedCalls).toBe(1);
+  });
+
   it('fails closed when a write-reaching webhook lacks idempotency replay posture', async () => {
     const invoice = domain('invoice-missing-replay');
-    const unsafeWebhook = webhook('missing-replay', {
+    const unsafeWebhook = webhook('/webhooks/missing-replay', {
       handler(input, context) {
         context.recordChange(invoice, { keys: [input.id] });
         return { ok: true };
       },
       input: s.object({ id: s.string() }),
-      path: '/webhooks/missing-replay',
       verify: 'none',
       verifyJustification: 'fixture-only webhook test',
     });
@@ -314,14 +369,13 @@ describe('server webhook primitive', () => {
     const ledger = domain('ledger-h8');
     let writes = 0;
     expect(() =>
-      webhook('charge-no-posture', {
+      webhook('/webhooks/charge-no-posture', {
         handler(input, context) {
           (context.tx as { insert(): void }).insert();
           context.recordChange(ledger, { keys: [input.id] });
           return { ok: true };
         },
         input: s.object({ id: s.string() }),
-        path: '/webhooks/charge-no-posture',
         // Exposes a writable tx, but declares neither idempotency() nor replayStore.
         async transaction(_context, run) {
           return run({ insert: () => (writes += 1) });
@@ -336,14 +390,13 @@ describe('server webhook primitive', () => {
 
   it('H8: a tx-writing webhook whose posture was stripped fails closed at dispatch before commit', async () => {
     let writes = 0;
-    const wh = webhook('charge-dispatch', {
+    const wh = webhook('/webhooks/charge-dispatch', {
       handler(input, context) {
         (context.tx as { insert(): void }).insert();
         return { received: input.id };
       },
       idempotency: (input) => input.id,
       input: s.object({ id: s.string() }),
-      path: '/webhooks/charge-dispatch',
       replayStore: createDurableWebhookReplayStore(),
       async transaction(_context, run) {
         return run({ insert: () => (writes += 1) });
@@ -385,7 +438,7 @@ describe('server webhook primitive', () => {
     let releaseA = (): void => undefined;
     const aReleased = new Promise<void>((resolve) => (releaseA = resolve));
 
-    const wh = webhook('durable-charge', {
+    const wh = webhook('/webhooks/durable-charge', {
       async handler(input, context) {
         enteredTotal += 1;
         (context.tx as { write(): void }).write();
@@ -398,7 +451,6 @@ describe('server webhook primitive', () => {
       },
       idempotency: (input) => input.id,
       input: s.object({ id: s.string() }),
-      path: '/webhooks/durable-charge',
       replayStore: durable,
       async transaction(_context, run) {
         return run({ write: () => (sideEffects += 1) });
@@ -439,7 +491,7 @@ describe('server webhook primitive', () => {
   it('A4: does not commit a 500 to replay on unexpected exception; retry reruns the handler', async () => {
     const replayStore = createMemoryWebhookReplayStore();
     let callCount = 0;
-    const flakyWebhook = webhook('flaky', {
+    const flakyWebhook = webhook('/webhooks/flaky', {
       handler(input: { id: string }) {
         callCount += 1;
         if (callCount === 1) throw new Error('transient DB blip');
@@ -447,7 +499,6 @@ describe('server webhook primitive', () => {
       },
       idempotency: (input) => input.id,
       input: s.object({ id: s.string() }),
-      path: '/webhooks/flaky',
       replayStore,
       verify: 'none',
       verifyJustification: 'fixture-only test webhook',
@@ -477,13 +528,12 @@ describe('server webhook primitive', () => {
   // check failed.
   it('L10-1: a throwing custom verify() fails closed to 401, not a thrown 500', async () => {
     let handled = 0;
-    const throwingWebhook = webhook('throwing-custom', {
+    const throwingWebhook = webhook('/webhooks/throwing-custom', {
       handler() {
         handled += 1;
       },
       idempotency: (input) => input.id as string,
       input: s.object({ id: s.string() }),
-      path: '/webhooks/throwing-custom',
       // A malformed signature header makes a real app verifier throw rather than
       // return false (e.g. `Buffer.from(badHex, 'hex')` / signature parsing).
       verify: customVerifier('boom', () => {
@@ -521,14 +571,13 @@ describe('server webhook primitive', () => {
       },
       secret: 'whsec_test',
     });
-    const okWebhook = webhook('throwing-payload', {
+    const okWebhook = webhook('/webhooks/throwing-payload', {
       handler(input: { id: string }) {
         handled += 1;
         return { received: input.id };
       },
       idempotency: (input) => input.id,
       input: s.object({ id: s.string() }),
-      path: '/webhooks/throwing-payload',
       verify: verifier,
     });
 
@@ -579,7 +628,7 @@ describe('server webhook primitive', () => {
       },
     };
     let handled = 0;
-    const emptyIdemWebhook = webhook('empty-idem', {
+    const emptyIdemWebhook = webhook('/webhooks/empty-idem', {
       handler(input: { id: string }) {
         handled += 1;
         return { received: input.id };
@@ -587,7 +636,6 @@ describe('server webhook primitive', () => {
       // Idempotency key is the empty string for every delivery.
       idempotency: () => '',
       input: s.object({ id: s.string() }),
-      path: '/webhooks/empty-idem',
       replayStore,
       verify: 'none',
       verifyJustification: 'fixture-only test webhook',
@@ -624,7 +672,7 @@ describe('server webhook primitive', () => {
   it('L2: an internal (non-validation) input-parse error maps to 500, not a 422 leaking the message', async () => {
     const secret = 'DB dsn postgres://user:pw@db.internal:5432/prod';
     let handled = 0;
-    const leakyWebhook = webhook('leaky-parse', {
+    const leakyWebhook = webhook('/webhooks/leaky-parse', {
       handler() {
         handled += 1;
         return { ok: true };
@@ -636,7 +684,6 @@ describe('server webhook primitive', () => {
           throw new Error(secret);
         },
       } as unknown as Parameters<typeof webhook>[1]['input'],
-      path: '/webhooks/leaky-parse',
       verify: 'none',
       verifyJustification: 'fixture-only test webhook',
     });
@@ -660,7 +707,7 @@ describe('server webhook primitive', () => {
   // L2: a genuine SchemaValidationError still produces the typed 422 (not a 500), so the
   // re-throw of internals does not regress the legitimate validation path.
   it('L2: a real validation error still maps to a typed 422', async () => {
-    const validatingWebhook = webhook('validating', {
+    const validatingWebhook = webhook('/webhooks/validating', {
       handler() {
         return { ok: true };
       },
@@ -669,7 +716,6 @@ describe('server webhook primitive', () => {
           throw new SchemaValidationError([{ message: 'id is required', path: ['id'] }]);
         },
       } as unknown as Parameters<typeof webhook>[1]['input'],
-      path: '/webhooks/validating',
       verify: 'none',
       verifyJustification: 'fixture-only test webhook',
     });

@@ -498,6 +498,13 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(publicApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
+	    expect(publicApi.createMemoryWebhookReplayStore).toBe(
+	      routingApi.createMemoryWebhookReplayStore,
+	    );
+	    expect(publicApi.webhook).toBe(routingApi.webhook);
+	    expect(publicApi.customVerifier).toBe(coreApi.customVerifier);
+	    expect(publicApi.hmacSignature).toBe(coreApi.hmacSignature);
+	    expect(publicApi.standardWebhooks).toBe(coreApi.standardWebhooks);
     expect(publicValues).not.toHaveProperty('parseRouteRequest');
     expect(publicValues).not.toHaveProperty('endpointMatches');
     expect(publicValues).not.toHaveProperty('runEndpoint');
@@ -629,6 +636,36 @@ describe('server app-shell public API barrels', () => {
     );
 
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell');
+  });
+
+  it('exposes path-first webhook authoring through public routing barrels', () => {
+    const rootWebhook = publicApi.webhook('/webhooks/public-order-paid', {
+      handler: () => undefined,
+      input: publicApi.s.object({ id: publicApi.s.string() }),
+      verify: 'none',
+      verifyJustification: 'public API fixture',
+    });
+    const routingWebhook = routingApi.webhook('/webhooks/routing-order-paid', {
+      handler: () => undefined,
+      input: dataApi.s.object({ id: dataApi.s.string() }),
+      verify: 'none',
+      verifyJustification: 'public API fixture',
+    });
+    const removedOptionsPath = () =>
+      publicApi.webhook('/webhooks/public-path-first-only', {
+        handler: () => undefined,
+        input: publicApi.s.object({ id: publicApi.s.string() }),
+        // @ts-expect-error Phase 1 path-first API removed public options.path.
+        path: '/webhooks/legacy-options-path',
+        verify: 'none',
+        verifyJustification: 'compile-time fixture only',
+      });
+
+    expect(rootWebhook.name).toBe('/webhooks/public-order-paid');
+    expect(rootWebhook.path).toBe('/webhooks/public-order-paid');
+    expect(rootWebhook.reason).toBe('webhook:/webhooks/public-order-paid');
+    expect(routingWebhook.name).toBe('/webhooks/routing-order-paid');
+    expect(removedOptionsPath).toBeTypeOf('function');
   });
 
   it('exposes the split app-shell package subpaths for R5/R6/R7 consumers', () => {

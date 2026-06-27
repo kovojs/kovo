@@ -80,11 +80,10 @@ describe('app access graph extraction', () => {
       reason: 'signed API sync with executable verifier',
       response: rawJsonResponse,
     });
-    const signedWebhook = webhook('stripe', {
+    const signedWebhook = webhook('/webhooks/stripe', {
       access: verifiedAccess,
       handler: () => ({}),
       input: s.object({ id: s.string() }),
-      path: '/webhooks/stripe',
       verify: hmacSignature({
         header: 'Stripe-Signature',
         scheme: 'stripe-signature',
