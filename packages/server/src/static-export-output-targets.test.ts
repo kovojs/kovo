@@ -67,6 +67,13 @@ describe('server static export output target boundary', () => {
         kind: 'static asset',
         targetPath: path.join(root, 'assets', 'app.css'),
       },
+      {
+        diagnosticPath: '_headers',
+        itemIndex: 0,
+        itemKind: 'header-sidecar',
+        kind: 'header sidecar',
+        targetPath: path.join(root, '_headers'),
+      },
     ]);
   });
 
