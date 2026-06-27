@@ -526,6 +526,7 @@ interface BuildCheckSourceFile {
 }
 
 interface QueryReadFactLike {
+  readOnlyDomains?: readonly string[];
   reads?: readonly string[];
   query?: string;
 }
@@ -565,12 +566,15 @@ function queryCheckFact(
   query: KovoApp['queries'][number],
   queryFacts: readonly QueryReadFactLike[],
 ): CoreGraph.QueryReadSet {
-  const factReads =
-    queryFacts.find((fact) => fact.query === query.key)?.reads?.filter(isString) ?? [];
+  const fact = queryFacts.find((candidate) => candidate.query === query.key);
+  const factReads = fact?.reads?.filter(isString) ?? [];
   const declaredReads = (query.reads ?? []) as readonly { key: string }[];
   return {
     domains: uniqueSorted([...declaredReads.map((read) => read.key), ...factReads]),
     query: query.key,
+    ...((fact?.readOnlyDomains?.length ?? 0) > 0
+      ? { readOnlyDomains: uniqueSorted(fact?.readOnlyDomains?.filter(isString) ?? []) }
+      : {}),
     ...(query.access === undefined ? {} : { access: query.access }),
     ...(query.guard === undefined ? {} : { guards: ['query.guard'] }),
   };

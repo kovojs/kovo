@@ -553,6 +553,7 @@ export interface QueryReadSet {
   domains: readonly string[];
   guards?: readonly string[];
   query: string;
+  readOnlyDomains?: readonly string[];
 }
 
 /** @internal */

@@ -81,6 +81,7 @@ describe('@kovojs/drizzle runtime surface', () => {
     const staticSource = drizzleStaticSource();
 
     expect(runtime.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
+    expect(runtime.kovo({ domain: 'note', key: 'id', readOnly: true }).readOnly).toBe(true);
     expect(runtime.kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }).secret).toEqual([
       'passwordHash',
     ]);
