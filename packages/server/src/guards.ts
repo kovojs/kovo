@@ -73,6 +73,77 @@ export interface Guard<Request, RefinedRequest extends Request = Request> {
   readonly refines?: (request: Request) => request is RefinedRequest;
 }
 
+export type GuardAuditFact =
+  | AuthedGuardAuditFact
+  | OwnershipGuardAuditFact
+  | RateLimitGuardAuditFact
+  | RoleGuardAuditFact;
+
+export interface GuardPrincipalKeyAudit {
+  expression: string;
+  path: string;
+  source: 'request' | 'session';
+}
+
+export interface GuardResourceKeyAudit {
+  expression: string;
+  path: string;
+  source: 'args' | 'params' | 'request';
+}
+
+export interface AuthedGuardAuditFact {
+  auth: 'session-user';
+  kind: 'authed';
+  name: 'authed';
+}
+
+export interface RoleGuardAuditFact {
+  auth: 'session-role';
+  kind: 'role';
+  name: `role:${string}`;
+  principal: GuardPrincipalKeyAudit;
+  role: string;
+}
+
+export interface RateLimitGuardAuditFact {
+  kind: 'rateLimit';
+  name: 'rateLimit';
+  per: 'global' | 'session' | 'ip' | 'custom';
+}
+
+export interface OwnershipGuardAuditFact {
+  auth: 'session-user';
+  kind: 'owns';
+  name: string;
+  principal: GuardPrincipalKeyAudit;
+  resourceKey?: GuardResourceKeyAudit;
+  staticProof: 'not-claimed';
+}
+
+export interface OwnershipGuardAuditOptions {
+  /**
+   * Human-readable principal expression the ownership predicate keys on. This is audit metadata
+   * only: runtime `ownsRow` still enforces access, and static WHERE-predicate proof is not claimed.
+   */
+  principal?: GuardPrincipalKeyAudit | string;
+  /**
+   * Human-readable resource key expression selected by `keyOf`, e.g. `args.id` or `params.id`.
+   * Omit when the key selector is intentionally opaque to runtime metadata.
+   */
+  resourceKey?: GuardResourceKeyAudit | string;
+  /** Optional stable label for this ownership guard in explain/audit output. */
+  name?: string;
+}
+
+const guardAuditSymbol: unique symbol = Symbol('kovo.guardAudit');
+
+type GuardWithAudit<Request, RefinedRequest extends Request = Request> = Guard<
+  Request,
+  RefinedRequest
+> & {
+  readonly [guardAuditSymbol]?: readonly GuardAuditFact[];
+};
+
 /**
  * @internal Framework-resolved guard failure. The intent-based {@link GuardDenial}
  * an author returns is normalized into this wire-facing shape (auth disposition,
@@ -343,7 +414,7 @@ export const guards = {
   all<Request, RefinedRequest extends Request = Request>(
     ...items: Guard<Request, RefinedRequest>[]
   ): Guard<Request, RefinedRequest> {
-    return async (request: Request) => {
+    const guard: Guard<Request, RefinedRequest> = async (request: Request) => {
       for (const item of items) {
         const result = await item(request);
         // Propagate the first denial (intent object) or bare `false` as-is so the
@@ -353,51 +424,78 @@ export const guards = {
 
       return true;
     };
+    return stampGuardAudit(
+      guard,
+      items.flatMap((item) => explainGuard(item)),
+    );
   },
   authed<Request extends SessionRequestLike>(): Guard<Request, AuthenticatedRequest<Request>> {
-    return (request) => (request.session?.user ? true : unauthenticatedGuardFailure());
+    return stampGuardAudit(
+      (request) => (request.session?.user ? true : unauthenticatedGuardFailure()),
+      [{ auth: 'session-user', kind: 'authed', name: 'authed' }],
+    );
   },
   rateLimit<Request extends SessionRequestLike>(
     options: RateLimitOptions<Request>,
   ): Guard<Request> {
     const counts = new Map<string, { count: number; resetAt: number }>();
 
-    return (request) => {
-      const now = Date.now();
-      evictExpiredRateLimits(counts, now);
+    return stampGuardAudit(
+      (request) => {
+        const now = Date.now();
+        evictExpiredRateLimits(counts, now);
 
-      const windowMs = options.windowMs ?? defaultRateLimitWindowMs;
-      if (options.max <= 0) return rateLimitFailure(now + windowMs, now);
+        const windowMs = options.windowMs ?? defaultRateLimitWindowMs;
+        if (options.max <= 0) return rateLimitFailure(now + windowMs, now);
 
-      const key = rateLimitKey(request, options);
-      const existing = counts.get(key);
+        const key = rateLimitKey(request, options);
+        const existing = counts.get(key);
 
-      if (existing && existing.resetAt > now) {
-        if (existing.count >= options.max) return rateLimitFailure(existing.resetAt, now);
+        if (existing && existing.resetAt > now) {
+          if (existing.count >= options.max) return rateLimitFailure(existing.resetAt, now);
 
-        existing.count += 1;
+          existing.count += 1;
+          return true;
+        }
+
+        const maxKeys = options.maxKeys ?? defaultRateLimitMaxKeys;
+        while (counts.size >= maxKeys) {
+          const oldest = counts.keys().next().value;
+          if (oldest === undefined) break;
+          counts.delete(oldest);
+        }
+
+        counts.set(key, {
+          count: 1,
+          resetAt: now + windowMs,
+        });
         return true;
-      }
-
-      const maxKeys = options.maxKeys ?? defaultRateLimitMaxKeys;
-      while (counts.size >= maxKeys) {
-        const oldest = counts.keys().next().value;
-        if (oldest === undefined) break;
-        counts.delete(oldest);
-      }
-
-      counts.set(key, {
-        count: 1,
-        resetAt: now + windowMs,
-      });
-      return true;
-    };
+      },
+      [
+        {
+          kind: 'rateLimit',
+          name: 'rateLimit',
+          per: options.key ? 'custom' : (options.per ?? 'session'),
+        },
+      ],
+    );
   },
   role<Request extends SessionRequestLike>(role: string): Guard<Request> {
-    return (request) => {
-      if (!request.session?.user) return unauthenticatedGuardFailure();
-      return request.session.user.roles?.includes(role) ? true : unauthorizedGuardFailure();
-    };
+    return stampGuardAudit(
+      (request) => {
+        if (!request.session?.user) return unauthenticatedGuardFailure();
+        return request.session.user.roles?.includes(role) ? true : unauthorizedGuardFailure();
+      },
+      [
+        {
+          auth: 'session-role',
+          kind: 'role',
+          name: `role:${role}`,
+          principal: normalizePrincipalKeyAudit('session.user.roles'),
+          role,
+        },
+      ],
+    );
   },
   /**
    * Ownership guard (SPEC §10.3:1155-1157 "Guards (arg-aware, normative)", §9.4): passes only
@@ -419,17 +517,92 @@ export const guards = {
   owns<Request extends SessionRequestLike, KeyedRequest extends Request = Request, Key = unknown>(
     keyOf: (request: KeyedRequest) => Key,
     ownsRow: (request: KeyedRequest, key: Key) => boolean | Promise<boolean>,
+    audit?: OwnershipGuardAuditOptions,
   ): Guard<Request> {
-    return async (request) => {
-      if (!request.session?.user) return unauthenticatedGuardFailure();
-      // The query/mutation/route runners merge the validated args / resolved params onto `request`
-      // BEFORE this guard runs (SPEC §10.3:1155-1157), so the runtime value is a `KeyedRequest`
-      // even though the guard's *attachment* type is the base request. View it as such for `keyOf`.
-      const keyedRequest = request as unknown as KeyedRequest;
-      return (await ownsRow(keyedRequest, keyOf(keyedRequest))) ? true : unauthorizedGuardFailure();
-    };
+    return stampGuardAudit(
+      async (request) => {
+        if (!request.session?.user) return unauthenticatedGuardFailure();
+        // The query/mutation/route runners merge the validated args / resolved params onto `request`
+        // BEFORE this guard runs (SPEC §10.3:1155-1157), so the runtime value is a `KeyedRequest`
+        // even though the guard's *attachment* type is the base request. View it as such for `keyOf`.
+        const keyedRequest = request as unknown as KeyedRequest;
+        return (await ownsRow(keyedRequest, keyOf(keyedRequest)))
+          ? true
+          : unauthorizedGuardFailure();
+      },
+      [
+        {
+          auth: 'session-user',
+          kind: 'owns',
+          name: audit?.name ?? 'owns',
+          principal: normalizePrincipalKeyAudit(audit?.principal ?? 'session.user.id'),
+          ...(audit?.resourceKey === undefined
+            ? {}
+            : { resourceKey: normalizeResourceKeyAudit(audit.resourceKey) }),
+          staticProof: 'not-claimed',
+        },
+      ],
+    );
   },
 };
+
+/**
+ * Return framework-owned audit metadata stamped on a built-in guard. These facts are intentionally
+ * narrower than static proof: an `owns` fact declares the runtime principal/resource-key intent for
+ * OPP-28 review, while the app predicate and future static analyzer still own enforcement/proof.
+ */
+export function explainGuard<Request>(
+  guard: Guard<Request> | undefined,
+): readonly GuardAuditFact[] {
+  return guard === undefined ? [] : ((guard as GuardWithAudit<Request>)[guardAuditSymbol] ?? []);
+}
+
+function stampGuardAudit<Request, RefinedRequest extends Request = Request>(
+  guard: Guard<Request, RefinedRequest>,
+  facts: readonly GuardAuditFact[],
+): Guard<Request, RefinedRequest> {
+  Object.defineProperty(guard, guardAuditSymbol, {
+    configurable: false,
+    enumerable: false,
+    value: Object.freeze([...facts]),
+    writable: false,
+  });
+  return guard;
+}
+
+function normalizePrincipalKeyAudit(
+  value: GuardPrincipalKeyAudit | string,
+): GuardPrincipalKeyAudit {
+  if (typeof value !== 'string') return value;
+
+  const { path, source } = normalizeAuditExpression(value, ['session']);
+  return {
+    expression: value,
+    path,
+    source: source === 'session' ? 'session' : 'request',
+  };
+}
+
+function normalizeResourceKeyAudit(value: GuardResourceKeyAudit | string): GuardResourceKeyAudit {
+  if (typeof value !== 'string') return value;
+
+  const { path, source } = normalizeAuditExpression(value, ['args', 'params']);
+  return {
+    expression: value,
+    path,
+    source: source === 'args' || source === 'params' ? source : 'request',
+  };
+}
+
+function normalizeAuditExpression(
+  expression: string,
+  knownSources: readonly string[],
+): { path: string; source: string } {
+  const source = knownSources.find((candidate) => expression.startsWith(`${candidate}.`));
+  return source === undefined
+    ? { path: expression, source: 'request' }
+    : { path: expression.slice(source.length + 1), source };
+}
 
 /**
  * Declare the session schema for the app: how to `parse` the raw session into a
