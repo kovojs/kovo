@@ -17,7 +17,7 @@ const repoRoot = process.cwd();
 
 function appSource(): string {
   return `
-import { createApp, createMemoryVersionedClientModuleRegistry, route } from '@kovojs/server';
+import { createApp, createMemoryVersionedClientModuleRegistry, publicAccess, route } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
@@ -28,6 +28,7 @@ clientModules.put({
 });
 
 const home = route('/', {
+  access: publicAccess('browser build fixture'),
   page: () =>
     trustedHtml('<main><counter-island kovo-c="counter-island" kovo-state="{&quot;n&quot;:0}">' +
     '<button on:click="/c/__v/counter-v1/counter.client.js#increment">bump</button> ' +

@@ -79,6 +79,19 @@ export function validateReservedQueryNames(
     : [];
 }
 
+export function validateIsomorphicJustifications(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+): CompilerDiagnostic[] {
+  return model.components.flatMap((component) => {
+    const option = component.options.find((candidate) => candidate.key === 'isomorphic');
+    if (option?.staticValue !== true || (option.justifiedDiagnostics?.includes('KV318') ?? false)) {
+      return [];
+    }
+    return [diagnostics.at('KV318', { start: option.start, length: option.end - option.start })];
+  });
+}
+
 export function validateRemovedFragmentTargetOption(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
@@ -146,8 +159,7 @@ export function validateFragmentTargetInputs(
     : [];
 
   return dedupeBy([...missingInputs, ...missingIsomorphicReads], (input) => input.name).map(
-    (input) =>
-      diagnostics.at('KV303', { start: input.start, length: input.end - input.start }, input.name),
+    (input) => kv303RenderInputDiagnostic(diagnostics, allowedInputs, input),
   );
 }
 
@@ -163,9 +175,20 @@ function declaredRenderInputRoots(model: ComponentModuleModel, includeState: boo
 }
 
 function isomorphicRenderReads(model: ComponentModuleModel): RenderInputModel[] {
+  const renderLocalNames = new Set(
+    model.components.flatMap((component) => component.renderLocalNames),
+  );
+
   return jsxExpressions(model)
     .filter((expression) => !isJsxEventAttributeExpression(expression, model))
-    .flatMap((expression) => expression.propertyAccesses.map(renderInputFromPropertyAccessRoot));
+    .flatMap((expression) => {
+      const expressionLocalNames = new Set(expression.localNames);
+      return expression.propertyAccesses
+        .map(renderInputFromPropertyAccessRoot)
+        .filter(
+          (input) => !expressionLocalNames.has(input.name) && !renderLocalNames.has(input.name),
+        );
+    });
 }
 
 function renderInputFromPropertyAccessRoot(access: PropertyAccessPathModel): RenderInputModel {
@@ -175,6 +198,32 @@ function renderInputFromPropertyAccessRoot(access: PropertyAccessPathModel): Ren
     name: root,
     start: access.start,
   };
+}
+
+function kv303RenderInputDiagnostic(
+  diagnostics: DiagnosticFactory,
+  allowedInputs: ReadonlySet<string>,
+  input: RenderInputModel,
+): CompilerDiagnostic {
+  const span = { start: input.start, length: input.end - input.start };
+  if (
+    input.sourceKey !== undefined &&
+    input.sourceKey !== input.name &&
+    allowedInputs.has(input.sourceKey)
+  ) {
+    return {
+      ...diagnostics.at('KV303', span, input.name),
+      help: [
+        'Would lower to: a fragment target that can be re-rendered from declared query data plus stamped props.',
+        'Blocked reason: render destructuring renamed a declared query/prop key, but fragment refresh and binding coverage use the declared key as the reconstructible channel.',
+        `Fixes: destructure the declared key as "${input.sourceKey}" in render, stamp "${input.name}" as a serializable prop, or move the aliasing into a render-local const after destructuring the declared key.`,
+        'SPEC §4.5 requires fragment targets to be reconstructible from declared server inputs.',
+      ].join('\n'),
+      message: `${diagnostics.at('KV303').message} ${input.name} (render destructuring aliases declared key ${input.sourceKey}; use the declared key name in the render parameter)`,
+    };
+  }
+
+  return diagnostics.at('KV303', span, input.name);
 }
 
 function isJsxEventAttributeExpression(

@@ -5,8 +5,8 @@ import { applyQueryDelta, type QueryDelta } from '@kovojs/core/internal/query-de
 import { renderQueryPageWireHtml } from '@kovojs/server/internal/html';
 import { describe, expect, it } from 'vitest';
 
-import { createCommerceDb, loadProductGrid } from './domain.js';
-import { productGridInput } from './app-test-helpers.js';
+import { createCommerceDb } from './domain.js';
+import { loadProductGrid, productGridInput } from './app-test-helpers.js';
 
 // SPEC §9.1.1/§9.3 (capability-gaps §2): the commerce productGrid is a real
 // cursor-paged query (queries.ts `after`/`nextCursor`). This proves the read-side

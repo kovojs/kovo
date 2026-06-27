@@ -11,7 +11,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { DiagnosticCode } from '@kovojs/core';
@@ -505,13 +505,16 @@ async function staticBuildCheckGraph(
   const files = buildCheckSourceFiles(appModulePath);
   const [queries, touchGraphDiagnostics, touchGraph] =
     files.length === 0 ? [[], [], undefined] : await staticDrizzleBuildFacts(files);
+  const liveTargetQueries = liveTargetQueryDefinitions(app);
 
   return {
     ...(touchGraph === undefined ? {} : { touchGraph }),
     ...(touchGraphDiagnostics.length === 0 ? {} : { sqlSafetyDiagnostics: touchGraphDiagnostics }),
     endpoints: app.endpoints.map(endpointCheckFact),
-    mutations: app.mutations.map(mutationCheckFact),
-    optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
+    mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, liveTargetQueries)),
+    optimistic: app.mutations.flatMap((mutation) =>
+      mutationOptimisticCheckFacts(mutation, liveTargetQueries),
+    ),
     pages: app.routes.map(routeCheckFact),
     queries: app.queries.map((query) => queryCheckFact(query, queries)),
   };
@@ -523,6 +526,7 @@ interface BuildCheckSourceFile {
 }
 
 interface QueryReadFactLike {
+  readOnlyDomains?: readonly string[];
   reads?: readonly string[];
   query?: string;
 }
@@ -562,25 +566,33 @@ function queryCheckFact(
   query: KovoApp['queries'][number],
   queryFacts: readonly QueryReadFactLike[],
 ): CoreGraph.QueryReadSet {
-  const factReads =
-    queryFacts.find((fact) => fact.query === query.key)?.reads?.filter(isString) ?? [];
+  const fact = queryFacts.find((candidate) => candidate.query === query.key);
+  const factReads = fact?.reads?.filter(isString) ?? [];
   const declaredReads = (query.reads ?? []) as readonly { key: string }[];
   return {
     domains: uniqueSorted([...declaredReads.map((read) => read.key), ...factReads]),
     query: query.key,
+    ...((fact?.readOnlyDomains?.length ?? 0) > 0
+      ? { readOnlyDomains: uniqueSorted(fact?.readOnlyDomains?.filter(isString) ?? []) }
+      : {}),
     ...(query.access === undefined ? {} : { access: query.access }),
     ...(query.guard === undefined ? {} : { guards: ['query.guard'] }),
   };
 }
 
-function mutationCheckFact(mutation: KovoApp['mutations'][number]): CoreGraph.MutationExplain {
+function mutationCheckFact(
+  mutation: KovoApp['mutations'][number],
+  liveTargetQueries: readonly { key: string }[],
+): CoreGraph.MutationExplain {
   const registry = mutation.registry;
   const touches = (registry?.touches ?? []) as readonly { key: string }[];
   const inferredTouches = (registry?.inferredTouches ?? []) as readonly { domain: string }[];
   const registryQueries = (registry?.queries ?? []) as readonly { key: string }[];
   const writes = uniqueSorted(touches.map((touch) => touch.key));
   const inferredWrites = uniqueSorted(inferredTouches.map((touch) => touch.domain));
-  const invalidates = uniqueSorted(registryQueries.map((query) => query.key));
+  const invalidates = uniqueSorted(
+    [...registryQueries, ...liveTargetQueries].map((query) => query.key),
+  );
   return {
     ...(mutation.access === undefined ? {} : { access: mutation.access }),
     csrf: mutation.csrf === false ? 'exempt' : 'checked',
@@ -596,12 +608,13 @@ function mutationCheckFact(mutation: KovoApp['mutations'][number]): CoreGraph.Mu
 
 function mutationOptimisticCheckFacts(
   mutation: KovoApp['mutations'][number],
+  liveTargetQueries: readonly { key: string }[],
 ): CoreGraph.OptimisticCoverage[] {
   const optimistic = mutation.optimistic as Record<string, unknown> | undefined;
   if (optimistic === undefined) return [];
 
   const registryQueries = (mutation.registry?.queries ?? []) as readonly { key: string }[];
-  return registryQueries.flatMap((query) => {
+  return uniqueQueries([...registryQueries, ...liveTargetQueries]).flatMap((query) => {
     const entry = optimistic[query.key];
     if (entry === undefined) return [];
     return [
@@ -612,6 +625,25 @@ function mutationOptimisticCheckFacts(
       },
     ];
   });
+}
+
+function liveTargetQueryDefinitions(app: KovoApp): readonly { key: string }[] {
+  return uniqueQueries(
+    app.liveTargetRenderers.flatMap(
+      (renderer) => (renderer.queryDefinitions ?? []) as readonly { key: string }[],
+    ),
+  );
+}
+
+function uniqueQueries(queries: readonly { key: string }[]): { key: string }[] {
+  const seen = new Set<string>();
+  const unique: { key: string }[] = [];
+  for (const query of queries) {
+    if (seen.has(query.key)) continue;
+    seen.add(query.key);
+    unique.push(query);
+  }
+  return unique.sort((left, right) => left.key.localeCompare(right.key));
 }
 
 function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain {
@@ -664,6 +696,7 @@ function sourceFilesUnder(dir: string, root: string): BuildCheckSourceFile[] {
     const stat = statSafe(path);
     if (!stat) return [];
     if (stat.isDirectory()) return sourceFilesUnder(path, root);
+    if (isBuildCheckIgnoredSource(entry)) return [];
     if (!/\.[cm]?[jt]sx?$/.test(entry) || entry.endsWith('.d.ts')) return [];
     return [
       {
@@ -672,6 +705,15 @@ function sourceFilesUnder(dir: string, root: string): BuildCheckSourceFile[] {
       },
     ];
   });
+}
+
+function isBuildCheckIgnoredSource(entry: string): boolean {
+  const lower = entry.toLowerCase();
+  return (
+    /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(lower) ||
+    /(?:^|[.-])test-helpers\.[cm]?[jt]sx?$/.test(lower) ||
+    /\.test-support\.[cm]?[jt]sx?$/.test(lower)
+  );
 }
 
 function findBuildTsconfig(appModulePath: string): string | undefined {
@@ -887,7 +929,7 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
     configFile: false,
     logLevel: 'error',
     root,
-    server: { middlewareMode: true },
+    server: buildTimeViteServerOptions(),
     ssr: { noExternal: true },
   });
   try {
@@ -903,10 +945,9 @@ async function loadBuildAppModule(appModulePath: string, root: string): Promise<
   const { createServer } = await import('vite-plus');
   const server = await createServer({
     appType: 'custom',
-    configFile: false,
     logLevel: 'error',
     root,
-    server: { middlewareMode: true },
+    server: buildTimeViteServerOptions(),
   });
   try {
     return await server.ssrLoadModule(viteSsrModuleId(appModulePath, root));
@@ -1323,14 +1364,16 @@ export async function runExportCommand(options: KovoExportOptions): Promise<CliC
 }
 
 async function loadExportAppModule(options: KovoExportOptions): Promise<unknown> {
-  if (!options.vite) return await import(pathToFileURL(resolve(options.appModulePath)).href);
+  if (!options.vite && !exportAppModuleNeedsVite(options.appModulePath)) {
+    return await import(pathToFileURL(resolve(options.appModulePath)).href);
+  }
 
   const { createServer } = await import('vite-plus');
   const server = await createServer({
     appType: 'custom',
     logLevel: 'error',
     root: resolve(options.root ?? process.cwd()),
-    server: { middlewareMode: true },
+    server: buildTimeViteServerOptions(),
   });
   try {
     return await server.ssrLoadModule(options.appModulePath);
@@ -1339,12 +1382,20 @@ async function loadExportAppModule(options: KovoExportOptions): Promise<unknown>
   }
 }
 
+function exportAppModuleNeedsVite(appModulePath: string): boolean {
+  return ['.ts', '.tsx', '.jsx'].includes(extname(appModulePath));
+}
+
 interface ExportManifestPlan {
   assets: readonly {
     path: string;
     source: string;
   }[];
   stylesheetHref?: string;
+}
+
+function buildTimeViteServerOptions(): { hmr: false } {
+  return { hmr: false };
 }
 
 async function staticExportManifestPlan(options: KovoExportOptions): Promise<ExportManifestPlan> {

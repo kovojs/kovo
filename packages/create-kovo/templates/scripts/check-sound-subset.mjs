@@ -9,14 +9,19 @@ for (const file of sourceFiles(join(root, 'src'))) {
   const source = readFileSync(file, 'utf8');
   const relativeFile = relative(root, file);
   const lines = source.split('\n');
+  let inImportStatement = false;
 
   for (const [index, line] of lines.entries()) {
     const text = stripLineComment(line);
     if (/^\s*(?:\/\*|\*|\*\/)/.test(text)) continue;
+    if (inImportStatement || startsImportStatement(text)) {
+      inImportStatement = !endsImportStatement(text);
+      continue;
+    }
     if (/\bany\b/.test(text)) {
       findings.push(`${relativeFile}:${index + 1}: SPEC.md §6.6 sound subset bans any`);
     }
-    if (!/^\s*import\b/.test(text) && /\bas\s+(?!const\b)[A-Za-z_{]/.test(text)) {
+    if (/\bas\s+(?!const\b)[A-Za-z_{]/.test(text)) {
       findings.push(`${relativeFile}:${index + 1}: SPEC.md §6.6 sound subset bans unchecked casts`);
     }
     if (hasNonNullAssertion(text)) {
@@ -48,6 +53,14 @@ function sourceFiles(dir) {
 function stripLineComment(line) {
   const index = line.indexOf('//');
   return index === -1 ? line : line.slice(0, index);
+}
+
+function startsImportStatement(line) {
+  return /^\s*import\b/.test(line);
+}
+
+function endsImportStatement(line) {
+  return /;\s*$/.test(line);
 }
 
 function hasNonNullAssertion(line) {

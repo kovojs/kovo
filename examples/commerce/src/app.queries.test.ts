@@ -10,12 +10,12 @@ import {
   createCommerceDb,
   EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
   EXAMPLE_ONLY_COMMERCE_CSRF_SECRET,
-  loadOrderHistory,
-  loadProductGrid,
   orderHistoryQuery,
   productGridQuery,
 } from './domain.js';
 import {
+  loadOrderHistory,
+  loadProductGrid,
   productGridInput,
   queryContext,
   readCartItems,

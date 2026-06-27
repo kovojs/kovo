@@ -597,7 +597,8 @@ describe('compiled interactive gallery demos', () => {
     expect(pureMarkup).toContain("import { Badge } from '@kovojs/ui/badge';");
     expect(pureMarkup).toContain("import { Card } from '@kovojs/ui/card';");
     expect(pureMarkup).toContain("import { Kbd } from '@kovojs/ui/kbd';");
-    expect(pureMarkup).toContain("import { Table } from '@kovojs/ui/table';");
+    expect(pureMarkup).toContain("} from '@kovojs/ui/table';");
+    expect(pureMarkup).toContain('  Table,');
     expect(pureMarkup).not.toContain('@kovojs/headless-ui');
 
     expect(radioGroup).toContain('data-gallery-interactive="radio-group"');

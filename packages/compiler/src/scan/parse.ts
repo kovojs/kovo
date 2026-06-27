@@ -692,6 +692,7 @@ function componentModelFromInitializer(
     options,
     ...(render ? renderHostModel(sourceFile, render) : {}),
     renderInputs: render ? arrowObjectPatternKeys(sourceFile, render) : [],
+    renderLocalNames: render ? renderLocalDeclarationNames(render) : [],
     ...(render ? renderSlots(sourceFile, render) : {}),
     ...(render ? renderSlotsParam(sourceFile, render) : {}),
     ...(stateReturnObject === null ? {} : { stateReturnObject }),
@@ -727,6 +728,7 @@ function componentOptions(
     return [
       {
         end: property.name.getEnd(),
+        ...leadingJustifiedDiagnostics(source, property),
         key,
         ...(ts.isObjectLiteralExpression(property.initializer)
           ? { objectEntries: objectLiteralEntries(sourceFile, source, property.initializer) }
@@ -737,6 +739,22 @@ function componentOptions(
       },
     ];
   });
+}
+
+function leadingJustifiedDiagnostics(
+  source: string,
+  node: ts.Node,
+): { justifiedDiagnostics: readonly string[] } | {} {
+  const ranges = ts.getLeadingCommentRanges(source, node.getFullStart()) ?? [];
+  const codes = new Set<string>();
+  for (const range of ranges) {
+    if (range.end > node.getStart(node.getSourceFile())) continue;
+    for (const code of parseJustifiedDiagnostics(source.slice(range.pos, range.end))) {
+      codes.add(code);
+    }
+  }
+
+  return codes.size === 0 ? {} : { justifiedDiagnostics: [...codes] };
 }
 
 // SPEC §4.9: a query-backed component without disableServerRefresh infers a server-refreshable
@@ -1564,6 +1582,7 @@ function jsxExpressionModel(
     containerStart: node.getStart(sourceFile),
     end,
     expression: source.slice(start, end).trim(),
+    localNames: [...new Set([...localIdentifierNames(expression), ...enclosingLocalNames(node)])],
     propertyAccesses: propertyAccessPathModels(sourceFile, expression),
     references: referenceIdentifiers(expression),
     ...(solePath ? { solePropertyAccessPath: solePath } : {}),
@@ -1882,16 +1901,71 @@ function arrowObjectPatternKeys(
   const firstParam = expression.parameters[0];
   if (!firstParam || !ts.isObjectBindingPattern(firstParam.name)) return [];
 
-  return firstParam.name.elements.flatMap((element) =>
-    ts.isIdentifier(element.name)
-      ? [
-          {
-            end: element.name.getEnd(),
-            name: element.name.text,
-            start: element.name.getStart(sourceFile),
-          },
-        ]
-      : [],
+  return firstParam.name.elements.flatMap((element) => {
+    if (!ts.isIdentifier(element.name)) return [];
+
+    return [
+      {
+        end: element.name.getEnd(),
+        name: element.name.text,
+        start: element.name.getStart(sourceFile),
+        ...bindingElementSourceKey(element),
+      },
+    ];
+  });
+}
+
+function bindingElementSourceKey(element: ts.BindingElement): { sourceKey: string } | {} {
+  const propertyName = element.propertyName;
+  if (!propertyName) return {};
+  if (ts.isIdentifier(propertyName) || ts.isStringLiteralLike(propertyName)) {
+    return { sourceKey: propertyName.text };
+  }
+  return {};
+}
+
+function renderLocalDeclarationNames(expression: ts.Expression): string[] {
+  if (!ts.isArrowFunction(expression)) return [];
+  return localDeclarationNames(expression.body);
+}
+
+function localIdentifierNames(node: ts.Node): string[] {
+  const names: string[] = [];
+
+  const visit = (child: ts.Node): void => {
+    if (ts.isIdentifier(child) && isDeclaredIdentifier(child)) names.push(child.text);
+    ts.forEachChild(child, visit);
+  };
+
+  ts.forEachChild(node, visit);
+  return [...new Set(names)];
+}
+
+function enclosingLocalNames(node: ts.Node): string[] {
+  const names: string[] = [];
+  let current: ts.Node | undefined = node.parent;
+
+  while (current !== undefined) {
+    if (
+      (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
+      !isRenderPropertyInitializer(current)
+    ) {
+      for (const param of current.parameters) collectBindingNames(param.name, names);
+    }
+
+    current = current.parent;
+  }
+
+  return [...new Set(names)];
+}
+
+function isRenderPropertyInitializer(node: ts.Node): boolean {
+  const parent = node.parent;
+  return (
+    parent !== undefined &&
+    ts.isPropertyAssignment(parent) &&
+    propertyNameText(parent.name) === 'render' &&
+    parent.initializer === node
   );
 }
 

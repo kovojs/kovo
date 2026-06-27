@@ -34,7 +34,7 @@ import {
   type RoutePageResponse,
   type RouteResponseOutcome,
 } from './response.js';
-import type { Schema } from './schema.js';
+import { isSchemaValidationError, type Schema, type ValidationFailurePayload } from './schema.js';
 import {
   escapeAttribute,
   isRenderedHtml,
@@ -479,7 +479,22 @@ async function runRoutePageInternal<
   request: Request,
   options: RequestLifecycleOptions<Request> & RouteJsxContextOptions<Request> = {},
 ): Promise<RoutePageInternalResult<Page>> {
-  const routeRequest = parseRouteRequest(definition, input);
+  let routeRequest: RouteRequest<Path, ParamsSchema, SearchSchema>;
+  try {
+    routeRequest = parseRouteRequest(definition, input);
+  } catch (error) {
+    if (isSchemaValidationError(error)) {
+      return {
+        error: {
+          code: 'VALIDATION',
+          payload: { issues: error.issues } satisfies ValidationFailurePayload,
+        },
+        ok: false,
+        status: 422,
+      };
+    }
+    throw error;
+  }
 
   // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §6.4: thread the route's *validated*
   // params (parsed/coerced by `parseRouteRequest` above against the route's `params` schema) onto
@@ -894,7 +909,7 @@ export interface RoutePageRedirectSuccess {
 export interface RoutePageFailure {
   auth?: ResolvedGuardFailure['auth'];
   error?: {
-    code: 'RATE_LIMITED' | 'RENDER_ERROR' | 'UNAUTHORIZED';
+    code: 'RATE_LIMITED' | 'RENDER_ERROR' | 'UNAUTHORIZED' | 'VALIDATION';
     payload: Record<string, unknown>;
   };
   ok: false;
@@ -1024,6 +1039,14 @@ export async function renderRoutePageResponse<
   }
 
   if (!result.ok) {
+    if (result.error?.code === 'VALIDATION') {
+      return {
+        body: 'Validation Failed',
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 422,
+      };
+    }
+
     if (result.boundary && (result.status === 404 || result.status === 500)) {
       if (result.status === 500) {
         reportServerError(options.onError, result.thrown, {

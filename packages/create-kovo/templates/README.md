@@ -7,7 +7,7 @@ as possible.
 
 ```sh
 pnpm run dev         # vp dev — start the dev server
-pnpm run check       # vp check — types + Kovo's compile/coverage checks
+pnpm run check       # vp check + sound-subset + endpoint posture + kovo build
 pnpm run test        # vp test
 pnpm run build:prod  # kovo build ./src/app.tsx → dist/server (node preset)
 npm start            # node dist/server/server.mjs
@@ -31,13 +31,19 @@ random `KOVO_DEMO_PASSWORD` value in your generated, gitignored `.env` file.
 
 `vp dev`, `vp check`, and `vp test` run through the `kovo()` Vite plugin, which
 compiles the app and serves route documents and `/c/` handler modules (SPEC.md
-§9.5). The compiler-derived dependency graph is auditable with `kovo check` and
-`kovo explain` against the built app — there is no hand-maintained graph file.
+§9.5). `pnpm run check` also runs `kovo build`, so the compiler-derived
+dependency graph verifier runs before deploy — there is no hand-maintained graph
+file.
 
 `pnpm run check` also enforces the SPEC.md §6.6 sound TypeScript subset for app
 source: strict TypeScript plus local bans on `any`, non-null assertions, and
 unchecked `as` casts. Keep deliberate escapes outside starter app code until
 they have a framework-owned audit path.
+
+Install note: Better Auth currently marks `drizzle-orm@^0.45.2` as an optional
+peer while this starter uses Drizzle `1.0.0-rc.3`. The resulting pnpm peer warning
+is expected; Kovo's Better Auth adapter and starter tests cover this Drizzle 1.0
+shape.
 
 ## Deploying
 

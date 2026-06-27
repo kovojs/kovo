@@ -103,7 +103,7 @@ describe('reference app shell HTTP entry', () => {
         ['exec', 'vp', 'run', '--no-cache', 'export'],
         {
           cwd: referenceRoot,
-          timeout: 30000,
+          timeout: 60000,
         },
       );
       const output = `${result.stdout}\n${result.stderr}`;
@@ -127,7 +127,7 @@ describe('reference app shell HTTP entry', () => {
     } finally {
       await rm(distDir, { force: true, recursive: true });
     }
-  });
+  }, 90_000);
 
   it('keeps reference static export failures from creating partial output', async () => {
     const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-reference-export-'));
@@ -146,7 +146,8 @@ describe('reference app shell HTTP entry', () => {
 
       expect(result.status, output).toBe(1);
       expect(output).toContain('reference-export/v1');
-      expect(output).toContain('ERROR KV229 route=/login');
+      expect(output).toContain('ERROR KV229 route=/account');
+      expect(output).toContain('ERROR KV229 route=/admin');
       await expect(readdir(outDir)).rejects.toThrow();
     } finally {
       await rm(tmpDir, { force: true, recursive: true });

@@ -158,7 +158,9 @@ export function createCommerceApp(options: CommerceAppOptions = {}): CommerceApp
       return routeValueToHtml(value);
     },
     routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
-    sessionProvider: (request) => commerceSessionProvider(request as CommerceRouteRequest),
+    sessionProvider: commerceSessionProvider as NonNullable<
+      KovoApp<CommerceSession>['sessionProvider']
+    >,
   });
   const requestHandler = createRequestHandler(app);
 

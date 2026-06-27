@@ -235,6 +235,110 @@ export default createApp({
     }
   });
 
+  it('excludes adjacent test fixtures from the production build graph preflight', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-test-source-filter-'));
+    const appPath = join(root, 'src/app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, publicAccess, route } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/', {
+      access: publicAccess('build source filter fixture'),
+      page: () => '<main>Home</main>',
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src/app.test.ts'),
+        `
+declare const db: { execute(sql: string): Promise<void> };
+await db.execute('delete from production_data');
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src/app-test-helpers.ts'),
+        `
+declare const db: { execute(sql: string): Promise<void> };
+export async function resetFixture() {
+  await db.execute('delete from production_data');
+}
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('KV406');
+      expect(errorOutput).not.toContain('KV422');
+      expect(existsSync(join(outDir, 'server/server.mjs'))).toBe(true);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not bind a shared HMR websocket port during concurrent builds', async () => {
+    const rootParent = mkdtempSync(join(repoRoot, '.tmp-kovo-build-parallel-'));
+    const rootA = join(rootParent, 'a');
+    const rootB = join(rootParent, 'b');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(rootParent, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(
+        join(repoRoot, 'packages/server'),
+        join(rootParent, 'node_modules/@kovojs/server'),
+      );
+      writeRetentionProofConfig(rootParent);
+      for (const root of [rootA, rootB]) {
+        const appPath = join(root, 'app.mjs');
+        mkdirSync(root, { recursive: true });
+        mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+        symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+        symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+        writeFileSync(appPath, appModuleSource(), 'utf8');
+        writeClientEntry(root);
+      }
+
+      const [exitA, exitB] = await withCwd(rootParent, () =>
+        Promise.all([
+          mainAsync(['build', './a/app.mjs', '--out', './a/dist']),
+          mainAsync(['build', './b/app.mjs', '--out', './b/dist']),
+        ]),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitA, errorOutput).toBe(0);
+      expect(exitB, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('WebSocket server error');
+      expect(errorOutput).not.toContain('24678');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(rootParent, { force: true, recursive: true });
+    }
+  });
+
   it('auto-collects compiled component CSS into the build stylesheet asset', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-app-css-'));
     const appPath = join(root, 'app.tsx');

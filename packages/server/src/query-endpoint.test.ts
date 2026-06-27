@@ -1,16 +1,78 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedReveal, type Secret } from '@kovojs/core';
 
+import { publicAccess } from './access.js';
 import { domain } from './domain.js';
 import {
   query,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
   runQuery,
+  type QueryFactory,
 } from './query.js';
 import { s, type Schema } from './schema.js';
 
 describe('query endpoints', () => {
+  it('rejects unknown query definition fields at type and runtime boundaries', () => {
+    const typedQuery = query('typed-ok', {
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    const appQuery = query as QueryFactory<{ session?: { userId?: string } | null }>;
+    const typedAppQuery = appQuery('typed-app-ok', {
+      guard: (request) => request.session?.userId === 'u1',
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    const elevatedQuery = query.elevated('typed-elevated-ok', {
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    const assertUnknownQueryDefinitionFieldsRejected = () => {
+      query('bad-live', {
+        // @ts-expect-error SPEC §9.3: SSE Live is not shipped, so live:true must not be accepted.
+        live: true,
+        load: () => ({ ok: true }),
+        reads: [],
+      });
+      query('bad-guard-typo', {
+        // @ts-expect-error SPEC §10.2: unknown query fields must not silently no-op.
+        guardd: () => true,
+        load: () => ({ ok: true }),
+        reads: [],
+      });
+      query('bad-reads-typo', {
+        load: () => ({ ok: true }),
+        // @ts-expect-error SPEC §10.2: unknown query fields must not silently no-op.
+        readz: [],
+      });
+      appQuery('bad-app-live', {
+        // @ts-expect-error App-scoped query factories use the same closed definition shape.
+        live: true,
+        load: () => ({ ok: true }),
+        reads: [],
+      });
+      query.elevated('bad-elevated-made-up', {
+        load: () => ({ ok: true }),
+        reads: [],
+        // @ts-expect-error query.elevated owns the elevated marker and rejects no-op fields too.
+        totallyMadeUp: 42,
+      });
+    };
+
+    expect(typedQuery.key).toBe('typed-ok');
+    expect(typedAppQuery.key).toBe('typed-app-ok');
+    expect(elevatedQuery).toMatchObject({ elevated: true, key: 'typed-elevated-ok' });
+    expect(assertUnknownQueryDefinitionFieldsRejected).toBeTypeOf('function');
+    expect(() =>
+      query('bad-runtime-live', {
+        live: true,
+        load: () => ({ ok: true }),
+        reads: [],
+      } as never),
+    ).toThrow('Unknown query() definition field "live"');
+  });
+
   it('bounds query load results to JSON-serializable values', () => {
     interface CatalogQueryResult {
       meta: {
@@ -169,6 +231,40 @@ describe('query endpoints', () => {
 
     await expect(renderQueryEndpointResponse(catalogQuery, { request: {} })).resolves.toEqual({
       body: '<kovo-query name="catalogLimited">{"rows":[{"id":0},{"id":1},{"id":2}]}</kovo-query>',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
+      status: 200,
+    });
+  });
+
+  it('allows explicit Cache-Control only for public unguarded query reads', async () => {
+    const publicQuery = query('publicCatalog', {
+      access: publicAccess('public product catalog'),
+      load: () => ({ items: ['p1'] }),
+      read: { cacheControl: 'public, max-age=60' },
+      reads: [domain('catalog')],
+    });
+    const guardedQuery = query('privateCatalog', {
+      access: publicAccess('audit metadata is not enough when a guard exists'),
+      guard: () => true,
+      load: () => ({ items: ['p1'] }),
+      read: { cacheControl: 'public, max-age=60' },
+      reads: [domain('catalog')],
+    });
+
+    await expect(renderQueryEndpointResponse(publicQuery, { request: {} })).resolves.toEqual({
+      body: '<kovo-query name="publicCatalog">{"items":["p1"]}</kovo-query>',
+      headers: {
+        'Cache-Control': 'public, max-age=60',
+        'Content-Type': 'text/html; charset=utf-8',
+      },
+      status: 200,
+    });
+    await expect(renderQueryEndpointResponse(guardedQuery, { request: {} })).resolves.toEqual({
+      body: '<kovo-query name="privateCatalog">{"items":["p1"]}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',

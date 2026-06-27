@@ -67,12 +67,13 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   // guard, or machine-auth posture. By-construction: the proof is this static graph
   // fact, not a TS brand. KV436 proves a decision EXISTS, never that it is correct.
   const pagesForAccess = mergedPages ?? options.graph?.pages;
-  const access = deriveAccessExplainFacts({
+  const derivedAccess = deriveAccessExplainFacts({
     ...(options.graph?.endpoints === undefined ? {} : { endpoints: options.graph.endpoints }),
     ...(options.graph?.mutations === undefined ? {} : { mutations: options.graph.mutations }),
     ...(pagesForAccess === undefined ? {} : { pages: pagesForAccess }),
     ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
   });
+  const access = mergeAccessExplainFacts(options.graph?.access ?? [], derivedAccess);
   const graph: RegistryGraphInput = {
     ...options.graph,
     ...(access.length > 0 ? { access } : {}),
@@ -106,6 +107,36 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     graph,
     registryFacts,
   };
+}
+
+function mergeAccessExplainFacts(
+  callerFacts: readonly CoreGraph.AccessExplainFact[],
+  derivedFacts: readonly CoreGraph.AccessExplainFact[],
+): CoreGraph.AccessExplainFact[] {
+  const facts = [...callerFacts];
+  const existing = new Set(callerFacts.map(accessExplainFactKey));
+  for (const fact of derivedFacts) {
+    const key = accessExplainFactKey(fact);
+    if (existing.has(key)) continue;
+    facts.push(fact);
+    existing.add(key);
+  }
+  return facts.sort(compareAccessFacts);
+}
+
+function accessExplainFactKey(fact: CoreGraph.AccessExplainFact): string {
+  return `${fact.kind}\0${fact.name}`;
+}
+
+function compareAccessFacts(
+  left: CoreGraph.AccessExplainFact,
+  right: CoreGraph.AccessExplainFact,
+): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.name.localeCompare(right.name) ||
+    left.decision.localeCompare(right.decision)
+  );
 }
 
 /** @internal Process-lifetime cache for app graph derivation keyed by contribution fingerprints. */

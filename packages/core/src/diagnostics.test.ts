@@ -52,6 +52,7 @@ describe('diagnostic registry', () => {
       'KV315',
       'KV316',
       'KV317',
+      'KV318',
       'KV320',
       'KV330',
       'KV402',
@@ -480,6 +481,16 @@ describe('diagnostic registry', () => {
       SPEC §4.6 makes a contradicting static state aria-* an error (KV317), not the override lint (KV232).",
           "message": "Static state-bearing aria-* value contradicts the primitive's render-time state.",
           "severity": "error",
+        },
+        "KV318": {
+          "code": "KV318",
+          "help": "Would lower to: a client-bundled copy of the component render function plus a self-morph update plan.
+      Blocked reason: isomorphic islands are the bounded SPA-creep escape; without an adjacent justification, review cannot distinguish an intentional client self-render from accidental overuse.
+      Fixes: add an adjacent JSX justification comment naming KV318 before the isomorphic component, or drop isomorphic: true and use bindings, derives, keyed lists, or a server fragment.
+      SPEC §4.8 makes isomorphic: true the explicit client self-render escape and requires a recorded justification.
+      Escape: an adjacent KV318 justification comment preserves the lint trail without blocking compilation.",
+          "message": "isomorphic: true requires an adjacent KV318 justification comment.",
+          "severity": "lint",
         },
         "KV320": {
           "code": "KV320",

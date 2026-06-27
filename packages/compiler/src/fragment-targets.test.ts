@@ -6,6 +6,7 @@ import { compileComponentModule, deriveAppGraph } from './index.js';
 const kv230 = diagnosticDefinitions.KV230;
 const kv303 = diagnosticDefinitions.KV303;
 const kv316 = diagnosticDefinitions.KV316;
+const kv318 = diagnosticDefinitions.KV318;
 
 describe('fragment target validation', () => {
   it('reports removed fragmentTarget usage and points to query inference', () => {
@@ -215,6 +216,7 @@ export const CartRow = component({
 const DISPLAY = { currency: 'USD' };
 
 export const CartBadge = component({
+  /* KV318: cart badge self-renders from declared query/state inputs. */
   isomorphic: true,
   queries: { cart: cartQuery },
   props: { rowId: String },
@@ -229,6 +231,56 @@ export const CartBadge = component({
     });
 
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('accepts isomorphic mapped lists with lambda params and render-local consts', () => {
+    const result = compileComponentModule({
+      fileName: 'contact-list.tsx',
+      source: `
+export const ContactList = component({
+  isomorphic: true,
+  queries: { contacts: contactsQuery },
+  state: () => ({ filter: '' }),
+  render: ({ contacts }, state) => {
+    const visible = contacts.items.filter((contact) => contact.name.includes(state.filter));
+    const rows = visible.map((contact) => ({ id: contact.id, label: contact.name }));
+
+    return (
+      <ul>
+        {rows.map((row) => (
+          <li data-id={row.id}>{row.label}</li>
+        ))}
+        <li>{visible.length}</li>
+      </ul>
+    );
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV303')).toEqual([]);
+  });
+
+  it('explains KV303 when render destructuring aliases a declared query key', () => {
+    const result = compileComponentModule({
+      fileName: 'task-list.tsx',
+      source: `
+export const TaskList = component({
+  queries: { taskList: taskListQuery },
+  render: ({ taskList: list }) => <ul kovo-c="task-list">{list.items.map((item) => <li>{item.title}</li>)}</ul>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV303')).toMatchObject([
+      {
+        code: 'KV303',
+        fileName: 'task-list.tsx',
+        help: expect.stringContaining('render destructuring renamed a declared query/prop key'),
+        message: `${kv303.message} list (render destructuring aliases declared key taskList; use the declared key name in the render parameter)`,
+        severity: kv303.severity,
+      },
+    ]);
   });
 
   it('reports KV303 when isomorphic render inputs are not live-declared', () => {
@@ -596,6 +648,46 @@ export const Card = component({
     });
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV316')).toEqual([]);
+  });
+});
+
+describe('KV318 isomorphic justification', () => {
+  it('reports KV318 when an isomorphic island has no adjacent justification', () => {
+    const result = compileComponentModule({
+      fileName: 'isomorphic-counter.tsx',
+      source: `
+export const IsomorphicCounter = component({
+  isomorphic: true,
+  state: () => ({ count: 0 }),
+  render: (_data, state) => <button>{state.count}</button>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV318')).toMatchObject([
+      {
+        code: 'KV318',
+        fileName: 'isomorphic-counter.tsx',
+        message: kv318.message,
+        severity: kv318.severity,
+      },
+    ]);
+  });
+
+  it('accepts an adjacent KV318 justification comment for isomorphic islands', () => {
+    const result = compileComponentModule({
+      fileName: 'isomorphic-counter.tsx',
+      source: `
+export const IsomorphicCounter = component({
+  /* KV318: local counter must self-render between server fragments. */
+  isomorphic: true,
+  state: () => ({ count: 0 }),
+  render: (_data, state) => <button>{state.count}</button>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV318')).toEqual([]);
   });
 });
 

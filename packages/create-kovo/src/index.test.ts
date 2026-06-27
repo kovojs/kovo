@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { kovoDocsMirrorRemotes } from '@kovojs/core/internal/agent-docs';
@@ -64,6 +64,8 @@ const SQLITE_TEMPLATE_FILES = [
   'src/auth.sqlite.ts',
 ];
 const createKovoPackageRoot = dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
+const repoRoot = dirname(dirname(createKovoPackageRoot));
+const linkLocalKovoScriptPath = join(repoRoot, 'scripts/link-local-kovo.mjs');
 const createKovoPackage = JSON.parse(
   readFileSync(join(createKovoPackageRoot, 'package.json'), 'utf8'),
 ) as { version: string };
@@ -173,7 +175,8 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
-        check: 'vp check && pnpm run check:sound-subset && pnpm run check:endpoint-posture',
+        check:
+          'vp check && pnpm run check:sound-subset && pnpm run check:endpoint-posture && pnpm run build:prod',
         'check:endpoint-posture':
           'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
         'check:sound-subset': 'node scripts/check-sound-subset.mjs',
@@ -190,6 +193,16 @@ describe('create-kovo starter (metadata)', () => {
       const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
       expect(ciWorkflow).toContain('vp exec pnpm run build:prod');
       expect(ciWorkflow).not.toContain('run: kovo build');
+
+      const readme = readFileSync(join(root, 'README.md'), 'utf8');
+      expect(readme).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
+      expect(readme).toContain('peer warning');
+      expect(readme).toContain('is expected');
+
+      const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
+      expect(viteConfig).toContain("host: process.env.HOST ?? '127.0.0.1'");
+      expect(viteConfig).toContain('port: Number.isFinite(port) ? port : 5173');
+      expect(viteConfig).toContain('strictPort: true');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -223,6 +236,51 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/auth.ts')).not.toContain('kovo-starter-anon');
   });
 
+  it('lets check:sound-subset ignore multiline import aliases while still flagging casts', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-sound-subset-'));
+
+    try {
+      writeKovoProject(root, { name: 'Sound Subset Proof' });
+      writeFileSync(join(root, 'src/source.ts'), 'export const sourceValue = 1;\n', 'utf8');
+      writeFileSync(
+        join(root, 'src/import-alias.ts'),
+        [
+          'import {',
+          '  sourceValue as renamedSourceValue,',
+          "} from './source';",
+          '',
+          'export const aliasValue = renamedSourceValue;',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src/unsafe-cast.ts'),
+        'const maybeNumber = "1" as number;\nexport const castValue = maybeNumber;\n',
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(/unsafe-cast\.ts:1: SPEC\.md §6\.6 sound subset bans unchecked casts/);
+
+      try {
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        });
+      } catch (error) {
+        const stderr = (error as { stderr?: Buffer }).stderr?.toString('utf8') ?? '';
+        expect(stderr).not.toContain('import-alias.ts');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('emits the SQLite scaffold variant when requested', () => {
     const project = createKovoProject({ dialect: 'sqlite', name: 'Sqlite App' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));
@@ -253,6 +311,45 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/schema.ts')).not.toContain('timestamp(');
     expect(files.get('src/auth.ts')).toContain("provider: 'sqlite'");
     expect(files.get('README.md')).toContain('opt-in SQLite dialect');
+    expect(files.get('README.md')).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
+    expect(files.get('README.md')).toContain('peer warning');
+    expect(files.get('README.md')).toContain('is expected');
+  });
+
+  it('writes local link specs that survive symlinked app roots', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-link-local-'));
+    const realAppsRoot = join(root, 'real-apps');
+    const aliasAppsRoot = join(root, 'alias-apps');
+    mkdirSync(realAppsRoot, { recursive: true });
+    symlinkSync(realAppsRoot, aliasAppsRoot);
+    const appRoot = join(aliasAppsRoot, 'linked-app');
+
+    try {
+      writeKovoProject(appRoot, { dialect: 'sqlite', name: 'Linked App', disableGit: true });
+
+      execFileSync(process.execPath, [linkLocalKovoScriptPath, appRoot, repoRoot], {
+        cwd: repoRoot,
+        stdio: 'pipe',
+      });
+
+      const realAppRoot = realpathSync(appRoot);
+      const packageJson = JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')) as {
+        dependencies?: Record<string, string>;
+      };
+      const serverSpec = packageJson.dependencies?.['@kovojs/server'] ?? '';
+      expect(serverSpec.startsWith('link:')).toBe(true);
+      expect(realpathSync(resolve(realAppRoot, serverSpec.slice('link:'.length)))).toBe(
+        realpathSync(join(repoRoot, 'packages/server')),
+      );
+
+      const workspace = readFileSync(join(appRoot, 'pnpm-workspace.yaml'), 'utf8');
+      const workspacePattern = workspace.split('\n')[2]?.trim().slice(2) ?? '';
+      expect(realpathSync(resolve(realAppRoot, workspacePattern.replace(/\/\*$/, '')))).toBe(
+        realpathSync(join(repoRoot, 'packages')),
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('uses the public Kovo Vite plugin instead of a hand-rolled dev loader', () => {

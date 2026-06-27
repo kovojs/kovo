@@ -1,4 +1,4 @@
-import { publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
+import { domain, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
 import { and, asc, eq, sum } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
@@ -137,6 +137,8 @@ export const questionAnswers = query('questionAnswers', {
 // Total score across all question votes.
 export const questionScore = query('questionScore', {
   access: publicAccess(PUBLIC_QA_READ),
+  output: s.object({ score: s.number() }),
+  reads: [domain('vote')],
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
     const sessionId = context?.request?.session?.id;

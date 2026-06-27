@@ -1,4 +1,4 @@
-import { guards, type Reader } from '@kovojs/server';
+import { domain, guards, s, type Reader } from '@kovojs/server';
 import { count, eq, sql } from 'drizzle-orm';
 
 import type { CrmDb } from './db.js';
@@ -24,12 +24,16 @@ interface QueryDefinition<Key extends string, Value> {
   guard: typeof crmRead;
   key: Key;
   load: (input: unknown, context: CrmQueryLoadContext) => Promise<Value>;
+  output?: unknown;
+  reads?: readonly unknown[];
 }
 
 function query<const Key extends string, Value>(
   key: Key,
   definition: {
     load: (input: unknown, db: Reader<CrmDb>) => Promise<Value>;
+    output?: unknown;
+    reads?: readonly unknown[];
   },
 ): QueryDefinition<Key, Value> {
   return {
@@ -38,6 +42,8 @@ function query<const Key extends string, Value>(
     load(input, context) {
       return definition.load(input, crmQueryDb(context));
     },
+    ...(definition.output === undefined ? {} : { output: definition.output }),
+    ...(definition.reads === undefined ? {} : { reads: definition.reads }),
   };
 }
 
@@ -132,6 +138,8 @@ export const dealListQuery = query('dealList', {
 
 /** COUNT(deals) — the scalar count of deals across the pipeline (derivable). */
 export const contactDealCountQuery = query('contactDealCount', {
+  output: s.object({ count: s.number() }),
+  reads: [domain('deal')],
   load: async (_input: unknown, db: Reader<CrmDb>): Promise<ContactDealCountResult> => {
     const rows = await db.select({ value: count() }).from(deals);
     return { count: Number(rows[0]?.value ?? 0) };
@@ -160,6 +168,10 @@ export const openDealsQuery = query('openDeals', {
  * SUM(amount) GROUP BY stage — the pipeline value per stage.
  */
 export const pipelineByStageQuery = query('pipelineByStage', {
+  output: s.object({
+    buckets: s.array(s.object({ stage: s.string(), total: s.number() })),
+  }),
+  reads: [domain('deal')],
   load: async (_input: unknown, db: Reader<CrmDb>): Promise<PipelineByStageResult> => {
     const buckets = await db
       .select({ stage: deals.stage, total: sql<number>`coalesce(sum(${deals.amount}), 0)::int` })

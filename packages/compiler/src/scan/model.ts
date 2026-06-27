@@ -4,6 +4,7 @@ import type { StaticLiteralValue } from './object.js';
 
 export interface ComponentOptionEntry {
   end: number;
+  justifiedDiagnostics?: readonly string[];
   key: string;
   objectEntries?: readonly ObjectLiteralEntry[];
   start: number;
@@ -87,6 +88,7 @@ export interface JsxExpressionModel {
   containerStart: number;
   end: number;
   expression: string;
+  localNames: readonly string[];
   propertyAccesses: readonly PropertyAccessPathModel[];
   references: readonly string[];
   solePropertyAccessPath?: string;
@@ -197,6 +199,7 @@ export interface ComponentModel {
   options: readonly ComponentOptionEntry[];
   renderHost?: RenderHostModel;
   renderInputs: readonly RenderInputModel[];
+  renderLocalNames: readonly string[];
   renderSlots?: RenderSlotsModel;
   renderSlotsParam?: RenderInputModel;
   stateReturnObject?: StateReturnObjectModel;
@@ -221,6 +224,7 @@ export interface RenderInputModel {
   end: number;
   name: string;
   start: number;
+  sourceKey?: string;
 }
 
 export interface StateReturnObjectModel {

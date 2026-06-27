@@ -148,6 +148,43 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('marks read-only table domains on extracted query facts', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'notes.queries.ts',
+          source: [
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const notes = pgTable("notes", {',
+            '  id: text("id").primaryKey(),',
+            '  body: text("body").notNull(),',
+            '}, kovo({ domain: "note", key: "id", readOnly: true }));',
+            '',
+            'export const noteIndex = query("notes/index", {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({ body: notes.body }).from(notes);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'notes/index',
+        reads: ['note'],
+        readOnlyDomains: ['note'],
+        shape: {
+          body: 'string',
+        },
+        site: 'notes.queries.ts:8',
+      },
+    ]);
+  });
+
   it('extracts project query instance keys from static element access predicates', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -869,6 +906,131 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           'Opaque query projection requires a declared output schema. cart.count uses sql/raw projection without output.',
         severity: 'error',
         site: 'cart.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('routes aggregate helper projections through KV410 instead of KV406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+          import { avg, count, sum } from 'drizzle-orm';
+
+          export const cartItems = pgTable("cart_items", {
+            cartId: text("cart_id").notNull(),
+            qty: integer("qty").notNull(),
+          }, kovo({ domain: "cart", key: "cartId" }));
+
+          export const cartStats = query("cart/stats", {
+            async load(input, db: PgAsyncDatabase<any, any>) {
+              return db.select({
+                total: count(),
+                quantity: sum(cartItems.qty),
+                average: avg(cartItems.qty),
+              }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV410',
+        message:
+          'Opaque query projection requires a declared output schema. cart/stats.total uses sql/raw projection without output.',
+        severity: 'error',
+        site: 'cart.queries.ts:9',
+      },
+      {
+        code: 'KV410',
+        message:
+          'Opaque query projection requires a declared output schema. cart/stats.quantity uses sql/raw projection without output.',
+        severity: 'error',
+        site: 'cart.queries.ts:9',
+      },
+      {
+        code: 'KV410',
+        message:
+          'Opaque query projection requires a declared output schema. cart/stats.average uses sql/raw projection without output.',
+        severity: 'error',
+        site: 'cart.queries.ts:9',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts).map((diagnostic) => diagnostic.code)).not.toContain(
+      'KV406',
+    );
+  });
+
+  it('accepts aggregate helper projections with declared output and reads', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+          import { avg, count, sum } from 'drizzle-orm';
+
+          export const cartItems = pgTable("cart_items", {
+            cartId: text("cart_id").notNull(),
+            qty: integer("qty").notNull(),
+          }, kovo({ domain: "cart", key: "cartId" }));
+
+          export const cartStats = query("cart/stats", {
+            output: s.object({ total: s.number(), quantity: s.number(), average: s.number() }),
+            reads: [cartItems],
+            async load(input, db: PgAsyncDatabase<any, any>) {
+              return db.select({
+                total: count(),
+                quantity: sum(cartItems.qty),
+                average: avg(cartItems.qty),
+              }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(facts[0]?.reads).toEqual(['cart']);
+  });
+
+  it('keeps local aggregate-named helpers fail-closed as KV406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+          export const cartItems = pgTable("cart_items", {
+            cartId: text("cart_id").notNull(),
+            qty: integer("qty").notNull(),
+          }, kovo({ domain: "cart", key: "cartId" }));
+
+          function count() {
+            return Math.random();
+          }
+
+          export const cartStats = query("cart/stats", {
+            output: s.object({ total: s.number() }),
+            reads: [cartItems],
+            async load(input, db: PgAsyncDatabase<any, any>) {
+              return db.select({ total: count() }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV406',
+        message: expect.stringContaining('Query projection cart/stats.total could not be resolved'),
+        severity: 'error',
+        site: 'cart.queries.ts:11',
       },
     ]);
   });

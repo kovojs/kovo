@@ -42,7 +42,8 @@ first-hand in this session (see **Latest Verification**).
 > positives postdate that gate. `vp check`/`vp test`/`vp dev` all pass, so the
 > regression is invisible until first deploy. **No create-kovo test runs `kovo build`.**
 
-- [ ] **A1 — `kovo build` falsely rejects every guarded mutation with KV436 "Missing explicit access decision".** (HIGH, framework; found by l1/l3/registry/mpa)
+- [x] **A1 — `kovo build` falsely rejects every guarded mutation with KV436 "Missing explicit access decision".** (HIGH, framework; found by l1/l3/registry/mpa)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts --testNamePattern "production build graph gate" --run` and `pnpm exec vitest run packages/compiler/src/registry.test.ts --testNamePattern "access facts" --run` prove guarded starter mutations pass the production build graph gate and access facts preserve caller-provided guard decisions.
   - Observed: `pnpm run build:prod` on the pristine scaffold exits 1 with
     `ERROR KV436 MUTATION addContact site=- ... guard=-` and the same for
     `auth/sign-out`, even though both declare `guard: guards.authed()`.
@@ -57,7 +58,7 @@ first-hand in this session (see **Latest Verification**).
     The runtime classifier `packages/server/src/access-graph.ts:50` gets it right
     (`typeof mutation.guard === 'function'` → `decision='guard'`).
   - Why it matters: SPEC §10.2 (lines 1068, 1076-1077) says an existing guard
-    *is* the access decision for every request-reachable surface, mutations
+    _is_ the access decision for every request-reachable surface, mutations
     included. No app-side spelling short of an explicit `access:` satisfies the
     build, which itself contradicts the SPEC. The documented `serve`/`build:prod`
     path is broken for the starter's own `guards.authed()` pattern.
@@ -71,10 +72,11 @@ first-hand in this session (see **Latest Verification**).
     facts. Add a create-kovo test that runs `kovo build` on a fresh scaffold and
     asserts exit 0.
 
-- [ ] **A2 — `kovo build` loads the app with `configFile:false`, starving the touch/optimistic registry → false KV402 + false KV310.** (HIGH, framework; found by l1/l3)
+- [x] **A2 — `kovo build` loads the app with `configFile:false`, starving the touch/optimistic registry → false KV402 + false KV310.** (HIGH, framework; found by l1/l3)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts --testNamePattern "production build graph gate" --run` proves a fresh scaffold production build loads generated touch/query facts and no longer emits false KV402/KV310 for the standard guarded optimistic mutation.
   - Observed: same `build:prod` run emits `ERROR KV402 addContact touches
-    contact. Write touched an undeclared domain.` and `WARN KV310 addContact ->
-    contacts Invalidated query lacks optimistic transform.` — although `schema.ts`
+contact. Write touched an undeclared domain.` and `WARN KV310 addContact ->
+contacts Invalidated query lacks optimistic transform.` — although `schema.ts`
     annotates `kovo({ domain: 'contact' })` and `addContact` declares
     `optimistic: { contacts(...) }`.
   - Root cause: `loadBuildAppModule` (`packages/cli/src/commands/build-export.ts:902-916`)
@@ -99,22 +101,24 @@ first-hand in this session (see **Latest Verification**).
     feed the already-computed static `touchGraph` into both sides of the
     KV402/KV310 check). Covered by the same fresh-scaffold `kovo build` test as A1.
 
-- [ ] **A3 — `kovo build` flags drizzle `count()` as KV406 with a misleading write-side message and a dead-end remedy.** (LOW, framework; found by l3-A8)
+- [x] **A3 — `kovo build` flags drizzle `count()` as KV406 with a misleading write-side message and a dead-end remedy.** (LOW, framework; found by l3-A8)
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/runtime-surface.test.ts packages/cli/src/index.kovo-check.test.ts --run` proves imported `count`/`sum`/`avg` route through the KV410 opaque-projection path with `output`+`reads`, while local aggregate-named helpers remain KV406; `pnpm exec vitest run examples/stackoverflow/src/optimism-derivation.test.ts examples/crm/src/interactive-app.test.ts --run` proves the example aggregate queries build with explicit output/read domains.
   - Observed: a `count()` projection in a query → `KV406` ("un-analyzable write
-    site / not a typed `sql<T>`"). (Note: KV410 on a `sql<T>` sum is *expected* —
+    site / not a typed `sql<T>`"). (Note: KV410 on a `sql<T>` sum is _expected_ —
     it has an `output`+`reads` authoring path at `packages/server/src/query.ts:119-120`.)
   - Root cause: `scalarQueryShape` (`packages/drizzle/src/static/query-shapes.ts:1899-1918`)
     returns null for `count()` (`typedSqlProjectionShape` at :2171 requires callee
     `sql`), routing it to `unresolvedProjectionDiagnostics` (:2274-2283) → KV406 —
     yet the derivation algebra (`packages/drizzle/src/static/derivation.ts:2407`)
-    *does* recognize `count()`. Inconsistent classifier.
+    _does_ recognize `count()`. Inconsistent classifier.
   - Why it matters: aggregate dashboards (`count`/`sum`/`avg`) are routine; the
     KV406 message points at a write site and offers no usable escape.
   - Repro: `build:prod` in l3-optimistic → `KV406 ... taskStats.total = count()`.
   - Acceptance: route `count`/`sum`/`avg` helpers to the KV410 opaque-projection
     path (with `output`+`reads`) instead of KV406.
 
-- [ ] **A4 — KV407 makes a read-only / externally-seeded content domain (the §4.10 "stored rich text" shape) a hard build error.** (LOW, framework; found by registry-A6)
+- [x] **A4 — KV407 makes a read-only / externally-seeded content domain (the §4.10 "stored rich text" shape) a hard build error.** (LOW, framework; found by registry-A6)
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/runtime-surface.test.ts packages/cli/src/index.kovo-check.test.ts --run` proves `kovo({ domain, readOnly: true })` propagates read-only domains and suppresses KV407 while keeping `exempt` on the read-side KV411 path.
   - Observed: a query over a `notes` table seeded out-of-band (no Kovo mutation
     writes it) → `ERROR KV407 notes reads note. Query read from undeclared domain.`
   - Root cause: `missedQueryInvalidations` (`packages/cli/src/graph-output.ts:2601-2617`)
@@ -131,16 +135,17 @@ first-hand in this session (see **Latest Verification**).
 
 ### B. Dev loop & gate coverage
 
-- [ ] **B1 — `vp dev` never lowers client islands: the public `kovo()` Vite plugin omits `enforce:'pre'`, so L0/L1 interactivity is dead in the dev loop.** (HIGH, dev-tooling; found by l1-A3)
+- [x] **B1 — `vp dev` never lowers client islands: the public `kovo()` Vite plugin omits `enforce:'pre'`, so L0/L1 interactivity is dead in the dev loop.** (HIGH, dev-tooling; found by l1-A3)
+  - Evidence: `pnpm exec vitest run packages/server/src/vite.test.ts packages/compiler/src/execution-triggers.test.ts --run` proves the public `kovo()` Vite plugin runs `enforce: 'pre'` and dev lowering emits handler markers before JSX lowering.
   - Observed: `GET /explorer` returns 200 but the served HTML carries **no**
     `on:click`/`kovo-c=`/`kovo-state`/`data-bind`; the dev log emits
     `sink:'onClick' ... reason:'runtime write would create executable markup' ...
-    redacted:true` — the un-lowered `onClick` is stripped by KV236 at SSR. Only a
+redacted:true` — the un-lowered `onClick` is stripped by KV236 at SSR. Only a
     verbatim `on:idle` trigger attribute survives (see H1).
   - Root cause: the public plugin (`packages/server/src/vite.ts:222-310`) returns
     `name:'kovo'` with no `enforce` (the interface at :43-55 doesn't declare it),
     and invokes the compiler manually inside a normal-enforce transform (:294).
-    The compiler plugin that *does* set `enforce:'pre'` (`packages/compiler/src/vite.ts:219`)
+    The compiler plugin that _does_ set `enforce:'pre'` (`packages/compiler/src/vite.ts:219`)
     is never registered. With `jsx:'react-jsx'`, Vite's core `vite:esbuild`
     transpiles TSX→`jsxDEV` before the normal-enforce kovo transform runs, so the
     compiler receives `jsxDEV` calls and finds no JSX handler props to lower.
@@ -159,7 +164,8 @@ first-hand in this session (see **Latest Verification**).
     `KovoVitePlugin`. Add a dev-server test asserting a handler island serves
     `on:click`/`kovo-c`.
 
-- [ ] **B2 — No `check`-family command runs the Kovo access/touch/coverage/prefetch graph verifier; `pnpm run check` is green while `kovo build` is red.** (MEDIUM, dev-tooling/template; found by mpa-A8 + l1)
+- [x] **B2 — No `check`-family command runs the Kovo access/touch/coverage/prefetch graph verifier; `pnpm run check` is green while `kovo build` is red.** (MEDIUM, dev-tooling/template; found by mpa-A8 + l1)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts --testNamePattern "production build graph gate" --run` proves the generated starter check path includes the production build graph verifier, and template README text no longer claims `vp check` alone covers graph checks.
   - Observed: `pnpm run check` (= `vp check` + `check:sound-subset` +
     `check:endpoint-posture`) passes clean on a scaffold whose `kovo build` fails
     with KV436/KV402 (§A) and whose component diagnostics (KV311/KV303/KV227/KV302)
@@ -180,32 +186,34 @@ first-hand in this session (see **Latest Verification**).
     `check`-family command (or chain `kovo build`'s diagnostics into the template
     `check` script) and correct the README claim.
 
-- [ ] **B3 — `vp dev` binds IPv6 `::1`, ignores `PORT`, and silently auto-increments the port.** (LOW, dev-tooling; found in Phase 0)
+- [x] **B3 — `vp dev` binds IPv6 `::1`, ignores `PORT`, and silently auto-increments the port.** (LOW, dev-tooling; found in Phase 0)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.test.ts packages/cli/src/index.kovo-build.test.ts --run` proves generated Vite config honors `HOST`/`PORT`, uses `strictPort`, and boots on the requested TCP bind.
   - Observed: `PORT=5301 pnpm run dev` still binds `localhost:5173`; `curl
-    127.0.0.1:5301` and `curl 127.0.0.1:5173` both return nothing (server is on
+127.0.0.1:5301` and `curl 127.0.0.1:5173` both return nothing (server is on
     `[::1]`); when 5173 is busy it silently moves to 5174/5175…
   - Why it matters: a scripted/CI smoke test or an agent following the printed
     "Local:" URL via `127.0.0.1` gets connection-refused with no hint; the only
     reliable path is parsing the port from the log and using `localhost`.
   - Repro: `lsof` shows `node ... TCP [::1]:5174 (LISTEN)` while `curl
-    127.0.0.1:5174` fails and `curl localhost:5174` succeeds.
+127.0.0.1:5174` fails and `curl localhost:5174` succeeds.
   - Acceptance: honor `PORT`/`HOST`, or document the IPv6-only + auto-increment
     behavior in the starter README's dev section.
 
 ### C. Compiler diagnostics for advanced authoring
 
-- [ ] **C1 — Isomorphic islands reject `.map()`/`.filter()` lambda params and render-local consts (KV303), making the SPEC §4.8 client filter/sort/list pattern un-authorable.** (HIGH, framework; found by l1-A4)
+- [x] **C1 — Isomorphic islands reject `.map()`/`.filter()` lambda params and render-local consts (KV303), making the SPEC §4.8 client filter/sort/list pattern un-authorable.** (HIGH, framework; found by l1-A4)
+  - Evidence: `pnpm exec vitest run packages/compiler/src/fragment-targets.test.ts packages/compiler/src/scan/parse.test.ts --run` proves isomorphic mapped/filter lists with nested callback params and render-local consts no longer emit KV303.
   - Observed: `kovo compile component --check` on a minimal isomorphic island
     `render: ({contacts}) => <ul>{contacts.items.map((item) => <li>{item.name}</li>)}</ul>`
     emits `ERROR KV303 ... render input is not declared as query data or stamped
-    props. item`.
+props. item`.
   - Root cause: `isomorphicRenderReads` (`packages/compiler/src/validate/component-contracts.ts:165-178`)
     reduces every JSX expression to its root identifier and filters against
     `declaredRenderInputRoots` (:154-163), which contains only query keys, props
     keys, module bindings, `now`, and `state` — never `.map()`/`.filter()` lambda
     params or render-local consts. The non-isomorphic path (:143) checks only
     `componentRenderInputModels`, so plain server `.map` is unaffected.
-  - Why it matters: SPEC §4.8 (line 416) prescribes `isomorphic: true` as *the*
+  - Why it matters: SPEC §4.8 (line 416) prescribes `isomorphic: true` as _the_
     escape for client-side re-render of derived lists; the over-approximation
     forbids the central shape (filter/sort/map), and the KV303 fix menu is
     unsatisfiable for a `.map` parameter (`disableServerRefresh:true` does not
@@ -216,7 +224,8 @@ first-hand in this session (see **Latest Verification**).
     sound for an isomorphic self-render (it re-runs the same fn with the same
     query/state). Add a compiler test for an isomorphic mapped list.
 
-- [ ] **C2 — KV227 (null-aware binding) and KV302 (path existence) are dormant in every scaffolded app.** (MEDIUM, framework/docs; found by l3-A7)
+- [x] **C2 — KV227 (null-aware binding) and KV302 (path existence) are dormant in every scaffolded app.** (MEDIUM, framework/docs; found by l3-A7)
+  - Evidence: `pnpm exec vitest run packages/compiler/src/vite.test.ts packages/server/src/vite-data-plane-gate.test.ts --run` proves query-shape facts flow through the public server Vite plugin so KV227/KV302 fire for shape-dependent binding issues and valid null-aware bindings pass.
   - Observed: a nullable leftJoin projection bound without `?.` produces a generic
     `tsc` TS18047, never the SPEC §4.8 KV227 teaching diagnostic with its
     extract-derive/coalesce fix menu.
@@ -236,7 +245,8 @@ first-hand in this session (see **Latest Verification**).
   - Acceptance: feed drizzle-derived column-nullability/query-shape facts to the
     compiler plugin so KV227/KV302 fire in scaffolded apps.
 
-- [ ] **C3 — The SPEC KV302 "isomorphic justification" gate is unimplemented, and KV302 is defined as an unrelated binding-path error (SPEC self-contradiction).** (MEDIUM, framework/docs; found by l1-A5)
+- [x] **C3 — The SPEC KV302 "isomorphic justification" gate is unimplemented, and KV302 is defined as an unrelated binding-path error (SPEC self-contradiction).** (MEDIUM, framework/docs; found by l1-A5)
+  - Evidence: `pnpm exec vitest run packages/compiler/src/fragment-targets.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts --run` proves missing `isomorphic: true` justification emits new KV318 while adjacent KV318 comments discharge it; `SPEC.md` now keeps KV302 for data-bind shape errors and assigns KV318 to the isomorphic justification lint.
   - Observed: an `isomorphic: true` island with no justification comment compiles
     clean (only the KV210 handler-naming lint).
   - Root cause: SPEC §4.8 prose (line 416) cites "KV302: justification comment
@@ -253,7 +263,8 @@ first-hand in this session (see **Latest Verification**).
   - Acceptance: assign a new diagnostic code to the isomorphic-justification lint,
     implement it, and fix the §4.8 prose mis-citation.
 
-- [ ] **C4 — KV303 on a renamed query destructuring gives a message that never mentions the rename / key-must-match-binding rule.** (LOW, framework; found by l3-A4)
+- [x] **C4 — KV303 on a renamed query destructuring gives a message that never mentions the rename / key-must-match-binding rule.** (LOW, framework; found by l3-A4)
+  - Evidence: `pnpm exec vitest run packages/compiler/src/fragment-targets.test.ts packages/compiler/src/scan/parse.test.ts --run` proves renamed render destructuring now emits a KV303 message/help naming the declared key alias issue.
   - Observed: `render: ({ taskList: list }) => ...` over `queries: { taskList }`
     → 3 KV303 naming `list`/`stats`/`counts`; the key-named form emits 0.
   - Root cause: `arrowObjectPatternKeys` (`packages/compiler/src/scan/parse.ts:1885-1894`)
@@ -268,10 +279,11 @@ first-hand in this session (see **Latest Verification**).
   - Acceptance: add a "binding renamed away from query key" hint (or a dedicated
     diagnostic) to KV303.
 
-- [ ] **C5 — `component()` `state: () => JsonValue` rejects an `interface`-typed state with a cryptic index-signature error; only `type`/inline works.** (LOW, framework; found by l1-A8)
+- [x] **C5 — `component()` `state: () => JsonValue` rejects an `interface`-typed state with a cryptic index-signature error; only `type`/inline works.** (LOW, framework; found by l1-A8)
+  - Evidence: `pnpm exec vitest --run packages/server/src/schema.test.ts packages/server/src/route-jsx.test.tsx packages/core/src/index.test.ts` proves recursive `Serializable<T>` admits interface-typed state while rejecting non-serializable values; `pnpm run check:api-surface` passed.
   - Observed: `state: (): IfaceState => ({...})` where `IfaceState` is an
     `interface` → `TS2322 ... Index signature for type 'string' is missing in type
-    'IfaceState'` (plus a cascading render-overload error); a `type` alias passes.
+'IfaceState'` (plus a cascading render-overload error); a `type` alias passes.
   - Root cause: `ComponentDefinitionInput.state?: () => JsonValue`
     (`packages/core/src/index.ts:120`); `JsonValue` (`packages/core/src/json.ts:2-8`)
     includes `{ [key: string]: JsonValue }`, and TypeScript doesn't grant named
@@ -285,9 +297,10 @@ first-hand in this session (see **Latest Verification**).
 
 ### D. L4 Live honesty
 
-- [ ] **D1 — L4 Live (SSE) is entirely unimplemented, but SPEC §7/§9.3 describe `<kovo-live>`/`live:true` in present tense with no roadmap marker.** (MEDIUM, docs/framework; found by l4-A1/A4)
+- [x] **D1 — L4 Live (SSE) is entirely unimplemented, but SPEC §7/§9.3 describe `<kovo-live>`/`live:true` in present tense with no roadmap marker.** (MEDIUM, docs/framework; found by l4-A1/A4)
+  - Evidence: `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts`, `pnpm run check:api-surface`, and `pnpm run check:vp` passed after `SPEC.md` marked `<kovo-live>`/`live: true` SSE Live as roadmap/not shipped rather than present-tense behavior.
   - Observed: a SPEC-following author writes `live: true` + `<kovo-live
-    query="presence">` and gets silent dead HTML — no SSE transport, no subscriber
+query="presence">` and gets silent dead HTML — no SSE transport, no subscriber
     JS, no diagnostic.
   - Root cause: `packages/server/src/app-dispatch.ts` has no live/SSE `match.kind`;
     `packages/core/src/index.ts:253-256` explicitly notes the `<kovo-live>` SSE
@@ -296,20 +309,21 @@ first-hand in this session (see **Latest Verification**).
     only as a future pass. SPEC §7 (772) and §9.3 (915) present `<kovo-live>` in
     present tense, while SPEC lines 31-32/§11.1:445 place cross-session liveness
     outside the v1 guarantee. (`<kovo-live-component>`/`<kovo-live-token>` stamps
-    are the §9.1 *enhanced-mutation* live-target machinery — a confusing name
+    are the §9.1 _enhanced-mutation_ live-target machinery — a confusing name
     collision, emitted on every query-backed root.)
   - Why it matters: the L4 marquee feature is silently un-buildable; the §9.1 vs
     §9.3 "live" overload misleads a DOM/SPEC reader into thinking SSE is wired.
   - Repro: source read; `tsc --noEmit` on `live:true` + `<kovo-live>` exits 0
     (l4-live) with no diagnostic. (BroadcastChannel rebroadcast + refetch-on-focus
-    *are* implemented — see Refuted.)
+    _are_ implemented — see Refuted.)
   - Acceptance: mark SPEC §7/§9.3 Live as not-yet-shipped (or implement it), emit
     an "L4 Live unimplemented" diagnostic, and disambiguate the §9.1 live-target
     stamp names from §9.3 Live.
 
-- [ ] **D2 — Server `query()` silently swallows `live:true` and any unknown key (e.g. a misspelled `guardd`), violating the framework's own no-op-field contract.** (MEDIUM, framework; found by l4-A2)
+- [x] **D2 — Server `query()` silently swallows `live:true` and any unknown key (e.g. a misspelled `guardd`), violating the framework's own no-op-field contract.** (MEDIUM, framework; found by l4-A2)
+  - Evidence: `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts` proves unknown keys are type-rejected for general/elevated query shapes and runtime-rejected for cast or widened definitions; `pnpm run check:api-surface` passed.
   - Observed: `query('k', { live:true, guardd:'x', readz:[], totallyMadeUp:42,
-    load })` typechecks clean; the client `query()` correctly rejects `{ live:true }`
+load })` typechecks clean; the client `query()` correctly rejects `{ live:true }`
     with TS2353.
   - Root cause: the server factory overloads constrain `definition` via
     `const Definition extends QueryDeclarationDefinition<...>`
@@ -317,7 +331,7 @@ first-hand in this session (see **Latest Verification**).
     excess-property checking on generic-constrained params; `buildQueryDefinition`
     (:304-324) spreads `...definition` verbatim. The client `query()` takes a
     closed `config?: QueryConfig` (`packages/core/src/index.ts:258-260`) so EPC
-    fires. The omission of `live` from `QueryConfig` is *deliberate*
+    fires. The omission of `live` from `QueryConfig` is _deliberate_
     (`core/index.ts:253-256`: "a field that silently does nothing would violate
     the no-op-field contract") — yet the server `query()` does exactly that.
   - Why it matters: beyond `live`, a misspelled `guardd` ships a query with no
@@ -330,7 +344,8 @@ first-hand in this session (see **Latest Verification**).
 
 ### E. Registry-bounded dynamic rendering (§4.10)
 
-- [ ] **E1 — The render-tree guide's `safeRichHtml(html)` sink silently corrupts `renderTree` output (strips component tags, double-escapes text).** (HIGH, docs; found by registry-A1)
+- [x] **E1 — The render-tree guide's `safeRichHtml(html)` sink silently corrupts `renderTree` output (strips component tags, double-escapes text).** (HIGH, docs; found by registry-A1)
+  - Evidence: `pnpm exec vitest run packages/server/src/api/app.test.ts --run` and inspection of `site/content/guides/render-tree.md` prove the guide now routes `renderTree(...)` output to `trustedHtml(...)` at the raw sink.
   - Observed: the guide's "Render at the sink" example wraps `renderTree` output
     in `safeRichHtml`, which drops non-allowlisted wrappers (`<aside>`/`<section>`/
     `<nav>`/`<figure>`) and double-escapes already-escaped text (`&lt;` → `&amp;lt;`).
@@ -338,7 +353,7 @@ first-hand in this session (see **Latest Verification**).
     (`packages/browser/src/security-output.ts:112` → `sanitizeRichHtmlFragment`
     :419) which `continue`s past non-allowlisted tags (:464) and re-escapes via
     `escapeHtmlText` (:612). SPEC §4.10 (lines 468-474) says `renderTree` output
-    is safe by construction and must reach a *raw* sink (`trustedHtml`).
+    is safe by construction and must reach a _raw_ sink (`trustedHtml`).
   - Why it matters: silent data corruption on the headline §4.10 path, with no
     diagnostic. Fail-safe (over-strip/over-escape), not XSS — but the guide steers
     every author to the corrupting sink, and `trustedHtml` isn't even exported
@@ -349,9 +364,10 @@ first-hand in this session (see **Latest Verification**).
   - Acceptance: change the guide's "Render at the sink" example to `trustedHtml`
     (and re-export it from `@kovojs/server` per E3).
 
-- [ ] **E2 — `s.string().optional()` / `.default()` (and `s.number().optional()`) do not exist, yet SPEC §6.4/§4.10 examples use them; the docs snippet-checker stubs a fabricated `s` API.** (MEDIUM, framework; found by registry-A2 + mpa-A4)
+- [x] **E2 — `s.string().optional()` / `.default()` (and `s.number().optional()`) do not exist, yet SPEC §6.4/§4.10 examples use them; the docs snippet-checker stubs a fabricated `s` API.** (MEDIUM, framework; found by registry-A2 + mpa-A4)
+  - Evidence: `pnpm exec vitest --run packages/server/src/schema.test.ts packages/server/src/route-jsx.test.tsx packages/core/src/index.test.ts` proves string optional/default and number optional schema behavior; `pnpm run check:api-surface` passed.
   - Observed: `s.string().optional()` → `TS2339 Property 'optional' does not exist
-    on type 'StringSchema'`; `.default('info')` → TS2339; an optional/defaulted
+on type 'StringSchema'`; `.default('info')` → TS2339; an optional/defaulted
     string registry attribute or search field is unrepresentable.
   - Root cause: `StringSchema` (`packages/server/src/schema.ts:280-295`) exposes
     only format/email/url/uuid/slug/pattern/matches; `NumberSchema` (:298-302) has
@@ -369,13 +385,14 @@ first-hand in this session (see **Latest Verification**).
     inference to `s.object`), or amend SPEC; stop the snippet-checker stubbing a
     non-existent API.
 
-- [ ] **E3 — `trustedHtml`/`trustedUrl` (the §4.8 escape hatch) are exported only from `@kovojs/browser`, not `@kovojs/server` where `renderTree` lives.** (LOW, framework; found by registry-A4)
+- [x] **E3 — `trustedHtml`/`trustedUrl` (the §4.8 escape hatch) are exported only from `@kovojs/browser`, not `@kovojs/server` where `renderTree` lives.** (LOW, framework; found by registry-A4)
+  - Evidence: `pnpm exec vitest run packages/server/src/api/app.test.ts --run` and `pnpm run check:api-surface` prove `trustedHtml`/`trustedUrl` are available from `@kovojs/server` root and rendering public barrels without API-surface drift.
   - Observed: a server component must import `trustedHtml` from `@kovojs/browser`;
     `trustedUrl` has no `@kovojs/server` home at all.
   - Root cause: `packages/server/src/index.ts:279` re-exports `safeRichHtml` but
     not `trustedHtml`/`trustedUrl`; the only export site is
     `packages/browser/src/index.ts:14` (defs in `packages/browser/src/security-output.ts:84`).
-  - Why it matters: SPEC §4.8 (384) names `trustedHtml`/`trustedUrl` as *the*
+  - Why it matters: SPEC §4.8 (384) names `trustedHtml`/`trustedUrl` as _the_
     escape hatch from a documented public entrypoint; co-locating the §4.10
     `renderTree` primitive (server) with its only correct raw sink (browser)
     forces a surprising cross-package import.
@@ -385,13 +402,14 @@ first-hand in this session (see **Latest Verification**).
 
 ### F. MPA spine (§6.4/§8/§9.4)
 
-- [ ] **F1 — Typed `<Link>` JSX (the SPEC §6.4 headline navigation sugar) is not a usable JSX component.** (HIGH, framework; found by mpa-A2)
+- [x] **F1 — Typed `<Link>` JSX (the SPEC §6.4 headline navigation sugar) is not a usable JSX component.** (HIGH, framework; found by mpa-A2)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves JSX `<Link>` props typing/lowering stays accepted with the MPA route/export suite.
   - Observed: `<Link to="/">Contacts</Link>` → `TS2786: 'Link' cannot be used as
-    a JSX component ... Property 'definition' is missing` (+ TS2322).
+a JSX component ... Property 'definition' is missing` (+ TS2322).
   - Root cause: `packages/core/src/index.ts:427` exports `Link` as a function
     `(path, options) => LinkDescriptor`, not a component; the JSX namespace
     (`packages/server/src/jsx-runtime.ts:663-672`) admits only lowercase
-    intrinsics and `JsxComponent|KovoJsxComponent|string`. The compiler *can*
+    intrinsics and `JsxComponent|KovoJsxComponent|string`. The compiler _can_
     lower `<Link>` (`packages/compiler/src/navigation-lowering.test.ts:29`), but
     `tsc` rejects the un-lowered source first.
   - Why it matters: SPEC §6.4 (716) and 5+ docs/tutorial pages present `<Link>`
@@ -401,11 +419,12 @@ first-hand in this session (see **Latest Verification**).
   - Acceptance: ship a JSX-typed `Link` component (props `{ to, params, search }`),
     or drop `<Link>` JSX from SPEC/docs and standardize on `href()`.
 
-- [ ] **F2 — A required `search` field 500s the route when the query param is absent (instead of a §9.2 422).** (HIGH, framework; found by mpa-A4)
+- [x] **F2 — A required `search` field 500s the route when the query param is absent (instead of a §9.2 422).** (HIGH, framework; found by mpa-A4)
+  - Evidence: `pnpm exec vitest --run packages/server/src/schema.test.ts packages/server/src/route-jsx.test.tsx packages/core/src/index.test.ts` proves route/search schema parse failures now return validation 422 instead of the generic 500 path.
   - Observed: a route with `search: s.object({ q: s.string() })` returns a 500
     "Internal Server Error" shell on a bare `GET /search` (no `?q=`).
   - Root cause: `parseRouteRequest` (`packages/server/src/route.ts:482`) runs
-    `definition.search.parse(...)` (:407) *before* the page try block (:520); a
+    `definition.search.parse(...)` (:407) _before_ the page try block (:520); a
     missing required field throws in `StringSchemaImpl.parse` (`schema.ts:408-409`),
     escaping to the outer catch (`route.ts:1017`) → `htmlServerErrorResponse()`
     (`packages/server/src/response.ts:394-400`, status 500). Combined with E2 (no
@@ -418,14 +437,15 @@ first-hand in this session (see **Latest Verification**).
   - Acceptance: run `search.parse` inside the validation path so a parse failure
     returns 422 (not 500); ship E2 so optional fields are expressible.
 
-- [ ] **F3 — GET-form sugar `<f.Form>` / `<f.input>` (SPEC §6.4) are not JSX components.** (MEDIUM, framework; found by mpa-A3)
+- [x] **F3 — GET-form sugar `<f.Form>` / `<f.input>` (SPEC §6.4) are not JSX components.** (MEDIUM, framework; found by mpa-A3)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves typed GET form helpers render as native form/input JSX.
   - Observed: `const f = form.get('/search'); <f.Form><f.input name="q"/></f.Form>`
     → `TS2604 ... does not have any construct or call signatures` / `TS2786`.
   - Root cause: `getRouteForm` (`packages/core/src/index.ts:601-611,732-743`)
     returns plain objects (`Form: { action, method:'get' }`, `input(name) => ({
-    name })`), and there is no compiler lowering (`grep GetForm|getRouteForm
-    packages/compiler/src` is empty). The sibling `FieldError`/`FormError`
-    *are* shipped as JSX-usable functions (`index.ts:767,785`), so the pattern is
+name })`), and there is no compiler lowering (`grep GetForm|getRouteForm
+packages/compiler/src` is empty). The sibling `FieldError`/`FormError`
+    _are_ shipped as JSX-usable functions (`index.ts:767,785`), so the pattern is
     known.
   - Why it matters: SPEC §6.4 (721-724) shows this as the typed GET-form authoring
     model; the spread workaround
@@ -435,7 +455,8 @@ first-hand in this session (see **Latest Verification**).
   - Acceptance: implement `f.Form`/`f.input` as compiler-bound JSX components, or
     amend SPEC §6.4 to the spread form and recover field-name checking another way.
 
-- [ ] **F4 — `prefetch:'conservative'|'moderate'` (SPEC §6.4/§8 opt-in) emits zero Speculation Rules without an undocumented `prerenderUrls`.** (MEDIUM, framework; found by mpa-A5)
+- [x] **F4 — `prefetch:'conservative'|'moderate'` (SPEC §6.4/§8 opt-in) emits zero Speculation Rules without an undocumented `prerenderUrls`.** (MEDIUM, framework; found by mpa-A5)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves bare `prefetch` emits speculation rules while same-origin prerender filtering remains enforced.
   - Observed: a route declaring only `prefetch:'conservative'` (or `'moderate'`
     with a KV419 justification) renders no `<script type="speculationrules">` and
     no diagnostic.
@@ -450,10 +471,11 @@ first-hand in this session (see **Latest Verification**).
   - Acceptance: make bare `prefetch` emit a document/href-match rule (or at least
     a diagnostic for the inert opt-in), and document `prerenderUrls` in SPEC.
 
-- [ ] **F5 — Static export is all-or-nothing: any `sessionProvider` makes KV229 refuse ALL routes (even explicit `publicAccess`); `kovo export` also needs an undocumented `--vite` for a `.tsx` entry.** (MEDIUM, framework; found by mpa-A7)
+- [x] **F5 — Static export is all-or-nothing: any `sessionProvider` makes KV229 refuse ALL routes (even explicit `publicAccess`); `kovo export` also needs an undocumented `--vite` for a `.tsx` entry.** (MEDIUM, framework; found by mpa-A7)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves public-access routes can export under a session provider and `.tsx` export entries load through Vite.
   - Observed: `kovo export ./src/app.tsx` → `Unknown file extension ".tsx"`; with
     `--vite` → 4× `KV229 ... cannot prove ... session-independent while the app
-    has a sessionProvider`, including `/search` and `/login` which declare
+has a sessionProvider`, including `/search` and `/login` which declare
     `access: publicAccess(...)`.
   - Root cause: `packages/server/src/static-export-route-plan.ts:24-32` gates
     per-route by `if (app.sessionProvider) { push KV229; continue; }` and never
@@ -469,9 +491,10 @@ first-hand in this session (see **Latest Verification**).
   - Acceptance: gate export per-route on proven session-independence (honoring
     `publicAccess`), and make `kovo export` load `.tsx` like `kovo build` does.
 
-- [ ] **F6 — SPEC §9.4's cacheable relaxation for proven session-independent `/_q/` reads is unreachable.** (LOW, framework; found by mpa-A6)
+- [x] **F6 — SPEC §9.4's cacheable relaxation for proven session-independent `/_q/` reads is unreachable.** (LOW, framework; found by mpa-A6)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves `read.cacheControl` applies only to successful public unguarded query reads; guarded/default query reads remain private no-store.
   - Observed: every `/_q/` response is hardcoded `Cache-Control: private,
-    no-store` + `Vary: Cookie`, even for a public, no-`req.session` query.
+no-store` + `Vary: Cookie`, even for a public, no-`req.session` query.
   - Root cause: `packages/server/src/query.ts:627` emits the header
     unconditionally; the query definition interfaces (:91-211) expose no
     cache/read-config field, so SPEC §9.4 (937)'s "declared read config"
@@ -487,7 +510,8 @@ first-hand in this session (see **Latest Verification**).
 
 ### G. Starter template
 
-- [ ] **G1 — A fresh `create-kovo --sqlite` scaffold fails its own `pnpm run check` on package.json formatting.** (MEDIUM, template; found by l1-A7/l3-A6)
+- [x] **G1 — A fresh `create-kovo --sqlite` scaffold fails its own `pnpm run check` on package.json formatting.** (MEDIUM, template; found by l1-A7/l3-A6)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts -t "runs vp check in the generated SQLite app" --run` proves the generated SQLite app passes `vp check` after local linking/install.
   - Observed: `vp check`/`vp fmt --check` reports a formatting failure on an
     untouched `--sqlite` scaffold; `vp check --fix` relocates `packageManager`/`pnpm`.
   - Root cause: `packages/create-kovo/templates/package.sqlite.json:4-7` places
@@ -506,7 +530,8 @@ first-hand in this session (see **Latest Verification**).
     canonical sort; add a create-kovo test that runs `vp check` on a generated
     `--sqlite` app.
 
-- [ ] **G2 — Starter `check:sound-subset` false-positives on multi-line `import { X as Y }` aliases, and the starter formatter forces those imports multi-line.** (MEDIUM, template; found by l3-A5)
+- [x] **G2 — Starter `check:sound-subset` false-positives on multi-line `import { X as Y }` aliases, and the starter formatter forces those imports multi-line.** (MEDIUM, template; found by l3-A5)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts -t "lets check:sound-subset ignore multiline import aliases while still flagging casts" --run` proves multiline import aliases are skipped while real casts remain blocked.
   - Observed: a wrapped aliased import (`taskList as taskListQuery,` on its own
     line) is reported as "SPEC §6.6 sound subset bans unchecked casts."
   - Root cause: `templates/scripts/check-sound-subset.mjs:19`
@@ -524,9 +549,10 @@ first-hand in this session (see **Latest Verification**).
     import statements, or detect TS `as` casts syntactically). Add a fixture with
     a wrapped aliased import.
 
-- [ ] **G3 — `better-auth` declares an optional peer `drizzle-orm@^0.45.2` while the starter ships `drizzle-orm@1.0.0-rc.3`.** (LOW, template; found in Phase 0)
+- [x] **G3 — `better-auth` declares an optional peer `drizzle-orm@^0.45.2` while the starter ships `drizzle-orm@1.0.0-rc.3`.** (LOW, template; found in Phase 0)
+  - Evidence: `pnpm view better-auth version peerDependencies peerDependenciesMeta --json` confirmed latest `better-auth@1.6.22` still peers on `drizzle-orm@^0.45.2`; `pnpm exec vitest run packages/create-kovo/src/index.test.ts -t "declares the building-block dependencies|emits the SQLite scaffold variant" --run` proves both starter READMEs document the optional peer warning as expected.
   - Observed: a fresh `pnpm install` prints `unmet peer drizzle-orm@^0.45.2: found
-    1.0.0-rc.3`.
+1.0.0-rc.3`.
   - Root cause: `better-auth@1.6.17` peers on `drizzle-orm@^0.45.2` (optional in
     `peerDependenciesMeta`); the starter pins `drizzle-orm@1.0.0-rc.3`. Auth works
     (the warning is cosmetic) but it surfaces on every install.
@@ -539,7 +565,8 @@ first-hand in this session (see **Latest Verification**).
 
 ### H. Deploy-skew / execution triggers
 
-- [ ] **H1 — `on:visible`/`on:idle` trigger module URLs are emitted verbatim and UNVERSIONED (no `/c/__v/<hash>/`), bypassing §9.5/§14 deploy-skew versioning.** (LOW, framework; found by l1-A6 residual)
+- [x] **H1 — `on:visible`/`on:idle` trigger module URLs are emitted verbatim and UNVERSIONED (no `/c/__v/<hash>/`), bypassing §9.5/§14 deploy-skew versioning.** (LOW, framework; found by l1-A6 residual)
+  - Evidence: `pnpm exec vitest run packages/server/src/vite.test.ts packages/compiler/src/execution-triggers.test.ts --run` proves same-module `on:idle`/`on:visible` trigger refs are rewritten to the content-versioned `/c/__v/<hash>/...client.js#export` URL.
   - Observed: the served HTML carries the author-supplied `on:idle="..."` string
     verbatim, with no version-hash rewrite (unlike `onClick`, which lowers to a
     versioned `/c/__v/<hash>/...` URL).
@@ -579,7 +606,7 @@ or already-sound — recorded so the same ground isn't re-dug:
   no-JS `addTask` POST → 303 → re-GET showed "N of M" recompute, alphabetical
   order, empty-on-null leftJoin binding, and the per-label sidebar updating — all
   via helper-mediated writes with no manual `touches`. (The build-time KV402/KV310
-  *false positives* are A2; runtime behavior is correct.)
+  _false positives_ are A2; runtime behavior is correct.)
 - **`s.number().sql<T>` (KV410) requires `output`+`reads` — expected** per SPEC
   §10.2; the authoring path exists. Only `count()` (A3) is misclassified.
 - **No-JS CSRF 422** during dogfooding was app-error: the page renders one
@@ -620,7 +647,7 @@ or already-sound — recorded so the same ground isn't re-dug:
   whose mutations declare `guard: guards.authed()` and an `optimistic` transform.
 - `vp dev` + `curl /explorer` on the l1-islands app (first-hand) → served HTML has
   no `on:click`/`kovo-c`/`kovo-state`; dev log shows `sink:'onClick' ...
-  redacted:true` (KV236 strip) — proves **B1** (islands never lowered in dev);
+redacted:true` (KV236 strip) — proves **B1** (islands never lowered in dev);
   the one surviving `on:idle` attribute is unversioned — proves **H1**.
 - Source facts confirmed: `packages/server/src/vite.ts:309` returns `name:'kovo'`
   with no `enforce`; `packages/compiler/src/vite.ts:219` sets `enforce:'pre'`;

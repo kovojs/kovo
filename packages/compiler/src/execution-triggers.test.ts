@@ -7,6 +7,35 @@ const kv211 = diagnosticDefinitions.KV211;
 const kv212 = diagnosticDefinitions.KV212;
 
 describe('execution trigger validation', () => {
+  it('versions same-module idle and visible trigger URLs with the client module version', () => {
+    const result = compileComponentModule({
+      fileName: 'components/search.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+export const Search = component({
+  render: () => (
+    <section>
+      <search-index on:idle="/c/components/search.client.js#Search$warm"></search-index>
+      <sales-chart on:visible="/c/components/search.client.js#Search$mount"></sales-chart>
+    </section>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics).toEqual([]);
+    expect(serverSource).toMatch(
+      /on:idle="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/components\/search\.client\.js#Search\$warm"/,
+    );
+    expect(serverSource).toMatch(
+      /on:visible="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/components\/search\.client\.js#Search\$mount"/,
+    );
+    expect(serverSource).not.toContain('on:idle="/c/components/search.client.js');
+    expect(serverSource).not.toContain('on:visible="/c/components/search.client.js');
+  });
+
   it('accepts known delegated events and declared execution triggers', () => {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',

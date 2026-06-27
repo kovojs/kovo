@@ -12,6 +12,24 @@ import { layout, notFound, renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
 
 describe('route JSX pages', () => {
+  it('renders typed GET form sugar as native form controls', async () => {
+    const productFilter = form.get('/products');
+    const productRoute = route('/products', {
+      page: () => (
+        <product-search>
+          <productFilter.Form class="search-form">
+            <productFilter.input name="max" type="number" />
+          </productFilter.Form>
+        </product-search>
+      ),
+    });
+
+    await expect(renderRoutePageResponse(productRoute, {}, {})).resolves.toMatchObject({
+      body: '<product-search><form class="search-form" action="/products" method="get"><input name="max" type="number"></form></product-search>',
+      status: 200,
+    });
+  });
+
   it('renders the nearest ErrorBoundary fallback for unexpected component render failures', async () => {
     const ProductGrid = component({
       render: () => {
@@ -89,6 +107,24 @@ describe('route JSX pages', () => {
       renderRoutePageResponse(productRoute, { params: { id: 'p1' } }, { locale: 'en-US' }),
     ).resolves.toMatchObject({
       body: '<section data-product="p1" data-prop="p1">en-US:p1</section>',
+      status: 200,
+    });
+  });
+
+  it('returns 422 when required route search validation fails before rendering', async () => {
+    const productRoute = route('/products', {
+      search: s.object({ q: s.string(), max: s.number().int().min(1).optional() }),
+      page: ({ search }) => <main>{search.q}</main>,
+    });
+
+    await expect(renderRoutePageResponse(productRoute, { search: {} }, {})).resolves.toMatchObject({
+      body: 'Validation Failed',
+      status: 422,
+    });
+    await expect(
+      renderRoutePageResponse(productRoute, { search: { q: 'boots', max: '2' } }, {}),
+    ).resolves.toMatchObject({
+      body: '<main>boots</main>',
       status: 200,
     });
   });

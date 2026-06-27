@@ -713,6 +713,26 @@ export const CartBadge = component({
     expect(compileComponentModule).toHaveBeenCalledWith(expect.objectContaining({ registryFacts }));
   });
 
+  it('passes query-shape facts to the compile step', async () => {
+    const compileComponentModule = vi.fn(() => ({
+      files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+    }));
+    const queryShapeFacts = [
+      {
+        query: 'cart',
+        shape: { count: 'number' as const },
+        source: 'src/cart.queries.ts:1',
+      },
+    ];
+    const plugin = createKovoVitePlugin(compileComponentModule, { queryShapeFacts });
+
+    await plugin.transform('component(', 'src/cart-badge.tsx');
+
+    expect(compileComponentModule).toHaveBeenCalledWith(
+      expect.objectContaining({ queryShapeFacts }),
+    );
+  });
+
   it('caches repeated transforms by source hash and compile context', async () => {
     const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
       dependencyFootprint: {},

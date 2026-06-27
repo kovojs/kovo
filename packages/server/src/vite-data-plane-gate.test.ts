@@ -137,6 +137,70 @@ const DRIZZLE_RUNTIME_REGISTRY_SOURCE = [
   '});',
 ].join('\n');
 
+const DRIZZLE_QUERY_SHAPE_TYPES = [
+  'import "drizzle-orm/pg-core";',
+  'declare module "drizzle-orm/pg-core" {',
+  '  export interface PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> {',
+  '    select(value?: unknown): { from(table: unknown): { leftJoin(table: unknown, on: unknown): Promise<unknown[]> } };',
+  '  }',
+  '}',
+  'declare global {',
+  '  type PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> = import("drizzle-orm/pg-core").PgAsyncDatabase<any, any>;',
+  '}',
+].join('\n');
+
+const DRIZZLE_QUERY_SHAPE_SOURCE = [
+  'import { query } from "@kovojs/server";',
+  'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+  '',
+  'export const products = pgTable("products", {',
+  '  id: text("id").primaryKey(),',
+  '  name: text("name").notNull(),',
+  '}, kovo({ domain: "product", key: "id" }));',
+  'export const reviews = pgTable("reviews", {',
+  '  productId: text("product_id"),',
+  '  rating: integer("rating"),',
+  '}, kovo({ domain: "review", key: "productId" }));',
+  '',
+  'export const productQuery = query("product", {',
+  '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+  '    return db.select({',
+  '      name: products.name,',
+  '      review: { rating: reviews.rating },',
+  '    }).from(products).leftJoin(reviews, eq(reviews.productId, products.id));',
+  '  },',
+  '});',
+].join('\n');
+
+const SHAPE_DEPENDENT_COMPONENT = [
+  'import { component } from "@kovojs/server";',
+  '',
+  'export const ProductCard = component({',
+  '  queries: { product: {} },',
+  '  render: () => (',
+  '    <article>',
+  '      <span data-bind="product.review.rating">Rating</span>',
+  '      <span data-bind="product.missing">Missing</span>',
+  '      <span data-bind="product.review?.rating">Optional rating</span>',
+  '    </article>',
+  '  ),',
+  '});',
+].join('\n');
+
+const VALID_SHAPE_COMPONENT = [
+  'import { component } from "@kovojs/server";',
+  '',
+  'export const ProductCard = component({',
+  '  queries: { product: {} },',
+  '  render: () => (',
+  '    <article>',
+  '      <span data-bind="product.name">Name</span>',
+  '      <span data-bind="product.review?.rating">Optional rating</span>',
+  '    </article>',
+  '  ),',
+  '});',
+].join('\n');
+
 // Synthetic drizzle-orm type augmentation so the KV429 symbolic-effect lowering resolves the
 // update/set/where chain (mirrors the @kovojs/drizzle KV429 unit fixtures).
 const DRIZZLE_TYPES = [
@@ -235,6 +299,54 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     );
     expect(registrySource).toContain(
       `registerGeneratedMutationTouchRegistry({"addContact":[{"domain":"contact","keys":null}]});`,
+    );
+  });
+
+  it('feeds Drizzle query-shape facts to compiler diagnostics in the public server plugin path', async () => {
+    const root = await fixture({
+      'src/components/product-card.tsx': SHAPE_DEPENDENT_COMPONENT,
+      'src/drizzle-types.d.ts': DRIZZLE_QUERY_SHAPE_TYPES,
+      'src/product.queries.ts': DRIZZLE_QUERY_SHAPE_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(SHAPE_DEPENDENT_COMPONENT, join(root, 'src/components/product-card.tsx')),
+    ).rejects.toThrow(/KV227[\s\S]*KV302/);
+
+    const componentReport = captured.find((report) => report.fileName.endsWith('product-card.tsx'));
+    expect(componentReport?.diagnostics.map((diagnostic) => diagnostic.code).sort()).toEqual([
+      'KV227',
+      'KV302',
+    ]);
+  });
+
+  it('passes null-aware and in-shape bindings when query-shape facts are available', async () => {
+    const root = await fixture({
+      'src/components/product-card.tsx': VALID_SHAPE_COMPONENT,
+      'src/drizzle-types.d.ts': DRIZZLE_QUERY_SHAPE_TYPES,
+      'src/product.queries.ts': DRIZZLE_QUERY_SHAPE_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(VALID_SHAPE_COMPONENT, join(root, 'src/components/product-card.tsx')),
+    ).resolves.toEqual(expect.objectContaining({ map: null }));
+
+    const componentReport = captured.find((report) => report.fileName.endsWith('product-card.tsx'));
+    expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV227')).toBe(
+      false,
+    );
+    expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
+      false,
     );
   });
 

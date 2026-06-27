@@ -101,6 +101,7 @@ export type KovoTableAnnotation =
       governed?: KovoGovernedColumnAnnotation;
       key?: KovoColumnRef;
       owner?: KovoColumnRef;
+      readOnly?: true;
       secret?: KovoSecretColumnAnnotation;
       version?: KovoConcurrencyColumnAnnotation;
     }
@@ -124,6 +125,7 @@ export interface KovoDomainTableAnnotation {
   governed?: KovoGovernedColumnAnnotation;
   key?: KovoColumnRef;
   owner?: KovoColumnRef;
+  readOnly?: true;
   secret?: KovoSecretColumnAnnotation;
   version?: KovoConcurrencyColumnAnnotation;
 }
@@ -144,8 +146,10 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
  * facts from queries and writes — the Drizzle-blessed path to
  * schema-as-domain-registry (SPEC §10.1).
  *
- * @param annotation - A `{ domain, key?, owner?, secret?, confidentialAtRest? }`
+ * @param annotation - A `{ domain, key?, owner?, readOnly?, secret?, confidentialAtRest? }`
  *   binding (`owner` names the principal-owning column for the §10.3 IDOR audit and
+ *   `readOnly` marks externally-owned/CMS-style content read by the app but not invalidated by
+ *   Kovo mutations (SPEC §4.10),
  *   `secret` names confidential columns for the Phase 1 wire gate; `confidentialAtRest`
  *   names columns that require the authenticated-encryption write sink), `{ exempt: true }`,
  *   or `{ view: { of, refresh? } }` binding.

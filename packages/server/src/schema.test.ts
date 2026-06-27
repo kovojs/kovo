@@ -65,6 +65,40 @@ describe('server schemas', () => {
     });
   });
 
+  it('supports optional and default string/number schema fields', () => {
+    const search = s.object({
+      max: s.number().int().min(1).optional(),
+      page: s.number().int().min(1).default(1),
+      q: s.string().optional(),
+      tab: s.string().default('all'),
+    });
+
+    expect(search.parse({})).toEqual({
+      max: undefined,
+      page: 1,
+      q: undefined,
+      tab: 'all',
+    });
+    expect(search.parse({ max: '3', page: '2', q: '', tab: 'open' })).toEqual({
+      max: 3,
+      page: 2,
+      q: '',
+      tab: 'open',
+    });
+
+    const assertInferredTypes = () => {
+      const parsed = search.parse({});
+      const _max: number | undefined = parsed.max;
+      const _page: number = parsed.page;
+      const _q: string | undefined = parsed.q;
+      const _tab: string = parsed.tab;
+      // @ts-expect-error optional number fields remain possibly undefined.
+      const _requiredMax: number = parsed.max;
+      void [_max, _page, _q, _tab, _requiredMax];
+    };
+    expect(assertInferredTypes).toBeTypeOf('function');
+  });
+
   it('coerces checkbox booleans and repeated FormData fields through declared schemas', async () => {
     const updatePreferences = mutation('preferences/update', {
       input: s.object({

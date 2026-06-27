@@ -2151,7 +2151,57 @@ function trustedRevealValueExpression(expression: ts.Expression): ts.Expression 
   if (!ts.isCallExpression(node)) return false;
 
   const callee = staticTsExpressionPath(node.expression);
-  return callee === 'sql' || callee === 'raw' || callee?.startsWith('sql.') === true;
+  return (
+    callee === 'sql' ||
+    callee === 'raw' ||
+    callee?.startsWith('sql.') === true ||
+    isDrizzleAggregateHelperProjection(node)
+  );
+}
+
+function isDrizzleAggregateHelperProjection(call: ts.CallExpression): boolean {
+  const imports = drizzleAggregateImports(call.getSourceFile());
+  const callee = unwrappedTsExpression(call.expression);
+
+  if (ts.isIdentifier(callee)) return imports.named.has(callee.text);
+  if (!ts.isPropertyAccessExpression(callee) || !isAggregateHelperName(callee.name.text)) {
+    return false;
+  }
+
+  const receiver = unwrappedTsExpression(callee.expression);
+  return ts.isIdentifier(receiver) && imports.namespaces.has(receiver.text);
+}
+
+function drizzleAggregateImports(sourceFile: ts.SourceFile): {
+  named: ReadonlySet<string>;
+  namespaces: ReadonlySet<string>;
+} {
+  const named = new Set<string>();
+  const namespaces = new Set<string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const moduleSpecifier = statement.moduleSpecifier;
+    if (!ts.isStringLiteral(moduleSpecifier) || moduleSpecifier.text !== 'drizzle-orm') continue;
+
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings) continue;
+    if (ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+      continue;
+    }
+
+    for (const specifier of bindings.elements) {
+      const imported = specifier.propertyName?.text ?? specifier.name.text;
+      if (isAggregateHelperName(imported)) named.add(specifier.name.text);
+    }
+  }
+
+  return { named, namespaces };
+}
+
+function isAggregateHelperName(name: string): boolean {
+  return name === 'avg' || name === 'count' || name === 'sum';
 }
 
 /** @internal */ export function typedSqlProjectionShape(

@@ -43,6 +43,8 @@ type KovoVitePostHook = () => void | Promise<void>;
 export interface KovoVitePlugin {
   buildStart?(): void | Promise<void>;
   configResolved?(config: KovoViteResolvedConfig): void | Promise<void>;
+  /** Run before Vite's JSX transform so the Kovo compiler sees authored TSX. */
+  enforce?: 'pre';
   /** Stable plugin name used by Vite diagnostics. */
   name: 'kovo';
   resolveId?(source: string, importer?: string): null | Promise<null | string> | string;
@@ -125,6 +127,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const runtimeRegistryResolvedId = `\0${runtimeRegistryPublicId}`;
   let root = process.cwd();
   let compilerPluginPromise: Promise<KovoCompilerVitePlugin> | undefined;
+  let compilerQueryShapeFacts: readonly CompilerQueryShapeFact[] | undefined;
   let appShellPlugin: KovoAppShellDevPlugin | undefined;
   let onModuleDiagnostics: ((report: unknown) => void) | undefined;
   // SPEC.md §9.5: `serve` is the dev disposition (teaching, never fail-closed); any other
@@ -175,8 +178,16 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const scheduleDevDataPlaneGate = (file: string): void => {
     if (viteCommand !== 'serve') return;
     if (!isDataPlaneSourceFile(file, app, root)) return;
+    compilerQueryShapeFacts = undefined;
     if (devDataPlaneDebounce) clearTimeout(devDataPlaneDebounce);
     devDataPlaneDebounce = setTimeout(() => {
+      void collectCompilerQueryShapeFacts(root, app)
+        .then((facts) => {
+          compilerQueryShapeFacts = facts;
+        })
+        .catch(() => {
+          compilerQueryShapeFacts = [];
+        });
       void runDevDataPlaneGate();
     }, DATA_PLANE_GATE_DEBOUNCE_MS);
     devDataPlaneDebounce.unref?.();
@@ -192,6 +203,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         include: [(fileName: string) => isAuthoredAppSourceFile(fileName, app, root)],
         onModuleDiagnostics(report: unknown) {
           onModuleDiagnostics?.(report);
+        },
+        queryShapeFacts() {
+          return compilerQueryShapeFacts;
         },
       }) as KovoCompilerVitePlugin;
     });
@@ -220,10 +234,12 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   };
 
   return {
+    enforce: 'pre',
     async configResolved(config) {
       root = config.root ?? root;
       viteCommand =
         (config as { command?: 'build' | 'serve' }).command === 'serve' ? 'serve' : 'build';
+      compilerQueryShapeFacts = await collectCompilerQueryShapeFacts(root, app);
       const compiler = await compilerPlugin();
       await compiler.configResolved?.(config);
     },
@@ -233,6 +249,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       // once per project at the build hook, reusing the SAME `@kovojs/drizzle` analyzers the
       // `kovo` CLI uses (one source of truth, zero drift). Until now these gates ran ONLY via the
       // CLI over app source, so unsafe raw SQL shipped green through `vp build`.
+      compilerQueryShapeFacts = await collectCompilerQueryShapeFacts(root, app);
       if (viteCommand === 'serve') {
         // Dev disposition: surface as teaching diagnostics in the ledger; never crash HMR.
         await runDevDataPlaneGate();
@@ -489,6 +506,43 @@ interface RuntimeQueryFactLike {
   query: string;
 }
 
+type CompilerQueryShape =
+  | 'array'
+  | 'boolean'
+  | 'number'
+  | 'object'
+  | 'string'
+  | readonly CompilerQueryShape[]
+  | {
+      readonly [key: string]: CompilerQueryShape;
+    }
+  | {
+      kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
+      shape: CompilerQueryShape;
+    }
+  | {
+      kind: 'table-row';
+      shape: CompilerQueryShape;
+      table: string;
+    }
+  | {
+      kind: 'revealed';
+      reveal: unknown;
+      shape: CompilerQueryShape;
+    };
+
+interface CompilerQueryShapeFact {
+  query: string;
+  shape: CompilerQueryShape;
+  source: string;
+}
+
+interface RuntimeQueryShapeFactLike {
+  query: string;
+  shape: unknown;
+  site: string;
+}
+
 interface RuntimeMutationTouchSiteLike {
   crossTable?: true;
   domain: string;
@@ -641,6 +695,42 @@ async function collectRuntimeRegistry(root: string, app: string): Promise<Runtim
   return { mutationTouches, queryReads };
 }
 
+async function collectCompilerQueryShapeFacts(
+  root: string,
+  app: string,
+): Promise<readonly CompilerQueryShapeFact[]> {
+  const sourceDir = dirname(appEntryFileName(app, root));
+  const files = dataPlaneSourceFiles(sourceDir, root);
+  if (files.length === 0) return [];
+
+  const drizzle = await importKovoDrizzleStaticModule();
+  return compilerQueryShapeFacts(drizzle.extractQueryFactsFromProject({ files }));
+}
+
+function compilerQueryShapeFacts(
+  queryFacts: readonly unknown[],
+): readonly CompilerQueryShapeFact[] {
+  return queryFacts
+    .filter((fact): fact is RuntimeQueryShapeFactLike & { shape: CompilerQueryShape } => {
+      const candidate = fact as RuntimeQueryShapeFactLike;
+      return (
+        typeof candidate.query === 'string' &&
+        typeof candidate.site === 'string' &&
+        isCompilerQueryShape(candidate.shape) &&
+        isSubstantiveCompilerQueryShape(candidate.shape)
+      );
+    })
+    .map((fact) => ({
+      query: fact.query,
+      shape: fact.shape,
+      source: fact.site,
+    }))
+    .sort(
+      (left, right) =>
+        left.query.localeCompare(right.query) || left.source.localeCompare(right.source),
+    );
+}
+
 function runtimeQueryReads(queryFacts: readonly unknown[]): RuntimeRegistryFacts['queryReads'] {
   return queryFacts
     .filter((fact): fact is RuntimeQueryFactLike => {
@@ -654,6 +744,47 @@ function runtimeQueryReads(queryFacts: readonly unknown[]): RuntimeRegistryFacts
     })
     .map((fact) => ({ domains: [...fact.reads], query: fact.query }))
     .sort((left, right) => left.query.localeCompare(right.query));
+}
+
+function isCompilerQueryShape(shape: unknown): shape is CompilerQueryShape {
+  if (
+    shape === 'array' ||
+    shape === 'boolean' ||
+    shape === 'number' ||
+    shape === 'object' ||
+    shape === 'string'
+  ) {
+    return true;
+  }
+
+  if (Array.isArray(shape)) return shape.every(isCompilerQueryShape);
+  if (typeof shape !== 'object' || shape === null) return false;
+
+  if ('kind' in shape) {
+    const wrapper = shape as { kind?: unknown; shape?: unknown; table?: unknown };
+    if (
+      wrapper.kind === 'nullable' ||
+      wrapper.kind === 'optional' ||
+      wrapper.kind === 'secret' ||
+      wrapper.kind === 'volatile-time'
+    ) {
+      return isCompilerQueryShape(wrapper.shape);
+    }
+    if (wrapper.kind === 'table-row') {
+      return typeof wrapper.table === 'string' && isCompilerQueryShape(wrapper.shape);
+    }
+    if (wrapper.kind === 'revealed') return isCompilerQueryShape(wrapper.shape);
+    return false;
+  }
+
+  return Object.values(shape).every(isCompilerQueryShape);
+}
+
+function isSubstantiveCompilerQueryShape(shape: CompilerQueryShape): boolean {
+  if (typeof shape === 'string') return shape !== 'object';
+  if (Array.isArray(shape)) return shape.some(isSubstantiveCompilerQueryShape);
+  if ('kind' in shape) return isSubstantiveCompilerQueryShape(shape.shape);
+  return Object.keys(shape).length > 0;
 }
 
 function serializeRuntimeRegistryModule(registry: RuntimeRegistryFacts): string {

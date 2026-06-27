@@ -17,6 +17,7 @@ import {
   type FormValidationFailure,
   type JsonValue,
   type Secret,
+  type Serializable,
   trustedReveal,
   type TrustedRevealValue,
 } from './index.js';
@@ -165,9 +166,21 @@ describe('core authoring APIs', () => {
   });
 
   it('rejects non-JsonValue component state at authoring time', () => {
+    interface CounterState {
+      count: number;
+      filters: readonly { label: string; selected: boolean }[];
+    }
     const assertLegacyNameArgument = () => {
       // @ts-expect-error component names are compiler-derived; positional strings are not accepted.
       component('cart-badge', { render: () => null });
+    };
+    const assertInterfaceStateAccepted = () => {
+      const Counter = component({
+        render: (_queries, state: CounterState) => ({ state }),
+        state: (): CounterState => ({ count: 0, filters: [] }),
+      });
+      const _state: Serializable<CounterState> = Counter.definition.state();
+      void _state;
     };
     const assertDateState = () => {
       component({
@@ -192,6 +205,7 @@ describe('core authoring APIs', () => {
     };
 
     expect(assertLegacyNameArgument).toBeTypeOf('function');
+    expect(assertInterfaceStateAccepted).toBeTypeOf('function');
     expect(assertDateState).toBeTypeOf('function');
     expect(assertMapState).toBeTypeOf('function');
     expect(assertSecretState).toBeTypeOf('function');
@@ -506,6 +520,14 @@ describe('core authoring APIs', () => {
     expect(Link('/products/:id', { params: { id: 'p1' }, search: { sort: 'price' } })).toEqual({
       href: '/products/p1?sort=price',
     });
+    expect(
+      Link({
+        children: 'View',
+        params: { id: 'p1' },
+        search: { sort: 'price' },
+        to: '/products/:id',
+      }),
+    ).toBeUndefined();
     expect(redirect('/cart', {})).toEqual({ location: '/cart', status: 303 });
 
     // H1 (bugs-part4 L6-1): `PathParamNames` and the runtime matcher take the whole
@@ -548,16 +570,23 @@ describe('core authoring APIs', () => {
 
     expect(productFilter).toMatchObject({
       action: '/products',
-      Form: { action: '/products', method: 'get' },
       method: 'get',
       path: '/products',
     });
+    expect(productFilter.Form.action).toBe('/products');
+    expect(productFilter.Form.method).toBe('get');
     expect(productFilter.input('max')).toEqual({ name: 'max' });
+    expect(productFilter.Form({ children: null })).toBeUndefined();
+    expect(productFilter.input({ name: 'max', type: 'number' })).toBeUndefined();
     expect(productDetailFilter.action).toBe('/products/p1');
 
     const assertUnknownSearchField = () => {
       // @ts-expect-error sku is not part of the route search schema.
       productFilter.input('sku');
+    };
+    const assertUnknownSearchFieldComponent = () => {
+      // @ts-expect-error sku is not part of the route search schema.
+      productFilter.input({ name: 'sku' });
     };
     const assertMissingRouteParam = () => {
       // @ts-expect-error id is required for GET forms targeting product detail routes.
@@ -565,6 +594,7 @@ describe('core authoring APIs', () => {
     };
 
     expect(assertUnknownSearchField).toBeTypeOf('function');
+    expect(assertUnknownSearchFieldComponent).toBeTypeOf('function');
     expect(assertMissingRouteParam).toBeTypeOf('function');
   });
 

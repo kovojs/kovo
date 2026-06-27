@@ -360,6 +360,12 @@ describe('compiler diagnostic coverage matrix', () => {
           "spec": "SPEC.md §4.5/§4.8",
         },
         {
+          "code": "KV318",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.8",
+        },
+        {
           "code": "KV320",
           "negativeCount": 1,
           "positiveCount": 0,
@@ -1001,6 +1007,22 @@ describe('compiler diagnostic coverage matrix', () => {
           "start": {
             "column": 30,
             "line": 6,
+          },
+        },
+        {
+          "code": "KV318",
+          "fileName": "isomorphic-justification-bad.tsx",
+          "help": "Would lower to: a client-bundled copy of the component render function plus a self-morph update plan.
+      Blocked reason: isomorphic islands are the bounded SPA-creep escape; without an adjacent justification, review cannot distinguish an intentional client self-render from accidental overuse.
+      Fixes: add an adjacent JSX justification comment naming KV318 before the isomorphic component, or drop isomorphic: true and use bindings, derives, keyed lists, or a server fragment.
+      SPEC §4.8 makes isomorphic: true the explicit client self-render escape and requires a recorded justification.
+      Escape: an adjacent KV318 justification comment preserves the lint trail without blocking compilation.",
+          "length": 10,
+          "message": "isomorphic: true requires an adjacent KV318 justification comment.",
+          "severity": "lint",
+          "start": {
+            "column": 3,
+            "line": 3,
           },
         },
         {
