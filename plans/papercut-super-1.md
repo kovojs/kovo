@@ -42,7 +42,8 @@ first-hand in this session (see **Latest Verification**).
 > positives postdate that gate. `vp check`/`vp test`/`vp dev` all pass, so the
 > regression is invisible until first deploy. **No create-kovo test runs `kovo build`.**
 
-- [ ] **A1 — `kovo build` falsely rejects every guarded mutation with KV436 "Missing explicit access decision".** (HIGH, framework; found by l1/l3/registry/mpa)
+- [x] **A1 — `kovo build` falsely rejects every guarded mutation with KV436 "Missing explicit access decision".** (HIGH, framework; found by l1/l3/registry/mpa)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts --testNamePattern "production build graph gate" --run` and `pnpm exec vitest run packages/compiler/src/registry.test.ts --testNamePattern "access facts" --run` prove guarded starter mutations pass the production build graph gate and access facts preserve caller-provided guard decisions.
   - Observed: `pnpm run build:prod` on the pristine scaffold exits 1 with
     `ERROR KV436 MUTATION addContact site=- ... guard=-` and the same for
     `auth/sign-out`, even though both declare `guard: guards.authed()`.
@@ -71,7 +72,8 @@ first-hand in this session (see **Latest Verification**).
     facts. Add a create-kovo test that runs `kovo build` on a fresh scaffold and
     asserts exit 0.
 
-- [ ] **A2 — `kovo build` loads the app with `configFile:false`, starving the touch/optimistic registry → false KV402 + false KV310.** (HIGH, framework; found by l1/l3)
+- [x] **A2 — `kovo build` loads the app with `configFile:false`, starving the touch/optimistic registry → false KV402 + false KV310.** (HIGH, framework; found by l1/l3)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts --testNamePattern "production build graph gate" --run` proves a fresh scaffold production build loads generated touch/query facts and no longer emits false KV402/KV310 for the standard guarded optimistic mutation.
   - Observed: same `build:prod` run emits `ERROR KV402 addContact touches
 contact. Write touched an undeclared domain.` and `WARN KV310 addContact ->
 contacts Invalidated query lacks optimistic transform.` — although `schema.ts`
@@ -160,7 +162,8 @@ redacted:true` — the un-lowered `onClick` is stripped by KV236 at SSR. Only a
     `KovoVitePlugin`. Add a dev-server test asserting a handler island serves
     `on:click`/`kovo-c`.
 
-- [ ] **B2 — No `check`-family command runs the Kovo access/touch/coverage/prefetch graph verifier; `pnpm run check` is green while `kovo build` is red.** (MEDIUM, dev-tooling/template; found by mpa-A8 + l1)
+- [x] **B2 — No `check`-family command runs the Kovo access/touch/coverage/prefetch graph verifier; `pnpm run check` is green while `kovo build` is red.** (MEDIUM, dev-tooling/template; found by mpa-A8 + l1)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts --testNamePattern "production build graph gate" --run` proves the generated starter check path includes the production build graph verifier, and template README text no longer claims `vp check` alone covers graph checks.
   - Observed: `pnpm run check` (= `vp check` + `check:sound-subset` +
     `check:endpoint-posture`) passes clean on a scaffold whose `kovo build` fails
     with KV436/KV402 (§A) and whose component diagnostics (KV311/KV303/KV227/KV302)
