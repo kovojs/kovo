@@ -200,6 +200,7 @@ export type RegistryGraphInput = Pick<
 /** @internal Optional mutation/query type maps threaded into registry-fact derivation. */
 export interface RegistryTypeFactOptions {
   mutations?: RegistryTypeFacts;
+  previousRegistryFacts?: RegistryFacts;
   queries?: RegistryTypeFacts;
 }
 
@@ -210,6 +211,7 @@ export interface CompileAppGraphOptions {
   }[];
   graph?: RegistryGraphInput;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
+  previousRegistryFacts?: RegistryFacts;
   registryTypes?: RegistryTypeFactOptions;
   routePages?: readonly { routePageFacts: readonly RoutePageFact[] }[];
 }

@@ -40,6 +40,8 @@ describe('diagnostic registry', () => {
       'KV243',
       'KV244',
       'KV245',
+      'KV246',
+      'KV247',
       'KV301',
       'KV302',
       'KV303',
@@ -373,6 +375,22 @@ describe('diagnostic registry', () => {
       SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.",
           "message": "TypeScript/TSX parse failed.",
           "severity": "error",
+        },
+        "KV246": {
+          "code": "KV246",
+          "help": "Blocked reason: source-derived mutation keys are deploy-load-bearing; changing one can strand in-flight documents, CSRF audiences, replay records, form actions, and generated invalidation facts that still name the previous mutation.
+      Fixes: keep the mutation export binding and module path stable across deploys, or review the rename/move as an intentional identity migration and refresh the previous registry facts.
+      SPEC §4.1 and §10.3 make mutation registry identities source-derived and load-bearing for /_m dispatch, CSRF audience binding, replay scopes, and invalidation graphs.",
+          "message": "Derived mutation registry key changed since the previous emitted graph.",
+          "severity": "warn",
+        },
+        "KV247": {
+          "code": "KV247",
+          "help": "Blocked reason: source-derived query keys are deploy-load-bearing; changing one can strand in-flight documents, kovo-query stores, kovo-deps, query endpoint URLs, and generated invalidation facts that still name the previous query.
+      Fixes: keep the query export binding and module path stable across deploys, or review the rename/move as an intentional identity migration and refresh the previous registry facts.
+      SPEC §4.1 and §10.2 make query registry identities source-derived and load-bearing for /_q dispatch, hydration, dependency stamps, and mutation invalidation graphs.",
+          "message": "Derived query registry key changed since the previous emitted graph.",
+          "severity": "warn",
         },
         "KV301": {
           "code": "KV301",

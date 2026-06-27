@@ -851,6 +851,51 @@ export const ProductGrid = component({
     expect((registryFacts.diagnostics ?? []).filter((d) => d.code === 'KV421')).toEqual([]);
   });
 
+  it('reports KV246 when a mutation registry type moves to a new derived key', () => {
+    const registryFacts = deriveRegistryFactsFromGraph(
+      {
+        mutations: [{ key: 'mutations/cart/add-to-cart', writes: ['cart'] }],
+        queries: [{ domains: ['cart'], query: 'queries/cart/cart' }],
+      },
+      {
+        mutations: { 'mutations/cart/add-to-cart': 'typeof addToCart' },
+        previousRegistryFacts: {
+          mutations: { 'mutations/old-cart/add-to-cart': 'typeof addToCart' },
+        },
+      },
+    );
+
+    expect(registryFacts.diagnostics ?? []).toContainEqual(
+      expect.objectContaining({
+        code: 'KV246',
+        fileName: 'app graph mutation table',
+        help: expect.stringContaining('previousRegistryFacts.mutations'),
+        message:
+          'Derived mutation registry key changed since the previous emitted graph. mutations/old-cart/add-to-cart -> mutations/cart/add-to-cart.',
+        severity: 'warn',
+      }),
+    );
+  });
+
+  it('does not report KV246 when the previous mutation registry facts already contain the current key', () => {
+    const registryFacts = deriveRegistryFactsFromGraph(
+      {
+        mutations: [{ key: 'mutations/cart/add-to-cart', writes: ['cart'] }],
+        queries: [{ domains: ['cart'], query: 'queries/cart/cart' }],
+      },
+      {
+        mutations: { 'mutations/cart/add-to-cart': 'typeof addToCart' },
+        previousRegistryFacts: {
+          mutations: { 'mutations/cart/add-to-cart': 'typeof addToCart' },
+        },
+      },
+    );
+
+    expect(
+      (registryFacts.diagnostics ?? []).filter((diagnostic) => diagnostic.code === 'KV246'),
+    ).toEqual([]);
+  });
+
   // SPEC §4.1/§10.2/§10.3: source-derived query keys are typed read identities and the
   // invalidation graph currency. Duplicate query facts must fail before generated query
   // registries, kovo-query hydration, /_q dispatch, or mutation invalidations collapse them.
@@ -897,6 +942,51 @@ export const ProductGrid = component({
         (d) => d.code === 'KV240' && d.fileName === 'app graph query table',
       ),
     ).toEqual([]);
+  });
+
+  it('reports KV247 when a query registry type moves to a new derived key', () => {
+    const registryFacts = deriveRegistryFactsFromGraph(
+      {
+        mutations: [{ key: 'mutations/cart/add-to-cart', writes: ['cart'] }],
+        queries: [{ domains: ['cart'], query: 'queries/cart/cart-query' }],
+      },
+      {
+        previousRegistryFacts: {
+          queries: { 'queries/old-cart/cart-query': 'typeof cartQuery' },
+        },
+        queries: { 'queries/cart/cart-query': 'typeof cartQuery' },
+      },
+    );
+
+    expect(registryFacts.diagnostics ?? []).toContainEqual(
+      expect.objectContaining({
+        code: 'KV247',
+        fileName: 'app graph query table',
+        help: expect.stringContaining('previousRegistryFacts.queries'),
+        message:
+          'Derived query registry key changed since the previous emitted graph. queries/old-cart/cart-query -> queries/cart/cart-query.',
+        severity: 'warn',
+      }),
+    );
+  });
+
+  it('threads previous registry facts through deriveAppGraph for query and mutation drift diagnostics', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        mutations: [{ key: 'mutations/cart/add-to-cart', writes: ['cart'] }],
+        queries: [{ domains: ['cart'], query: 'queries/cart/cart-query' }],
+      },
+      previousRegistryFacts: {
+        mutations: { 'mutations/old-cart/add-to-cart': 'typeof addToCart' },
+        queries: { 'queries/old-cart/cart-query': 'typeof cartQuery' },
+      },
+      registryTypes: {
+        mutations: { 'mutations/cart/add-to-cart': 'typeof addToCart' },
+        queries: { 'queries/cart/cart-query': 'typeof cartQuery' },
+      },
+    });
+
+    expect(derived.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV246', 'KV247']);
   });
 
   // SPEC.md §10.2/§6.6: deriveAppGraph populates graph.access so the KV436 consumer

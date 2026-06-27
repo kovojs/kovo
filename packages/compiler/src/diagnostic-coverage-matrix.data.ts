@@ -836,6 +836,66 @@ export const CartBadge = component({
       }).diagnostics,
   },
   {
+    code: 'KV246',
+    spec: 'SPEC.md §4.1/§10.3',
+    positive: () =>
+      deriveRegistryFactsFromGraph(
+        {
+          mutations: [{ key: 'mutations/cart/add-to-cart', writes: ['cart'] }],
+          queries: [{ domains: ['cart'], query: 'queries/cart/cart' }],
+        },
+        {
+          mutations: { 'mutations/cart/add-to-cart': 'typeof addToCart' },
+          previousRegistryFacts: {
+            mutations: { 'mutations/cart/add-to-cart': 'typeof addToCart' },
+          },
+        },
+      ).diagnostics ?? [],
+    negative: () =>
+      deriveRegistryFactsFromGraph(
+        {
+          mutations: [{ key: 'mutations/cart/add-to-cart', writes: ['cart'] }],
+          queries: [{ domains: ['cart'], query: 'queries/cart/cart' }],
+        },
+        {
+          mutations: { 'mutations/cart/add-to-cart': 'typeof addToCart' },
+          previousRegistryFacts: {
+            mutations: { 'mutations/old-cart/add-to-cart': 'typeof addToCart' },
+          },
+        },
+      ).diagnostics ?? [],
+  },
+  {
+    code: 'KV247',
+    spec: 'SPEC.md §4.1/§10.2',
+    positive: () =>
+      deriveRegistryFactsFromGraph(
+        {
+          mutations: [{ key: 'mutations/cart/add-to-cart', writes: ['cart'] }],
+          queries: [{ domains: ['cart'], query: 'queries/cart/cart-query' }],
+        },
+        {
+          previousRegistryFacts: {
+            queries: { 'queries/cart/cart-query': 'typeof cartQuery' },
+          },
+          queries: { 'queries/cart/cart-query': 'typeof cartQuery' },
+        },
+      ).diagnostics ?? [],
+    negative: () =>
+      deriveRegistryFactsFromGraph(
+        {
+          mutations: [{ key: 'mutations/cart/add-to-cart', writes: ['cart'] }],
+          queries: [{ domains: ['cart'], query: 'queries/cart/cart-query' }],
+        },
+        {
+          previousRegistryFacts: {
+            queries: { 'queries/old-cart/cart-query': 'typeof cartQuery' },
+          },
+          queries: { 'queries/cart/cart-query': 'typeof cartQuery' },
+        },
+      ).diagnostics ?? [],
+  },
+  {
     code: 'KV301',
     spec: 'SPEC.md §4.1',
     positive: () =>

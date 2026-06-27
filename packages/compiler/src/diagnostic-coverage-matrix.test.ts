@@ -312,6 +312,18 @@ describe('compiler diagnostic coverage matrix', () => {
           "spec": "SPEC.md §4.2/§4.8",
         },
         {
+          "code": "KV246",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.1/§10.3",
+        },
+        {
+          "code": "KV247",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.1/§10.2",
+        },
+        {
           "code": "KV301",
           "negativeCount": 1,
           "positiveCount": 0,
@@ -888,6 +900,36 @@ describe('compiler diagnostic coverage matrix', () => {
             "column": 14,
             "line": 2,
           },
+        },
+        {
+          "code": "KV246",
+          "fileName": "app graph mutation table",
+          "help": "Blocked reason: source-derived mutation keys are deploy-load-bearing; changing one can strand in-flight documents, CSRF audiences, replay records, form actions, and generated invalidation facts that still name the previous mutation.
+      Fixes: keep the mutation export binding and module path stable across deploys, or review the rename/move as an intentional identity migration and refresh the previous registry facts.
+      SPEC §4.1 and §10.3 make mutation registry identities source-derived and load-bearing for /_m dispatch, CSRF audience binding, replay scopes, and invalidation graphs.
+      Previous registry key: mutations/old-cart/add-to-cart
+      Current registry key: mutations/cart/add-to-cart
+      Registry type: typeof addToCart
+      Registry writer: previousRegistryFacts.mutations",
+          "length": null,
+          "message": "Derived mutation registry key changed since the previous emitted graph. mutations/old-cart/add-to-cart -> mutations/cart/add-to-cart.",
+          "severity": "warn",
+          "start": null,
+        },
+        {
+          "code": "KV247",
+          "fileName": "app graph query table",
+          "help": "Blocked reason: source-derived query keys are deploy-load-bearing; changing one can strand in-flight documents, kovo-query stores, kovo-deps, query endpoint URLs, and generated invalidation facts that still name the previous query.
+      Fixes: keep the query export binding and module path stable across deploys, or review the rename/move as an intentional identity migration and refresh the previous registry facts.
+      SPEC §4.1 and §10.2 make query registry identities source-derived and load-bearing for /_q dispatch, hydration, dependency stamps, and mutation invalidation graphs.
+      Previous registry key: queries/old-cart/cart-query
+      Current registry key: queries/cart/cart-query
+      Registry type: typeof cartQuery
+      Registry writer: previousRegistryFacts.queries",
+          "length": null,
+          "message": "Derived query registry key changed since the previous emitted graph. queries/old-cart/cart-query -> queries/cart/cart-query.",
+          "severity": "warn",
+          "start": null,
         },
         {
           "code": "KV301",

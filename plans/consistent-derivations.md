@@ -126,17 +126,18 @@ packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities
     and `packages/server/src/vite.test.ts` additionally prove exported standalone Vite app/server
     `mutation({ ... })` declarations are assigned derived keys before `createApp()` consumes them.
 
-- [ ] **Add rename/collision diagnostics for derived mutation keys.**
+- [x] **Add rename/collision diagnostics for derived mutation keys.**
   - Duplicate derived mutation keys must be an error.
   - Derived key changes since the previous emitted graph should warn like component key drift, because
     deployed documents and replay records can still name the previous identity.
   - Integrated evidence (2026-06-27): `packages/server/src/app.ts` now fails closed when object-form
     mutations reach `createApp()` without compiler-derived key metadata and continues to reject
     duplicate resolved mutation keys; `packages/compiler/src/app-graph.ts` reports duplicate
-    mutation graph keys as `KV421` before invalidation derivation indexes them. Focused verification
-    passed `pnpm exec vitest run packages/compiler/src/registry.test.ts packages/server/src/app.test.ts`.
-    Remaining gap: previous-graph rename/drift diagnostics are not implemented because graph facts
-    currently carry resolved identities without prior source provenance.
+    mutation graph keys as `KV421` before invalidation derivation indexes them and reports
+    previous-registry type moves as `KV246`. Verification passed `pnpm exec vitest run
+packages/compiler/src/registry.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts
+packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.test.ts`,
+    `pnpm run check:vp`, and `git diff --check`.
 
 - [ ] **Update mutation form lowering and registry typing to use mutation values instead of authored key strings.**
   - `<form mutation={addToCart}>` should continue to be the normal author path.
@@ -191,16 +192,16 @@ packages/compiler/src/scan/optimistic-inline.test.ts examples/crm/src/interactiv
     `pnpm run check:api-surface`, `pnpm run check`, and `git diff --check HEAD~1..HEAD`.
     Remaining gap: imported query value references are still outside the source-only scanner.
 
-- [ ] **Add query key drift and collision diagnostics.**
+- [x] **Add query key drift and collision diagnostics.**
   - Duplicate derived query keys and changed derived query keys must be reported before generated
     registries or wire artifacts can drift silently.
   - Integrated evidence (2026-06-27): `packages/compiler/src/app-graph.ts` now reports duplicate
     query read-set keys as `KV240` before generated query registries and invalidation derivation can
-    collapse them; `packages/compiler/src/registry.test.ts` covers duplicate and distinct query fact
-    cases. Verification passed `pnpm exec vitest run packages/compiler/src/registry.test.ts
-packages/server/src/app.test.ts packages/cli/src/index.kovo-explain.test.ts`, `pnpm run check:vp`,
-    and `git diff --check HEAD~1..HEAD`. Remaining gap: previous-graph rename/drift diagnostics need
-    a prior source-provenance surface; current query graph facts carry only resolved key/domains.
+    collapse them and reports previous-registry type moves as `KV247`. Verification passed `pnpm
+exec vitest run packages/compiler/src/registry.test.ts
+packages/compiler/src/diagnostic-coverage-matrix.test.ts
+packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.test.ts`,
+    `pnpm run check:vp`, and `git diff --check`.
 
 ## Phase 4 - Domains And Tags
 
@@ -333,5 +334,10 @@ vitest run packages/server/src/mutation.test.ts packages/compiler/src/scan/optim
 examples/crm/src/interactive-app.test.ts`, `pnpm run check:api-surface`, `pnpm run check`, and
   `git diff --check HEAD~1..HEAD` passed.
 - 2026-06-27: Refreshed the mutation collision SPEC coverage citation after integration; `pnpm exec
-  vitest run packages/compiler/src/spec-coverage-map.test.ts`, `pnpm run test`, and
+vitest run packages/compiler/src/spec-coverage-map.test.ts`, `pnpm run test`, and
   `git diff --check` passed.
+- 2026-06-27: Added mutation/query previous-registry drift diagnostics `KV246`/`KV247`; `pnpm exec
+  vitest run packages/compiler/src/registry.test.ts
+packages/compiler/src/diagnostic-coverage-matrix.test.ts
+packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.test.ts`,
+  `pnpm run check:vp`, and `git diff --check` passed.

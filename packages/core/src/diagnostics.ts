@@ -33,6 +33,8 @@ export type DiagnosticCode =
   | 'KV243'
   | 'KV244'
   | 'KV245'
+  | 'KV246'
+  | 'KV247'
   | 'KV301'
   | 'KV302'
   | 'KV303'
@@ -185,6 +187,8 @@ export const compilerDiagnosticTeachingSchemas = {
   KV243: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV244: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
   KV245: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
+  KV246: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
+  KV247: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
   KV301: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV302: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV303: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
@@ -540,6 +544,26 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'TypeScript/TSX parse failed.',
+  },
+  KV246: {
+    code: 'KV246',
+    help: [
+      'Blocked reason: source-derived mutation keys are deploy-load-bearing; changing one can strand in-flight documents, CSRF audiences, replay records, form actions, and generated invalidation facts that still name the previous mutation.',
+      'Fixes: keep the mutation export binding and module path stable across deploys, or review the rename/move as an intentional identity migration and refresh the previous registry facts.',
+      'SPEC §4.1 and §10.3 make mutation registry identities source-derived and load-bearing for /_m dispatch, CSRF audience binding, replay scopes, and invalidation graphs.',
+    ].join('\n'),
+    severity: 'warn',
+    message: 'Derived mutation registry key changed since the previous emitted graph.',
+  },
+  KV247: {
+    code: 'KV247',
+    help: [
+      'Blocked reason: source-derived query keys are deploy-load-bearing; changing one can strand in-flight documents, kovo-query stores, kovo-deps, query endpoint URLs, and generated invalidation facts that still name the previous query.',
+      'Fixes: keep the query export binding and module path stable across deploys, or review the rename/move as an intentional identity migration and refresh the previous registry facts.',
+      'SPEC §4.1 and §10.2 make query registry identities source-derived and load-bearing for /_q dispatch, hydration, dependency stamps, and mutation invalidation graphs.',
+    ].join('\n'),
+    severity: 'warn',
+    message: 'Derived query registry key changed since the previous emitted graph.',
   },
   KV301: {
     code: 'KV301',

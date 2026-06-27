@@ -100,7 +100,12 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
       : { unregisteredSinks: options.graph.unregisteredSinks }),
   };
 
-  const registryFacts = deriveRegistryFactsFromGraph(graph, options.registryTypes);
+  const registryFacts = deriveRegistryFactsFromGraph(graph, {
+    ...options.registryTypes,
+    ...(options.previousRegistryFacts === undefined
+      ? {}
+      : { previousRegistryFacts: options.previousRegistryFacts }),
+  });
 
   return {
     diagnostics: registryFacts.diagnostics ?? [],
@@ -169,6 +174,7 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
     components: componentHashes,
     graph: options.graph ?? null,
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
+    previousRegistryFacts: options.previousRegistryFacts ?? null,
     registryTypes: options.registryTypes ?? null,
     routes: routeHashes,
     publishToClientFacts: (options.components ?? [])
@@ -324,6 +330,8 @@ export function deriveRegistryFactsFromGraph(
     ...routeFactDiagnostics(graph),
     ...queryReadSetFactDiagnostics(graph),
     ...mutationFactDiagnostics(graph),
+    ...registryTypeDriftDiagnostics('mutation', options.mutations, options.previousRegistryFacts),
+    ...registryTypeDriftDiagnostics('query', options.queries, options.previousRegistryFacts),
   ];
   const fragmentTargets = deriveFragmentTargetsFromGraph(graph);
   const statefulComponents = deriveStatefulComponentsFromGraph(graph);
@@ -443,6 +451,59 @@ export function queryReadSetFactDiagnostics(graph: RegistryGraphInput): Compiler
   }
 
   return diagnostics;
+}
+
+function registryTypeDriftDiagnostics(
+  kind: 'mutation' | 'query',
+  current: RegistryTypeFactOptions['mutations'],
+  previousRegistryFacts: RegistryFacts | undefined,
+): CompilerDiagnostic[] {
+  const previous =
+    kind === 'mutation' ? previousRegistryFacts?.mutations : previousRegistryFacts?.queries;
+  if (!current || !previous) return [];
+
+  const previousByType = new Map<string, string[]>();
+  for (const [key, typeSource] of Object.entries(previous)) {
+    const keys = previousByType.get(typeSource) ?? [];
+    keys.push(key);
+    previousByType.set(typeSource, keys);
+  }
+
+  const diagnostics: CompilerDiagnostic[] = [];
+  for (const [currentKey, typeSource] of Object.entries(current).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    const previousKeys = (previousByType.get(typeSource) ?? [])
+      .filter((previousKey) => previousKey !== currentKey)
+      .sort((left, right) => left.localeCompare(right));
+    if (previousKeys.length !== 1 || previous[currentKey] === typeSource) continue;
+
+    diagnostics.push(registryTypeDriftDiagnostic(kind, previousKeys[0]!, currentKey, typeSource));
+  }
+  return diagnostics;
+}
+
+function registryTypeDriftDiagnostic(
+  kind: 'mutation' | 'query',
+  previousKey: string,
+  currentKey: string,
+  typeSource: string,
+): CompilerDiagnostic {
+  const code = kind === 'mutation' ? 'KV246' : 'KV247';
+  const definition = diagnosticDefinitions[code];
+  return {
+    code,
+    fileName: `app graph ${kind} table`,
+    help: [
+      definition.help,
+      `Previous registry key: ${previousKey}`,
+      `Current registry key: ${currentKey}`,
+      `Registry type: ${typeSource}`,
+      `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
+    ].join('\n'),
+    message: `${definition.message} ${previousKey} -> ${currentKey}.`,
+    severity: definition.severity,
+  };
 }
 
 function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {
