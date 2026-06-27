@@ -43,7 +43,7 @@ the emitted wire metadata:
 
 ```ts
 // cart.mutations.ts
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   guard: authed,
   input: s.object({
     productId: s.string(),
@@ -77,7 +77,7 @@ export const AddToCartForm = component({
     </form>
   ),
 });
-// Emits a real form action such as:
+// Emits a real form action from the source-derived mutation identity, such as:
 // <form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" kovo-key="p1">
 ```
 

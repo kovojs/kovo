@@ -45,7 +45,7 @@ checks, top to bottom:
 products = table({ priceCents: integer() }); // was: price
 
 // 2. the query that still selects `price` → compile error at the read
-query('product', { load: () => db.select({ price: products.price }) /* ✗ no such column */ });
+query({ load: () => db.select({ price: products.price }) /* ✗ no such column */ });
 
 // 3. the element bound to `product.price` → compile error at the binding
 <span>{product.price}</span>; // ✗ not on the query's result type

@@ -18,9 +18,9 @@ A transform is a pure `(draft, input) => void` function over a query's result ty
 optimistic map on the mutation, next to the write it predicts:
 
 ```ts
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
-  queue: 'cart',
+  queue: true,
   optimistic: {
     cart(draft, input) {
       draft.count = (draft.count ?? 0) + input.quantity;
@@ -36,15 +36,16 @@ Three things to notice:
 
 - **The keys are query names**, and the required set is the mutation's derived invalidation set. The
   compiler emits each mutation's invalidated-query keys into the registries, so the inline
-  `optimistic` object is typed from `InvalidationSets['cart/add']` and the query result registry.
+  `optimistic` object is typed from that source-derived mutation identity and the query result
+  registry.
   Add a write that touches a new domain and `kovo check optimistic` reports the uncovered query.
 - **`'await-fragment'` is a real answer.** It says "considered; the 1-RTT latency is fine here" — the
   product grid re-renders from the server fragment instead of being predicted. A deliberate deferral
   and a forgotten transform are different states, and only the second one is a diagnostic.
-- **`queue: 'cart'`** names a FIFO queue. Submissions sharing a queue name run strictly in
-  submit order — each waits for the previous to settle before its transform and request fire — so
-  two quick "add" clicks can't land out of order or race to a wrong predicted count. Mutations with
-  different queue names (or none) stay concurrent.
+- **`queue: true`** gives this mutation its own FIFO queue. Submissions sharing a queue run strictly
+  in submit order — each waits for the previous to settle before its transform and request fire — so
+  two quick "add" clicks can't land out of order or race to a wrong predicted count. Use an explicit
+  string only when several mutations intentionally share one conceptual queue.
 
 Transforms receive a cloned draft of the query's inferred result, so mutate the draft and return
 nothing. A column rename breaks the transform in the editor instead of in production.

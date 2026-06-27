@@ -14,12 +14,12 @@ what happens when it fails.
 
 ## Declare a mutation
 
-A mutation is a named POST with a schema-validated input. Start with the write the form needs:
+A mutation is a source-named POST with a schema-validated input. Start with the write the form needs:
 
 ```ts
 import { mutation, s } from '@kovojs/server';
 
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
   handler(input, request) {
     return request.db.cart.add(input);
@@ -49,7 +49,7 @@ session authority, keep CSRF on and express authorization as a guard:
 ```ts
 import { guards } from '@kovojs/server';
 
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   csrf: commerceCsrf,
   guard: guards.all(
     guards.authed<CommerceRequest>(),
@@ -69,7 +69,7 @@ Expected failures are part of the mutation contract. Declare them once, then ret
 handler:
 
 ```ts
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
   errors: { OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }) },
   handler(input, request, context) {
@@ -90,7 +90,7 @@ submitted form. The no-JS path re-renders the page with the same failure.
 Use `transaction` when the handler needs a real commit/rollback boundary:
 
 ```ts
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
   transaction(request: CommerceRequest, run) {
     return request.db.transaction((db) => run({ ...request, db }));
@@ -99,17 +99,22 @@ export const addToCart = mutation('cart/add', {
 });
 ```
 
-Use `queue` when multiple submissions from the same client must stay ordered. The client applies
-optimistic transforms when each submit is enqueued, sends only the queue head, and then rebases
-remaining predictions over server truth:
+Use `queue` when multiple submissions from the same client must stay ordered. `queue: true` gives
+this mutation its own FIFO queue, derived from the same source identity as the mutation. The client
+applies optimistic transforms when each submit is enqueued, sends only the queue head, and then
+rebases remaining predictions over server truth:
 
 ```ts
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
-  queue: 'cart',
+  queue: true,
   handler: addToCartHandler,
 });
 ```
+
+Use a string queue only when the string is intentionally shared vocabulary. For example,
+`queue: 'checkout'` can group several checkout mutations behind one queue even though each mutation
+has its own source-derived registry identity.
 
 ## Add optimism
 
@@ -117,7 +122,7 @@ Optimism is keyed to queries, not components. Each entry predicts the query valu
 will send after commit:
 
 ```ts
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
   optimistic: {
     cart(draft, input) {
@@ -145,8 +150,9 @@ In TSX, bind the form to the mutation value and give repeated forms ordinary com
 </form>
 ```
 
-The compiler emits the concrete action URL, mutation metadata, CSRF field, `kovo-key`, and the
-submitted-form target. The served HTML is still an ordinary form:
+The compiler derives the mutation identity from the exported binding and module path, then emits the
+concrete action URL, mutation metadata, CSRF field, `kovo-key`, and the submitted-form target. The
+served HTML is still an ordinary form:
 
 ```html
 <form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" kovo-key="p1">
@@ -279,7 +285,7 @@ export const cartPage = route('/cart', {
   page: () => <CartPage />,
 });
 
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   csrf: commerceCsrf,
   defaultRedirectTo: '/cart',
   input: addToCartInput,
@@ -300,7 +306,7 @@ typed `redirect()` value is better for routes with params:
 ```ts
 import { redirect } from '@kovojs/core';
 
-export const createOrder = mutation('order/create', {
+export const createOrder = mutation({
   input: createOrderInput,
   redirectTo: (result) => redirect('/orders/:id', { params: { id: result.value.id } }),
   handler(input, request) {

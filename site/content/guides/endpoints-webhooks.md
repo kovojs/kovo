@@ -45,8 +45,7 @@ Use `webhook()` for third-party POSTs that write Kovo-owned data:
 import { hmacSignature } from '@kovojs/core';
 import { s, webhook } from '@kovojs/server';
 
-export const stripeWebhook = webhook('stripe', {
-  path: '/hooks/stripe',
+export const stripeWebhook = webhook('/hooks/stripe', {
   verify: hmacSignature({
     header: 'stripe-signature',
     payload: 'raw-body',
@@ -64,6 +63,10 @@ export const stripeWebhook = webhook('stripe', {
   },
 });
 ```
+
+The path is explicit because it is the provider-facing address. The webhook registry identity is
+derived from `stripeWebhook` and its module path, so replay and audit names follow the source instead
+of duplicating a string.
 
 The lifecycle is fixed: capture raw bytes, verify, parse/coerce a loose input schema, reserve replay
 by provider event id, run the handler in a transaction, commit, emit the unified change record, and

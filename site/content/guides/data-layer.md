@@ -12,12 +12,15 @@ plain object, PGlite, SQLite, or hosted Postgres.
 
 ## Declare a domain and its writes
 
-A domain is a name. Queries read it; mutations write it. Start with one domain and one insert:
+A domain is an invalidation identity. In ordinary app source the compiler derives that identity from
+the exported binding and module path. Queries read it; mutations write it. Start with one domain and
+one insert:
 
 ```ts
 import { domain, write } from '@kovojs/server';
 import { cartItems } from './schema.js';
-export const cart = domain('cart');
+
+export const cart = domain();
 export const addItem = write({
   key: 'cart/add-item',
   touches: [cart],
@@ -37,7 +40,7 @@ the call site reads as "this mutation writes to the cart":
 ```ts
 import { mutation, s } from '@kovojs/server';
 
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
   handler(input, request) {
     // writes go through the domain layer: `request.db.cart.add(...)`, never

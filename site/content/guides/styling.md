@@ -195,7 +195,7 @@ export const cartPage = route('/cart', {
   page: () => <CartPage />,
 });
 
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   failureStylesheets: siteStylesheets,
   input: addToCartInput,
   handler(input, request) {

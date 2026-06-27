@@ -148,7 +148,7 @@ Then scope every read and write of that table to the session, not to client inpu
 
 ```ts
 // CORRECT: the user id comes from req.session, traceable by the predicate extractor
-export const orderHistoryQuery = query('orderHistory', {
+export const orderHistoryQuery = query({
   guard: authed,
   load: (db, _args, req) => db.select().from(orders).where(eq(orders.userId, req.session.user.id)),
   reads: [order],
@@ -179,7 +179,7 @@ export const commerceCsrf = {
   },
 };
 
-export const addToCart = mutation('cart/add', { csrf: commerceCsrf /* … */ });
+export const addToCart = mutation({ csrf: commerceCsrf /* … */ });
 ```
 
 You render the field with `csrfField`, though enhanced forms emit it for you:
@@ -313,7 +313,7 @@ export const users = pgTable(
 Project only the fields the UI needs:
 
 ```ts
-export const supportUser = query('supportUser', {
+export const supportUser = query({
   guard: guards.role('support'),
   load: (db, args) =>
     db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, args.userId)),

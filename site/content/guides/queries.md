@@ -16,17 +16,17 @@ and how to check it.
 
 ## Declare a query
 
-A query couples a name and a loader. On the Drizzle path, the read domains come
+A query couples a source-derived identity and a loader. On the Drizzle path, the read domains come
 from the loader's query expression:
 
 ```ts
 import { query } from '@kovojs/server';
 
-export const cartQuery = query('cart', {
+export const cartQuery = query({
   load: (_input, { request }) => request.db.select({ count: sum(cartItems.qty) }).from(cartItems),
 });
 
-export const productGridQuery = query('productGrid', {
+export const productGridQuery = query({
   load: (input, { request }) =>
     request.db
       .select()
@@ -101,8 +101,8 @@ auditable:
 ```ts
 import { domain, write } from '@kovojs/server';
 
-export const cart = domain('cart');
-export const product = domain('product');
+export const cart = domain();
+export const product = domain();
 
 // One named write; its `touches` are the domains this operation can dirty.
 export const addItem = write({
@@ -189,7 +189,7 @@ cart data must refresh when the cart changes" — you assert it in a graph query
 A parameterized query declares its arguments once:
 
 ```ts
-export const productQuery = query('product', {
+export const productQuery = query({
   args: s.object({ id: s.string() }),
   guard: authed,
   load: (input, { request }) =>
@@ -229,7 +229,7 @@ Refetch-on-focus is on by default. Turn it off only for a query whose value is i
 fixed for the document lifetime:
 
 ```ts
-export const buildInfoQuery = query('build-info', {
+export const buildInfoQuery = query({
   refetchOnFocus: false,
   load: () => ({ version: process.env.KOVO_VERSION ?? 'dev' }),
   reads: [],

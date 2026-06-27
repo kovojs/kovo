@@ -241,7 +241,7 @@ export const ContactsRegion = component({
           })}
         </div>
 
-        {/* No-JS posts to /_m/addContact; `enhance` upgrades it to a fragment swap. */}
+        {/* No-JS posts to the typed mutation endpoint; `enhance` upgrades it to a fragment swap. */}
         <form {...mutationFormAttributes(addContact)} style={styles.formPanel}>
           <input type="hidden" name="id" value={freshId('c')} />
           <div style={styles.formHeader}>

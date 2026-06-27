@@ -24,8 +24,8 @@ export type AddContactInput = FormInput<typeof addContactForm>;
 const duplicateEmailError = s.object({ email: s.string() });
 
 // One real write: validate input, guard it behind a session, insert a row, and
-// predict the optimistic list update. No-JS clients POST to /_m/addContact and
-// get the refreshed page; `enhance` upgrades the same form to a fragment swap.
+// predict the optimistic list update. No-JS clients POST to the typed mutation
+// endpoint and get the refreshed page; `enhance` upgrades the same form to a fragment swap.
 export const addContact = mutation('addContact', {
   csrf: appCsrf,
   errors: { DUPLICATE_EMAIL: duplicateEmailError },

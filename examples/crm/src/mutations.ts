@@ -86,6 +86,10 @@ const contactOwnershipError = s.object({ contactId: s.string() });
 const dealOwnershipError = s.object({ dealId: s.string() });
 const contactIdSchema = prefixedUuidSchema('c');
 const dealIdSchema = prefixedUuidSchema('d');
+// The CRM demo intentionally serializes contact/deal writes through one conceptual client queue:
+// every pipeline mutation can affect shared dashboard summaries, so the string is a shared queue
+// vocabulary, not a registry identity.
+const CRM_QUEUE = 'crm';
 const crmStageSchema: Schema<CrmStage> = {
   parse(input: unknown): CrmStage {
     if (typeof input !== 'string' || !isCrmStage(input)) {
@@ -143,7 +147,7 @@ export const addContact = mutation('addContact', {
       else draft.items.splice(index, 0, row);
     },
   },
-  queue: 'crm',
+  queue: CRM_QUEUE,
   registry: { touches: [contact] },
   handler: addContactHandler,
 });
@@ -224,7 +228,7 @@ export const createDeal = mutation('createDeal', {
       draft.buckets.sort((left, right) => left.stage.localeCompare(right.stage));
     },
   },
-  queue: 'crm',
+  queue: CRM_QUEUE,
   registry: { touches: [contact, deal] },
   handler: createDealHandler,
 });
@@ -269,7 +273,7 @@ export const moveDeal = mutation('moveDeal', {
     openDeals: 'await-fragment',
     pipelineByStage: 'await-fragment',
   },
-  queue: 'crm',
+  queue: CRM_QUEUE,
   registry: { touches: [deal] },
   handler: moveDealHandler,
 });
@@ -335,7 +339,7 @@ export const closeDeal = mutation('closeDeal', {
     dealList: 'await-fragment',
     pipelineByStage: 'await-fragment',
   },
-  queue: 'crm',
+  queue: CRM_QUEUE,
   registry: { touches: [deal] },
   handler: closeDealHandler,
 });

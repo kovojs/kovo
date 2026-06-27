@@ -17,13 +17,13 @@ rest of the docs will read like footnotes.
 
 ## Step 1: declare the data once
 
-A query is a named read. You say what it loads and which parts of your data it depends on:
+A query is a source-named read. You say what it loads and which parts of your data it depends on:
 
 ```ts
 import { query } from '@kovojs/server';
 import { cart } from './domains.js';
 
-export const cartQuery = query('cart', {
+export const cartQuery = query({
   load: (_input) => loadCart(db), // returns e.g. { count: 3 }
   reads: [cart], // this query depends on the "cart" domain
 });
@@ -83,7 +83,7 @@ Now add an item. A mutation is a typed write:
 ```ts
 import { mutation, s } from '@kovojs/server';
 
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
   handler(input) {
     /* insert into cart_items… */
