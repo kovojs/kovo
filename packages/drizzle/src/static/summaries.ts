@@ -812,10 +812,18 @@ function eqOperandsAreTableColumnArgKeyed(
   const instanceKey: QueryInstanceKeyComparison[] = [];
   const argCandidates: QueryInstanceKeyComparison[] = [];
   const ownerScopePredicates: QueryPredicateComparisonPnf[] = [];
-  const sessionContext = sessionProvenanceContextForNodes(
+  const baseSessionContext = sessionProvenanceContextForNodes(
     body.getSourceFile(),
     queryCallbackBodies(body, queryReceiverMode(receiverReferences)),
   );
+  const acceptedGuardPrivateKeys = queryAcceptedGuardPrivateKeys(body, baseSessionContext);
+  const sessionContext =
+    acceptedGuardPrivateKeys.length > 0
+      ? {
+          ...baseSessionContext,
+          acceptedGuardPrivateKeys: new Set(acceptedGuardPrivateKeys),
+        }
+      : baseSessionContext;
 
   for (const predicate of queryBodyCallExpressions(
     body,
@@ -867,7 +875,171 @@ function eqOperandsAreTableColumnArgKeyed(
     argCandidates.push(...pnfAllEqOperandPairs(pnf).map(toComparison));
   }
 
-  return { argCandidates, instanceKey, ownerScopePredicates };
+  return {
+    ...(acceptedGuardPrivateKeys.length > 0 ? { acceptedGuardPrivateKeys } : {}),
+    argCandidates,
+    instanceKey,
+    ownerScopePredicates,
+  };
+}
+
+function queryAcceptedGuardPrivateKeys(
+  body: ObjectLiteralExpression,
+  sessionContext: SessionProvenanceContext,
+): readonly string[] {
+  const keys = new Set<string>();
+
+  for (const key of acceptedGuardPrivateKeysFromQueryGuardProperty(body, sessionContext)) {
+    keys.add(key);
+  }
+
+  return [...keys].sort();
+}
+
+function acceptedGuardPrivateKeysFromQueryGuardProperty(
+  body: ObjectLiteralExpression,
+  sessionContext: SessionProvenanceContext,
+): readonly string[] {
+  const property = body.getProperty('guard');
+  if (!Node.isPropertyAssignment(property)) return [];
+  const initializer = property.getInitializer();
+  return initializer
+    ? acceptedGuardPrivateKeysFromGuardExpression(initializer, sessionContext)
+    : [];
+}
+
+function acceptedGuardPrivateKeysFromGuardExpression(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+  depth = 0,
+): readonly string[] {
+  if (depth > 4) return [];
+  const node = unwrappedStaticExpressionNode(expression);
+  const keys = new Set<string>();
+
+  const callable = summarizedStaticCallablePrivateScope(node, sessionContext);
+  if (callable?.kind === 'guard') keys.add(privateScopeKey(callable));
+
+  if (Node.isArrayLiteralExpression(node)) {
+    if (node.getElements().some(Node.isSpreadElement)) return [];
+    for (const element of node.getElements()) {
+      for (const key of acceptedGuardPrivateKeysFromGuardExpression(
+        element,
+        sessionContext,
+        depth + 1,
+      )) {
+        keys.add(key);
+      }
+    }
+  } else if (Node.isCallExpression(node)) {
+    const callee = unwrappedStaticExpressionNode(node.getExpression());
+    const calleeName = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+    const summarizedCall = summarizedStaticCallPrivateScope(node, sessionContext);
+    if (summarizedCall?.kind === 'guard') keys.add(privateScopeKey(summarizedCall));
+
+    if (calleeName === 'all' || calleeName === 'compose' || calleeName === 'freeze') {
+      for (const argument of node.getArguments()) {
+        for (const key of acceptedGuardPrivateKeysFromGuardExpression(
+          argument,
+          sessionContext,
+          depth + 1,
+        )) {
+          keys.add(key);
+        }
+      }
+    }
+  } else if (Node.isIdentifier(node)) {
+    const initializer = localConstInitializer(node);
+    if (initializer) {
+      for (const key of acceptedGuardPrivateKeysFromGuardExpression(
+        initializer,
+        sessionContext,
+        depth + 1,
+      )) {
+        keys.add(key);
+      }
+    }
+  }
+
+  return [...keys].sort();
+}
+
+function acceptedGuardPrivateKeysDominatingNode(node: Node): readonly string[] {
+  const used = blockStatementAncestor(node);
+  if (!used) return [];
+  const statements = used.block.getStatements();
+  const useIndex = statements.findIndex((statement) => sameSourceNode(statement, used.statement));
+  if (useIndex <= 0) return [];
+
+  const keys = new Set<string>();
+  for (const statement of statements.slice(0, useIndex)) {
+    for (const key of acceptedGuardPrivateKeysFromStatement(statement)) keys.add(key);
+  }
+  return [...keys].sort();
+}
+
+function acceptedGuardPrivateKeysFromStatement(statement: Node): readonly string[] {
+  if (!Node.isIfStatement(statement)) return [];
+  if (!statementExits(statement.getThenStatement())) return [];
+  const key = falsyDirectGuardPrivateKey(statement.getExpression());
+  return key ? [key] : [];
+}
+
+function falsyDirectGuardPrivateKey(expression: Node): string | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isPrefixUnaryExpression(node)) return undefined;
+  if (node.getOperatorToken() !== SyntaxKind.ExclamationToken) return undefined;
+  const path = directGuardPrivateScopePath(node.getOperand());
+  return path ? `guard:${path}` : undefined;
+}
+
+function statementExits(statement: Node): boolean {
+  if (Node.isReturnStatement(statement) || Node.isThrowStatement(statement)) return true;
+  if (Node.isBlock(statement)) {
+    const [first] = statement.getStatements();
+    return first ? statementExits(first) : false;
+  }
+  if (!Node.isExpressionStatement(statement)) return false;
+  const expression = unwrappedStaticExpressionNode(statement.getExpression());
+  if (!Node.isCallExpression(expression)) return false;
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  return name === 'fail' || name === 'redirect' || name === 'notFound';
+}
+
+function localConstInitializer(identifier: Node): Node | undefined {
+  if (!Node.isIdentifier(identifier)) return undefined;
+  const symbol = symbolForIdentifierReference(identifier) ?? identifier.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+  return declaration.getInitializer();
+}
+
+function blockStatementAncestor(
+  node: Node,
+): { block: Node & { getStatements(): Node[] }; statement: Node } | undefined {
+  let current: Node | undefined = node;
+  while (current) {
+    const parent = current.getParent();
+    if (parent && Node.isBlock(parent)) {
+      return { block: parent as Node & { getStatements(): Node[] }, statement: current };
+    }
+    current = parent;
+  }
+  return undefined;
+}
+
+function sameSourceNode(left: Node, right: Node): boolean {
+  return (
+    left.getSourceFile().getFilePath() === right.getSourceFile().getFilePath() &&
+    left.getStart() === right.getStart() &&
+    left.getEnd() === right.getEnd()
+  );
 }
 
 interface RelationalWherePredicate {
@@ -1177,6 +1349,7 @@ function relationalWithObjectTableExpressions(
 }
 
 /** @internal */ export interface QueryInstanceKeyComparisons {
+  acceptedGuardPrivateKeys?: readonly string[];
   argCandidates: readonly QueryInstanceKeyComparison[];
   instanceKey: readonly QueryInstanceKeyComparison[];
   ownerScopePredicates?: readonly QueryPredicateComparisonPnf[];
@@ -1225,11 +1398,17 @@ function relationalWithObjectTableExpressions(
 ): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
   const provenance =
     privateScopeForOwnerPredicateExpression(expression, sessionContext) ??
+    acceptedGuardPrivateScopeForExpression(expression, sessionContext) ??
     summarizedStaticCallPrivateScope(expression, sessionContext) ??
     awaitedExpressionPrivateScope(expression, sessionContext) ??
     conditionalExpressionPrivateScope(expression, sessionContext) ??
     binaryExpressionPrivateScope(expression, sessionContext);
   if (!provenance) {
+    const acceptedGuardAlias = localConstAcceptedGuardAliasPrivateScope(expression, sessionContext);
+    if (acceptedGuardAlias) {
+      return { privateKey: privateScopeKey(acceptedGuardAlias) };
+    }
+
     const tupleElement = localConstTupleElementPrivateScope(expression, sessionContext);
     if (tupleElement) {
       return {
@@ -1302,6 +1481,48 @@ function relationalWithObjectTableExpressions(
     privateKey: privateScopeKey(provenance),
     ...(provenance.kind === 'session' ? { sessionKey: provenance.path } : {}),
   };
+}
+
+function acceptedGuardPrivateScopeForExpression(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const path = directGuardPrivateScopePath(expression);
+  if (!path) return undefined;
+  const key = `guard:${path}`;
+  return sessionContext.acceptedGuardPrivateKeys?.has(key)
+    ? { kind: 'guard', path, requiresGuard: false }
+    : undefined;
+}
+
+function localConstAcceptedGuardAliasPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const key = resolvedSymbolKey(symbol);
+  const alias =
+    (key ? sessionContext.aliases.get(key) : undefined) ??
+    sessionContext.aliases.get(`name:${node.getText()}`);
+  if (!alias || alias.kind !== 'guard') return undefined;
+  const privateKey = `guard:${alias.path}`;
+  if (!sessionContext.acceptedGuardPrivateKeys?.has(privateKey)) return undefined;
+  if (!aliasDeclarationIsConst(alias.declaration)) return undefined;
+  return { kind: 'guard', path: alias.path, requiresGuard: false };
+}
+
+function aliasDeclarationIsConst(declaration: Node): boolean {
+  let current: Node | undefined = declaration;
+  while (current) {
+    if (Node.isVariableDeclarationList(current)) {
+      return (current.getDeclarationKind?.() ?? 'const') === 'const';
+    }
+    current = current.getParent();
+  }
+  return false;
 }
 
 function localConstTupleElementPrivateScope(
@@ -1952,6 +2173,16 @@ function directNonNullableSessionScopePath(node: Node): string | undefined {
   if (path.length === 0) return undefined;
   if (sessionAccessRequiresGuard(expression)) return undefined;
   return path;
+}
+
+function directGuardPrivateScopePath(node: Node): string | undefined {
+  const segments = staticAccessSegments(node);
+  if (!segments) return undefined;
+  if (!isPrivateScopeCarrierRootName(segments.root)) return undefined;
+  const index = segments.path.indexOf('guard');
+  if (index < 0) return undefined;
+  const path = segments.path.slice(index + 1).join('.');
+  return path.length > 0 ? path : undefined;
 }
 
 function sessionAccessRequiresGuard(node: Node): boolean {
@@ -2850,13 +3081,25 @@ function objectLiteralStaticPathInputPath(
   const predicate = whereCall?.getArguments()[0];
   if (!predicate) return { argCandidates: [], instanceKey: [] };
   const pnf = predicatePnf(predicate);
+  const acceptedGuardPrivateKeys = acceptedGuardPrivateKeysDominatingNode(chain);
+  const predicateSessionContext =
+    acceptedGuardPrivateKeys.length > 0
+      ? {
+          ...sessionContext,
+          acceptedGuardPrivateKeys: new Set([
+            ...(sessionContext.acceptedGuardPrivateKeys ?? []),
+            ...acceptedGuardPrivateKeys,
+          ]),
+        }
+      : sessionContext;
 
   const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
-    left: queryInstanceKeyOperand(left, resolveIdentifier, sessionContext),
-    right: queryInstanceKeyOperand(right, resolveIdentifier, sessionContext),
+    left: queryInstanceKeyOperand(left, resolveIdentifier, predicateSessionContext),
+    right: queryInstanceKeyOperand(right, resolveIdentifier, predicateSessionContext),
   });
 
   return {
+    ...(acceptedGuardPrivateKeys.length > 0 ? { acceptedGuardPrivateKeys } : {}),
     argCandidates: pnfAllEqOperandPairs(pnf).map(toComparison),
     instanceKey: (pnfExactConjuncts(pnf) ?? []).map(toComparison),
     ownerScopePredicates: [comparisonPnf(pnf, toComparison)],
