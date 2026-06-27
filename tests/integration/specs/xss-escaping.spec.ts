@@ -38,12 +38,12 @@ test('neutralizes injected HTML/JS across server render, JSON island, wire, and 
   const authoredTsxOutput = page.locator(
     '#tsx-authored-output-context tsx-xss-card output[data-bind="payload.text"]',
   );
-  await expect(authoredTsxOutput).toHaveText(
-    '&lt;/script&gt;&lt;script&gt;alert(2)&lt;/script&gt;',
-  );
+  await expect(authoredTsxOutput).toHaveText('</script><script>alert(2)</script>');
   await expect(page.locator('#tsx-authored-output-context script')).toHaveCount(0);
   expect(homeHtml).toContain('<tsx-xss-card');
-  expect(homeHtml).toContain('&amp;lt;/script&amp;gt;&amp;lt;script&amp;gt;alert(2)');
+  expect(homeHtml).toContain(
+    '<output data-bind="payload.text">&lt;/script&gt;&lt;script&gt;alert(2)&lt;/script&gt;</output>',
+  );
   // Seeded href is the safe value as-is.
   await expect(page.locator('xss-card a[data-bind\\:href="payload.url"]')).toHaveAttribute(
     'href',

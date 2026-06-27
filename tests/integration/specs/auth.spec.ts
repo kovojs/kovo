@@ -47,7 +47,7 @@ test('login → authed request → logout round-trip clears the session (testing
   await expect(page.getByText('ada@example.com')).toHaveCount(0);
 });
 
-test('guarded route documents are no-store; unguarded ones are not (bugs-1 F34)', async ({
+test('session-dependent route documents are no-store, guarded or not (bugs-1 F34; bugz-3 L2)', async ({
   page,
   kovoApp,
 }) => {
@@ -62,10 +62,12 @@ test('guarded route documents are no-store; unguarded ones are not (bugs-1 F34)'
   expect(guarded.status()).toBe(200);
   expect(guarded.headers()['cache-control']).toBe('no-store');
 
-  // The unguarded /login document is not forced no-store.
+  // bugz-3 L2: the unguarded /login document still resolves the signed-in session and stamps a
+  // kovo-session fingerprint, so it is session-dependent even without a route guard.
   const unguarded = await page.request.get('/login');
   expect(unguarded.status()).toBe(200);
-  expect(unguarded.headers()['cache-control']).toBeUndefined();
+  expect(unguarded.headers()['cache-control']).toBe('no-store');
+  expect(unguarded.headers().vary).toBe('Cookie');
 });
 
 test('documents stamp an opaque per-session fingerprint for broadcast scoping (bugs-1 F13)', async ({
