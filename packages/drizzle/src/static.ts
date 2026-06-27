@@ -2135,6 +2135,7 @@ function extractQueryDefinitionsFromSourceFile(
         bodyObject,
         receiverReferences,
         options.readTableIdentifier,
+        options.relationalTableName,
       ),
       localHelperCalls,
       opaquePaths: selection?.opaquePaths ?? [],

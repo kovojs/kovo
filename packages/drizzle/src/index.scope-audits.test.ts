@@ -298,6 +298,11 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'export async function closeMineComputed(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
               '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, Array.of(req.session.userId)));',
               '}',
+              '',
+              'export async function closeMineShadowedArrayOf(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '  const Array = { of<T>(value: T): T[] { return [value]; } };',
+              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, Array.of(req.session.userId)));',
+              '}',
             ].join('\n'),
           },
         ],
@@ -317,7 +322,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       { name: 'closeGuardMine', scope: 'session' },
       { name: 'closeGuardReadonlyObjectTuple', scope: 'session' },
       { name: 'closeMine', scope: 'session' },
-      { name: 'closeMineComputed', scope: 'unknown' },
+      { name: 'closeMineComputed', scope: 'session' },
       { name: 'closeMineComputedObjectTuple', scope: 'unknown' },
       { name: 'closeMineFrozenTuple', scope: 'session' },
       { name: 'closeMineFrozenTupleAlias', scope: 'session' },
@@ -331,6 +336,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       { name: 'closeMineReadonlyObjectTuple', scope: 'session' },
       { name: 'closeMineReadonlyTuple', scope: 'session' },
       { name: 'closeMineSessionList', scope: 'unknown' },
+      { name: 'closeMineShadowedArrayOf', scope: 'unknown' },
       { name: 'closeMineShadowedObjectFreeze', scope: 'unknown' },
       { name: 'closeMineSpreadObjectTuple', scope: 'unknown' },
     ]);
@@ -777,6 +783,67 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('OPP-28: uses static relational query where predicates for owner-column proof', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'query: { orders: { findMany(value?: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const relationalOrdersMine = query("relationalOrdersMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: eq(orders.userId, req.session.userId) });',
+              '  },',
+              '});',
+              '',
+              'export const relationalOrdersWrongColumn = query("relationalOrdersWrongColumn", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.query.orders.findMany({ columns: { id: true }, where: eq(orders.id, req.session.userId) });',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({
+          detail: a.detail,
+          domain: a.domain,
+          name: a.name,
+          scope: a.scope,
+        }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        name: 'relationalOrdersMine',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; session predicate does not compare the owner column to the matching session/principal symbol',
+        domain: 'order',
+        name: 'relationalOrdersWrongColumn',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
   // OPP-28 narrow DATA subset: `inArray(ownerColumn, [principal])` is equality-equivalent
   // only for a literal singleton array. Larger, mixed, mutable, computed, or mismatched
   // predicates stay outside the proof subset instead of being laundered into `session`.
@@ -914,6 +981,14 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '    return db.select({ id: orders.id }).from(orders).where(inArray(orders.userId, Array.of(req.session.userId)));',
               '  },',
               '});',
+              '',
+              'export const ordersMineShadowedArrayOf = query("ordersMineShadowedArrayOf", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    const Array = { of<T>(value: T): T[] { return [value]; } };',
+              '    return db.select({ id: orders.id }).from(orders).where(inArray(orders.userId, Array.of(req.session.userId)));',
+              '  },',
+              '});',
             ].join('\n'),
           },
         ],
@@ -930,7 +1005,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       { name: 'orderByReadonlyTupleSessionId', scope: 'unknown' },
       { name: 'orderBySessionId', scope: 'unknown' },
       { name: 'ordersMine', scope: 'session' },
-      { name: 'ordersMineComputed', scope: 'unknown' },
+      { name: 'ordersMineComputed', scope: 'session' },
       { name: 'ordersMineFrozenTuple', scope: 'session' },
       { name: 'ordersMineFrozenTupleAlias', scope: 'session' },
       { name: 'ordersMineFrozenTupleSpread', scope: 'unknown' },
@@ -940,6 +1015,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       { name: 'ordersMineMutatedReadonlyTuple', scope: 'unknown' },
       { name: 'ordersMineReadonlyTuple', scope: 'session' },
       { name: 'ordersMineSessionList', scope: 'unknown' },
+      { name: 'ordersMineShadowedArrayOf', scope: 'unknown' },
       { name: 'ordersMineShadowedObjectFreeze', scope: 'unknown' },
     ]);
     expect(audit.scopeAudits.find((a) => a.name === 'ordersMine')?.detail).toContain(
@@ -1336,6 +1412,85 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
           'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
         domain: 'order',
         scope: 'session',
+      },
+    ]);
+  });
+
+  it('accepts awaited summarized guard principals on the owner-column predicate only', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'async function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'async function unsummarizedGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+              '',
+              'export const ordersForAwaitedGuard = query("ordersForAwaitedGuard", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, await currentGuardUser(ctx)));',
+              '  },',
+              '});',
+              '',
+              'export const ordersForAwaitedGuardAlias = query("ordersForAwaitedGuardAlias", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '    const guardUserId = await currentGuardUser(ctx);',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
+              '  },',
+              '});',
+              '',
+              'export const ordersForUnsummarizedAwaitedGuard = query("ordersForUnsummarizedAwaitedGuard", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, await unsummarizedGuardUser(ctx)));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({
+        detail: a.detail,
+        domain: a.domain,
+        name: a.name,
+        scope: a.scope,
+      })),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'order',
+        name: 'ordersForAwaitedGuard',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'order',
+        name: 'ordersForAwaitedGuardAlias',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'ordersForUnsummarizedAwaitedGuard',
+        scope: 'unknown',
       },
     ]);
   });

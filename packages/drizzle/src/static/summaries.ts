@@ -217,23 +217,8 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
   relationalTableName?: (name: string) => string | undefined,
 ): string[] {
   return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
-    const expression = call.getExpression();
-    const method = staticAccessName(expression);
-    if (method !== 'findMany' && method !== 'findFirst') return [];
-
-    const tableAccess = staticAccessExpression(expression);
-    if (!tableAccess) return [];
-    const table = staticAccessName(tableAccess);
-    if (!table) return [];
-
-    const queryAccess = staticAccessExpression(tableAccess);
-    if (!queryAccess || staticAccessName(queryAccess) !== 'query') return [];
-    const receiver = staticAccessExpression(queryAccess);
-    // SPEC §10-§11: non-DB objects must not fabricate relational read/KV406 facts.
-    if (!isQueryReceiverIdentifier(receiver, receiverReferences)) return [];
-
-    const resolvedTable = relationalTableName ? relationalTableName(table) : table;
-    return resolvedTable ? [resolvedTable] : [];
+    const table = relationalQueryTableExpression(call, receiverReferences, relationalTableName);
+    return table ? [table] : [];
   });
 }
 
@@ -747,6 +732,7 @@ function eqOperandsAreTableColumnArgKeyed(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   readTableIdentifier?: (node: Node) => string | undefined,
+  relationalTableName?: (name: string) => string | undefined,
 ): QueryInstanceKeyComparisons {
   const instanceKey: QueryInstanceKeyComparison[] = [];
   const argCandidates: QueryInstanceKeyComparison[] = [];
@@ -780,7 +766,63 @@ function eqOperandsAreTableColumnArgKeyed(
     argCandidates.push(...allEqOperandPairs(predicate).map(toComparison));
   }
 
+  for (const predicate of queryRelationalWherePredicates(
+    body,
+    receiverReferences,
+    relationalTableName,
+  )) {
+    const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
+      left: queryInstanceKeyOperand(left, readTableIdentifier, sessionContext),
+      right: queryInstanceKeyOperand(right, readTableIdentifier, sessionContext),
+    });
+
+    const conjuncts = eqPredicateConjuncts(predicate);
+    if (conjuncts) instanceKey.push(...conjuncts.map(toComparison));
+
+    argCandidates.push(...allEqOperandPairs(predicate).map(toComparison));
+  }
+
   return { argCandidates, instanceKey };
+}
+
+function queryRelationalWherePredicates(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  relationalTableName?: (name: string) => string | undefined,
+): Node[] {
+  return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
+    if (!relationalQueryTableExpression(call, receiverReferences, relationalTableName)) return [];
+
+    const options = call.getArguments()[0];
+    const object = options ? unwrappedStaticExpressionNode(options) : undefined;
+    if (!object || !Node.isObjectLiteralExpression(object)) return [];
+
+    const where = objectLiteralSingleStaticPropertyValue(object, 'where');
+    return where ? [where] : [];
+  });
+}
+
+function relationalQueryTableExpression(
+  call: CallExpression,
+  receiverReferences: QueryReceiverReferences,
+  relationalTableName?: (name: string) => string | undefined,
+): string | undefined {
+  const expression = call.getExpression();
+  const method = staticAccessName(expression);
+  if (method !== 'findMany' && method !== 'findFirst') return undefined;
+
+  const tableAccess = staticAccessExpression(expression);
+  if (!tableAccess) return undefined;
+  const table = staticAccessName(tableAccess);
+  if (!table) return undefined;
+
+  const queryAccess = staticAccessExpression(tableAccess);
+  if (!queryAccess || staticAccessName(queryAccess) !== 'query') return undefined;
+  const receiver = staticAccessExpression(queryAccess);
+  // SPEC §10-§11: non-DB objects must not fabricate relational read/KV406 facts.
+  if (!isQueryReceiverIdentifier(receiver, receiverReferences)) return undefined;
+
+  return relationalTableName ? relationalTableName(table) : table;
 }
 
 /** @internal */ export interface QueryInstanceKeyComparisons {
@@ -822,6 +864,7 @@ function eqOperandsAreTableColumnArgKeyed(
   const provenance =
     privateScopeForExpression(expression, sessionContext) ??
     summarizedStaticCallPrivateScope(expression, sessionContext) ??
+    awaitedExpressionPrivateScope(expression, sessionContext) ??
     conditionalExpressionPrivateScope(expression, sessionContext) ??
     binaryExpressionPrivateScope(expression, sessionContext);
   if (!provenance) {
@@ -1220,6 +1263,9 @@ function staticWrapperValuePrivateScope(
 ): PrivateScopeProvenance | undefined {
   if (!value || depth > 4) return undefined;
   const node = unwrappedStaticExpressionNode(value);
+  if (Node.isAwaitExpression(node)) {
+    return staticWrapperValuePrivateScope(node.getExpression(), sessionContext, depth + 1);
+  }
   if (isObjectFreezeCall(node)) {
     const argument = singleObjectFreezeArgument(node);
     return argument
@@ -1383,6 +1429,18 @@ function summarizedStaticCallPrivateScope(
     (key ? sessionContext.helpers.get(key) : undefined) ??
     (name ? sessionContext.helpers.get(`name:${name}`) : undefined)
   );
+}
+
+function awaitedExpressionPrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+  depth = 0,
+): PrivateScopeProvenance | undefined {
+  if (depth > 4) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+  return Node.isAwaitExpression(node)
+    ? staticWrapperValuePrivateScope(node.getExpression(), sessionContext, depth + 1)
+    : undefined;
 }
 
 function conditionalExpressionPrivateScope(
@@ -2449,8 +2507,32 @@ function nonliteralMembershipPnf(
 }
 
 function singleLiteralArrayElement(node: Node): Node | undefined {
+  const arrayOfElement = singleGlobalArrayOfElement(node);
+  if (arrayOfElement) return arrayOfElement;
+
   const elements = literalArrayElements(node);
   return elements?.length === 1 ? elements[0] : undefined;
+}
+
+function singleGlobalArrayOfElement(node: Node): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression)) return undefined;
+
+  const args = expression.getArguments();
+  if (args.length !== 1 || Node.isSpreadElement(args[0])) return undefined;
+
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'of') return undefined;
+
+  const receiver = unwrappedStaticExpressionNode(callee.getExpression());
+  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'Array') return undefined;
+
+  const symbol = symbolForIdentifierReference(receiver) ?? receiver.getSymbol();
+  const shadowed = (symbol?.getDeclarations() ?? []).some(
+    (declaration) =>
+      declaration.getSourceFile().getFilePath() === receiver.getSourceFile().getFilePath(),
+  );
+  return shadowed ? undefined : args[0];
 }
 
 function literalArrayElements(node: Node): readonly Node[] | undefined {
