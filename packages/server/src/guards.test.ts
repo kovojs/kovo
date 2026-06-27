@@ -8,6 +8,7 @@ import {
   stampTrustedSql,
 } from '@kovojs/core/internal/sql-safety';
 import {
+  explainGuard,
   guards,
   renderHttpGuardFailureResponse,
   resolveLifecycleRequest,
@@ -859,8 +860,33 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
   it('composes with all(authed, owns(...))', async () => {
     const guard = guards.all<Req>(
       guards.authed<Req>(),
-      guards.owns<Req, Req, string>((req) => req.args.id, ownsRow),
+      guards.owns<Req, Req, string>((req) => req.args.id, ownsRow, {
+        resourceKey: 'args.id',
+      }),
     );
+    expect(explainGuard(guard)).toEqual([
+      {
+        auth: 'session-user',
+        kind: 'authed',
+        name: 'authed',
+      },
+      {
+        auth: 'session-user',
+        kind: 'owns',
+        name: 'owns',
+        principal: {
+          expression: 'session.user.id',
+          path: 'user.id',
+          source: 'session',
+        },
+        resourceKey: {
+          expression: 'args.id',
+          path: 'id',
+          source: 'args',
+        },
+        staticProof: 'not-claimed',
+      },
+    ]);
     await expect(
       guard({ session: { user: { id: 'owner-of-r1' } }, args: { id: 'r1' } }),
     ).resolves.toBe(true);
@@ -876,6 +902,38 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
     );
     await expect(
       guard({ session: { user: { id: 'owner-of-r9' } }, args: { id: 'r9' } }),
+    ).resolves.toBe(true);
+  });
+
+  it('exposes ownership principal/key audit metadata without claiming static proof', async () => {
+    const guard = guards.owns<Req, Req, string>((req) => req.args.id, ownsRow, {
+      name: 'order-owner',
+      principal: 'session.user.id',
+      resourceKey: 'args.id',
+    });
+
+    expect(explainGuard(guard)).toEqual([
+      {
+        auth: 'session-user',
+        kind: 'owns',
+        name: 'order-owner',
+        principal: {
+          expression: 'session.user.id',
+          path: 'user.id',
+          source: 'session',
+        },
+        resourceKey: {
+          expression: 'args.id',
+          path: 'id',
+          source: 'args',
+        },
+        staticProof: 'not-claimed',
+      },
+    ]);
+    expect(Object.getOwnPropertySymbols(guard)).toHaveLength(1);
+    expect(Object.keys(guard)).toEqual([]);
+    await expect(
+      guard({ session: { user: { id: 'owner-of-r1' } }, args: { id: 'r1' } }),
     ).resolves.toBe(true);
   });
 });
@@ -899,6 +957,10 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
     guard: guards.owns<AppReq, GuardArgsRequest<AppReq, { id: string }>, string>(
       (req) => req.args.id,
       ownsRowById,
+      {
+        name: 'order-query-owner',
+        resourceKey: 'args.id',
+      },
     ),
     load: (input: { id: string }) => ({ id: input.id }),
     reads: [],
@@ -926,6 +988,10 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
     guard: guards.owns<AppReq, GuardParamsRequest<AppReq, { id: string }>, string>(
       (req) => req.params.id,
       ownsRouteRow,
+      {
+        name: 'order-route-owner',
+        resourceKey: 'params.id',
+      },
     ),
     page: ({ params }) => trustedHtml(`<h1>order ${params.id}</h1>`),
   });
@@ -950,9 +1016,64 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
     guard: guards.owns<AppReq, GuardArgsRequest<AppReq, { id: string }>, string>(
       (req) => req.args.id,
       ownsRowById,
+      {
+        name: 'order-mutation-owner',
+        resourceKey: 'args.id',
+      },
     ),
     input: s.object({ id: s.string() }),
     handler: (input: { id: string }) => ({ id: input.id }),
+  });
+
+  it('keeps ownership audit metadata on query, route, and mutation guard declarations', () => {
+    const expectedPrincipal = {
+      expression: 'session.user.id',
+      path: 'user.id',
+      source: 'session',
+    };
+
+    expect(explainGuard(orderQuery.guard)).toEqual([
+      {
+        auth: 'session-user',
+        kind: 'owns',
+        name: 'order-query-owner',
+        principal: expectedPrincipal,
+        resourceKey: {
+          expression: 'args.id',
+          path: 'id',
+          source: 'args',
+        },
+        staticProof: 'not-claimed',
+      },
+    ]);
+    expect(explainGuard(orderRoute.guard)).toEqual([
+      {
+        auth: 'session-user',
+        kind: 'owns',
+        name: 'order-route-owner',
+        principal: expectedPrincipal,
+        resourceKey: {
+          expression: 'params.id',
+          path: 'id',
+          source: 'params',
+        },
+        staticProof: 'not-claimed',
+      },
+    ]);
+    expect(explainGuard(orderMutation.guard)).toEqual([
+      {
+        auth: 'session-user',
+        kind: 'owns',
+        name: 'order-mutation-owner',
+        principal: expectedPrincipal,
+        resourceKey: {
+          expression: 'args.id',
+          path: 'id',
+          source: 'args',
+        },
+        staticProof: 'not-claimed',
+      },
+    ]);
   });
 
   it('runMutation (direct path: in-handler guard) allows the owner and denies the foreign key', async () => {
