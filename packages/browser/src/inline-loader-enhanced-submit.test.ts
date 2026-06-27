@@ -950,6 +950,114 @@ describe('inline loader enhanced submit source', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'dispatches full inline query chunks whose key contains delta through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        CustomEvent: globalRecord.CustomEvent,
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        dispatchEvent: globalRecord.dispatchEvent,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const dispatched: unknown[] = [];
+
+      try {
+        globalRecord.CustomEvent = class CustomEvent {
+          detail: unknown;
+          type: string;
+
+          constructor(type: string, init: { detail?: unknown } = {}) {
+            this.type = type;
+            this.detail = init.detail;
+          }
+        };
+        globalRecord.FormData = function FormData() {
+          return {};
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.dispatchEvent = (event: unknown) => {
+          dispatched.push(event);
+          return true;
+        };
+        globalRecord.document = {
+          getElementById() {
+            return null;
+          },
+          querySelector(selector: string) {
+            return selector === 'meta[name="kovo-build"]'
+              ? { getAttribute: (name: string) => (name === 'content' ? 'build-A' : null) }
+              : null;
+          },
+          querySelectorAll() {
+            return [];
+          },
+        };
+        const fetch = vi.fn(async () => ({
+          headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-A' : null) },
+          status: 200,
+          async text() {
+            return '<kovo-query name="cart" key="cart delta fresh">{"count":3}</kovo-query>';
+          },
+        }));
+        globalRecord.fetch = fetch;
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        listeners.get('submit')?.({
+          preventDefault: vi.fn(),
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? {
+                    action: '/_m/cart/add',
+                    getAttribute(name: string) {
+                      return name === 'enhance' ? '' : null;
+                    },
+                    method: 'post',
+                  }
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(dispatched).toHaveLength(1);
+        const detail = (
+          dispatched[0] as {
+            detail?: { queries?: Array<{ attrs: string }>; qs?: Array<{ attrs: string }> };
+          }
+        ).detail;
+        expect((detail?.queries ?? detail?.qs)?.[0]?.attrs).toContain('key="cart delta fresh"');
+      } finally {
+        Object.assign(globalRecord, {
+          CustomEvent: originals.CustomEvent,
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          dispatchEvent: originals.dispatchEvent,
+          fetch: originals.fetch,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'does not apply inline mutation fragments on build skew through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;

