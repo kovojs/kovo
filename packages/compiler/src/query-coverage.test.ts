@@ -1017,6 +1017,7 @@ export const CartBadge = component({
       fileName: 'cart-badge.tsx',
       source: `
 export const CartBadge = component({
+  /* KV318: test fixture intentionally exercises isomorphic coverage. */
   isomorphic: true,
   queries: { cart: {} },
   render: () => (
