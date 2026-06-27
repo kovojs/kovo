@@ -963,7 +963,7 @@ export function queryDeclaredReadDomains(body: ObjectLiteralExpression): string[
 
   const domains: string[] = [];
   for (const element of reads.getElements()) {
-    const key = declaredReadDomainKey(unwrappedStaticExpressionNode(element));
+    const key = declaredDomainValueKey(unwrappedStaticExpressionNode(element));
     if (key !== undefined) domains.push(key);
   }
   return [...new Set(domains)].sort();
@@ -985,7 +985,8 @@ export function isStaticDeclaredReadEntry(expression: Node): boolean {
   );
 }
 
-function declaredReadDomainKey(expression: Node): string | undefined {
+/** @internal */
+export function declaredDomainValueKey(expression: Node): string | undefined {
   // Inline `domain('x')` / `tag('x')` value passed directly into `reads:`.
   const inline = domainFactoryCallKey(expression);
   if (inline !== undefined) return inline;
@@ -1015,6 +1016,7 @@ function domainFactoryCallKey(expression: Node): string | undefined {
   if (argNode && (Node.isStringLiteral(argNode) || Node.isNoSubstitutionTemplateLiteral(argNode))) {
     return argNode.getLiteralText();
   }
+  if (!argNode) return derivedDomainFactoryCallKey(expression);
   return undefined;
 }
 
@@ -1024,6 +1026,59 @@ function domainValueDeclarationInitializer(node: Node): Node | undefined {
   if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
   const initializer = declaration.getInitializer();
   return initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+}
+
+function derivedDomainFactoryCallKey(expression: Node): string | undefined {
+  const declaration = expression.getParentIfKind(SyntaxKind.VariableDeclaration);
+  if (!declaration || declaration.getInitializer() !== expression) return undefined;
+  const name = declaration.getNameNode();
+  if (!Node.isIdentifier(name) || !isExportedVariableDeclaration(declaration)) return undefined;
+
+  const namespace = derivedDomainNamespace(declaration.getSourceFile().getFilePath());
+  const leaf = kebabCase(name.getText());
+  return namespace ? `${namespace}/${leaf}` : leaf;
+}
+
+function isExportedVariableDeclaration(declaration: Node): boolean {
+  const statement = declaration.getFirstAncestorByKind(SyntaxKind.VariableStatement);
+  return statement?.isExported() === true;
+}
+
+function derivedDomainNamespace(fileName: string): string {
+  const normalized = fileName.replaceAll('\\', '/').replace(/\.[^./]+$/, '');
+  const parts = normalized.split('/').filter(Boolean);
+  const fixtureRoot = fixtureRootIndex(parts);
+  const srcRoot = nearestSrcRootIndex(parts);
+  const root = fixtureRoot ?? srcRoot;
+  const relative = root === undefined ? parts : parts.slice(root + 1);
+  return relative.map(kebabCase).join('/');
+}
+
+function fixtureRootIndex(parts: readonly string[]): number | undefined {
+  for (let index = 0; index <= parts.length - 3; index += 1) {
+    if (
+      parts[index] === 'tests' &&
+      parts[index + 1] === 'integration' &&
+      parts[index + 2] === 'fixtures'
+    ) {
+      return index + 2;
+    }
+  }
+  return undefined;
+}
+
+function nearestSrcRootIndex(parts: readonly string[]): number | undefined {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    if (parts[index] === 'src') return index;
+  }
+  return undefined;
+}
+
+function kebabCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[_\s]+/g, '-')
+    .toLowerCase();
 }
 
 /** @internal */ export function queryOutputShape(

@@ -1,4 +1,4 @@
-import type { Domain } from './domain.js';
+import { isCompilerDerivedDomain, type Domain } from './domain.js';
 
 const ARGUMENT_TOUCH_KEY_PREFIX = 'arg:';
 
@@ -59,6 +59,12 @@ export function invalidate<const DomainKey extends string, Input = unknown>(
   domain: Domain<DomainKey>,
   options: InvalidateOptions<Input> = {},
 ): ChangeRecord<DomainKey, Input> {
+  if (isCompilerDerivedDomain(domain)) {
+    throw new TypeError(
+      'Cannot emit a change record for a compiler-derived domain before generated domain facts are registered.',
+    );
+  }
+
   return {
     domain: domain.key,
     ...(options.input === undefined ? {} : { input: options.input }),
@@ -160,9 +166,18 @@ function changeRecordsFor<Input>(
   input: Input,
 ): ChangeRecord<string, Input>[] {
   return domains.map((item) => ({
-    domain: item.key,
+    domain: resolvedManualDomainKey(item),
     input,
   }));
+}
+
+function resolvedManualDomainKey(domain: Domain): string {
+  if (isCompilerDerivedDomain(domain)) {
+    throw new TypeError(
+      'Cannot emit a mutation touch for a compiler-derived domain before generated touch facts are registered.',
+    );
+  }
+  return domain.key;
 }
 
 function dedupeTouchSites(touches: readonly MutationTouchSite[]): MutationTouchSite[] {

@@ -2462,7 +2462,7 @@ function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
   if (booleanPropertyFromObject(annotationObject, 'exempt') === true) {
     return { exempt: true, name: tableName };
   }
-  const domain = stringPropertyFromObject(annotationObject, 'domain');
+  const domain = domainPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
   const key = columnNamePropertyFromObject(annotationObject, 'key');
   const owner = columnNamePropertyFromObject(annotationObject, 'owner');
@@ -2502,7 +2502,7 @@ function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
   const viewObject = objectPropertyFromObject(annotationObject, 'view');
   if (!viewObject) return null;
 
-  const domain = stringPropertyFromObject(viewObject, 'of');
+  const domain = domainPropertyFromObject(viewObject, 'of');
   if (!domain) return null;
 
   const refresh = stringPropertyFromObject(viewObject, 'refresh');
@@ -2560,6 +2560,25 @@ function defaultDomainForTableName(tableName: string): string {
 
     const initializer = property.getInitializer();
     if (initializer && Node.isStringLiteral(initializer)) return initializer.getLiteralText();
+  }
+
+  return undefined;
+}
+
+function domainPropertyFromObject(object: Node, name: string): string | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) return undefined;
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression)) {
+      return expression.getLiteralText();
+    }
+    return declaredDomainValueKey(expression);
   }
 
   return undefined;
@@ -2760,7 +2779,7 @@ function fanAnnotationsFromObject(object: Node): KovoFanAnnotation[] {
   return initializer.getElements().flatMap((element) => {
     if (!Node.isObjectLiteralExpression(element)) return [];
 
-    const domain = stringPropertyFromObject(element, 'domain');
+    const domain = domainPropertyFromObject(element, 'domain');
     const via = columnNamePropertyFromObject(element, 'via');
     if (!domain || !via) return [];
 
@@ -3013,6 +3032,7 @@ import {
   columnBuilderShape,
   columnShapesForFile,
   computedPropertyNameExpression,
+  declaredDomainValueKey,
   drizzleCoreExportNameFromDeclarations,
   drizzleCoreExportSpecifierExportName,
   drizzleCoreImportSpecifierExportName,

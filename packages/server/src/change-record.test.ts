@@ -15,6 +15,17 @@ import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server change records', () => {
+  it('rejects manual change records for unresolved compiler-derived domains', () => {
+    const cartDomain = domain();
+
+    expect(() => invalidate(cartDomain)).toThrow(
+      /Cannot emit a change record for a compiler-derived domain/,
+    );
+    expect(() => mutationRegistryChangeRecords({ touches: [cartDomain] }, {})).toThrow(
+      /Cannot emit a mutation touch for a compiler-derived domain/,
+    );
+  });
+
   it('derives inferred mutation touch keys from arg:path sources', () => {
     const input = {
       item: {

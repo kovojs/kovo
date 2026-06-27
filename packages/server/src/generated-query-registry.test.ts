@@ -10,7 +10,13 @@ import { query } from './query.js';
 // The registry is process-global module state; reset it between cases by
 // overwriting each query key we touch with an empty domain set.
 afterEach(() => {
-  for (const key of ['foldQuery', 'emptyQuery', 'dedupeQuery', 'noopQuery']) {
+  for (const key of [
+    'foldQuery',
+    'emptyQuery',
+    'dedupeQuery',
+    'noopQuery',
+    'compilerDerivedQuery',
+  ]) {
     registerGeneratedQueryReadRegistry([{ domains: [], query: key }]);
   }
 });
@@ -89,5 +95,21 @@ describe('queryWithGeneratedReads (SPEC §10.2:1018 — declared reads folded in
 
     expect(effective).toBe(coveredQuery);
     expect(readKeys(effective.reads).sort()).toEqual(['inventory', 'product']);
+  });
+
+  it('replaces compiler-derived domain placeholders with generated read keys', () => {
+    const compilerDerived = domain();
+    const derivedQuery = query('compilerDerivedQuery', {
+      reads: [compilerDerived],
+      load: () => ({ rows: [] as unknown[] }),
+    });
+
+    registerGeneratedQueryReadRegistry([
+      { domains: ['domains/cart-domain'], query: 'compilerDerivedQuery' },
+    ]);
+
+    const effective = queryWithGeneratedReads(derivedQuery);
+
+    expect(readKeys(effective.reads)).toEqual(['domains/cart-domain']);
   });
 });

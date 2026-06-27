@@ -1,4 +1,4 @@
-import { domain, type Domain } from './domain.js';
+import { domain, isCompilerDerivedDomain, type Domain } from './domain.js';
 import type { QueryDefinition } from './query.js';
 
 /** @internal Compiler-emitted query read entry keyed by query name. */
@@ -56,7 +56,7 @@ export function queryWithGeneratedReads<Query extends QueryDefinition<string, an
   const registered = registeredGeneratedQueryReads(definition.key);
   if (registered.length === 0) return definition;
 
-  const declared = definition.reads ?? [];
+  const declared = (definition.reads ?? []).filter((read) => !isCompilerDerivedDomain(read));
   const seen = new Set(declared.map((read) => read.key));
   const additions = registered.filter((read) => !seen.has(read.key));
   // Return the definition unchanged when the union adds nothing.

@@ -7,6 +7,59 @@ import {
 import { pgDatabaseTypes } from './test-helpers.js';
 
 describe('@kovojs/drizzle touch graph helpers', () => {
+  it('derives exported zero-arg domain and tag names for read and touch currency', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        'update(table: unknown): { set(value: unknown): Promise<void> };',
+      ]),
+      {
+        fileName: 'src/domains.ts',
+        source: [
+          'export const cartDomain = domain();',
+          'export const cartItem = tag();',
+          'export const billing = domain("billing");',
+          'export const cartItems = pgTable("cart_items", {}, kovo({ domain: cartDomain, key: "id" }));',
+          'export const invoices = pgTable("invoices", {}, kovo({ domain: billing, key: "id" }));',
+          '',
+          'export const cartQuery = query("cart", {',
+          '  output: s.object({ rows: s.array(s.string()) }),',
+          '  reads: [cartDomain, cartItem, billing],',
+          '});',
+          '',
+          'export async function updateCart(db: PgAsyncDatabase<any, any>) {',
+          '  await db.update(cartItems).set({ id: "c1" });',
+          '  await db.update(invoices).set({ id: "i1" });',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'cart',
+        reads: ['billing', 'domains/cart-domain', 'domains/cart-item'],
+        shape: { rows: ['string'] },
+        site: 'src/domains.ts:7',
+      },
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      updateCart: {
+        reads: [],
+        touches: [
+          { domain: 'billing', keys: null, site: 'src/domains.ts:14', via: 'invoices' },
+          {
+            domain: 'domains/cart-domain',
+            keys: null,
+            site: 'src/domains.ts:13',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts project-mode direct Drizzle write calls from typed function declarations', () => {
     const graph = extractTouchGraphFromProject({
       files: [
