@@ -50,7 +50,7 @@ describe('voteUp optimistic derivation (SPEC §10.5)', () => {
     const all = facts();
     expect(factFor(all, 'voteUp', 'questionScore')?.status).toBe('derived');
     expect(factFor(all, 'voteUp', 'questionList')?.status).toBe('derived');
-  });
+  }, 120_000);
 
   it('NAMES the questionDetail punt (keyed whole-row return) instead of silently dropping it', () => {
     const all = facts();

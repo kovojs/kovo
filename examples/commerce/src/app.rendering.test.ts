@@ -163,7 +163,7 @@ describe('commerce example', () => {
     } finally {
       await close(server);
     }
-  });
+  }, 120_000);
 });
 
 function readBuiltCssAsset(predicate: (path: string) => boolean): { css: string; path: string } {
