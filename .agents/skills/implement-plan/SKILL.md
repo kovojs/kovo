@@ -1,6 +1,6 @@
 ---
 name: implement-plan
-description: Complete a specified Kovo active plan end to end in a new git worktree, track the effort with a Codex goal, coordinate sub-agent workers for large disjoint implementation chunks, integrate and verify worker commits in the main agent worktree, push substantial batches, and monitor CI. Use when asked to "implement this plan", "finish plans/foo.md", "complete the roadmap item", or otherwise execute an active `plans/*.md` implementation ledger rather than merely review or update it.
+description: Complete a specified Kovo active plan end to end in a new git worktree, track the effort with a Codex goal, coordinate sub-agent workers for large phase-sized disjoint implementation chunks, reject tiny proof-slice delegation, integrate and verify worker commits in the main agent worktree, push substantial batches, and monitor CI. Use when asked to "implement this plan", "finish plans/foo.md", "complete the roadmap item", or otherwise execute an active `plans/*.md` implementation ledger rather than merely review or update it.
 ---
 
 # Implement Plan
@@ -11,8 +11,10 @@ Execute a specified active plan as a complete implementation loop. Work in an is
 branch and worktree, keep the main checkout stable, delegate independent implementation chunks to
 worker-owned worktrees, prove each completed checkbox with current evidence, merge verified batches
 into local `main`, then push local `main` and monitor CI. Aim for large chunks that close a meaningful
-plan phase, module family, or proof surface before pushing; do not split the work into tiny
-assertion-sized commits when the same files and tests can support a broader coherent batch. Once fan-out
+plan phase, module family, runtime path, analyzer surface, or proof surface before pushing. Tiny
+assertion-sized slices are a failure mode: if the same files, fixtures, and focused tests can prove
+several adjacent gaps, group them into one worker-owned chunk and keep that branch open until the
+larger surface is done. Once fan-out
 begins, keep the main agent focused on integration, verification, local-main merge, push, and CI
 follow-through rather than owning broad production chunks directly.
 
@@ -96,6 +98,10 @@ Default to an integration-led strategy when the plan has multiple independent op
 - Spawn 3-5 workers at once when there are enough disjoint open items. Give each worker a large,
   coherent production chunk, explicit file/module ownership, and instructions to create its own
   sibling worktree and branch from the current integration `HEAD`.
+- A worker slice should normally be sized so that it can close one substantial plan checkbox, a
+  complete phase, or a whole owned proof/runtime/analyzer surface. If a proposed assignment is only
+  one fixture, one assertion, one helper branch, or one narrow alias/operator pattern, expand it to
+  cover the adjacent same-owner cases before spawning the worker.
 - For security or hardening plans, good concurrent worker slices are independent areas such as
   runtime sink event drain, inline sanitizer parity or parity gates, endpoint posture starter/CI
   gates, static export symlink/race handling, pack security gates, and egress hardening. Treat this
@@ -104,10 +110,13 @@ Default to an integration-led strategy when the plan has multiple independent op
   or one-pattern proof slivers. A chunk should normally cover a whole module path, primitive family,
   analyzer surface, runtime path, or plan phase, including the positive cases, fail-closed negatives,
   production changes, focused tests, `git diff --check`, `check:vp`, and a scoped commit in its branch.
+- Do not accept "green but tiny" as a good worker outcome. When a worker reports only a narrow proof
+  and the same ownership boundary has obvious adjacent gaps, send it back to finish the surrounding
+  chunk or keep the branch unintegrated until the larger closure target is met.
 - If the next apparent task is small but adjacent gaps share the same files/tests, group them into
   one larger parity batch before committing or pushing. Prefer "relational callback predicate parity"
-  over separate commits for callback operators, table destructuring, and local aliases; prefer
-  "endpoint posture gate" over separate commits for one fixture or one assertion.
+  over separate commits for callback operators, table destructuring, helper wrappers, and local
+  aliases; prefer "endpoint posture gate" over separate commits for one fixture or one assertion.
 - Tell workers they are not alone in the codebase, must not edit active plan ledgers, must not
   push, and must not revert or overwrite other workers' changes.
 - Keep worker write sets disjoint. If two plan items would touch the same files or generated
@@ -154,10 +163,13 @@ Work from the active plan's unchecked task list.
 
 - Choose coherent chunks that materially advance or complete the plan. Bias toward chunks large
   enough that a reviewer would describe them as closing a phase, surface, subsystem, or family of
-  related gaps.
+  related gaps. The default unit of progress is a complete owned surface, not a small reproducer or
+  one diagnostic/test assertion.
 - Before starting or delegating a small task, scan for adjacent same-owner gaps that touch the same
   modules, fixtures, generated artifacts, or gates. Combine them into one larger chunk whenever doing
   so avoids repeated setup, repeated plan edits, or repeated pushes without creating merge conflicts.
+  Only leave a genuinely small slice standalone when it is the final remainder, is blocked by a
+  different ownership boundary, or cannot be safely batched without conflict.
 - Do not stop after a tiny green proof when the same worktree can safely finish the surrounding
   parity surface. Keep the branch open until the chunk has positive coverage, fail-closed negatives,
   plan evidence, and focused verification for the whole chunk.

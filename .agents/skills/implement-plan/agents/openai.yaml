@@ -1,4 +1,4 @@
 interface:
   display_name: 'Implement Plan'
-  short_description: 'Integrate worker slices for a Kovo plan'
-  default_prompt: 'Use $implement-plan to complete plans/example.md by keeping the main agent on integration, assigning disjoint worker slices, verifying batches, pushing to main, monitoring CI, and summarizing the result.'
+  short_description: 'Integrate large worker chunks for a Kovo plan'
+  default_prompt: 'Use $implement-plan to complete plans/example.md by keeping the main agent on integration, assigning large disjoint worker chunks, verifying batches, merging to local main before pushing, monitoring CI, and summarizing the result.'
