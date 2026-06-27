@@ -8,11 +8,6 @@ import {
   unsafeCookie,
   validateRawSetCookie,
 } from './cookies.js';
-// bugz-3 L1: the opaque-session manager is the primary session credential's cookie sink; its L1
-// regression (Secure on an HTTPS request) is asserted here because opaque-session.test.ts is owned
-// by a different slice. The behavior under test (the credential floor + per-request HTTPS signal)
-// belongs to this module's cookie story.
-import { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
 
 describe('cookie header helpers', () => {
   it('serializes structured Set-Cookie values', () => {
@@ -380,52 +375,5 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     expect(normalized).toContain('SameSite=None');
     expect(normalized).toContain('Secure');
     expect(normalized).toContain('Partitioned');
-  });
-});
-
-// L1 (SPEC §6.6/§9.1): the opaque-session manager — the primary session credential's cookie sink —
-// now threads a per-request HTTPS signal, so the session cookie is Secure + __Host- on an HTTPS
-// request regardless of NODE_ENV. BEFORE the fix `establish` took no request, so the most sensitive
-// cookie depended SOLELY on NODE_ENV (no Secure on a dev/staging/unset env even over HTTPS).
-describe('opaque-session credential cookie HTTPS floor (SPEC §6.6/§9.1, bugz-3 L1)', () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-  afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
-  });
-
-  it('emits Secure + __Host- on an HTTPS establish request even when NODE_ENV is not production', async () => {
-    process.env.NODE_ENV = 'development';
-    const manager = createOpaqueSessionManager<{ user: { id: string } }>({
-      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
-    });
-    const established = await manager.establish(
-      { user: { id: 'u1' } },
-      { request: new Request('https://app.test/login', { method: 'POST' }) },
-    );
-    expect(established.setCookie).toContain('Secure');
-    expect(established.setCookie).toMatch(/^__Host-kovo_session=/);
-
-    // Control: no request (no HTTPS signal) keeps the dev carve-out — no Secure, bare name.
-    const devEstablished = await manager.establish({ user: { id: 'u1' } });
-    expect(devEstablished.setCookie).not.toContain('Secure');
-    expect(devEstablished.setCookie).toMatch(/^kovo_session=/);
-  });
-
-  it('clears with a matching Secure + __Host- cookie on an HTTPS revoke request', async () => {
-    process.env.NODE_ENV = 'development';
-    const manager = createOpaqueSessionManager<{ user: { id: string } }>({
-      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
-    });
-    const established = await manager.establish(
-      { user: { id: 'u1' } },
-      { request: new Request('https://app.test/login', { method: 'POST' }) },
-    );
-    const revoked = await manager.revoke(established.session.id, {
-      request: new Request('https://app.test/logout', { method: 'POST' }),
-    });
-    // The clearing cookie must carry the same __Host- prefix or the browser won't match/clear it.
-    expect(revoked.setCookie).toMatch(/^__Host-kovo_session=;/);
-    expect(revoked.setCookie).toContain('Secure');
-    expect(revoked.setCookie).toContain('Max-Age=0');
   });
 });

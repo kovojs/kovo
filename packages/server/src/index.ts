@@ -7,26 +7,6 @@ export { committedSecretWaiver, CreateAppBootError, isCreateAppBootError } from 
 export type { EnvValidationIssue } from './env.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
-// SPEC §6.6: agent-exposed server tools are declared through a fail-closed runtime
-// boundary with explicit purpose, authority, allowed capabilities, audit metadata,
-// and ambient browser/session credential posture. This is blast-radius reduction,
-// not prompt-injection immunity or a compiler proof.
-export { AgentToolCapabilityError, agentToolAuditFacts, runAgentTool, tool } from './agent-tool.js';
-export type {
-  AgentToolAmbientCredentialJustification,
-  AgentToolAmbientCredentialKind,
-  AgentToolAmbientCredentials,
-  AgentToolAuditFact,
-  AgentToolAuditMetadata,
-  AgentToolAuthority,
-  AgentToolCapability,
-  AgentToolDeclaration,
-  AgentToolDefinition,
-  AgentToolInvocationContext,
-  AgentToolReachableSink,
-  AgentToolReachableSinkAuditFact,
-  AgentToolRequest,
-} from './agent-tool.js';
 export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';
 export type { AdminAssignFact, AdminAssignOptions } from './write-governance.js';
 export { encryptAtRest } from './confidential-at-rest.js';
@@ -56,7 +36,6 @@ export type {
   SigningKeyRing,
   SigningKeyRingOptions,
   SigningKeyState,
-  SigningKeyType,
   SigningRejectReason,
   SigningResult,
   SigningSecret,
@@ -127,23 +106,6 @@ export type {
   PasswordHashOptions,
   PasswordVerifyResult,
 } from './password.js';
-// SPEC §6.5 / plans/most-secure-web-framework.md OPP-11: an opt-in Kovo-owned opaque
-// session provider/sink boundary. This does not replace every app `sessionProvider`
-// automatically, but it gives auth flows a framework-owned store that mints opaque ids,
-// rotates on establish, validates only by store lookup, and revokes immediately.
-export { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
-export type {
-  MemoryOpaqueSessionStoreOptions,
-  OpaqueSessionEstablishOptions,
-  OpaqueSessionEstablishResult,
-  OpaqueSessionManager,
-  OpaqueSessionManagerOptions,
-  OpaqueSessionRecord,
-  OpaqueSessionRejectReason,
-  OpaqueSessionRevokeResult,
-  OpaqueSessionStore,
-  OpaqueSessionValidation,
-} from './opaque-session.js';
 export type {
   AccessDecision,
   GuardAccessStep,
@@ -181,8 +143,6 @@ export type {
   AppRequestRateLimitOptions,
   AppRouteRenderContext,
   CreateAppOptions,
-  DelegatedSessionLifecycleAssertions,
-  DelegatedSessionProvider,
   ErrorShellRenderer,
   KovoApp,
   RequestHandler,

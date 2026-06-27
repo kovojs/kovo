@@ -9,9 +9,10 @@ description: Complete a specified Kovo active plan end to end in a new git workt
 
 Execute a specified active plan as a complete implementation loop. Work in an isolated integration
 branch and worktree, keep the main checkout stable, delegate independent implementation slices to
-worker-owned worktrees, prove each completed checkbox with current evidence, then push integrated
-batches to `main` and monitor CI. Once fan-out begins, keep the main agent focused on integration,
-verification, push, and CI follow-through rather than owning broad production slices directly.
+worker-owned worktrees, prove each completed checkbox with current evidence, merge verified batches
+into local `main`, then push local `main` and monitor CI. Once fan-out begins, keep the main agent
+focused on integration, verification, local-main merge, push, and CI follow-through rather than
+owning broad production slices directly.
 
 ## Start The Goal
 
@@ -20,7 +21,7 @@ verification, push, and CI follow-through rather than owning broad production sl
 2. Create a Codex goal when goal tools are available:
 
    ```text
-   Complete <plan path> in a new git worktree, coordinate worker slices, verify and push integrated batches to main, monitor CI, and report the final state.
+   Complete <plan path> in a new git worktree, coordinate worker slices, verify integrated batches, merge them into local main before pushing main, monitor CI, and report the final state.
    ```
 
 3. Keep the goal active until the implementation is pushed to `main`, CI has been monitored for
@@ -70,8 +71,10 @@ Protect unrelated local changes in the current checkout.
    ```
 
 3. Keep this worktree as the main-agent integration lane. The main agent reviews and integrates
-   worker commits here, resolves conflicts here, updates active-plan evidence here, runs broader
-   verification here, pushes batches from here, and monitors CI from here.
+   worker commits here, resolves conflicts here, updates active-plan evidence here, and runs broader
+   verification here. Before pushing, merge the verified integration branch into a clean local
+   `main` checkout/worktree, run any required post-merge checks on local `main`, and push from
+   local `main`.
 4. Do not modify, stage, or revert unrelated files in the original checkout.
 
 If `origin/main` is unavailable, use the local `main` branch after confirming its exact SHA. If
@@ -84,7 +87,7 @@ Default to an integration-led strategy when the plan has multiple independent op
 
 - Keep the main agent in the plan integration worktree. The main agent owns roadmap sequencing,
   worker prompt design, worker commit review, conflict resolution, plan evidence, final gates,
-  batch commits, pushes to `main`, and CI monitoring.
+  batch commits, local `main` merges, pushes from local `main`, and CI monitoring.
 - Treat the main agent/worktree as the integration lane. It should avoid implementing active worker
   slices and should make production edits only for integration fixes, conflict resolution,
   verification fallout, or a deliberately serialized slice that would collide with workers.
@@ -115,9 +118,9 @@ Default to an integration-led strategy when the plan has multiple independent op
 - Integrate worker branches one at a time with review. Cherry-pick or merge into the integration
   worktree, resolve conflicts, run the focused verification for that slice, update plan evidence
   only after verification, and commit the integrated result.
-- Push after a coherent batch of 2-3 integrated slices, or sooner when CI feedback is needed to
-  unblock confidence. Monitor GitHub checks after every push and repair CI failures in the main
-  integration worktree.
+- Merge into local `main` and push after a coherent batch of 2-3 integrated slices, or sooner when
+  CI feedback is needed to unblock confidence. Monitor GitHub checks after every push and repair CI
+  failures through the same integration-then-local-main merge path.
 - Close worker agents and remove worker worktrees only after their commits are integrated or
   explicitly abandoned.
 
@@ -186,9 +189,10 @@ the exact reason in the plan or handoff and do not mark claims fully verified.
 
 Integrate continuously in the plan integration worktree as worker commits finish. Merge or
 cherry-pick worker branches into the integration branch one at a time, review the resulting diff,
-and run focused post-integration checks before taking the next branch. Merge back to the
-repository's `main` branch, or push directly to `main` when that is the established flow for the
-task, after each coherent verified batch.
+and run focused post-integration checks before taking the next branch. Do not push an integration
+branch directly to `origin/main`. After each coherent verified batch, merge the integration branch
+into a clean local `main` checkout/worktree first, verify the merged result on local `main`, then
+push local `main` to `origin/main`.
 
 1. In each worker worktree, require a clean committed branch and a handoff before integration:
 
@@ -208,8 +212,7 @@ task, after each coherent verified batch.
    from worker branches; workers should not edit active plans, and any accidental plan edits should
    be manually reviewed before inclusion.
 
-3. In the plan integration worktree, ensure a clean committed branch before pushing or merging to
-   `main`:
+3. In the plan integration worktree, ensure a clean committed branch before merging to local `main`:
 
    ```bash
    git status --short
@@ -225,20 +228,29 @@ task, after each coherent verified batch.
    If main has unrelated local changes, use a separate clean integration worktree or ask before
    proceeding. Do not overwrite user work.
 
-5. Update main and merge the implementation branch when using a separate local main checkout:
+5. Update local `main` and merge the implementation branch before any push to `origin/main`:
 
    ```bash
    git checkout main
    git fetch origin main
-   git merge --ff-only origin/main || git merge origin/main
+   git merge --ff-only origin/main
    git merge --no-ff <branch>
    ```
 
+   If `git merge --ff-only origin/main` fails, stop and inspect why local `main` diverged before
+   proceeding. Do not hide unrelated local-main commits inside the plan merge.
 6. Resolve conflicts by preserving the compact current plan ledger and porting only new,
    verified implementation evidence from the branch.
-7. Run the relevant post-merge verification in `main`.
-8. Commit conflict resolutions if the merge required them. Push verified batches when the user
-   requested push/CI follow-through or the repository workflow for the task requires it.
+7. Run the relevant post-merge verification on local `main`.
+8. Commit conflict resolutions if the merge required them. Push only from local `main` when the
+   user requested push/CI follow-through or the repository workflow for the task requires it:
+
+   ```bash
+   git push origin main
+   ```
+
+   Avoid `git push origin HEAD:main` from the integration branch; it bypasses the local-main merge
+   check this workflow relies on.
 9. Remove temporary worker and integration worktrees only after their commits are integrated or
    explicitly abandoned:
 
@@ -248,13 +260,13 @@ task, after each coherent verified batch.
 
 ## Push And Monitor CI
 
-After each pushed batch:
+After each local-main merge has been pushed:
 
 - Poll GitHub checks for the pushed SHA.
 - Treat aggregator jobs as secondary; inspect the underlying failing shard first.
 - Pull logs with `gh run view` or the Actions job log API when the workflow is still running.
-- Repair CI failures in the main integration worktree, run the focused local reproduction, commit,
-  push again, and continue monitoring.
+- Repair CI failures in the integration worktree, run the focused local reproduction, commit, merge
+  the fix into local `main`, push local `main` again, and continue monitoring.
 - If push or `gh` access fails because auth is missing or stale, fix `GH_TOKEN`, credential helper,
   or GitHub CLI auth separately in the main integration lane. Keep local verified batches committed
   and record that CI feedback is delayed until push access is restored.
@@ -271,5 +283,5 @@ Report:
 - Files changed, grouped by purpose.
 - Verification commands and results, including focused worker checks, integration gates, skipped
   checks, and CI status.
-- Main branch merge commit or final pushed SHA.
+- Local `main` merge commit and final pushed SHA.
 - Push status, CI failures repaired or still pending, and any follow-up needed.

@@ -8,7 +8,6 @@ import {
   isBetterAuthCredentialFailureError,
   type BetterAuthResponseLike,
   type BetterAuthSignInEmailLike,
-  type BetterAuthSignOutLike,
   type BetterAuthSignUpEmailLike,
 } from './internal.js';
 import {
@@ -165,19 +164,6 @@ describe('credential mutation helpers', () => {
         status: 'signed-out',
       },
     });
-  });
-
-  it('fails closed when signOut does not emit a session revocation cookie', async () => {
-    const auth: BetterAuthSignOutLike = {
-      api: {
-        signOut: () => responseWithCookies([], 204),
-      },
-    };
-    const signOut = betterAuthSignOutMutation(auth, { csrf: false });
-
-    await expect(
-      runMutation(signOut, {}, { headers: requestHeaders('kovo_session=session-1') }),
-    ).rejects.toThrow('Better Auth sign-out did not revoke a session credential');
   });
 
   it('keeps redirect targets on same-origin paths', async () => {
@@ -422,85 +408,6 @@ describe('credential success is positively classified', () => {
     });
   });
 
-  it('does NOT sign in when Better Auth only sets a session-data cache cookie', async () => {
-    const auth = signInAuthReturning(
-      jsonResponse(200, { ok: true }, [
-        'better-auth.session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
-      ]),
-    );
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
-
-    const result = await runMutation(
-      signIn,
-      { email: 'ada@example.com', password: 'correct' },
-      { headers: requestHeaders() },
-    );
-
-    expect(result).toMatchObject({ ok: false, status: 422 });
-  });
-
-  it('does NOT sign in when Better Auth reissues the incoming session credential', async () => {
-    const auth = signInAuthReturning(
-      jsonResponse(200, { ok: true }, [
-        'better-auth.session_token=fixed-token; Path=/; HttpOnly; SameSite=Lax',
-      ]),
-    );
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
-
-    const result = await runMutation(
-      signIn,
-      { email: 'ada@example.com', password: 'correct' },
-      { headers: requestHeaders('better-auth.session_token=fixed-token') },
-    );
-
-    expect(result).toMatchObject({ ok: false, status: 422 });
-  });
-
-  it('rejects JWT-shaped session cookies by default at session establishment', async () => {
-    const auth = signInAuthReturning(
-      jsonResponse(200, { ok: true }, [
-        `better-auth.session_token=${jwtSessionValue()}; Path=/; HttpOnly; SameSite=Lax`,
-      ]),
-    );
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
-
-    const result = await runMutation(
-      signIn,
-      { email: 'ada@example.com', password: 'correct' },
-      { headers: requestHeaders() },
-    );
-
-    expect(result).toMatchObject({ ok: false, status: 422 });
-  });
-
-  it('allows JWT-shaped session cookies only with explicit opt-in', async () => {
-    const token = jwtSessionValue();
-    const auth = signInAuthReturning(
-      jsonResponse(200, { ok: true }, [
-        `better-auth.session_token=${token}; Path=/; HttpOnly; SameSite=Lax`,
-      ]),
-    );
-    const signIn = betterAuthSignInEmailMutation(auth, {
-      csrf: false,
-      defaultRedirectTo: '/home',
-      sessionCookieMode: 'jwt',
-    });
-
-    const result = await runMutation(
-      signIn,
-      { email: 'ada@example.com', password: 'correct' },
-      { headers: requestHeaders() },
-    );
-
-    expect(result).toMatchObject({
-      ok: true,
-      responseHeaders: {
-        'Set-Cookie': [`better-auth.session_token=${token}; Path=/; HttpOnly; SameSite=Lax`],
-      },
-      value: { redirectTo: '/home', status: 'signed-in' },
-    });
-  });
-
   it('does NOT sign in on a 200 two-factor-pending body (no session cookie)', async () => {
     const auth = signInAuthReturning(jsonResponse(200, { twoFactorRedirect: true }));
     const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
@@ -574,13 +481,3 @@ describe('credential success is positively classified', () => {
     expect(result).toMatchObject({ ok: false, status: 422 });
   });
 });
-
-function jwtSessionValue(): string {
-  return `${base64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${base64Url(
-    JSON.stringify({ sub: 'user-1' }),
-  )}.signature`;
-}
-
-function base64Url(value: string): string {
-  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
-}

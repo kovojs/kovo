@@ -1,9 +1,10 @@
 # Better JavaScript Loader
 
 Created 2026-06-23. Behavioral source of truth is `SPEC.md`, especially the
-loader contract in section 4.4: an 8KB gzip-capped always-loaded bootstrap owns
-event delegation, ref resolution, enhanced forms, query hydration, update plans,
-refetch, and morph application.
+loader contract in section 4.4: a gzip-capped always-loaded bootstrap captures
+first interactions and imports a versioned deferred runtime. The bootstrap is
+budgeted by `inlineKovoLoaderGzipByteBudget`; the deferred runtime is cacheable
+and intentionally outside that byte cap.
 
 ## Current Baseline
 

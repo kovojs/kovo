@@ -1,32 +1,22 @@
 // SPEC §6.5 + §10.3: unauthenticated mutation guard failures use the auth
 // redirect vocabulary, while signed-in writes still run through server truth.
-import { csrfToken } from '@kovojs/server';
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'guarded-mutation' });
-
-const csrf = {
-  secret: 'guarded-mutation-csrf-secret-key-0123456789',
-  sessionId: () => 'guarded-mutation-fixture-session',
-};
 
 test('guarded mutation reauths anonymous submits and permits signed-in writes', async ({
   request,
   page,
   kovoApp,
 }) => {
-  const token = csrfToken({} as Request, csrf, { audience: 'guarded-mutation/increment' });
-
   await page.goto('/');
-  const origin = new URL(page.url()).origin;
   await expect(page.locator('[data-count]')).toHaveText('0');
 
   const enhancedDenied = await request.post('/_m/guarded-mutation/increment', {
-    form: { 'kovo-csrf': token },
+    form: {},
     headers: {
       'Kovo-Fragment': 'true',
       'Kovo-Targets': 'guarded-count',
-      origin,
     },
   });
 
@@ -40,8 +30,8 @@ test('guarded mutation reauths anonymous submits and permits signed-in writes', 
   );
 
   const noJsDenied = await request.post('/_m/guarded-mutation/increment', {
-    form: { 'kovo-csrf': token },
-    headers: { origin, Referer: '/' },
+    form: {},
+    headers: { Referer: '/' },
     maxRedirects: 0,
   });
   expect(noJsDenied.status()).toBe(303);

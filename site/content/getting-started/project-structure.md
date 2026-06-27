@@ -61,8 +61,8 @@ createApp({
 ```
 
 The home route redirects unauthenticated requests to `/login`; the login route renders the auth
-form. The full scaffold wraps `appSessionProvider` in delegated lifecycle assertions, registers the
-health endpoint, and uses the same `layout()` and stylesheet declaration on both pages.
+form. The full scaffold passes `appSessionProvider` to `createApp()`, registers the health endpoint,
+and uses the same `layout()` and stylesheet declaration on both pages.
 
 ## Auth and secrets
 

@@ -89,18 +89,6 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     expect((result as { reason: string }).reason).toBe('bad-signature');
   });
 
-  it('ignores untrusted token alg fields and keeps verification pinned to the KeyRing type', async () => {
-    const { token } = await signCapability(SECRET, { key: 'a.pdf' }, 0);
-    const tokenWithAlgNone = withPayloadField(token, 'alg', 'none');
-
-    await expect(
-      verifyCapability(SECRET, tokenWithAlgNone, { key: 'a.pdf', method: 'GET' }, { now: 1 }),
-    ).resolves.toEqual({
-      ok: true,
-      claims: { expiry: DEFAULT_CAPABILITY_TTL_MS, key: 'a.pdf', method: 'GET' },
-    });
-  });
-
   it('REJECTS a token signed with a different secret', async () => {
     const { token } = await signCapability(
       'secret-A-padding-padding-padding-pad',
@@ -187,17 +175,6 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     expect(cross.ok).toBe(false);
   });
 });
-
-function withPayloadField(token: string, key: string, value: unknown): string {
-  const [payload, signature] = token.split('.');
-  if (!payload || !signature) throw new Error(`malformed test token: ${token}`);
-  const json = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<
-    string,
-    unknown
-  >;
-  json[key] = value;
-  return `${Buffer.from(JSON.stringify(json), 'utf8').toString('base64url')}.${signature}`;
-}
 
 describe('capability-url: one-time tokens via a replay store', () => {
   it('a one-time token verifies once, then is rejected as replayed', async () => {

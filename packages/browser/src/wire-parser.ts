@@ -264,8 +264,8 @@ export function readMutationResponseBodyChunks(
   // patches in one wire body, so runtime apply paths consume one decoded shape.
   // SPEC.md §4.4/§9.1: the scan + fragment-decode skeleton is shared with the
   // inline bootstrap via readMutationResponseBodyCore; this modular reader keeps
-  // raw kovo-query chunks (deferred by the inline loader for its 8KB gzip budget)
-  // and JSON-decodes them here via readQueryElementChunk.
+  // raw kovo-query chunks (deferred by the always-loaded bootstrap for its gzip
+  // budget) and JSON-decodes them here via readQueryElementChunk.
   //
   // Malformed-reporting ORDER is observable (see wire-parser.test.ts): kovo-query
   // errors are reported during decode below, then kovo-fragment errors after, so

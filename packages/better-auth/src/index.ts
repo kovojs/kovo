@@ -27,9 +27,5 @@ export {
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
 } from './mutations.js';
-export type {
-  BetterAuthSessionMapper,
-  BetterAuthSessionOptions,
-  BetterAuthSessionPayload,
-} from './session.js';
+export type { BetterAuthSessionMapper, BetterAuthSessionPayload } from './session.js';
 export { betterAuthSession } from './session.js';

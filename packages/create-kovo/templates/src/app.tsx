@@ -106,18 +106,7 @@ const app = createApp({
   endpoints: [healthEndpoint],
   mutations: [addContact, appSignIn, appSignOut],
   queries: [contactsQuery],
-  sessionProvider: {
-    justification:
-      'Better Auth owns validation, rotation, expiry, and revocation for the starter session.',
-    lifecycle: 'delegated',
-    lifecycleAssertions: {
-      expiry: 'Better Auth enforces starter session expiry through its session table.',
-      revocation: 'Better Auth revokes starter sessions on sign-out and invalid token lookup.',
-      rotation: 'Better Auth owns starter session token rotation and reissue.',
-      validation: 'Better Auth validates starter session cookies before Kovo sees request.session.',
-    },
-    provider: appSessionProvider,
-  },
+  sessionProvider: appSessionProvider,
   routes: [
     route('/', {
       // The contact book is the signed-in user's data, so this route's KV436 access

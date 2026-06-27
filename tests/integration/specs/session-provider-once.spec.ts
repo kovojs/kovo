@@ -1,15 +1,9 @@
 // SPEC §6.5 + §9.5: sessionProvider is resolved once per route/query/mutation
 // request, and all guarded work sees the same session value.
-import { csrfToken } from '@kovojs/server';
 import { expect, test } from '@kovojs/test/internal/integration';
 import type { KovoApp } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'session-provider-once' });
-
-const csrf = {
-  secret: 'session-provider-once-csrf-secret-key-0123456789',
-  sessionId: () => 'session-provider-once-fixture-session',
-};
 
 async function eventKinds(kovoApp: KovoApp, caseKey: string): Promise<string[]> {
   const rows = await kovoApp.db.query<{ kind: string }>(
@@ -48,12 +42,9 @@ test('resolves one session for each guarded route, query, and mutation request',
   expect(await eventSubjects(kovoApp, 'query')).toEqual(['user-query']);
 
   const mutationResponse = await request.post('/_m/session-once/mutate', {
-    form: {
-      'kovo-csrf': csrfToken({} as Request, csrf, { audience: 'session-once/mutate' }),
-    },
+    form: {},
     headers: {
       'Kovo-Fragment': 'true',
-      origin: kovoApp.origin,
       'x-session-case': 'mutation',
     },
   });

@@ -9,7 +9,6 @@ import {
   betterAuthSignUpEmailInput,
   credentialMutationDefinitionOptions,
   forwardBetterAuthSetCookie,
-  hasBetterAuthSessionRevocationSetCookie,
   isBetterAuthCredentialFailureError,
   redirectPath,
   resolveBetterAuthCredentialSuccess,
@@ -67,20 +66,10 @@ export function betterAuthSignInEmailMutation<
           headers: request.headers,
         });
 
-        const success = await resolveBetterAuthCredentialSuccess(
-          response,
-          context,
-          {
-            redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
-            status: 'signed-in',
-          },
-          {
-            requestHeaders: request.headers,
-            ...(options.sessionCookieMode === undefined
-              ? {}
-              : { sessionCookieMode: options.sessionCookieMode }),
-          },
-        );
+        const success = await resolveBetterAuthCredentialSuccess(response, context, {
+          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
+          status: 'signed-in',
+        });
 
         if (success === null) {
           return context.fail('INVALID_CREDENTIALS', {});
@@ -140,20 +129,10 @@ export function betterAuthSignUpEmailMutation<
           headers: request.headers,
         });
 
-        const success = await resolveBetterAuthCredentialSuccess(
-          response,
-          context,
-          {
-            redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
-            status: 'signed-up',
-          },
-          {
-            requestHeaders: request.headers,
-            ...(options.sessionCookieMode === undefined
-              ? {}
-              : { sessionCookieMode: options.sessionCookieMode }),
-          },
-        );
+        const success = await resolveBetterAuthCredentialSuccess(response, context, {
+          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
+          status: 'signed-up',
+        });
 
         if (success === null) {
           return context.fail('INVALID_CREDENTIALS', {});
@@ -202,10 +181,6 @@ export function betterAuthSignOutMutation<
         asResponse: true,
         headers: request.headers,
       });
-
-      if (!hasBetterAuthSessionRevocationSetCookie(response.headers)) {
-        throw new Error('Better Auth sign-out did not revoke a session credential');
-      }
 
       forwardBetterAuthSetCookie(response.headers, context);
       setSessionRevocationClearSiteData(context);

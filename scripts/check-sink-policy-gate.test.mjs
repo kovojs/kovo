@@ -528,6 +528,47 @@ describe('sink-policy gate', () => {
     }
   });
 
+  it('rejects destructured real-global eval aliases in server source', () => {
+    const finding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink eval(); server source must not execute generated code';
+
+    for (const source of [
+      'const { eval: run } = globalThis; export const result = run(code);',
+      'const { eval } = globalThis; export const result = (eval)(code);',
+      'const { "eval": run } = globalThis; export const result = run(code);',
+      "const { ['eval']: run } = globalThis; export const result = run(code);",
+      'const { ["eval"]: run } = (globalThis); export const result = run.call(null, code);',
+      'const { eval: run } = globalThis; export const result = run.bind(globalThis)(code);',
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        finding,
+      ]);
+    }
+  });
+
+  it('rejects eval dynamic code execution through call, apply, and bind laundering', () => {
+    const finding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink eval(); server source must not execute generated code';
+
+    for (const source of [
+      'export const run = eval.call(globalThis, code);',
+      'export const run = eval.apply(null, [code]);',
+      'export const run = globalThis.eval.call(globalThis, code);',
+      'export const run = globalThis["eval"].apply(null, [code]);',
+      "export const run = (globalThis['eval']).call(globalThis, code);",
+      'const run = globalThis.eval; export const result = run.call(null, code);',
+      'const run = globalThis["eval"]; export const result = run.apply(null, [code]);',
+      'const run = globalThis.eval.bind(globalThis); export const result = run(code);',
+      'const run = globalThis["eval"].bind(globalThis); export const result = (run)(code);',
+      'export const run = globalThis.eval.bind(globalThis)(code);',
+      "export const run = (globalThis['eval'].bind(globalThis))(code);",
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        finding,
+      ]);
+    }
+  });
+
   it('rejects Function constructor and call dynamic code execution in server source', () => {
     expect(
       dynamicCodeExecutionSinkFindings(
@@ -607,6 +648,72 @@ describe('sink-policy gate', () => {
     }
   });
 
+  it('rejects destructured real-global Function aliases in server source', () => {
+    const constructorFinding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink new Function(); server source must not execute generated code';
+    const callFinding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code';
+
+    for (const source of [
+      'const { Function: Make } = globalThis; export const made = new Make(code);',
+      'const { Function } = globalThis; export const made = new (Function)(code);',
+      'const { "Function": Make } = globalThis; export const made = new Make(code);',
+      "const { ['Function']: Make } = globalThis; export const made = new Make(code);",
+      'const { ["Function"]: Make } = (globalThis); export const made = new (Make)(code);',
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        constructorFinding,
+      ]);
+    }
+
+    for (const source of [
+      'const { Function: Make } = globalThis; export const call = Make(code);',
+      'const { "Function": Make } = globalThis; export const call = Make.apply(null, [code]);',
+      'const { ["Function"]: Make } = globalThis; export const call = Make.bind(null)(code);',
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        callFinding,
+      ]);
+    }
+  });
+
+  it('rejects Function dynamic code execution through call, apply, and bind laundering', () => {
+    const constructorFinding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink new Function(); server source must not execute generated code';
+    const callFinding =
+      'packages/server/src/unsafe.ts: forbidden dynamic code execution sink Function(); server source must not execute generated code';
+
+    for (const source of [
+      'export const call = Function.call(null, "return 1");',
+      'export const call = Function.apply(null, ["return 1"]);',
+      'export const call = globalThis.Function.call(null, code);',
+      'export const call = globalThis["Function"].apply(null, [code]);',
+      "export const call = (globalThis['Function']).call(null, code);",
+      'const Make = globalThis.Function; export const call = Make.call(null, code);',
+      'const Make = globalThis["Function"]; export const call = Make.apply(null, [code]);',
+      'const Make = globalThis.Function.bind(globalThis); export const call = Make("return 1");',
+      'const Make = globalThis["Function"].bind(globalThis); export const call = (Make)(code);',
+      'export const call = Function.bind(null)("return 1");',
+      'export const call = globalThis.Function.bind(globalThis)("return 1");',
+      "export const call = (globalThis['Function'].bind(globalThis))('return 1');",
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        callFinding,
+      ]);
+    }
+
+    for (const source of [
+      'const Make = globalThis.Function.bind(globalThis); export const made = new Make("return 1");',
+      'const Make = globalThis["Function"].bind(globalThis); export const made = new (Make)(code);',
+      "export const made = new (globalThis.Function.bind(globalThis))('return 1');",
+      "export const made = new (globalThis['Function'].bind(globalThis))('return 1');",
+    ]) {
+      expect(dynamicCodeExecutionSinkFindings('packages/server/src/unsafe.ts', source)).toEqual([
+        constructorFinding,
+      ]);
+    }
+  });
+
   it('rejects vm imports and requires in server source', () => {
     expect(
       dynamicCodeExecutionSinkFindings(
@@ -628,7 +735,7 @@ describe('sink-policy gate', () => {
         `
           // (0, eval)(code); globalThis.Function(code); globalThis["eval"](code);
           const note =
-            "eval(code); new Function(code); globalThis.eval(code); globalThis['Function'](code)";
+            "eval(code); new Function(code); globalThis.eval(code); globalThis['Function'](code); Function.bind(null)('value')";
           export function safe(eval, globalThis) {
             const run = eval;
             function Function(value) {
@@ -643,7 +750,39 @@ describe('sink-policy gate', () => {
               globalThis.eval("value"),
               bracketRun("value"),
               new bracketMake("value"),
+              eval.call(null, "value"),
+              globalThis["eval"].apply(null, ["value"]),
+              Function.call(null, "value"),
+              globalThis.Function.bind(null)("value"),
+              globalThis.eval.bind(globalThis)("value"),
+              (globalThis["eval"].bind(globalThis))("value"),
+              Function.bind(null)("value"),
+              new (globalThis.Function.bind(null))("value"),
             ];
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('allows local and rebound destructured dynamic-code names', () => {
+    expect(
+      dynamicCodeExecutionSinkFindings(
+        'packages/server/src/safe.ts',
+        `
+          export function safe(globalThis, code) {
+            const { eval: run } = globalThis;
+            const { "Function": Make } = globalThis;
+            return [run(code), new Make(code)];
+          }
+
+          const { eval: realRun } = globalThis;
+          const { Function: RealMake } = globalThis;
+          export function rebound(code) {
+            const realRun = (value) => value;
+            let RealMake = class SafeFunction {};
+            RealMake = class SaferFunction {};
+            return [realRun(code), new RealMake(code)];
           }
         `,
       ),

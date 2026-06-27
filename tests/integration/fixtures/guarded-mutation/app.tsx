@@ -1,12 +1,8 @@
 // SPEC §6.5 + §10.3: mutation guards run before the transaction/write path.
 // Unauthenticated enhanced failures return Kovo-Reauth; authenticated
 // authorization failures stay on typed mutation error fragments.
-import { createApp, csrfField, guards, mutation, route, s } from '@kovojs/server';
-import {
-  defineFixture,
-  delegatedFixtureSessionProvider,
-  type KovoFixtureRequest,
-} from '@kovojs/test/internal/integration/define';
+import { createApp, guards, mutation, route, s } from '@kovojs/server';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {
   user: { id: string; roles: readonly string[] };
@@ -14,10 +10,6 @@ interface AuthSession {
 type AuthRequest = KovoFixtureRequest & { session?: AuthSession | null };
 
 const COOKIE = 'kovo_guarded_mutation_session';
-const csrf = {
-  secret: 'guarded-mutation-csrf-secret-key-0123456789',
-  sessionId: () => 'guarded-mutation-fixture-session',
-};
 
 function readSessionCookie(request: Request): AuthSession | null {
   const raw = request.headers.get('cookie') ?? '';
@@ -42,6 +34,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const guardedIncrement = mutation('guarded-mutation/increment', {
+  csrf: false,
   guard: guards.authed<AuthRequest>(),
   input: s.object({}),
   transaction: async (_request, run) => run(_request),
@@ -59,7 +52,6 @@ const homeRoute = route('/', {
       ${status}
       <div kovo-fragment-target="guarded-error"></div>
       <form method="post" action="/_m/guarded-mutation/increment" enhance data-mutation="guarded-mutation/increment" kovo-deps="guarded-count">
-        ${csrfField(request, { ...csrf, audience: guardedIncrement.key })}
         <button type="submit">Increment protected counter</button>
       </form>
     </main>`;
@@ -68,10 +60,9 @@ const homeRoute = route('/', {
 
 export default defineFixture({
   app: createApp<AuthSession>({
-    csrf,
     mutations: [guardedIncrement],
     routes: [homeRoute],
-    sessionProvider: delegatedFixtureSessionProvider((request) => readSessionCookie(request)),
+    sessionProvider: (request) => readSessionCookie(request),
     mutationResponses: {
       [guardedIncrement.key]: ({ request }) => {
         return {

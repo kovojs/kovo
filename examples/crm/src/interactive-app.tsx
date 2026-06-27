@@ -141,18 +141,7 @@ export async function buildCrmInteractiveApp(
       }),
       dealDetailRoute,
     ],
-    sessionProvider: {
-      justification:
-        'The CRM demo owns validation, rotation, expiry, and revocation for its fixed demo session.',
-      lifecycle: 'delegated',
-      lifecycleAssertions: {
-        expiry: 'The fixed CRM demo session is process-scoped and expires with the demo process.',
-        revocation: 'The CRM demo has no sign-out path; process restart revokes the fixed session.',
-        rotation: 'The fixed CRM demo session is never elevated after authentication.',
-        validation: 'The CRM demo provider returns only the fixed in-process demo session.',
-      },
-      provider: () => demoSession,
-    },
+    sessionProvider: () => demoSession,
   });
 
   const handler: RequestHandler = createRequestHandler(app);

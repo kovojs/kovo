@@ -1,8 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-import {
-  deriveAccessExplainFacts,
-  deriveAgentToolReachableSinkFacts,
-} from '@kovojs/core/internal/graph';
+import { deriveAccessExplainFacts } from '@kovojs/core/internal/graph';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
@@ -15,7 +12,6 @@ import {
   type ComponentModuleModel,
   type ObjectLiteralEntry,
 } from './scan/parse.js';
-import { agentToolSinksFromSource } from './scan/agent-tools.js';
 import { queryBindingFromExpression } from './scan/query-binding.js';
 import type {
   CompileAppGraphOptions,
@@ -60,9 +56,6 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.capabilities ?? []),
     ...publishToClientCapabilities,
   ].sort(compareCapabilityFacts);
-  const analyzedAgentToolSinks = (options.agentToolModules ?? []).flatMap((moduleSource) =>
-    agentToolSinksFromSource(moduleSource, options.agentToolModules),
-  );
   const derivedRoutePages = derivedPageFactsFromRoutePages(routePages, components);
   const mergedPages =
     derivedRoutePages.length > 0 || (options.graph?.pages?.length ?? 0) > 0
@@ -80,20 +73,9 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(pagesForAccess === undefined ? {} : { pages: pagesForAccess }),
     ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
   });
-  const agentToolSinks = deriveAgentToolReachableSinkFacts({
-    ...((options.graph?.agentToolSinks?.length ?? 0) === 0 && analyzedAgentToolSinks.length === 0
-      ? {}
-      : {
-          agentToolSinks: [...(options.graph?.agentToolSinks ?? []), ...analyzedAgentToolSinks],
-        }),
-    ...(capabilities.length === 0 ? {} : { capabilities }),
-    ...(options.graph?.mutations === undefined ? {} : { mutations: options.graph.mutations }),
-    ...(options.graph?.touchGraph === undefined ? {} : { touchGraph: options.graph.touchGraph }),
-  });
   const graph: RegistryGraphInput = {
     ...options.graph,
     ...(access.length > 0 ? { access } : {}),
-    ...(agentToolSinks.length > 0 ? { agentToolSinks } : {}),
     ...(capabilities.length > 0 ? { capabilities } : {}),
     components,
     ...(mergedPages === undefined ? {} : { pages: mergedPages }),
@@ -155,9 +137,6 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
   return factHash({
     components: componentHashes,
     graph: options.graph ?? null,
-    agentToolModules: (options.agentToolModules ?? [])
-      .map((moduleSource) => factHash(moduleSource))
-      .sort(),
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
     registryTypes: options.registryTypes ?? null,
     routes: routeHashes,

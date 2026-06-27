@@ -51,10 +51,8 @@ import {
   credentialMutationDefinitionOptions,
   forwardBetterAuthSetCookie,
   getBetterAuthSetCookie,
-  hasBetterAuthSessionRevocationSetCookie,
   isBetterAuthCredentialFailureError,
   isBetterAuthCredentialFailureResponse,
-  isBetterAuthSessionRevocationSetCookie,
   isBetterAuthCredentialMutationTouchGraphOptions,
   redirectPath,
   resolveBetterAuthCredentialSuccess,
@@ -83,11 +81,7 @@ export {
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
 } from './mutations.js';
-export type {
-  BetterAuthSessionMapper,
-  BetterAuthSessionOptions,
-  BetterAuthSessionPayload,
-} from './session.js';
+export type { BetterAuthSessionMapper, BetterAuthSessionPayload } from './session.js';
 export { betterAuthSession } from './session.js';
 export {
   betterAuthAuthDomain,
@@ -106,10 +100,8 @@ export {
   credentialMutationDefinitionOptions,
   forwardBetterAuthSetCookie,
   getBetterAuthSetCookie,
-  hasBetterAuthSessionRevocationSetCookie,
   isBetterAuthCredentialFailureError,
   isBetterAuthCredentialFailureResponse,
-  isBetterAuthSessionRevocationSetCookie,
   redirectPath,
   resolveBetterAuthCredentialSuccess,
   setSessionRevocationClearSiteData,
@@ -150,7 +142,6 @@ export interface BetterAuthCredentialMutationOptions<
   guard?: Guard<Request, GuardedRequest>;
   key?: Key;
   registry?: MutationRegistry;
-  sessionCookieMode?: 'jwt' | 'opaque';
   transaction?: <Result>(
     request: Request,
     run: (transactionRequest: GuardedRequest) => Promise<Result>,

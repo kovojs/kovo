@@ -1318,7 +1318,13 @@ function isObjectFreezeCall(value: Node): value is CallExpression {
   if (!Node.isPropertyAccessExpression(expression)) return false;
   if (expression.getName() !== 'freeze') return false;
   const receiver = unwrappedStaticExpressionNode(expression.getExpression());
-  return Node.isIdentifier(receiver) && receiver.getText() === 'Object';
+  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'Object') return false;
+
+  const symbol = symbolForIdentifierReference(receiver) ?? receiver.getSymbol();
+  return !(symbol?.getDeclarations() ?? []).some(
+    (declaration) =>
+      declaration.getSourceFile().getFilePath() === receiver.getSourceFile().getFilePath(),
+  );
 }
 
 function singleObjectFreezeArgument(value: CallExpression): Node | undefined {
@@ -2448,12 +2454,137 @@ function singleLiteralArrayElement(node: Node): Node | undefined {
 }
 
 function literalArrayElements(node: Node): readonly Node[] | undefined {
-  const expression = unwrappedStaticExpressionNode(node);
+  const expression = readonlyTupleLiteralValue(node);
   if (!Node.isArrayLiteralExpression(expression)) return undefined;
 
   const elements = expression.getElements();
   if (elements.some(Node.isSpreadElement)) return undefined;
   return elements;
+}
+
+function readonlyTupleLiteralValue(node: Node, depth = 0): Node | undefined {
+  if (depth > 4) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isArrayLiteralExpression(expression)) return expression;
+  if (isObjectFreezeCall(expression)) {
+    const argument = singleObjectFreezeArgument(expression);
+    return argument ? readonlyTupleLiteralValue(argument, depth + 1) : undefined;
+  }
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    if (!staticAccessRootHasStableConstBinding(expression)) return undefined;
+    const value = localConstLiteralStaticAccessValue(expression);
+    return value ? readonlyTupleLiteralValue(value, depth + 1) : undefined;
+  }
+  return localConstReadonlyTupleAliasValue(expression, depth + 1);
+}
+
+function staticAccessRootHasStableConstBinding(node: Node): boolean {
+  const declaration = staticAccessRootVariableDeclaration(node);
+  if (!declaration || !Node.isIdentifier(declaration.getNameNode())) return false;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return false;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return false;
+
+  return !isStaticBindingMutatedAfterDeclaration(
+    node.getSourceFile(),
+    declaration.getNameNode().getText(),
+    declaration,
+  );
+}
+
+function localConstReadonlyTupleAliasValue(node: Node, depth = 0): Node | undefined {
+  if (depth > 4) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isIdentifier(expression)) return undefined;
+
+  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+  if (
+    isStaticBindingMutatedAfterDeclaration(
+      expression.getSourceFile(),
+      expression.getText(),
+      declaration,
+    )
+  ) {
+    return undefined;
+  }
+
+  const initializer = declaration.getInitializer();
+  return initializer ? readonlyTupleLiteralValue(initializer, depth + 1) : undefined;
+}
+
+function isStaticBindingMutatedAfterDeclaration(
+  sourceFile: SourceFile,
+  name: string,
+  declaration: VariableDeclaration,
+): boolean {
+  const declarationEnd = declaration.getEnd();
+  const searchRoot = staticBindingMutationSearchRoot(declaration) ?? sourceFile;
+
+  for (const binary of searchRoot.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    if (binary.getStart() <= declarationEnd) continue;
+    if (!isAssignmentOperator(binary.getOperatorToken().getKind())) continue;
+    if (mutationTargetRootName(binary.getLeft()) === name) return true;
+  }
+
+  for (const prefix of searchRoot.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression)) {
+    if (prefix.getStart() <= declarationEnd) continue;
+    const operator = prefix.getOperatorToken();
+    if (operator !== SyntaxKind.PlusPlusToken && operator !== SyntaxKind.MinusMinusToken) continue;
+    if (mutationTargetRootName(prefix.getOperand()) === name) return true;
+  }
+
+  for (const postfix of searchRoot.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression)) {
+    if (postfix.getStart() <= declarationEnd) continue;
+    const operator = postfix.getOperatorToken();
+    if (operator !== SyntaxKind.PlusPlusToken && operator !== SyntaxKind.MinusMinusToken) continue;
+    if (mutationTargetRootName(postfix.getOperand()) === name) return true;
+  }
+
+  return false;
+}
+
+function staticBindingMutationSearchRoot(declaration: VariableDeclaration): Node | undefined {
+  return declaration.getFirstAncestor(
+    (ancestor) =>
+      Node.isFunctionDeclaration(ancestor) ||
+      Node.isFunctionExpression(ancestor) ||
+      Node.isArrowFunction(ancestor) ||
+      Node.isMethodDeclaration(ancestor) ||
+      Node.isConstructorDeclaration(ancestor),
+  );
+}
+
+function isAssignmentOperator(kind: SyntaxKind): boolean {
+  return (
+    kind === SyntaxKind.EqualsToken ||
+    kind === SyntaxKind.PlusEqualsToken ||
+    kind === SyntaxKind.MinusEqualsToken ||
+    kind === SyntaxKind.AsteriskEqualsToken ||
+    kind === SyntaxKind.AsteriskAsteriskEqualsToken ||
+    kind === SyntaxKind.SlashEqualsToken ||
+    kind === SyntaxKind.PercentEqualsToken ||
+    kind === SyntaxKind.LessThanLessThanEqualsToken ||
+    kind === SyntaxKind.GreaterThanGreaterThanEqualsToken ||
+    kind === SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken ||
+    kind === SyntaxKind.AmpersandEqualsToken ||
+    kind === SyntaxKind.BarEqualsToken ||
+    kind === SyntaxKind.CaretEqualsToken ||
+    kind === SyntaxKind.BarBarEqualsToken ||
+    kind === SyntaxKind.AmpersandAmpersandEqualsToken ||
+    kind === SyntaxKind.QuestionQuestionEqualsToken
+  );
+}
+
+function mutationTargetRootName(node: Node): string | undefined {
+  return staticExpressionRootIdentifier(node)?.getText();
 }
 
 /** @internal */ export function pnfExactConjuncts(

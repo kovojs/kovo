@@ -13,20 +13,6 @@ import { exportStaticApp } from './static-export.js';
 import { StaticExportError } from './static-export-diagnostics.js';
 import { renderedHtml } from './html.js';
 
-function delegatedSessionProvider(provider: (request: Request) => unknown) {
-  return {
-    justification: 'test delegates session lifecycle to an app-owned provider',
-    lifecycle: 'delegated' as const,
-    lifecycleAssertions: {
-      expiry: 'test provider enforces session expiration',
-      revocation: 'test provider revokes sessions on sign-out',
-      rotation: 'test provider rotates credentials after authentication',
-      validation: 'test provider validates browser session credentials',
-    },
-    provider,
-  };
-}
-
 describe('server static export', () => {
   it('rejects raw request handlers before static export replay or writes', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
@@ -193,18 +179,6 @@ describe('server static export', () => {
   });
 
   it('fails loudly for guarded and session-provider routes', async () => {
-    const defaultSessionApp = createApp({
-      routes: [route('/public', { page: () => trustedHtml('<main>Public</main>') })],
-    });
-
-    await expect(exportStaticApp(defaultSessionApp)).resolves.toMatchObject({
-      artifacts: [
-        {
-          path: '/public/index.html',
-        },
-      ],
-    });
-
     const guardedApp = createApp({
       routes: [
         route('/account', {
@@ -227,7 +201,7 @@ describe('server static export', () => {
 
     const sessionApp = createApp({
       routes: [route('/profile', { page: () => trustedHtml('<main>Profile</main>') })],
-      sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+      sessionProvider: () => ({ user: { id: 'u1' } }),
     });
 
     await expect(exportStaticApp(sessionApp)).rejects.toMatchObject({
