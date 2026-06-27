@@ -5169,12 +5169,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'kovoAnalyzerSummary(guardFns.requireActor, { returns: { kind: "guard", path: "actorId" } });',
               '',
               'const guardBag = Object.freeze({ current: guardFns.requireUser, actor: guardFns.requireActor });',
+              'const notGuards = { all(..._items: unknown[]) { return () => true; } };',
               'const dynamicGuardKey = "current";',
               '',
               'export const ordersForGuardedUser = query("ordersForGuardedUser", {',
               '  guard: guards.all(guardBag.current),',
               '  output: s.object({ id: s.string() }),',
               '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string; actorId?: string } | null }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ctx.guard?.userId));',
+              '  },',
+              '});',
+              'export const ordersForCustomAllGuard = query("ordersForCustomAllGuard", {',
+              '  guard: notGuards.all(guardBag.current),',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
               '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ctx.guard?.userId));',
               '  },',
               '});',
@@ -5235,6 +5243,12 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
         detail:
           'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
         name: 'ordersForActorGuard',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        name: 'ordersForCustomAllGuard',
         scope: 'unknown',
       },
       {

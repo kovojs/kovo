@@ -643,6 +643,13 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       pipeline proof; `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts
       packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts --run` passed 99 tests, and
       `pnpm exec vitest run packages/drizzle/src --run` passed 32 files / 591 tests.
+      Current integration batch adds non-enumerable server guard audit metadata, pins accepted query/mutation
+      guard principals to exact owner predicates, keeps arbitrary similarly named guard-composition helpers
+      fail-closed, and expands end-to-end pipeline/read-fact coverage; `pnpm exec vitest run
+      packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts
+      packages/drizzle/src/index.query-loader-receivers.test.ts packages/server/src/guards.test.ts
+      packages/server/src/route-query-guards.test.ts --run` passed 5 files / 174 tests, with `git diff --check`,
+      `pnpm run check:vp`, and `pnpm run check:api-surface` passing.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---

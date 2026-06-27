@@ -933,12 +933,22 @@ function acceptedGuardPrivateKeysFromGuardExpression(
     }
   } else if (Node.isCallExpression(node)) {
     const callee = unwrappedStaticExpressionNode(node.getExpression());
-    const calleeName = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+    const callArguments = node.getArguments();
     const summarizedCall = summarizedStaticCallPrivateScope(node, sessionContext);
     if (summarizedCall?.kind === 'guard') keys.add(privateScopeKey(summarizedCall));
 
-    if (calleeName === 'all' || calleeName === 'compose' || calleeName === 'freeze') {
-      for (const argument of node.getArguments()) {
+    if (isObjectFreezeCall(node)) {
+      const argument = singleObjectFreezeArgument(node);
+      if (!argument) return [...keys].sort();
+      for (const key of acceptedGuardPrivateKeysFromGuardExpression(
+        argument,
+        sessionContext,
+        depth + 1,
+      )) {
+        keys.add(key);
+      }
+    } else if (isKovoGuardCompositionCall(callee)) {
+      for (const argument of callArguments) {
         for (const key of acceptedGuardPrivateKeysFromGuardExpression(
           argument,
           sessionContext,
@@ -962,6 +972,14 @@ function acceptedGuardPrivateKeysFromGuardExpression(
   }
 
   return [...keys].sort();
+}
+
+function isKovoGuardCompositionCall(expression: Node): boolean {
+  if (!Node.isPropertyAccessExpression(expression)) return false;
+  const name = expression.getName();
+  if (name !== 'all' && name !== 'compose') return false;
+  const receiver = unwrappedStaticExpressionNode(expression.getExpression());
+  return Node.isIdentifier(receiver) && receiver.getText() === 'guards';
 }
 
 function acceptedGuardPrivateKeysDominatingNode(node: Node): readonly string[] {
