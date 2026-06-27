@@ -214,6 +214,8 @@ export {
    * on `{ key: id, owner: userId }` is still flagged `args`/IDOR.
    */
   argScopedReads?: readonly string[];
+  /** Private guard principal keys accepted by the query guard chain, e.g. `guard:userId`. */
+  acceptedGuardPrivateKeys?: readonly string[];
   /** Exact client-visible keys for `argScopedReads`, used to scope `owns()` suppression. */
   argScopedReadKeys?: readonly OwnerScopeKey[];
   diagnostics?: readonly TouchGraphDiagnostic[];
@@ -410,7 +412,14 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
         )?.privateKey;
         audits.push({
           ...(privateKey
-            ? { detail: ownerAuthorizationDataProofDetail(ownerScopes, domain, privateKey) }
+            ? {
+                detail: ownerAuthorizationDataProofDetail(
+                  ownerScopes,
+                  domain,
+                  privateKey,
+                  fact.acceptedGuardPrivateKeys,
+                ),
+              }
             : {}),
           domain,
           kind: 'query',
@@ -484,10 +493,15 @@ function ownerAuthorizationDataProofDetail(
   owners: readonly OwnerDomainScope[],
   domain: string,
   privateKey: string,
+  acceptedGuardPrivateKeys: readonly string[] = [],
 ): string {
   const owner = owners.find((candidate) => candidate.domain === domain);
   const ownerColumn = owner?.owner ? `owner=${owner.owner}` : 'owner=<unknown>';
-  return `narrow Authorization-gates-DATA subset: ${ownerColumn}; owner column compared to ${privateKey}`;
+  const guardCoupling =
+    privateKey.startsWith('guard:') && acceptedGuardPrivateKeys.includes(privateKey)
+      ? '; accepted guard principal matched owner predicate'
+      : '';
+  return `narrow Authorization-gates-DATA subset: ${ownerColumn}; owner column compared to ${privateKey}${guardCoupling}`;
 }
 
 /**
@@ -498,6 +512,8 @@ function ownerAuthorizationDataProofDetail(
  * @internal
  */
 /** @internal */ export interface WriteScopeFact {
+  /** Private guard principal keys accepted before this write, e.g. `guard:userId`. */
+  acceptedGuardPrivateKeys?: readonly string[];
   /** Owner-table domains keyed by a client-visible `input.*` arg (any column) → `args`/IDOR. */
   argScopedWrites: readonly string[];
   /** Exact client-visible keys for `argScopedWrites`, used to scope `owns()` suppression. */
@@ -577,7 +593,14 @@ function ownerAuthorizationDataProofDetail(
         )?.privateKey;
         audits.push({
           ...(privateKey
-            ? { detail: ownerAuthorizationDataProofDetail(ownerScopes, domain, privateKey) }
+            ? {
+                detail: ownerAuthorizationDataProofDetail(
+                  ownerScopes,
+                  domain,
+                  privateKey,
+                  fact.acceptedGuardPrivateKeys,
+                ),
+              }
             : {}),
           domain,
           kind: 'write',
@@ -1626,6 +1649,9 @@ function writeScopeFactsForFunction(
 
     facts.push({
       argScopedWrites,
+      ...(call.instanceKeyComparisons.acceptedGuardPrivateKeys?.length
+        ? { acceptedGuardPrivateKeys: call.instanceKeyComparisons.acceptedGuardPrivateKeys }
+        : {}),
       ...(argScopedWriteKeys.length > 0 ? { argScopedWriteKeys } : {}),
       ...(hasClientArgPredicate ? { hasClientArgPredicate } : {}),
       name: fn.name,
@@ -1838,6 +1864,9 @@ function extractQueryFactsFromPreparedFiles(
       facts.push({
         ...(argScopedReads.length > 0 ? { argScopedReads } : {}),
         ...(argScopedReadKeys.length > 0 ? { argScopedReadKeys } : {}),
+        ...(query.instanceKeyComparisons.acceptedGuardPrivateKeys?.length
+          ? { acceptedGuardPrivateKeys: query.instanceKeyComparisons.acceptedGuardPrivateKeys }
+          : {}),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...(hasClientArgPredicate ? { hasClientArgPredicate } : {}),
         ...instanceKey,
@@ -2107,6 +2136,7 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
 }
 
 /** @internal */ export interface SessionProvenanceContext {
+  acceptedGuardPrivateKeys?: ReadonlySet<string>;
   aliases: ReadonlyMap<string, SessionAlias>;
   helpers: ReadonlyMap<string, PrivateScopeProvenance>;
   opaqueAliases: Map<string, string>;
