@@ -919,7 +919,7 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
     configFile: false,
     logLevel: 'error',
     root,
-    server: { middlewareMode: true },
+    server: buildTimeViteServerOptions(),
     ssr: { noExternal: true },
   });
   try {
@@ -937,7 +937,7 @@ async function loadBuildAppModule(appModulePath: string, root: string): Promise<
     appType: 'custom',
     logLevel: 'error',
     root,
-    server: { hmr: false, middlewareMode: true },
+    server: buildTimeViteServerOptions(),
   });
   try {
     return await server.ssrLoadModule(viteSsrModuleId(appModulePath, root));
@@ -1363,7 +1363,7 @@ async function loadExportAppModule(options: KovoExportOptions): Promise<unknown>
     appType: 'custom',
     logLevel: 'error',
     root: resolve(options.root ?? process.cwd()),
-    server: { middlewareMode: true },
+    server: buildTimeViteServerOptions(),
   });
   try {
     return await server.ssrLoadModule(options.appModulePath);
@@ -1382,6 +1382,10 @@ interface ExportManifestPlan {
     source: string;
   }[];
   stylesheetHref?: string;
+}
+
+function buildTimeViteServerOptions(): { hmr: false } {
+  return { hmr: false };
 }
 
 async function staticExportManifestPlan(options: KovoExportOptions): Promise<ExportManifestPlan> {

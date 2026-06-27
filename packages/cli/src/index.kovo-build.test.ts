@@ -235,6 +235,49 @@ export default createApp({
     }
   });
 
+  it('does not bind a shared HMR websocket port during concurrent builds', async () => {
+    const rootParent = mkdtempSync(join(repoRoot, '.tmp-kovo-build-parallel-'));
+    const rootA = join(rootParent, 'a');
+    const rootB = join(rootParent, 'b');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(rootParent, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(
+        join(repoRoot, 'packages/server'),
+        join(rootParent, 'node_modules/@kovojs/server'),
+      );
+      writeRetentionProofConfig(rootParent);
+      for (const root of [rootA, rootB]) {
+        const appPath = join(root, 'app.mjs');
+        mkdirSync(root, { recursive: true });
+        mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+        symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+        symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+        writeFileSync(appPath, appModuleSource(), 'utf8');
+        writeClientEntry(root);
+      }
+
+      const [exitA, exitB] = await withCwd(rootParent, () =>
+        Promise.all([
+          mainAsync(['build', './a/app.mjs', '--out', './a/dist']),
+          mainAsync(['build', './b/app.mjs', '--out', './b/dist']),
+        ]),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitA, errorOutput).toBe(0);
+      expect(exitB, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('WebSocket server error');
+      expect(errorOutput).not.toContain('24678');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(rootParent, { force: true, recursive: true });
+    }
+  });
+
   it('auto-collects compiled component CSS into the build stylesheet asset', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-app-css-'));
     const appPath = join(root, 'app.tsx');

@@ -1,5 +1,6 @@
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createConnection } from 'node:net';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -250,4 +251,56 @@ describe('create-kovo starter (build integration)', () => {
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
+
+  it('honors HOST and PORT from the generated starter Vite config', async () => {
+    const tempParent = join(process.cwd(), 'node_modules/.tmp');
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-dev-env-'));
+    const port = await reservePort();
+    let devServer: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Dev Env Proof' });
+      linkStarterBuildDependencies(root);
+
+      devServer = spawn(resolveBin('vp'), ['dev'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          PORT: String(port),
+        },
+      });
+      await waitForTcpPort('127.0.0.1', port);
+    } finally {
+      await stopProcess(devServer);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
 });
+
+async function waitForTcpPort(host: string, port: number): Promise<void> {
+  const deadline = Date.now() + 20_000;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const socket = createConnection({ host, port });
+        socket.once('connect', () => {
+          socket.end();
+          resolve();
+        });
+        socket.once('error', reject);
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  const cause = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`Timed out waiting for ${host}:${port} to accept TCP connections: ${cause}`);
+}

@@ -198,6 +198,11 @@ describe('create-kovo starter (metadata)', () => {
       expect(readme).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
       expect(readme).toContain('peer warning');
       expect(readme).toContain('is expected');
+
+      const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
+      expect(viteConfig).toContain("host: process.env.HOST ?? '127.0.0.1'");
+      expect(viteConfig).toContain('port: Number.isFinite(port) ? port : 5173');
+      expect(viteConfig).toContain('strictPort: true');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
