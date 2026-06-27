@@ -332,3 +332,6 @@ packages/cli/src/index.kovo-explain.test.ts`, `pnpm run check:vp`, and
 vitest run packages/server/src/mutation.test.ts packages/compiler/src/scan/optimistic-inline.test.ts
 examples/crm/src/interactive-app.test.ts`, `pnpm run check:api-surface`, `pnpm run check`, and
   `git diff --check HEAD~1..HEAD` passed.
+- 2026-06-27: Refreshed the mutation collision SPEC coverage citation after integration; `pnpm exec
+  vitest run packages/compiler/src/spec-coverage-map.test.ts`, `pnpm run test`, and
+  `git diff --check` passed.

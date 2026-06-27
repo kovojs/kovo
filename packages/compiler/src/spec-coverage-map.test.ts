@@ -403,7 +403,7 @@ describe('compiler SPEC coverage map', () => {
               "codes": [
                 "KV421",
               ],
-              "testName": "reports KV421 for duplicate mutation-key facts (today none; invalidations last-write-wins)",
+              "testName": "reports KV421 for duplicate mutation-key facts before registry emission",
             },
             {
               "codes": [
