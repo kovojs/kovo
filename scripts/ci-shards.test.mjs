@@ -4,6 +4,7 @@ import {
   balanceShards,
   extractPlaywrightDurations,
   extractVitestDurations,
+  includeVitest,
   mergeDurationHistory,
   unknownDurationSeconds,
   validateShardAssignment,
@@ -106,5 +107,12 @@ describe('ci-shards', () => {
     ).toEqual({
       'chromium:tests/integration/specs/counter.spec.ts': { seconds: 3.5 },
     });
+  });
+
+  it('keeps consolidated CI-owned files out of root Vitest shards', () => {
+    expect(includeVitest('packages/create-kovo/src/index.test.ts')).toBe(true);
+    expect(includeVitest('packages/create-kovo/src/index.build.test.ts')).toBe(false);
+    expect(includeVitest('packages/core/src/sql-safety.test.ts')).toBe(false);
+    expect(includeVitest('packages/server/src/guards.test.ts')).toBe(false);
   });
 });

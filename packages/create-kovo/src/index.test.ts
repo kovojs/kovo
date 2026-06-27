@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -11,7 +11,6 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +25,7 @@ import {
   main,
   writeKovoProject,
 } from './index.js';
+import { resolveDependencyRoot } from './index.test-support.js';
 
 const TEMPLATE_FILES = [
   'package.json',
@@ -173,12 +173,12 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
-        check: 'vp check && npm run check:sound-subset && npm run check:endpoint-posture',
+        check: 'vp check && pnpm run check:sound-subset && pnpm run check:endpoint-posture',
         'check:endpoint-posture':
           'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
         'check:sound-subset': 'node scripts/check-sound-subset.mjs',
         dev: 'vp dev',
-        serve: 'npm run build:prod && node dist/server/server.mjs',
+        serve: 'pnpm run build:prod && node dist/server/server.mjs',
         start: 'node dist/server/server.mjs',
         test: 'vp test',
       });
@@ -263,6 +263,7 @@ describe('create-kovo starter (metadata)', () => {
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
       expect(viteConfig).toContain("import { kovo } from '@kovojs/server/vite'");
       expect(viteConfig).toContain("kovo({ app: '/src/app.tsx' })");
+      expect(viteConfig).toContain("external: ['undici']");
       expect(viteConfig).not.toContain('ssrLoadModule');
       expect(viteConfig).not.toContain('starterSharedAppShellDevPlugin');
 
@@ -329,197 +330,6 @@ describe('create-kovo starter (metadata)', () => {
       rmSync(root, { force: true, recursive: true });
     }
   });
-});
-
-describe('create-kovo starter (build integration)', () => {
-  it('typechecks the generated app with starter dependencies', () => {
-    const tempParent = join(process.cwd(), 'node_modules/.tmp');
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-tsc-'));
-
-    try {
-      writeKovoProject(root, { name: 'Tsc Proof' });
-      linkStarterBuildDependencies(root);
-
-      execFileSync(
-        resolveBin('tsc'),
-        [
-          '--ignoreConfig',
-          '--noEmit',
-          '--jsx',
-          'react-jsx',
-          '--jsxImportSource',
-          '@kovojs/server',
-          '--module',
-          'NodeNext',
-          '--moduleResolution',
-          'NodeNext',
-          '--target',
-          'ES2024',
-          '--strict',
-          '--skipLibCheck',
-          '--exactOptionalPropertyTypes',
-          '--noUncheckedIndexedAccess',
-          '--types',
-          'node',
-          'src/schema.ts',
-          'src/db.ts',
-          'src/auth.ts',
-          'src/queries.ts',
-          'src/mutations.ts',
-          'src/components/contacts.tsx',
-          'src/components/auth-forms.tsx',
-          'src/app.tsx',
-        ],
-        { cwd: root, stdio: 'pipe' },
-      );
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  });
-
-  it('typechecks the generated SQLite app variant', () => {
-    const tempParent = join(process.cwd(), 'node_modules/.tmp');
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-sqlite-tsc-'));
-
-    try {
-      writeKovoProject(root, { dialect: 'sqlite', name: 'Sqlite Tsc Proof' });
-      linkStarterBuildDependencies(root);
-
-      execFileSync(
-        resolveBin('tsc'),
-        [
-          '--ignoreConfig',
-          '--noEmit',
-          '--jsx',
-          'react-jsx',
-          '--jsxImportSource',
-          '@kovojs/server',
-          '--module',
-          'NodeNext',
-          '--moduleResolution',
-          'NodeNext',
-          '--target',
-          'ES2024',
-          '--strict',
-          '--skipLibCheck',
-          '--exactOptionalPropertyTypes',
-          '--noUncheckedIndexedAccess',
-          '--types',
-          'node',
-          'src/schema.ts',
-          'src/db.ts',
-          'src/auth.ts',
-          'src/queries.ts',
-          'src/mutations.ts',
-          'src/components/contacts.tsx',
-          'src/components/auth-forms.tsx',
-          'src/app.tsx',
-        ],
-        { cwd: root, stdio: 'pipe' },
-      );
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  });
-
-  it('runs the generated in-app tests (data layer + request shell)', () => {
-    const tempParent = join(process.cwd(), 'node_modules/.tmp');
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-vitest-'));
-
-    try {
-      writeKovoProject(root, { name: 'Vitest Proof' });
-      linkStarterBuildDependencies(root);
-
-      execFileSync(resolveBin('vitest'), ['--run', 'src/app.test.ts'], {
-        cwd: root,
-        stdio: 'pipe',
-      });
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 90_000);
-
-  it('serves the generated app through vp dev (redirect + login + styles)', async () => {
-    const tempParent = join(process.cwd(), 'node_modules/.tmp');
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-dev-'));
-    const port = await reservePort();
-    let devServer: ChildProcessWithoutNullStreams | undefined;
-
-    try {
-      writeKovoProject(root, { name: 'Dev Proof' });
-      linkStarterBuildDependencies(root);
-
-      devServer = spawn(
-        resolveBin('vp'),
-        ['dev', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
-        { cwd: root, detached: process.platform !== 'win32', env: withRepoBinOnPath() },
-      );
-      const output = collectOutput(devServer);
-      const origin = `http://127.0.0.1:${port}`;
-
-      const login = await fetchTextWhenReady(`${origin}/login`, output);
-      expect(login).toContain('Sign in');
-      // The themed stylesheet pipeline ran: critical theme vars are inlined.
-      expect(login).toContain('--kovo-theme');
-
-      const home = await fetch(`${origin}/`, { redirect: 'manual' });
-      expect([302, 303, 307]).toContain(home.status);
-      // The `/` route's KV436 access guard (SPEC §10.2) redirects an unauthenticated
-      // visitor to the login route, carrying `next` so sign-in returns them home.
-      expect(home.headers.get('location')).toBe('/login?next=%2F');
-
-      // Full real-auth round trip: the seeded demo account signs in (CSRF token +
-      // Better Auth over PGlite), and the guarded home page then renders the
-      // contact list and add-contact form.
-      const jar = new Map<string, string>();
-      const loginResponse = await fetch(`${origin}/login`);
-      mergeCookies(jar, loginResponse.headers.getSetCookie());
-      const csrf = /name="csrf"\s+value="([^"]+)"/.exec(await loginResponse.text())?.[1];
-      expect(csrf).toBeTruthy();
-      const demoPassword =
-        new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
-          readFileSync(join(root, '.env'), 'utf8'),
-        )?.[1] ?? '';
-      expect(demoPassword).toBeTruthy();
-
-      const form = new URLSearchParams({
-        email: 'demo@example.com',
-        password: demoPassword,
-        next: '/',
-        csrf: csrf ?? '',
-      });
-      const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          cookie: cookieHeader(jar),
-          origin,
-        },
-        body: form.toString(),
-        redirect: 'manual',
-      });
-      mergeCookies(jar, signIn.headers.getSetCookie());
-      expect(signIn.status).toBe(303);
-
-      const authedHome = await fetch(`${origin}/`, {
-        headers: { cookie: cookieHeader(jar) },
-        redirect: 'manual',
-      });
-      expect(authedHome.status).toBe(200);
-      const authedHtml = await authedHome.text();
-      expect(authedHtml).toContain('Demo User');
-      expect(authedHtml).toContain('Contacts');
-      expect(authedHtml).toContain('Ada Lovelace');
-      expect(authedHtml).toContain('Add contact');
-    } finally {
-      await stopProcess(devServer);
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
 });
 
 describe('create-kovo starter (CLI)', () => {
@@ -715,9 +525,11 @@ describe('create-kovo starter (CLI)', () => {
     try {
       expect(main(['app', '--template', 'demo'])).toBe(1);
       expect(main(['app', '--dialect', 'mysql'])).toBe(1);
+      expect(main(['app', '--local-kovo', '../kovo'])).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unknown option: --template'));
       expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unsupported dialect: mysql.'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unknown option: --local-kovo'));
       expect(stderr).toHaveBeenCalledWith(
         expect.stringContaining('supported options and defaults'),
       );
@@ -741,217 +553,3 @@ describe('create-kovo starter (CLI)', () => {
     }
   });
 });
-
-function linkStarterBuildDependencies(root: string): void {
-  const nodeModules = join(root, 'node_modules');
-  const nodeModulesBin = join(nodeModules, '.bin');
-  mkdirSync(join(nodeModules, '@kovojs'), { recursive: true });
-  mkdirSync(join(nodeModules, '@electric-sql'), { recursive: true });
-  mkdirSync(join(nodeModules, '@types'), { recursive: true });
-  mkdirSync(nodeModulesBin, { recursive: true });
-
-  symlinkSync(join(resolveDependencyRoot('kovo'), 'src/bin.ts'), join(nodeModulesBin, 'kovo'));
-  symlinkSync(join(resolveDependencyRoot('vite-plus'), 'bin/vp'), join(nodeModulesBin, 'vp'));
-  symlinkSync(resolveDependencyRoot('@types/node'), join(nodeModules, '@types/node'));
-  symlinkSync(
-    resolveDependencyRoot('@types/better-sqlite3'),
-    join(nodeModules, '@types/better-sqlite3'),
-  );
-
-  for (const pkg of [
-    '@kovojs/better-auth',
-    '@kovojs/browser',
-    '@kovojs/core',
-    '@kovojs/drizzle',
-    '@kovojs/server',
-    '@kovojs/style',
-    '@kovojs/ui',
-    '@kovojs/cli',
-  ]) {
-    symlinkSync(resolveDependencyRoot(pkg), join(nodeModules, pkg));
-  }
-  symlinkSync(
-    resolveDependencyRoot('@electric-sql/pglite'),
-    join(nodeModules, '@electric-sql/pglite'),
-  );
-  for (const pkg of [
-    'better-auth',
-    'better-sqlite3',
-    'drizzle-orm',
-    'kovo',
-    'vite',
-    'vitest',
-    'vite-plus',
-  ]) {
-    symlinkSync(resolveDependencyRoot(pkg), join(nodeModules, pkg));
-  }
-}
-
-function mergeCookies(jar: Map<string, string>, setCookies: readonly string[]): void {
-  for (const setCookie of setCookies) {
-    const pair = setCookie.split(';')[0] ?? '';
-    const eq = pair.indexOf('=');
-    if (eq < 0) continue;
-    jar.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
-  }
-}
-
-function cookieHeader(jar: Map<string, string>): string {
-  return [...jar.entries()].map(([name, value]) => `${name}=${value}`).join('; ');
-}
-
-function withRepoBinOnPath(): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    PATH: [join(process.cwd(), 'node_modules/.bin'), process.env.PATH ?? ''].join(':'),
-  };
-}
-
-async function reservePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      server.off('error', reject);
-      resolve();
-    });
-  });
-  const address = server.address();
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  });
-  if (typeof address !== 'object' || address === null) {
-    throw new Error('Unable to reserve a TCP port.');
-  }
-  return address.port;
-}
-
-function collectOutput(process: ChildProcessWithoutNullStreams): () => string {
-  const chunks: Buffer[] = [];
-  process.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
-  process.stderr.on('data', (chunk: Buffer) => chunks.push(chunk));
-  return () => Buffer.concat(chunks).toString('utf8');
-}
-
-async function fetchTextWhenReady(url: string, output: () => string): Promise<string> {
-  const deadline = Date.now() + 20_000;
-  let lastError: unknown;
-
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url);
-      const body = await response.text();
-      if (response.ok) return body;
-      lastError = new Error(`HTTP ${response.status}: ${body}`);
-    } catch (error) {
-      lastError = error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  const cause = lastError instanceof Error ? lastError.message : String(lastError);
-  throw new Error(`Timed out fetching ${url}: ${cause}\n${output()}`);
-}
-
-async function stopProcess(
-  childProcess: ChildProcessWithoutNullStreams | undefined,
-): Promise<void> {
-  if (!childProcess || childProcess.exitCode !== null) return;
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      killProcessTree(childProcess, 'SIGKILL');
-      reject(new Error('Timed out stopping process.'));
-    }, 5_000);
-    childProcess.once('exit', () => {
-      clearTimeout(timer);
-      resolve();
-    });
-    killProcessTree(childProcess, 'SIGTERM');
-  });
-}
-
-function killProcessTree(
-  childProcess: ChildProcessWithoutNullStreams,
-  signal: NodeJS.Signals,
-): void {
-  if (childProcess.pid === undefined) return;
-  try {
-    if (process.platform !== 'win32') {
-      process.kill(-childProcess.pid, signal);
-      return;
-    }
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code !== 'ESRCH') throw error;
-  }
-  childProcess.kill(signal);
-}
-
-function resolveDependencyRoot(packageName: string): string {
-  const dependencyRoot = join(process.cwd(), 'node_modules');
-  const linkedPackageJson = join(dependencyRoot, packageName, 'package.json');
-  if (existsSync(linkedPackageJson)) {
-    return realpathSync(dirname(linkedPackageJson));
-  }
-
-  if (packageName.startsWith('@kovojs/')) {
-    const workspacePackageJson = join(
-      process.cwd(),
-      'packages',
-      packageName.slice('@kovojs/'.length),
-      'package.json',
-    );
-    if (existsSync(workspacePackageJson)) {
-      return realpathSync(dirname(workspacePackageJson));
-    }
-  }
-
-  if (packageName === 'kovo') {
-    const workspacePackageJson = join(process.cwd(), 'packages/cli/package.json');
-    if (existsSync(workspacePackageJson)) {
-      return realpathSync(dirname(workspacePackageJson));
-    }
-  }
-
-  const pnpmStore = findPnpmStore(dependencyRoot);
-  if (pnpmStore) {
-    for (const entry of readdirSync(pnpmStore)) {
-      const packageJson = join(pnpmStore, entry, 'node_modules', packageName, 'package.json');
-      if (existsSync(packageJson)) {
-        return realpathSync(dirname(packageJson));
-      }
-    }
-  }
-
-  throw new Error(`Unable to resolve generated starter dependency: ${packageName}`);
-}
-
-function findPnpmStore(start: string): string | undefined {
-  let current = start;
-  while (true) {
-    for (const candidate of [join(current, '.pnpm'), join(current, 'node_modules/.pnpm')]) {
-      if (existsSync(candidate)) return candidate;
-    }
-    const parent = dirname(current);
-    if (parent === current) return undefined;
-    current = parent;
-  }
-}
-
-function resolveBin(name: string): string {
-  let current = process.cwd();
-  while (true) {
-    for (const candidate of [
-      join(current, 'node_modules/.bin', name),
-      join(current, 'node_modules/.pnpm/node_modules/.bin', name),
-    ]) {
-      if (existsSync(candidate)) {
-        return realpathSync(candidate);
-      }
-    }
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  throw new Error(`Unable to resolve binary: ${name}`);
-}

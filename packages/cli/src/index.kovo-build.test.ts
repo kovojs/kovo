@@ -185,7 +185,7 @@ describe('kovo build', () => {
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build TypeScript preflight failed');
-      expect(errorOutput).toContain('Type \'string\' is not assignable to type \'number\'');
+      expect(errorOutput).toContain("Type 'string' is not assignable to type 'number'");
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -584,6 +584,8 @@ export default createApp({
 
       const handlerSource = readFileSync(join(runtimeDir, 'server/handler.mjs'), 'utf8');
       expect(handlerSource).not.toContain('vite');
+      expect(handlerSource).not.toContain("require('undici')");
+      expect(handlerSource).not.toContain('require("undici")');
 
       const serverModule = (await import(
         `${pathToFileURL(join(runtimeDir, 'server.mjs')).href}?t=${Date.now()}`

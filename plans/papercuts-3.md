@@ -16,7 +16,7 @@ fixes are intentionally out of scope for this ledger.
 
 ## Issues
 
-- [ ] **Node preset build output requires `undici` at app runtime.**
+- [x] **Node preset build output requires `undici` at app runtime.**
   - Observed behavior: `pnpm run build:prod` exited 0, but running the emitted
     server with `HOST=0.0.0.0 PORT=5194 node dist/server/server.mjs` crashed
     before listening with `Error: Cannot find module 'undici'` from
@@ -42,8 +42,16 @@ undici` showed only transitive `@kovojs/server` copies; adding
     server output, or make `create-kovo` generate the direct dependency. Add a
     starter-level production smoke that builds a fresh SQLite app and boots
     `dist/server/server.mjs` under pnpm's non-hoisted dependency layout.
+  - Fixed: `packages/cli/src/commands/build-export.ts` now teaches the node
+    preset bundler about the framework-owned dynamic `undici` dependency, while
+    `packages/server/src/egress-undici.ts` keeps the lazy `createRequire` import
+    that avoids dev/test SSR evaluating Undici during app import.
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts -t
+"boots emitted node preset output from production dependencies"` passed and
+    asserts the emitted handler has no `require('undici')`; `pnpm exec vitest run
+packages/create-kovo/src/index.build.test.ts` passed.
 
-- [ ] **Generated pnpm starter runs subchecks through `npm run`, producing npm config warnings.**
+- [x] **Generated pnpm starter runs subchecks through `npm run`, producing npm config warnings.**
   - Observed behavior: `pnpm run check` passed, but each generated subcheck
     printed npm warnings such as `Unknown env config "verify-deps-before-run"`,
     `"_jsr-registry"`, and `"minimum-release-age"`.
@@ -63,8 +71,14 @@ check:endpoint-posture"` even though the generated `packageManager` is
     consistently, or avoid package-manager recursion for same-package scripts.
     `pnpm run check` in a freshly scaffolded pnpm app should pass without npm
     unknown-config warnings.
+  - Fixed: `packages/create-kovo/templates/package*.json` now use `pnpm run` for
+    same-package subchecks and `serve`; template READMEs now document `pnpm run`
+    commands consistently.
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts`
+    passed and checks the generated script shape; `pnpm exec vitest run
+packages/create-kovo/src/index.build.test.ts` passed against generated apps.
 
-- [ ] **Local monorepo dogfood linking has an easy broken path.**
+- [x] **Local monorepo dogfood linking has an easy broken path.**
   - Observed behavior: after changing generated `@kovojs/*` dependencies to
     `file:../kovo/packages/*`, `pnpm install` first failed on unresolved
     transitive `workspace:*`; after adding a temporary workspace, `pnpm run test`
@@ -96,6 +110,15 @@ check:endpoint-posture"` even though the generated `packageManager` is
     source-exported Kovo packages under `node_modules` and should be covered by a
     smoke test that runs `pnpm install`, `pnpm run test`, and `pnpm run
 build:prod` in an outside throwaway app.
+  - Fixed: `scripts/link-local-kovo.mjs` rewrites generated `@kovojs/*`
+    dependencies to `link:` specs and writes a temporary `pnpm-workspace.yaml`;
+    `.agents/skills/dogfood/SKILL.md` now instructs dogfood runs to use the
+    helper and explicitly keeps it out of public `create-kovo` options.
+  - Evidence: `node packages/create-kovo/dist/index.mjs
+/tmp/kovo-link-helper-proof --dialect sqlite --disable-git && node
+scripts/link-local-kovo.mjs /tmp/kovo-link-helper-proof /Users/mini/kovo`
+    produced `link:` specs for generated Kovo dependencies and a workspace entry
+    for `/Users/mini/kovo/packages/*`.
 
 ## Refuted / Not Carried Forward
 
@@ -116,6 +139,24 @@ text/vnd.kovo.fragment+html`, `Kovo-Changes: [{"domain":"auth"}]`, empty
   a direct workflow failure caused by that peer range.
 
 ## Latest Verification
+
+- `pnpm exec vp check packages/cli/src/commands/build-export.ts
+packages/server/src/egress-undici.ts packages/create-kovo/src/index.ts
+packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.test.ts
+packages/create-kovo/src/index.test-support.ts packages/create-kovo/templates/package.json
+packages/create-kovo/templates/package.sqlite.json packages/create-kovo/templates/README.md
+packages/create-kovo/templates/README.sqlite.md packages/create-kovo/templates/vite.config.ts
+.agents/skills/dogfood/SKILL.md scripts/link-local-kovo.mjs`: passed.
+- `pnpm exec vitest run packages/create-kovo/src/index.test.ts`: 19 tests passed.
+- `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts`: 4 tests passed.
+- `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts -t "boots emitted node preset output from production dependencies"`:
+  passed.
+- `pnpm exec vitest run scripts/ci-shards.test.mjs`: 7 tests passed.
+- `pnpm --filter create-kovo run build:dist`: passed.
+- `node packages/create-kovo/dist/index.mjs /tmp/kovo-link-helper-proof --dialect sqlite --disable-git && node scripts/link-local-kovo.mjs /tmp/kovo-link-helper-proof /Users/mini/kovo`:
+  produced `link:` specs and a temporary workspace file.
+
+Historical dogfood run evidence:
 
 - `pnpm --filter create-kovo run build:dist` in `/Users/mini/kovo`: passed before
   scaffolding.

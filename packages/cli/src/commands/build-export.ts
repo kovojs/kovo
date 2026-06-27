@@ -504,9 +504,7 @@ async function staticBuildCheckGraph(
 ): Promise<CoreGraph.KovoCheckInput> {
   const files = buildCheckSourceFiles(appModulePath);
   const [queries, touchGraphDiagnostics, touchGraph] =
-    files.length === 0
-      ? [[], [], undefined]
-      : await staticDrizzleBuildFacts(files);
+    files.length === 0 ? [[], [], undefined] : await staticDrizzleBuildFacts(files);
 
   return {
     ...(touchGraph === undefined ? {} : { touchGraph }),
@@ -1209,6 +1207,9 @@ async function bundleKovoServerHandler(
     await build({
       appType: 'custom',
       build: {
+        commonjsOptions: {
+          dynamicRequireTargets: [requireFromCli.resolve('undici')],
+        },
         emptyOutDir: true,
         minify: false,
         outDir,

@@ -6,10 +6,10 @@ optimistic UI, real authentication, and styled UI components — in as little co
 as possible.
 
 ```sh
-npm run dev      # vp dev — start the dev server
-npm run check    # vp check — types + Kovo's compile/coverage checks
-npm run test     # vp test
-npm run build:prod   # kovo build ./src/app.tsx → dist/server (node preset)
+pnpm run dev         # vp dev — start the dev server
+pnpm run check       # vp check — types + Kovo's compile/coverage checks
+pnpm run test        # vp test
+pnpm run build:prod  # kovo build ./src/app.tsx → dist/server (node preset)
 npm start            # node dist/server/server.mjs
 ```
 
@@ -34,7 +34,7 @@ compiles the app and serves route documents and `/c/` handler modules (SPEC.md
 §9.5). The compiler-derived dependency graph is auditable with `kovo check` and
 `kovo explain` against the built app — there is no hand-maintained graph file.
 
-`npm run check` also enforces the SPEC.md §6.6 sound TypeScript subset for app
+`pnpm run check` also enforces the SPEC.md §6.6 sound TypeScript subset for app
 source: strict TypeScript plus local bans on `any`, non-null assertions, and
 unchecked `as` casts. Keep deliberate escapes outside starter app code until
 they have a framework-owned audit path.

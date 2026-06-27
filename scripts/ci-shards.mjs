@@ -10,6 +10,19 @@ const DEFAULT_ROOTS = {
 
 const DEFAULT_HISTORY_NAME = 'timing-history.json';
 const DEFAULT_DURATION_SECONDS = 5;
+const CONSOLIDATED_VITEST_FILES = new Set([
+  'packages/cli/src/index.kovo-compile.test.ts',
+  'packages/core/src/diagnostics.test.ts',
+  'packages/core/src/sql-safety.test.ts',
+  'packages/create-kovo/src/index.build.test.ts',
+  'packages/drizzle/src/runtime-surface.test.ts',
+  'packages/drizzle/src/sql-safety-static.test.ts',
+  'packages/server/src/guards.test.ts',
+  'packages/test/src/pglite-harness.test.ts',
+  'packages/test/src/query-verifier.test.ts',
+  'packages/test/src/sqlite-harness.test.ts',
+  'packages/test/src/verifier-sql.test.ts',
+]);
 
 export function percentile(values, ratio) {
   const sorted = values
@@ -198,12 +211,13 @@ async function discoverFromRoot(root, kind) {
   return files;
 }
 
-function includeVitest(file) {
+export function includeVitest(file) {
   return (
     !file.startsWith('tests/integration/') &&
     !file.startsWith('conformance/') &&
     !file.endsWith('.browser.test.ts') &&
-    !file.includes('/templates/')
+    !file.includes('/templates/') &&
+    !CONSOLIDATED_VITEST_FILES.has(file)
   );
 }
 

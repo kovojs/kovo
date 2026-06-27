@@ -14,6 +14,13 @@ export default defineConfig({
       output: { assetFileNames: 'assets/[name][extname]' },
     },
   },
+  test: {
+    server: {
+      deps: {
+        external: ['undici'],
+      },
+    },
+  },
   lint: {
     options: {
       typeAware: true,
