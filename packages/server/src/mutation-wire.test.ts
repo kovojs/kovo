@@ -176,6 +176,78 @@ describe('mutation wire headers', () => {
     ).toEqual([]);
   });
 
+  it('attests no-CSRF live-target descriptors with a deployment-stable secret (M8)', () => {
+    const previousSecret = process.env.KOVO_LIVE_TARGET_SECRET;
+    const request = {};
+    const descriptor = {
+      component: 'components/product-form/product-form',
+      props: { productId: 'p1' },
+      target: 'product-form:p1',
+    };
+    try {
+      process.env.KOVO_LIVE_TARGET_SECRET = 'live-target-deployment-secret-a';
+      const token = createLiveTargetAttestation(descriptor, { request });
+
+      expect(
+        mutationWireRequestFromHeaders({
+          headers: {
+            'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+          },
+          rawInput: {},
+          request,
+        }).liveTargetDescriptors,
+      ).toHaveLength(1);
+
+      process.env.KOVO_LIVE_TARGET_SECRET = 'live-target-deployment-secret-b';
+      expect(
+        mutationWireRequestFromHeaders({
+          headers: {
+            'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+          },
+          rawInput: {},
+          request,
+        }).liveTargetDescriptors,
+      ).toEqual([]);
+    } finally {
+      if (previousSecret === undefined) {
+        delete process.env.KOVO_LIVE_TARGET_SECRET;
+      } else {
+        process.env.KOVO_LIVE_TARGET_SECRET = previousSecret;
+      }
+    }
+  });
+
+  it('fails closed in production when no-CSRF live-target attestation lacks a secret (M8)', () => {
+    const previousEnv = process.env.NODE_ENV;
+    const previousSecret = process.env.KOVO_LIVE_TARGET_SECRET;
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.KOVO_LIVE_TARGET_SECRET;
+
+      expect(() =>
+        createLiveTargetAttestation(
+          {
+            component: 'components/product-form/product-form',
+            props: { productId: 'p1' },
+            target: 'product-form:p1',
+          },
+          { request: {} },
+        ),
+      ).toThrow(/KOVO_LIVE_TARGET_SECRET is required/);
+    } finally {
+      if (previousEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousEnv;
+      }
+      if (previousSecret === undefined) {
+        delete process.env.KOVO_LIVE_TARGET_SECRET;
+      } else {
+        process.env.KOVO_LIVE_TARGET_SECRET = previousSecret;
+      }
+    }
+  });
+
   // K2 (SPEC §9.5): client-supplied Kovo-Live-Targets / Kovo-Targets headers must be
   // count-capped at parse time so one mutation cannot amplify into thousands of
   // component renders + O(N·M) selection (a >1000× DoS).

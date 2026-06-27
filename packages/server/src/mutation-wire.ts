@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import type { Redirect } from '@kovojs/core';
 import { signingKeyRingFromCsrfSecret, type CsrfValidationOptions } from './csrf.js';
@@ -496,7 +496,7 @@ export function createLiveTargetAttestation<Request>(
 ): string {
   const payload = liveTargetAttestationPayload(descriptor, options);
   if (options.csrf === undefined) {
-    return createHmac('sha256', liveTargetAttestationSecret).update(payload).digest('base64url');
+    return createHmac('sha256', liveTargetAttestationSecret()).update(payload).digest('base64url');
   }
   return signingKeyRingFromCsrfSecret(options.csrf.secret).sign({
     audience: 'mutation-live-target',
@@ -519,7 +519,17 @@ function verifyLiveTargetDescriptor<Request>(
   return secureEqual(descriptor.attestation, expected);
 }
 
-const liveTargetAttestationSecret = randomBytes(32).toString('base64url');
+function liveTargetAttestationSecret(): string {
+  const configured = process.env.KOVO_LIVE_TARGET_SECRET;
+  if (configured !== undefined && configured !== '') return configured;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'KOVO_LIVE_TARGET_SECRET is required for live-target attestation when CSRF is not configured.',
+    );
+  }
+
+  return 'kovo-live-target-attestation:development';
+}
 
 function liveTargetAttestationPayload<Request>(
   descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,

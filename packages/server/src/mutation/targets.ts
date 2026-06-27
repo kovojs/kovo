@@ -169,6 +169,7 @@ function buildAffectedKeysByDomain(
 ): ReadonlyMap<string, ReadonlySet<string>> {
   const map = new Map<string, Set<string>>();
   for (const change of changes) {
+    if (change.crossTable) continue;
     if (!change.keys || change.keys.length === 0) continue;
     const set = map.get(change.domain) ?? new Set<string>();
     for (const key of change.keys) set.add(key);

@@ -87,6 +87,28 @@ describe('deferred streams', () => {
     expect(policy).toContain(`'${cleanupHashXb}'`);
   });
 
+  it('rerolls when the boundary appears only after tag-stripped textContent scanning (M2)', () => {
+    const result = renderDeferredStream({
+      chunks: [
+        {
+          fragments: [
+            {
+              html: '<section><span>chunk --kovo</span><span>-boundary</span></section>',
+              target: 'main',
+            },
+          ],
+        },
+      ],
+      shell:
+        '<!doctype html><html><body><main><span>shell --kovo</span><span>&#45;boundary</span></main>',
+    });
+
+    expect(result.body).not.toContain('\n--kovo-boundary\n');
+    expect(result.body).not.toContain('\n--kovo-boundary--\n');
+    expect(result.body).toMatch(/\n--kovo-boundary-[0-9a-f]{32}\n/);
+    expect(result.body).toMatch(/\n--kovo-boundary-[0-9a-f]{32}--\n/);
+  });
+
   it('orders deferred stream chunks by priority, queries before fragments within each chunk', () => {
     const result = renderDeferredStream({
       chunks: [
