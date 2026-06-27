@@ -152,7 +152,9 @@ function followSuccessfulMutationRedirect(location: string): void {
   globalLocation?.assign(location);
 }
 
-function readSuccessfulRedirectLocation(response: EnhancedMutationResponseLike): string | undefined {
+function readSuccessfulRedirectLocation(
+  response: EnhancedMutationResponseLike,
+): string | undefined {
   const status = response.status ?? 0;
   const headerLocation =
     response.headers?.get('Location') ?? response.headers?.get('location') ?? undefined;

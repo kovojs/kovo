@@ -41,47 +41,50 @@ describe('enhanced mutation submit', () => {
       },
       title: 'sign-out-like followed redirect to /login',
     },
-  ])('navigates after a successful enhanced auth redirect: $title', async ({ expected, response }) => {
-    const store = createQueryStore();
-    const root = new FakeMorphRoot();
-    const assign = vi.fn();
-    const originalLocation = globalThis.location;
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { assign },
-    });
-    const text = vi.fn(async () => '<kovo-fragment target="auth">stale</kovo-fragment>');
-    const fetch = vi.fn(async () => ({
-      ...response,
-      text,
-    }));
-
-    try {
-      const result = await submitEnhancedMutation({
-        fetch,
-        form: { action: '/_m/auth/sign-in', method: 'post' },
-        formData: new FormData(),
-        root,
-        store,
-      });
-      expect(result).toEqual({
-        appliedFragments: [],
-        changes: [],
-        fragments: [],
-        idem: expect.any(String),
-        queries: [],
-        targets: [],
-      });
-    } finally {
+  ])(
+    'navigates after a successful enhanced auth redirect: $title',
+    async ({ expected, response }) => {
+      const store = createQueryStore();
+      const root = new FakeMorphRoot();
+      const assign = vi.fn();
+      const originalLocation = globalThis.location;
       Object.defineProperty(globalThis, 'location', {
         configurable: true,
-        value: originalLocation,
+        value: { assign },
       });
-    }
+      const text = vi.fn(async () => '<kovo-fragment target="auth">stale</kovo-fragment>');
+      const fetch = vi.fn(async () => ({
+        ...response,
+        text,
+      }));
 
-    expect(assign).toHaveBeenCalledWith(expected);
-    expect(text).not.toHaveBeenCalled();
-  });
+      try {
+        const result = await submitEnhancedMutation({
+          fetch,
+          form: { action: '/_m/auth/sign-in', method: 'post' },
+          formData: new FormData(),
+          root,
+          store,
+        });
+        expect(result).toEqual({
+          appliedFragments: [],
+          changes: [],
+          fragments: [],
+          idem: expect.any(String),
+          queries: [],
+          targets: [],
+        });
+      } finally {
+        Object.defineProperty(globalThis, 'location', {
+          configurable: true,
+          value: originalLocation,
+        });
+      }
+
+      expect(assign).toHaveBeenCalledWith(expected);
+      expect(text).not.toHaveBeenCalled();
+    },
+  );
 
   it('follows 401 Kovo-Reauth without applying mutation fragments', async () => {
     const store = createQueryStore();
