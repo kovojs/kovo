@@ -19,6 +19,7 @@ describe('generated component live target renderers', () => {
       reads: [product],
     });
     const ProductDetail = component({
+      props: { productId: String },
       queries: {
         product: productQuery.args((props: { productId: string }) => ({ id: props.productId })),
       },
@@ -44,14 +45,22 @@ describe('generated component live target renderers', () => {
     expect(renderer.queryDefinitions?.map((queryDefinition) => queryDefinition.key)).toEqual([
       productQuery.key,
     ]);
-    await expect(
-      renderer.render({
-        input: {},
-        props: { productId: 'p1' },
-        request: { locale: 'en-US' },
-        target: 'product-detail:p1',
-      }),
-    ).resolves.toBe('<section data-product="p1" data-prop="p1">en-US:p1</section>');
+    const html = await renderer.render({
+      input: {},
+      props: { productId: 'p1' },
+      request: { locale: 'en-US' },
+      target: 'product-detail:p1',
+    });
+
+    expect(html).toContain('data-product="p1"');
+    expect(html).toContain('data-prop="p1"');
+    expect(html).toContain('>en-US:p1</section>');
+    expect(html).toContain('kovo-c="product-detail"');
+    expect(html).toContain('kovo-deps="product"');
+    expect(html).toContain('kovo-fragment-target="product-detail:p1"');
+    expect(html).toContain('kovo-live-component="components/product-detail/product-detail"');
+    expect(html).toContain('kovo-live-token="');
+    expect(html).toContain('kovo-props="{&quot;productId&quot;:&quot;p1&quot;}"');
   });
 
   it('folds generated query reads into component-bound live target query definitions', async () => {
@@ -128,13 +137,20 @@ describe('generated component live target renderers', () => {
       componentId: 'components/cart-form/cart-form',
     });
 
-    await expect(
-      renderer.render({
-        input: {},
-        props: {},
-        request: { csrf: 'token' },
-        target: 'cart-form',
-      }),
-    ).resolves.toBe('<form data-count="1" data-request="yes">ready</form>');
+    const html = await renderer.render({
+      input: {},
+      props: {},
+      request: { csrf: 'token' },
+      target: 'cart-form',
+    });
+
+    expect(html).toContain('data-count="1"');
+    expect(html).toContain('data-request="yes"');
+    expect(html).toContain('>ready</form>');
+    expect(html).toContain('kovo-c="cart-form"');
+    expect(html).toContain('kovo-deps="cart"');
+    expect(html).toContain('kovo-fragment-target="cart-form"');
+    expect(html).toContain('kovo-live-component="components/cart-form/cart-form"');
+    expect(html).toContain('kovo-live-token="');
   });
 });

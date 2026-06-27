@@ -11,6 +11,7 @@ import {
   renderComponent,
   type ComponentRenderOptions,
 } from './component-render.js';
+import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { renderServerRenderable } from './renderable.js';
@@ -72,7 +73,7 @@ export function componentLiveTargetRenderer<
     async render(context) {
       const queries = await loadLiveTargetQueries(queryBindings, context);
       const renderOptions = await componentLiveTargetRenderOptions(options, context);
-      return runWithJsxRequestContext(
+      const html = await runWithJsxRequestContext(
         context.request,
         {
           ...(context.csrf === undefined ? {} : { csrf: context.csrf }),
@@ -89,6 +90,15 @@ export function componentLiveTargetRenderer<
         },
         () => renderComponent(options.component, { ...context.props, ...queries }, renderOptions),
       );
+      return stampKovoComponentRoot({
+        component: options.component,
+        componentName: options.componentId,
+        ...(context.csrf === undefined ? {} : { csrf: context.csrf }),
+        html,
+        props: context.props,
+        request: context.request,
+        target: context.target,
+      });
     },
   };
 
