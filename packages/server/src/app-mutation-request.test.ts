@@ -360,7 +360,7 @@ describe('server app mutation request boundary', () => {
     let handlerCalls = 0;
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: 'test-csrf-secret-0123456789abcdef012345',
       sessionId() {
         return 's1';
       },

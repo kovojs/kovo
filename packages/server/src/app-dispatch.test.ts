@@ -19,6 +19,10 @@ const rawTextResponse = {
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
 
+const ENDPOINT_CSRF_SECRET = 'endpoint-csrf-secret-0123456789abcdef012345';
+const MACHINE_HMAC_SECRET = 'endpoint-hmac-secret-0123456789abcdef012345';
+const APP_CSRF_SECRET = 'app-csrf-secret-0123456789abcdef012345';
+
 describe('server app matched dispatch boundary', () => {
   it('owns SPEC §9.5 client-module dispatch through the app registry', async () => {
     const app = createApp();
@@ -103,7 +107,7 @@ describe('server app matched dispatch boundary', () => {
         response: rawTextResponse,
       });
       const app = createApp({
-        csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },
+        csrf: { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' },
         endpoints: [updateEmail],
       });
       const requestInit: RequestInit = { method };
@@ -131,7 +135,7 @@ describe('server app matched dispatch boundary', () => {
       reason: 'account email update endpoint',
       response: rawTextResponse,
     });
-    const csrf = { secret: 'endpoint-secret', sessionId: () => 's1' };
+    const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' };
     const app = createApp({ csrf, endpoints: [updateEmail] });
     const request = new Request('https://shop.example.test/account/email', {
       body: new URLSearchParams({
@@ -165,7 +169,7 @@ describe('server app matched dispatch boundary', () => {
       reason: 'account email update endpoint',
       response: rawTextResponse,
     });
-    const csrf = { secret: 'endpoint-secret', sessionId: () => 's1' };
+    const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' };
     const app = createApp({ csrf, endpoints: [updateEmail] });
     const body = JSON.stringify({
       email: 'ada@example.com',
@@ -197,7 +201,7 @@ describe('server app matched dispatch boundary', () => {
       reason: 'account email update endpoint',
       response: rawTextResponse,
     });
-    const csrf = { secret: 'endpoint-secret', sessionId: () => 's1' };
+    const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' };
     const app = createApp({ csrf, endpoints: [updateEmail] });
     const request = new Request('https://shop.example.test/account/email', {
       body: JSON.stringify({ email: 'ada@example.com' }),
@@ -228,7 +232,7 @@ describe('server app matched dispatch boundary', () => {
       response: rawTextResponse,
     });
     const app = createApp({
-      csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },
+      csrf: { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' },
       endpoints: [signedWebhook],
     });
     const request = new Request('https://shop.example.test/webhooks/signed', {
@@ -249,7 +253,7 @@ describe('server app matched dispatch boundary', () => {
       encoding: 'hex',
       header: 'x-signature',
       payload: (request) => request.payload,
-      secret: 'endpoint-secret',
+      secret: MACHINE_HMAC_SECRET,
     });
     let handlerCalls = 0;
     const signedEndpoint = endpoint('/machine/signed', {
@@ -263,11 +267,11 @@ describe('server app matched dispatch boundary', () => {
       response: rawTextResponse,
     });
     const app = createApp({
-      csrf: { secret: 'csrf-secret', sessionId: () => 's1' },
+      csrf: { secret: APP_CSRF_SECRET, sessionId: () => 's1' },
       endpoints: [signedEndpoint],
     });
     const body = 'payload';
-    const badSignature = createHmac('sha256', 'endpoint-secret').update('other').digest('hex');
+    const badSignature = createHmac('sha256', MACHINE_HMAC_SECRET).update('other').digest('hex');
     const badRequest = new Request('https://shop.example.test/machine/signed', {
       body,
       headers: { 'x-signature': badSignature },
@@ -280,7 +284,7 @@ describe('server app matched dispatch boundary', () => {
     await expect(badResponse.text()).resolves.toBe('Unauthorized');
     expect(handlerCalls).toBe(0);
 
-    const goodSignature = createHmac('sha256', 'endpoint-secret').update(body).digest('hex');
+    const goodSignature = createHmac('sha256', MACHINE_HMAC_SECRET).update(body).digest('hex');
     const goodRequest = new Request('https://shop.example.test/machine/signed', {
       body,
       headers: { 'x-signature': goodSignature },
@@ -308,7 +312,7 @@ describe('server app matched dispatch boundary', () => {
       response: rawTextResponse,
     });
     const app = createApp({
-      csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },
+      csrf: { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' },
       endpoints: [signedWebhook],
     });
     const request = new Request('https://shop.example.test/webhooks/signed', {

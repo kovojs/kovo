@@ -17,11 +17,14 @@ import {
 import type { MutationReplayStore } from './replay.js';
 import { s } from './schema.js';
 
+const TEST_CSRF_SECRET = 'test-csrf-secret-0123456789abcdef012345';
+const ANONYMOUS_CSRF_SECRET = 'anonymous-csrf-secret-0123456789abcdef';
+
 describe('csrf helpers', () => {
   const request = { sessionId: 'session-1' };
   const csrf = {
     field: 'csrf<input>',
-    secret: 'secret',
+    secret: TEST_CSRF_SECRET,
     sessionId(input: typeof request): string | undefined {
       return input.sessionId;
     },
@@ -153,7 +156,7 @@ describe('csrf helpers', () => {
   it('renders and validates anonymous CSRF tokens bound to the framework cookie', () => {
     const anonymousCsrf = {
       field: 'csrf',
-      secret: 'anonymous-secret',
+      secret: ANONYMOUS_CSRF_SECRET,
       sessionId() {
         return undefined;
       },
@@ -200,7 +203,7 @@ describe('csrf helpers', () => {
   // defense-in-depth floor — sound at that sink, bypassable by same-process raw `Set-Cookie`.
   const anonymousCsrf = {
     field: 'csrf',
-    secret: 'anonymous-secret',
+    secret: ANONYMOUS_CSRF_SECRET,
     sessionId(): string | undefined {
       return undefined;
     },
@@ -281,7 +284,7 @@ describe('csrf helpers', () => {
       const insecureCsrf = {
         anonymousCookie: { secure: false },
         field: 'csrf',
-        secret: 'anonymous-secret',
+        secret: ANONYMOUS_CSRF_SECRET,
         sessionId(): string | undefined {
           return undefined;
         },
@@ -373,7 +376,7 @@ describe('mutation CSRF enforcement', () => {
     const request = { session: { id: 's1' } };
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: TEST_CSRF_SECRET,
       sessionId(candidate: typeof request) {
         return candidate.session.id;
       },
@@ -417,7 +420,7 @@ describe('mutation CSRF enforcement', () => {
     const request = { session: { id: 's1' } };
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: TEST_CSRF_SECRET,
       sessionId(candidate: typeof request) {
         return candidate.session.id;
       },
@@ -489,7 +492,7 @@ describe('mutation CSRF enforcement', () => {
     const request = { session: { id: 's1' } };
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: TEST_CSRF_SECRET,
       sessionId(candidate: typeof request) {
         return candidate.session.id;
       },
@@ -540,7 +543,7 @@ describe('mutation CSRF enforcement', () => {
     const request = { session: { id: 's1' } };
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: TEST_CSRF_SECRET,
       sessionId(candidate: typeof request) {
         return candidate.session.id;
       },
@@ -665,7 +668,7 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
   it('validateCsrfToken rejects no-Origin unsafe-verb requests before the token check', () => {
     const anonymousCsrf = {
       field: 'csrf',
-      secret: 'anon',
+      secret: ANONYMOUS_CSRF_SECRET,
       sessionId: () => undefined,
     };
     const setCookies: string[] = [];
