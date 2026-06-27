@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Find Bugz'
+  short_description: 'Adversarial bug hunt → next plans/bugz-N.md ledger'
+  default_prompt: 'Use $find-bugz to run a fresh adversarial sweep of the Kovo framework: fan out dimension finders that reproduce candidates in throwaway git worktrees, adversarially verify each, run a completeness critic plus a targeted second round, and synthesize the next severity-ranked plans/bugz-N.md ledger. Find and report only — do not fix.'
