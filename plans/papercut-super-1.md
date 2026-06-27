@@ -293,7 +293,8 @@ props. item`.
 
 ### D. L4 Live honesty
 
-- [ ] **D1 — L4 Live (SSE) is entirely unimplemented, but SPEC §7/§9.3 describe `<kovo-live>`/`live:true` in present tense with no roadmap marker.** (MEDIUM, docs/framework; found by l4-A1/A4)
+- [x] **D1 — L4 Live (SSE) is entirely unimplemented, but SPEC §7/§9.3 describe `<kovo-live>`/`live:true` in present tense with no roadmap marker.** (MEDIUM, docs/framework; found by l4-A1/A4)
+  - Evidence: `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts`, `pnpm run check:api-surface`, and `pnpm run check:vp` passed after `SPEC.md` marked `<kovo-live>`/`live: true` SSE Live as roadmap/not shipped rather than present-tense behavior.
   - Observed: a SPEC-following author writes `live: true` + `<kovo-live
 query="presence">` and gets silent dead HTML — no SSE transport, no subscriber
     JS, no diagnostic.
@@ -315,7 +316,8 @@ query="presence">` and gets silent dead HTML — no SSE transport, no subscriber
     an "L4 Live unimplemented" diagnostic, and disambiguate the §9.1 live-target
     stamp names from §9.3 Live.
 
-- [ ] **D2 — Server `query()` silently swallows `live:true` and any unknown key (e.g. a misspelled `guardd`), violating the framework's own no-op-field contract.** (MEDIUM, framework; found by l4-A2)
+- [x] **D2 — Server `query()` silently swallows `live:true` and any unknown key (e.g. a misspelled `guardd`), violating the framework's own no-op-field contract.** (MEDIUM, framework; found by l4-A2)
+  - Evidence: `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts` proves unknown keys are type-rejected for general/elevated query shapes and runtime-rejected for cast or widened definitions; `pnpm run check:api-surface` passed.
   - Observed: `query('k', { live:true, guardd:'x', readz:[], totallyMadeUp:42,
 load })` typechecks clean; the client `query()` correctly rejects `{ live:true }`
     with TS2353.
