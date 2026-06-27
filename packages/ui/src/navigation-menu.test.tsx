@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { NavigationMenuLink, NavigationMenuTrigger } from './navigation-menu.js';
 
-const DOUBLE_ESCAPED = '&amp;lt;img src=x onerror=alert(1)&amp;gt;';
+const ESCAPED = '&lt;img src=x onerror=alert(1)&gt;';
 const ESCAPED_CHILD = '&lt;span&gt;Products&lt;/span&gt;';
 
 describe('NavigationMenuLink href sanitization (SECURITY_FINDINGS.md H3)', () => {
@@ -42,7 +42,7 @@ describe('navigation-menu scalar text props are escaped (SECURITY_FINDINGS.md C1
     );
 
     expect(html).not.toContain('<img src=x onerror=alert(1)>');
-    expect(html).toContain(DOUBLE_ESCAPED);
+    expect(html).toContain(ESCAPED);
   });
 
   it('escapes an itemValue fallback containing HTML in NavigationMenuLink', () => {
@@ -53,7 +53,7 @@ describe('navigation-menu scalar text props are escaped (SECURITY_FINDINGS.md C1
     );
 
     expect(html).not.toContain('<img src=x onerror=alert(1)>');
-    expect(html).toContain(DOUBLE_ESCAPED);
+    expect(html).toContain(ESCAPED);
   });
 
   it('escapes plain string children as text', () => {

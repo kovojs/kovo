@@ -66,7 +66,7 @@ export function collectApiExamples(dir = apiDir, publicPages = publicApiPageFile
     let heading = 'page';
     let perHeading = 0;
     for (let index = 0; index < lines.length; index += 1) {
-      const headingMatch = /^#{3,4} `(.+)`$/.exec(lines[index]);
+      const headingMatch = /^#{3,4} `(.+?)`(?:\s+\{#[^}]+\})?$/.exec(lines[index]);
       if (headingMatch) {
         heading = headingMatch[1];
         perHeading = 0;
