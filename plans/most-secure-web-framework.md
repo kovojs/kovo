@@ -603,10 +603,13 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       scope-audit tests, `git diff --check`, and `pnpm run check:vp` passed. Static relational query
       `where` predicates, relational callback `where: (table, { eq }) => ...` predicates, renamed callback
       operator aliases such as `{ and: both, eq: equals }`, destructured relational table columns such as
-      `where: ({ userId }, { eq }) => ...`, operator bag calls such as `ops.eq(...)`, awaited summarized guard
-      helpers, and unshadowed singleton `Array.of(principal)` membership predicates now feed the same exact
-      owner-column proof; shadowed/unsummarized/wrong-column/defaulted-or-opaque callback cases remain
-      `scope: unknown`. Evidence: `pnpm exec vitest run
+      `where: ({ userId }, { eq }) => ...`, operator bag calls and stable local aliases such as `ops.eq(...)`
+      and `const equals = ops.eq`, callback-local owner-column aliases such as `const owner = order.userId`,
+      readonly object wrappers such as `const owner = { userId: order.userId } as const`, awaited summarized
+      guard helpers, and unshadowed singleton `Array.of(principal)` membership predicates now feed the same exact
+      owner-column proof; mutable aliases, spread/computed wrappers, shadowed operators, unsummarized helpers,
+      wrong-column predicates, and defaulted-or-opaque callback cases remain `scope: unknown`. Evidence:
+      `pnpm exec vitest run
       packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed.
       Remaining gap: this is not full guard-predicate correctness.
 
