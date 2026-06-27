@@ -107,7 +107,11 @@ describe('compiled interactive gallery demos', () => {
         ...galleryHeadlessUiClientModuleHrefs,
         ...galleryInteractiveClientModuleHrefs,
       ]) {
-        expect(html).toContain(`<link rel="modulepreload" href="${href}">`);
+        expect(html).toMatch(
+          new RegExp(
+            `<link rel="modulepreload" href="${escapeRegExp(href)}"(?: integrity="[^"]+")?>`,
+          ),
+        );
         const modulePath = href.replace(/^\//, '');
         expect(existsSync(join(distDir, modulePath)), `${modulePath} was exported`).toBe(true);
       }
@@ -176,4 +180,8 @@ describe('compiled interactive gallery demos', () => {
 function exportedModulePath(href: string): string {
   if (!href) throw new Error('Missing gallery exported module href.');
   return href.replace(/^\//, '');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

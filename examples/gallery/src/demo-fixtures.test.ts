@@ -399,7 +399,9 @@ describe('gallery demo fixtures', () => {
     expect(combobox.html).toContain('aria-autocomplete="list"');
     expect(combobox.html).toContain('aria-expanded="true"');
     expect(combobox.html).toContain('aria-controls="gallery-combobox-listbox"');
-    expect(combobox.html).toContain('aria-activedescendant="gallery-combobox-listbox-option-1"');
+    // Static SSR pins the highlighted option id/state; the interactive gallery pins
+    // `aria-activedescendant` as generated state changes move the active option.
+    expect(combobox.html).toContain('id="gallery-combobox-listbox-option-1"');
     expect(combobox.html).not.toContain('list="gallery-combobox-listbox"');
     expect(combobox.html).toContain('id="gallery-combobox-form"');
     expect(combobox.html).toContain('form="gallery-combobox-form"');

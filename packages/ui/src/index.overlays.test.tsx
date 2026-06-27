@@ -439,7 +439,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(command).toContain('aria-selected="true"');
     expect(command).toContain('data-highlighted="" data-state="active"');
     expect(command).toContain('aria-disabled="true"');
-    expect(command).toContain('disabled role="option" tabIndex="-1" type="button" value="delete"');
+    expect(command).toContain('aria-disabled="true"');
+    expect(command).toContain('data-disabled="" data-state="inactive" disabled');
+    expect(command).toMatch(
+      /id="command-[^"]+-item-2" role="option" tabIndex="-1" type="button" value="delete"/,
+    );
     expect(command).toContain('command="request-close" commandfor="command-dialog"');
     expect(command).toContain('id="command-value">Invite teammate</span>');
     expect({

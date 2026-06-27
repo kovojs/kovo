@@ -159,8 +159,8 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(trigger).toContain('id="plan" role="combobox" type="button"');
     expect(trigger).toContain('role="listbox"');
     expect(trigger).toContain('aria-selected="true"');
-    expect(trigger).toContain(
-      'data-state="checked" id="select-option-1" label="Growth" role="option" value="growth"',
+    expect(trigger).toMatch(
+      /data-state="checked" id="select-[^"]+-option-1" label="Growth" role="option" value="growth"/,
     );
     expect(trigger).toContain('aria-disabled="true"');
     expect(trigger).toContain('data-disabled="" data-state="unchecked"');
@@ -220,7 +220,6 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const value = String(ComboboxValue.definition.render({ ...state, id: 'assignee-value' }));
-    expect(input).toContain('aria-activedescendant="assignee-listbox-option-1"');
     expect(input).toContain('aria-autocomplete="list"');
     expect(input).toContain('aria-controls="assignee-listbox"');
     expect(input).toContain('aria-expanded="true"');
@@ -231,6 +230,7 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(listbox).toContain('data-state="open" id="assignee-listbox"');
     expect(listbox).toContain('aria-selected="true"');
     expect(listbox).toContain('data-highlighted="" data-state="unchecked"');
+    expect(listbox).toContain('id="assignee-listbox-option-1"');
     expect(listbox).toContain('aria-disabled="true"');
     expect(value).toContain('id="assignee-value">Ada Lovelace</span>');
     expect({
