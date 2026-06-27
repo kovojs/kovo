@@ -6,6 +6,7 @@ import { compileComponentModule, deriveAppGraph } from './index.js';
 const kv230 = diagnosticDefinitions.KV230;
 const kv303 = diagnosticDefinitions.KV303;
 const kv316 = diagnosticDefinitions.KV316;
+const kv318 = diagnosticDefinitions.KV318;
 
 describe('fragment target validation', () => {
   it('reports removed fragmentTarget usage and points to query inference', () => {
@@ -215,6 +216,7 @@ export const CartRow = component({
 const DISPLAY = { currency: 'USD' };
 
 export const CartBadge = component({
+  /* KV318: cart badge self-renders from declared query/state inputs. */
   isomorphic: true,
   queries: { cart: cartQuery },
   props: { rowId: String },
@@ -646,6 +648,46 @@ export const Card = component({
     });
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV316')).toEqual([]);
+  });
+});
+
+describe('KV318 isomorphic justification', () => {
+  it('reports KV318 when an isomorphic island has no adjacent justification', () => {
+    const result = compileComponentModule({
+      fileName: 'isomorphic-counter.tsx',
+      source: `
+export const IsomorphicCounter = component({
+  isomorphic: true,
+  state: () => ({ count: 0 }),
+  render: (_data, state) => <button>{state.count}</button>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV318')).toMatchObject([
+      {
+        code: 'KV318',
+        fileName: 'isomorphic-counter.tsx',
+        message: kv318.message,
+        severity: kv318.severity,
+      },
+    ]);
+  });
+
+  it('accepts an adjacent KV318 justification comment for isomorphic islands', () => {
+    const result = compileComponentModule({
+      fileName: 'isomorphic-counter.tsx',
+      source: `
+export const IsomorphicCounter = component({
+  /* KV318: local counter must self-render between server fragments. */
+  isomorphic: true,
+  state: () => ({ count: 0 }),
+  render: (_data, state) => <button>{state.count}</button>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV318')).toEqual([]);
   });
 });
 

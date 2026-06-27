@@ -79,6 +79,19 @@ export function validateReservedQueryNames(
     : [];
 }
 
+export function validateIsomorphicJustifications(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+): CompilerDiagnostic[] {
+  return model.components.flatMap((component) => {
+    const option = component.options.find((candidate) => candidate.key === 'isomorphic');
+    if (option?.staticValue !== true || (option.justifiedDiagnostics?.includes('KV318') ?? false)) {
+      return [];
+    }
+    return [diagnostics.at('KV318', { start: option.start, length: option.end - option.start })];
+  });
+}
+
 export function validateRemovedFragmentTargetOption(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,

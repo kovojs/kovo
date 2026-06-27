@@ -45,6 +45,7 @@ export type DiagnosticCode =
   | 'KV315'
   | 'KV316'
   | 'KV317'
+  | 'KV318'
   | 'KV320'
   | 'KV330'
   | 'KV402'
@@ -195,6 +196,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV315: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
   KV316: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
   KV317: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
+  KV318: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
@@ -670,6 +672,18 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: "Static state-bearing aria-* value contradicts the primitive's render-time state.",
+  },
+  KV318: {
+    code: 'KV318',
+    help: [
+      'Would lower to: a client-bundled copy of the component render function plus a self-morph update plan.',
+      'Blocked reason: isomorphic islands are the bounded SPA-creep escape; without an adjacent justification, review cannot distinguish an intentional client self-render from accidental overuse.',
+      'Fixes: add an adjacent JSX justification comment naming KV318 before the isomorphic component, or drop isomorphic: true and use bindings, derives, keyed lists, or a server fragment.',
+      'SPEC §4.8 makes isomorphic: true the explicit client self-render escape and requires a recorded justification.',
+      'Escape: an adjacent KV318 justification comment preserves the lint trail without blocking compilation.',
+    ].join('\n'),
+    severity: 'lint',
+    message: 'isomorphic: true requires an adjacent KV318 justification comment.',
   },
   KV320: {
     code: 'KV320',

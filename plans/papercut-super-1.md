@@ -238,7 +238,8 @@ props. item`.
   - Acceptance: feed drizzle-derived column-nullability/query-shape facts to the
     compiler plugin so KV227/KV302 fire in scaffolded apps.
 
-- [ ] **C3 — The SPEC KV302 "isomorphic justification" gate is unimplemented, and KV302 is defined as an unrelated binding-path error (SPEC self-contradiction).** (MEDIUM, framework/docs; found by l1-A5)
+- [x] **C3 — The SPEC KV302 "isomorphic justification" gate is unimplemented, and KV302 is defined as an unrelated binding-path error (SPEC self-contradiction).** (MEDIUM, framework/docs; found by l1-A5)
+  - Evidence: `pnpm exec vitest run packages/compiler/src/fragment-targets.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts --run` proves missing `isomorphic: true` justification emits new KV318 while adjacent KV318 comments discharge it; `SPEC.md` now keeps KV302 for data-bind shape errors and assigns KV318 to the isomorphic justification lint.
   - Observed: an `isomorphic: true` island with no justification comment compiles
     clean (only the KV210 handler-naming lint).
   - Root cause: SPEC §4.8 prose (line 416) cites "KV302: justification comment

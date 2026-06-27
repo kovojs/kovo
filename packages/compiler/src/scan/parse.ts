@@ -728,6 +728,7 @@ function componentOptions(
     return [
       {
         end: property.name.getEnd(),
+        ...leadingJustifiedDiagnostics(source, property),
         key,
         ...(ts.isObjectLiteralExpression(property.initializer)
           ? { objectEntries: objectLiteralEntries(sourceFile, source, property.initializer) }
@@ -738,6 +739,22 @@ function componentOptions(
       },
     ];
   });
+}
+
+function leadingJustifiedDiagnostics(
+  source: string,
+  node: ts.Node,
+): { justifiedDiagnostics: readonly string[] } | {} {
+  const ranges = ts.getLeadingCommentRanges(source, node.getFullStart()) ?? [];
+  const codes = new Set<string>();
+  for (const range of ranges) {
+    if (range.end > node.getStart(node.getSourceFile())) continue;
+    for (const code of parseJustifiedDiagnostics(source.slice(range.pos, range.end))) {
+      codes.add(code);
+    }
+  }
+
+  return codes.size === 0 ? {} : { justifiedDiagnostics: [...codes] };
 }
 
 // SPEC §4.9: a query-backed component without disableServerRefresh infers a server-refreshable

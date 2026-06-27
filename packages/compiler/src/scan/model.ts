@@ -4,6 +4,7 @@ import type { StaticLiteralValue } from './object.js';
 
 export interface ComponentOptionEntry {
   end: number;
+  justifiedDiagnostics?: readonly string[];
   key: string;
   objectEntries?: readonly ObjectLiteralEntry[];
   start: number;

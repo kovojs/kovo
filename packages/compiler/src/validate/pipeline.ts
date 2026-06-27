@@ -14,6 +14,7 @@ import {
   validateFragmentTargetChildren,
   validateFragmentTargetInputs,
   validateHandAuthoredFragmentTargetStamp,
+  validateIsomorphicJustifications,
   validateIsomorphicSlotComposition,
   validateNestedStatefulIslandInRefreshTarget,
   validateRemovedFragmentTargetOption,
@@ -126,6 +127,9 @@ const compilerValidators: readonly CompilerValidator[] = [
   ),
   graphValidator(({ options }) =>
     queryShapeFactDiagnostics(options.fileName, options.queryShapeFacts ?? []),
+  ),
+  originalValidator(({ diagnostics, model }) =>
+    validateIsomorphicJustifications(diagnostics, model),
   ),
   loweredValidator(({ diagnostics, model }) => validateFragmentTargetInputs(diagnostics, model)),
   loweredValidator(({ diagnostics, model }) =>

@@ -1038,6 +1038,33 @@ export const IsomorphicSlotBad = component({
       }).diagnostics,
   },
   {
+    code: 'KV318',
+    spec: 'SPEC.md §4.8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'isomorphic-justification-ok.tsx',
+        source: `
+export const IsomorphicJustificationOk = component({
+  /* KV318: local chooser self-renders while filtering query data. */
+  isomorphic: true,
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <cart-badge>{cart.count}</cart-badge>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'isomorphic-justification-bad.tsx',
+        source: `
+export const IsomorphicJustificationBad = component({
+  isomorphic: true,
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <cart-badge>{cart.count}</cart-badge>,
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV320',
     spec: 'SPEC.md §6.4',
     positive: () =>
