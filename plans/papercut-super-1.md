@@ -131,7 +131,8 @@ contacts Invalidated query lacks optimistic transform.` — although `schema.ts`
 
 ### B. Dev loop & gate coverage
 
-- [ ] **B1 — `vp dev` never lowers client islands: the public `kovo()` Vite plugin omits `enforce:'pre'`, so L0/L1 interactivity is dead in the dev loop.** (HIGH, dev-tooling; found by l1-A3)
+- [x] **B1 — `vp dev` never lowers client islands: the public `kovo()` Vite plugin omits `enforce:'pre'`, so L0/L1 interactivity is dead in the dev loop.** (HIGH, dev-tooling; found by l1-A3)
+  - Evidence: `pnpm exec vitest run packages/server/src/vite.test.ts packages/compiler/src/execution-triggers.test.ts --run` proves the public `kovo()` Vite plugin runs `enforce: 'pre'` and dev lowering emits handler markers before JSX lowering.
   - Observed: `GET /explorer` returns 200 but the served HTML carries **no**
     `on:click`/`kovo-c=`/`kovo-state`/`data-bind`; the dev log emits
     `sink:'onClick' ... reason:'runtime write would create executable markup' ...
@@ -546,7 +547,8 @@ no-store` + `Vary: Cookie`, even for a public, no-`req.session` query.
 
 ### H. Deploy-skew / execution triggers
 
-- [ ] **H1 — `on:visible`/`on:idle` trigger module URLs are emitted verbatim and UNVERSIONED (no `/c/__v/<hash>/`), bypassing §9.5/§14 deploy-skew versioning.** (LOW, framework; found by l1-A6 residual)
+- [x] **H1 — `on:visible`/`on:idle` trigger module URLs are emitted verbatim and UNVERSIONED (no `/c/__v/<hash>/`), bypassing §9.5/§14 deploy-skew versioning.** (LOW, framework; found by l1-A6 residual)
+  - Evidence: `pnpm exec vitest run packages/server/src/vite.test.ts packages/compiler/src/execution-triggers.test.ts --run` proves same-module `on:idle`/`on:visible` trigger refs are rewritten to the content-versioned `/c/__v/<hash>/...client.js#export` URL.
   - Observed: the served HTML carries the author-supplied `on:idle="..."` string
     verbatim, with no version-hash rewrite (unlike `onClick`, which lowers to a
     versioned `/c/__v/<hash>/...` URL).
