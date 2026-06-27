@@ -1224,7 +1224,7 @@ function relationalWithObjectTableExpressions(
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
   const provenance =
-    privateScopeForExpression(expression, sessionContext) ??
+    privateScopeForOwnerPredicateExpression(expression, sessionContext) ??
     summarizedStaticCallPrivateScope(expression, sessionContext) ??
     awaitedExpressionPrivateScope(expression, sessionContext) ??
     conditionalExpressionPrivateScope(expression, sessionContext) ??
@@ -1644,7 +1644,7 @@ function staticWrapperValuePrivateScope(
       if (provenance || staticAccessRootVariableDeclaration(node)) return provenance;
     }
     return (
-      privateScopeForExpression(node, sessionContext) ??
+      privateScopeForOwnerPredicateExpression(node, sessionContext) ??
       summarizedStaticCallPrivateScope(node, sessionContext)
     );
   }
@@ -1767,6 +1767,13 @@ function objectLiteralSingleStaticPropertyValue(
       if (staticPlainPropertyName(property.getNameNode()) !== name) continue;
       if (value) return undefined;
       value = property.getNameNode();
+      continue;
+    }
+
+    if (Node.isMethodDeclaration(property)) {
+      if (staticPlainPropertyName(property.getNameNode()) !== name) continue;
+      if (value) return undefined;
+      value = property;
     }
   }
   return value;
@@ -1785,12 +1792,67 @@ function summarizedStaticCallPrivateScope(
   if (!Node.isCallExpression(node)) return undefined;
 
   const callee = unwrappedStaticExpressionNode(node.getExpression());
-  const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
-  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  return summarizedStaticCallablePrivateScope(callee, sessionContext);
+}
+
+function privateScopeForOwnerPredicateExpression(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  // OPP-28 owner-principal proof must not inherit the shared call-name fallback:
+  // callable helpers prove scope only when this file pins the callee identity back
+  // to an explicit kovoAnalyzerSummary.
+  return Node.isCallExpression(node) ? undefined : privateScopeForExpression(node, sessionContext);
+}
+
+function summarizedStaticCallablePrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+  depth = 0,
+): PrivateScopeProvenance | undefined {
+  if (depth > 4) return undefined;
+
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const rootDeclaration = staticAccessRootVariableDeclaration(node);
+    if (rootDeclaration && !staticCallableAccessHasStableStaticRoot(node)) return undefined;
+
+    const direct = strictHelperSummaryForStaticReference(node, sessionContext.helpers);
+    if (direct) return direct;
+
+    const value = rootDeclaration ? localConstLiteralStaticAccessValue(node) : undefined;
+    return value
+      ? summarizedStaticCallablePrivateScope(value, sessionContext, depth + 1)
+      : undefined;
+  }
+
+  const direct = strictHelperSummaryForStaticReference(node, sessionContext.helpers);
+  if (direct) return direct;
+
+  if (Node.isIdentifier(node)) {
+    const initializer = stableLocalConstInitializer(node);
+    return initializer
+      ? summarizedStaticCallablePrivateScope(initializer, sessionContext, depth + 1)
+      : undefined;
+  }
+
+  return undefined;
+}
+
+function staticCallableAccessHasStableStaticRoot(node: Node): boolean {
   return (
-    (key ? sessionContext.helpers.get(key) : undefined) ??
-    (name ? sessionContext.helpers.get(`name:${name}`) : undefined)
+    staticAccessRootHasStableConstBinding(node) &&
+    localConstLiteralStaticAccessValue(node) !== undefined
   );
+}
+
+function strictHelperSummaryForStaticReference(
+  expression: Node,
+  helpers: ReadonlyMap<string, PrivateScopeProvenance>,
+): PrivateScopeProvenance | undefined {
+  const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
+  return key ? helpers.get(key) : undefined;
 }
 
 function awaitedExpressionPrivateScope(
