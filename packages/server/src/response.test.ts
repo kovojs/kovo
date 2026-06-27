@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 import { setRuntimeSinkSecurityEventHandler } from '@kovojs/core/internal/sink-policy';
 
+import { renderRouteDocumentResponse } from './document-core.js';
 import {
   blessRedirectResponse,
   isHeaderSource,
@@ -231,6 +232,30 @@ describe('server response adapters', () => {
 
     expect(response.headers['Content-Disposition']).toBe('attachment');
     expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
+  });
+
+  it('does not document-wrap text/html file or stream route outcomes', () => {
+    for (const outcome of [
+      respond.file('<h1>Report</h1>', {
+        contentType: 'text/html; charset=utf-8',
+        filename: 'report.html',
+      }),
+      respond.stream('<h1>Report</h1>', {
+        contentType: 'text/html; charset=utf-8',
+      }),
+    ]) {
+      const response = renderRouteDocumentResponse(
+        routeResponseToDocumentResponse(routeOutcomeResponse(outcome, { method: 'GET' })),
+        { buildToken: 'build-test' },
+      );
+
+      expect(response.body).toBe('<h1>Report</h1>');
+      expect(response.headers['Content-Type']).toBe('text/html; charset=utf-8');
+      expect(response.headers['Content-Disposition']).toMatch(/^attachment/u);
+      expect(response.headers['Content-Security-Policy']).toBeUndefined();
+      expect(String(response.body)).not.toContain('<!doctype html>');
+      expect(String(response.body)).not.toContain('<script');
+    }
   });
 
   // KV428 (SPEC §6.6/§9.1): the live inline-XSS hole — `respond.stream({disposition:'inline'})`

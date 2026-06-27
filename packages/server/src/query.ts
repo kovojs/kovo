@@ -16,6 +16,7 @@ import {
   blessRedirectResponse,
   isBlessedRedirectResponse,
   retryAfterHeaders,
+  type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
 import {
@@ -77,7 +78,7 @@ export type QuerySearchInput =
 /** @internal */
 export interface QueryEndpointResponse extends ServerResponseBase<
   string,
-  Record<string, string>,
+  ResponseHeaders,
   200 | 303 | 403 | 404 | 422 | 429 | 500
 > {}
 

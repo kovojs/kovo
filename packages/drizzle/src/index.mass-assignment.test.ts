@@ -304,6 +304,44 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     expect(result.some((fact) => fact.via === 'spread' && fact.provenance === 'input')).toBe(true);
   });
 
+  it('resolves static computed payload keys before applying governed-column provenance', () => {
+    const result = facts(
+      handler(
+        [
+          '  const roleCol = "role";',
+          '  const balanceCol = "balance";',
+          '  await db.update(accounts).set({ [roleCol]: input.role, [balanceCol]: input.balance }).where(eq(accounts.id, input.id));',
+        ].join('\n'),
+      ),
+    );
+    expect(
+      result
+        .map((fact) => ({ column: fact.column, provenance: fact.provenance }))
+        .sort((left, right) => left.column.localeCompare(right.column)),
+    ).toEqual([
+      { column: 'balance', provenance: 'input' },
+      { column: 'role', provenance: 'input' },
+    ]);
+  });
+
+  it('fails closed for unresolved computed payload keys on governed tables', () => {
+    const result = facts(
+      handler(
+        '  await db.update(accounts).set({ [input.field]: input.role }).where(eq(accounts.id, input.id));',
+        'db: PgAsyncDatabase<any, any>, input: { id: string; field: string; role: string }',
+      ),
+    );
+    expect(result).toMatchObject([
+      {
+        column: 'balance+id+ownerId+role',
+        domain: 'account',
+        provenance: 'input',
+        via: 'set',
+      },
+    ]);
+    expect(result[0]?.detail).toBe('computed:input.field');
+  });
+
   it('emits nothing for a table with no governed columns', () => {
     const result = extractMassAssignmentFromProject({
       files: [

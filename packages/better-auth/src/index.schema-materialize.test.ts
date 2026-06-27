@@ -268,7 +268,7 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  secret: text('secret').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId', secret: ['secret', 'backupCodes'] }));",
     );
   });
 
@@ -372,7 +372,13 @@ describe('schema.ts materialization', () => {
       "export const oauthApplication = pgTable('oauthApplication', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo({ domain: 'auth', key: 'userId', secret: ['clientSecret'] }));",
+    );
+    expect(result.source).toContain(
+      "export const oauthAccessToken = pgTable('oauthAccessToken', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "}, kovo({ domain: 'auth', key: 'userId', secret: ['accessToken', 'refreshToken'] }));",
     );
   });
 

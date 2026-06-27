@@ -165,6 +165,45 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
   return names;
 }
 
+/** @internal */ export function projectRelationTargetTableNamesByProperty(
+  sourceFile: SourceFile,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  const namespaceTableNames = projectNamespaceTableNamesByLocal(sourceFile, tableNamesBySymbol);
+
+  const append = (name: string, tableName: string) => {
+    const existing = names.get(name);
+    if (existing && existing !== tableName) {
+      ambiguous.add(name);
+      return;
+    }
+    names.set(name, tableName);
+  };
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (relationCallName(call) !== 'relations') continue;
+    const relationObject = relationDefinitionObject(call);
+    if (!relationObject) continue;
+
+    for (const property of relationObject.getProperties()) {
+      if (!Node.isPropertyAssignment(property)) continue;
+      const relation = propertyNameText(property.getNameNode(), true);
+      const target = relationTargetTableName(
+        property.getInitializer(),
+        tableNamesBySymbol,
+        namespaceTableNames,
+      );
+      if (!relation || !target) continue;
+      append(relation, target);
+    }
+  }
+
+  for (const text of ambiguous) names.delete(text);
+  return names;
+}
+
 /** @internal */ export function isDrizzleWriteCall(call: CallExpression): boolean {
   const expression = call.getExpression();
   const name = staticAccessName(expression);

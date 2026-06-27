@@ -1003,6 +1003,36 @@ describe('server createApp request shell', () => {
     expect((await trusted(request('cart/proxy-trusted', '203.0.113.2'))).status).toBe(303);
   });
 
+  it('uses the rightmost forwarded IP behind a trusted proxy', async () => {
+    const addToCart = mutation('cart/rightmost-forwarded-ip', {
+      csrf: false,
+      handler: () => ({ ok: true }),
+      input: s.object({}),
+    });
+    const app = createApp({
+      mutations: [addToCart],
+      requestLimits: {
+        global: false,
+        maxBodyBytes: false,
+        mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+        perIp: false,
+        queries: { global: false, perIp: false },
+        trustedProxy: true,
+      },
+    });
+    const handler = createRequestHandler(app);
+    const request = (forwardedFor: string) =>
+      new Request('https://example.test/_m/cart/rightmost-forwarded-ip', {
+        body: new URLSearchParams(),
+        headers: { 'X-Forwarded-For': forwardedFor },
+        method: 'POST',
+      });
+
+    expect((await handler(request('198.51.100.10, 203.0.113.99'))).status).toBe(303);
+    expect((await handler(request('198.51.100.11, 203.0.113.99'))).status).toBe(429);
+    expect((await handler(request('198.51.100.12, 203.0.113.100'))).status).toBe(303);
+  });
+
   it('bounds app request-limit key cardinality across windows while preserving active retry-after', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-25T10:00:00.000Z'));
@@ -1054,6 +1084,43 @@ describe('server createApp request shell', () => {
     }
   });
 
+  it("does not let one rate-limit check evict another check's window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-25T10:00:00.000Z'));
+    const cartQuery = query('cart-rate-window-isolated', {
+      load: () => ({ count: 1 }),
+      reads: [],
+    });
+    const app = createApp({
+      queries: [cartQuery],
+      requestLimits: {
+        global: false,
+        maxBodyBytes: false,
+        mutations: { global: false, perIp: false },
+        perIp: { max: 1_000, windowMs: 1_000 },
+        queries: { global: false, perIp: { max: 2, windowMs: 60_000 } },
+        trustedProxy: true,
+      },
+    });
+    const handler = createRequestHandler(app);
+    const request = () =>
+      new Request('https://example.test/_q/cart-rate-window-isolated', {
+        headers: { 'X-Forwarded-For': '203.0.113.77' },
+      });
+
+    try {
+      expect((await handler(request())).status).toBe(200);
+      expect((await handler(request())).status).toBe(200);
+      vi.advanceTimersByTime(1_001);
+      const limited = await handler(request());
+
+      expect(limited.status).toBe(429);
+      expect(limited.headers.get('retry-after')).toBe('59');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // SPEC §9.5 / §9.4: typed reads also pass through the shell's anonymous-flood
   // limiter before args parsing or query loading.
   it('rate-limits query requests before loading the query', async () => {
@@ -1086,6 +1153,48 @@ describe('server createApp request shell', () => {
     expect(limited.headers.get('x-content-type-options')).toBe('nosniff');
     await expect(limited.text()).resolves.toBe('Too Many Requests');
     expect(queryLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it("threads trusted client IPs into query and route guards.rateLimit({ per: 'ip' })", async () => {
+    const rateLimitedQuery = query('query-guard-per-ip', {
+      guard: guards.rateLimit<{ clientIp?: string }>({ max: 1, per: 'ip', windowMs: 60_000 }),
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    const rateLimitedRoute = route('/route-guard-per-ip', {
+      guard: guards.rateLimit<{ clientIp?: string }>({ max: 1, per: 'ip', windowMs: 60_000 }),
+      page: () => trustedHtml('<main>ok</main>'),
+    });
+    const app = createApp({
+      queries: [rateLimitedQuery],
+      requestLimits: {
+        global: false,
+        maxBodyBytes: false,
+        mutations: { global: false, perIp: false },
+        perIp: false,
+        queries: { global: false, perIp: false },
+        trustedProxy: true,
+      },
+      routes: [rateLimitedRoute],
+    });
+    const handler = createRequestHandler(app);
+    const headers = { 'X-Forwarded-For': '203.0.113.44' };
+
+    expect(
+      (await handler(new Request('https://example.test/_q/query-guard-per-ip', { headers })))
+        .status,
+    ).toBe(200);
+    expect(
+      (await handler(new Request('https://example.test/_q/query-guard-per-ip', { headers })))
+        .status,
+    ).toBe(429);
+
+    expect(
+      (await handler(new Request('https://example.test/route-guard-per-ip', { headers }))).status,
+    ).toBe(200);
+    expect(
+      (await handler(new Request('https://example.test/route-guard-per-ip', { headers }))).status,
+    ).toBe(429);
   });
 
   it('opts up the query list result ceiling for explicit large reads', async () => {

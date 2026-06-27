@@ -107,6 +107,17 @@ export interface RoutePageResponse extends ServerResponseBase<
   lifecycleRequest?: unknown;
 }
 
+function markRouteResponseOutcome<Response extends object>(
+  response: Response,
+): Response & { routeResponse: true } {
+  Object.defineProperty(response, 'routeResponse', {
+    configurable: false,
+    enumerable: false,
+    value: true,
+  });
+  return response as Response & RouteResponseOutcome;
+}
+
 export interface DocumentRouteResponseBase extends ServerResponseBase<
   DocumentRouteResponseBody,
   ResponseHeaders,
@@ -372,11 +383,12 @@ export function routeOutcomeResponse(
     };
   }
 
-  return {
+  const response: RoutePageResponse = {
     body: outcome.body,
     headers,
     status: 200,
   };
+  return markRouteResponseOutcome(response);
 }
 
 export function htmlServerErrorResponse(): RoutePageResponse {
@@ -479,9 +491,13 @@ export function routeResponseToDocumentResponse(
     ...response,
     body: response.body instanceof ArrayBuffer ? new Uint8Array(response.body) : response.body,
   };
+  const clonedResponse =
+    (response as { routeResponse?: unknown }).routeResponse === true
+      ? markRouteResponseOutcome(documentResponse)
+      : documentResponse;
   return isBlessedRedirectResponse(response)
-    ? blessRedirectResponse(documentResponse)
-    : documentResponse;
+    ? blessRedirectResponse(clonedResponse)
+    : clonedResponse;
 }
 
 /**
@@ -534,14 +550,13 @@ function routeResponseOutcome(
   const contentDisposition = options.filename
     ? `${options.disposition}; filename="${escapeHeaderValue(options.filename)}"`
     : options.disposition;
-  return {
+  return markRouteResponseOutcome({
     body,
     contentDisposition,
     contentType: options.contentType,
     ...(options.etag === undefined ? {} : { etag: options.etag }),
     ...(options.headers === undefined ? {} : { headers: options.headers }),
-    routeResponse: true,
-  };
+  });
 }
 
 function routeOutcomeHeaders(outcome: RouteResponseOutcome): Record<string, string> {

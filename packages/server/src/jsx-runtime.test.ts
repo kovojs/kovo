@@ -16,6 +16,7 @@ import { mutationFormAttributes } from './mutation.js';
 
 const html = (value: unknown): string => renderHtmlValue(value);
 const asyncHtml = async (value: unknown): Promise<string> => renderHtmlValue(await value);
+const TEST_CSRF_SECRET = 'test-csrf-secret-0123456789abcdef012345';
 
 function hiddenInputValue(rendered: string, name: string): string {
   const match = new RegExp(`name="${name}" value="([^"]+)"`).exec(rendered);
@@ -93,7 +94,7 @@ describe('server jsx runtime', () => {
     const request = { session: { id: 's1' } };
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: TEST_CSRF_SECRET,
       sessionId: (value: typeof request) => value.session.id,
     };
     const addToCart = { csrf, key: 'cart/add' } as const;
@@ -142,7 +143,7 @@ describe('server jsx runtime', () => {
     const request = { session: { id: 's1' } };
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: TEST_CSRF_SECRET,
       sessionId: (value: typeof request) => value.session.id,
     };
     const addToCart = { csrf, key: 'cart/add' } as const;

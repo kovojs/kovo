@@ -9,6 +9,8 @@ import {
 import { createSigningKeyRing } from './keyring.js';
 
 const SECRET = 'capability-url-test-secret-at-least-32-characters-long';
+const OLD_SECRET = 'old-capability-secret-at-least-32-bytes';
+const NEW_SECRET = 'new-capability-secret-at-least-32-bytes';
 
 describe('capability-url: sign + constant-time verify before any storage read', () => {
   it('round-trips: a token signed for key+method+scope verifies against the same expected claims', async () => {
@@ -104,13 +106,13 @@ describe('capability-url: sign + constant-time verify before any storage read', 
 
   it('signs with the current KeyRing key and verifies tokens from a previous valid key', async () => {
     const previousSigner = createSigningKeyRing({
-      keys: [{ id: 'old', secret: 'old-capability-secret', state: 'active' }],
+      keys: [{ id: 'old', secret: OLD_SECRET, state: 'active' }],
     });
     const { token: previousToken } = await signCapability(previousSigner, { key: 'a.pdf' }, 0);
     const rotated = createSigningKeyRing({
       keys: [
-        { id: 'new', secret: 'new-capability-secret', state: 'active' },
-        { id: 'old', secret: 'old-capability-secret', state: 'previous' },
+        { id: 'new', secret: NEW_SECRET, state: 'active' },
+        { id: 'old', secret: OLD_SECRET, state: 'previous' },
       ],
     });
 
@@ -129,7 +131,7 @@ describe('capability-url: sign + constant-time verify before any storage read', 
 
   it('rejects revoked KeyRing material and wrong verify audience', async () => {
     const oldSigner = createSigningKeyRing({
-      keys: [{ id: 'old', secret: 'old-capability-secret', state: 'active' }],
+      keys: [{ id: 'old', secret: OLD_SECRET, state: 'active' }],
     });
     const { token } = await signCapability(
       oldSigner,
@@ -138,8 +140,8 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     );
     const revoked = createSigningKeyRing({
       keys: [
-        { id: 'new', secret: 'new-capability-secret', state: 'active' },
-        { id: 'old', secret: 'old-capability-secret', state: 'revoked' },
+        { id: 'new', secret: NEW_SECRET, state: 'active' },
+        { id: 'old', secret: OLD_SECRET, state: 'revoked' },
       ],
     });
 
@@ -178,7 +180,7 @@ describe('capability-url: sign + constant-time verify before any storage read', 
 
 describe('capability-url: one-time tokens via a replay store', () => {
   it('a one-time token verifies once, then is rejected as replayed', async () => {
-    const store = createMemoryCapabilityReplayStore();
+    const store = createMemoryCapabilityReplayStore({ now: () => 1 });
     const { token } = await signCapability(
       SECRET,
       { key: 'a.pdf', oneTime: true, expiresIn: 60_000 },
@@ -230,5 +232,31 @@ describe('capability-url: one-time tokens via a replay store', () => {
     );
     expect(r1.ok).toBe(true);
     expect(r2.ok).toBe(true);
+  });
+
+  it('evicts one-time replay ids at the signed token expiry', async () => {
+    let currentTime = 0;
+    const store = createMemoryCapabilityReplayStore({ now: () => currentTime });
+    const { token } = await signCapability(
+      SECRET,
+      { key: 'a.pdf', oneTime: true, expiresIn: 1000 },
+      0,
+    );
+
+    await expect(
+      verifyCapability(
+        SECRET,
+        token,
+        { key: 'a.pdf', method: 'GET' },
+        { now: 1, replayStore: store },
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(store.size()).toBe(1);
+
+    currentTime = 999;
+    expect(store.size()).toBe(1);
+
+    currentTime = 1000;
+    expect(store.size()).toBe(0);
   });
 });

@@ -37,7 +37,7 @@ import { selectStyles } from './select.js';
 import { Separator } from './separator.js';
 import { Skeleton } from './skeleton.js';
 import { sliderStyles } from './slider.js';
-import { Table, TableCell, TableHeaderCell } from './table.js';
+import { Table, TableBody, TableCell, TableHeaderCell } from './table.js';
 import { toastStyles } from './toast.js';
 import { TooltipContent, TooltipTrigger } from './tooltip.js';
 import { readSource } from './test-source.js';
@@ -363,9 +363,14 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('aria-orientation="vertical"');
   });
   it('exports table primitives as styled semantic markup', () => {
-    expect(
-      String(Table.definition.render({ caption: 'Invoices', children: '<tbody></tbody>' })),
-    ).toContain('Invoices</caption><tbody></tbody>');
+    const tableMarkup = String(
+      Table.definition.render({
+        caption: 'Invoices',
+        children: TableBody.definition.render({ children: undefined }),
+      }),
+    );
+    expect(tableMarkup).toContain('Invoices</caption><tbody');
+    expect(tableMarkup).toContain('data-style-src="table.tsx#body"');
     expect(
       String(TableHeaderCell.definition.render({ children: 'Status', scope: 'row' })),
     ).toContain('scope="row">Status</th>');

@@ -20,6 +20,11 @@ describe('compareAndSet (KV429)', () => {
       expect(result).toEqual({ ok: true });
     });
 
+    it('returns ok:true when affectedRows is 1 (PGlite style)', async () => {
+      const result = await compareAndSet(Promise.resolve({ affectedRows: 1 }));
+      expect(result).toEqual({ ok: true });
+    });
+
     it('returns ok:true when changes is 1 (sqlite-style)', async () => {
       const result = await compareAndSet(Promise.resolve({ changes: 1 }));
       expect(result).toEqual({ ok: true });
@@ -44,6 +49,11 @@ describe('compareAndSet (KV429)', () => {
 
     it('returns ok:false + conflict:true when rowsAffected is 0 (generic style)', async () => {
       const result = await compareAndSet(Promise.resolve({ rowsAffected: 0 }));
+      expect(result).toEqual({ ok: false, conflict: true });
+    });
+
+    it('returns ok:false + conflict:true when affectedRows is 0 (PGlite style)', async () => {
+      const result = await compareAndSet(Promise.resolve({ affectedRows: 0 }));
       expect(result).toEqual({ ok: false, conflict: true });
     });
 

@@ -737,7 +737,31 @@ function installInlineKovoLoader(im) {
   const dq = (type, init) => {
     dispatchEvent(new CustomEvent(type, init));
   };
-  const qd = (q) => /(?:^|\s)delta(?=\s|=|$|\/|>)/i.test(q.attrs);
+  const qd = (q) => {
+    let i = 0;
+    const attrs = q.attrs;
+    while (i < attrs.length) {
+      while (/[\t\n\f\r ]/.test(attrs[i] ?? '')) i += 1;
+      if (i >= attrs.length || attrs[i] === '/' || attrs[i] === '>') return false;
+      const start = i;
+      while (!/[\t\n\f\r =/>"'<]/.test(attrs[i] ?? ' ')) i += 1;
+      const name = attrs.slice(start, i).toLowerCase();
+      while (/[\t\n\f\r ]/.test(attrs[i] ?? '')) i += 1;
+      if (attrs[i] === '=') {
+        i += 1;
+        while (/[\t\n\f\r ]/.test(attrs[i] ?? '')) i += 1;
+        const quote = attrs[i];
+        if (quote === '"' || quote === "'") {
+          for (i += 1; i < attrs.length && attrs[i] !== quote; i += 1);
+          if (attrs[i] === quote) i += 1;
+        } else {
+          while (!/[\t\n\f\r ]/.test(attrs[i] ?? ' ')) i += 1;
+        }
+      }
+      if (name === 'delta') return true;
+    }
+    return false;
+  };
   const qw = (q) => {
     const name = readAttribute(q.attrs, 'name');
     const key = readAttribute(q.attrs, 'key');

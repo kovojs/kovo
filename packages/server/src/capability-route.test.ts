@@ -66,6 +66,8 @@ describe('capability download route: verify-before-read sink', () => {
       new Request(`https://app.example${url}`, { method: 'GET' }),
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('Vary')).toBe('Cookie');
     expect(await response.text()).toBe('receipt-bytes');
   });
 
@@ -107,6 +109,8 @@ describe('capability download route: verify-before-read sink', () => {
     const tampered = `${payload}.${sig!.slice(0, -2)}AA`;
     const response = await runEndpoint(route, new Request(downloadUrl(tampered, 'a.pdf')));
     expect(response.status).toBe(404);
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('Vary')).toBe('Cookie');
     expect(reads).toEqual([]);
     const body = await response.text();
     expect(body).toBe('Not Found');
@@ -177,7 +181,7 @@ describe('capability download route: verify-before-read sink', () => {
     const key = 'a.pdf';
     const storage = await storageWith(key, 'once');
     const { reads, storage: recording } = recordingStorage(storage);
-    const replayStore = createMemoryCapabilityReplayStore();
+    const replayStore = createMemoryCapabilityReplayStore({ now: () => 1 });
     const route = createStorageDownloadEndpoint({
       secret: SECRET,
       storage: recording,

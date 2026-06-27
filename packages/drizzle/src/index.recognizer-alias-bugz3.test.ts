@@ -19,13 +19,14 @@ describe('bugz-3 H1: query() loader recognition is alias/namespace hardened', ()
     'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
   ]);
 
-  function ordersQueryFile(importLine: string, callee: string): SourceFileInput {
+  function ordersQueryFile(importLine: string, callee: string, setupLine = ''): SourceFileInput {
     return {
       fileName: 'order.queries.ts',
       source: [
         importLine,
         'import { eq } from "drizzle-orm";',
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        setupLine,
         '',
         'export const orders = pgTable("orders", {',
         '  id: text("id").primaryKey(),',
@@ -47,7 +48,7 @@ describe('bugz-3 H1: query() loader recognition is alias/namespace hardened', ()
     };
   }
 
-  const forms: { label: string; importLine: string; callee: string }[] = [
+  const forms: { label: string; importLine: string; setupLine?: string; callee: string }[] = [
     { label: 'bare query() (control)', importLine: '', callee: 'query' },
     {
       label: 'aliased import { query as q }',
@@ -59,12 +60,24 @@ describe('bugz-3 H1: query() loader recognition is alias/namespace hardened', ()
       importLine: 'import * as srv from "@kovojs/server";',
       callee: 'srv.query',
     },
+    {
+      label: 'const alias of imported query',
+      importLine: 'import { query } from "@kovojs/server";',
+      setupLine: 'const q = query;',
+      callee: 'q',
+    },
+    {
+      label: 'const alias of server namespace',
+      importLine: 'import * as srv from "@kovojs/server";',
+      setupLine: 'const s = srv;',
+      callee: 's.query',
+    },
   ];
 
   for (const form of forms) {
     it(`recognizes the loader and fires KV435 + the args scope audit for ${form.label}`, () => {
       const options = withPgDatabaseTypes(
-        { files: [dbTypes, ordersQueryFile(form.importLine, form.callee)] },
+        { files: [dbTypes, ordersQueryFile(form.importLine, form.callee, form.setupLine)] },
         [],
       );
 
@@ -92,6 +105,36 @@ describe('bugz-3 H1: query() loader recognition is alias/namespace hardened', ()
       ).toContainEqual({ domain: 'order', kind: 'query', name: 'order', scope: 'args' });
     });
   }
+
+  it('recognizes a query imported through a renamed local re-export', () => {
+    const options = withPgDatabaseTypes(
+      {
+        files: [
+          dbTypes,
+          {
+            fileName: 'server-barrel.ts',
+            source: 'export { query as q } from "@kovojs/server";',
+          },
+          ordersQueryFile('import { q } from "./server-barrel";', 'q'),
+        ],
+      },
+      [],
+    );
+
+    const facts = extractQueryFactsFromProject(options);
+    expect(facts.map((fact) => fact.query)).toEqual(['order']);
+    expect(diagnosticsForQueryFacts(facts).some((diagnostic) => diagnostic.code === 'KV435')).toBe(
+      true,
+    );
+    expect(
+      extractOwnerAuditFromProject(options).scopeAudits.map((audit) => ({
+        domain: audit.domain,
+        kind: audit.kind,
+        name: audit.name,
+        scope: audit.scope,
+      })),
+    ).toContainEqual({ domain: 'order', kind: 'query', name: 'order', scope: 'args' });
+  });
 });
 
 // bugz-3 L11 (SPEC §11.1): the legacy `domain({ action: write(...) })` write-surface extractor must
@@ -106,6 +149,7 @@ describe('bugz-3 L11: domain()/write() recognition is alias/namespace hardened',
     importLine: string,
     domainCallee: string,
     writeCallee: string,
+    setupLine = '',
   ): SourceFileInput {
     return {
       fileName: 'cart.domain.ts',
@@ -113,6 +157,7 @@ describe('bugz-3 L11: domain()/write() recognition is alias/namespace hardened',
         importLine,
         'import { eq } from "drizzle-orm";',
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        setupLine,
         '',
         'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
         '',
@@ -156,6 +201,7 @@ describe('bugz-3 L11: domain()/write() recognition is alias/namespace hardened',
   const aliasedForms: {
     label: string;
     importLine: string;
+    setupLine?: string;
     domainCallee: string;
     writeCallee: string;
   }[] = [
@@ -171,18 +217,51 @@ describe('bugz-3 L11: domain()/write() recognition is alias/namespace hardened',
       domainCallee: 'srv.domain',
       writeCallee: 'srv.write',
     },
+    {
+      label: 'const aliases of imported domain/write',
+      importLine: 'import { domain, write } from "@kovojs/server";',
+      setupLine: 'const dom = domain;\nconst wr = write;',
+      domainCallee: 'dom',
+      writeCallee: 'wr',
+    },
+    {
+      label: 'const alias of server namespace',
+      importLine: 'import * as srv from "@kovojs/server";',
+      setupLine: 'const s = srv;',
+      domainCallee: 's.domain',
+      writeCallee: 's.write',
+    },
   ];
 
   for (const form of aliasedForms) {
     it(`extracts the same touch graph for ${form.label} (was silently {})`, () => {
       const graph = extractTouchGraphFromProject({
-        files: [dbTypes, cartDomainFile(form.importLine, form.domainCallee, form.writeCallee)],
+        files: [
+          dbTypes,
+          cartDomainFile(form.importLine, form.domainCallee, form.writeCallee, form.setupLine),
+        ],
       });
       // KEY ASSERTION: the aliased/namespaced legacy form no longer collapses to an empty graph.
       expect(Object.keys(graph)).toEqual(['cart.addItem']);
       expect(stripSites(graph)).toEqual(stripSites(literalGraph));
     });
   }
+
+  it('extracts the same touch graph through renamed local re-exports', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        dbTypes,
+        {
+          fileName: 'server-barrel.ts',
+          source: 'export { domain as dom, write as wr } from "@kovojs/server";',
+        },
+        cartDomainFile('import { dom, wr } from "./server-barrel";', 'dom', 'wr'),
+      ],
+    });
+
+    expect(Object.keys(graph)).toEqual(['cart.addItem']);
+    expect(stripSites(graph)).toEqual(stripSites(literalGraph));
+  });
 });
 
 // bugz-3 M4 (SPEC §10.2/§11.3): the relational-query projection extractor must parse the `extras`
@@ -277,6 +356,92 @@ describe('bugz-3 M4: relational-query extras projections engage the secret backs
       (diagnostic) => diagnostic.code === 'KV435',
     );
     expect(kv435.length).toBeGreaterThanOrEqual(1);
+    expect(kv435.some((diagnostic) => diagnostic.message.includes('author.leaked'))).toBe(true);
+  });
+});
+
+describe('bugz-4 H2/M5: relational-query with() relations contribute read security facts', () => {
+  it('folds with-relation owner tables into the KV414 read set', () => {
+    const project = withPgDatabaseTypes({
+      files: [
+        pgDatabaseTypes(['query: { posts: { findMany(value?: unknown): Promise<unknown[]> } };']),
+        {
+          fileName: 'feed.queries.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const posts = pgTable("posts", { id: text("id").primaryKey() }, kovo({ domain: "post", key: "id" }));',
+            'export const comments = pgTable("comments", { id: text("id").primaryKey(), postId: text("post_id").notNull(), authorId: text("author_id").notNull() }, kovo({ domain: "comment", key: "id", owner: "authorId" }));',
+            'export const postsRelations = relations(posts, ({ many }) => ({ comments: many(comments) }));',
+            '',
+            'export const feed = query("feed", {',
+            '  output: s.object({ id: s.string() }),',
+            '  async load(input: { postId: string }, db: PgAsyncDatabase<any, any>) {',
+            '    return db.query.posts.findMany({',
+            '      columns: { id: true },',
+            '      with: { comments: { columns: { id: true } } },',
+            '      where: eq(posts.id, input.postId),',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    const facts = extractQueryFactsFromProject(project);
+    expect(facts.map((fact) => fact.reads)).toEqual([['comment', 'post']]);
+
+    const audit = extractOwnerAuditFromProject(project);
+    expect(
+      audit.scopeAudits.map((fact) => ({
+        domain: fact.domain,
+        name: fact.name,
+        scope: fact.scope,
+      })),
+    ).toEqual([{ domain: 'comment', name: 'feed', scope: 'args' }]);
+  });
+
+  it('fires KV435 for with-relation extras when reads omits the related secret table', () => {
+    const facts = extractQueryFactsFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(['query: { posts: { findMany(value?: unknown): Promise<unknown[]> } };']),
+          {
+            fileName: 'post.queries.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const users = pgTable("users", {',
+              '  id: text("id").primaryKey(),',
+              '  passwordHash: text("password_hash").notNull(),',
+              '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+              'export const posts = pgTable("posts", {',
+              '  id: text("id").primaryKey(),',
+              '}, kovo({ domain: "post", key: "id" }));',
+              'export const postsRelations = relations(posts, ({ one }) => ({ author: one(users) }));',
+              '',
+              'export const postsQuery = query("post", {',
+              '  output: s.object({ id: s.string() }),',
+              '  reads: [posts],',
+              '  load(_input, db: PgAsyncDatabase<any, any>) {',
+              '    return db.query.posts.findMany({',
+              '      columns: { id: true },',
+              '      with: { author: { columns: { id: true }, extras: { leaked: sql<string>`${users.passwordHash}`.as("leaked") } } },',
+              '    });',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(facts.map((fact) => fact.reads)).toEqual([['post', 'user']]);
+    const kv435 = diagnosticsForQueryFacts(facts).filter(
+      (diagnostic) => diagnostic.code === 'KV435',
+    );
     expect(kv435.some((diagnostic) => diagnostic.message.includes('author.leaked'))).toBe(true);
   });
 });

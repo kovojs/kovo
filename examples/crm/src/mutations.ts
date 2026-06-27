@@ -64,7 +64,7 @@ export interface CrmCsrfRequest {
   session?: { id?: string } | null;
 }
 
-export const EXAMPLE_ONLY_CRM_CSRF_SECRET = 'crm-reference-demo-csrf-secret';
+export const EXAMPLE_ONLY_CRM_CSRF_SECRET = 'crm-reference-demo-csrf-secret-0123456789';
 
 export const crmCsrf = {
   field: 'csrf',

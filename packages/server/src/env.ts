@@ -1,4 +1,5 @@
 import type { Schema } from './schema.js';
+import { isSigningKeyRing, SIGNING_SECRET_MIN_BYTES } from './keyring.js';
 import { isSchemaValidationError } from './schema.js';
 
 /**
@@ -25,7 +26,7 @@ import { isSchemaValidationError } from './schema.js';
  * anonymous-CSRF cookie path already mints `randomBytes(32).toString('base64url')`
  * (~43 chars), so a real deployment secret comfortably clears this floor.
  */
-export const FRAMEWORK_SECRET_MIN_LENGTH = 32;
+export const FRAMEWORK_SECRET_MIN_LENGTH = SIGNING_SECRET_MIN_BYTES;
 
 /**
  * Minimum Shannon-entropy estimate (bits) for a framework signing secret. This is an
@@ -157,6 +158,10 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
   // No secret configured at all: not validated here. `csrf` is only consulted when an
   // app declares it; the gate fires on a *declared-but-weak* secret.
   if (value === undefined) return;
+  // A custom SigningKeyRing deliberately hides raw key material. The crypto boundary in
+  // keyring.ts enforces the floor for framework-created rings; external rings own their
+  // material policy and are accepted as the first-class rotation interface.
+  if (isSigningKeyRing(value)) return;
 
   if (isRecord(value)) {
     if (Array.isArray(value.keys)) {

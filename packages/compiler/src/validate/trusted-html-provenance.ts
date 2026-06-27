@@ -24,7 +24,7 @@ import type { ComponentModuleModel } from '../scan/parse.js';
  *     accessor chain (`req.search`/`req.params`/`req.body`/`req.headers`/`req.cookies`/…);
  *   - a query root: a render binding destructured from the component's `queries` result;
  *   - those reached directly, via a field access (`question.body`), or via a same-scope
- *     alias/derive (`const body = question.body; trustedHtml(body)`).
+ *     alias/destructure/derive (`const { body } = question; trustedHtml(body)`).
  * It deliberately does NOT flag a function-call result (`trustedHtml(renderUserCard(q.name))`):
  * the compiler has no inter-procedural return provenance here (cf. KV437's callee-position reasoning
  * and KV438's `kovoAnalyzerSummary` requirement), so a call result is treated as opaque/clean. That
@@ -138,6 +138,11 @@ function classifyExpression(node: ts.Expression, ctx: ClassifyContext): Provenan
   if (ts.isIdentifier(expr)) {
     return classifyIdentifier(expr, ctx);
   }
+  if (ts.isConditionalExpression(expr)) {
+    const whenTrue = classifyExpression(expr.whenTrue, ctx);
+    if (whenTrue !== null) return whenTrue;
+    return classifyExpression(expr.whenFalse, { ...ctx, visited: new Set(ctx.visited) });
+  }
   // Function-call results, literals, binary/template concatenations, etc. are opaque: the gate does
   // not invent inter-procedural taint (documented residue), and a literal/concatenation carries no
   // proven request/query root.
@@ -197,7 +202,10 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
   return null;
 }
 
-/** The initializer of the nearest enclosing `const <name> = <init>` visible at `node`, if any. */
+/**
+ * The initializer of the nearest enclosing `const <name> = <init>` or
+ * `const { <name> } = <init>` visible at `node`, if any.
+ */
 function localConstInitializer(node: ts.Node, name: string): ts.Expression | undefined {
   let cursor: ts.Node | undefined = node.parent;
   while (cursor) {
@@ -212,12 +220,26 @@ function localConstInitializer(node: ts.Node, name: string): ts.Expression | und
           ) {
             return declaration.initializer;
           }
+          if (
+            ts.isObjectBindingPattern(declaration.name) &&
+            declaration.initializer &&
+            objectBindingPatternBindsName(declaration.name, name)
+          ) {
+            return declaration.initializer;
+          }
         }
       }
     }
     cursor = cursor.parent;
   }
   return undefined;
+}
+
+function objectBindingPatternBindsName(pattern: ts.ObjectBindingPattern, name: string): boolean {
+  for (const element of pattern.elements) {
+    if (ts.isIdentifier(element.name) && identifierName(element.name) === name) return true;
+  }
+  return false;
 }
 
 /** Discharge: a non-empty STATIC reason as the second argument (`"…"` or `{ reason: "…" }`). */

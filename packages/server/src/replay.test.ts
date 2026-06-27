@@ -5,7 +5,9 @@ import { domain } from './domain.js';
 import { renderMutationResponse as renderMutationResponseBase } from './mutation.js';
 import { query } from './query.js';
 import {
+  canonicalRequestFingerprint,
   createMemoryMutationReplayStore,
+  mutationReplayContext,
   MutationReplayAbortedError,
   type MutationReplayResponse,
   type MutationReplayStore,
@@ -291,6 +293,42 @@ describe('server mutation response replay', () => {
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     expect(second.body).toBe(first.body);
+  });
+
+  it('neutralizes rotating CSRF tokens before comparing precomputed replay fingerprints (L5)', () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const csrf = {
+      secret: 'replay-csrf-secret-0123456789-abcdef',
+      sessionId: (request: { sessionId?: string }) => request.sessionId,
+    };
+    const request = { sessionId: 's1' };
+    const bodyFor = () => ({
+      'kovo-csrf': csrfToken(request, csrf, { audience: 'cart/add' }),
+      productId: 'p1',
+    });
+    const firstBody = bodyFor();
+    const secondBody = bodyFor();
+
+    const first = mutationReplayContext(csrf, {
+      idem: 'idem_rotating_csrf',
+      mutationKey: 'cart/add',
+      rawInput: firstBody,
+      replayStore,
+      request,
+      requestFingerprint: canonicalRequestFingerprint(firstBody),
+    });
+    const second = mutationReplayContext(csrf, {
+      idem: 'idem_rotating_csrf',
+      mutationKey: 'cart/add',
+      rawInput: secondBody,
+      replayStore,
+      request,
+      requestFingerprint: canonicalRequestFingerprint(secondBody),
+    });
+
+    expect(first.fingerprint).toBe(second.fingerprint);
+    expect(first.fingerprint).not.toBe(canonicalRequestFingerprint(firstBody));
+    expect(second.fingerprint).not.toBe(canonicalRequestFingerprint(secondBody));
   });
 
   it('scopes replay records by mutation key so a sibling mutation does not replay another', async () => {
@@ -712,7 +750,7 @@ describe('server mutation response replay', () => {
     const request = { session: { id: 's1' } };
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: 'test-secret-0123456789abcdef012345',
       sessionId(candidate: typeof request) {
         return candidate.session.id;
       },
@@ -759,7 +797,7 @@ describe('server mutation response replay', () => {
     const replayStore = createMemoryMutationReplayStore();
     const csrf = {
       field: 'csrf',
-      secret: 'test-secret',
+      secret: 'test-secret-0123456789abcdef012345',
       sessionId(candidate: { session: { id: string } }) {
         return candidate.session.id;
       },

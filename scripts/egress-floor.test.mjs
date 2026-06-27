@@ -55,6 +55,7 @@ describe('egress floor policy', () => {
   it('allows loopback and explicit wildcard host matches', () => {
     expect(isAllowedHost('localhost', [])).toBe(true);
     expect(isAllowedHost('127.0.0.1', [])).toBe(true);
+    expect(isAllowedHost('127.evil.example', [])).toBe(false);
     expect(isAllowedHost('downloads.registry.npmjs.org', ['*.registry.npmjs.org'])).toBe(true);
     expect(isAllowedHost('registry.npmjs.org', ['*.registry.npmjs.org'])).toBe(false);
   });

@@ -161,9 +161,13 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
  * never enumerated for pruning.
  */
 async function pruneStaleStaticExportRouteDocuments(plan: StaticExportOutputPlan): Promise<void> {
-  const ownedRouteDocuments = new Set(
+  const ownedIndexHtmlDocuments = new Set(
     plan.writes
-      .filter((write) => write.itemKind === 'route-document')
+      .filter(
+        (write) =>
+          write.itemKind === 'route-document' ||
+          (write.itemKind === 'static-asset' && path.basename(write.targetPath) === 'index.html'),
+      )
       .map((write) => write.targetPath),
   );
 
@@ -172,7 +176,7 @@ async function pruneStaleStaticExportRouteDocuments(plan: StaticExportOutputPlan
     plan.root,
     clientModuleRoot,
   )) {
-    if (!ownedRouteDocuments.has(indexHtmlPath)) {
+    if (!ownedIndexHtmlDocuments.has(indexHtmlPath)) {
       // Remove only the stale directory-index document; leave any sibling files (assets the export
       // does not own a manifest for, user-managed files) untouched.
       await rm(indexHtmlPath, { force: true });
@@ -312,9 +316,20 @@ function buildNetlifyHeadersSidecar(plan: StaticExportOutputArtifacts): string {
     const entries = Object.entries(artifact.headers);
     if (entries.length === 0) continue;
 
+    for (const documentPath of staticExportDocumentHeaderPaths(artifact.path)) {
+      lines.push('');
+      lines.push(documentPath);
+      for (const [name, value] of entries) {
+        lines.push(`  ${name}: ${value}`);
+      }
+    }
+  }
+
+  const fallbackHeaders = commonStaticExportDocumentHeaders(plan.artifacts);
+  if (Object.keys(fallbackHeaders).length > 0) {
     lines.push('');
-    lines.push(artifact.path);
-    for (const [name, value] of entries) {
+    lines.push('/*');
+    for (const [name, value] of Object.entries(fallbackHeaders)) {
       lines.push(`  ${name}: ${value}`);
     }
   }
@@ -331,6 +346,31 @@ function buildNetlifyHeadersSidecar(plan: StaticExportOutputArtifacts): string {
 
   lines.push('');
   return lines.join('\n');
+}
+
+function staticExportDocumentHeaderPaths(artifactPath: string): string[] {
+  const paths = [artifactPath];
+  if (artifactPath === '/index.html') {
+    paths.push('/');
+  } else if (artifactPath.endsWith('/index.html')) {
+    const directory = artifactPath.slice(0, -'index.html'.length);
+    paths.push(directory, directory.endsWith('/') ? directory.slice(0, -1) || '/' : directory);
+  }
+  return [...new Set(paths)];
+}
+
+function commonStaticExportDocumentHeaders(
+  artifacts: readonly StaticExportArtifact[],
+): Record<string, string> {
+  if (artifacts.length === 0) return {};
+  const [first, ...rest] = artifacts;
+  if (first === undefined) return {};
+
+  return Object.fromEntries(
+    Object.entries(first.headers).filter(([name, value]) =>
+      rest.every((artifact) => artifact.headers[name] === value),
+    ),
+  );
 }
 
 function appendStaticExportImmutableHeaderStanza(lines: string[], pathPattern: string): void {

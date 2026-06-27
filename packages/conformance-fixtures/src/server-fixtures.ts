@@ -305,7 +305,7 @@ export async function serverDataPlaneBehaviorFact(
   const request = { session: { id: 's1' } };
   const csrf = {
     field: 'csrf',
-    secret: 'test-secret',
+    secret: 'test-csrf-secret-0123456789abcdef012345',
     sessionId: (candidate: typeof request) => candidate.session.id,
   };
   let guardCalls = 0;

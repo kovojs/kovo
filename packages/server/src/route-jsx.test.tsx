@@ -247,7 +247,7 @@ describe('route JSX pages', () => {
     });
     const request = { session: { id: 's1' } };
     const csrf = {
-      secret: 'test-secret',
+      secret: 'route-jsx-csrf-secret-0123456789abcdef012345',
       sessionId: (value: typeof request) => value.session.id,
     };
 

@@ -109,7 +109,7 @@ export async function verificationLayerBehaviorFact(
   const csrfRequest = { session: { id: 's1' } };
   const csrf = {
     field: 'csrf',
-    secret: 'test-secret',
+    secret: 'test-csrf-secret-0123456789abcdef012345',
     sessionId(request: { session: { id: string } }) {
       return request.session.id;
     },

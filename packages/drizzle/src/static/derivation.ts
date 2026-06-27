@@ -30,6 +30,7 @@ import {
 
 import {
   UNRESOLVED_READ_SOURCE_EXPRESSION,
+  computedPropertyNameExpression,
   createProjectExtraction,
   drizzleWriteChainRoot,
   emptySessionProvenanceContext,
@@ -1174,12 +1175,27 @@ function massAssignmentFactsForObject(
     if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
       continue;
     }
-    const column = propertyNameText(property.getNameNode());
-    if (!column || !governs(info, column)) continue;
     const valueNode = Node.isShorthandPropertyAssignment(property)
       ? property.getNameNode()
       : property.getInitializer();
     if (!valueNode) continue;
+
+    const column = propertyNameText(property.getNameNode(), true);
+    if (!column) {
+      facts.push(
+        dynamicColumnMassAssignmentFact(
+          property.getNameNode(),
+          valueNode,
+          info,
+          site,
+          context,
+          via,
+          table,
+        ),
+      );
+      continue;
+    }
+    if (!governs(info, column)) continue;
 
     const verdict = confidentialAtRestColumn(info, column)
       ? confidentialAtRestValueVerdict(valueNode, context)
@@ -1198,6 +1214,28 @@ function massAssignmentFactsForObject(
     });
   }
   return facts;
+}
+
+function dynamicColumnMassAssignmentFact(
+  name: Node,
+  value: Node,
+  info: GovernedTableInfo,
+  site: string,
+  context: MassAssignmentCallContext,
+  via: 'set' | 'values',
+  table: string,
+): MassAssignmentFact {
+  const verdict = governedValueVerdict(value, context);
+  const key = computedPropertyNameExpression(name);
+  return {
+    column: governedColumnsLabel(info, table),
+    domain: info.domain,
+    name: context.name,
+    provenance: verdict.provenance,
+    site,
+    via,
+    detail: key ? `computed:${key.getText()}` : (verdict.detail ?? name.getText()),
+  };
 }
 
 /**
