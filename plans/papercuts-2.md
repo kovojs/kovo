@@ -15,7 +15,7 @@ ledger.
 
 ## Issues
 
-- [ ] **SQLite starter omits pnpm native-build approval for `better-sqlite3`.**
+- [x] **SQLite starter omits pnpm native-build approval for `better-sqlite3`.**
   - Observed behavior: after linking generated `@kovojs/*` dependencies to local
     packages, `pnpm install` completed but warned `Ignored build scripts:
 better-sqlite3`; `pnpm run test` then failed before tests ran with
@@ -33,6 +33,10 @@ better-sqlite3`; `pnpm run test` then failed before tests ran with
   - Acceptance: the SQLite template should generate the pnpm native-build allowlist
     or otherwise make the post-scaffold install path build `better-sqlite3`
     noninteractively.
+  - Evidence: `packages/create-kovo/templates/package.sqlite.json` now emits
+    `pnpm.onlyBuiltDependencies: ["better-sqlite3"]`; `pnpm exec vitest run
+packages/create-kovo/src/index.test.ts` passed and asserts the SQLite
+    generated package includes the native-build allowlist.
 
 - [x] **SQLite Better Auth seed uses incompatible date column types.**
   - Observed behavior: `pnpm run build:prod` exited 0 but logged Better Auth
@@ -80,9 +84,9 @@ bigints, buffers, and null` twice during `seedDemoUser()`.
     `next`/default route even when the adapter records an `auth` change rather
     than returning a raw 303 response.
   - Evidence: `pnpm exec vitest run packages/browser/src/mutation-submit.test.ts
-    packages/browser/src/mutation-fetch.test.ts` covers modular empty auth
+packages/browser/src/mutation-fetch.test.ts` covers modular empty auth
     fragments with safe `next` and unsafe fallback; `pnpm exec vitest run
-    packages/browser/src/inline-loader-enhanced-submit.test.ts` covers inline
+packages/browser/src/inline-loader-enhanced-submit.test.ts` covers inline
     loader parity; `pnpm --filter @kovojs/browser run check:inline-loader`
     verifies the generated inline runtime is current.
 
@@ -152,15 +156,29 @@ bigints, buffers, and null` twice during `seedDemoUser()`.
 
 ## Latest Verification
 
-- `pnpm --filter create-kovo run build:dist` in `/Users/mini/kovo`: passed before
-  scaffolding the dogfood app.
-- `pnpm run test` in `/Users/mini/kovo-dogfood-todo`: 2 files, 5 tests passed
-  after local SQLite build-script and auth-schema workarounds.
-- Browser dogfood on `http://100.108.214.117:5188`: sign-in set the session cookie
-  but stayed on `/login`; after manual navigation plus explicit registry wiring,
-  enhanced add returned a 12 KB fragment, enhanced toggle returned a 12 KB
-  fragment with keyed `todo` change, the new todo became visible, and its row
-  changed to `Done`.
-- `pnpm exec vp check --fix && pnpm run check && pnpm run build:prod` in
-  `/Users/mini/kovo-dogfood-todo`: passed after formatting regenerated cache
-  files and applying local app workarounds.
+- `pnpm exec vitest run packages/create-kovo/src/index.test.ts`: passed after
+  both SQLite template fixes.
+- `pnpm exec vitest run packages/browser/src/mutation-submit.test.ts
+packages/browser/src/mutation-fetch.test.ts
+packages/browser/src/inline-loader-enhanced-submit.test.ts`: passed after the
+  enhanced auth empty-fragment navigation fix.
+- `pnpm exec vitest run packages/drizzle/src/index.query-loader-receivers.test.ts
+packages/drizzle/src/index.receiver-alias-bindings.test.ts
+packages/drizzle/src/index.query-loader-config.test.ts
+packages/drizzle/src/index.query-shapes.test.ts`: passed after the
+  helper-mediated query-read extraction fix.
+- `pnpm --filter @kovojs/browser run check:inline-loader`, `pnpm exec vp check
+packages/create-kovo/src/index.test.ts
+packages/create-kovo/templates/package.sqlite.json
+packages/create-kovo/templates/src/schema.sqlite.ts
+packages/create-kovo/templates/src/db.sqlite.ts
+packages/create-kovo/templates/README.sqlite.md
+packages/browser/src/mutation-fetch.ts
+packages/browser/src/mutation-submit.test.ts
+packages/browser/src/inline-loader-build.ts
+packages/browser/src/inline-loader.ts
+packages/browser/src/inline-loader-enhanced-submit.test.ts
+packages/drizzle/src/static/schema.ts
+packages/drizzle/src/index.query-loader-receivers.test.ts
+plans/papercuts-2.md`, and `git diff --check`: passed for the integrated
+  patch set.

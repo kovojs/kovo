@@ -919,10 +919,17 @@ function installInlineKovoLoader(im) {
       return [];
     }
   };
+  const badp = (value) => {
+    for (let index = 0; index < value.length; index += 1) {
+      const code = value.charCodeAt(index);
+      if (value[index] === '\\' || code <= 0x20 || code === 0x7f) return true;
+    }
+    return false;
+  };
   const safep = (value) => {
     if (!value || value[0] !== '/' || value[1] === '/') return '';
     try {
-      if (/[\\\x00-\x20\x7f]/.test(decodeURIComponent(value))) return '';
+      if (badp(decodeURIComponent(value))) return '';
     } catch {
       return '';
     }
@@ -966,7 +973,7 @@ function installInlineKovoLoader(im) {
         const reauth = response.headers?.get('Kovo-Reauth');
         if (response.status == 401 && reauth) {
           try {
-            if (reauth[0] !== '/' || reauth[1] === '/' || /[\\\x00-\x20\x7f]/.test(decodeURIComponent(reauth))) {
+            if (reauth[0] !== '/' || reauth[1] === '/' || badp(decodeURIComponent(reauth))) {
               throw 0;
             }
           } catch {

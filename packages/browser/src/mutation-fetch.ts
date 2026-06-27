@@ -131,7 +131,9 @@ export async function fetchEnhancedMutation(
     !(options.streaming && response.body) &&
     isSuccessfulEmptyAuthFragmentResponse(response, changes, body)
   ) {
-    followSuccessfulMutationRedirect(resolveAuthMutationNavigationTarget(options.form, options.formData));
+    followSuccessfulMutationRedirect(
+      resolveAuthMutationNavigationTarget(options.form, options.formData),
+    );
     return {
       body: '',
       buildToken,
@@ -220,7 +222,10 @@ function safeSameOriginPath(value: string | undefined): string | undefined {
   } catch {
     return undefined;
   }
-  if (/[\\\x00-\x20\x7f]/.test(decoded)) return undefined;
+  for (let index = 0; index < decoded.length; index += 1) {
+    const code = decoded.charCodeAt(index);
+    if (decoded[index] === '\\' || code <= 0x20 || code === 0x7f) return undefined;
+  }
   return value;
 }
 
