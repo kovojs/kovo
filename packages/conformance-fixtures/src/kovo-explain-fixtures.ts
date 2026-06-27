@@ -33,6 +33,15 @@ export interface KovoExplainEndpointFact {
   writes: string[];
 }
 
+export interface KovoExplainMutationIngressFact {
+  auth: string;
+  csrf: string;
+  method: string;
+  mutation: string;
+  session: string;
+  writes: string[];
+}
+
 export interface KovoExplainComponentHandlerFact {
   captures: string[];
   event: string;
@@ -83,6 +92,7 @@ export interface KovoExplainUnguardedFact {
 export interface KovoExplainEndpointAssertionFact {
   endpoints: KovoExplainEndpointFact[];
   exitCode: number;
+  mutations: KovoExplainMutationIngressFact[];
   subject: string;
   summary: KovoExplainSummary;
   version: KovoExplainOutput['version'];
@@ -338,6 +348,7 @@ export function kovoExplainEndpointAssertionFact(
   return {
     endpoints: kovoExplainEndpointFacts(result.output),
     exitCode: result.exitCode,
+    mutations: kovoExplainMutationIngressFacts(result.output),
     subject: parsed.subject,
     summary: kovoExplainSummary(result.output, 'SUMMARY'),
     version: parsed.version,
@@ -613,6 +624,29 @@ export function kovoExplainEndpointFacts(output: string): KovoExplainEndpointFac
       path: requiredMatchGroup(match.groups, 'path'),
       rateLimit: requiredMatchGroup(match.groups, 'rateLimit'),
       surface: requiredMatchGroup(match.groups, 'surface'),
+      writes: parseList(requiredMatchGroup(match.groups, 'writes')),
+    };
+  });
+}
+
+export function kovoExplainMutationIngressFacts(output: string): KovoExplainMutationIngressFact[] {
+  return kovoExplainRecords(output, 'MUTATION').map((record) => {
+    const match =
+      /^(?<mutation>\S+) method=(?<method>\S+) auth=(?<auth>\S+) csrf=(?<csrf>.*?) session=(?<session>\S+) writes=(?<writes>\S+)$/.exec(
+        record,
+      );
+    if (!match?.groups) {
+      throw new Error(
+        `kovo explain MUTATION ingress record is '<mutation> method=... auth=... csrf=... session=... writes=...': ${record}`,
+      );
+    }
+
+    return {
+      auth: requiredMatchGroup(match.groups, 'auth'),
+      csrf: requiredMatchGroup(match.groups, 'csrf'),
+      method: requiredMatchGroup(match.groups, 'method'),
+      mutation: requiredMatchGroup(match.groups, 'mutation'),
+      session: requiredMatchGroup(match.groups, 'session'),
       writes: parseList(requiredMatchGroup(match.groups, 'writes')),
     };
   });

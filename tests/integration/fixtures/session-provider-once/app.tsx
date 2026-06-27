@@ -1,6 +1,6 @@
 // SPEC §6.5 + §9.5: the request shell resolves the sessionProvider once, then
 // route/query/mutation guards and handlers observe that same session value.
-import { createApp, domain, guards, mutation, query, route, s } from '@kovojs/server';
+import { createApp, csrfField, domain, guards, mutation, query, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface AppSession {
@@ -10,6 +10,10 @@ interface AppSession {
 type AppRequest = Request & KovoFixtureRequest & { session?: AppSession | null };
 
 const sessionDomain = domain('session-once');
+const csrf = {
+  secret: 'session-provider-once-secret-0123456789',
+  sessionId: () => 'session-provider-once-session',
+};
 
 async function record(request: AppRequest, kind: string): Promise<void> {
   const caseKey = request.headers.get('x-session-case') ?? new URL(request.url).pathname;
@@ -39,7 +43,6 @@ export const sessionOnceQuery = query('session-once', {
 });
 
 export const sessionOnceMutation = mutation('session-once/mutate', {
-  csrf: false,
   guard: recordingAuthed('mutation'),
   input: s.object({}),
   handler: async (_input: unknown, request: AppRequest) => {
@@ -52,12 +55,13 @@ const routeCase = route('/route', {
   guard: recordingAuthed('route'),
   page: async (_context, request: AppRequest) => {
     await record(request, 'page:route');
-    return `<main><h1>Session Once</h1><p data-user>${request.session?.user.id}</p></main>`;
+    return `<main><h1>Session Once</h1><p data-user>${request.session?.user.id}</p><form method="post" action="/_m/session-once/mutate">${csrfField(request, { ...csrf, audience: sessionOnceMutation.key })}</form></main>`;
   },
 });
 
 export default defineFixture({
   app: createApp<AppSession>({
+    csrf,
     mutations: [sessionOnceMutation],
     queries: [sessionOnceQuery],
     routes: [routeCase],

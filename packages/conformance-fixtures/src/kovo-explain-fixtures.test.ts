@@ -404,6 +404,7 @@ describe('@kovojs/test kovo explain fixture seam', () => {
         },
       ],
       exitCode: 0,
+      mutations: [],
       subject: 'ENDPOINTS',
       summary: { total: '1' },
       version: 'kovo-explain/v1',
