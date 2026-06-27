@@ -445,10 +445,14 @@ describe('Better Auth pinned conformance', () => {
       pluginTableDegradations: [],
       unbridgedTables: [],
     });
-    expect(betterAuthSchemaBridge.account).toEqual({ domain: 'auth', key: 'userId' });
+    expect(betterAuthSchemaBridge.account).toEqual({
+      domain: 'auth',
+      key: 'userId',
+      secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
+    });
     expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
     );
   });
 

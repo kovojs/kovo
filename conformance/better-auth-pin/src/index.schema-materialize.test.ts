@@ -239,7 +239,7 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const account = authPgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const account = authPgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
     );
     expect(result.source).toContain(
       "export const invitation = sqlite.sqliteTable('invitation', {}, kovo({ domain: 'organization', key: 'organizationId' }));",
@@ -280,7 +280,7 @@ describe('Better Auth pinned conformance', () => {
     expect(result.duplicateSourceTables).toEqual(['user']);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
     );
     expect(result.source).toContain("export const user = pgTable('user', {});");
     expect(result.source).toContain("export const userShadow = pgTable('user', {});");
@@ -352,7 +352,7 @@ describe('Better Auth pinned conformance', () => {
       "export const auth_users = pgTable('auth_users', {}, kovo({ domain: 'user', key: 'id' }));",
     );
     expect(result.source).toContain(
-      "export const auth_sessions = pgTable('auth_sessions', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const auth_sessions = pgTable('auth_sessions', {}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
     );
     expect(result.source).toContain(
       "export const auth_organizations = pgTable('auth_organizations', {}, kovo({ domain: 'organization', key: 'id' }));",
