@@ -15,7 +15,6 @@ import { registerGeneratedMutationTouchRegistry } from './generated-mutation-reg
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { guards } from './guards.js';
 import { mutation } from './mutation.js';
-import { createMemoryOpaqueSessionStore, createOpaqueSessionManager } from './opaque-session.js';
 import { query } from './query.js';
 import { registerGeneratedLiveTargetRenderer } from './live-target-registry.js';
 import { layout, route } from './route.js';
@@ -44,20 +43,6 @@ const rawTextResponse = {
   body: 'text',
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
-
-function delegatedSessionProvider(provider: (request: Request) => unknown) {
-  return {
-    justification: 'test delegates session lifecycle to an app-owned provider',
-    lifecycle: 'delegated' as const,
-    lifecycleAssertions: {
-      expiry: 'test provider enforces session expiration',
-      revocation: 'test provider revokes sessions on sign-out',
-      rotation: 'test provider rotates credentials after authentication',
-      validation: 'test provider validates browser session credentials',
-    },
-    provider,
-  };
-}
 
 function expectReservedSystemResponsePosture(response: Response, buildToken: string): void {
   expect(response.headers.get('cache-control')).toBe('private, no-store');
@@ -273,7 +258,7 @@ describe('server createApp request shell', () => {
       endpoints: [statusEndpoint],
       queries: [productQuery],
       routes: [productRoute],
-      sessionProvider: delegatedSessionProvider(sessionProvider),
+      sessionProvider,
       stylesheets: [appStylesheet],
     });
 
@@ -294,238 +279,6 @@ describe('server createApp request shell', () => {
       windowMs: 60_000,
     });
     expect('use' in app).toBe(false);
-  });
-
-  it('wires Kovo-owned opaque sessions as the request-shell sessionProvider', async () => {
-    const manager = createOpaqueSessionManager({
-      store: createMemoryOpaqueSessionStore<{ user: { id: string } | null }>(),
-    });
-    const app = createApp({ session: manager });
-    const anonymous = await app.session!.establish({ user: null });
-    const authenticated = await app.session!.establish(
-      { user: { id: 'u1' } },
-      { priorId: anonymous.session.id },
-    );
-
-    expect(app.session).toBe(manager);
-    expect(app.sessionProvider).toBe(manager.provider);
-    expect(app.sessionProviderBoundary).toBe('owned');
-    await expect(app.session!.validate(anonymous.session.id)).resolves.toEqual({
-      ok: false,
-      reason: 'revoked',
-    });
-    await expect(
-      app.sessionProvider!(
-        new Request('https://app.test/account', {
-          headers: { cookie: authenticated.setCookie.split(';')[0]! },
-        }),
-      ),
-    ).resolves.toEqual({ user: { id: 'u1' } });
-
-    await app.session!.revoke(authenticated.session.id);
-    await expect(
-      app.sessionProvider!(
-        new Request('https://app.test/account', {
-          headers: { cookie: authenticated.setCookie.split(';')[0]! },
-        }),
-      ),
-    ).resolves.toBeNull();
-  });
-
-  it('defaults to a Kovo-owned opaque session manager when no session boundary is supplied', async () => {
-    const app = createApp<{ user: { id: string } | null }>();
-    const established = await app.session!.establish({ user: { id: 'u1' } });
-    const cookie = established.setCookie.split(';')[0]!;
-
-    expect(app.session).toBeDefined();
-    expect(app.sessionProvider).toBe(app.session!.provider);
-    expect(app.sessionProviderBoundary).toBe('default-owned');
-    expect(app.session!.cookieName).toBe('kovo_session');
-    expect(established.session.id).toMatch(/^kos_[A-Za-z0-9_-]+$/);
-    expect(established.session.id).not.toContain('.');
-    await expect(
-      app.sessionProvider!(new Request('https://app.test/account', { headers: { cookie } })),
-    ).resolves.toEqual({ user: { id: 'u1' } });
-    await expect(
-      app.sessionProvider!(
-        new Request('https://app.test/account', {
-          headers: { cookie: 'kovo_session=header.payload.signature' },
-        }),
-      ),
-    ).resolves.toBeNull();
-
-    await app.session!.revoke(established.session.id);
-    await expect(
-      app.sessionProvider!(new Request('https://app.test/account', { headers: { cookie } })),
-    ).resolves.toBeNull();
-  });
-
-  it('keeps an explicitly justified delegated sessionProvider as a non-owned boundary', () => {
-    const sessionProvider = () => ({ user: { id: 'delegated' } });
-    const app = createApp({ sessionProvider: delegatedSessionProvider(sessionProvider) });
-
-    expect(app.session).toBeUndefined();
-    expect(app.sessionProvider).toBe(sessionProvider);
-    expect(app.sessionProviderBoundary).toBe('delegated');
-  });
-
-  it('rejects Kovo-owned opaque providers routed through the delegated boundary', () => {
-    const manager = createOpaqueSessionManager({
-      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
-    });
-
-    expect(() =>
-      createApp({ sessionProvider: delegatedSessionProvider(manager.provider as () => unknown) }),
-    ).toThrow(
-      'createApp() received a Kovo-owned opaque session provider through `sessionProvider`. Pass the manager as `session`',
-    );
-  });
-
-  it('rejects delegated sessionProvider accessors that could change after validation', () => {
-    const manager = createOpaqueSessionManager({
-      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
-    });
-    let reads = 0;
-    const declaration = {
-      justification: 'test delegates session lifecycle to an app-owned provider',
-      lifecycle: 'delegated' as const,
-      lifecycleAssertions: {
-        expiry: 'test provider enforces session expiration',
-        revocation: 'test provider revokes sessions on sign-out',
-        rotation: 'test provider rotates credentials after authentication',
-        validation: 'test provider validates browser session credentials',
-      },
-      get provider() {
-        reads += 1;
-        return reads === 1 ? () => ({ user: { id: 'delegated' } }) : manager.provider;
-      },
-    };
-
-    expect(() => createApp({ sessionProvider: declaration as never })).toThrow(
-      'requires delegated `provider` to be an own data property',
-    );
-  });
-
-  it('rejects delegated lifecycle assertion accessors', () => {
-    const lifecycleAssertions = {
-      expiry: 'test provider enforces session expiration',
-      revocation: 'test provider revokes sessions on sign-out',
-      get rotation() {
-        return 'test provider rotates credentials after authentication';
-      },
-      validation: 'test provider validates browser session credentials',
-    };
-
-    expect(() =>
-      createApp({
-        sessionProvider: {
-          justification: 'test delegates session lifecycle to an app-owned provider',
-          lifecycle: 'delegated',
-          lifecycleAssertions,
-          provider: () => ({ user: { id: 'delegated' } }),
-        } as never,
-      }),
-    ).toThrow('requires delegated `rotation` to be an own data property');
-  });
-
-  it('does not treat forged global-symbol opaque provider markers as framework-owned', () => {
-    const forgedProvider = (() => ({ user: { id: 'delegated' } })) as (() => {
-      user: { id: string };
-    }) & {
-      [key: symbol]: true;
-    };
-    forgedProvider[Symbol.for('kovo.opaqueSessionProvider')] = true;
-
-    const app = createApp({ sessionProvider: delegatedSessionProvider(forgedProvider) });
-
-    expect(app.session).toBeUndefined();
-    expect(app.sessionProvider).toBe(forgedProvider);
-    expect(app.sessionProviderBoundary).toBe('delegated');
-  });
-
-  it('rejects ambiguous delegated sessionProvider shorthand without lifecycle posture', () => {
-    expect(() =>
-      createApp({
-        sessionProvider: (() => ({ user: { id: 'legacy' } })) as never,
-      }),
-    ).toThrow(
-      'createApp({ sessionProvider }) now requires an explicit delegated lifecycle declaration',
-    );
-  });
-
-  it('rejects hand-built app aggregates that attach a raw sessionProvider below createApp', () => {
-    const app = createApp();
-
-    expect(() =>
-      createRequestHandler({
-        ...app,
-        sessionProvider: (() => ({ user: { id: 'raw' } })) as never,
-        sessionProviderBoundary: 'delegated',
-      }),
-    ).toThrow('createRequestHandler() requires a Kovo app aggregate');
-  });
-
-  it('rejects delegated sessionProvider declarations without justification', () => {
-    expect(() =>
-      createApp({
-        sessionProvider: {
-          justification: '   ',
-          lifecycle: 'delegated',
-          lifecycleAssertions: {
-            expiry: 'test provider enforces session expiration',
-            revocation: 'test provider revokes sessions on sign-out',
-            rotation: 'test provider rotates credentials after authentication',
-            validation: 'test provider validates browser session credentials',
-          },
-          provider: () => ({ user: { id: 'delegated' } }),
-        },
-      }),
-    ).toThrow('requires a non-empty delegated session justification');
-  });
-
-  it('rejects delegated sessionProvider declarations without lifecycle assertions', () => {
-    expect(() =>
-      createApp({
-        sessionProvider: {
-          justification: 'delegated provider under migration',
-          lifecycle: 'delegated',
-          provider: () => ({ user: { id: 'delegated' } }),
-        } as never,
-      }),
-    ).toThrow('requires delegated `lifecycleAssertions`');
-  });
-
-  it('rejects delegated sessionProvider declarations with empty lifecycle assertions', () => {
-    expect(() =>
-      createApp({
-        sessionProvider: {
-          justification: 'delegated provider under migration',
-          lifecycle: 'delegated',
-          lifecycleAssertions: {
-            expiry: 'test provider enforces session expiration',
-            revocation: 'test provider revokes sessions on sign-out',
-            rotation: '   ',
-            validation: 'test provider validates browser session credentials',
-          },
-          provider: () => ({ user: { id: 'delegated' } }),
-        },
-      }),
-    ).toThrow('requires a non-empty delegated lifecycleAssertions.rotation');
-  });
-
-  it('rejects ambiguous owned and delegated session lifecycles', () => {
-    const manager = createOpaqueSessionManager({
-      store: createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
-    });
-
-    expect(() =>
-      createApp({
-        session: manager,
-        sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'delegated' } })),
-      }),
-    ).toThrow(
-      'createApp() received both `session` and `sessionProvider`. `session` gives the request shell Kovo-owned opaque session lifecycle control',
-    );
   });
 
   it('uses compiler-registered live target renderers when createApp does not receive explicit wiring', () => {
@@ -1370,7 +1123,7 @@ describe('server createApp request shell', () => {
       createApp({
         endpoints: [statusEndpoint],
         routes: [route('/status', { page: () => trustedHtml('route') })],
-        sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+        sessionProvider: () => ({ user: { id: 'u1' } }),
       }),
     );
 
@@ -1418,10 +1171,10 @@ describe('server createApp request shell', () => {
     const handler = createRequestHandler(
       createApp({
         routes: [adminRoute],
-        sessionProvider: delegatedSessionProvider(() => {
+        sessionProvider() {
           sessionReads += 1;
           return { user: { id: 'u1' } };
-        }),
+        },
       }),
     );
 
@@ -1506,7 +1259,7 @@ describe('server createApp request shell', () => {
             },
           }),
         ],
-        sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+        sessionProvider: () => ({ user: { id: 'u1' } }),
       }),
     );
 

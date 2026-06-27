@@ -830,6 +830,8 @@ function hasForbiddenEvalCall(source) {
       ),
     );
   }
+  patterns.push(...dynamicCodeMemberHelperCallPatterns('eval', globalEvalExpression, aliases));
+  patterns.push(...dynamicCodeImmediateBindCallPatterns('eval', globalEvalExpression, aliases));
 
   for (const pattern of patterns) {
     for (const call of callArgumentLists(source, pattern)) {
@@ -861,6 +863,14 @@ function hasForbiddenFunctionConstructorCall(source, options = {}) {
         ),
       );
     }
+    patterns.push(
+      ...dynamicCodeMemberHelperCallPatterns('Function', globalFunctionExpression, aliases),
+    );
+    patterns.push(
+      ...dynamicCodeImmediateBindCallPatterns('Function', globalFunctionExpression, aliases, {
+        callOnly: true,
+      }),
+    );
   }
 
   if (options.callOnly !== true) {
@@ -881,6 +891,11 @@ function hasForbiddenFunctionConstructorCall(source, options = {}) {
         ),
       );
     }
+    patterns.push(
+      ...dynamicCodeImmediateBindCallPatterns('Function', globalFunctionExpression, aliases, {
+        newOnly: true,
+      }),
+    );
   }
 
   for (const pattern of patterns) {
@@ -896,16 +911,25 @@ function hasForbiddenFunctionConstructorCall(source, options = {}) {
 function dynamicCodeSourceForSinkScanning(text) {
   const source = stripCommentsAndStringContents(text);
   const chars = source.split('');
-  const literalGlobalDynamicCodeMemberPattern = /\bglobalThis\s*\[\s*(['"])(eval|Function)\1\s*\]/g;
+  const preservedDynamicCodeLiteralPatterns = [
+    /\bglobalThis\s*\[\s*(['"])(eval|Function)\1\s*\]/g,
+    /(?:^|[{\[,])\s*(['"])(eval|Function)\1\s*:/g,
+    /(?:^|[{\[,])\s*\[\s*(['"])(eval|Function)\1\s*\]\s*:/g,
+  ];
   let match;
-  while ((match = literalGlobalDynamicCodeMemberPattern.exec(text)) !== null) {
-    if (source.slice(match.index, match.index + 'globalThis'.length) !== 'globalThis') {
-      continue;
-    }
-    const literal = `${match[1]}${match[2]}${match[1]}`;
-    const literalIndex = match.index + match[0].indexOf(literal);
-    for (let offset = 0; offset < literal.length; offset += 1) {
-      chars[literalIndex + offset] = text[literalIndex + offset];
+  for (const literalPattern of preservedDynamicCodeLiteralPatterns) {
+    while ((match = literalPattern.exec(text)) !== null) {
+      const literal = `${match[1]}${match[2]}${match[1]}`;
+      const literalIndex = match.index + match[0].indexOf(literal);
+      if (
+        source.slice(match.index, literalIndex).trim() !==
+        text.slice(match.index, literalIndex).trim()
+      ) {
+        continue;
+      }
+      for (let offset = 0; offset < literal.length; offset += 1) {
+        chars[literalIndex + offset] = text[literalIndex + offset];
+      }
     }
   }
   return chars.join('');
@@ -923,12 +947,19 @@ function dynamicCodeGlobalAliasNames(source, targetName) {
       String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*\(\s*(${targetExpression})\s*\)\s*(?=;|\n|$)`,
       'g',
     ),
+    new RegExp(
+      String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(${targetExpression}|\(\s*${targetExpression}\s*\))\s*\.\s*bind\s*\([^;\n]*\)\s*(?=;|\n|$)`,
+      'g',
+    ),
   ];
 
   for (const declarationPattern of declarationPatterns) {
     let declaration;
     while ((declaration = declarationPattern.exec(source)) !== null) {
-      const expression = declaration[2].trim();
+      const expression = declaration[2]
+        .trim()
+        .replace(/^\(\s*/, '')
+        .replace(/\s*\)$/, '');
       if (
         expression === targetName &&
         hasLocalBindingBefore(source, targetName, declaration.index)
@@ -944,8 +975,92 @@ function dynamicCodeGlobalAliasNames(source, targetName) {
       aliases.set(declaration[1], declarationPattern.lastIndex);
     }
   }
+  for (const alias of destructuredGlobalDynamicCodeAliasDeclarations(source, targetName)) {
+    aliases.set(alias.name, alias.end);
+  }
 
   return aliases;
+}
+
+function destructuredGlobalDynamicCodeAliasDeclarations(source, targetName) {
+  const aliases = [];
+  const declarationPattern =
+    /\b(?:const|let|var)\s*\{([\s\S]*?)\}\s*(?::[^=;]+)?=\s*\(?\s*globalThis\s*\)?\s*(?=;|\n|$)/g;
+  let declaration;
+  while ((declaration = declarationPattern.exec(source)) !== null) {
+    if (hasLocalBindingBefore(source, 'globalThis', declaration.index)) {
+      continue;
+    }
+
+    for (const entry of splitTopLevelArguments(declaration[1])) {
+      const aliasName = destructuredDynamicCodeAliasName(entry, targetName);
+      if (aliasName === undefined) continue;
+      aliases.push({ name: aliasName, end: declarationPattern.lastIndex });
+    }
+  }
+  return aliases;
+}
+
+function destructuredDynamicCodeAliasName(entry, targetName) {
+  const trimmed = entry.trim();
+  if (trimmed === targetName) return targetName;
+  const key = String.raw`(?:${escapeRegExp(targetName)}|\[\s*(['"])${escapeRegExp(
+    targetName,
+  )}\1\s*\]|(['"])${escapeRegExp(targetName)}\2)`;
+  const alias = String.raw`([A-Za-z_$][\w$]*)`;
+  const renamedPattern = new RegExp(String.raw`^${key}\s*:\s*${alias}$`);
+  const renamed = renamedPattern.exec(trimmed);
+  if (renamed !== null) return renamed[3];
+  return undefined;
+}
+
+function dynamicCodeMemberHelperCallPatterns(targetName, globalExpression, aliases) {
+  const memberHelpers = String.raw`(?:call|apply)`;
+  const patterns = [
+    new RegExp(
+      String.raw`(^|[^\w$])(?:${targetName}|\(\s*${targetName}\s*\)|${globalExpression}|\(\s*${globalExpression}\s*\))\s*\.\s*${memberHelpers}\s*\(`,
+      'g',
+    ),
+  ];
+
+  for (const alias of aliases.keys()) {
+    patterns.push(
+      new RegExp(
+        String.raw`(^|[^\w$.])(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(
+          alias,
+        )}\s*\))\s*\.\s*${memberHelpers}\s*\(`,
+        'g',
+      ),
+    );
+  }
+
+  return patterns;
+}
+
+function dynamicCodeImmediateBindCallPatterns(targetName, globalExpression, aliases, options = {}) {
+  const directTarget = String.raw`(?:${targetName}|\(\s*${targetName}\s*\)|${globalExpression}|\(\s*${globalExpression}\s*\))`;
+  const patterns = [];
+  const addPattern = (targetExpression) => {
+    const boundExpression = String.raw`${targetExpression}\s*\.\s*bind\s*\([^)]*\)`;
+    const maybeParenthesizedBoundExpression = String.raw`(?:${boundExpression}|\(\s*${boundExpression}\s*\))`;
+    if (options.newOnly === true) {
+      patterns.push(
+        new RegExp(String.raw`(^|[^\w$.])new\s+${maybeParenthesizedBoundExpression}\s*\(`, 'g'),
+      );
+      return;
+    }
+    patterns.push(
+      new RegExp(String.raw`(^|[^\w$.])${maybeParenthesizedBoundExpression}\s*\(`, 'g'),
+    );
+  };
+
+  addPattern(directTarget);
+
+  for (const alias of aliases.keys()) {
+    addPattern(String.raw`(?:${escapeRegExp(alias)}|\(\s*${escapeRegExp(alias)}\s*\))`);
+  }
+
+  return patterns;
 }
 
 function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()) {
@@ -953,6 +1068,7 @@ function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()
   const callPrefix =
     openParenIndex < 0 ? source.slice(call.index) : source.slice(call.index, openParenIndex);
   const nearbyPrefix = source.slice(Math.max(0, call.index - 40), openParenIndex);
+  const nearbyCallWindow = source.slice(call.index, Math.min(source.length, call.index + 160));
   if (
     new RegExp(String.raw`\bfunction\s+${escapeRegExp(targetName)}\s*$`).test(callPrefix) ||
     new RegExp(String.raw`\bfunction\s+${escapeRegExp(targetName)}\s*$`).test(nearbyPrefix)
@@ -964,6 +1080,47 @@ function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()
     hasLocalBindingBefore(source, 'globalThis', call.index)
   ) {
     return true;
+  }
+  if (
+    /\bglobalThis\b/.test(nearbyPrefix) &&
+    hasLocalBindingBefore(source, 'globalThis', call.index)
+  ) {
+    return true;
+  }
+  if (
+    /\bglobalThis\b/.test(nearbyCallWindow) &&
+    hasLocalBindingBefore(source, 'globalThis', call.index)
+  ) {
+    return true;
+  }
+  if (
+    new RegExp(String.raw`\b${escapeRegExp(targetName)}\s*\.\s*bind\b`).test(nearbyPrefix) &&
+    hasLocalBindingBefore(source, targetName, call.index)
+  ) {
+    return true;
+  }
+
+  const memberHelperBase = dynamicCodeMemberHelperBaseName(callPrefix);
+  if (memberHelperBase !== undefined) {
+    if (memberHelperBase === 'globalThis') return false;
+    if (memberHelperBase === targetName) {
+      const aliasDeclarationEnd = aliases.get(targetName);
+      const isGlobalAlias =
+        aliasDeclarationEnd !== undefined &&
+        call.index > aliasDeclarationEnd &&
+        !isReboundAfterAliasDeclaration(source, targetName, aliasDeclarationEnd, call.index);
+      if (!isGlobalAlias && hasLocalBindingBefore(source, targetName, call.index)) return true;
+      return false;
+    }
+
+    const aliasDeclarationEnd = aliases.get(memberHelperBase);
+    if (aliasDeclarationEnd === undefined || call.index <= aliasDeclarationEnd) return false;
+    return isReboundAfterAliasDeclaration(
+      source,
+      memberHelperBase,
+      aliasDeclarationEnd,
+      call.index,
+    );
   }
 
   if (call.name === 'globalThis') {
@@ -983,6 +1140,18 @@ function isShadowedDynamicCodeCall(source, call, targetName, aliases = new Map()
   const aliasDeclarationEnd = aliases.get(call.name);
   if (aliasDeclarationEnd === undefined || call.index <= aliasDeclarationEnd) return false;
   return isReboundAfterAliasDeclaration(source, call.name, aliasDeclarationEnd, call.index);
+}
+
+function dynamicCodeMemberHelperBaseName(callPrefix) {
+  if (!/\.\s*(?:call|apply|bind)\s*(?:\([^)]*\))?\s*$/.test(callPrefix)) return undefined;
+  const targetExpression = callPrefix
+    .replace(/^([^\w$]*)/, '')
+    .replace(/\.\s*(?:call|apply|bind)\s*(?:\([^)]*\))?\s*$/, '')
+    .trim()
+    .replace(/^\(\s*/, '')
+    .replace(/\s*\)$/, '')
+    .trim();
+  return targetExpression.match(/^([A-Za-z_$][\w$]*)/)?.[1];
 }
 
 function hasNewPrefixBeforeCall(source, callIndex) {

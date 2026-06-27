@@ -15,7 +15,6 @@ import type { QueryFactory } from './query.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
-import type { OpaqueSessionManager } from './opaque-session.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 
@@ -58,39 +57,6 @@ export interface AppAuthoringContext<AppRequest> {
 export type AppAuthoringDeclarations<Declaration, AppRequest> =
   | readonly Declaration[]
   | ((context: AppAuthoringContext<AppRequest>) => readonly unknown[]);
-
-/**
- * Structured lifecycle ownership assertions required for delegated session providers.
- *
- * Each field names the external control that owns the corresponding session lifecycle step.
- * Empty strings fail closed at `createApp()` so delegated providers are auditable as four
- * concrete claims instead of one prose-only justification (SPEC §6.5 / OPP-11).
- */
-export interface DelegatedSessionLifecycleAssertions {
-  /** Who validates browser session credentials and rejects malformed/stale credentials. */
-  validation: string;
-  /** Who rotates or reissues session credentials after authentication or refresh. */
-  rotation: string;
-  /** Who enforces absolute and idle expiry for the delegated session. */
-  expiry: string;
-  /** Who immediately revokes credentials on sign-out or compromise response. */
-  revocation: string;
-}
-
-/**
- * Explicit declaration for app-owned or third-party session lifecycles.
- *
- * Kovo defaults to a framework-owned opaque session manager when no session boundary is
- * supplied. Supplying a `sessionProvider` is therefore a deliberate delegated lifecycle
- * posture: the app or integration owns validation, rotation, expiry, and revocation
- * outside Kovo's opaque store (SPEC §6.5 / OPP-11).
- */
-export interface DelegatedSessionProvider<RawRequest extends globalThis.Request, SessionValue> {
-  justification: string;
-  lifecycle: 'delegated';
-  lifecycleAssertions: DelegatedSessionLifecycleAssertions;
-  provider: SessionProvider<RawRequest, SessionValue>;
-}
 
 /**
  * Optional shell renderers for framework-owned error pages in the request shell
@@ -274,14 +240,7 @@ export interface CreateAppOptions<
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
   requestLimits?: AppRequestLimitOptions | false;
   routes?: AppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>;
-  /**
-   * Kovo-owned opaque session lifecycle for the request shell. When present, `createApp()`
-   * wires `sessionProvider` from this manager so `req.session` is populated only after
-   * store-backed opaque-id validation (SPEC §6.5 / OPP-11). Use `sessionProvider` only for
-   * explicitly justified delegated session ownership.
-   */
-  session?: OpaqueSessionManager<SessionValue>;
-  sessionProvider?: DelegatedSessionProvider<RawRequest, SessionValue>;
+  sessionProvider?: SessionProvider<RawRequest, SessionValue>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
   stylesheets?: readonly (string | StylesheetAsset)[];
 }
@@ -324,8 +283,6 @@ export interface KovoApp<
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
   requestLimits: ResolvedAppRequestLimitOptions;
   routes: readonly AppRouteDeclaration<any>[];
-  session?: OpaqueSessionManager<any>;
-  sessionProviderBoundary?: 'default-owned' | 'delegated' | 'owned';
   sessionProvider?: SessionProvider<any, any>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
   stylesheets: readonly (string | StylesheetAsset)[];

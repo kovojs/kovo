@@ -2,9 +2,6 @@ export type {
   AccessDecisionFact,
   AccessDerivationInput,
   AccessExplainFact,
-  AgentToolReachabilityInput,
-  AgentToolReachableSinkFact,
-  AgentToolReachableSinkKind,
   AttributeMergeExplain,
   CapabilityExplain,
   CaptureChannel,
@@ -57,8 +54,4 @@ export type {
   VerificationCoverageFact,
   VerificationDiagnosticFact,
 } from '../graph.js';
-export {
-  deriveAccessExplainFacts,
-  deriveAgentToolReachableSinkFacts,
-  validateKovoExplainInput,
-} from '../graph.js';
+export { deriveAccessExplainFacts, validateKovoExplainInput } from '../graph.js';

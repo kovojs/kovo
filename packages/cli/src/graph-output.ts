@@ -5,10 +5,7 @@ import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/in
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type { DerivationProof } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import {
-  deriveAgentToolReachableSinkFacts,
-  validateKovoExplainInput,
-} from '@kovojs/core/internal/graph';
+import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 
 import { AUDIT_USAGE, CHECK_USAGE, EXPLAIN_USAGE_LINE } from './commands-manifest.js';
@@ -393,9 +390,6 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
 
     for (const capability of capabilities) {
       lines.push(capabilityLine(capability));
-      if (capability.kind === 'agentTool') {
-        lines.push(...agentToolReachableSinkLines(capability));
-      }
     }
 
     lines.push(`SUMMARY total=${capabilities.length}`);
@@ -657,7 +651,6 @@ export function kovoAudit(
   const manualInvalidates = (input.mutations ?? []).filter(
     (mutation) => (mutation.manualInvalidates?.length ?? 0) > 0,
   );
-  const agentToolCoverage = agentToolCoverageFindings(input.capabilities ?? []);
   const lines = [auditOutputVersion];
 
   if (unguarded.length > 0) {
@@ -676,23 +669,15 @@ export function kovoAudit(
     }
   }
 
-  if (agentToolCoverage.length > 0) {
-    lines.push('AGENT-TOOLS');
-
-    for (const finding of agentToolCoverage) {
-      lines.push(agentToolCoverageLine(finding));
-    }
-  }
-
   if (lines.length === 1) {
     lines.push('OK');
   } else {
     lines.push(
-      `SUMMARY unguarded=${unguarded.length} manual-invalidates=${manualInvalidates.length} agent-tool-coverage=${agentToolCoverage.length}`,
+      `SUMMARY unguarded=${unguarded.length} manual-invalidates=${manualInvalidates.length}`,
     );
   }
 
-  const findingCount = unguarded.length + manualInvalidates.length + agentToolCoverage.length;
+  const findingCount = unguarded.length + manualInvalidates.length;
   return {
     exitCode: options.failOnFindings && findingCount > 0 ? 1 : 0,
     output: `${lines.join('\n')}\n`,
@@ -833,14 +818,6 @@ export function kovoCheck(
     // Drizzle write (without query.elevated) is the blocking KV433 confused-deputy error.
     for (const finding of sortedQueryWriteReachability(graph.queryWriteReachability ?? [])) {
       pushFinding(queryWriteReachabilityKv433Line(finding), true);
-    }
-
-    // SPEC §6.6 / OPP-07: for the narrow sound subset of framework-owned `tool()` declarations
-    // with statically classified reachable sinks, declared capabilities must cover every sink's
-    // required capability. Audit-grade rows stay visible in `explain --capabilities` but do not
-    // claim capability bounding.
-    for (const finding of agentToolCapabilityCoverageFailures(graph)) {
-      pushFinding(agentToolCapabilityCoverageLine(finding), true);
     }
 
     // SPEC §10.3/§11.1 / secure-framework Phase 6: a single-row self-referential write to a
@@ -1840,21 +1817,7 @@ function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
 function collectCapabilityFacts(
   graph: CoreGraph.KovoExplainInput,
 ): readonly CoreGraph.CapabilityExplain[] {
-  const reachableSinks = deriveAgentToolReachableSinkFacts(graph);
-  const sinksByTool = new Map<string, CoreGraph.AgentToolReachableSinkFact[]>();
-  for (const sink of reachableSinks) {
-    const sinks = sinksByTool.get(sink.tool) ?? [];
-    sinks.push(sink);
-    sinksByTool.set(sink.tool, sinks);
-  }
-
-  const collected: CoreGraph.CapabilityExplain[] = (graph.capabilities ?? []).map((capability) => {
-    if (capability.kind !== 'agentTool' || capability.target === undefined) return capability;
-    const sinks = sinksByTool.get(capability.target);
-    return sinks === undefined || sinks.length === 0
-      ? capability
-      : { ...capability, reachableSinks: sinks };
-  });
+  const collected: CoreGraph.CapabilityExplain[] = [...(graph.capabilities ?? [])];
 
   for (const reveal of graph.revealed ?? []) {
     if (reveal.grade !== 'audit') continue; // proof-grade server projections are not an escape.
@@ -1879,8 +1842,6 @@ function compareCapability(a: CoreGraph.CapabilityExplain, b: CoreGraph.Capabili
 }
 
 function capabilityLine(capability: CoreGraph.CapabilityExplain): string {
-  if (capability.kind === 'agentTool') return agentToolCapabilityLine(capability);
-
   return [
     'CAPABILITY',
     `kind=${capability.kind}`,
@@ -1889,163 +1850,6 @@ function capabilityLine(capability: CoreGraph.CapabilityExplain): string {
     `target=${capability.target ?? '-'}`,
     `justification=${stableValue(capability.justification)}`,
   ].join(' ');
-}
-
-function agentToolCapabilityLine(capability: CoreGraph.CapabilityExplain): string {
-  return [
-    'CAPABILITY',
-    'kind=agentTool',
-    `site=${capability.site}`,
-    `name=${capability.target ?? '-'}`,
-    `owner=${capability.owner ?? '-'}`,
-    `purpose=${stableValue(capability.purpose)}`,
-    `authority=${list(capability.authority)}`,
-    `capabilities=${list(capability.declaredCapabilities)}`,
-    `sinks=${agentToolSinkList(capability.reachableSinks)}`,
-    `ambient=${capability.ambientBrowserCredentials ?? '-'}`,
-    `ambientJustification=${stableValue(capability.ambientJustification)}`,
-    `review=${stableValue(capability.justification)}`,
-  ].join(' ');
-}
-
-function agentToolSinkList(
-  sinks: readonly CoreGraph.AgentToolReachableSinkFact[] | undefined,
-): string {
-  if (sinks === undefined || sinks.length === 0) return '-';
-  return sinks
-    .map((sink) => `${sink.grade}:${sink.kind}:${sink.target}->${sink.capability}@${sink.site}`)
-    .sort()
-    .join(',');
-}
-
-function agentToolReachableSinkLines(capability: CoreGraph.CapabilityExplain): string[] {
-  const sinks = capability.reachableSinks ?? [];
-  if (sinks.length === 0) return [];
-
-  return [...sinks]
-    .sort(compareAgentToolReachableSink)
-    .map((sink) =>
-      [
-        'AGENT_TOOL_SINK',
-        `tool=${sink.tool}`,
-        `grade=${sink.grade}`,
-        `kind=${sink.kind}`,
-        `target=${sink.target}`,
-        `capability=${sink.capability}`,
-        `site=${sink.site}`,
-        `evidence=${stableValue(sink.evidence)}`,
-      ].join(' '),
-    );
-}
-
-function compareAgentToolReachableSink(
-  left: CoreGraph.AgentToolReachableSinkFact,
-  right: CoreGraph.AgentToolReachableSinkFact,
-): number {
-  return (
-    left.tool.localeCompare(right.tool) ||
-    left.grade.localeCompare(right.grade) ||
-    left.kind.localeCompare(right.kind) ||
-    left.target.localeCompare(right.target) ||
-    left.capability.localeCompare(right.capability) ||
-    left.site.localeCompare(right.site) ||
-    (left.evidence ?? '').localeCompare(right.evidence ?? '')
-  );
-}
-
-interface AgentToolCapabilityCoverageFailure {
-  capability: string;
-  kind: CoreGraph.AgentToolReachableSinkKind;
-  site: string;
-  target: string;
-  tool: string;
-}
-
-function agentToolCapabilityCoverageFailures(
-  graph: CoreGraph.KovoCheckInput,
-): readonly AgentToolCapabilityCoverageFailure[] {
-  const tools = new Map(
-    (graph.capabilities ?? [])
-      .filter((capability) => capability.kind === 'agentTool' && !empty(capability.target))
-      .map((capability) => [
-        capability.target as string,
-        new Set(capability.declaredCapabilities ?? []),
-      ]),
-  );
-  if (tools.size === 0) return [];
-
-  return deriveAgentToolReachableSinkFacts(graph)
-    .filter((sink) => sink.grade === 'sound')
-    .filter((sink) => {
-      const declared = tools.get(sink.tool);
-      return declared !== undefined && !declared.has(sink.capability);
-    })
-    .map((sink) => ({
-      capability: sink.capability,
-      kind: sink.kind,
-      site: sink.site,
-      target: sink.target,
-      tool: sink.tool,
-    }))
-    .sort(
-      (left, right) =>
-        left.tool.localeCompare(right.tool) ||
-        left.kind.localeCompare(right.kind) ||
-        left.target.localeCompare(right.target) ||
-        left.capability.localeCompare(right.capability) ||
-        left.site.localeCompare(right.site),
-    );
-}
-
-function agentToolCapabilityCoverageLine(finding: AgentToolCapabilityCoverageFailure): string {
-  return [
-    'ERROR AGENT_TOOL_CAPABILITY',
-    finding.tool,
-    `sink=${finding.kind}:${finding.target}`,
-    `required=${finding.capability}`,
-    `site=${finding.site}`,
-    'Declared tool capabilities do not cover statically reachable sink.',
-  ].join(' ');
-}
-
-interface AgentToolCoverageFinding {
-  missing: readonly string[];
-  site: string;
-  tool: string;
-}
-
-function agentToolCoverageFindings(
-  capabilities: readonly CoreGraph.CapabilityExplain[],
-): readonly AgentToolCoverageFinding[] {
-  return capabilities
-    .filter((capability) => capability.kind === 'agentTool')
-    .map((capability) => {
-      const missing = [
-        empty(capability.target) ? 'name' : undefined,
-        empty(capability.owner) ? 'owner' : undefined,
-        empty(capability.purpose) ? 'purpose' : undefined,
-        (capability.authority?.length ?? 0) === 0 ? 'authority' : undefined,
-        (capability.declaredCapabilities?.length ?? 0) === 0 ? 'capabilities' : undefined,
-        capability.ambientBrowserCredentials === undefined ? 'ambient' : undefined,
-        capability.ambientBrowserCredentials === 'allowed' && empty(capability.ambientJustification)
-          ? 'ambientJustification'
-          : undefined,
-      ].filter((value): value is string => value !== undefined);
-
-      return { missing, site: capability.site, tool: capability.target ?? '-' };
-    })
-    .filter((finding) => finding.missing.length > 0)
-    .sort(
-      (left, right) => left.site.localeCompare(right.site) || left.tool.localeCompare(right.tool),
-    );
-}
-
-function agentToolCoverageLine(finding: AgentToolCoverageFinding): string {
-  return `AGENT_TOOL ${finding.tool} site=${finding.site} missing=${finding.missing.join(',')}`;
-}
-
-function empty(value: string | undefined): boolean {
-  return value === undefined || value.trim() === '';
 }
 
 function compareCookieDowngrade(

@@ -22,20 +22,6 @@ function attestedLiveTargetHeader(
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 
-function delegatedSessionProvider(provider: (request: Request) => unknown) {
-  return {
-    justification: 'test delegates session lifecycle to an app-owned provider',
-    lifecycle: 'delegated' as const,
-    lifecycleAssertions: {
-      expiry: 'test provider enforces session expiration',
-      revocation: 'test provider revokes sessions on sign-out',
-      rotation: 'test provider rotates credentials after authentication',
-      validation: 'test provider validates browser session credentials',
-    },
-    provider,
-  };
-}
-
 describe('server app mutation request boundary', () => {
   it('resolves mutation response options from exact-key policies', async () => {
     const seen: string[] = [];
@@ -280,10 +266,10 @@ describe('server app mutation request boundary', () => {
         },
       },
       mutations: [addToCart],
-      sessionProvider: delegatedSessionProvider(() => {
+      sessionProvider() {
         sessionReads += 1;
         return { user: { id: 'u1' } };
-      }),
+      },
     });
     const form = new FormData();
     form.set('productId', 'p1');
@@ -322,19 +308,9 @@ describe('server app mutation request boundary', () => {
     });
     const app = createApp({
       mutations: [addToCart],
-      sessionProvider: {
-        justification: 'test delegated provider must not run for csrf:false mutation requests',
-        lifecycle: 'delegated',
-        lifecycleAssertions: {
-          expiry: 'test provider fixture owns expiry',
-          revocation: 'test provider fixture owns revocation',
-          rotation: 'test provider fixture owns rotation',
-          validation: 'test provider fixture owns validation',
-        },
-        provider() {
-          sessionReads += 1;
-          return { user: { id: 'u1' } };
-        },
+      sessionProvider() {
+        sessionReads += 1;
+        return { user: { id: 'u1' } };
       },
     });
     const form = new FormData();

@@ -79,33 +79,6 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
       });
     });
 
-    it('refuses unsupported key types in keyring-shaped CSRF signing material', () => {
-      const error = captureBootError(() =>
-        validateAppEnv(
-          {
-            csrfSecret: {
-              keys: [
-                {
-                  id: 'current',
-                  secret: STRONG_SECRET,
-                  state: 'active',
-                  type: 'rsa-public',
-                },
-              ],
-            },
-          },
-          { mode: 'production' },
-        ),
-      );
-
-      expect(error.issues[0]).toMatchObject({
-        code: 'invalid',
-        fatal: true,
-        path: 'csrf.secret.keys.0.type',
-      });
-      expect(error.message).toContain('hmac-sha256');
-    });
-
     it('does not throw when no csrf secret is configured (CSRF is opt-in)', () => {
       expect(() => validateAppEnv({}, { mode: 'production' })).not.toThrow();
     });

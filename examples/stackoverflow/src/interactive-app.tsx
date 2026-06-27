@@ -249,7 +249,7 @@ export async function buildSoInteractiveApp(
     stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/users/:id'),
   });
 
-  const app = createApp<ReturnType<typeof soDemoSessionProvider>, SoDb>({
+  const app = createApp({
     clientModules: createMemoryVersionedClientModuleRegistry(),
     db: async (request) => {
       const sessionId = request.session?.id ?? FALLBACK_SO_DEMO_SESSION_ID;
@@ -292,18 +292,7 @@ export async function buildSoInteractiveApp(
       }),
       userProfileRoute,
     ],
-    sessionProvider: {
-      justification:
-        'The KovOverflow demo owns validation, rotation, expiry, and revocation for demo sessions.',
-      lifecycle: 'delegated',
-      lifecycleAssertions: {
-        expiry: 'The KovOverflow demo session is bounded to seeded demo data lifetime.',
-        revocation: 'Changing the demo session id or clearing the demo cookie revokes continuity.',
-        rotation: 'The KovOverflow demo does not elevate sessions after sign-in.',
-        validation: 'The provider accepts only the demo session header or cookie id.',
-      },
-      provider: soDemoSessionProvider,
-    },
+    sessionProvider: soDemoSessionProvider,
   });
 
   const handler: RequestHandler = createRequestHandler(app);

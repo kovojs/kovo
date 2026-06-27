@@ -14,7 +14,6 @@ import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
-import * as agentToolApi from '../agent-tool.js';
 import * as writeGovernanceApi from '../write-governance.js';
 import * as confidentialAtRestApi from '../confidential-at-rest.js';
 import * as capabilityUrlApi from '../capability-url.js';
@@ -26,7 +25,6 @@ import * as egressCredentialsApi from '../egress-credentials.js';
 import * as envApi from '../env.js';
 import * as fileApi from '../file.js';
 import * as keyringApi from '../keyring.js';
-import * as opaqueSessionApi from '../opaque-session.js';
 import * as passwordApi from '../password.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
@@ -381,13 +379,6 @@ describe('server app-shell public API barrels', () => {
     const renderingSubpathOnlyValues = new Set<string>();
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
-      // SPEC §6.6: agent tool-capability runtime substrate. Public at the root
-      // barrel so app-authored tool adapters declare purpose, authority,
-      // capabilities, audit owner, and ambient credential posture explicitly.
-      AgentToolCapabilityError: agentToolApi.AgentToolCapabilityError,
-      agentToolAuditFacts: agentToolApi.agentToolAuditFacts,
-      runAgentTool: agentToolApi.runAgentTool,
-      tool: agentToolApi.tool,
       // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
       // env/secret validation surface — the typed boot error, its guard, and the
       // committed-secret waiver are public at the root barrel.
@@ -435,10 +426,6 @@ describe('server app-shell public API barrels', () => {
       isArgon2idPasswordDigest: passwordApi.isArgon2idPasswordDigest,
       verifyCredential: passwordApi.verifyCredential,
       verifyPassword: passwordApi.verifyPassword,
-      // SPEC §6.5 / plans/most-secure-web-framework.md OPP-11: Kovo-owned opaque session
-      // primitive for store-backed validation, rotation, expiry, and immediate revocation.
-      createMemoryOpaqueSessionStore: opaqueSessionApi.createMemoryOpaqueSessionStore,
-      createOpaqueSessionManager: opaqueSessionApi.createOpaqueSessionManager,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
       // create-kovo starter template's vite.config.ts.
       createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,
@@ -743,53 +730,11 @@ describe('server app-shell public API barrels', () => {
 
   it('validates dynamically loaded app-shell aggregates through the shared core guard', () => {
     const app = publicApi.createApp();
-    const opaqueSession = publicApi.createOpaqueSessionManager({
-      store: publicApi.createMemoryOpaqueSessionStore<{ user: { id: string } }>(),
-    });
 
     expect(publicApi.isKovoApp(app)).toBe(true);
     expect(publicApi.isKovoApp(publicApi.createApp({ document: publicApi.Document({}) }))).toBe(
       true,
     );
-    expect(publicApi.isKovoApp(publicApi.createApp({ session: opaqueSession }))).toBe(true);
-    const markerlessOwnedSessionApp = publicApi.createApp({ session: opaqueSession });
-    for (const symbol of Object.getOwnPropertySymbols(markerlessOwnedSessionApp.sessionProvider!)) {
-      const descriptor = Object.getOwnPropertyDescriptor(
-        markerlessOwnedSessionApp.sessionProvider!,
-        symbol,
-      );
-      if (descriptor?.configurable === true) {
-        delete (markerlessOwnedSessionApp.sessionProvider as { [key: symbol]: unknown })[symbol];
-      }
-    }
-    expect(publicApi.isKovoApp(markerlessOwnedSessionApp)).toBe(true);
-    const markerlessDelegatedSessionApp = publicApi.createApp({
-      sessionProvider: {
-        justification: 'test fixture owns its request-scoped session lifecycle',
-        lifecycle: 'delegated',
-        lifecycleAssertions: {
-          expiry: 'test fixture expires with the request',
-          revocation: 'test fixture revokes by ending the request',
-          rotation: 'test fixture never elevates credentials',
-          validation: 'test fixture validates the request header directly',
-        },
-        provider: async () => null,
-      },
-    });
-    for (const symbol of Object.getOwnPropertySymbols(
-      markerlessDelegatedSessionApp.sessionProvider!,
-    )) {
-      const descriptor = Object.getOwnPropertyDescriptor(
-        markerlessDelegatedSessionApp.sessionProvider!,
-        symbol,
-      );
-      if (descriptor?.configurable === true) {
-        delete (markerlessDelegatedSessionApp.sessionProvider as { [key: symbol]: unknown })[
-          symbol
-        ];
-      }
-    }
-    expect(publicApi.isKovoApp(markerlessDelegatedSessionApp)).toBe(true);
     expect(() =>
       publicApi.createApp({ document: { template: () => '<html></html>' } as any }),
     ).toThrow('createApp({ document.template }) is not supported');
@@ -802,16 +747,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(publicApi.isKovoApp({ ...app, clientModules: {} })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, renderRoute: '<main>compat</main>' })).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, session: { provider: () => null } })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, sessionProvider: { session: null } })).toBe(false);
-    expect(
-      publicApi.isKovoApp({
-        ...app,
-        session: undefined,
-        sessionProvider: () => null,
-        sessionProviderBoundary: 'owned',
-      }),
-    ).toBe(false);
     expect(
       publicApi.isKovoApp({
         ...app,

@@ -1,4 +1,4 @@
-import { createApp, type EndpointDeclaration, type SessionProvider } from '@kovojs/server';
+import { type EndpointDeclaration, type SessionProvider } from '@kovojs/server';
 import {
   endpointMatches,
   resolveLifecycleRequest,
@@ -26,25 +26,6 @@ const mappedAppSession: AppSession = {
   },
 };
 
-function betterAuthDelegatedDeclaration(provider: SessionProvider<RequestWithHeaders, AppSession>) {
-  return {
-    justification:
-      'Better Auth owns validation, rotation, expiry, and revocation for this app session.',
-    lifecycle: 'delegated' as const,
-    lifecycleAssertions: {
-      expiry: 'Better Auth session max-age and database expiry own expiration.',
-      revocation: 'Better Auth sign-out and session deletion own revocation.',
-      rotation: 'Better Auth session refresh and sign-in issue rotated credentials.',
-      validation: 'Better Auth getSession validates the browser session credential.',
-    },
-    provider,
-  };
-}
-
-function normalizedBetterAuthProvider(provider: SessionProvider<RequestWithHeaders, AppSession>) {
-  return createApp({ sessionProvider: betterAuthDelegatedDeclaration(provider) }).sessionProvider!;
-}
-
 describe('betterAuthSession', () => {
   it('maps a Better Auth-like session into the app session provider seam', async () => {
     const auth = new FakeBetterAuth();
@@ -57,54 +38,6 @@ describe('betterAuthSession', () => {
     // SessionProvider consumers (and apps whose getSession ignores returnHeaders) unchanged.
     await expect(provider({ headers })).resolves.toEqual(mappedAppSession);
     expect(auth.lastHeaders).toBe(headers);
-  });
-
-  it('maps an opaque Better Auth browser session cookie by default', async () => {
-    const auth = new FakeBetterAuth();
-    const provider = betterAuthSession(auth, mapSession);
-
-    await expect(
-      provider({
-        headers: new Headers({ cookie: 'better-auth.session_token=opaque-session-1' }),
-      }),
-    ).resolves.toEqual(mappedAppSession);
-  });
-
-  it('requires Better Auth delegation to be declared at the createApp session boundary', () => {
-    const auth = new FakeBetterAuth();
-    const provider = betterAuthSession(auth, mapSession);
-    const app = createApp({
-      sessionProvider: betterAuthDelegatedDeclaration(provider),
-    });
-
-    expect(app.session).toBeUndefined();
-    expect(app.sessionProvider).toBe(provider);
-    expect(app.sessionProviderBoundary).toBe('delegated');
-    expect(() => createApp({ sessionProvider: provider as never })).toThrow(
-      'createApp({ sessionProvider }) now requires an explicit delegated lifecycle declaration',
-    );
-  });
-
-  it('fails closed when Better Auth returns a payload without a browser session cookie', async () => {
-    const auth = new FakeBetterAuth();
-    auth.forceAuthenticated = true;
-    const provider = betterAuthSession(auth, () => {
-      throw new Error('delegated non-cookie payloads must not be mapped');
-    });
-
-    await expect(provider({ headers: new Headers() })).resolves.toBeNull();
-  });
-
-  it('does not forward session-refresh cookies for a payload without a browser credential', async () => {
-    const auth = new FakeBetterAuth();
-    auth.forceAuthenticated = true;
-    auth.refreshSetCookie =
-      'better-auth.session_token=minted-by-get-session; Path=/; HttpOnly; SameSite=Lax';
-    const provider = betterAuthSession(auth, () => {
-      throw new Error('delegated non-cookie payloads must not be mapped');
-    });
-
-    await expect(provider({ headers: new Headers() })).resolves.toBeNull();
   });
 
   it('treats a missing Better Auth session as anonymous', async () => {
@@ -129,7 +62,7 @@ describe('betterAuthSession', () => {
       { headers: new Headers({ cookie: 'kovo_session=s1' }) },
       {
         onSessionSetCookie: (cookie) => forwarded.push(cookie),
-        sessionProvider: normalizedBetterAuthProvider(provider),
+        sessionProvider: provider,
       },
     );
 
@@ -150,112 +83,11 @@ describe('betterAuthSession', () => {
       { headers: new Headers({ cookie: 'kovo_session=s1' }) },
       {
         onSessionSetCookie: (cookie) => forwarded.push(cookie),
-        sessionProvider: normalizedBetterAuthProvider(provider),
+        sessionProvider: provider,
       },
     );
 
     expect(forwarded).toEqual([]);
-  });
-
-  it('treats a Better Auth session-clearing Set-Cookie as immediate revocation', async () => {
-    const auth = new FakeBetterAuth();
-    auth.refreshSetCookie = 'better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax';
-    const provider = betterAuthSession(auth, () => {
-      throw new Error('revoked sessions must not be mapped');
-    });
-
-    const forwarded: string[] = [];
-    const lifecycleRequest = await resolveLifecycleRequest<RequestWithHeaders, AppSession>(
-      { headers: new Headers({ cookie: 'kovo_session=s1' }) },
-      {
-        onSessionSetCookie: (cookie) => forwarded.push(cookie),
-        sessionProvider: normalizedBetterAuthProvider(provider),
-      },
-    );
-
-    expect((lifecycleRequest as { session: AppSession | null }).session).toBeNull();
-    expect(forwarded).toEqual([
-      'better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
-    ]);
-  });
-
-  it('still forwards session-clearing cookies when no credential was accepted', async () => {
-    const auth = new FakeBetterAuth();
-    auth.forceAuthenticated = true;
-    auth.refreshSetCookie = 'better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax';
-    const provider = betterAuthSession(auth, () => {
-      throw new Error('revoked sessions must not be mapped');
-    });
-
-    await expect(provider({ headers: new Headers() })).resolves.toEqual({
-      setCookies: ['better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'],
-      value: null,
-    });
-  });
-
-  it('recognizes prefixed Better Auth session-token clearing cookies as revoked', async () => {
-    const auth = new FakeBetterAuth();
-    auth.refreshSetCookie =
-      '__Host-better-auth.session_token=deleted; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax';
-    const provider = betterAuthSession(auth, mapSession);
-
-    await expect(
-      provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) }),
-    ).resolves.toEqual({
-      setCookies: [
-        '__Host-better-auth.session_token=deleted; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax',
-      ],
-      value: null,
-    });
-  });
-
-  it('treats any Better Auth session-clearing cookie in a refresh batch as revocation', async () => {
-    const auth = new FakeBetterAuth();
-    auth.refreshSetCookie = [
-      'better-auth.session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
-      'better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
-    ];
-    const provider = betterAuthSession(auth, () => {
-      throw new Error('mixed revocation batches must not map a stale session payload');
-    });
-
-    await expect(
-      provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) }),
-    ).resolves.toEqual({
-      setCookies: [
-        'better-auth.session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
-        'better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
-      ],
-      value: null,
-    });
-  });
-
-  it('treats JWT-shaped Better Auth session cookies as anonymous by default', async () => {
-    const auth = new FakeBetterAuth();
-    const provider = betterAuthSession(auth, () => {
-      throw new Error('JWT-backed sessions must not be mapped without opt-in');
-    });
-
-    await expect(
-      provider({
-        headers: new Headers({
-          cookie: `kovo_session=s1; better-auth.session_token=${jwtSessionValue()}`,
-        }),
-      }),
-    ).resolves.toBeNull();
-  });
-
-  it('maps JWT-shaped Better Auth session cookies only with explicit opt-in', async () => {
-    const auth = new FakeBetterAuth();
-    const provider = betterAuthSession(auth, mapSession, { sessionCookieMode: 'jwt' });
-
-    await expect(
-      provider({
-        headers: new Headers({
-          cookie: `kovo_session=s1; better-auth.session_token=${jwtSessionValue()}`,
-        }),
-      }),
-    ).resolves.toEqual(mappedAppSession);
   });
 
   it('keeps the mapper total against the declared app session type', () => {
@@ -284,16 +116,6 @@ describe('betterAuthSession', () => {
     expect(incompleteProvider).toBeTypeOf('function');
   });
 });
-
-function jwtSessionValue(): string {
-  return `${base64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${base64Url(
-    JSON.stringify({ sub: 'user-1' }),
-  )}.signature`;
-}
-
-function base64Url(value: string): string {
-  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
-}
 
 describe('browser redirect protocol mount', () => {
   it('declares a prefix endpoint for Better Auth-owned redirect protocols', async () => {
