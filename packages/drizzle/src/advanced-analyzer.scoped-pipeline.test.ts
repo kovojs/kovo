@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   diagnosticsForTouchGraph,
   extractAlgebraicShapesFromProject,
+  extractOwnerAuditFromProject,
   extractQueryFactsFromProject,
   extractSymbolicEffectsFromProject,
   extractTouchGraphFromProject,
@@ -582,6 +583,178 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     });
   });
 
+  it('carries owner-principal DATA facts through the scoped analyzer and codegen pipeline', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'case-file.owner-pipeline.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          '',
+          'export const caseFiles = pgTable("case_files", {',
+          '  userId: text("user_id").notNull(),',
+          '  id: text("id").notNull(),',
+          '  title: text("title").notNull(),',
+          '  status: text("status").notNull(),',
+          '}, kovo({ domain: "case-file", key: "userId,id", owner: "userId" }));',
+          '',
+          'function currentGuardUser(ctx: { guard?: { userId?: string } | null }) {',
+          '  if (!ctx.guard?.userId) throw new Error("owner guard required");',
+          '  return ctx.guard.userId;',
+          '}',
+          'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+          '',
+          'export const activeCaseFiles = query("activeCaseFiles", {',
+          '  async load(_input: {}, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
+          '    const userId = currentGuardUser(ctx);',
+          '    return {',
+          '      items: await db.select({ id: caseFiles.id, title: caseFiles.title, status: caseFiles.status }).from(caseFiles).where(and(eq(caseFiles.userId, userId), eq(caseFiles.status, "active"))),',
+          '    };',
+          '  },',
+          '});',
+          '',
+          'export async function archiveCaseFile(db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }, targetId: string) {',
+          '  const userId = currentGuardUser(ctx);',
+          '  await db.update(caseFiles).set({ status: "archived" }).where(and(eq(caseFiles.userId, userId), eq(caseFiles.id, targetId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const ownerAudit = extractOwnerAuditFromProject({ files });
+    expect(ownerAudit.ownerDomains).toEqual([{ domain: 'case-file', owner: 'userId' }]);
+    expect(
+      ownerAudit.scopeAudits
+        .map((audit) => ({
+          detail: audit.detail,
+          domain: audit.domain,
+          kind: audit.kind,
+          name: audit.name,
+          scope: audit.scope,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'case-file',
+        kind: 'query',
+        name: 'activeCaseFiles',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'case-file',
+        kind: 'write',
+        name: 'archiveCaseFile',
+        scope: 'session',
+      },
+    ]);
+
+    const graph = extractTouchGraphFromProject({ files });
+    expect(graph.archiveCaseFile?.touches).toMatchObject([
+      {
+        domain: 'case-file',
+        keys: 'arg:targetId',
+        via: 'case_files',
+      },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+
+    const queryFact = extractQueryFactsFromProject({ files }).find(
+      (candidate) => candidate.query === 'activeCaseFiles',
+    );
+    expect(queryFact).toMatchObject({
+      ownerScopedPrivateReadKeys: [{ domain: 'case-file', privateKey: 'guard:userId' }],
+      ownerScopedSessionReads: ['case-file'],
+      query: 'activeCaseFiles',
+      reads: ['case-file'],
+    });
+    expect(queryFact?.instanceKey).toBeUndefined();
+
+    const shape = extractAlgebraicShapesFromProject({ files }).find(
+      (candidate) => candidate.query === 'activeCaseFiles',
+    );
+    if (!shape) throw new Error('expected activeCaseFiles algebraic shape');
+    expect(shape.fields.items).toMatchObject({
+      kind: 'agg',
+      projection: ['id', 'title', 'status'],
+      rowKey: 'userId,id',
+      rowset: {
+        filters: [
+          { column: 'userId', op: 'eq', value: { kind: 'guard', path: 'userId' } },
+          { column: 'status', op: 'eq', value: { kind: 'const', value: 'active' } },
+        ],
+        key: 'userId,id',
+        table: 'case_files',
+      },
+    });
+
+    const effect = extractSymbolicEffectsFromProject({ files }).find(
+      (candidate) => candidate.writeKey === 'archiveCaseFile',
+    );
+    if (!effect) throw new Error('expected archiveCaseFile symbolic effect');
+    expect(effect.effect).toMatchObject({
+      match: {
+        eq: [
+          { column: 'userId', value: { kind: 'guard', path: 'userId' } },
+          { column: 'id', value: { kind: 'param', path: 'targetId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'archived' } },
+      table: 'case_files',
+    });
+
+    const result = deriveOptimistic([effect.effect], shape);
+    if (result.kind !== 'derived') {
+      throw new Error(`expected archiveCaseFile derived, got ${result.kind}`);
+    }
+    expect(result.program.ops).toEqual([
+      {
+        guard: 'find-or-noop',
+        match: [{ column: 'id', value: { kind: 'param', path: 'targetId' } }],
+        op: 'remove-row',
+        path: 'items',
+      },
+    ]);
+
+    const loweredBrowserCode = serializeDerivedOptimistic({
+      complete: true,
+      constName: 'archiveCaseFileDerivedOptimistic',
+      entries: [{ program: result.program, query: 'activeCaseFiles' }],
+      formImport: { name: 'archiveCaseFileForm', path: '../../app.js' },
+    });
+    const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
+      (match) => match[1] ?? '',
+    );
+
+    expect(transformInputs).toEqual(['targetId']);
+    expect(loweredBrowserCode).toContain('entry.id === $input.targetId');
+    expect(loweredBrowserCode).toContain('draft.items.splice(index, 1);');
+    expectNoPrivateScopeLeak({
+      'browser-visible query instance key': queryFact.query,
+      'generated transform inputs': transformInputs.join(','),
+      'kovo-deps': queryFact.query,
+      'lowered browser code': loweredBrowserCode,
+    });
+    expectNoBrowserVisibleTokenLeak(
+      {
+        'generated optimistic module exports':
+          loweredBrowserCode.match(/export const \w+/)?.[0] ?? loweredBrowserCode,
+        'lowered browser code': loweredBrowserCode,
+      },
+      ['guardUser', 'guard:userId', 'userId'],
+    );
+  });
+
   it('derives composite natural-key cart updates with same-scope aggregate witnesses', () => {
     const files = [
       pgDatabaseTypes([
@@ -1081,6 +1254,21 @@ function expectNoPrivateScopeLeak(surfaces: Record<string, string>): void {
     for (const token of forbidden) {
       if (value.includes(token)) {
         throw new Error(`${surface} leaked private scope token ${JSON.stringify(token)}: ${value}`);
+      }
+    }
+  }
+}
+
+function expectNoBrowserVisibleTokenLeak(
+  surfaces: Record<string, string>,
+  forbidden: readonly string[],
+): void {
+  for (const [surface, value] of Object.entries(surfaces)) {
+    for (const token of forbidden) {
+      if (value.includes(token)) {
+        throw new Error(
+          `${surface} leaked browser-visible token ${JSON.stringify(token)}: ${value}`,
+        );
       }
     }
   }
