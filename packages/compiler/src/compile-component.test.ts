@@ -38,6 +38,44 @@ function escapeRegExp(value: string): string {
 }
 
 describe('compileComponentModule', () => {
+  it('assigns source-derived keys to exported object-first query declarations', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { query } from '@kovojs/server';
+
+export const cart = query({
+  load: () => ({ count: 2 }),
+  reads: [],
+});
+
+export const audit = query.elevated({
+  load: () => ({ ok: true }),
+  reads: [],
+});
+
+export const CartBadge = component({
+  queries: { cart },
+  render: ({ cart }) => <cart-badge>{cart.count}</cart-badge>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.loweredSource).toContain(
+      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';",
+    );
+    expect(result.loweredSource).toContain(
+      'export const cart = __kovoAssignDerivedQueryKey(query({',
+    );
+    expect(result.loweredSource).toContain('"components/cart-badge/cart"');
+    expect(result.loweredSource).toContain(
+      'export const audit = __kovoAssignDerivedQueryKey(query.elevated({',
+    );
+    expect(result.loweredSource).toContain('"components/cart-badge/audit"');
+  });
+
   it('fails closed on malformed TSX before emitting artifacts', () => {
     const result = compileComponentModule({
       fileName: 'components/broken.tsx',

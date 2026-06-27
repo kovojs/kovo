@@ -4,6 +4,8 @@ import { trustedReveal, type Secret } from '@kovojs/core';
 import { publicAccess } from './access.js';
 import { domain } from './domain.js';
 import {
+  assignDerivedQueryKey,
+  drainElevatedQueryFacts,
   query,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
@@ -13,6 +15,37 @@ import {
 import { s, type Schema } from './schema.js';
 
 describe('query endpoints', () => {
+  it('uses compiler-assigned derived query keys for /_q and kovo-query wire identity', async () => {
+    const cart = assignDerivedQueryKey(
+      query({
+        load: () => ({ count: 2 }),
+        reads: [],
+      }),
+      'queries/cart/cart',
+    );
+
+    const result = await renderQueryRegistryEndpointResponse({ queries: [cart] }, cart.key, {
+      request: {},
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.body).toBe('<kovo-query name="queries/cart/cart">{"count":2}</kovo-query>');
+  });
+
+  it('records elevated query facts after assigning a source-derived key', () => {
+    drainElevatedQueryFacts();
+
+    const elevated = query.elevated({
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    expect(drainElevatedQueryFacts()).toEqual([]);
+
+    assignDerivedQueryKey(elevated, 'queries/audit/audit');
+
+    expect(drainElevatedQueryFacts()).toEqual([{ query: 'queries/audit/audit' }]);
+  });
+
   it('rejects unknown query definition fields at type and runtime boundaries', () => {
     const typedQuery = query('typed-ok', {
       load: () => ({ ok: true }),

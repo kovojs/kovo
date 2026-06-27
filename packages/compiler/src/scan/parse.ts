@@ -125,9 +125,12 @@ export function parseComponentModule(fileName: string, source: string): Componen
       if (comment) jsxComments.push(comment);
       if (node.expression) jsxExpressions.push(jsxExpressionModel(sourceFile, source, node));
     }
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+    if (
+      ts.isCallExpression(node) &&
+      (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression))
+    ) {
       calls.push(callExpressionModel(sourceFile, source, node));
-      if (node.expression.text === 'mutation') {
+      if (ts.isIdentifier(node.expression) && node.expression.text === 'mutation') {
         mutationHandlers.push(...mutationHandlerModels(sourceFile, source, node));
       }
     }

@@ -22,6 +22,7 @@ import {
 } from './css.js';
 import { deriveComponentNames } from './component-names.js';
 import { deriveMutationKey } from './mutation-names.js';
+import { deriveRegistryIdentity } from './registry-identities.js';
 import { emitClientModule } from './emit/client.js';
 import { removeUnreferencedNamedImports } from './emit/dead-imports.js';
 import { appendLiveTargetRendererExports } from './emit/live-target-renderers.js';
@@ -486,16 +487,22 @@ function emitServerPhase(
     ...serverRender.replacements,
     ...componentDescriptorNameAssignments(lowered.model, parsed.componentNames.registryKey),
     ...derivedMutationKeyAssignments(lowered.model, parsed.options.fileName),
+    ...derivedQueryKeyAssignments(lowered.model, parsed.options.fileName, lowered.source),
     ...versionStateDeriveReferences(client.stateDeriveReferences),
   ];
+  const patchedServerSource = applyTerminalEmitPatches(
+    lowered.lowering.terminalState,
+    serverRenderReplacements,
+    {
+      phase: 'server-emit',
+      writer: 'compileComponentModule',
+    },
+  );
   const serverRenderedSource = removeUnreferencedNamedImports(
     appendLiveTargetRendererExports({
       componentExpression: parsed.componentName,
       liveTargetFacts: registryCss.liveTargetFacts,
-      source: applyTerminalEmitPatches(lowered.lowering.terminalState, serverRenderReplacements, {
-        phase: 'server-emit',
-        writer: 'compileComponentModule',
-      }),
+      source: insertDerivedQueryKeyImport(patchedServerSource, lowered.model),
     }),
   );
 
@@ -911,6 +918,72 @@ function isExportedObjectFormMutationCall(
     call.exportedConstName !== undefined &&
     call.arguments.length === 1 &&
     call.arguments[0]?.trimStart().startsWith('{') === true
+  );
+}
+
+const derivedQueryKeyHelper = '__kovoAssignDerivedQueryKey';
+const derivedQueryKeyWireModule = '@kovojs/server/internal/wire';
+
+function derivedQueryKeyAssignments(
+  model: ComponentModuleModel,
+  fileName: string,
+  source: string,
+): SourceReplacement[] {
+  return exportedObjectFirstQueryCalls(model).map((call) => {
+    const key = deriveRegistryIdentity(fileName, call.exportedConstName!).key;
+    return {
+      end: call.end,
+      replacement: `${derivedQueryKeyHelper}(${source.slice(call.start, call.end)}, ${JSON.stringify(key)})`,
+      start: call.start,
+    };
+  });
+}
+
+function insertDerivedQueryKeyImport(source: string, model: ComponentModuleModel): string {
+  if (exportedObjectFirstQueryCalls(model).length === 0) return source;
+  if (
+    model.namedImports.some(
+      (entry) =>
+        entry.moduleSpecifier === derivedQueryKeyWireModule &&
+        entry.localName === derivedQueryKeyHelper,
+    )
+  ) {
+    return source;
+  }
+
+  const sourceFile = ts.createSourceFile(
+    'lowered.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const importDeclarationEnd =
+    sourceFile.statements.findLast((statement) => ts.isImportDeclaration(statement))?.end ?? 0;
+  const importLine = `import { assignDerivedQueryKey as ${derivedQueryKeyHelper} } from '${derivedQueryKeyWireModule}';\n`;
+  if (importDeclarationEnd > 0) {
+    return `${source.slice(0, importDeclarationEnd)}\n${importLine}${source.slice(importDeclarationEnd)}`;
+  }
+  return `${importLine}${source}`;
+}
+
+function exportedObjectFirstQueryCalls(model: ComponentModuleModel) {
+  if (!importsKovoQuery(model)) return [];
+  return model.calls.filter(
+    (call) =>
+      call.exportedConstName &&
+      (call.name === 'query' || call.name === 'query.elevated') &&
+      call.arguments.length === 1 &&
+      typeof call.argumentStaticValues[0] !== 'string',
+  );
+}
+
+function importsKovoQuery(model: ComponentModuleModel): boolean {
+  return model.namedImports.some(
+    (entry) =>
+      entry.moduleSpecifier === '@kovojs/server' &&
+      entry.importedName === 'query' &&
+      entry.localName === 'query',
   );
 }
 

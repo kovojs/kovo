@@ -15,7 +15,7 @@ import { registerGeneratedMutationTouchRegistry } from './generated-mutation-reg
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { guards } from './guards.js';
 import { mutation } from './mutation.js';
-import { query } from './query.js';
+import { assignDerivedQueryKey, query } from './query.js';
 import { registerGeneratedLiveTargetRenderer } from './live-target-registry.js';
 import { layout, route } from './route.js';
 import { s } from './schema.js';
@@ -344,10 +344,6 @@ describe('server createApp request shell', () => {
       load: () => ({ count: 1 }),
       reads: [cart],
     });
-    const explicitCartQuery = query('cart', {
-      load: () => ({ count: 2 }),
-      reads: [cart],
-    });
     const productQuery = query('product', {
       load: () => ({ id: 'p1' }),
       reads: [],
@@ -371,7 +367,7 @@ describe('server createApp request shell', () => {
           render: () => '<cart-badge>1</cart-badge>',
         },
       ],
-      queries: [explicitCartQuery],
+      queries: [cartQuery],
       routes: [
         route('/account', {
           layout: accountLayout,
@@ -380,7 +376,53 @@ describe('server createApp request shell', () => {
       ],
     });
 
-    expect(app.queries).toEqual([explicitCartQuery, productQuery, profileQuery]);
+    expect(app.queries).toEqual([cartQuery, productQuery, profileQuery]);
+  });
+
+  it('accepts source-derived query keys assigned by generated modules', () => {
+    const cartQuery = assignDerivedQueryKey(
+      query({
+        load: () => ({ count: 1 }),
+        reads: [],
+      }),
+      'queries/cart/cart',
+    );
+
+    const app = createApp({ queries: [cartQuery] });
+
+    expect(app.queries.map((candidate) => candidate.key)).toEqual(['queries/cart/cart']);
+  });
+
+  it('rejects query declarations whose source-derived key was not assigned', () => {
+    const cartQuery = query({
+      load: () => ({ count: 1 }),
+      reads: [],
+    });
+
+    expect(() => createApp({ queries: [cartQuery] })).toThrow(
+      /received query\(\{ \.\.\. \}\) before the compiler assigned its source-derived key/,
+    );
+  });
+
+  it('rejects duplicate source-derived query keys at createApp build time', () => {
+    const firstCart = assignDerivedQueryKey(
+      query({
+        load: () => ({ count: 1 }),
+        reads: [],
+      }),
+      'queries/cart/cart',
+    );
+    const secondCart = assignDerivedQueryKey(
+      query({
+        load: () => ({ count: 2 }),
+        reads: [],
+      }),
+      'queries/cart/cart',
+    );
+
+    expect(() => createApp({ queries: [firstCart, secondCart] })).toThrow(
+      /two queries with the same key "queries\/cart\/cart"/,
+    );
   });
 
   it('injects compiler-registered mutation touch sites into app mutations', () => {

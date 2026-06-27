@@ -8,7 +8,7 @@ import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { mutation } from './mutation.js';
-import { query } from './query.js';
+import { query, queryHasDerivedKey } from './query.js';
 import { layout, route } from './route.js';
 import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
 import { resolveBootMode, validateAppEnv } from './env.js';
@@ -338,13 +338,33 @@ function appQueryRegistry<Request>(
   for (const group of groups) {
     for (const queryDefinition of group) {
       const generatedQueryDefinition = queryWithGeneratedReads(queryDefinition);
-      if (!queries.has(generatedQueryDefinition.key)) {
-        queries.set(generatedQueryDefinition.key, generatedQueryDefinition);
+      assertQueryKeyAssigned(generatedQueryDefinition);
+      const existing = queries.get(generatedQueryDefinition.key);
+      if (existing && existing !== generatedQueryDefinition) {
+        throw new Error(
+          `createApp() received two queries with the same key "${generatedQueryDefinition.key}". ` +
+            'Query keys address one typed read for /_q dispatch, kovo-query hydration, kovo-deps, ' +
+            'and generated query registries (SPEC §4.1, §9.4); duplicate keys are ambiguous. ' +
+            'Rename or move one exported query so its derived key is unique.',
+        );
       }
+      queries.set(generatedQueryDefinition.key, generatedQueryDefinition);
     }
   }
 
   return [...queries.values()];
+}
+
+function assertQueryKeyAssigned(
+  definition: QueryDefinition<string, unknown, unknown, unknown>,
+): void {
+  if (queryHasDerivedKey(definition)) return;
+  throw new Error(
+    'createApp() received query({ ... }) before the compiler assigned its source-derived key. ' +
+      'Runtime cannot infer module path plus exported binding; compile app-authored exported queries ' +
+      'or use the generated/internal query key assignment ABI before registering the query ' +
+      '(SPEC §4.1).',
+  );
 }
 
 function liveTargetRendererQueries<Request>(

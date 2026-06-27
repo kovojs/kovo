@@ -35,6 +35,7 @@ export {
   renderNoJsMutationResponse,
 } from '../mutation.js';
 export {
+  assignDerivedQueryKey,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
   type QueryEndpointFailure,

@@ -92,6 +92,8 @@ export interface QueryEndpointRegistry<Request = unknown> {
   queries: readonly QueryDefinition<string, unknown, unknown, Request>[];
 }
 
+const UNASSIGNED_DERIVED_QUERY_KEY = '\0kovo:unassigned-query-key';
+
 /** The shape of a query: its key, `load`, `reads` domains, and optional args/output/guard/version. */
 export interface QueryDefinition<
   Key extends string = string,
@@ -236,6 +238,24 @@ export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue
 /** App-scoped query factory. `createApp()` uses this to contextually type query callbacks from configured request providers (SPEC §9.5/§10.2). */
 export interface QueryFactory<Request = unknown> {
   <
+    Input,
+    Value,
+    const Definition extends QueryArgsDeclarationDefinition<string, Value, Input, Request>,
+  >(
+    definition: Definition,
+    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
+      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+        ? []
+        : [never]
+      : []
+  ): QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] };
+  <const Definition extends QueryDeclarationDefinition<Request, any>>(
+    definition: Definition,
+    ...jsonBoundary: QueryDefinitionBoundary<Definition, QueryDeclarationDefinition<Request, any>>
+  ): Definition extends { args: Schema<infer Input> }
+    ? QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] }
+    : Definition & { key: string; reads: readonly Domain[] };
+  <
     const Key extends string,
     Input,
     Value,
@@ -284,6 +304,25 @@ export interface QueryFactory<Request = unknown> {
  * });
  */
 export function query<
+  Input,
+  Request,
+  Value,
+  const Definition extends QueryArgsDeclarationDefinition<string, Value, Input, Request>,
+>(
+  definition: Definition,
+  ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
+    ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+      ? []
+      : [never]
+    : []
+): QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] };
+export function query<const Definition extends QueryDeclarationDefinition<any, any>>(
+  definition: Definition,
+  ...jsonBoundary: QueryDefinitionBoundary<Definition, QueryDeclarationDefinition<any, any>>
+): Definition extends { args: Schema<infer Input> }
+  ? QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] }
+  : Definition & { key: string; reads: readonly Domain[] };
+export function query<
   const Key extends string,
   Input,
   Request,
@@ -308,11 +347,18 @@ export function query<
 ): Definition extends { args: Schema<infer Input> }
   ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] }
   : Definition & { key: Key; reads: readonly Domain[] };
-export function query<const Key extends string>(
-  key: Key,
-  definition: Omit<RegisteredQueryDefinition, 'key'>,
+export function query(
+  keyOrDefinition: string | Omit<RegisteredQueryDefinition, 'key'>,
+  maybeDefinition?: Omit<RegisteredQueryDefinition, 'key'>,
   ..._jsonBoundary: never[]
 ): unknown {
+  const [key, definition] =
+    typeof keyOrDefinition === 'string'
+      ? [keyOrDefinition, maybeDefinition]
+      : [UNASSIGNED_DERIVED_QUERY_KEY, keyOrDefinition];
+  if (!definition) {
+    throw new TypeError('query() requires a definition object.');
+  }
   return buildQueryDefinition(key, definition, false);
 }
 
@@ -337,6 +383,35 @@ function buildQueryDefinition<const Key extends string>(
       queryDefinition as QueryDefinition<string, unknown, unknown, unknown>,
     ),
   };
+}
+
+/**
+ * @internal Compiler-emitted/generated ABI for SPEC §4.1 source-derived query identities.
+ *
+ * Runtime-only `query({ ... })` cannot know the source module path or exported binding. Generated
+ * modules call this after evaluating an exported query declaration so every downstream wire surface
+ * (`/_q/<key>`, `<kovo-query name>`, `kovo-deps`, and query stores) observes the derived key.
+ */
+export function assignDerivedQueryKey<Query extends QueryDefinition<string, any, any, any>>(
+  definition: Query,
+  key: string,
+): Query {
+  if (!key) {
+    throw new TypeError('assignDerivedQueryKey() requires a non-empty query key.');
+  }
+  if (definition.key !== UNASSIGNED_DERIVED_QUERY_KEY && definition.key !== key) {
+    throw new TypeError(
+      `Cannot assign derived query key "${key}" to query already keyed as "${definition.key}".`,
+    );
+  }
+  definition.key = key;
+  if (definition.elevated) recordElevatedQueryFact(key);
+  return definition;
+}
+
+/** @internal */
+export function queryHasDerivedKey(definition: QueryDefinition<string, any, any, any>): boolean {
+  return definition.key !== UNASSIGNED_DERIVED_QUERY_KEY;
 }
 
 const queryDefinitionKeys = new Set<PropertyKey>([
@@ -376,12 +451,20 @@ export interface ElevatedQueryFact {
 }
 
 const elevatedQueryFacts: ElevatedQueryFact[] = [];
+const elevatedQueryFactKeys = new Set<string>();
+
+function recordElevatedQueryFact(key: string): void {
+  if (key === UNASSIGNED_DERIVED_QUERY_KEY || elevatedQueryFactKeys.has(key)) return;
+  elevatedQueryFactKeys.add(key);
+  elevatedQueryFacts.push({ query: key });
+}
 
 /**
  * Drain the recorded {@link ElevatedQueryFact}s for `kovo explain --capabilities`
  * (SPEC §9.4/§10.3). Returns and clears the accumulated facts.
  */
 export function drainElevatedQueryFacts(): ElevatedQueryFact[] {
+  elevatedQueryFactKeys.clear();
   return elevatedQueryFacts.splice(0, elevatedQueryFacts.length);
 }
 
@@ -400,12 +483,19 @@ export function drainElevatedQueryFacts(): ElevatedQueryFact[] {
  * @param definition - `load` (receiving a read-write handle), `reads`, and optional facets.
  * @returns A query definition carrying `key` and `elevated: true`.
  */
-function queryElevated<const Key extends string>(
-  key: Key,
-  definition: Omit<RegisteredQueryDefinition, 'key'>,
+function queryElevated(
+  keyOrDefinition: string | Omit<RegisteredQueryDefinition, 'key'>,
+  maybeDefinition?: Omit<RegisteredQueryDefinition, 'key'>,
   ..._jsonBoundary: never[]
 ): unknown {
-  elevatedQueryFacts.push({ query: key });
+  const [key, definition] =
+    typeof keyOrDefinition === 'string'
+      ? [keyOrDefinition, maybeDefinition]
+      : [UNASSIGNED_DERIVED_QUERY_KEY, keyOrDefinition];
+  if (!definition) {
+    throw new TypeError('query.elevated() requires a definition object.');
+  }
+  recordElevatedQueryFact(key);
   return buildQueryDefinition(key, definition, true);
 }
 
@@ -413,6 +503,33 @@ function queryElevated<const Key extends string>(
 // (minus the elevated marker the factory owns) so `query.elevated('name', { load, reads })` type-
 // checks identically to `query('name', …)`.
 interface QueryElevated {
+  <
+    Input,
+    Request,
+    Value,
+    const Definition extends QueryArgsDeclarationDefinition<string, Value, Input, Request>,
+  >(
+    definition: Definition,
+    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
+      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+        ? []
+        : [never]
+      : []
+  ): QueryWithArgsBinding<Definition, Input> & {
+    key: string;
+    reads: readonly Domain[];
+    elevated: true;
+  };
+  <const Definition extends QueryDeclarationDefinition<any, any>>(
+    definition: Definition,
+    ...jsonBoundary: QueryDefinitionBoundary<Definition, QueryDeclarationDefinition<any, any>>
+  ): Definition extends { args: Schema<infer Input> }
+    ? QueryWithArgsBinding<Definition, Input> & {
+        key: string;
+        reads: readonly Domain[];
+        elevated: true;
+      }
+    : Definition & { key: string; reads: readonly Domain[]; elevated: true };
   <
     const Key extends string,
     Input,
