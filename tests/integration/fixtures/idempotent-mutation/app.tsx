@@ -10,7 +10,7 @@ import {
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const csrf = {
-  secret: 'idempotent-mutation-secret',
+  secret: 'idempotent-mutation-secret-at-least-32-bytes',
   sessionId: () => 'idempotent-mutation-session',
 };
 

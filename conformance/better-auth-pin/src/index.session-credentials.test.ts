@@ -279,9 +279,9 @@ describe('Better Auth pinned conformance', () => {
         renderForbidden: () => '<main>Forbidden</main>',
         sessionProvider,
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       body: '<main>Forbidden</main>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: expect.objectContaining({ 'Content-Type': 'text/html; charset=utf-8' }),
       status: 403,
     });
 

@@ -3,7 +3,7 @@ import { createApp, csrfField, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const csrf = {
-  secret: 'csrf-required-secret',
+  secret: 'csrf-required-secret-at-least-32-bytes',
   sessionId: () => 'csrf-required-session',
 };
 

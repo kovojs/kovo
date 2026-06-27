@@ -218,10 +218,13 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const auth_oauth_apps = pgTable('auth_oauth_apps', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const auth_oauth_apps = pgTable('auth_oauth_apps', {}, kovo({ domain: 'auth', key: 'userId', secret: ['clientSecret'] }));",
     );
     expect(result.source).toContain(
-      "export const auth_two_factors = pgTable('auth_two_factors', {}, kovo({ domain: 'auth', key: 'userId' }));",
+      "export const auth_oauth_tokens = pgTable('auth_oauth_tokens', {}, kovo({ domain: 'auth', key: 'userId', secret: ['accessToken', 'refreshToken'] }));",
+    );
+    expect(result.source).toContain(
+      "export const auth_two_factors = pgTable('auth_two_factors', {}, kovo({ domain: 'auth', key: 'userId', secret: ['secret', 'backupCodes'] }));",
     );
     expect(result.source).toContain(
       "export const auth_device_codes = pgTable('auth_device_codes', {}, kovo({ exempt: true }));",
