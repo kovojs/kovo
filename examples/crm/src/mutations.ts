@@ -345,11 +345,13 @@ export const closeDealOptimistic = optimisticPlan<CloseDealInput>(closeDeal);
 export const crmMutations = [addContact, createDeal, moveDeal, closeDeal];
 
 function optimisticPlan<Input>(definition: {
+  key: string;
   optimistic?: Record<string, unknown>;
-  queue?: string;
+  queue?: string | true;
 }): OptimisticPlan<Input> {
+  const queue = definition.queue === true ? definition.key : definition.queue;
   return {
-    ...(definition.queue ? { queue: definition.queue } : {}),
+    ...(queue ? { queue } : {}),
     transforms: (definition.optimistic ?? {}) as OptimisticPlan<Input>['transforms'],
   };
 }

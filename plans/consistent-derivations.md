@@ -190,6 +190,16 @@ packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities
     export const addToCart = mutation({ queue: cartQueue, ... });
     ```
 
+  - Integrated evidence (2026-06-27): `packages/server/src/mutation/definition.ts` accepts
+    `queue: true` and normalizes it to the resolved mutation key for key-first mutations;
+    `packages/compiler/src/compile.ts` emits the same normalization after compiler-derived object-form
+    mutation keys; `packages/compiler/src/scan/optimistic-inline.ts` lowers object-form
+    `queue: true` into the derived mutation identity for optimistic plans; `examples/crm/src/mutations.ts`
+    accepts the widened queue posture. Focused verification passed `pnpm exec vitest run
+packages/server/src/mutation.test.ts packages/compiler/src/scan/optimistic-inline.test.ts
+packages/compiler/src/registry.test.ts`, `pnpm run check:vp`, and `git diff --check`.
+    Remaining gap: a first-class named queue object is not implemented.
+
 ## Phase 6 - Migration And Verification
 
 - [ ] **Update examples, tutorials, docs, and starter templates to the derived forms.**
@@ -217,3 +227,6 @@ packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts`, `pnpm 
 packages/server/src/app.test.ts packages/compiler/src/scan/mutation-inputs.test.ts
 packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities.test.ts`,
   `pnpm run check:vp`, and `git diff --check` passed.
+- 2026-06-27: Added per-mutation queue shorthand `queue: true`; `pnpm exec vitest run
+packages/server/src/mutation.test.ts packages/compiler/src/scan/optimistic-inline.test.ts
+packages/compiler/src/registry.test.ts`, `pnpm run check:vp`, and `git diff --check` passed.

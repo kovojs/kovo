@@ -699,6 +699,7 @@ export const addToCart = mutation({
   input: s.object({
     productId: s.string(),
   }),
+  queue: true,
   handler() {
     return null;
   },
@@ -718,6 +719,9 @@ export const ProductGrid = component({
 
     expect(result.loweredSource).toContain(
       'addToCart.key = "components/product-grid/add-to-cart";',
+    );
+    expect(result.loweredSource).toContain(
+      'if (addToCart.queue === true) addToCart.queue = "components/product-grid/add-to-cart";',
     );
     expect(result.loweredSource).toContain('action="/_m/components/product-grid/add-to-cart"');
     expect(result.loweredSource).toContain('data-mutation="components/product-grid/add-to-cart"');

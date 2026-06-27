@@ -75,6 +75,28 @@ describe('inline optimistic mutation lowering', () => {
     `);
   });
 
+  it('derives object-form mutation keys for per-mutation queue shorthand', () => {
+    const source = `
+      export const addToCart = mutation({
+        queue: true,
+        optimistic: {
+          cart(draft, input) {
+            draft.count = (draft.count ?? 0) + input.quantity;
+          },
+        },
+        handler() {},
+      });
+    `;
+    const [plan] = inlineOptimisticPlansFromSource('src/features/cart/mutations.ts', source);
+    if (!plan) throw new Error('expected optimistic plan');
+
+    expect(plan).toMatchObject({
+      localName: 'addToCart',
+      mutation: 'features/cart/mutations/add-to-cart',
+      queue: 'features/cart/mutations/add-to-cart',
+    });
+  });
+
   it('captures the per-entry keyed `{ keys, transform }` instance-key derivation (SPEC §10.2/§10.4)', () => {
     const source = `
       export const voteUpMutation = mutation('voteUp', {

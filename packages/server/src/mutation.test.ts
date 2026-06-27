@@ -83,6 +83,18 @@ describe('server mutation lifecycle', () => {
     expect(assertMissingNonDerivableKeyRejected).toBeTypeOf('function');
   });
 
+  it('uses the mutation key for per-mutation queue shorthand', () => {
+    const addContact = mutation('contacts/add', {
+      input: s.object({ id: s.string(), name: s.string() }),
+      queue: true,
+      handler() {
+        return 'ok';
+      },
+    });
+
+    expect(addContact.queue).toBe('contacts/add');
+  });
+
   it('derives direct-render form attributes from typed mutation values', () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),

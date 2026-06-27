@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
+import { deriveMutationKey } from '../mutation-names.js';
+
 const mutableTs = ts as unknown as Record<string, unknown>;
 if (!('ScriptTarget' in mutableTs))
   Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
@@ -100,18 +102,30 @@ function inlineMutationOptimisticPlan(
     return null;
   }
 
-  const [keyArg, optionsArg] = initializer.arguments;
-  if (!keyArg || !ts.isStringLiteralLike(keyArg)) return null;
+  const [firstArg, secondArg] = initializer.arguments;
+  const key =
+    firstArg && ts.isStringLiteralLike(firstArg)
+      ? firstArg.text
+      : firstArg && ts.isObjectLiteralExpression(firstArg)
+        ? deriveMutationKey(sourceFile.fileName, localName)
+        : undefined;
+  const optionsArg =
+    firstArg && ts.isStringLiteralLike(firstArg)
+      ? secondArg
+      : firstArg && ts.isObjectLiteralExpression(firstArg)
+        ? firstArg
+        : undefined;
+  if (key === undefined) return null;
   if (!optionsArg || !ts.isObjectLiteralExpression(optionsArg)) return null;
 
   const optimistic = objectPropertyExpression(optionsArg, 'optimistic');
   const optimisticObject = unwrapTsExpression(optimistic);
   if (!optimisticObject || !ts.isObjectLiteralExpression(optimisticObject)) return null;
 
-  const queue = stringPropertyValue(optionsArg, 'queue');
+  const queue = mutationQueuePropertyValue(optionsArg, key);
   return {
     localName,
-    mutation: keyArg.text,
+    mutation: key,
     ...(queue === undefined ? {} : { queue }),
     transforms: optimisticTransformsFromObject(sourceFile, optimisticObject),
   };
@@ -142,6 +156,15 @@ function standaloneOptimisticPlan(
     ...(queue === undefined ? {} : { queue }),
     transforms: merged,
   };
+}
+
+function mutationQueuePropertyValue(
+  object: ts.ObjectLiteralExpression,
+  mutationKey: string,
+): string | undefined {
+  const unwrapped = unwrapTsExpression(objectPropertyExpression(object, 'queue'));
+  if (unwrapped?.kind === ts.SyntaxKind.TrueKeyword) return mutationKey;
+  return unwrapped && ts.isStringLiteralLike(unwrapped) ? unwrapped.text : undefined;
 }
 
 function mergeSiblingKeyDerivations(

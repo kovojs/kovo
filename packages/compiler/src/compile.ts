@@ -888,11 +888,14 @@ function derivedMutationKeyAssignments(
   return model.calls.flatMap((call) => {
     if (!isExportedObjectFormMutationCall(call)) return [];
 
+    const derivedKey = deriveMutationKey(fileName, call.exportedConstName);
     return [
       {
         end: call.end,
         replacement: `\n${call.exportedConstName}.key = ${JSON.stringify(
-          deriveMutationKey(fileName, call.exportedConstName),
+          derivedKey,
+        )};\nif (${call.exportedConstName}.queue === true) ${call.exportedConstName}.queue = ${JSON.stringify(
+          derivedKey,
         )};`,
         start: call.end,
       },

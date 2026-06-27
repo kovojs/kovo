@@ -245,7 +245,7 @@ export interface MutationDefinition<
   input: InputSchema;
   key: Key;
   optimistic?: MutationOptimisticMap<Key, InputSchema>;
-  queue?: string;
+  queue?: string | true;
   /**
    * Mutation-local success redirect policy for dynamic POST-redirect-GET targets (SPEC §9.1 PRG).
    * Accepts three forms:
@@ -433,6 +433,7 @@ export function mutation(
       ...definition,
       ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
       key: keyOrDefinition,
+      ...(definition.queue === true ? { queue: keyOrDefinition } : {}),
     } as MutationDefinition<string> & { key: string };
   }
 
