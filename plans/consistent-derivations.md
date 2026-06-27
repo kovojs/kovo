@@ -1,7 +1,9 @@
 # Consistent Derivations Plan
 
-**Status:** Active implementation started 2026-06-27. Baseline/SPEC contract checkpoint landed;
-runtime/compiler slices are in progress.
+**Status:** Active implementation started 2026-06-27. Baseline/SPEC contract, runtime/compiler
+identity slices, Vite standalone lowering, and docs-focused migration are integrated. Drift
+diagnostics, query-reference ergonomics, first-class queue objects, and remaining legacy cleanup are
+still open.
 **Source of truth:** `SPEC.md` remains normative. This plan should update `SPEC.md` first, then code,
 tests, generated artifacts, and docs.
 
@@ -52,7 +54,7 @@ This keeps `route('/products/:id', ...)` and `endpoint('/healthz', ...)` explici
 
 ## Phase 1 - Webhook Shape
 
-- [ ] **Make webhook path-first and derive the webhook registry name.**
+- [x] **Make webhook path-first and derive the webhook registry name.**
   - Target authoring shape:
 
     ```ts
@@ -71,12 +73,16 @@ This keeps `route('/products/:id', ...)` and `endpoint('/healthz', ...)` explici
     webhook('order-paid', { path: '/webhooks/order-paid', ... })
     ```
 
-  - Integrated evidence (2026-06-27): `packages/server/src/webhook.ts` and
-    `packages/server/src/webhook.test.ts` now accept the path-first shape and reject `options.path`;
-    integrated verification passed `pnpm vitest --run packages/server/src/webhook.test.ts
-packages/server/src/api/app.test.ts`, `pnpm run check:vp`, and `git diff --check HEAD~1..HEAD`.
-    Remaining gap: runtime/audit/replay identity is path-derived until the compiler export/module
-    derivation slice lands, so this checkbox stays open.
+  - Evidence (2026-06-27): `packages/server/src/webhook.ts` and
+    `packages/server/src/webhook.test.ts` accept the path-first shape and reject `options.path`;
+    `packages/compiler/src/source-derived-lowering.ts` and `packages/compiler/src/vite.ts` assign
+    exported `webhook('/path', { ... })` declarations source-derived names before Vite evaluates
+    `createApp()`. Verification passed `pnpm exec vitest run packages/compiler/src/vite.test.ts
+packages/server/src/vite.test.ts packages/server/src/mutation.test.ts packages/server/src/webhook.test.ts
+packages/compiler/src/source-reparse-boundary.test.ts packages/server/src/access-graph.test.ts
+examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
+examples/stackoverflow/src/interactive-app.test.ts`, `pnpm run check:vp`, and
+    `git diff --check`.
 
 - [ ] **Update webhook audit, replay, diagnostics, docs, and tests for derived names.**
   - `kovo explain --endpoints` should still print a stable webhook name, but that name should be
@@ -86,11 +92,13 @@ packages/server/src/api/app.test.ts`, `pnpm run check:vp`, and `git diff --check
   - Integrated evidence (2026-06-27): `packages/server/src/api/app.test.ts`,
     `packages/server/src/access.test.ts`, and `packages/server/src/access-graph.test.ts` were updated
     for path-first webhook audit/access behavior; focused webhook/app tests passed after integration.
-    Remaining gap: audit/replay names are not yet compiler-derived.
+    `packages/server/src/webhook.test.ts` now covers replay scope with a compiler-assigned webhook
+    identity. Remaining gap: `kovo explain --endpoints` output for derived webhook names is not yet
+    covered by a focused snapshot.
 
 ## Phase 2 - Mutation Keys
 
-- [ ] **Derive mutation registry keys from source.**
+- [x] **Derive mutation registry keys from source.**
   - Target authoring shape:
 
     ```ts
@@ -113,8 +121,9 @@ packages/server/src/api/app.test.ts`, `pnpm run check:vp`, and `git diff --check
     verification passed `pnpm exec vitest run packages/server/src/mutation.test.ts
 packages/server/src/app.test.ts packages/compiler/src/scan/mutation-inputs.test.ts
 packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities.test.ts`,
-    `pnpm run check:vp`, and `git diff --check`. Remaining gap: standalone app-entry mutation
-    modules that are not lowered by the compiler still need a source-derived identity path.
+    `pnpm run check:vp`, and `git diff --check`. `packages/compiler/src/source-derived-lowering.ts`
+    and `packages/server/src/vite.test.ts` additionally prove exported standalone Vite app/server
+    `mutation({ ... })` declarations are assigned derived keys before `createApp()` consumes them.
 
 - [ ] **Add rename/collision diagnostics for derived mutation keys.**
   - Duplicate derived mutation keys must be an error.
@@ -132,12 +141,14 @@ packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities
   - Integrated evidence (2026-06-27): `packages/compiler/src/emit/mutation-form.ts`,
     `packages/compiler/src/emit/render-equivalence.ts`, `packages/server/src/mutation.test.ts`, and
     `packages/compiler/src/registry.test.ts` cover object-form mutation values through generated form
-    action/data-mutation output and registry metadata. Remaining gap: app-facing docs/examples and any
-    remaining bare-string helper surfaces still need cleanup.
+    action/data-mutation output and registry metadata. `site/content/guides/mutations.md`,
+    `site/content/guides/optimistic.md`, and `docs/worked-example-add-to-cart.md` now use the
+    derived form in public snippets. Remaining gap: key-first declarations still exist in direct-test
+    example/starter source until those non-Vite test paths are migrated or lowered.
 
 ## Phase 3 - Query Keys
 
-- [ ] **Derive query registry keys from source.**
+- [x] **Derive query registry keys from source.**
   - Target authoring shape:
 
     ```ts
@@ -158,8 +169,10 @@ packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities
 packages/server/src/query-endpoint.test.ts packages/server/src/app.test.ts
 packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-identities.test.ts`,
     `pnpm run check:vp`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD`.
-    Remaining gap: arbitrary standalone server modules still need app-wide source lowering, and
-    previous-graph rename/drift diagnostics are not implemented.
+    `packages/compiler/src/source-derived-lowering.ts` and `packages/server/src/vite.test.ts`
+    additionally prove exported standalone Vite app/server `query({ ... })` and
+    `query.elevated({ ... })` declarations are assigned derived keys before `createApp()` consumes
+    them.
 
 - [ ] **Replace string-keyed query references in authoring surfaces.**
   - Optimistic maps should not require authors to spell query keys manually when query values are in
@@ -173,7 +186,7 @@ packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-i
 
 ## Phase 4 - Domains And Tags
 
-- [ ] **Allow domains and tags to derive their stable names.**
+- [x] **Allow domains and tags to derive their stable names.**
   - Target authoring shape:
 
     ```ts
@@ -192,11 +205,14 @@ packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-i
     vitest run packages/server/src/generated-query-registry.test.ts
 packages/server/src/change-record.test.ts packages/drizzle/src/index.writes-receivers.test.ts`,
     `pnpm run check:vp`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD`.
-    Remaining gap: starter/docs defaults and explicit escape-hatch guidance are not updated.
+    Authored guides now show zero-argument `domain()` in the default snippets.
 
 - [ ] **Keep explicit domain/tag names only as an escape hatch for intentionally shared external vocabulary.**
   - Document when `domain('billing')` is still clearer than deriving from a local binding.
   - The default should favor derivation in starter templates and guides.
+  - Integrated evidence (2026-06-27): `site/content/guides/data-layer.md` and
+    `site/content/guides/queries.md` now favor zero-argument domains in public snippets. Remaining
+    gap: starter source and explicit escape-hatch guidance are not fully migrated.
 
 ## Phase 5 - Queues And Shared Groups
 
@@ -226,6 +242,15 @@ packages/compiler/src/registry.test.ts`, `pnpm run check:vp`, and `git diff --ch
 - [ ] **Update examples, tutorials, docs, and starter templates to the derived forms.**
   - Replace redundant first-argument registry names in docs after the implementation and tests land.
   - Keep public examples aligned with the rule: paths explicit, registry identities derived.
+  - Integrated evidence (2026-06-27): docs-focused migration updated
+    `site/content/guides/{mutations,queries,data-layer,endpoints-webhooks,security,optimistic,styling}.md`,
+    `site/content/getting-started/{mental-model,why-kovo}.md`,
+    `docs/worked-example-add-to-cart.md`, `packages/create-kovo/templates/src/mutations.ts`, and
+    `examples/crm/src/mutations.ts`. Verification passed `pnpm exec vitest run
+packages/create-kovo/src/index.build.test.ts examples/crm/src/interactive-app.test.ts`,
+    `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD`.
+    Remaining gap: direct-test starter/example source still has key-first declarations where Vitest
+    imports do not yet pass through Vite source-derived lowering.
 
 - [ ] **Update generated registries, explain snapshots, compiler tests, server tests, and browser wire tests.**
   - Cover `/_m/*`, `data-mutation`, CSRF audience, replay scope, query wire chunks, domain touch
@@ -259,3 +284,18 @@ packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-i
 packages/server/src/generated-query-registry.test.ts packages/server/src/change-record.test.ts
 packages/drizzle/src/index.writes-receivers.test.ts`, `pnpm run check:vp`,
   `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD` passed.
+- 2026-06-27: Fixed integrated query dedupe/source-reparse regressions in `cfcc60e65`; `pnpm exec
+vitest run packages/compiler/src/source-reparse-boundary.test.ts packages/server/src/access-graph.test.ts
+packages/server/src/app.test.ts examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
+examples/stackoverflow/src/interactive-app.test.ts` and `pnpm exec vitest run
+packages/compiler/src/compile-component.test.ts packages/server/src/query-endpoint.test.ts` passed.
+- 2026-06-27: Integrated standalone Vite lowering slice `50bb4cd0a` plus scanner-boundary fix
+  `94079af7c`; `pnpm exec vitest run packages/compiler/src/vite.test.ts packages/server/src/vite.test.ts
+packages/server/src/mutation.test.ts packages/server/src/webhook.test.ts
+packages/compiler/src/source-reparse-boundary.test.ts packages/server/src/access-graph.test.ts
+examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
+examples/stackoverflow/src/interactive-app.test.ts`, `pnpm run check:vp`,
+  `pnpm run check:api-surface`, and `git diff --check` passed.
+- 2026-06-27: Integrated docs-focused migration slice `a29ad53da`; `pnpm exec vitest run
+packages/create-kovo/src/index.build.test.ts examples/crm/src/interactive-app.test.ts`,
+  `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD` passed.
