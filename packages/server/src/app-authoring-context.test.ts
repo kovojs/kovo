@@ -5,14 +5,6 @@ import { domain } from './domain.js';
 import { s } from './schema.js';
 import { renderedHtml } from './html.js';
 
-function delegatedSessionProvider(provider: (request: Request) => unknown) {
-  return {
-    justification: 'test delegates session lifecycle to an app-owned provider',
-    lifecycle: 'delegated' as const,
-    provider,
-  };
-}
-
 describe('createApp provider-typed authoring context', () => {
   it('infers db and session in app-scoped query, mutation, layout, and route callbacks', () => {
     const cart = domain('cart');
@@ -84,7 +76,7 @@ describe('createApp provider-typed authoring context', () => {
           }),
         ];
       },
-      sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+      sessionProvider: () => ({ user: { id: 'u1' } }),
     });
 
     expect(app.queries.map((query) => query.key)).toEqual(['cart']);

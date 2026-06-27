@@ -22,14 +22,6 @@ function attestedLiveTargetHeader(
   return `${target}#${component}@${token}:${JSON.stringify(props)}`;
 }
 
-function delegatedSessionProvider(provider: (request: Request) => unknown) {
-  return {
-    justification: 'test delegates session lifecycle to an app-owned provider',
-    lifecycle: 'delegated' as const,
-    provider,
-  };
-}
-
 describe('server app mutation request boundary', () => {
   it('resolves mutation response options from exact-key policies', async () => {
     const seen: string[] = [];
@@ -274,10 +266,10 @@ describe('server app mutation request boundary', () => {
         },
       },
       mutations: [addToCart],
-      sessionProvider: delegatedSessionProvider(() => {
+      sessionProvider() {
         sessionReads += 1;
         return { user: { id: 'u1' } };
-      }),
+      },
     });
     const form = new FormData();
     form.set('productId', 'p1');

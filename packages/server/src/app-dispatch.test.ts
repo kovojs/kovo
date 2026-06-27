@@ -19,14 +19,6 @@ const rawTextResponse = {
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
 
-function delegatedSessionProvider(provider: (request: Request) => unknown) {
-  return {
-    justification: 'test delegates session lifecycle to an app-owned provider',
-    lifecycle: 'delegated' as const,
-    provider,
-  };
-}
-
 describe('server app matched dispatch boundary', () => {
   it('owns SPEC §9.5 client-module dispatch through the app registry', async () => {
     const app = createApp();
@@ -59,10 +51,10 @@ describe('server app matched dispatch boundary', () => {
     });
     const app = createApp({
       queries: [cart],
-      sessionProvider: delegatedSessionProvider(() => {
+      sessionProvider() {
         sessionReads += 1;
         return { user: { id: 'u1' } };
-      }),
+      },
     });
     const request = new Request('https://shop.example.test/_q/cart?id=c1');
 
@@ -85,9 +77,9 @@ describe('server app matched dispatch boundary', () => {
     });
     const app = createApp({
       endpoints: [status],
-      sessionProvider: delegatedSessionProvider(() => {
+      sessionProvider() {
         return { user: { id: 'u1' } };
-      }),
+      },
     });
     const request = new Request('https://shop.example.test/status');
 

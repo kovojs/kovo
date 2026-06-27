@@ -124,12 +124,7 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
       return `<main>${routeValueToHtml(value)}</main>`;
     },
     routes: [referenceLoginRoute, accountRoute, adminRoute],
-    sessionProvider: {
-      justification:
-        'The reference app delegates validation, rotation, expiry, and revocation to its auth fixture.',
-      lifecycle: 'delegated',
-      provider: (request) => auth.sessionProvider(request as ReferenceShellRequest),
-    },
+    sessionProvider: (request) => auth.sessionProvider(request as ReferenceShellRequest),
   });
   const requestHandler = withReferenceRequestContext(createRequestHandler(app));
 

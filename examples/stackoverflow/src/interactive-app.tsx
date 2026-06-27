@@ -292,12 +292,7 @@ export async function buildSoInteractiveApp(
       }),
       userProfileRoute,
     ],
-    sessionProvider: {
-      justification:
-        'The KovOverflow demo owns validation, rotation, expiry, and revocation for demo sessions.',
-      lifecycle: 'delegated',
-      provider: soDemoSessionProvider,
-    },
+    sessionProvider: soDemoSessionProvider,
   });
 
   const handler: RequestHandler = createRequestHandler(app);

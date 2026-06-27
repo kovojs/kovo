@@ -3,8 +3,6 @@ import { randomBytes } from 'node:crypto';
 import { serializeCookie, type CookieOptions } from './cookies.js';
 import type { SessionProvider } from './guards.js';
 
-const OPAQUE_SESSION_PROVIDER = Symbol.for('kovo.opaqueSessionProvider');
-
 /** Stable rejection code for an opaque session lookup that did not produce a live session. */
 export type OpaqueSessionRejectReason = 'missing' | 'malformed' | 'expired' | 'revoked';
 
@@ -127,25 +125,10 @@ export interface OpaqueSessionManager<SessionValue> {
   revoke(id: string | null | undefined): Promise<OpaqueSessionRevokeResult>;
 }
 
-/**
- * @internal Runtime marker for Kovo-owned opaque-session providers. The request shell uses this
- * to reject `createApp({ sessionProvider: manager.provider })`, which would otherwise make a
- * Kovo-owned lifecycle look like an explicit delegated boundary without exposing the manager.
- */
-export function isOpaqueSessionProvider(
-  value: unknown,
-): value is SessionProvider<Request, unknown> {
-  return (
-    typeof value === 'function' &&
-    (value as { [OPAQUE_SESSION_PROVIDER]?: true })[OPAQUE_SESSION_PROVIDER] === true
-  );
-}
-
 const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_ENTRIES = 10_000;
 const OPAQUE_ID_BYTES = 32;
 const OPAQUE_ID_PATTERN = /^kos_[A-Za-z0-9_-]{43}$/;
-const AMBIGUOUS_OPAQUE_SESSION_ID = '__kovo_ambiguous_opaque_session__';
 
 /** Create a bounded in-memory opaque session store for tests, local dev, or single-process apps. */
 export function createMemoryOpaqueSessionStore<SessionValue>(
@@ -243,7 +226,6 @@ export function createMemoryOpaqueSessionStore<SessionValue>(
 export function createOpaqueSessionManager<SessionValue>(
   options: OpaqueSessionManagerOptions<SessionValue>,
 ): OpaqueSessionManager<SessionValue> {
-  assertOpaqueSessionManagerOptions(options);
   const cookieName = options.cookieName ?? 'kovo_session';
   const cookieOptions: CookieOptions = {
     ...options.cookie,
@@ -256,19 +238,8 @@ export function createOpaqueSessionManager<SessionValue>(
   ): Promise<OpaqueSessionValidation<SessionValue>> => {
     if (id === null || id === undefined || id === '') return { ok: false, reason: 'missing' };
     if (!isOpaqueSessionId(id)) return { ok: false, reason: 'malformed' };
-    return normalizeOpaqueSessionValidation(id, await options.store.validate(id));
+    return options.store.validate(id);
   };
-  const provider: SessionProvider<Request, SessionValue> = async (
-    request: Request,
-  ): Promise<SessionValue | null> => {
-    const result = await validate(
-      extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
-    );
-    return result.ok ? result.session.value : null;
-  };
-  Object.defineProperty(provider, OPAQUE_SESSION_PROVIDER, {
-    value: true,
-  });
 
   return {
     cookieName,
@@ -278,7 +249,12 @@ export function createOpaqueSessionManager<SessionValue>(
         extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
       );
     },
-    provider,
+    async provider(request: Request): Promise<SessionValue | null> {
+      const result = await validate(
+        extractOpaqueSessionId(request, cookieName, options.acceptAuthorizationHeader),
+      );
+      return result.ok ? result.session.value : null;
+    },
     async establish(
       value: SessionValue,
       establishOptions: OpaqueSessionEstablishOptions & {
@@ -288,7 +264,6 @@ export function createOpaqueSessionManager<SessionValue>(
       const session = establishOptions.priorId
         ? await options.store.rotate(establishOptions.priorId, value, establishOptions)
         : await options.store.create(value, establishOptions);
-      assertEstablishedOpaqueSession(session);
       return {
         session,
         setCookie: serializeCookie(cookieName, session.id, {
@@ -310,75 +285,6 @@ export function createOpaqueSessionManager<SessionValue>(
   };
 }
 
-function normalizeOpaqueSessionValidation<SessionValue>(
-  presentedId: string,
-  result: OpaqueSessionValidation<SessionValue>,
-): OpaqueSessionValidation<SessionValue> {
-  if (!result.ok) return result;
-  if (!isCoherentOpaqueSessionRecord(result.session) || result.session.id !== presentedId) {
-    return { ok: false, reason: 'malformed' };
-  }
-  return result;
-}
-
-function assertEstablishedOpaqueSession<SessionValue>(
-  session: OpaqueSessionRecord<SessionValue>,
-): void {
-  if (!isCoherentOpaqueSessionRecord(session)) {
-    throw new Error(
-      'Opaque session store returned a malformed session record; refusing to set a browser session cookie',
-    );
-  }
-}
-
-function isCoherentOpaqueSessionRecord<SessionValue>(
-  value: unknown,
-): value is OpaqueSessionRecord<SessionValue> {
-  if (value === null || typeof value !== 'object') return false;
-  const record = value as Partial<OpaqueSessionRecord<SessionValue>>;
-  const { createdAt, expiresAt, id } = record;
-  return (
-    typeof id === 'string' &&
-    isOpaqueSessionId(id) &&
-    typeof createdAt === 'number' &&
-    typeof expiresAt === 'number' &&
-    Number.isSafeInteger(createdAt) &&
-    Number.isSafeInteger(expiresAt) &&
-    createdAt >= 0 &&
-    expiresAt > createdAt &&
-    'value' in record
-  );
-}
-
-function assertOpaqueSessionManagerOptions<SessionValue>(
-  options: OpaqueSessionManagerOptions<SessionValue>,
-): void {
-  const store = options.store as Partial<OpaqueSessionStore<SessionValue>> | undefined;
-  if (
-    store === undefined ||
-    typeof store.create !== 'function' ||
-    typeof store.validate !== 'function' ||
-    typeof store.rotate !== 'function' ||
-    typeof store.revoke !== 'function'
-  ) {
-    throw new Error(
-      'createOpaqueSessionManager requires an opaque session store with create, validate, rotate, and revoke methods',
-    );
-  }
-  if (options.cookieName !== undefined) assertOpaqueSessionCookieName(options.cookieName);
-}
-
-function assertOpaqueSessionCookieName(cookieName: string): void {
-  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(cookieName)) {
-    throw new Error('Opaque session cookieName must be an HTTP token');
-  }
-  if (cookieName.startsWith('__Host-') || cookieName.startsWith('__Secure-')) {
-    throw new Error(
-      'Opaque session cookieName must be the unprefixed base name; Kovo owns __Host-/__Secure- aliases for the session credential',
-    );
-  }
-}
-
 function mintOpaqueSessionId(): string {
   return `kos_${base64url(randomBytes(OPAQUE_ID_BYTES))}`;
 }
@@ -394,34 +300,29 @@ function extractOpaqueSessionId(
 ): string | null {
   const cookie = request.headers.get('cookie');
   const cookieId = cookie === null ? null : readCookie(cookie, cookieName);
+  if (cookieId !== null) return cookieId;
 
-  if (!acceptAuthorizationHeader) return cookieId;
+  if (!acceptAuthorizationHeader) return null;
   const authorization = request.headers.get('authorization');
-  if (authorization === null) return cookieId;
+  if (authorization === null) return null;
   const match = /^Bearer\s+([^\s]+)$/i.exec(authorization);
-  const headerId = match?.[1] ?? null;
-  if (cookieId !== null && headerId !== null) return AMBIGUOUS_OPAQUE_SESSION_ID;
-  return cookieId ?? headerId;
+  return match?.[1] ?? null;
 }
 
 function readCookie(header: string, cookieName: string): string | null {
   const names = new Set([cookieName, `__Host-${cookieName}`, `__Secure-${cookieName}`]);
-  let value: string | null = null;
   for (const part of header.split(';')) {
     const index = part.indexOf('=');
     if (index === -1) continue;
     const name = part.slice(0, index).trim();
     if (!names.has(name)) continue;
-    // SPEC §6.5 / OPP-11: owned sessions fail closed on ambiguous credentials instead of
-    // choosing a cookie alias by header order and silently changing session provenance.
-    if (value !== null) return AMBIGUOUS_OPAQUE_SESSION_ID;
     try {
-      value = decodeURIComponent(part.slice(index + 1).trim());
+      return decodeURIComponent(part.slice(index + 1).trim());
     } catch {
-      value = part.slice(index + 1).trim();
+      return part.slice(index + 1).trim();
     }
   }
-  return value;
+  return null;
 }
 
 function base64url(bytes: Uint8Array): string {

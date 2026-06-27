@@ -106,12 +106,7 @@ const app = createApp({
   endpoints: [healthEndpoint],
   mutations: [addContact, appSignIn, appSignOut],
   queries: [contactsQuery],
-  sessionProvider: {
-    justification:
-      'Better Auth owns validation, rotation, expiry, and revocation for the starter session.',
-    lifecycle: 'delegated',
-    provider: appSessionProvider,
-  },
+  sessionProvider: appSessionProvider,
   routes: [
     route('/', {
       // The contact book is the signed-in user's data, so this route's KV436 access

@@ -13,14 +13,6 @@ import {
   createMemoryVersionedClientModuleRegistry,
 } from './client-modules.js';
 
-function delegatedSessionProvider(provider: (request: Request) => unknown) {
-  return {
-    justification: 'test delegates session lifecycle to an app-owned provider',
-    lifecycle: 'delegated' as const,
-    provider,
-  };
-}
-
 // ─── DEPLOY-3: module-less app always stamps kovo-build ───────────────────────
 
 describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
@@ -119,7 +111,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
 
     const app = createApp({
       routes: [homeRoute],
-      sessionProvider: delegatedSessionProvider(sessionProvider),
+      sessionProvider,
     });
 
     const [resA, resB] = await Promise.all([
@@ -165,10 +157,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
       return match ? { id: match[1] } : null;
     };
 
-    const app = createApp({
-      routes: [homeRoute],
-      sessionProvider: delegatedSessionProvider(sessionProvider),
-    });
+    const app = createApp({ routes: [homeRoute], sessionProvider });
 
     const [resA, resB] = await Promise.all([
       renderAppRouteDocumentResponse({
@@ -202,10 +191,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
     const app = createApp({
       routes: [homeRoute],
-      sessionProvider: delegatedSessionProvider((request) => {
+      sessionProvider(request) {
         const id = request.headers.get('x-session-id');
         return id ? { id } : null;
-      }),
+      },
     });
 
     const [resA, resB] = await Promise.all([
@@ -242,10 +231,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
       const match = cookie.match(/(?:^|; )sid=([^;]+)/);
       return match ? { id: match[1] } : null;
     };
-    const app = createApp({
-      routes: [homeRoute],
-      sessionProvider: delegatedSessionProvider(sessionProvider),
-    });
+    const app = createApp({ routes: [homeRoute], sessionProvider });
 
     const [resA, resB] = await Promise.all([
       renderAppRouteDocumentResponse({
@@ -741,7 +727,7 @@ describe('server app document boundary', () => {
         },
       },
       routes: [adminRoute],
-      sessionProvider: delegatedSessionProvider(() => ({ user: { roles: ['staff'] } })),
+      sessionProvider: () => ({ user: { roles: ['staff'] } }),
     });
 
     const response = await renderAppRouteDocumentResponse({
@@ -797,7 +783,7 @@ describe('server app document boundary', () => {
         }),
       },
       routes: [missingRoute, forbiddenRoute],
-      sessionProvider: delegatedSessionProvider(() => ({ user: { roles: ['staff'] } })),
+      sessionProvider: () => ({ user: { roles: ['staff'] } }),
     });
 
     const missingResponse = await renderAppRouteDocumentResponse({
@@ -837,13 +823,13 @@ describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
     const app = createApp({
       routes: [homeRoute],
-      sessionProvider: delegatedSessionProvider(() => ({
+      sessionProvider: () => ({
         setCookies: [
           'session_token=rolled; Path=/; HttpOnly; SameSite=Lax',
           'session_data=cache; Path=/; HttpOnly',
         ],
         value: { user: { id: 'u1' } },
-      })),
+      }),
     });
 
     const response = await renderAppRouteDocumentResponse({
@@ -868,7 +854,7 @@ describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
     const app = createApp({
       routes: [homeRoute],
-      sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+      sessionProvider: () => ({ user: { id: 'u1' } }),
     });
 
     const response = await renderAppRouteDocumentResponse({
@@ -901,10 +887,10 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
 
     const app = createApp({
       routes: [homeRoute],
-      sessionProvider: delegatedSessionProvider(() => ({
+      sessionProvider: () => ({
         setCookies: ['better-auth.session_token=tok; Path=/; HttpOnly'],
         value: { user: { id: 'u1' } },
-      })),
+      }),
     });
 
     const response = await renderAppRouteDocumentResponse({
@@ -931,7 +917,7 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
     const app = createApp({
       routes: [homeRoute],
-      sessionProvider: delegatedSessionProvider(() => ({ user: { id: 'u1' } })),
+      sessionProvider: () => ({ user: { id: 'u1' } }),
     });
 
     const response = await renderAppRouteDocumentResponse({
