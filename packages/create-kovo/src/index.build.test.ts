@@ -110,6 +110,31 @@ describe('create-kovo starter (build integration)', () => {
     }
   });
 
+  it('runs vp check in the generated SQLite app', () => {
+    const tempParent = join(process.cwd(), 'node_modules/.tmp');
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-sqlite-check-'));
+
+    try {
+      writeKovoProject(root, { dialect: 'sqlite', name: 'Sqlite Check Proof' });
+      execFileSync(process.execPath, ['scripts/link-local-kovo.mjs', root, process.cwd()], {
+        cwd: process.cwd(),
+        stdio: 'pipe',
+      });
+      execFileSync('pnpm', ['install', '--ignore-workspace'], {
+        cwd: root,
+        stdio: 'pipe',
+      });
+
+      execFileSync(resolveBin('vp'), ['check'], {
+        cwd: root,
+        stdio: 'pipe',
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
   it('runs the generated in-app tests (data layer + request shell)', () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
     mkdirSync(tempParent, { recursive: true });
