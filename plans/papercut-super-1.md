@@ -221,7 +221,8 @@ props. item`.
     sound for an isomorphic self-render (it re-runs the same fn with the same
     query/state). Add a compiler test for an isomorphic mapped list.
 
-- [ ] **C2 — KV227 (null-aware binding) and KV302 (path existence) are dormant in every scaffolded app.** (MEDIUM, framework/docs; found by l3-A7)
+- [x] **C2 — KV227 (null-aware binding) and KV302 (path existence) are dormant in every scaffolded app.** (MEDIUM, framework/docs; found by l3-A7)
+  - Evidence: `pnpm exec vitest run packages/compiler/src/vite.test.ts packages/server/src/vite-data-plane-gate.test.ts --run` proves query-shape facts flow through the public server Vite plugin so KV227/KV302 fire for shape-dependent binding issues and valid null-aware bindings pass.
   - Observed: a nullable leftJoin projection bound without `?.` produces a generic
     `tsc` TS18047, never the SPEC §4.8 KV227 teaching diagnostic with its
     extract-derive/coalesce fix menu.
