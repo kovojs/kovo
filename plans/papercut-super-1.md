@@ -538,7 +538,8 @@ no-store` + `Vary: Cookie`, even for a public, no-`req.session` query.
     import statements, or detect TS `as` casts syntactically). Add a fixture with
     a wrapped aliased import.
 
-- [ ] **G3 — `better-auth` declares an optional peer `drizzle-orm@^0.45.2` while the starter ships `drizzle-orm@1.0.0-rc.3`.** (LOW, template; found in Phase 0)
+- [x] **G3 — `better-auth` declares an optional peer `drizzle-orm@^0.45.2` while the starter ships `drizzle-orm@1.0.0-rc.3`.** (LOW, template; found in Phase 0)
+  - Evidence: `pnpm view better-auth version peerDependencies peerDependenciesMeta --json` confirmed latest `better-auth@1.6.22` still peers on `drizzle-orm@^0.45.2`; `pnpm exec vitest run packages/create-kovo/src/index.test.ts -t "declares the building-block dependencies|emits the SQLite scaffold variant" --run` proves both starter READMEs document the optional peer warning as expected.
   - Observed: a fresh `pnpm install` prints `unmet peer drizzle-orm@^0.45.2: found
 1.0.0-rc.3`.
   - Root cause: `better-auth@1.6.17` peers on `drizzle-orm@^0.45.2` (optional in

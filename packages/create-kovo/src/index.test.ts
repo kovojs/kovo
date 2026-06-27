@@ -193,6 +193,11 @@ describe('create-kovo starter (metadata)', () => {
       const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
       expect(ciWorkflow).toContain('vp exec pnpm run build:prod');
       expect(ciWorkflow).not.toContain('run: kovo build');
+
+      const readme = readFileSync(join(root, 'README.md'), 'utf8');
+      expect(readme).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
+      expect(readme).toContain('peer warning');
+      expect(readme).toContain('is expected');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -301,6 +306,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/schema.ts')).not.toContain('timestamp(');
     expect(files.get('src/auth.ts')).toContain("provider: 'sqlite'");
     expect(files.get('README.md')).toContain('opt-in SQLite dialect');
+    expect(files.get('README.md')).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
+    expect(files.get('README.md')).toContain('peer warning');
+    expect(files.get('README.md')).toContain('is expected');
   });
 
   it('writes local link specs that survive symlinked app roots', () => {

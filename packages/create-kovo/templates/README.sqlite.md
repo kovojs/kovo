@@ -49,6 +49,11 @@ source: strict TypeScript plus local bans on `any`, non-null assertions, and
 unchecked `as` casts. Keep deliberate escapes outside starter app code until
 they have a framework-owned audit path.
 
+Install note: Better Auth currently marks `drizzle-orm@^0.45.2` as an optional
+peer while this starter uses Drizzle `1.0.0-rc.3`. The resulting pnpm peer warning
+is expected; Kovo's Better Auth adapter and starter tests cover this Drizzle 1.0
+shape.
+
 ## Deploying
 
 `kovo build ./src/app.tsx` reruns TypeScript and Kovo graph verification, then
