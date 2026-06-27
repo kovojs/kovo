@@ -493,8 +493,8 @@ describe('kovo explain', () => {
             csrf: 'exempt',
             csrfJustification: 'signed stripe webhook',
             method: 'POST',
-            name: 'stripe/webhook',
-            path: '/webhooks/stripe',
+            name: 'app-shell/order-paid',
+            path: '/webhooks/order-paid',
           },
         ],
       },
@@ -530,8 +530,8 @@ describe('kovo explain', () => {
             csrf: 'exempt',
             csrfJustification: 'signed stripe webhook',
             method: 'POST',
-            name: 'stripe/webhook',
-            path: '/webhooks/stripe',
+            name: 'app-shell/order-paid',
+            path: '/webhooks/order-paid',
             surface: 'webhook',
           },
           {
@@ -576,7 +576,7 @@ describe('kovo explain', () => {
       ACCESS QUERY cart decision=guard source=legacy-guard site=- detail="guards=authed reads=cart" justification=-
       ACCESS QUERY catalog decision=missing source=legacy-guard site=- detail="guards=- reads=product" justification=-
       ACCESS QUERY explicit-missing decision=missing source=access site=queries.ts:4 detail="no access property" justification=-
-      ACCESS WEBHOOK stripe/webhook decision=verified source=auth site=- detail="method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook" justification="signed stripe webhook"
+      ACCESS WEBHOOK app-shell/order-paid decision=verified source=auth site=- detail="method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook" justification="signed stripe webhook"
       SUMMARY total=10 guard=3 verified=1 public=1 missing=5
       "
     `);
@@ -595,8 +595,8 @@ describe('kovo explain', () => {
             csrfJustification: 'signed stripe webhook',
             headers: ['Stripe-Signature'],
             method: 'POST',
-            name: 'stripe/webhook',
-            path: '/webhooks/stripe',
+            name: 'app-shell/order-paid',
+            path: '/webhooks/order-paid',
             rateLimit: 'webhook:stripe',
             surface: 'webhook',
             writes: ['order'],
@@ -624,8 +624,8 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       ENDPOINTS
+      ENDPOINT app-shell/order-paid surface=webhook method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=1mb rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
       ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
-      ENDPOINT stripe/webhook surface=webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=1mb rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
       SUMMARY total=2
       "
     `);

@@ -84,7 +84,7 @@ examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
 examples/stackoverflow/src/interactive-app.test.ts`, `pnpm run check:vp`, and
     `git diff --check`.
 
-- [ ] **Update webhook audit, replay, diagnostics, docs, and tests for derived names.**
+- [x] **Update webhook audit, replay, diagnostics, docs, and tests for derived names.**
   - `kovo explain --endpoints` should still print a stable webhook name, but that name should be
     compiler-derived.
   - Webhook replay/idempotency must continue to scope by the derived webhook identity plus provider
@@ -93,8 +93,9 @@ examples/stackoverflow/src/interactive-app.test.ts`, `pnpm run check:vp`, and
     `packages/server/src/access.test.ts`, and `packages/server/src/access-graph.test.ts` were updated
     for path-first webhook audit/access behavior; focused webhook/app tests passed after integration.
     `packages/server/src/webhook.test.ts` now covers replay scope with a compiler-assigned webhook
-    identity. Remaining gap: `kovo explain --endpoints` output for derived webhook names is not yet
-    covered by a focused snapshot.
+    identity; `packages/cli/src/index.kovo-explain.test.ts` now pins `kovo explain --endpoints` and
+    access output for a derived-style webhook name. Verification passed `pnpm exec vitest run
+packages/cli/src/index.kovo-explain.test.ts`, `pnpm run check:vp`, and `git diff --check`.
 
 ## Phase 2 - Mutation Keys
 
@@ -299,3 +300,5 @@ examples/stackoverflow/src/interactive-app.test.ts`, `pnpm run check:vp`,
 - 2026-06-27: Integrated docs-focused migration slice `a29ad53da`; `pnpm exec vitest run
 packages/create-kovo/src/index.build.test.ts examples/crm/src/interactive-app.test.ts`,
   `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD` passed.
+- 2026-06-27: Added derived-webhook explain proof; `pnpm exec vitest run
+packages/cli/src/index.kovo-explain.test.ts`, `pnpm run check:vp`, and `git diff --check` passed.
