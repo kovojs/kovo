@@ -132,8 +132,11 @@ packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities
     deployed documents and replay records can still name the previous identity.
   - Integrated evidence (2026-06-27): `packages/server/src/app.ts` now fails closed when object-form
     mutations reach `createApp()` without compiler-derived key metadata and continues to reject
-    duplicate resolved mutation keys. Remaining gap: previous-graph rename/drift diagnostics are not
-    implemented.
+    duplicate resolved mutation keys; `packages/compiler/src/app-graph.ts` reports duplicate
+    mutation graph keys as `KV421` before invalidation derivation indexes them. Focused verification
+    passed `pnpm exec vitest run packages/compiler/src/registry.test.ts packages/server/src/app.test.ts`.
+    Remaining gap: previous-graph rename/drift diagnostics are not implemented because graph facts
+    currently carry resolved identities without prior source provenance.
 
 - [ ] **Update mutation form lowering and registry typing to use mutation values instead of authored key strings.**
   - `<form mutation={addToCart}>` should continue to be the normal author path.
@@ -184,6 +187,13 @@ packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-i
 - [ ] **Add query key drift and collision diagnostics.**
   - Duplicate derived query keys and changed derived query keys must be reported before generated
     registries or wire artifacts can drift silently.
+  - Integrated evidence (2026-06-27): `packages/compiler/src/app-graph.ts` now reports duplicate
+    query read-set keys as `KV240` before generated query registries and invalidation derivation can
+    collapse them; `packages/compiler/src/registry.test.ts` covers duplicate and distinct query fact
+    cases. Verification passed `pnpm exec vitest run packages/compiler/src/registry.test.ts
+packages/server/src/app.test.ts packages/cli/src/index.kovo-explain.test.ts`, `pnpm run check:vp`,
+    and `git diff --check HEAD~1..HEAD`. Remaining gap: previous-graph rename/drift diagnostics need
+    a prior source-provenance surface; current query graph facts carry only resolved key/domains.
 
 ## Phase 4 - Domains And Tags
 
@@ -302,3 +312,7 @@ packages/create-kovo/src/index.build.test.ts examples/crm/src/interactive-app.te
   `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD` passed.
 - 2026-06-27: Added derived-webhook explain proof; `pnpm exec vitest run
 packages/cli/src/index.kovo-explain.test.ts`, `pnpm run check:vp`, and `git diff --check` passed.
+- 2026-06-27: Integrated query collision graph diagnostics `937e281af`; `pnpm exec vitest run
+packages/compiler/src/registry.test.ts packages/server/src/app.test.ts
+packages/cli/src/index.kovo-explain.test.ts`, `pnpm run check:vp`, and
+  `git diff --check HEAD~1..HEAD` passed.
