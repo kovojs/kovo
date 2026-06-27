@@ -5144,6 +5144,214 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('OPP-28: couples accepted query guard principals to nullable owner predicates', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'const guardFns = {',
+              '  requireUser(ctx: { guard?: { userId?: string } | null }) { return ctx.guard?.userId; },',
+              '  requireActor(ctx: { guard?: { actorId?: string } | null }) { return ctx.guard?.actorId; },',
+              '  unsummarized(ctx: { guard?: { userId?: string } | null }) { return ctx.guard?.userId; },',
+              '};',
+              'kovoAnalyzerSummary(guardFns.requireUser, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(guardFns.requireActor, { returns: { kind: "guard", path: "actorId" } });',
+              '',
+              'const guardBag = Object.freeze({ current: guardFns.requireUser, actor: guardFns.requireActor });',
+              'const notGuards = { all(..._items: unknown[]) { return () => true; } };',
+              'const dynamicGuardKey = "current";',
+              '',
+              'export const ordersForGuardedUser = query("ordersForGuardedUser", {',
+              '  guard: guards.all(guardBag.current),',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string; actorId?: string } | null }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ctx.guard?.userId));',
+              '  },',
+              '});',
+              'export const ordersForCustomAllGuard = query("ordersForCustomAllGuard", {',
+              '  guard: notGuards.all(guardBag.current),',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ctx.guard?.userId));',
+              '  },',
+              '});',
+              'export const ordersForActorGuard = query("ordersForActorGuard", {',
+              '  guard: guards.all(guardBag.actor),',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string; actorId?: string } | null }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ctx.guard?.userId));',
+              '  },',
+              '});',
+              'export const ordersForDynamicGuard = query("ordersForDynamicGuard", {',
+              '  guard: guardBag[dynamicGuardKey],',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ctx.guard?.userId));',
+              '  },',
+              '});',
+              'export const ordersForUnsummarizedGuard = query("ordersForUnsummarizedGuard", {',
+              '  guard: guardFns.unsummarized,',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ctx.guard?.userId));',
+              '  },',
+              '});',
+              'export const ordersByClientUser = query("ordersByClientUser", {',
+              '  guard: guardBag.current,',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, input.userId));',
+              '  },',
+              '});',
+              'export const ordersByNonOwnerColumn = query("ordersByNonOwnerColumn", {',
+              '  guard: guardBag.current,',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.status, ctx.guard?.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ detail: a.detail, name: a.name, scope: a.scope }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      { detail: undefined, name: 'ordersByClientUser', scope: 'args' },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        name: 'ordersByNonOwnerColumn',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        name: 'ordersForActorGuard',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        name: 'ordersForCustomAllGuard',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        name: 'ordersForDynamicGuard',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
+        name: 'ordersForGuardedUser',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        name: 'ordersForUnsummarizedGuard',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
+  it('OPP-28: couples accepted mutation guard principals to nullable owner predicates', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order.mutations.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export async function closeByGuardAlias(db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string; actorId?: string } | null }) {',
+              '  if (!ctx.guard?.userId) return;',
+              '  const ownerId = ctx.guard?.userId;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, ownerId));',
+              '}',
+              'export async function closeByActorGuard(db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string; actorId?: string } | null }) {',
+              '  if (!ctx.guard?.actorId) return;',
+              '  const ownerId = ctx.guard?.userId;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, ownerId));',
+              '}',
+              'export async function closeByMutableAlias(db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
+              '  if (!ctx.guard?.userId) return;',
+              '  let ownerId = ctx.guard?.userId;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, ownerId));',
+              '}',
+              'export async function closeByClientUser(db: PgAsyncDatabase<any, any>, input: { userId: string }, ctx: { guard?: { userId?: string } | null }) {',
+              '  if (!ctx.guard?.userId) return;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, input.userId));',
+              '}',
+              'export async function closeByStatus(db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
+              '  if (!ctx.guard?.userId) return;',
+              '  const ownerId = ctx.guard?.userId;',
+              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.status, ownerId));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({ detail: a.detail, kind: a.kind, name: a.name, scope: a.scope }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        kind: 'write',
+        name: 'closeByActorGuard',
+        scope: 'unknown',
+      },
+      { detail: undefined, kind: 'write', name: 'closeByClientUser', scope: 'args' },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
+        kind: 'write',
+        name: 'closeByGuardAlias',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        kind: 'write',
+        name: 'closeByMutableAlias',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        kind: 'write',
+        name: 'closeByStatus',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
   it('OPP-28: treats range read predicates as args without proving session scope', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({

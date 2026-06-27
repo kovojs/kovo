@@ -755,6 +755,267 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     );
   });
 
+  it('keeps OPP-28 guard-owner proofs through mutations, codegen, and opaque punts', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'guard-case.pipeline.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          '',
+          'export const cases = pgTable("cases", {',
+          '  userId: text("user_id").notNull(),',
+          '  id: text("id").notNull(),',
+          '  status: text("status").notNull(),',
+          '  title: text("title").notNull(),',
+          '}, kovo({ domain: "case", key: "userId,id", owner: "userId" }));',
+          '',
+          'function currentGuardUser(ctx: { guard?: { userId?: string; actorId?: string } | null }) {',
+          '  if (!ctx.guard?.userId) throw new Error("owner guard required");',
+          '  return ctx.guard.userId;',
+          '}',
+          'function hiddenGuardUser(ctx: { guard?: { userId?: string } | null }) {',
+          '  if (!ctx.guard?.userId) throw new Error("owner guard required");',
+          '  return ctx.guard.userId;',
+          '}',
+          'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+          '',
+          'export const openCases = query("openCases", {',
+          '  async load(_input: {}, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string; actorId?: string } | null }) {',
+          '    const ownerId = currentGuardUser(ctx);',
+          '    return {',
+          '      items: await db.select({ id: cases.id, title: cases.title, status: cases.status }).from(cases).where(and(eq(cases.userId, ownerId), eq(cases.status, "open"))),',
+          '    };',
+          '  },',
+          '});',
+          '',
+          'export async function archiveCase(db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string; actorId?: string } | null }, targetId: string) {',
+          '  const ownerId = currentGuardUser(ctx);',
+          '  await db.update(cases).set({ status: "archived" }).where(and(eq(cases.userId, ownerId), eq(cases.id, targetId)));',
+          '}',
+          '',
+          'export async function closeCase(db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string; actorId?: string } | null }, targetId: string) {',
+          '  const ownerId = currentGuardUser(ctx);',
+          '  await db.update(cases).set({ status: "closed" }).where(and(eq(cases.userId, ownerId), eq(cases.id, targetId)));',
+          '}',
+          '',
+          'export async function opaqueArchiveCase(db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }, targetId: string) {',
+          '  const ownerId = hiddenGuardUser(ctx);',
+          '  await db.update(cases).set({ status: "archived" }).where(and(eq(cases.userId, ownerId), eq(cases.id, targetId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const ownerAudit = extractOwnerAuditFromProject({ files });
+    expect(ownerAudit.ownerDomains).toEqual([{ domain: 'case', owner: 'userId' }]);
+    expect(
+      ownerAudit.scopeAudits
+        .map((audit) => ({
+          detail: audit.detail,
+          domain: audit.domain,
+          kind: audit.kind,
+          name: audit.name,
+          scope: audit.scope,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'case',
+        kind: 'write',
+        name: 'archiveCase',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'case',
+        kind: 'write',
+        name: 'closeCase',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'case',
+        kind: 'write',
+        name: 'opaqueArchiveCase',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'case',
+        kind: 'query',
+        name: 'openCases',
+        scope: 'session',
+      },
+    ]);
+
+    const queryFact = extractQueryFactsFromProject({ files }).find(
+      (candidate) => candidate.query === 'openCases',
+    );
+    expect(queryFact).toMatchObject({
+      ownerScopedPrivateReadKeys: [{ domain: 'case', privateKey: 'guard:userId' }],
+      ownerScopedSessionReads: ['case'],
+      query: 'openCases',
+      reads: ['case'],
+    });
+    expect(queryFact?.instanceKey).toBeUndefined();
+
+    const graph = extractTouchGraphFromProject({ files });
+    expect(graph.archiveCase?.touches).toMatchObject([
+      {
+        domain: 'case',
+        keys: 'arg:targetId',
+        via: 'cases',
+      },
+    ]);
+    expect(graph.closeCase?.touches).toMatchObject([
+      {
+        domain: 'case',
+        keys: 'arg:targetId',
+        via: 'cases',
+      },
+    ]);
+    expect(graph.opaqueArchiveCase?.touches).toMatchObject([
+      {
+        domain: 'case',
+        keys: null,
+        predicate: 'non-eq',
+        via: 'cases',
+      },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toMatchObject([
+      {
+        code: 'KV409',
+        severity: 'notice',
+      },
+    ]);
+
+    const shape = extractAlgebraicShapesFromProject({ files }).find(
+      (candidate) => candidate.query === 'openCases',
+    );
+    if (!shape) throw new Error('expected openCases algebraic shape');
+    expect(shape.fields.items).toMatchObject({
+      kind: 'agg',
+      projection: ['id', 'title', 'status'],
+      rowKey: 'userId,id',
+      rowset: {
+        filters: [
+          { column: 'userId', op: 'eq', value: { kind: 'guard', path: 'userId' } },
+          { column: 'status', op: 'eq', value: { kind: 'const', value: 'open' } },
+        ],
+        key: 'userId,id',
+        table: 'cases',
+      },
+    });
+
+    const effects = extractSymbolicEffectsFromProject({ files });
+    const archiveEffect = effects.find((candidate) => candidate.writeKey === 'archiveCase');
+    if (!archiveEffect) throw new Error('expected archiveCase symbolic effect');
+    expect(archiveEffect.effect).toMatchObject({
+      match: {
+        eq: [
+          { column: 'userId', value: { kind: 'guard', path: 'userId' } },
+          { column: 'id', value: { kind: 'param', path: 'targetId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'archived' } },
+      table: 'cases',
+    });
+
+    const archiveResult = deriveOptimistic([archiveEffect.effect], shape);
+    if (archiveResult.kind !== 'derived') {
+      throw new Error(`expected archiveCase derived, got ${archiveResult.kind}`);
+    }
+    expect(archiveResult.program.ops).toEqual([
+      {
+        guard: 'find-or-noop',
+        match: [{ column: 'id', value: { kind: 'param', path: 'targetId' } }],
+        op: 'remove-row',
+        path: 'items',
+      },
+    ]);
+
+    const closeEffect = effects.find((candidate) => candidate.writeKey === 'closeCase');
+    if (!closeEffect) throw new Error('expected closeCase symbolic effect');
+    expect(closeEffect.effect).toMatchObject({
+      match: {
+        eq: [
+          { column: 'userId', value: { kind: 'guard', path: 'userId' } },
+          { column: 'id', value: { kind: 'param', path: 'targetId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'closed' } },
+      table: 'cases',
+    });
+    const closeResult = deriveOptimistic([closeEffect.effect], shape);
+    if (closeResult.kind !== 'derived') {
+      throw new Error(`expected closeCase derived, got ${closeResult.kind}`);
+    }
+    expect(closeResult.program.ops).toEqual([
+      {
+        guard: 'find-or-noop',
+        match: [{ column: 'id', value: { kind: 'param', path: 'targetId' } }],
+        op: 'remove-row',
+        path: 'items',
+      },
+    ]);
+
+    const opaqueEffect = effects.find((candidate) => candidate.writeKey === 'opaqueArchiveCase');
+    if (!opaqueEffect) throw new Error('expected opaqueArchiveCase symbolic effect');
+    expect(opaqueEffect.effect).toMatchObject({
+      match: { expr: 'unsummarized-helper:hiddenGuardUser', kind: 'opaque' },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'archived' } },
+      table: 'cases',
+    });
+    expect(deriveOptimistic([opaqueEffect.effect], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'non-key-match', expr: 'unsummarized-helper:hiddenGuardUser' },
+    });
+
+    const loweredBrowserCode = serializeDerivedOptimistic({
+      complete: true,
+      constName: 'archiveCaseDerivedOptimistic',
+      entries: [{ program: archiveResult.program, query: 'openCases' }],
+      formImport: { name: 'archiveCaseForm', path: '../../app.js' },
+    });
+    const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
+      (match) => match[1] ?? '',
+    );
+
+    expect(transformInputs).toEqual(['targetId']);
+    expect(loweredBrowserCode).toContain('entry.id === $input.targetId');
+    expect(loweredBrowserCode).toContain('draft.items.splice(index, 1);');
+    expectNoPrivateScopeLeak({
+      'browser-visible query instance key': queryFact.query,
+      'generated transform inputs': transformInputs.join(','),
+      'kovo-deps': queryFact.query,
+      'lowered browser code': loweredBrowserCode,
+    });
+    expectNoBrowserVisibleTokenLeak(
+      {
+        'generated optimistic module exports':
+          loweredBrowserCode.match(/export const \w+/)?.[0] ?? loweredBrowserCode,
+        'lowered browser code': loweredBrowserCode,
+      },
+      ['currentGuardUser', 'guard:userId', 'userId'],
+    );
+  });
+
   it('derives composite natural-key cart updates with same-scope aggregate witnesses', () => {
     const files = [
       pgDatabaseTypes([

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   diagnosticsForQueryFacts,
+  extractOwnerAuditFromProject,
   extractTouchGraphFromProject,
   extractQueryFactsFromProject,
 } from '@kovojs/drizzle/internal/static';
@@ -1121,6 +1122,181 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           id: 'string',
         },
         site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
+  it('OPP-28: keeps owner-principal facts through typed query-loader receiver paths', () => {
+    const files = [
+      pgDatabaseTypes([
+        'query: { orders: { findMany(value?: unknown): Promise<unknown[]>; findFirst(value?: unknown): Promise<unknown | undefined> } };',
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+      ]),
+      {
+        fileName: 'order.receiver-pipeline.ts',
+        source: [
+          'import { eq, inArray, or } from "drizzle-orm";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          '',
+          'export const orders = pgTable("orders", {',
+          '  id: text("id").primaryKey(),',
+          '  userId: text("user_id").notNull(),',
+          '  status: text("status").notNull(),',
+          '}, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+          '',
+          'function currentGuardUser(ctx: { guard: { userId: string; actorId: string } }) { return ctx.guard.userId; }',
+          'function currentActor(ctx: { guard: { userId: string; actorId: string } }) { return ctx.guard.actorId; }',
+          'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+          'kovoAnalyzerSummary(currentActor, { returns: { kind: "guard", path: "actorId" } });',
+          '',
+          'const guardHelpers = Object.freeze({ current: currentGuardUser, actor: currentActor });',
+          'const guardTuple = [currentGuardUser] as const;',
+          'const computedKey = "current";',
+          '',
+          'export const directGuardOrders = query("directGuardOrders", {',
+          '  load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+          '    return db.select({ id: orders.id, status: orders.status }).from(orders).where(eq(orders.userId, guardHelpers.current(ctx)));',
+          '  },',
+          '});',
+          '',
+          'export const tupleGuardOrders = query("tupleGuardOrders", {',
+          '  load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+          '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardTuple[0](ctx)));',
+          '  },',
+          '});',
+          '',
+          'export const relationalGuardOrders = query("relationalGuardOrders", {',
+          '  load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+          '    return db.query.orders.findMany({ columns: { id: true, status: true }, where: (order, { eq }) => eq(order.userId, guardHelpers.current(ctx)) });',
+          '  },',
+          '});',
+          '',
+          'export const relationalOrGuardOrders = query("relationalOrGuardOrders", {',
+          '  load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+          '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, inArray, or }) => or(eq(order.userId, guardHelpers.current(ctx)), inArray(order.userId, [guardHelpers.current(ctx)])) });',
+          '  },',
+          '});',
+          '',
+          'export const relationalActorOrders = query("relationalActorOrders", {',
+          '  load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+          '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq }) => eq(order.userId, guardHelpers.actor(ctx)) });',
+          '  },',
+          '});',
+          '',
+          'export const relationalComputedGuardOrders = query("relationalComputedGuardOrders", {',
+          '  load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+          '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq }) => eq(order.userId, guardHelpers[computedKey](ctx)) });',
+          '  },',
+          '});',
+          '',
+          'export const relationalClientBranchOrders = query("relationalClientBranchOrders", {',
+          '  load(input: { userId: string }, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+          '    return db.query.orders.findMany({ columns: { id: true }, where: (order, { eq, or }) => or(eq(order.userId, guardHelpers.current(ctx)), eq(order.userId, input.userId)) });',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    const facts = extractQueryFactsFromProject({ files });
+    const factsByQuery = new Map(facts.map((fact) => [fact.query, fact]));
+    const sessionScopedQueries = [
+      'directGuardOrders',
+      'relationalGuardOrders',
+      'relationalOrGuardOrders',
+      'tupleGuardOrders',
+    ];
+
+    for (const queryName of sessionScopedQueries) {
+      expect(factsByQuery.get(queryName)).toMatchObject({
+        ownerScopedPrivateReadKeys: [{ domain: 'order', privateKey: 'guard:userId' }],
+        ownerScopedSessionReads: ['order'],
+        reads: ['order'],
+      });
+    }
+    expect(factsByQuery.get('relationalGuardOrders')?.shape).toEqual({
+      id: 'string',
+      status: 'string',
+    });
+    expect(factsByQuery.get('relationalActorOrders')).toMatchObject({
+      reads: ['order'],
+      shape: { id: 'string' },
+    });
+    expect(factsByQuery.get('relationalActorOrders')?.ownerScopedSessionReads).toBeUndefined();
+    expect(factsByQuery.get('relationalComputedGuardOrders')).toMatchObject({
+      reads: ['order'],
+      shape: { id: 'string' },
+    });
+    expect(
+      factsByQuery.get('relationalComputedGuardOrders')?.ownerScopedSessionReads,
+    ).toBeUndefined();
+    expect(factsByQuery.get('relationalClientBranchOrders')).toMatchObject({
+      argScopedReadKeys: [{ domain: 'order', key: 'arg:userId' }],
+      argScopedReads: ['order'],
+      hasClientArgPredicate: true,
+      reads: ['order'],
+      shape: { id: 'string' },
+    });
+
+    const ownerAudit = extractOwnerAuditFromProject({ files });
+    expect(
+      ownerAudit.scopeAudits
+        .map((audit) => ({
+          detail: audit.detail,
+          domain: audit.domain,
+          name: audit.name,
+          scope: audit.scope,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'order',
+        name: 'directGuardOrders',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalActorOrders',
+        scope: 'unknown',
+      },
+      {
+        detail: undefined,
+        domain: 'order',
+        name: 'relationalClientBranchOrders',
+        scope: 'args',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        name: 'relationalComputedGuardOrders',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'order',
+        name: 'relationalGuardOrders',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'order',
+        name: 'relationalOrGuardOrders',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+        domain: 'order',
+        name: 'tupleGuardOrders',
+        scope: 'session',
       },
     ]);
   });
