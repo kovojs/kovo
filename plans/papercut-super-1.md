@@ -332,7 +332,8 @@ load })` typechecks clean; the client `query()` correctly rejects `{ live:true }
 
 ### E. Registry-bounded dynamic rendering (§4.10)
 
-- [ ] **E1 — The render-tree guide's `safeRichHtml(html)` sink silently corrupts `renderTree` output (strips component tags, double-escapes text).** (HIGH, docs; found by registry-A1)
+- [x] **E1 — The render-tree guide's `safeRichHtml(html)` sink silently corrupts `renderTree` output (strips component tags, double-escapes text).** (HIGH, docs; found by registry-A1)
+  - Evidence: `pnpm exec vitest run packages/server/src/api/app.test.ts --run` and inspection of `site/content/guides/render-tree.md` prove the guide now routes `renderTree(...)` output to `trustedHtml(...)` at the raw sink.
   - Observed: the guide's "Render at the sink" example wraps `renderTree` output
     in `safeRichHtml`, which drops non-allowlisted wrappers (`<aside>`/`<section>`/
     `<nav>`/`<figure>`) and double-escapes already-escaped text (`&lt;` → `&amp;lt;`).
@@ -371,7 +372,8 @@ on type 'StringSchema'`; `.default('info')` → TS2339; an optional/defaulted
     inference to `s.object`), or amend SPEC; stop the snippet-checker stubbing a
     non-existent API.
 
-- [ ] **E3 — `trustedHtml`/`trustedUrl` (the §4.8 escape hatch) are exported only from `@kovojs/browser`, not `@kovojs/server` where `renderTree` lives.** (LOW, framework; found by registry-A4)
+- [x] **E3 — `trustedHtml`/`trustedUrl` (the §4.8 escape hatch) are exported only from `@kovojs/browser`, not `@kovojs/server` where `renderTree` lives.** (LOW, framework; found by registry-A4)
+  - Evidence: `pnpm exec vitest run packages/server/src/api/app.test.ts --run` and `pnpm run check:api-surface` prove `trustedHtml`/`trustedUrl` are available from `@kovojs/server` root and rendering public barrels without API-surface drift.
   - Observed: a server component must import `trustedHtml` from `@kovojs/browser`;
     `trustedUrl` has no `@kovojs/server` home at all.
   - Root cause: `packages/server/src/index.ts:279` re-exports `safeRichHtml` but
