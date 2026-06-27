@@ -50,6 +50,7 @@ export type { MutationFormAttributes } from '../mutation.js';
 export type {
   ElevatedQueryFact,
   QueryDeclarationDefinition,
+  QueryDefinitionBoundary,
   QueryDefinition,
   QueryLoadContext,
   QueryResult,

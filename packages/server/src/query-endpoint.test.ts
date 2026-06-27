@@ -7,10 +7,71 @@ import {
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
   runQuery,
+  type QueryFactory,
 } from './query.js';
 import { s, type Schema } from './schema.js';
 
 describe('query endpoints', () => {
+  it('rejects unknown query definition fields at type and runtime boundaries', () => {
+    const typedQuery = query('typed-ok', {
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    const appQuery = query as QueryFactory<{ session?: { userId?: string } | null }>;
+    const typedAppQuery = appQuery('typed-app-ok', {
+      guard: (request) => request.session?.userId === 'u1',
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    const elevatedQuery = query.elevated('typed-elevated-ok', {
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    const assertUnknownQueryDefinitionFieldsRejected = () => {
+      query('bad-live', {
+        // @ts-expect-error SPEC §9.3: SSE Live is not shipped, so live:true must not be accepted.
+        live: true,
+        load: () => ({ ok: true }),
+        reads: [],
+      });
+      query('bad-guard-typo', {
+        // @ts-expect-error SPEC §10.2: unknown query fields must not silently no-op.
+        guardd: () => true,
+        load: () => ({ ok: true }),
+        reads: [],
+      });
+      query('bad-reads-typo', {
+        load: () => ({ ok: true }),
+        // @ts-expect-error SPEC §10.2: unknown query fields must not silently no-op.
+        readz: [],
+      });
+      appQuery('bad-app-live', {
+        // @ts-expect-error App-scoped query factories use the same closed definition shape.
+        live: true,
+        load: () => ({ ok: true }),
+        reads: [],
+      });
+      query.elevated('bad-elevated-made-up', {
+        load: () => ({ ok: true }),
+        reads: [],
+        // @ts-expect-error query.elevated owns the elevated marker and rejects no-op fields too.
+        totallyMadeUp: 42,
+      });
+    };
+
+    expect(typedQuery.key).toBe('typed-ok');
+    expect(typedAppQuery.key).toBe('typed-app-ok');
+    expect(elevatedQuery).toMatchObject({ elevated: true, key: 'typed-elevated-ok' });
+    expect(assertUnknownQueryDefinitionFieldsRejected).toBeTypeOf('function');
+    expect(() =>
+      query('bad-runtime-live', {
+        live: true,
+        load: () => ({ ok: true }),
+        reads: [],
+      } as never),
+    ).toThrow('Unknown query() definition field "live"');
+  });
+
   it('bounds query load results to JSON-serializable values', () => {
     interface CatalogQueryResult {
       meta: {
