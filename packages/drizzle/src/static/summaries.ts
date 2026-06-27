@@ -833,8 +833,11 @@ function relationalWherePredicate(
   if (!predicate) return undefined;
 
   const tableParameter = node.getParameters()[0]?.getNameNode();
-  const readTableIdentifier = tableParameter
+  const parameterTableIdentifier = tableParameter
     ? relationalTableParameterIdentifier(tableParameter, tableIdentifier)
+    : undefined;
+  const readTableIdentifier = parameterTableIdentifier
+    ? relationalPredicateTableIdentifier(parameterTableIdentifier)
     : undefined;
   const predicateCallName = relationalPredicateCallNameResolver(node);
   return {
@@ -844,12 +847,61 @@ function relationalWherePredicate(
   };
 }
 
+function relationalPredicateTableIdentifier(
+  resolveParameterIdentifier: (node: Node) => string | undefined,
+): (node: Node) => string | undefined {
+  return (node: Node) =>
+    resolveParameterIdentifier(node) ??
+    relationalLocalConstTableIdentifier(node, resolveParameterIdentifier);
+}
+
+function relationalLocalConstTableIdentifier(
+  node: Node,
+  resolveParameterIdentifier: (node: Node) => string | undefined,
+  depth = 0,
+): string | undefined {
+  if (depth > 4) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    if (!staticAccessRootHasStableConstBinding(expression)) return undefined;
+
+    const value = localConstLiteralStaticAccessValue(expression);
+    return value
+      ? relationalStaticTableColumnPath(value, resolveParameterIdentifier, depth + 1)
+      : undefined;
+  }
+
+  if (!Node.isIdentifier(expression)) return undefined;
+
+  const initializer = stableLocalConstInitializer(expression);
+  return initializer
+    ? relationalStaticTableColumnPath(initializer, resolveParameterIdentifier, depth + 1)
+    : undefined;
+}
+
+function relationalStaticTableColumnPath(
+  node: Node,
+  resolveParameterIdentifier: (node: Node) => string | undefined,
+  depth: number,
+): string | undefined {
+  if (depth > 4) return undefined;
+
+  const reference = tableKeyReference(node, resolveParameterIdentifier);
+  if (reference) return `${reference.tableIdentifier}.${reference.key}`;
+
+  return relationalLocalConstTableIdentifier(node, resolveParameterIdentifier, depth + 1);
+}
+
 function singleReturnExpression(body: Node): Node | undefined {
   if (!Node.isBlock(body)) return undefined;
   const statements = body.getStatements();
-  if (statements.length !== 1) return undefined;
+  if (statements.length === 0) return undefined;
 
-  const [statement] = statements;
+  const statement = statements[statements.length - 1];
+  if (statements.slice(0, -1).some((candidate) => !Node.isVariableStatement(candidate))) {
+    return undefined;
+  }
   return Node.isReturnStatement(statement) ? statement.getExpression() : undefined;
 }
 
@@ -909,9 +961,10 @@ function relationalPredicateCallNameResolver(
   const operators = predicate.getParameters()[1]?.getNameNode();
   if (!operators) return undefined;
 
+  let resolveParameterCallName: PredicateCallNameResolver | undefined;
   if (Node.isIdentifier(operators)) {
     const operatorBagKey = resolvedSymbolKey(operators.getSymbol());
-    return (callee: Node) => {
+    resolveParameterCallName = (callee: Node) => {
       if (!operatorBagKey) return undefined;
 
       const expression = unwrappedStaticExpressionNode(callee);
@@ -931,34 +984,56 @@ function relationalPredicateCallNameResolver(
       const baseKey = resolvedSymbolKey(symbolForIdentifierReference(base) ?? base.getSymbol());
       return baseKey === operatorBagKey ? name : undefined;
     };
+  } else if (Node.isObjectBindingPattern(operators)) {
+    const aliases = new Map<string, string>();
+    for (const element of operators.getElements()) {
+      if (isRestBindingElement(element) || element.getInitializer()) continue;
+
+      const canonical = objectBindingPropertyName(element);
+      if (!canonical || !RELATIONAL_PREDICATE_CALL_NAMES.has(canonical)) continue;
+
+      const name = element.getNameNode();
+      if (!Node.isIdentifier(name)) continue;
+
+      const key = resolvedSymbolKey(name.getSymbol());
+      if (key) aliases.set(key, canonical);
+    }
+    if (aliases.size > 0) {
+      resolveParameterCallName = (callee: Node) => {
+        const expression = unwrappedStaticExpressionNode(callee);
+        if (!Node.isIdentifier(expression)) return undefined;
+
+        const key = resolvedSymbolKey(
+          symbolForIdentifierReference(expression) ?? expression.getSymbol(),
+        );
+        return key ? aliases.get(key) : undefined;
+      };
+    }
   }
 
-  if (!Node.isObjectBindingPattern(operators)) return undefined;
+  if (!resolveParameterCallName) return undefined;
+  return (callee: Node) =>
+    resolveParameterCallName(callee) ??
+    relationalLocalConstPredicateCallName(callee, resolveParameterCallName);
+}
 
-  const aliases = new Map<string, string>();
-  for (const element of operators.getElements()) {
-    if (isRestBindingElement(element) || element.getInitializer()) continue;
+function relationalLocalConstPredicateCallName(
+  callee: Node,
+  resolveParameterCallName: PredicateCallNameResolver,
+  depth = 0,
+): string | undefined {
+  if (depth > 4) return undefined;
 
-    const canonical = objectBindingPropertyName(element);
-    if (!canonical || !RELATIONAL_PREDICATE_CALL_NAMES.has(canonical)) continue;
+  const expression = unwrappedStaticExpressionNode(callee);
+  if (!Node.isIdentifier(expression)) return undefined;
 
-    const name = element.getNameNode();
-    if (!Node.isIdentifier(name)) continue;
+  const initializer = stableLocalConstInitializer(expression);
+  if (!initializer) return undefined;
 
-    const key = resolvedSymbolKey(name.getSymbol());
-    if (key) aliases.set(key, canonical);
-  }
-  if (aliases.size === 0) return undefined;
-
-  return (callee: Node) => {
-    const expression = unwrappedStaticExpressionNode(callee);
-    if (!Node.isIdentifier(expression)) return undefined;
-
-    const key = resolvedSymbolKey(
-      symbolForIdentifierReference(expression) ?? expression.getSymbol(),
-    );
-    return key ? aliases.get(key) : undefined;
-  };
+  return (
+    resolveParameterCallName(initializer) ??
+    relationalLocalConstPredicateCallName(initializer, resolveParameterCallName, depth + 1)
+  );
 }
 
 function relationalQueryTableExpression(
@@ -1714,23 +1789,17 @@ function sessionSegmentExpression(node: Node): Node | undefined {
   expression: Node,
   readTableIdentifier?: (node: Node) => string | undefined,
 ): Pick<QueryInstanceKeyOperand, 'tableKey'> {
+  const resolvedPath = readTableIdentifier?.(expression);
+  const resolvedKey = resolvedPath ? tableKeyFromStaticPath(resolvedPath) : undefined;
+  if (resolvedKey) return { tableKey: resolvedKey };
+
   const key = staticAccessName(expression);
   const tableIdentifier = staticExpressionPath(
     staticAccessExpression(expression),
     readTableIdentifier,
   );
   if (!tableIdentifier || !key) {
-    const resolvedPath = readTableIdentifier?.(expression);
-    if (!resolvedPath) return {};
-
-    const keyStart = resolvedPath.lastIndexOf('.');
-    if (keyStart <= 0 || keyStart === resolvedPath.length - 1) return {};
-    return {
-      tableKey: {
-        key: resolvedPath.slice(keyStart + 1),
-        tableIdentifier: resolvedPath.slice(0, keyStart),
-      },
-    };
+    return {};
   }
 
   return {
@@ -1738,6 +1807,17 @@ function sessionSegmentExpression(node: Node): Node | undefined {
       key,
       tableIdentifier,
     },
+  };
+}
+
+function tableKeyFromStaticPath(
+  path: string,
+): { key: string; tableIdentifier: string } | undefined {
+  const keyStart = path.lastIndexOf('.');
+  if (keyStart <= 0 || keyStart === path.length - 1) return undefined;
+  return {
+    key: path.slice(keyStart + 1),
+    tableIdentifier: path.slice(0, keyStart),
   };
 }
 
@@ -2758,6 +2838,33 @@ function staticAccessRootHasStableConstBinding(node: Node): boolean {
     declaration.getNameNode().getText(),
     declaration,
   );
+}
+
+function stableLocalConstInitializer(identifier: Node): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(identifier);
+  if (!Node.isIdentifier(expression)) return undefined;
+
+  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+  if (declaration.getEnd() > expression.getStart()) return undefined;
+
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+
+  if (
+    isStaticBindingMutatedAfterDeclaration(
+      expression.getSourceFile(),
+      declaration.getNameNode().getText(),
+      declaration,
+    )
+  ) {
+    return undefined;
+  }
+
+  return declaration.getInitializer();
 }
 
 function localConstReadonlyTupleAliasValue(node: Node, depth = 0): Node | undefined {
