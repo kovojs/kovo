@@ -104,16 +104,36 @@ packages/server/src/api/app.test.ts`, `pnpm run check:vp`, and `git diff --check
     collision rules as components.
   - The derived key remains the identity for `/_m/*`, `data-mutation`, CSRF audience binding,
     replay scope, generated mutation touch registries, and `kovo explain --endpoints`.
+  - Integrated evidence (2026-06-27): `packages/server/src/mutation/definition.ts` accepts
+    object-form `mutation({ input, handler })`; `packages/compiler/src/compile.ts`,
+    `packages/compiler/src/emit/server-emit-shared.ts`, `packages/compiler/src/emit/mutation-form.ts`,
+    and `packages/compiler/src/scan/mutation-inputs.ts` derive compiler-proved object-form mutation
+    keys from module namespace plus exported binding via `packages/compiler/src/mutation-names.ts`
+    and the shared `packages/compiler/src/registry-identities.ts` helper. Focused integration
+    verification passed `pnpm exec vitest run packages/server/src/mutation.test.ts
+packages/server/src/app.test.ts packages/compiler/src/scan/mutation-inputs.test.ts
+packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities.test.ts`,
+    `pnpm run check:vp`, and `git diff --check`. Remaining gap: standalone app-entry mutation
+    modules that are not lowered by the compiler still need a source-derived identity path.
 
 - [ ] **Add rename/collision diagnostics for derived mutation keys.**
   - Duplicate derived mutation keys must be an error.
   - Derived key changes since the previous emitted graph should warn like component key drift, because
     deployed documents and replay records can still name the previous identity.
+  - Integrated evidence (2026-06-27): `packages/server/src/app.ts` now fails closed when object-form
+    mutations reach `createApp()` without compiler-derived key metadata and continues to reject
+    duplicate resolved mutation keys. Remaining gap: previous-graph rename/drift diagnostics are not
+    implemented.
 
 - [ ] **Update mutation form lowering and registry typing to use mutation values instead of authored key strings.**
   - `<form mutation={addToCart}>` should continue to be the normal author path.
   - Direct helpers should accept the mutation definition object; bare string helpers should be
     reserved for generated IR or removed from app-facing docs.
+  - Integrated evidence (2026-06-27): `packages/compiler/src/emit/mutation-form.ts`,
+    `packages/compiler/src/emit/render-equivalence.ts`, `packages/server/src/mutation.test.ts`, and
+    `packages/compiler/src/registry.test.ts` cover object-form mutation values through generated form
+    action/data-mutation output and registry metadata. Remaining gap: app-facing docs/examples and any
+    remaining bare-string helper surfaces still need cleanup.
 
 ## Phase 3 - Query Keys
 
@@ -192,3 +212,8 @@ packages/server/src/api/app.test.ts`, `pnpm run check:vp`, and `git diff --check
 - 2026-06-27: Integrated path-first webhook slice `b10bd522b`; `pnpm vitest --run
 packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts`, `pnpm run check:vp`, and
   `git diff --check HEAD~1..HEAD` passed.
+- 2026-06-27: Integrated mutation object-form/source-key slice `75edc89f2` plus shared helper
+  consolidation `f948c28f7`; `pnpm exec vitest run packages/server/src/mutation.test.ts
+packages/server/src/app.test.ts packages/compiler/src/scan/mutation-inputs.test.ts
+packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities.test.ts`,
+  `pnpm run check:vp`, and `git diff --check` passed.
