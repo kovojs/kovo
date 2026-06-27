@@ -247,6 +247,8 @@ export {
   ownerScopedPrivateReadKeys?: readonly OwnerPrivateScopeKey[];
   query: string;
   reads: readonly string[];
+  /** Domains explicitly marked externally-owned/read-only for missed-invalidation posture. */
+  readOnlyDomains?: readonly string[];
   /** Domains this query anchors to `req.session.*` (session-scoped, SPEC §11.1). */
   sessionAnchoredReads?: readonly string[];
   shape: QueryShape;
@@ -1752,6 +1754,15 @@ function extractQueryFactsFromPreparedFiles(
       const reads = queryReadDomains(query.tableExpressions, fileTables);
       const declaredReads = queryReadDomains(query.declaredReadExpressions, fileTables);
       const helperReads = localHelperSummary.reads.map((read) => read.table.domain);
+      const readOnlyDomains = [
+        ...new Set([
+          ...queryReadOnlyDomains(query.tableExpressions, fileTables),
+          ...queryReadOnlyDomains(query.declaredReadExpressions, fileTables),
+          ...localHelperSummary.reads
+            .filter((read) => read.table.readOnly === true)
+            .map((read) => read.table.domain),
+        ]),
+      ].sort();
       // SPEC §11.1: fold every read-set source — `.from()`-derived tables, declared `reads:` table
       // identifiers, declared `reads:` Domain VALUES (§10.2), and local-helper reads. Declared
       // domain values resolve directly to their key (no table lookup), so a `reads: [domain('x')]`
@@ -1874,6 +1885,7 @@ function extractQueryFactsFromPreparedFiles(
         ...(ownerScopedSessionReads.length > 0 ? { ownerScopedSessionReads } : {}),
         query: query.query,
         reads: allReads,
+        ...(readOnlyDomains.length > 0 ? { readOnlyDomains } : {}),
         ...(sessionAnchoredReads.length > 0 ? { sessionAnchoredReads } : {}),
         shape: query.shape,
         site,
@@ -2445,6 +2457,7 @@ function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
   const atomic = concurrencyColumnsFromObject(annotationObject, 'atomic');
   const version = concurrencyColumnsFromObject(annotationObject, 'version');
   const fans = fanAnnotationsFromObject(annotationObject);
+  const readOnly = booleanPropertyFromObject(annotationObject, 'readOnly');
   return {
     domain,
     ...(atomic === undefined ? {} : { atomic }),
@@ -2453,6 +2466,7 @@ function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
     ...(governed === undefined ? {} : { governed }),
     ...(key ? { key } : {}),
     ...(owner ? { owner } : {}),
+    ...(readOnly === true ? { readOnly } : {}),
     ...(secret === undefined ? {} : { secret }),
     ...(version === undefined ? {} : { version }),
     name: tableName,
@@ -3155,6 +3169,7 @@ import {
   queryOwnerSessionAnchoredDomains,
   queryPrivateScopeKeyOperand,
   queryReadDomains,
+  queryReadOnlyDomains,
   queryReceiverMode,
   queryRelationalTableExpressions,
   querySessionAnchoredDomains,
@@ -3240,6 +3255,7 @@ export {
   queryOwnerSessionAnchoredDomains,
   queryPrivateScopeKeyOperand,
   queryReadDomains,
+  queryReadOnlyDomains,
   queryReceiverMode,
   queryRelationalTableExpressions,
   querySessionAnchoredDomains,

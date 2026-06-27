@@ -87,6 +87,22 @@ import {
   return [...domains].sort();
 }
 
+/** @internal */ export function queryReadOnlyDomains(
+  tableExpressions: readonly string[],
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string[] {
+  const domains = new Set<string>();
+
+  for (const tableExpression of tableExpressions) {
+    for (const table of tables.get(tableExpression) ?? []) {
+      if (!isDomainExtractedTableAnnotation(table.annotation)) continue;
+      if (table.annotation.readOnly === true) domains.add(table.annotation.domain);
+    }
+  }
+
+  return [...domains].sort();
+}
+
 /** @internal */ export function exemptQueryReadDiagnostics(
   tableExpressions: readonly string[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,

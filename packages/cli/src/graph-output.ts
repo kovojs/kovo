@@ -2610,11 +2610,17 @@ function missedQueryInvalidations(
     mutations.flatMap((mutation) => [...mutationAffectedDomains(mutation)]),
   );
 
-  return queries.flatMap((query) =>
-    query.domains
+  return queries.flatMap((query) => {
+    const readOnlyDomains = new Set(query.readOnlyDomains ?? []);
+    return query.domains
+      .filter((domain) => !readOnlyDomains.has(domain))
       .filter((domain) => !touchedDomains.has(domain) && !mutationDomains.has(domain))
-      .map((domain) => ({ domain, query: query.query })),
-  );
+      .map((domain) => ({ domain, query: query.query }));
+  });
+}
+
+function isDeclaredReadOnlyDomain(query: CoreGraph.QueryReadSet | undefined, domain: string) {
+  return query?.readOnlyDomains?.includes(domain) === true;
 }
 
 /**
@@ -2679,14 +2685,16 @@ function staticQueryReadSupersetFailures(
   declaredQueries: readonly CoreGraph.QueryReadSet[],
   derivedQueries: readonly CoreGraph.QueryReadSet[],
 ): StaticSupersetFailure[] {
-  const declaredByQuery = new Map(
-    declaredQueries.map((query) => [query.query, new Set(query.domains)]),
-  );
+  const declaredByQuery = new Map(declaredQueries.map((query) => [query.query, query]));
   const failures: StaticSupersetFailure[] = [];
 
   for (const derived of derivedQueries) {
-    const declaredDomains = declaredByQuery.get(derived.query) ?? new Set<string>();
+    const declared = declaredByQuery.get(derived.query);
+    const declaredDomains = new Set(declared?.domains ?? []);
     for (const domain of derived.domains) {
+      if (isDeclaredReadOnlyDomain(derived, domain) || isDeclaredReadOnlyDomain(declared, domain)) {
+        continue;
+      }
       if (!declaredDomains.has(domain)) {
         failures.push({ code: 'KV407', domain, query: derived.query });
       }

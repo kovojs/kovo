@@ -1357,6 +1357,17 @@ describe('kovo check', () => {
     });
   });
 
+  it('accepts read-only query domains without mutation invalidators', () => {
+    expect(
+      kovoCheck({
+        queries: [{ domains: ['note'], query: 'notes', readOnlyDomains: ['note'] }],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
   it('fails when declared query reads are narrower than derived query reads', () => {
     expect(
       kovoCheck({
@@ -1377,6 +1388,18 @@ describe('kovo check', () => {
       exitCode: 1,
       output:
         'kovo-check/v1\nERROR KV407 contactList reads deal. Query read from undeclared domain. Derived read set is not covered by declared query domains.\n',
+    });
+  });
+
+  it('accepts derived read-only query domains outside declared query domains', () => {
+    expect(
+      kovoCheck({
+        derivedQueries: [{ domains: ['note'], query: 'notes', readOnlyDomains: ['note'] }],
+        queries: [{ domains: [], query: 'notes' }],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
     });
   });
 

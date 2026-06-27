@@ -6,6 +6,7 @@ import type { KovoColumnRef } from './drizzle-surface.js';
 interface GraphDomainTableAnnotation {
   domain: string;
   key?: KovoColumnRef;
+  readOnly?: true;
 }
 
 /** @internal */
