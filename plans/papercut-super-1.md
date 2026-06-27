@@ -399,7 +399,8 @@ on type 'StringSchema'`; `.default('info')` → TS2339; an optional/defaulted
 
 ### F. MPA spine (§6.4/§8/§9.4)
 
-- [ ] **F1 — Typed `<Link>` JSX (the SPEC §6.4 headline navigation sugar) is not a usable JSX component.** (HIGH, framework; found by mpa-A2)
+- [x] **F1 — Typed `<Link>` JSX (the SPEC §6.4 headline navigation sugar) is not a usable JSX component.** (HIGH, framework; found by mpa-A2)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves JSX `<Link>` props typing/lowering stays accepted with the MPA route/export suite.
   - Observed: `<Link to="/">Contacts</Link>` → `TS2786: 'Link' cannot be used as
 a JSX component ... Property 'definition' is missing` (+ TS2322).
   - Root cause: `packages/core/src/index.ts:427` exports `Link` as a function
@@ -433,7 +434,8 @@ a JSX component ... Property 'definition' is missing` (+ TS2322).
   - Acceptance: run `search.parse` inside the validation path so a parse failure
     returns 422 (not 500); ship E2 so optional fields are expressible.
 
-- [ ] **F3 — GET-form sugar `<f.Form>` / `<f.input>` (SPEC §6.4) are not JSX components.** (MEDIUM, framework; found by mpa-A3)
+- [x] **F3 — GET-form sugar `<f.Form>` / `<f.input>` (SPEC §6.4) are not JSX components.** (MEDIUM, framework; found by mpa-A3)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves typed GET form helpers render as native form/input JSX.
   - Observed: `const f = form.get('/search'); <f.Form><f.input name="q"/></f.Form>`
     → `TS2604 ... does not have any construct or call signatures` / `TS2786`.
   - Root cause: `getRouteForm` (`packages/core/src/index.ts:601-611,732-743`)
@@ -450,7 +452,8 @@ packages/compiler/src` is empty). The sibling `FieldError`/`FormError`
   - Acceptance: implement `f.Form`/`f.input` as compiler-bound JSX components, or
     amend SPEC §6.4 to the spread form and recover field-name checking another way.
 
-- [ ] **F4 — `prefetch:'conservative'|'moderate'` (SPEC §6.4/§8 opt-in) emits zero Speculation Rules without an undocumented `prerenderUrls`.** (MEDIUM, framework; found by mpa-A5)
+- [x] **F4 — `prefetch:'conservative'|'moderate'` (SPEC §6.4/§8 opt-in) emits zero Speculation Rules without an undocumented `prerenderUrls`.** (MEDIUM, framework; found by mpa-A5)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves bare `prefetch` emits speculation rules while same-origin prerender filtering remains enforced.
   - Observed: a route declaring only `prefetch:'conservative'` (or `'moderate'`
     with a KV419 justification) renders no `<script type="speculationrules">` and
     no diagnostic.
@@ -465,7 +468,8 @@ packages/compiler/src` is empty). The sibling `FieldError`/`FormError`
   - Acceptance: make bare `prefetch` emit a document/href-match rule (or at least
     a diagnostic for the inert opt-in), and document `prerenderUrls` in SPEC.
 
-- [ ] **F5 — Static export is all-or-nothing: any `sessionProvider` makes KV229 refuse ALL routes (even explicit `publicAccess`); `kovo export` also needs an undocumented `--vite` for a `.tsx` entry.** (MEDIUM, framework; found by mpa-A7)
+- [x] **F5 — Static export is all-or-nothing: any `sessionProvider` makes KV229 refuse ALL routes (even explicit `publicAccess`); `kovo export` also needs an undocumented `--vite` for a `.tsx` entry.** (MEDIUM, framework; found by mpa-A7)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves public-access routes can export under a session provider and `.tsx` export entries load through Vite.
   - Observed: `kovo export ./src/app.tsx` → `Unknown file extension ".tsx"`; with
     `--vite` → 4× `KV229 ... cannot prove ... session-independent while the app
 has a sessionProvider`, including `/search` and `/login` which declare
@@ -484,7 +488,8 @@ has a sessionProvider`, including `/search` and `/login` which declare
   - Acceptance: gate export per-route on proven session-independence (honoring
     `publicAccess`), and make `kovo export` load `.tsx` like `kovo build` does.
 
-- [ ] **F6 — SPEC §9.4's cacheable relaxation for proven session-independent `/_q/` reads is unreachable.** (LOW, framework; found by mpa-A6)
+- [x] **F6 — SPEC §9.4's cacheable relaxation for proven session-independent `/_q/` reads is unreachable.** (LOW, framework; found by mpa-A6)
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/hints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/query-endpoint.test.ts packages/compiler/src/navigation-lowering.test.ts packages/cli/src/index.kovo-export.test.ts --run` proves `read.cacheControl` applies only to successful public unguarded query reads; guarded/default query reads remain private no-store.
   - Observed: every `/_q/` response is hardcoded `Cache-Control: private,
 no-store` + `Vary: Cookie`, even for a public, no-`req.session` query.
   - Root cause: `packages/server/src/query.ts:627` emits the header

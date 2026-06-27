@@ -347,6 +347,7 @@ const queryDefinitionKeys = new Set<PropertyKey>([
   'instanceKey',
   'load',
   'output',
+  'read',
   'reads',
   'version',
 ]);
