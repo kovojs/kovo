@@ -472,6 +472,7 @@ function emitServerPhase(
     lowered.model,
     parsed.componentNames.domName,
     {
+      clientHref: client.clientHref,
       fileName: parsed.options.fileName,
       registryComponentName: parsed.componentNames.registryKey,
       ...(parsed.compileOptions.registryFacts

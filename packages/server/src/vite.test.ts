@@ -22,9 +22,38 @@ interface KovoViteConfigureServer {
     source: string,
     id: string,
   ): null | Promise<null | { code: string; map: null }> | { code: string; map: null };
+  enforce?: 'pre';
 }
 
 describe('public Kovo Vite plugin', () => {
+  it('runs before JSX lowering and serves lowered handler island markers', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-dev-lowering-'));
+    const source = `
+import { component } from '@kovojs/core';
+
+export const CartButton = component({
+  render: () => <button onClick={() => null}>Save</button>,
+});
+`;
+
+    try {
+      const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
+
+      expect(plugin.enforce).toBe('pre');
+      await plugin.configResolved?.({ root });
+      const transformed = await plugin.transform?.(source, join(root, 'src/cart-button.tsx'));
+
+      expect(transformed).toMatchObject({ map: null });
+      expect(transformed?.code).toContain('kovo-c="cart-button"');
+      expect(transformed?.code).toMatch(
+        /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/src\/cart-button\.client\.js#CartButton\$button_click"/,
+      );
+      expect(transformed?.code).not.toContain('onClick');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('loads the authored app entry default export', async () => {
     const plugin = kovo({ app: '/src/app.tsx' }) as unknown as KovoViteConfigureServer;
     const middlewares: KovoAppShellViteMiddleware[] = [];

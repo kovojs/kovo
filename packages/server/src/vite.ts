@@ -43,6 +43,8 @@ type KovoVitePostHook = () => void | Promise<void>;
 export interface KovoVitePlugin {
   buildStart?(): void | Promise<void>;
   configResolved?(config: KovoViteResolvedConfig): void | Promise<void>;
+  /** Run before Vite's JSX transform so the Kovo compiler sees authored TSX. */
+  enforce?: 'pre';
   /** Stable plugin name used by Vite diagnostics. */
   name: 'kovo';
   resolveId?(source: string, importer?: string): null | Promise<null | string> | string;
@@ -220,6 +222,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   };
 
   return {
+    enforce: 'pre',
     async configResolved(config) {
       root = config.root ?? root;
       viteCommand =

@@ -25,6 +25,7 @@ import {
 } from './mutation-form.js';
 import { writerConflictDiagnostic } from './server-emit-shared.js';
 import { queryExpressionFromBinding } from '../scan/query-binding.js';
+import { clientModuleUrl } from '../lower/handlers.js';
 
 export interface EmittedServerModule {
   executableSource: string;
@@ -70,6 +71,7 @@ export function serverRenderLowering(
   model: ComponentModuleModel,
   domComponentName: string,
   options?: {
+    clientHref?: string;
     fileName: string;
     registryComponentName?: string;
     registryFacts?: RegistryFacts;
@@ -84,6 +86,7 @@ function serverRenderPatches(
   model: ComponentModuleModel,
   domComponentName: string,
   options?: {
+    clientHref?: string;
     fileName: string;
     registryComponentName?: string;
     registryFacts?: RegistryFacts;
@@ -111,6 +114,9 @@ function serverRenderPatches(
   const formErrorLowering = mutationFormErrorRenderLowering(model, options);
   diagnostics.push(...formErrorLowering.diagnostics);
   patches.push(...formErrorLowering.replacements);
+  const triggerLowering = executionTriggerRenderLowering(model, options);
+  patches.push(...triggerLowering.replacements);
+  outputContexts.push(...triggerLowering.outputContexts);
   const hostHandlers = host
     ? handlers.filter(
         (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
@@ -156,6 +162,47 @@ function serverRenderPatches(
   }
 
   return { diagnostics, outputContexts, replacements: patches, stampWrites };
+}
+
+function executionTriggerRenderLowering(
+  model: ComponentModuleModel,
+  options:
+    | {
+        clientHref?: string;
+        fileName: string;
+      }
+    | undefined,
+): {
+  outputContexts: readonly GeneratedOutputWriteFact[];
+  replacements: readonly SourceReplacement[];
+} {
+  if (!options?.clientHref) return { outputContexts: [], replacements: [] };
+
+  const unversionedHref = clientModuleUrl(options.fileName);
+  const replacements: SourceReplacement[] = [];
+  const outputContexts: GeneratedOutputWriteFact[] = [];
+  for (const element of model.jsxElements) {
+    for (const attribute of element.attributes) {
+      if (attribute.executionTriggerName === undefined || attribute.value === undefined) continue;
+      if (!attribute.value.startsWith(`${unversionedHref}#`)) continue;
+
+      const value = `${options.clientHref}#${attribute.value.slice(`${unversionedHref}#`.length)}`;
+      replacements.push({
+        end: attribute.end,
+        replacement: `${attribute.name}="${escapeAttribute(value)}"`,
+        start: attribute.start,
+      });
+      outputContexts.push({
+        context: outputContextForAttribute(attribute.name),
+        expression: value,
+        sink: attribute.name,
+        source: 'server-render',
+        writer: 'execution trigger URL versioning',
+      });
+    }
+  }
+
+  return { outputContexts, replacements };
 }
 
 function handlerOutputContexts(handler: HandlerLowering): GeneratedOutputWriteFact[] {
