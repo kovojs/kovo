@@ -751,14 +751,6 @@ describe('server app-shell public API barrels', () => {
     expect(
       publicApi.isKovoApp({
         ...app,
-        session: undefined,
-        sessionProvider: () => null,
-        sessionProviderBoundary: 'owned',
-      }),
-    ).toBe(false);
-    expect(
-      publicApi.isKovoApp({
-        ...app,
         clientModules: {
           resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
         },

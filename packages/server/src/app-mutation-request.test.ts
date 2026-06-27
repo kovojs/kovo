@@ -308,19 +308,9 @@ describe('server app mutation request boundary', () => {
     });
     const app = createApp({
       mutations: [addToCart],
-      sessionProvider: {
-        justification: 'test delegated provider must not run for csrf:false mutation requests',
-        lifecycle: 'delegated',
-        lifecycleAssertions: {
-          expiry: 'test provider fixture owns expiry',
-          revocation: 'test provider fixture owns revocation',
-          rotation: 'test provider fixture owns rotation',
-          validation: 'test provider fixture owns validation',
-        },
-        provider() {
-          sessionReads += 1;
-          return { user: { id: 'u1' } };
-        },
+      sessionProvider() {
+        sessionReads += 1;
+        return { user: { id: 'u1' } };
       },
     });
     const form = new FormData();

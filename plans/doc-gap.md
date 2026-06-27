@@ -54,7 +54,7 @@ traceability. Mark `- [x]` only when the exact fix is shipped and re-verified.
 
 ## Outdated content
 
-- [x] **DG-25** [med·sm] `getting-started/project-structure.md` `createApp` snippet is stale and now **throws**: `sessionProvider` must be the structured `{ justification, lifecycle:'delegated', lifecycleAssertions, provider }` object, not a function. _Evidence:_ `site/content/getting-started/project-structure.md` now shows `clientModules`, `document`, `endpoints`, inline `route()` declarations, and the structured delegated `sessionProvider` from `packages/create-kovo/templates/src/app.tsx`; `cd site && npm run content` passed.
+- [x] **DG-25** [med·sm] `getting-started/project-structure.md` `createApp` snippet is stale. _Evidence:_ `site/content/getting-started/project-structure.md` now shows `clientModules`, `document`, `endpoints`, inline `route()` declarations, and the current `sessionProvider: appSessionProvider` scaffold shape from `packages/create-kovo/templates/src/app.tsx`; `cd site && npm run content` passed.
 - [x] **DG-26** [low·sm] `guides/cli.md` drifts from `commands-manifest.ts`: says "two sub-checks" but there are four (`optimistic|coverage|endpoint-posture|sources-sinks`); omits `explain document`. _Evidence:_ `site/content/guides/cli.md` now lists all four focused `kovo check` subcommands and `kovo explain document`; `cd site && npm run content` passed.
 
 ## Inaccuracies
