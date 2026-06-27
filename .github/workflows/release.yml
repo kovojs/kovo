@@ -20,6 +20,11 @@ on:
         required: true
         default: true
         type: boolean
+      skip_verify_release_input:
+        description: Skip the Verify release input step
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -53,6 +58,7 @@ jobs:
         run: npm install -g npm@11.6.4
 
       - name: Verify release input
+        if: ${{ !inputs.skip_verify_release_input }}
         run: vp exec pnpm exec node scripts/verify-release-input.mjs "$VERSION"
         env:
           GH_TOKEN: ${{ github.token }}
