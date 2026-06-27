@@ -611,6 +611,10 @@ packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and 
       wrong-column predicates, and defaulted-or-opaque callback cases remain `scope: unknown`. Evidence:
       `pnpm exec vitest run
       packages/drizzle/src/index.scope-audits.test.ts --run`, `git diff --check`, and `pnpm run check:vp` passed.
+      Bugz-4 integration also folded RQB `with:` relation tables into read facts, anchored const-bound
+      `input.session.*` away from trusted session scope, and expanded server callee recognition through const
+      aliases/namespace aliases/renamed re-exports; `pnpm exec vitest run packages/drizzle/src --run` passed
+      32 files / 584 tests after integration.
       Remaining gap: this is not full guard-predicate correctness.
 
 ---

@@ -31,21 +31,26 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
 
 ## HIGH
 
-- [ ] **H1 — KV438 mass-assignment gate ignores computed (non-literal) property keys; attacker-chosen-column writes compile clean.** `packages/drizzle/src/static/derivation.ts:1177-1178`, `packages/drizzle/src/static/schema.ts:757-772`
+- [x] **H1 — KV438 mass-assignment gate ignores computed (non-literal) property keys; attacker-chosen-column writes compile clean.** `packages/drizzle/src/static/derivation.ts:1177-1178`, `packages/drizzle/src/static/schema.ts:757-772`
   - `massAssignmentFactsForObject` derives each payload column via `propertyNameText(property.getNameNode())` **without** `resolveStaticComputed`, so a computed key whose bracket expression is anything but a string/numeric literal returns `undefined` and the property is `continue`d **before** any value verdict — fail-OPEN (the sibling spread path is deliberately fail-CLOSED).
   - **Exploit:** in a governed-table write, `db.update(accounts).set({ [input.field]: input.value })` lets a request choose **both** column and value (set `role`/`ownerId`/`balance` → privilege escalation / cross-tenant write) with zero KV438; the common `const col='role'; set({ [col]: input.role })` (type-checks fine) and a whitelisted-field PATCH helper are equally unanalyzed. Also bypasses the password and confidential-at-rest gates on the same loop.
   - **Verified:** worktree vitest via real `extractMassAssignmentFromProject` (5/5): literal `set({ role })` and `set({ ['role'] })` → 1 fact each; `set({ ['ro'+'le'] })`, `set({ [col] })`, `set({ [input.field]: input.value })` → **0 facts**.
   - **Distinct:** bugz H3/H5 are VALUE-side name laundering on a _resolved_ key; this skips the column-key lookup entirely (computed-member control-flow), a different function and root cause.
   - **Fix:** call `propertyNameText` with `resolveStaticComputed`, and when a key cannot be resolved fail **closed** (emit a fact / reject) like the spread path — never `continue`.
+  - **Evidence:** `pnpm exec vitest run packages/drizzle/src/index.mass-assignment.test.ts --run`
+    and `pnpm exec vitest run packages/drizzle/src --run` passed after integration; static computed keys resolve and unresolved computed keys fail closed.
 
-- [ ] **H2 — RQB `with` relation tables are dropped from the query read set, so an owner-scoped related table read bypasses the KV414 IDOR gate (cross-tenant read).** `packages/drizzle/src/static/summaries.ts:805-826,214-238`; consumed at `packages/drizzle/src/static.ts:366-461`
+- [x] **H2 — RQB `with` relation tables are dropped from the query read set, so an owner-scoped related table read bypasses the KV414 IDOR gate (cross-tenant read).** `packages/drizzle/src/static/summaries.ts:805-826,214-238`; consumed at `packages/drizzle/src/static.ts:366-461`
   - `relationalQueryTableExpression` resolves only the **root** `db.query.<t>.findMany/findFirst` table and never walks the `with:` object, so related tables are absent from `fact.reads`; `scopeAuditsFromQueryFacts` only audits owner domains that appear in `reads`, so an owner table reached via `with` is never audited → no KV414. SPEC §10.6 promises "the JOIN is the declaration"; RQB makes the forgotten dependency representable and silent.
   - **Exploit:** `query('feed', { load: (_i, db) => db.query.posts.findMany({ with: { comments: {...} } }) })` where `comments` is `kovo({ owner:'authorId' })` compiles clean (scopeAudits=[]); `/_q/feed` returns every author's owner-scoped comments to any viewer. The byte-identical `leftJoin` form is correctly flagged KV414.
   - **Verified:** worktree (3/3) via `extractQueryFactsFromProject`/`extractOwnerAuditFromProject`: `with` form → `reads=['post']`, scopeAudits=[], diagnostics=[]; `leftJoin` control → `reads=['comment','post']`, KV414 `scope:'unknown'`.
   - **Distinct:** not bugz H3/H5 (owner table present, operand laundered) or bugz-3 H1 (aliased callee erases all facts — here the query is fully recognized, only the relation read is dropped) or bugz-3 M4 (the _shape_ extractor, KV435; this is the _read-set_ extractor, KV414).
   - **Fix:** walk the `with:` object in `relationalQueryTableExpression` and fold related tables into `tableExpressions`/reads (also restores KV407 invalidation for them).
+  - **Evidence:** `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts
+packages/drizzle/src/index.query-shapes.test.ts --run` and the full Drizzle suite passed after
+    integration; RQB `with:` relation tables now enter read facts and owner audits.
 
-- [ ] **H3 — `compareAndSet` misreads the PGlite driver's affected-row count, so every successful KV429 CAS reports a stale-version conflict on the default driver.** `packages/drizzle/src/cas.ts:86`
+- [x] **H3 — `compareAndSet` misreads the PGlite driver's affected-row count, so every successful KV429 CAS reports a stale-version conflict on the default driver.** `packages/drizzle/src/cas.ts:86`
   - `const affected = result.rowCount ?? result.rowsAffected ?? result.changes ?? 0` — drizzle-orm's PGlite session returns `{ rows, fields, affectedRows }` (named `affectedRows`), none of which the chain reads, so `affected===0` even when the UPDATE matched and committed → `CasConflict`.
   - **Exploit:** the documented, KV429-compiler-mandated compare-and-set pattern reports
     `cas.ok === false` on the default PGlite driver even though the UPDATE committed, so the handler 409s
@@ -54,6 +59,8 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
   - **Verified:** worktree (real `@electric-sql/pglite` 0.5.1 + drizzle-orm/pglite): a matching versioned UPDATE returns `{ok:false,conflict:true}` while the row was actually updated.
   - **Distinct:** no prior item touches `cas.ts`; bugz-3 M9 (invalidation) and the optimistic items are unrelated.
   - **Fix:** include `affectedRows` (and other driver count fields) in the coalescing chain, or read the count via a driver-agnostic path.
+  - **Evidence:** `pnpm exec vitest run packages/drizzle/src/cas.test.ts --run` and the full
+    Drizzle suite passed after integration; `compareAndSet` now recognizes PGlite `affectedRows`.
 
 ---
 
@@ -96,20 +103,25 @@ M9–M13 cluster in the rate-limit/capability runtime surface.
 packages/browser/src/inline-loader-enhanced-submit.test.ts --run` passed after integration, and
     `pnpm --filter @kovojs/browser run check:inline-loader` proved generated inline-loader parity.
 
-- [ ] **M5 — bugz-3 M4 residual: a secret column raw-projected via a `with`-relation `extras` escapes the KV435 backstop when the related secret table isn't in `reads`.** `packages/drizzle/src/static/query-shapes.ts:159-200,461-477`
+- [x] **M5 — bugz-3 M4 residual: a secret column raw-projected via a `with`-relation `extras` escapes the KV435 backstop when the related secret table isn't in `reads`.** `packages/drizzle/src/static/query-shapes.ts:159-200,461-477`
   - The M4 fix over-approximates RQB `extras` to opaque paths so KV435 can fire, but `secretProjectionBackstopDiagnostics` only treats a path as secret-leaking when the secret table is in `tableExpressions` (root only, per H2) or the author's declared `reads:`. A secret reached through a `with` relation is in neither unless manually listed.
   - **Exploit:** a posts query that projects an author relation extra from `users.passwordHash` while declaring
     only `reads:[posts]` never fires KV435, so the password hash reaches `/_q`.
   - **Verified:** worktree — `reads:[posts,users]` control fires KV435 ('author.leaked'); `reads:[posts]` leak form → no KV435.
   - **Distinct:** bugz-3 M4 fixed the case where the secret table is the queried/declared table; this is the related-table residual (shares the H2 read-set root cause on the secret-backstop side).
   - **Fix:** same as H2 — fold `with`-relation tables into the read set so the backstop sees the related secret table.
+  - **Evidence:** `pnpm exec vitest run packages/drizzle/src/index.recognizer-alias-bugz3.test.ts
+packages/drizzle/src/index.query-shapes.test.ts --run` and the full Drizzle suite passed after
+    integration; related-table `extras` secrets now hit the KV435 backstop.
 
-- [ ] **M6 — Owner-principal IDOR gate (KV414) bypassed by binding `input.session.<ownerCol>` to a const — the bugz H5 carrier-root anchor is missing on the const-tracing recovery path.** `packages/drizzle/src/static/summaries.ts:1495-1530`
+- [x] **M6 — Owner-principal IDOR gate (KV414) bypassed by binding `input.session.<ownerCol>` to a const — the bugz H5 carrier-root anchor is missing on the const-tracing recovery path.** `packages/drizzle/src/static/summaries.ts:1495-1530`
   - `directPrivateScopeForExpression` anchors `.session/.guard/.tenant` to a proven request carrier root (the bugz H3/H5 fix), but the later recovery fallback `localBoundNonNullableSessionScope`→`directNonNullableSessionScopePath` matches a `session` _segment_ anywhere in the const's initializer access path with **no** carrier-root check.
   - **Exploit:** `async load(input: { session: { userId: string } }, db) { const uid = input.session.userId; return db.delete(orders).where(eq(orders.userId, uid)) }` on an owner table → no KV414; attacker sets any victim's id. The codebase's own H5 comment says this exact shape must be rejected.
   - **Verified:** worktree via `extractOwnerAuditFromProject` — const-bound `input.session.userId` write resolves to `scope:'session'` (no KV414); direct `input.session.userId` (post-H5) is correctly `args`.
   - **Distinct:** new instance of the H3/H5 invariant on a _different_ function (the const-tracing recovery fallback), not the direct member path H5 fixed.
   - **Fix:** apply the `isPrivateScopeCarrierRoot` anchor in `directNonNullableSessionScopePath` too.
+  - **Evidence:** `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts --run` and
+    the full Drizzle suite passed after integration; const-bound `input.session.*` no longer proves trusted session scope.
 
 - [x] **M7 — Better-Auth secret classification (bugz-3 M6) omits plugin credential tables (twoFactor secret/backupCodes, oauthApplication clientSecret, oauthAccessToken access/refresh tokens).** `packages/better-auth/src/internal/contracts.ts:506-551`, emitter `packages/better-auth/src/internal.ts:1497-1523`
   - The M6 fix added `secret:` only to the core `account`/`session` tables. The blessed bridge classifies `twoFactor`/`oauthAccessToken`/`oauthApplication`/`oauthConsent` as non-exempt owner-scoped `auth` tables with **no** `secret:` entry, so KV435 never brands their credential columns.
@@ -244,11 +256,13 @@ packages/server/src/vite-build.test.ts` passed after integration; CSP reporting 
   - **Evidence:** `pnpm exec vitest run packages/server/src/replay.test.ts --run` passed after
     integration; replay fingerprints now neutralize rotating CSRF fields even when a precomputed request fingerprint exists.
 
-- [ ] **L6 — bugz-3 H1/L11 residual: `isKovoServerCalleeExpression` still misses const-reassign, renamed local re-export, and re-aliased namespace bindings.** `packages/drizzle/src/static.ts:915-934`
+- [x] **L6 — bugz-3 H1/L11 residual: `isKovoServerCalleeExpression` still misses const-reassign, renamed local re-export, and re-aliased namespace bindings.** `packages/drizzle/src/static.ts:915-934`
   - The recognizer accepts bare/import-alias/namespace-member callees but not `const q = query`, a local barrel that renamed the re-export (`export { query as q } from '@kovojs/server'`), or `const s = srv; s.query(...)`. Fail-open consumers (derivation.ts, domain-writes.ts) then erase the security gates for that loader.
   - **Verified:** worktree — bare/import-alias/namespace → true; const-reassign / renamed-re-export / re-aliased-namespace → false.
   - **Distinct:** the explicit completeness residual of the bugz-3 H1/L11 alias-hardening.
   - **Fix:** resolve callee bindings by ts-morph symbol identity (follow const initializers + re-export chains) rather than syntactic forms.
+  - **Evidence:** `pnpm exec vitest run packages/drizzle/src/index.recognizer-alias-bugz3.test.ts
+--run` and the full Drizzle suite passed after integration; query/domain/write recognition now follows const aliases, namespace aliases, and renamed re-exports.
 
 - [x] **L7 — The module stream-text renderer import bypasses the dynamic-import URL allowlist enforced by every other dynamic-import sink.** `packages/browser/src/stream-text.ts:173-194`
   - `StreamTextBuffer.render()` imports a `data-stream-renderer` ref via `this.importModule(parsed.url)` with no `assertAllowedKovoDynamicImportUrl` (handlers / query-bindings call it). Its only protection is a pre-wrapped `importModule`, which `installKovoLoader` provides only when `allowedClientModuleUrls` is set.
