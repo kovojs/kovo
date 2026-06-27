@@ -279,6 +279,8 @@ export {
   safeRichHtml,
   stylesheet,
   t,
+  trustedHtml,
+  trustedUrl,
   BodyAttrs,
   BodyEnd,
   BodyStart,

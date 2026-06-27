@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { trustedHtml } from '@kovojs/browser';
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
 
 import * as packageRootApi from '@kovojs/server';
 import * as packageViteApi from '@kovojs/server/vite';
@@ -493,6 +493,8 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
     expect(publicApi.cspSha256).toBe(cspApi.cspSha256);
     expect(publicApi.Defer).toBe(renderingApi.Defer);
+    expect(publicApi.trustedHtml).toBe(trustedHtml);
+    expect(publicApi.trustedUrl).toBe(trustedUrl);
     expect(publicApi.Document).toBe(documentStructuredApi.Document);
     expect(publicApi.Head).toBe(documentStructuredApi.Head);
     expect(publicApi.BodyStart).toBe(documentStructuredApi.BodyStart);
@@ -508,6 +510,8 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
     expect(packageRootApi.cspSha256).toBe(cspApi.cspSha256);
     expect(packageRootApi.Defer).toBe(renderingApi.Defer);
+    expect(packageRootApi.trustedHtml).toBe(trustedHtml);
+    expect(packageRootApi.trustedUrl).toBe(trustedUrl);
     expect(packageRootValues).not.toHaveProperty('defer');
     expect(publicValues).not.toHaveProperty('renderDeferredDocument');
     expect(publicValues).not.toHaveProperty('renderDeferredStream');
@@ -537,6 +541,8 @@ describe('server app-shell public API barrels', () => {
     expect(renderingApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
     expect(renderingApi.cspSha256).toBe(cspApi.cspSha256);
     expect(renderingApi.Defer).toBe(internalHtmlApi.Defer);
+    expect(renderingApi.trustedHtml).toBe(trustedHtml);
+    expect(renderingApi.trustedUrl).toBe(trustedUrl);
     expect(renderingApi).not.toHaveProperty('defer');
     expect(renderingApi).not.toHaveProperty('renderDeferredDocument');
     expect(renderingApi).not.toHaveProperty('renderDeferredStream');

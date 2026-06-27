@@ -3,6 +3,7 @@
 // `renderDeferredDocument`) to `renderContentSecurityPolicy` and setting the result as
 // their `Content-Security-Policy` header. `cspSha256` lets apps hash any additional
 // inline script/style they author so it can be admitted by the same policy.
+export { trustedHtml, trustedUrl } from '@kovojs/browser';
 export { cspSha256, renderContentSecurityPolicy } from '../csp.js';
 export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
 export { Defer } from '../deferred-region.js';
