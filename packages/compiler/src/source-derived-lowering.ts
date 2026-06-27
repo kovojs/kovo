@@ -1,6 +1,7 @@
 import ts from 'typescript';
 
 import { deriveRegistryIdentity } from './registry-identities.js';
+import { parseSourceFile } from './scan/parse.js';
 import { applySourceReplacements, type SourceReplacement } from './shared.js';
 
 const helperModule = '@kovojs/server/internal/wire';
@@ -32,13 +33,7 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
   fileName: string;
   source: string;
 }): string | null {
-  const sourceFile = ts.createSourceFile(
-    options.fileName,
-    options.source,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKindForFileName(options.fileName),
-  );
+  const sourceFile = parseSourceFile(options.fileName, options.source);
   const assignments = exportedRegistryAssignments(sourceFile);
   if (assignments.length === 0) return null;
 
@@ -145,10 +140,4 @@ function hasExportModifier(statement: ts.VariableStatement): boolean {
   return (
     statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true
   );
-}
-
-function scriptKindForFileName(fileName: string): ts.ScriptKind {
-  if (/\.tsx$/i.test(fileName)) return ts.ScriptKind.TSX;
-  if (/\.jsx$/i.test(fileName)) return ts.ScriptKind.JSX;
-  return ts.ScriptKind.TS;
 }
