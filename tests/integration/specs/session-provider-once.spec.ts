@@ -21,6 +21,12 @@ async function eventSubjects(kovoApp: KovoApp, caseKey: string): Promise<string[
   return rows.map((row) => row.subject);
 }
 
+function csrfTokenFrom(html: string): string {
+  const match = html.match(/name="kovo-csrf" value="([^"]+)"/);
+  if (!match) throw new Error('expected route document to include a mutation CSRF token');
+  return match[1]!;
+}
+
 test('resolves one session for each guarded route, query, and mutation request', async ({
   request,
   kovoApp,
@@ -29,7 +35,9 @@ test('resolves one session for each guarded route, query, and mutation request',
     headers: { 'x-session-case': 'route' },
   });
   expect(routeResponse.status()).toBe(200);
-  await expect(routeResponse.text()).resolves.toContain('user-route');
+  const routeHtml = await routeResponse.text();
+  expect(routeHtml).toContain('user-route');
+  const csrfToken = csrfTokenFrom(routeHtml);
   expect(await eventKinds(kovoApp, 'route')).toEqual(['provider', 'guard:route', 'page:route']);
   expect(await eventSubjects(kovoApp, 'route')).toEqual(['user-route']);
 
@@ -42,10 +50,11 @@ test('resolves one session for each guarded route, query, and mutation request',
   expect(await eventSubjects(kovoApp, 'query')).toEqual(['user-query']);
 
   const mutationResponse = await request.post('/_m/session-once/mutate', {
-    form: {},
+    form: { 'kovo-csrf': csrfToken },
     headers: {
       'Kovo-Fragment': 'true',
       'x-session-case': 'mutation',
+      origin: new URL(routeResponse.url()).origin,
     },
   });
   expect(mutationResponse.status()).toBe(200);
