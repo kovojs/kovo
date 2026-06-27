@@ -270,7 +270,8 @@ props. item`.
   - Acceptance: add a "binding renamed away from query key" hint (or a dedicated
     diagnostic) to KV303.
 
-- [ ] **C5 — `component()` `state: () => JsonValue` rejects an `interface`-typed state with a cryptic index-signature error; only `type`/inline works.** (LOW, framework; found by l1-A8)
+- [x] **C5 — `component()` `state: () => JsonValue` rejects an `interface`-typed state with a cryptic index-signature error; only `type`/inline works.** (LOW, framework; found by l1-A8)
+  - Evidence: `pnpm exec vitest --run packages/server/src/schema.test.ts packages/server/src/route-jsx.test.tsx packages/core/src/index.test.ts` proves recursive `Serializable<T>` admits interface-typed state while rejecting non-serializable values; `pnpm run check:api-surface` passed.
   - Observed: `state: (): IfaceState => ({...})` where `IfaceState` is an
     `interface` → `TS2322 ... Index signature for type 'string' is missing in type
 'IfaceState'` (plus a cascading render-overload error); a `type` alias passes.
@@ -352,7 +353,8 @@ load })` typechecks clean; the client `query()` correctly rejects `{ live:true }
   - Acceptance: change the guide's "Render at the sink" example to `trustedHtml`
     (and re-export it from `@kovojs/server` per E3).
 
-- [ ] **E2 — `s.string().optional()` / `.default()` (and `s.number().optional()`) do not exist, yet SPEC §6.4/§4.10 examples use them; the docs snippet-checker stubs a fabricated `s` API.** (MEDIUM, framework; found by registry-A2 + mpa-A4)
+- [x] **E2 — `s.string().optional()` / `.default()` (and `s.number().optional()`) do not exist, yet SPEC §6.4/§4.10 examples use them; the docs snippet-checker stubs a fabricated `s` API.** (MEDIUM, framework; found by registry-A2 + mpa-A4)
+  - Evidence: `pnpm exec vitest --run packages/server/src/schema.test.ts packages/server/src/route-jsx.test.tsx packages/core/src/index.test.ts` proves string optional/default and number optional schema behavior; `pnpm run check:api-surface` passed.
   - Observed: `s.string().optional()` → `TS2339 Property 'optional' does not exist
 on type 'StringSchema'`; `.default('info')` → TS2339; an optional/defaulted
     string registry attribute or search field is unrepresentable.
@@ -405,7 +407,8 @@ a JSX component ... Property 'definition' is missing` (+ TS2322).
   - Acceptance: ship a JSX-typed `Link` component (props `{ to, params, search }`),
     or drop `<Link>` JSX from SPEC/docs and standardize on `href()`.
 
-- [ ] **F2 — A required `search` field 500s the route when the query param is absent (instead of a §9.2 422).** (HIGH, framework; found by mpa-A4)
+- [x] **F2 — A required `search` field 500s the route when the query param is absent (instead of a §9.2 422).** (HIGH, framework; found by mpa-A4)
+  - Evidence: `pnpm exec vitest --run packages/server/src/schema.test.ts packages/server/src/route-jsx.test.tsx packages/core/src/index.test.ts` proves route/search schema parse failures now return validation 422 instead of the generic 500 path.
   - Observed: a route with `search: s.object({ q: s.string() })` returns a 500
     "Internal Server Error" shell on a bare `GET /search` (no `?q=`).
   - Root cause: `parseRouteRequest` (`packages/server/src/route.ts:482`) runs
