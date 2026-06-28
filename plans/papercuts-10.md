@@ -19,7 +19,7 @@ the same pass are filed in `plans/bugz-10.md`.
 
 ### A. Query / Live Target Build Path
 
-- [ ] **Object-form non-Drizzle query output schemas fail KV302 when the component uses a local query alias.** (med, framework; found by `streaming-query-deferred`)
+- [x] **Object-form non-Drizzle query output schemas fail KV302 when the component uses a local query alias.** (med, framework; found by `streaming-query-deferred`)
   - Observed behavior: `query({ output: s.object(...) })` exported as
     `statusQuery`, then bound in a component as `queries: { status:
 statusQuery }`, failed `build:prod` with KV302 for valid
@@ -40,8 +40,12 @@ statusQuery }`, failed `build:prod` with KV302 for valid
   - Acceptance: output-shape facts are associated with component-local query
     bindings, not only exported variable names, with a focused build test for an
     object-form query alias.
+  - Evidence: 2026-06-28 `pnpm exec vitest run
+    packages/compiler/src/compile-component.test.ts
+    packages/server/src/vite-data-plane-gate.test.ts` passed with object-form
+    query alias output-shape coverage.
 
-- [ ] **Live-target renderer emission skips required imports when the lowered module already imports `@kovojs/server/internal/wire`.** (high, framework; found by `streaming-query-deferred`)
+- [x] **Live-target renderer emission skips required imports when the lowered module already imports `@kovojs/server/internal/wire`.** (high, framework; found by `streaming-query-deferred`)
   - Observed behavior: a query-backed component with streaming mutation forms
     failed build evaluation with `registerGeneratedLiveTargetRenderer is not
 defined`.
@@ -59,6 +63,10 @@ __kovoAssignDerivedQueryKey }` from the wire module.
   - Acceptance: live-target renderer emission adds or merges the exact required
     named imports, with coverage for an existing wire import that lacks those
     names.
+  - Evidence: 2026-06-28 `pnpm exec vitest run
+    packages/compiler/src/compile-component.test.ts
+    packages/server/src/vite-data-plane-gate.test.ts` passed with live-target
+    renderer wire-import merge coverage.
 
 ### B. Copied UI Composition
 
