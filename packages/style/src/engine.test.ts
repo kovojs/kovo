@@ -80,6 +80,38 @@ describe('bugz-3 L10: createTheme/defineVars CSS-value breakout (SPEC.md §13.1)
     );
   });
 
+  it('rejects CSS-ident-invalid defineVars token names before emitting custom properties', () => {
+    expect(() => defineVars({ 'AT&TAccent': '#0f766e' })).toThrowError(
+      /style\.defineVars rejected CSS-invalid token "AT&TAccent".*"--kovo-tokens--a-t&-t-accent"/s,
+    );
+    expect(() => defineVars({ 'R&D_gap2': '#7c3aed' })).toThrowError(
+      /style\.defineVars rejected CSS-invalid token "R&D_gap2".*"--kovo-tokens--r&-d_gap2"/s,
+    );
+
+    const vars = defineVars({ accent: '#0f766e' });
+    const css = emitAtomicCss(vars.__rules as never);
+    expect(css).not.toContain('--kovo-tokens--a-t&-t-accent');
+    expect(css).not.toContain('--kovo-tokens--r&-d_gap2');
+  });
+
+  it('rejects createTheme overrides that would emit CSS-invalid custom properties', () => {
+    const forgedTokens = {
+      'R&D_gap2': 'var(--kovo-tokens--r&-d_gap2)',
+    } as never;
+
+    expect(() => createTheme(forgedTokens, { 'R&D_gap2': '#7c3aed' } as never)).toThrowError(
+      /style\.createTheme rejected CSS-invalid token "R&D_gap2"/,
+    );
+
+    const forgedValidTokenName = {
+      accent: 'var(--kovo-tokens-a&-accent)',
+    } as never;
+
+    expect(() => createTheme(forgedValidTokenName, { accent: '#0f766e' } as never)).toThrowError(
+      /style\.createTheme rejected token "accent": base token reference .*valid unescaped CSS custom-property name/s,
+    );
+  });
+
   it('rejects keyframe step names and declaration values that break out of @keyframes', () => {
     expect(() =>
       createKeyframes({
