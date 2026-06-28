@@ -10,27 +10,27 @@
       "label": "mutations/post-question-mutation",
       "data": {
         "guards": ["authed"],
-        "writes": ["question"],
-        "invalidates": ["question"],
+        "writes": ["model/question"],
+        "invalidates": ["model/question"],
         "inputFields": ["id", "title", "body", "authorId"],
         "session": "soSession",
         "optimistic": [
           {
             "derivation": { "status": "derived" },
             "mutation": "mutations/post-question-mutation",
-            "query": "questionList",
+            "query": "queries/question-list",
             "status": "derived"
           },
           {
             "mutation": "mutations/post-question-mutation",
-            "query": "questionDetail",
+            "query": "queries/question-detail",
             "status": "await-fragment"
           }
         ],
         "touch": {
           "reads": [
             {
-              "domain": "question",
+              "domain": "model/question",
               "keys": null,
               "site": "examples/stackoverflow/.emit-0/src/mutations.ts:17",
               "source": "select",
@@ -39,7 +39,7 @@
           ],
           "touches": [
             {
-              "domain": "question",
+              "domain": "model/question",
               "keys": null,
               "site": "examples/stackoverflow/src/mutations.ts:22",
               "via": "questions"
@@ -57,7 +57,7 @@
         "lang": "ts",
         "touches": [
           {
-            "domain": "question",
+            "domain": "model/question",
             "keys": null,
             "site": "examples/stackoverflow/src/mutations.ts:22",
             "via": "questions"
@@ -66,17 +66,17 @@
       }
     },
     {
-      "id": "domain:question",
+      "id": "domain:model/question",
       "kind": "domain",
-      "name": "question",
-      "label": "question",
+      "name": "model/question",
+      "label": "model/question",
       "data": {},
       "source": {
         "file": "model.ts",
         "startLine": 6,
         "anchorLine": 8,
         "endLine": 8,
-        "code": "// Shared demo facts: invalidation domains, typed mutation forms, and the small\n// request/result shapes consumed across the interactive example.\nexport const question = domain('question');",
+        "code": "// Shared demo facts: invalidation domains, typed mutation inputs, and the small\n// request/result shapes consumed across the interactive example.\nexport const question = domain('question');",
         "lang": "ts"
       }
     },
@@ -87,31 +87,31 @@
       "label": "mutations/post-answer-mutation",
       "data": {
         "guards": ["authed"],
-        "writes": ["answer", "question"],
-        "invalidates": ["answer", "question"],
+        "writes": ["model/answer", "model/question"],
+        "invalidates": ["model/answer", "model/question"],
         "inputFields": ["id", "questionId", "body", "authorId"],
         "session": "soSession",
         "optimistic": [
           {
             "derivation": { "status": "derived" },
             "mutation": "mutations/post-answer-mutation",
-            "query": "answerList",
+            "query": "queries/answer-list",
             "status": "derived"
           },
           {
             "derivation": { "status": "derived" },
             "mutation": "mutations/post-answer-mutation",
-            "query": "questionList",
+            "query": "queries/question-list",
             "status": "derived"
           },
           {
             "mutation": "mutations/post-answer-mutation",
-            "query": "questionAnswers",
+            "query": "queries/question-answers",
             "status": "await-fragment"
           },
           {
             "mutation": "mutations/post-answer-mutation",
-            "query": "questionDetail",
+            "query": "queries/question-detail",
             "status": "await-fragment"
           }
         ],
@@ -119,13 +119,13 @@
           "reads": [],
           "touches": [
             {
-              "domain": "answer",
+              "domain": "model/answer",
               "keys": null,
               "site": "examples/stackoverflow/src/mutations.ts:47",
               "via": "answers"
             },
             {
-              "domain": "question",
+              "domain": "model/question",
               "keys": "arg:questionId",
               "site": "examples/stackoverflow/src/mutations.ts:48",
               "via": "questions"
@@ -143,13 +143,13 @@
         "lang": "ts",
         "touches": [
           {
-            "domain": "answer",
+            "domain": "model/answer",
             "keys": null,
             "site": "examples/stackoverflow/src/mutations.ts:47",
             "via": "answers"
           },
           {
-            "domain": "question",
+            "domain": "model/question",
             "keys": "arg:questionId",
             "site": "examples/stackoverflow/src/mutations.ts:48",
             "via": "questions"
@@ -158,10 +158,10 @@
       }
     },
     {
-      "id": "domain:answer",
+      "id": "domain:model/answer",
       "kind": "domain",
-      "name": "answer",
-      "label": "answer",
+      "name": "model/answer",
+      "label": "model/answer",
       "data": {},
       "source": {
         "file": "model.ts",
@@ -179,26 +179,26 @@
       "label": "mutations/vote-up-mutation",
       "data": {
         "guards": ["authed"],
-        "writes": ["vote", "question"],
-        "invalidates": ["vote", "question"],
+        "writes": ["model/vote", "model/question"],
+        "invalidates": ["model/vote", "model/question"],
         "inputFields": ["id", "targetId", "userId"],
         "session": "soSession",
         "optimistic": [
           {
             "derivation": { "status": "derived" },
             "mutation": "mutations/vote-up-mutation",
-            "query": "questionList",
+            "query": "queries/question-list",
             "status": "derived"
           },
           {
             "derivation": { "status": "derived" },
             "mutation": "mutations/vote-up-mutation",
-            "query": "questionScore",
+            "query": "queries/question-score",
             "status": "derived"
           },
           {
             "mutation": "mutations/vote-up-mutation",
-            "query": "questionDetail",
+            "query": "queries/question-detail",
             "status": "await-fragment"
           }
         ],
@@ -206,13 +206,13 @@
           "reads": [],
           "touches": [
             {
-              "domain": "question",
+              "domain": "model/question",
               "keys": "arg:targetId",
               "site": "examples/stackoverflow/src/mutations.ts:62",
               "via": "questions"
             },
             {
-              "domain": "vote",
+              "domain": "model/vote",
               "keys": null,
               "site": "examples/stackoverflow/src/mutations.ts:61",
               "via": "votes"
@@ -230,13 +230,13 @@
         "lang": "ts",
         "touches": [
           {
-            "domain": "question",
+            "domain": "model/question",
             "keys": "arg:targetId",
             "site": "examples/stackoverflow/src/mutations.ts:62",
             "via": "questions"
           },
           {
-            "domain": "vote",
+            "domain": "model/vote",
             "keys": null,
             "site": "examples/stackoverflow/src/mutations.ts:61",
             "via": "votes"
@@ -245,10 +245,10 @@
       }
     },
     {
-      "id": "domain:vote",
+      "id": "domain:model/vote",
       "kind": "domain",
-      "name": "vote",
-      "label": "vote",
+      "name": "model/vote",
+      "label": "model/vote",
       "data": {},
       "source": {
         "file": "model.ts",
@@ -260,11 +260,11 @@
       }
     },
     {
-      "id": "query:questionList",
+      "id": "query:queries/question-list",
       "kind": "query",
-      "name": "questionList",
-      "label": "questionList",
-      "data": { "domains": ["question"], "guards": [] },
+      "name": "queries/question-list",
+      "label": "queries/question-list",
+      "data": { "domains": ["model/question"], "guards": [] },
       "source": {
         "file": "queries.ts",
         "startLine": 20,
@@ -275,11 +275,11 @@
       }
     },
     {
-      "id": "query:answerList",
+      "id": "query:queries/answer-list",
       "kind": "query",
-      "name": "answerList",
-      "label": "answerList",
-      "data": { "domains": ["answer"], "guards": [] },
+      "name": "queries/answer-list",
+      "label": "queries/answer-list",
+      "data": { "domains": ["model/answer"], "guards": [] },
       "source": {
         "file": "queries.ts",
         "startLine": 45,
@@ -290,11 +290,11 @@
       }
     },
     {
-      "id": "query:questionDetail",
+      "id": "query:queries/question-detail",
       "kind": "query",
-      "name": "questionDetail",
-      "label": "questionDetail",
-      "data": { "domains": ["question"], "guards": [] },
+      "name": "queries/question-detail",
+      "label": "queries/question-detail",
+      "data": { "domains": ["model/question"], "guards": [] },
       "source": {
         "file": "queries.ts",
         "startLine": 63,
@@ -305,11 +305,11 @@
       }
     },
     {
-      "id": "query:questionAnswers",
+      "id": "query:queries/question-answers",
       "kind": "query",
-      "name": "questionAnswers",
-      "label": "questionAnswers",
-      "data": { "domains": ["answer"], "guards": [] },
+      "name": "queries/question-answers",
+      "label": "queries/question-answers",
+      "data": { "domains": ["model/answer"], "guards": [] },
       "source": {
         "file": "queries.ts",
         "startLine": 90,
@@ -320,11 +320,11 @@
       }
     },
     {
-      "id": "query:questionScore",
+      "id": "query:queries/question-score",
       "kind": "query",
-      "name": "questionScore",
-      "label": "questionScore",
-      "data": { "domains": ["vote"], "guards": [] },
+      "name": "queries/question-score",
+      "label": "queries/question-score",
+      "data": { "domains": ["model/vote"], "guards": [] },
       "source": {
         "file": "queries.ts",
         "startLine": 115,
@@ -337,72 +337,72 @@
   ],
   "edges": [
     {
-      "id": "mutation:mutations/post-question-mutation->domain:question:writes",
+      "id": "mutation:mutations/post-question-mutation->domain:model/question:writes",
       "from": "mutation:mutations/post-question-mutation",
-      "to": "domain:question",
+      "to": "domain:model/question",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:mutations/post-answer-mutation->domain:answer:writes",
+      "id": "mutation:mutations/post-answer-mutation->domain:model/answer:writes",
       "from": "mutation:mutations/post-answer-mutation",
-      "to": "domain:answer",
+      "to": "domain:model/answer",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:mutations/post-answer-mutation->domain:question:writes",
+      "id": "mutation:mutations/post-answer-mutation->domain:model/question:writes",
       "from": "mutation:mutations/post-answer-mutation",
-      "to": "domain:question",
+      "to": "domain:model/question",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:mutations/vote-up-mutation->domain:vote:writes",
+      "id": "mutation:mutations/vote-up-mutation->domain:model/vote:writes",
       "from": "mutation:mutations/vote-up-mutation",
-      "to": "domain:vote",
+      "to": "domain:model/vote",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:mutations/vote-up-mutation->domain:question:writes",
+      "id": "mutation:mutations/vote-up-mutation->domain:model/question:writes",
       "from": "mutation:mutations/vote-up-mutation",
-      "to": "domain:question",
+      "to": "domain:model/question",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "domain:question->query:questionList:backs",
-      "from": "domain:question",
-      "to": "query:questionList",
+      "id": "domain:model/question->query:queries/question-list:backs",
+      "from": "domain:model/question",
+      "to": "query:queries/question-list",
       "kind": "backs",
       "data": {}
     },
     {
-      "id": "domain:answer->query:answerList:backs",
-      "from": "domain:answer",
-      "to": "query:answerList",
+      "id": "domain:model/answer->query:queries/answer-list:backs",
+      "from": "domain:model/answer",
+      "to": "query:queries/answer-list",
       "kind": "backs",
       "data": {}
     },
     {
-      "id": "domain:question->query:questionDetail:backs",
-      "from": "domain:question",
-      "to": "query:questionDetail",
+      "id": "domain:model/question->query:queries/question-detail:backs",
+      "from": "domain:model/question",
+      "to": "query:queries/question-detail",
       "kind": "backs",
       "data": {}
     },
     {
-      "id": "domain:answer->query:questionAnswers:backs",
-      "from": "domain:answer",
-      "to": "query:questionAnswers",
+      "id": "domain:model/answer->query:queries/question-answers:backs",
+      "from": "domain:model/answer",
+      "to": "query:queries/question-answers",
       "kind": "backs",
       "data": {}
     },
     {
-      "id": "domain:vote->query:questionScore:backs",
-      "from": "domain:vote",
-      "to": "query:questionScore",
+      "id": "domain:model/vote->query:queries/question-score:backs",
+      "from": "domain:model/vote",
+      "to": "query:queries/question-score",
       "kind": "backs",
       "data": {}
     }

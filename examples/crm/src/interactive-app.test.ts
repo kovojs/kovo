@@ -115,12 +115,12 @@ describe('crm interactive app', () => {
         name: 'Edsger Dijkstra',
         email: 'edsger@demo.example.com',
       }),
-      `${contactsTarget}=contactList`,
+      `${contactsTarget}=queries/contact-list-query`,
       liveHeader(contactsTarget, contactsComponent),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain('<kovo-query name="contactList"');
+    expect(html).toContain('<kovo-query name="queries/contact-list-query"');
     expect(html).toContain('Edsger Dijkstra');
 
     const rows = await db.select().from(contacts);
@@ -142,7 +142,7 @@ describe('crm interactive app', () => {
         name: 'Duplicate Contact',
         email: contact.email,
       }),
-      `${contactsTarget}=contactList`,
+      `${contactsTarget}=queries/contact-list-query`,
       liveHeader(contactsTarget, contactsComponent),
     );
 
@@ -164,7 +164,7 @@ describe('crm interactive app', () => {
         name: 'Attacker Controlled',
         email: 'attacker-id@demo.example.com',
       }),
-      `${contactsTarget}=contactList`,
+      `${contactsTarget}=queries/contact-list-query`,
       liveHeader(contactsTarget, contactsComponent),
     );
 
@@ -188,14 +188,14 @@ describe('crm interactive app', () => {
         stage: 'open',
         amount: '7500',
       }),
-      `${pipelineTarget}=contactList openDeals pipelineByStage`,
+      `${pipelineTarget}=queries/contact-list-query queries/open-deals-query queries/pipeline-by-stage-query`,
       liveHeader(pipelineTarget, pipelineComponent),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain('<kovo-query name="contactList"');
-    expect(html).toContain('<kovo-query name="openDeals"');
-    expect(html).toContain('<kovo-query name="pipelineByStage"');
+    expect(html).toContain('<kovo-query name="queries/contact-list-query"');
+    expect(html).toContain('<kovo-query name="queries/open-deals-query"');
+    expect(html).toContain('<kovo-query name="queries/pipeline-by-stage-query"');
 
     const dealRows = await db.select().from(deals);
     expect(dealRows).toHaveLength(beforeDeals + 1);
@@ -222,7 +222,7 @@ describe('crm interactive app', () => {
         stage: 'open',
         amount: '7500',
       }),
-      `${pipelineTarget}=contactList openDeals pipelineByStage`,
+      `${pipelineTarget}=queries/contact-list-query queries/open-deals-query queries/pipeline-by-stage-query`,
       liveHeader(pipelineTarget, pipelineComponent),
     );
 
@@ -237,7 +237,7 @@ describe('crm interactive app', () => {
         stage: 'javascript:alert(1)',
         amount: '7500',
       }),
-      `${pipelineTarget}=contactList openDeals pipelineByStage`,
+      `${pipelineTarget}=queries/contact-list-query queries/open-deals-query queries/pipeline-by-stage-query`,
       liveHeader(pipelineTarget, pipelineComponent),
     );
 
@@ -257,7 +257,7 @@ describe('crm interactive app', () => {
         email: 'spoofed-owner@demo.example.com',
         ownerId: 'u2',
       }),
-      `${contactsTarget}=contactList`,
+      `${contactsTarget}=queries/contact-list-query`,
       liveHeader(contactsTarget, contactsComponent),
     );
 
@@ -277,12 +277,12 @@ describe('crm interactive app', () => {
       handler,
       'mutations/move-deal',
       withCsrf({ dealId: 'd1', stage: 'proposal' }),
-      `${dealDetailTarget}:d1=activityList contactList dealList`,
+      `${dealDetailTarget}:d1=queries/activity-list-query queries/contact-list-query queries/deal-list-query`,
       liveHeader(`${dealDetailTarget}:d1`, dealDetailComponent, { dealId: 'd1' }),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain('<kovo-query name="dealList"');
+    expect(html).toContain('<kovo-query name="queries/deal-list-query"');
 
     const [after] = await db.select().from(deals).where(eq(deals.id, 'd1')).limit(1);
     expect(after?.stage).toBe('proposal');
@@ -297,7 +297,7 @@ describe('crm interactive app', () => {
       handler,
       'mutations/move-deal',
       withCsrf({ dealId: unowned.id, stage: 'proposal' }),
-      `${dealDetailTarget}:${unowned.id}=activityList contactList dealList`,
+      `${dealDetailTarget}:${unowned.id}=queries/activity-list-query queries/contact-list-query queries/deal-list-query`,
       liveHeader(`${dealDetailTarget}:${unowned.id}`, dealDetailComponent, { dealId: unowned.id }),
     );
 
@@ -317,12 +317,12 @@ describe('crm interactive app', () => {
       handler,
       'mutations/close-deal',
       withCsrf({ dealId: 'd1' }),
-      `${dealDetailTarget}:d1=activityList contactList dealList`,
+      `${dealDetailTarget}:d1=queries/activity-list-query queries/contact-list-query queries/deal-list-query`,
       liveHeader(`${dealDetailTarget}:d1`, dealDetailComponent, { dealId: 'd1' }),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain('<kovo-query name="dealList"');
+    expect(html).toContain('<kovo-query name="queries/deal-list-query"');
 
     const [after] = await db.select().from(deals).where(eq(deals.id, 'd1')).limit(1);
     expect(after?.stage).toBe('won');

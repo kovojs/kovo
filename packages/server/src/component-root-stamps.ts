@@ -60,7 +60,11 @@ export function stampKovoComponentRoot<Request = unknown>(
   attrs = setOrAppendAttribute(
     attrs,
     'kovo-deps',
-    mergeAttributeTokens(attributeValue(attrs, 'kovo-deps'), metadata.deps).join(' '),
+    mergeAttributeTokens(
+      attributeValue(attrs, 'kovo-deps'),
+      metadata.deps,
+      metadata.staleDeps,
+    ).join(' '),
   );
   attrs = setOrAppendAttribute(attrs, 'kovo-fragment-target', metadata.target);
   attrs = setOrAppendAttribute(attrs, 'kovo-live-component', metadata.componentName);
@@ -87,6 +91,7 @@ function componentRootStampMetadata<Request>(options: ComponentRootStampOptions<
   deps: string[];
   domName: string;
   props?: Record<string, unknown>;
+  staleDeps: string[];
   target: string;
 } | null {
   if (options.component.definition.disableServerRefresh) return null;
@@ -95,10 +100,14 @@ function componentRootStampMetadata<Request>(options: ComponentRootStampOptions<
   if (typeof componentName !== 'string' || componentName.length === 0) return null;
   if (!isRecord(options.component.definition.queries)) return null;
 
-  const deps = Object.values(options.component.definition.queries).flatMap((binding) => {
+  const deps: string[] = [];
+  const staleDeps: string[] = [];
+  for (const [name, binding] of Object.entries(options.component.definition.queries)) {
     const query = componentQueryDefinition(binding);
-    return query ? [query.key] : [];
-  });
+    if (!query) continue;
+    deps.push(query.key);
+    if (query.key !== name) staleDeps.push(name);
+  }
   if (deps.length === 0) return null;
 
   const domName = componentName.split('/').filter(Boolean).at(-1);
@@ -117,6 +126,7 @@ function componentRootStampMetadata<Request>(options: ComponentRootStampOptions<
     deps,
     domName,
     ...(stampedProps === undefined ? {} : { props: stampedProps }),
+    staleDeps,
     target,
   };
 }
@@ -225,13 +235,20 @@ function isQueryArgsBinding(
 function mergeAttributeTokens(
   existing: string | undefined,
   additions: readonly string[],
+  staleDeps: readonly string[] = [],
 ): string[] {
+  const stale = new Set(staleDeps);
   return [
     ...new Set([
       ...(existing ?? '')
         .split(/[\s,]+/)
         .map((token) => token.trim())
-        .filter(Boolean),
+        .filter(
+          // SPEC §4.1/§10.2: source-derived query keys are the browser-visible dependency tokens.
+          // Discard stale local component query property names and fail-closed sentinels that can
+          // appear in direct TSX tests before compiler lowering has canonicalized root stamps.
+          (token) => token.length > 0 && !stale.has(token) && !token.includes('\0'),
+        ),
       ...additions,
     ]),
   ];

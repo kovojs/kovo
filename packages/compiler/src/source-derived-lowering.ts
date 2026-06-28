@@ -11,6 +11,10 @@ const helperImports = {
     imported: 'assignDerivedComponentName',
     local: '__kovoAssignDerivedComponentName',
   },
+  domain: {
+    imported: 'assignDerivedDomainKey',
+    local: '__kovoAssignDerivedDomainKey',
+  },
   mutation: {
     imported: 'assignDerivedMutationKey',
     local: '__kovoAssignDerivedMutationKey',
@@ -84,8 +88,10 @@ function exportedRegistryAssignments(
 function sourceDerivedPrimitive(call: ts.CallExpression): SourceDerivedPrimitive | null {
   if (ts.isIdentifier(call.expression)) {
     if (call.expression.text === 'component' && isSingleObjectArgument(call)) return 'component';
+    if (call.expression.text === 'domain' && call.arguments.length === 0) return 'domain';
     if (call.expression.text === 'mutation' && isSingleObjectArgument(call)) return 'mutation';
     if (call.expression.text === 'query' && isSingleObjectArgument(call)) return 'query';
+    if (call.expression.text === 'tag' && call.arguments.length === 0) return 'domain';
     if (call.expression.text === 'webhook' && isPathFirstWebhookCall(call)) return 'webhook';
     return null;
   }

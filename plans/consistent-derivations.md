@@ -313,9 +313,13 @@ examples/stackoverflow/src/optimism-derivation.test.ts`, `pnpm run check:vp`, an
     `git diff --check`. Public API examples and browser typing tests now use mutation-value forms
     for optimistic authoring; verification passed `pnpm exec vitest run
 packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`. Remaining gap:
-    CRM/StackOverflow direct-test query/domain declarations still use explicit names because
-    migrating them currently exposes unkeyed generated live-target query definitions in direct
-    Vitest paths.
+    CRM and StackOverflow direct-test query/domain declarations now use source-derived object forms,
+    with generated graph setup assigning derived keys and registering live-target renderers after key
+    assignment; verification passed `pnpm exec vitest run
+examples/crm/src/interactive-app.test.ts examples/crm/src/optimistic.test.ts`, `pnpm exec vitest
+run examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/optimism-derivation.test.ts`,
+    `pnpm --filter @kovojs/example-devtool check`, and `node examples/devtool/scripts/conformance.mjs`.
+    Remaining gap: starter and some non-direct example/tutorial domain surfaces still need migration.
 
 - [ ] **Update generated registries, explain snapshots, compiler tests, server tests, and browser wire tests.**
   - Cover `/_m/*`, `data-mutation`, CSRF audience, replay scope, query wire chunks, domain touch
@@ -325,6 +329,13 @@ packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`. R
     `componentLiveTargetRenderer(...)` while leaving non-executable `{}` test stubs on the runtime
     fallback path; verification passed `pnpm exec vitest run
 packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts`.
+    Drizzle static query facts and algebraic shape extraction now derive exported object-form query
+    keys for generated registry/optimism decisions, and direct-test query arg bindings retain the
+    same assigned query object; verification passed `pnpm exec vitest run
+packages/drizzle/src/index.writes-receivers.test.ts --testNamePattern "object-form query|zero-arg domain"`,
+    `pnpm exec vitest run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts --testNamePattern "object-form query|Stack Overflow-style"`,
+    `pnpm exec vitest run packages/server/src/query-endpoint.test.ts --testNamePattern "derived query keys|args bindings|parameterized query args"`,
+    and `node examples/stackoverflow/scripts/generate-registry.mjs`.
 
 - [ ] **Remove legacy compatibility unless `SPEC.md` explicitly keeps it.**
   - Kovo is in technical preview, so prefer one clean authoring model over compatibility modes.
@@ -412,3 +423,10 @@ vitest run packages/compiler/src/compile-component.test.ts packages/compiler/src
 - 2026-06-27: Exercised browser `ctx.submit` with mutation-value form handles; `pnpm exec vitest
 run packages/browser/src/submit-context-apply.test.ts packages/browser/src/submit-context-failure.test.ts`
   passed.
+- 2026-06-27: Migrated CRM/StackOverflow direct-test query/domain declarations and refreshed devtool
+  fixtures; `pnpm exec vitest run examples/crm/src/interactive-app.test.ts
+examples/crm/src/optimistic.test.ts`, `pnpm exec vitest run
+examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/optimism-derivation.test.ts`,
+  `pnpm exec vitest run packages/compiler/src/vite.test.ts`, focused Drizzle/server query tests,
+  `pnpm --filter @kovojs/example-devtool check`, `node examples/stackoverflow/scripts/generate-registry.mjs`,
+  `node examples/devtool/scripts/conformance.mjs`, and `git diff --check` passed.

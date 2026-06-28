@@ -25,6 +25,13 @@ import {
 } from './model.js';
 import { contacts, deals } from './schema.js';
 
+import {
+  contactDealCountQuery,
+  contactListQuery,
+  dealListQuery,
+  openDealsQuery,
+  pipelineByStageQuery,
+} from './queries.js';
 import type {
   ContactDealCountResult,
   ContactListResult,
@@ -35,23 +42,31 @@ import type {
 
 declare module '@kovojs/core' {
   interface QueryRegistry {
-    contactDealCount: ContactDealCountResult;
-    contactList: ContactListResult;
-    dealList: DealListResult;
-    openDeals: OpenDealsResult;
-    pipelineByStage: PipelineByStageResult;
+    'queries/contact-deal-count-query': ContactDealCountResult;
+    'queries/contact-list-query': ContactListResult;
+    'queries/deal-list-query': DealListResult;
+    'queries/open-deals-query': OpenDealsResult;
+    'queries/pipeline-by-stage-query': PipelineByStageResult;
   }
 
   interface InvalidationSets {
-    'mutations/add-contact': 'contactList';
-    'mutations/close-deal': 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
+    'mutations/add-contact': 'queries/contact-list-query';
+    'mutations/close-deal':
+      | 'queries/contact-deal-count-query'
+      | 'queries/deal-list-query'
+      | 'queries/open-deals-query'
+      | 'queries/pipeline-by-stage-query';
     'mutations/create-deal':
-      | 'contactDealCount'
-      | 'contactList'
-      | 'dealList'
-      | 'openDeals'
-      | 'pipelineByStage';
-    'mutations/move-deal': 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
+      | 'queries/contact-deal-count-query'
+      | 'queries/contact-list-query'
+      | 'queries/deal-list-query'
+      | 'queries/open-deals-query'
+      | 'queries/pipeline-by-stage-query';
+    'mutations/move-deal':
+      | 'queries/contact-deal-count-query'
+      | 'queries/deal-list-query'
+      | 'queries/open-deals-query'
+      | 'queries/pipeline-by-stage-query';
   }
 }
 
@@ -141,7 +156,7 @@ export const addContact = mutation({
     email: s.string(),
   }),
   optimistic: {
-    contactList(draft: ContactListResult, $input: AddContactInput) {
+    [contactListQuery.key](draft: ContactListResult, $input: AddContactInput) {
       const row = {
         dealCount: 0,
         email: $input.email,
@@ -192,17 +207,17 @@ export const createDeal = mutation({
     amount: s.number().int().min(0),
   }),
   optimistic: {
-    contactDealCount(draft: ContactDealCountResult, _$input: CreateDealInput) {
+    [contactDealCountQuery.key](draft: ContactDealCountResult, _$input: CreateDealInput) {
       draft.count = (draft.count ?? 0) + 1;
     },
     // Hand-written optimistic patches for UI values the generated plan cannot know:
     // contactList needs the server-side dealCount increment, and pipelineByStage is a
     // grouped summary.
-    contactList(draft: ContactListResult, $input: CreateDealInput) {
+    [contactListQuery.key](draft: ContactListResult, $input: CreateDealInput) {
       const target = draft.items.find((item) => item.id === $input.contactId);
       if (target) target.dealCount += 1;
     },
-    dealList(draft: DealListResult, $input: CreateDealInput) {
+    [dealListQuery.key](draft: DealListResult, $input: CreateDealInput) {
       const row = {
         amount: $input.amount,
         contactId: $input.contactId,
@@ -215,7 +230,7 @@ export const createDeal = mutation({
       if (index < 0) draft.items.push(row);
       else draft.items.splice(index, 0, row);
     },
-    openDeals(draft: OpenDealsResult, $input: CreateDealInput) {
+    [openDealsQuery.key](draft: OpenDealsResult, $input: CreateDealInput) {
       const row = {
         amount: $input.amount,
         contactId: $input.contactId,
@@ -228,7 +243,7 @@ export const createDeal = mutation({
       if (index < 0) draft.items.push(row);
       else draft.items.splice(index, 0, row);
     },
-    pipelineByStage(draft: PipelineByStageResult, $input: CreateDealInput) {
+    [pipelineByStageQuery.key](draft: PipelineByStageResult, $input: CreateDealInput) {
       const bucket = draft.buckets.find((entry) => entry.stage === $input.stage);
       if (bucket) bucket.total += $input.amount;
       else draft.buckets.push({ stage: $input.stage, total: $input.amount });
@@ -270,15 +285,15 @@ export const moveDeal = mutation({
     stage: crmStageSchema,
   }),
   optimistic: {
-    contactDealCount(_draft: ContactDealCountResult, _$input: MoveDealInput) {},
-    dealList(draft: DealListResult, $input: MoveDealInput) {
+    [contactDealCountQuery.key](_draft: ContactDealCountResult, _$input: MoveDealInput) {},
+    [dealListQuery.key](draft: DealListResult, $input: MoveDealInput) {
       const target = draft.items.find((entry) => entry.id === $input.dealId);
       if (target) target.stage = $input.stage;
     },
     // Moving a deal can change filtered and grouped views in ways that need row
     // context, so the demo waits for the server fragment for those regions.
-    openDeals: 'await-fragment',
-    pipelineByStage: 'await-fragment',
+    [openDealsQuery.key]: 'await-fragment',
+    [pipelineByStageQuery.key]: 'await-fragment',
   },
   queue: CRM_QUEUE,
   registry: { touches: [deal] },
@@ -336,15 +351,15 @@ export const closeDeal = mutation({
     dealId: s.string(),
   }),
   optimistic: {
-    contactDealCount(_draft: ContactDealCountResult, _$input: CloseDealInput) {},
+    [contactDealCountQuery.key](_draft: ContactDealCountResult, _$input: CloseDealInput) {},
     // A closed deal leaves the open list immediately. Views that include the
     // server-computed commission wait for the returned fragment.
-    openDeals(draft: OpenDealsResult, $input: CloseDealInput) {
+    [openDealsQuery.key](draft: OpenDealsResult, $input: CloseDealInput) {
       const index = draft.items.findIndex((item) => item.id === $input.dealId);
       if (index >= 0) draft.items.splice(index, 1);
     },
-    dealList: 'await-fragment',
-    pipelineByStage: 'await-fragment',
+    [dealListQuery.key]: 'await-fragment',
+    [pipelineByStageQuery.key]: 'await-fragment',
   },
   queue: CRM_QUEUE,
   registry: { touches: [deal] },

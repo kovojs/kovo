@@ -4,9 +4,9 @@ import type { SoDb } from './db.js';
 
 // Shared demo facts: invalidation domains, typed mutation inputs, and the small
 // request/result shapes consumed across the interactive example.
-export const question = domain('question');
-export const answer = domain('answer');
-export const vote = domain('vote');
+export const question = domain();
+export const answer = domain();
+export const vote = domain();
 
 export interface PostQuestionInput {
   body: string;

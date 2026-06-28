@@ -379,13 +379,12 @@ function buildQueryDefinition<const Key extends string>(
   };
   if (!definition.args) return queryDefinition;
 
-  return {
-    ...queryDefinition,
+  return Object.assign(queryDefinition, {
     args: queryArgsSchema(
       definition.args,
       queryDefinition as QueryDefinition<string, unknown, unknown, unknown>,
     ),
-  };
+  });
 }
 
 /**

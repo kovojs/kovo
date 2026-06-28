@@ -65,11 +65,19 @@ const derivationFacts = writeExampleCoreRegistry({
   // loader indirection, so the read set is declared here. The mutation→query InvalidationSets union
   // is still DERIVED from this read set folded against the analyzer-derived Drizzle touch graph.
   queries: [
-    { query: 'questionList', domains: ['question'] },
-    { query: 'answerList', domains: ['answer'] },
-    { query: 'questionDetail', domains: ['question'] },
-    { query: 'questionAnswers', domains: ['answer'] },
-    { query: 'questionScore', domains: ['vote'] },
+    { query: 'queries/question-list', exportName: 'questionList', domains: ['model/question'] },
+    { query: 'queries/answer-list', exportName: 'answerList', domains: ['model/answer'] },
+    {
+      query: 'queries/question-detail',
+      exportName: 'questionDetail',
+      domains: ['model/question'],
+    },
+    {
+      query: 'queries/question-answers',
+      exportName: 'questionAnswers',
+      domains: ['model/answer'],
+    },
+    { query: 'queries/question-score', exportName: 'questionScore', domains: ['model/vote'] },
   ],
 });
 

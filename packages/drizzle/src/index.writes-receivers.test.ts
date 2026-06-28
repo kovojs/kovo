@@ -60,6 +60,29 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
+  it('derives exported object-form query names for query facts', () => {
+    const files = [
+      {
+        fileName: 'src/queries.ts',
+        source: [
+          'export const productList = query({',
+          '  output: s.object({ items: s.array(s.object({ id: s.string() })) }),',
+          '  reads: [domain("product")],',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'queries/product-list',
+        reads: ['product'],
+        shape: { items: [{ id: 'string' }] },
+        site: 'src/queries.ts:1',
+      },
+    ]);
+  });
+
   it('extracts project-mode direct Drizzle write calls from typed function declarations', () => {
     const graph = extractTouchGraphFromProject({
       files: [

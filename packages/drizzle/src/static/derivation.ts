@@ -64,6 +64,7 @@ import {
   selectProjectionArgument,
   serverSummaryKeysForSourceFile,
   sessionProvenanceContextForNodes,
+  staticQueryDeclarationFromCall,
   symbolProvenanceContextForNodes,
   symbolProvenanceForExpression,
   staticAccessExpression,
@@ -1952,15 +1953,20 @@ function readOnlyQueryLoaders(sourceFile: SourceFile): { fn: Node; name: string 
     const expression = queryCall.getExpression();
     // `query(...)` is a read surface; `query.elevated(...)` is the audited escape.
     // SPEC §11.1 (bugz-3 H1): match the @kovojs/server `query` binding (bare/alias/namespace).
-    if (!isKovoServerCalleeExpression(expression, 'query')) continue;
-
-    const [queryArgument, bodyArgument] = queryCall.getArguments();
-    if (!queryArgument || !Node.isStringLiteral(queryArgument)) continue;
-    const body = queryBodyObjectLiteral(bodyArgument, 'project').body;
+    if (
+      Node.isPropertyAccessExpression(expression) &&
+      expression.getName() === 'elevated' &&
+      isKovoServerCalleeExpression(expression.getExpression(), 'query')
+    ) {
+      continue;
+    }
+    const queryDeclaration = staticQueryDeclarationFromCall(declaration, queryCall);
+    if (!queryDeclaration) continue;
+    const body = queryBodyObjectLiteral(queryDeclaration.bodyArgument, 'project').body;
     if (!body) continue;
     const fn = queryLoadCallbackFunctions(body, 'project')[0];
     if (!fn) continue;
-    loaders.push({ fn, name: queryArgument.getLiteralText() });
+    loaders.push({ fn, name: queryDeclaration.query });
   }
   return loaders;
 }
@@ -2034,7 +2040,7 @@ interface QueryShapeContextForTable {
   }
 }
 
-/** Discover `query('name', { load(...) {...} })` definitions and their load callbacks. */
+/** Discover query definitions and their load callbacks. */
 function deriveQueryLoaders(
   sourceFile: SourceFile,
 ): { body: ObjectLiteralExpression; fn: Node; name: string }[] {
@@ -2044,19 +2050,16 @@ function deriveQueryLoaders(
     if (!initializer) continue;
     const queryCall = unwrappedStaticExpressionNode(initializer);
     if (!Node.isCallExpression(queryCall)) continue;
-    const expression = queryCall.getExpression();
     // SPEC §11.1 (bugz-3 H1): match the @kovojs/server `query` binding (bare/alias/namespace).
-    if (!isKovoServerCalleeExpression(expression, 'query')) continue;
-
-    const [queryArgument, bodyArgument] = queryCall.getArguments();
-    if (!queryArgument || !Node.isStringLiteral(queryArgument)) continue;
-    const body = queryBodyObjectLiteral(bodyArgument, 'project').body;
+    const queryDeclaration = staticQueryDeclarationFromCall(declaration, queryCall);
+    if (!queryDeclaration) continue;
+    const body = queryBodyObjectLiteral(queryDeclaration.bodyArgument, 'project').body;
     if (!body) continue;
 
     const callbacks = queryLoadCallbackFunctions(body, 'project');
     const fn = callbacks[0];
     if (!fn) continue;
-    loaders.push({ body: body, fn, name: queryArgument.getLiteralText() });
+    loaders.push({ body: body, fn, name: queryDeclaration.query });
   }
   return loaders;
 }

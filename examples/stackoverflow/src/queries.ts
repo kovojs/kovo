@@ -1,8 +1,13 @@
-import { domain, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
+import { publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
 import { and, asc, eq, sum } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
-import { type QuestionAnswersResult, type QuestionDetailResult, type SoRequest } from './model.js';
+import {
+  vote,
+  type QuestionAnswersResult,
+  type QuestionDetailResult,
+  type SoRequest,
+} from './model.js';
 import { answers, questions, votes } from './schema.js';
 
 // Drizzle selects stay inline so the generated StackOverflow artifacts can
@@ -23,7 +28,7 @@ type SoQueryLoadContext = QueryLoadContext<SoRequest, SoDb>;
 // gets an auto-provisioned demo session, so there is no authentication wall on reads.
 const PUBLIC_QA_READ = 'public Q&A browsing';
 
-export const questionList = query('questionList', {
+export const questionList = query({
   access: publicAccess(PUBLIC_QA_READ),
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
@@ -52,7 +57,7 @@ export const questionList = query('questionList', {
 });
 
 // All answers, ordered by stable id.
-export const answerList = query('answerList', {
+export const answerList = query({
   access: publicAccess(PUBLIC_QA_READ),
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
@@ -74,7 +79,7 @@ export const answerList = query('answerList', {
   },
 });
 
-export const questionDetail = query('questionDetail', {
+export const questionDetail = query({
   access: publicAccess(PUBLIC_QA_READ),
   args: s.object({ id: s.string() }),
   load: async (
@@ -105,7 +110,7 @@ export const questionDetail = query('questionDetail', {
   },
 });
 
-export const questionAnswers = query('questionAnswers', {
+export const questionAnswers = query({
   access: publicAccess(PUBLIC_QA_READ),
   args: s.object({ questionId: s.string() }),
   load: async (
@@ -135,10 +140,10 @@ export const questionAnswers = query('questionAnswers', {
 });
 
 // Total score across all question votes.
-export const questionScore = query('questionScore', {
+export const questionScore = query({
   access: publicAccess(PUBLIC_QA_READ),
   output: s.object({ score: s.number() }),
-  reads: [domain('vote')],
+  reads: [vote],
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
     const sessionId = context?.request?.session?.id;

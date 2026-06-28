@@ -16,7 +16,12 @@ import {
   createDealOptimistic,
   moveDealOptimistic,
 } from './mutations.js';
-import { contactListQuery, openDealsQuery, pipelineByStageQuery } from './queries.js';
+import {
+  contactListQuery,
+  dealListQuery,
+  openDealsQuery,
+  pipelineByStageQuery,
+} from './queries.js';
 import { contacts, deals } from './schema.js';
 
 async function beforeAndAfter<Value>(
@@ -48,30 +53,38 @@ describe('CRM optimistic demo behavior', () => {
     };
 
     const contactList = await beforeAndAfter(
-      (db) => contactListQuery.load(undefined, db),
+      (db) => contactListQuery.load(undefined, queryContext(db)),
       createDealEffect(input),
     );
     expect(
-      applyTransform(createDealOptimistic.transforms.contactList, contactList.before, input),
+      applyTransform(
+        createDealOptimistic.transforms[contactListQuery.key],
+        contactList.before,
+        input,
+      ),
     ).toEqual(contactList.after);
 
     const pipeline = await beforeAndAfter(
-      (db) => pipelineByStageQuery.load(undefined, db),
+      (db) => pipelineByStageQuery.load(undefined, queryContext(db)),
       createDealEffect(input),
     );
     expect(
-      applyTransform(createDealOptimistic.transforms.pipelineByStage, pipeline.before, input),
+      applyTransform(
+        createDealOptimistic.transforms[pipelineByStageQuery.key],
+        pipeline.before,
+        input,
+      ),
     ).toEqual(pipeline.after);
   });
 
   it('uses server fragments for stage moves, but keeps a row-carrying helper for summaries', async () => {
     const input: MoveDealInput = { dealId: 'd1', stage: 'won' };
 
-    expect(moveDealOptimistic.transforms.openDeals).toBe('await-fragment');
-    expect(moveDealOptimistic.transforms.pipelineByStage).toBe('await-fragment');
+    expect(moveDealOptimistic.transforms[openDealsQuery.key]).toBe('await-fragment');
+    expect(moveDealOptimistic.transforms[pipelineByStageQuery.key]).toBe('await-fragment');
 
     const { before, after } = await beforeAndAfter(
-      (db) => pipelineByStageQuery.load(undefined, db),
+      (db) => pipelineByStageQuery.load(undefined, queryContext(db)),
       (db) => db.update(deals).set({ stage: input.stage }).where(eq(deals.id, input.dealId)),
     );
     expect(
@@ -83,7 +96,7 @@ describe('CRM optimistic demo behavior', () => {
     const input: CloseDealInput = { dealId: 'd1' };
 
     const { before, after } = await beforeAndAfter(
-      (db) => openDealsQuery.load(undefined, db),
+      (db) => openDealsQuery.load(undefined, queryContext(db)),
       (db) =>
         db
           .update(deals)
@@ -91,12 +104,16 @@ describe('CRM optimistic demo behavior', () => {
           .where(eq(deals.id, input.dealId)),
     );
 
-    const openDealsTransform = closeDealOptimistic.transforms.openDeals;
+    const openDealsTransform = closeDealOptimistic.transforms[openDealsQuery.key];
     expect(applyTransform(openDealsTransform, before, input)).toEqual(after);
-    expect(closeDealOptimistic.transforms.dealList).toBe('await-fragment');
-    expect(closeDealOptimistic.transforms.pipelineByStage).toBe('await-fragment');
+    expect(closeDealOptimistic.transforms[dealListQuery.key]).toBe('await-fragment');
+    expect(closeDealOptimistic.transforms[pipelineByStageQuery.key]).toBe('await-fragment');
   });
 });
+
+function queryContext(db: CrmDb) {
+  return { db, request: {} };
+}
 
 function createDealEffect(input: CreateDealInput) {
   return async (db: CrmDb) => {

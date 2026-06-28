@@ -347,6 +347,24 @@ describe('query endpoints', () => {
     expect(bound.schema.parse({ id: 'p3' })).toEqual({ id: 'p3' });
   });
 
+  it('keeps args bindings attached to the assigned source-derived query object', () => {
+    const productQuery = assignDerivedQueryKey(
+      query({
+        args: s.object({ id: s.string() }),
+        load(input: { id: string }) {
+          return { id: input.id };
+        },
+        reads: [domain('product')],
+      }),
+      'queries/product/product-query',
+    );
+
+    const bound = productQuery.args((props: { productId: string }) => ({ id: props.productId }));
+
+    expect(bound.query).toBe(productQuery);
+    expect(bound.query.key).toBe('queries/product/product-query');
+  });
+
   it('renders query endpoint loader exceptions as stable 500 JSON', async () => {
     const thrown = new Error('database password leaked in stack');
     const onError = vi.fn();

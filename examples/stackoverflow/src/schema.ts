@@ -1,6 +1,8 @@
 import { kovo } from '@kovojs/drizzle';
 import { boolean, integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
 
+import { answer, question, vote } from './model.js';
+
 // Drizzle tables for the Stack Overflow clone. The kovo({ domain, key })
 // annotations let the generated graph connect mutations to refreshed queries.
 
@@ -19,7 +21,7 @@ export const questions = pgTable(
     tags: text('tags').notNull().default(''),
     createdAt: text('created_at').notNull().default(''),
   },
-  kovo({ domain: 'question', key: 'sessionId,id' }),
+  kovo({ domain: question, key: 'sessionId,id' }),
 );
 
 export const answers = pgTable(
@@ -35,7 +37,7 @@ export const answers = pgTable(
     authorName: text('author_name').notNull().default('Anonymous'),
     createdAt: text('created_at').notNull().default(''),
   },
-  kovo({ domain: 'answer', key: 'sessionId,id' }),
+  kovo({ domain: answer, key: 'sessionId,id' }),
 );
 
 export const votes = pgTable(
@@ -48,5 +50,5 @@ export const votes = pgTable(
     userId: text('user_id').notNull(),
     value: integer('value').notNull(),
   },
-  kovo({ domain: 'vote', key: 'sessionId,id' }),
+  kovo({ domain: vote, key: 'sessionId,id' }),
 );

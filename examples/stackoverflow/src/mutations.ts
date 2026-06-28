@@ -8,6 +8,7 @@ import {
   type SoRequest,
   type VoteUpInput,
 } from './model.js';
+import { questionDetail } from './queries.js';
 import { answers, questions, votes } from './schema.js';
 
 // Top-level mutation handlers for the demo. Drizzle writes stay inline so the
@@ -189,7 +190,7 @@ export const voteUpMutation = mutation({
     // instance key from the voted question id (`input.targetId`), exactly as `questionDetail`'s
     // own WHERE eq-predicate resolves `id` from args (§10.2). Server truth reconciles by
     // `kovo-key` (§13.2). `draft` is `QuestionDetailResult | null` (loader returns `row ?? null`).
-    questionDetail: {
+    [questionDetail.key]: {
       keys: (input) => ({ id: input.targetId }),
       transform(draft, _input) {
         if (draft) draft.score += 1;

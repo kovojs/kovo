@@ -13,6 +13,40 @@ import { serializeDerivedOptimistic } from './derive-codegen.js';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
+  it('derives exported object-form query names for algebraic shapes', () => {
+    const files = [
+      pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+      {
+        fileName: 'src/queries.ts',
+        source: [
+          'export const questions = pgTable("questions", {',
+          '  id: text("id").notNull(),',
+          '  score: integer("score").notNull(),',
+          '}, kovo({ domain: "question", key: "id" }));',
+          '',
+          'export const questionList = query({',
+          '  async load(_input: {}, db: PgAsyncDatabase<any, any>) {',
+          '    return { items: await db.select({ id: questions.id, score: questions.score }).from(questions) };',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractAlgebraicShapesFromProject({ files })).toMatchObject([
+      {
+        fields: {
+          items: {
+            kind: 'agg',
+            projection: ['id', 'score'],
+            rowKey: 'id',
+          },
+        },
+        query: 'queries/question-list',
+      },
+    ]);
+  });
+
   it('derives Stack Overflow-style scoped composite-key updates from extracted facts', () => {
     const files = [
       pgDatabaseTypes([

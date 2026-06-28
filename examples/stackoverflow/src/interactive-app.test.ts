@@ -170,12 +170,12 @@ describe('stackoverflow interactive app', () => {
     const { handler } = await buildSoInteractiveApp();
     const routes = [
       {
-        deps: 'questionList questionScore',
+        deps: 'queries/question-list queries/question-score',
         route: '/',
         target: questionListTarget,
       },
       {
-        deps: 'questionAnswers questionDetail',
+        deps: 'queries/question-answers queries/question-detail',
         route: '/questions/q1',
         target: `${questionDetailTarget}:q1`,
       },
@@ -188,7 +188,6 @@ describe('stackoverflow interactive app', () => {
         }),
       );
       const html = await response.text();
-
       expect(response.status, html).toBe(200);
       expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
       expect(html).toContain('<!doctype html>');
@@ -235,7 +234,7 @@ describe('stackoverflow interactive app', () => {
           'Kovo-Fragment': 'true',
           'Kovo-Idem': 'test-vote-1',
           'Kovo-Live-Targets': liveHeader(questionListTarget, questionListComponent),
-          'Kovo-Targets': `${questionListTarget}=questionList questionScore`,
+          'Kovo-Targets': `${questionListTarget}=queries/question-list queries/question-score`,
         },
         body: new URLSearchParams(
           withCsrf('mutations/vote-up-mutation', {
@@ -252,8 +251,8 @@ describe('stackoverflow interactive app', () => {
     const html = await response.text();
     const questionList = readKovoQuery<{
       items: readonly { id: string; score: number; sessionId?: string }[];
-    }>(html, 'questionList');
-    const questionScore = readKovoQuery<{ score: number }>(html, 'questionScore');
+    }>(html, 'queries/question-list');
+    const questionScore = readKovoQuery<{ score: number }>(html, 'queries/question-score');
     const responseQuestion = questionList.items.find((item) => item.id === first.id);
     if (!responseQuestion) throw new Error(`response omitted voted question ${first.id}`);
 
@@ -296,15 +295,15 @@ describe('stackoverflow interactive app', () => {
         body: 'A fresh demo answer.',
         authorId: 'demo-viewer',
       }),
-      `${questionDetailTarget}:${question.id}=questionAnswers questionDetail`,
+      `${questionDetailTarget}:${question.id}=queries/question-answers queries/question-detail`,
       liveHeader(`${questionDetailTarget}:${question.id}`, questionDetailComponent, {
         questionId: question.id,
       }),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain('<kovo-query name="questionAnswers"');
-    expect(html).toContain('<kovo-query name="questionDetail"');
+    expect(html).toContain('<kovo-query name="queries/question-answers"');
+    expect(html).toContain('<kovo-query name="queries/question-detail"');
     expect(html).toContain('A fresh demo answer.');
 
     const inserted = await db.select().from(answers).where(eq(answers.id, 'a-test-1'));
@@ -325,7 +324,9 @@ describe('stackoverflow interactive app', () => {
     );
     const headers = browserCollectedLiveHeaders(await page.text());
     const detailTarget = `${questionDetailTarget}:${question.id}`;
-    expect(headers.targets).toContain(`${detailTarget}=questionAnswers questionDetail`);
+    expect(headers.targets).toContain(
+      `${detailTarget}=queries/question-answers queries/question-detail`,
+    );
     expect(headers.liveTargets).toContain(
       liveHeader(detailTarget, questionDetailComponent, { questionId: question.id }),
     );
@@ -361,12 +362,12 @@ describe('stackoverflow interactive app', () => {
         body: 'Asking for a friend.',
         authorId: 'demo-viewer',
       }),
-      `${questionListTarget}=questionList questionScore`,
+      `${questionListTarget}=queries/question-list queries/question-score`,
       liveHeader(questionListTarget, questionListComponent),
     );
 
     expect(status).toBe(200);
-    expect(html).toContain('<kovo-query name="questionList"');
+    expect(html).toContain('<kovo-query name="queries/question-list"');
     expect(html).toContain('How do I demo Kovo?');
 
     const rows = await db.select().from(questions);
@@ -388,7 +389,7 @@ describe('stackoverflow interactive app', () => {
         body: 'Asking again should surface a typed form failure.',
         authorId: 'demo-viewer',
       }),
-      `${questionListTarget}=questionList questionScore`,
+      `${questionListTarget}=queries/question-list queries/question-score`,
       liveHeader(questionListTarget, questionListComponent),
     );
 
@@ -424,7 +425,7 @@ describe('stackoverflow interactive app', () => {
         body: 'This should not appear in another browser session.',
         authorId: 'demo-viewer',
       }),
-      `${questionListTarget}=questionList questionScore`,
+      `${questionListTarget}=queries/question-list queries/question-score`,
       liveHeader(questionListTarget, questionListComponent),
       { [demoSessionHeader]: sessionA },
     );

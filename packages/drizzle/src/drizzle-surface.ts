@@ -91,12 +91,15 @@ export type KovoGovernedColumnAnnotation = true | KovoColumnRef | readonly KovoC
  */
 export type KovoConcurrencyColumnAnnotation = KovoColumnRef | readonly KovoColumnRef[];
 
+/** A domain annotation can use explicit external vocabulary or a source-derived Kovo domain value. */
+export type KovoDomainRef = string | { key: string };
+
 /** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key` and principal `owner`), or an `exempt` marker. */
 export type KovoTableAnnotation =
   | {
       atomic?: KovoConcurrencyColumnAnnotation;
       confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation;
-      domain: string;
+      domain: KovoDomainRef;
       fans?: readonly KovoFanAnnotation[];
       governed?: KovoGovernedColumnAnnotation;
       key?: KovoColumnRef;
@@ -120,7 +123,7 @@ export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation
 export interface KovoDomainTableAnnotation {
   atomic?: KovoConcurrencyColumnAnnotation;
   confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation;
-  domain: string;
+  domain: KovoDomainRef;
   fans?: readonly KovoFanAnnotation[];
   governed?: KovoGovernedColumnAnnotation;
   key?: KovoColumnRef;

@@ -101,8 +101,10 @@ export function renderSource() {
     });
     const transformed = await plugin.transform(
       `
-import { mutation, query, webhook } from '@kovojs/server';
+import { domain, mutation, query, tag, webhook } from '@kovojs/server';
 
+export const contact = domain();
+export const contactRow = tag();
 export const addToCart = mutation({ handler() {}, input: {} });
 export const cartQuery = query({ load: () => ({ count: 1 }), reads: [] });
 export const auditQuery = query.elevated({ load: () => ({ ok: true }), reads: [] });
@@ -119,7 +121,13 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     expect(compileComponentModule).not.toHaveBeenCalled();
     expect(transformed).toMatchObject({ map: null });
     expect(transformed?.code).toContain(
-      "import { assignDerivedMutationKey as __kovoAssignDerivedMutationKey, assignDerivedQueryKey as __kovoAssignDerivedQueryKey, assignDerivedWebhookName as __kovoAssignDerivedWebhookName } from '@kovojs/server/internal/wire';",
+      "import { assignDerivedDomainKey as __kovoAssignDerivedDomainKey, assignDerivedMutationKey as __kovoAssignDerivedMutationKey, assignDerivedQueryKey as __kovoAssignDerivedQueryKey, assignDerivedWebhookName as __kovoAssignDerivedWebhookName } from '@kovojs/server/internal/wire';",
+    );
+    expect(transformed?.code).toContain(
+      'export const contact = __kovoAssignDerivedDomainKey(domain(), "app-shell/contact")',
+    );
+    expect(transformed?.code).toContain(
+      'export const contactRow = __kovoAssignDerivedDomainKey(tag(), "app-shell/contact-row")',
     );
     expect(transformed?.code).toContain(
       'export const addToCart = __kovoAssignDerivedMutationKey(mutation({ handler() {}, input: {} }), "app-shell/add-to-cart")',

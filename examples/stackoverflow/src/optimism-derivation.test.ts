@@ -25,11 +25,19 @@ function facts(): ExampleOptimisticDerivationFact[] {
       'mutations/vote-up-mutation': 'voteUp',
     },
     queries: [
-      { query: 'questionList', domains: ['question'] },
-      { query: 'answerList', domains: ['answer'] },
-      { query: 'questionDetail', domains: ['question'] },
-      { query: 'questionAnswers', domains: ['answer'] },
-      { query: 'questionScore', domains: ['vote'] },
+      { query: 'queries/question-list', exportName: 'questionList', domains: ['model/question'] },
+      { query: 'queries/answer-list', exportName: 'answerList', domains: ['model/answer'] },
+      {
+        query: 'queries/question-detail',
+        exportName: 'questionDetail',
+        domains: ['model/question'],
+      },
+      {
+        query: 'queries/question-answers',
+        exportName: 'questionAnswers',
+        domains: ['model/answer'],
+      },
+      { query: 'queries/question-score', exportName: 'questionScore', domains: ['model/vote'] },
     ],
     queryModule: '../queries.js',
     sourceRoot,
@@ -48,13 +56,17 @@ function factFor(
 describe('voteUp optimistic derivation (SPEC §10.5)', () => {
   it('COMPILER-DERIVES questionScore (INSERT × SUM) and questionList (UPDATE × AGG)', () => {
     const all = facts();
-    expect(factFor(all, 'mutations/vote-up-mutation', 'questionScore')?.status).toBe('derived');
-    expect(factFor(all, 'mutations/vote-up-mutation', 'questionList')?.status).toBe('derived');
+    expect(factFor(all, 'mutations/vote-up-mutation', 'queries/question-score')?.status).toBe(
+      'derived',
+    );
+    expect(factFor(all, 'mutations/vote-up-mutation', 'queries/question-list')?.status).toBe(
+      'derived',
+    );
   }, 120_000);
 
   it('NAMES the questionDetail punt (keyed whole-row return) instead of silently dropping it', () => {
     const all = facts();
-    const detail = factFor(all, 'mutations/vote-up-mutation', 'questionDetail');
+    const detail = factFor(all, 'mutations/vote-up-mutation', 'queries/question-detail');
     expect(detail?.status).toBe('hand-written');
     // The punt is named with its reason for `kovo explain --optimistic` (§10.5/§10.6).
     expect(detail?.reason).toMatch(/no in-grammar §10\.5 query shape/);

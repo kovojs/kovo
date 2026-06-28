@@ -28,6 +28,8 @@ interface ExampleDrizzleRegistryOptions {
 /** One declared query read fact: a query key and the domains its loader reads. */
 export interface ExampleQueryReadSpec {
   domains: readonly string[];
+  /** Exported binding name in `queryModule`; defaults to `query` for identifier-shaped keys. */
+  exportName?: string;
   query: string;
 }
 
@@ -190,7 +192,7 @@ function computeExampleCoreRegistry(
     invalidations,
     queries: options.queries.map((spec) => ({
       name: spec.query,
-      type: `QueryResult<typeof import('${options.queryModule}').${spec.query}>`,
+      type: `QueryResult<typeof import('${options.queryModule}').${spec.exportName ?? spec.query}>`,
     })),
   });
   return { facts, source };

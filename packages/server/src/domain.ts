@@ -52,6 +52,25 @@ export function tag<const Key extends string>(key?: Key): Tag<Key> {
   return { key: (key ?? DERIVED_DOMAIN_KEY) as Key };
 }
 
+/**
+ * @internal Compiler-emitted/generated ABI for SPEC §4.1 source-derived domain/tag identities.
+ */
+export function assignDerivedDomainKey<DomainType extends Domain>(
+  domain: DomainType,
+  key: string,
+): DomainType {
+  if (!key) {
+    throw new TypeError('assignDerivedDomainKey() requires a non-empty domain key.');
+  }
+  if (domain.key !== DERIVED_DOMAIN_KEY && domain.key !== key) {
+    throw new TypeError(
+      `Cannot assign derived domain key "${key}" to domain already keyed as "${domain.key}".`,
+    );
+  }
+  domain.key = key;
+  return domain;
+}
+
 /** @internal */
 export function isCompilerDerivedDomain(domain: Domain): boolean {
   return domain.key === DERIVED_DOMAIN_KEY;

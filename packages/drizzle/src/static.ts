@@ -685,9 +685,17 @@ function ownerDomainsFromTables(
   files: readonly SourceFileInput[];
 }
 
+type ExtractedDomainTableAnnotation = Omit<KovoDomainTableAnnotation, 'domain'> & {
+  domain: string;
+};
+
+type ExtractedKovoTableAnnotation =
+  | (Omit<KovoTableAnnotation, 'domain'> & { domain: string })
+  | Extract<KovoTableAnnotation, { exempt: true }>;
+
 /** @internal */ export type ExtractedTableAnnotation =
-  | (KovoTableAnnotation & { name: string })
-  | (KovoDomainTableAnnotation & {
+  | (ExtractedKovoTableAnnotation & { name: string })
+  | (ExtractedDomainTableAnnotation & {
       name: string;
       relation: 'materialized-view' | 'view';
       refresh?: KovoViewAnnotation['refresh'];
@@ -939,6 +947,95 @@ function kovoServerImportBindings(sourceFile: SourceFile): KovoServerImportBindi
  */
 export function isKovoServerCalleeExpression(expression: Node, exportName: string): boolean {
   return kovoServerCalleeExpressionMatches(expression, exportName, new Set(), 0);
+}
+
+interface StaticQueryDeclaration {
+  bodyArgument: Node | undefined;
+  query: string;
+}
+
+/**
+ * @internal Resolve a `query(...)` declaration to its public registry key and body object argument.
+ *
+ * SPEC.md §4.1/§10.2: exported object-form query declarations (`export const foo = query({ ... })`)
+ * are source-derived from module path + export binding, matching the compiler's runtime lowering.
+ * String-keyed declarations keep their explicit external vocabulary.
+ */
+export function staticQueryDeclarationFromCall(
+  declaration: VariableDeclaration,
+  queryCall: CallExpression,
+): StaticQueryDeclaration | null {
+  const expression = queryCall.getExpression();
+  const isQueryCall = isKovoServerCalleeExpression(expression, 'query');
+  const isElevatedQueryCall =
+    Node.isPropertyAccessExpression(expression) &&
+    expression.getName() === 'elevated' &&
+    isKovoServerCalleeExpression(expression.getExpression(), 'query');
+  if (!isQueryCall && !isElevatedQueryCall) return null;
+
+  const [firstArgument, secondArgument] = queryCall.getArguments();
+  if (
+    firstArgument &&
+    (Node.isStringLiteral(firstArgument) || Node.isNoSubstitutionTemplateLiteral(firstArgument))
+  ) {
+    return { bodyArgument: secondArgument, query: firstArgument.getLiteralText() };
+  }
+  if (firstArgument && Node.isObjectLiteralExpression(firstArgument)) {
+    const query = sourceDerivedQueryKey(declaration);
+    return query ? { bodyArgument: firstArgument, query } : null;
+  }
+  return null;
+}
+
+function sourceDerivedQueryKey(declaration: VariableDeclaration): string | undefined {
+  const name = declaration.getNameNode();
+  if (!Node.isIdentifier(name) || !isExportedVariableDeclaration(declaration)) return undefined;
+
+  const namespace = sourceDerivedRegistryNamespace(declaration.getSourceFile().getFilePath());
+  const leaf = sourceDerivedKebabCase(name.getText());
+  return namespace ? `${namespace}/${leaf}` : leaf;
+}
+
+function isExportedVariableDeclaration(declaration: Node): boolean {
+  const statement = declaration.getFirstAncestorByKind(SyntaxKind.VariableStatement);
+  return statement?.isExported() === true;
+}
+
+function sourceDerivedRegistryNamespace(fileName: string): string {
+  const normalized = fileName.replaceAll('\\', '/').replace(/\.[^./]+$/, '');
+  const parts = normalized.split('/').filter(Boolean);
+  const fixtureRoot = sourceDerivedFixtureRootIndex(parts);
+  const srcRoot = sourceDerivedNearestSrcRootIndex(parts);
+  const root = fixtureRoot ?? srcRoot;
+  const relative = root === undefined ? parts : parts.slice(root + 1);
+  return relative.map(sourceDerivedKebabCase).join('/');
+}
+
+function sourceDerivedFixtureRootIndex(parts: readonly string[]): number | undefined {
+  for (let index = 0; index <= parts.length - 3; index += 1) {
+    if (
+      parts[index] === 'tests' &&
+      parts[index + 1] === 'integration' &&
+      parts[index + 2] === 'fixtures'
+    ) {
+      return index + 2;
+    }
+  }
+  return undefined;
+}
+
+function sourceDerivedNearestSrcRootIndex(parts: readonly string[]): number | undefined {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    if (parts[index] === 'src') return index;
+  }
+  return undefined;
+}
+
+function sourceDerivedKebabCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[_\s]+/g, '-')
+    .toLowerCase();
 }
 
 function kovoServerCalleeExpressionMatches(
@@ -2261,17 +2358,12 @@ function extractQueryDefinitionsFromSourceFile(
     const queryCall = unwrappedStaticExpressionNode(initializer);
     if (!Node.isCallExpression(queryCall)) continue;
 
-    const expression = queryCall.getExpression();
     // SPEC §11.1 (bugz-3 H1): resolve `query` to its @kovojs/server binding (bare/alias/namespace)
     // so an aliased or namespaced loader still yields QueryFacts and KV435/KV414/KV410/KV406 stay engaged.
-    if (!isKovoServerCalleeExpression(expression, 'query')) continue;
+    const queryDeclaration = staticQueryDeclarationFromCall(declaration, queryCall);
+    if (!queryDeclaration) continue;
 
-    const [queryArgument, bodyArgument] = queryCall.getArguments();
-    if (!Node.isStringLiteral(queryArgument)) {
-      continue;
-    }
-
-    const query = queryArgument.getLiteralText();
+    const { bodyArgument, query } = queryDeclaration;
     // SPEC §11.1 (v1 scope): query facts require project-mode ts-morph type proof; the
     // source-mode receiver/table heuristics were removed in v1-cleanup item 4.
     const receiverMode = options.receiverMode ?? 'project';
@@ -2506,7 +2598,7 @@ function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
   if (!domain) return null;
 
   const refresh = stringPropertyFromObject(viewObject, 'refresh');
-  const annotation: KovoDomainTableAnnotation & {
+  const annotation: ExtractedDomainTableAnnotation & {
     name: string;
     relation: UnmodeledRelationFact['kind'];
     refresh?: KovoViewAnnotation['refresh'];
@@ -2532,7 +2624,7 @@ function defaultDomainForTableName(tableName: string): string {
 
 /** @internal */ export function isDomainExtractedTableAnnotation(
   annotation: ExtractedTableAnnotation,
-): annotation is KovoDomainTableAnnotation & { name: string } {
+): annotation is ExtractedDomainTableAnnotation & { name: string } {
   return 'domain' in annotation;
 }
 
