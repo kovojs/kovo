@@ -1469,7 +1469,9 @@ function bundledUndiciRuntimeVitePlugin(): {
     },
     load(id) {
       if (id !== bundledUndiciRuntimeModuleId) return null;
-      return "export { Agent, getGlobalDispatcher, setGlobalDispatcher } from 'undici';\n";
+      return `export { Agent, getGlobalDispatcher, setGlobalDispatcher } from ${JSON.stringify(
+        pathToFileURL(requireFromCli.resolve('undici')).href,
+      )};\n`;
     },
   };
 }

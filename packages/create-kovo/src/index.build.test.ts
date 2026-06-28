@@ -1,6 +1,7 @@
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createConnection } from 'node:net';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -155,7 +156,7 @@ describe('create-kovo starter (build integration)', () => {
   }, 90_000);
 
   it('runs the generated production build graph gate', () => {
-    const tempParent = join(process.cwd(), 'node_modules/.tmp');
+    const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-build-prod-'));
 
