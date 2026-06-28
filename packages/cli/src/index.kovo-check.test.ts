@@ -816,6 +816,60 @@ describe('kovo check', () => {
     );
   });
 
+  it('uses normalized access facts for the unguarded audit', () => {
+    expect(
+      kovoCheck({
+        access: [
+          {
+            decision: 'guard',
+            detail: 'guard=query.guard',
+            kind: 'query',
+            name: 'adminOrders',
+            source: 'legacy-guard',
+          },
+          {
+            decision: 'guard',
+            detail: 'guard=route.guard',
+            kind: 'page',
+            name: '/admin',
+            source: 'legacy-guard',
+          },
+          {
+            decision: 'guard',
+            detail: 'guard=mutation.guard',
+            kind: 'mutation',
+            name: 'cart/add',
+            source: 'legacy-guard',
+          },
+          {
+            decision: 'public',
+            detail: 'access=public',
+            justification: 'health check',
+            kind: 'endpoint',
+            name: '/api/health',
+            source: 'access',
+          },
+        ],
+        endpoints: [
+          {
+            appOwnedSafety: true,
+            body: 'json',
+            cache: 'no-store',
+            method: 'GET',
+            path: '/api/health',
+            reason: 'health check',
+          },
+        ],
+        mutations: [{ guards: ['mutation.guard'], key: 'cart/add' }],
+        pages: [{ guards: ['route.guard'], route: '/admin' }],
+        queries: [{ domains: [], guards: ['query.guard'], query: 'adminOrders' }],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
   it('derives KV310 gaps from mutation invalidations and query read sets', () => {
     expect(
       kovoCheck({

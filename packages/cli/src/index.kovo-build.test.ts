@@ -235,6 +235,70 @@ export default createApp({
     }
   });
 
+  it('does not report guarded build surfaces as UNGUARDED', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-access-facts-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
+
+const allow = () => true;
+
+const adminQuery = query('adminOrders', {
+  args: s.object({ id: s.string() }),
+  guard: allow,
+  load(input) {
+    return { id: input.id };
+  },
+});
+
+const adminMutation = mutation('admin/update', {
+  csrf: false,
+  csrfJustification: 'non-browser regression fixture',
+  guard: allow,
+  input: s.object({ id: s.string() }),
+  handler() {
+    return { ok: true };
+  },
+});
+
+export default createApp({
+  mutations: [adminMutation],
+  queries: [adminQuery],
+  routes: [
+    route('/admin', {
+      access: publicAccess('build access fixture shell'),
+      guard: allow,
+      page: () => trustedHtml('<main>Admin</main>', 'build access fixture'),
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('UNGUARDED');
+      expect(existsSync(outDir)).toBe(true);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('runs Drizzle security extractors before artifact emission', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-security-preflight-'));
     const appPath = join(root, 'app.mjs');

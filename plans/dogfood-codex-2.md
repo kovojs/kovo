@@ -49,12 +49,22 @@ new `bugz` ledger was created.
 
 ### B. Build And Posture Audits
 
-- [ ] **Build preflight `UNGUARDED` audit ignores explicit access facts and generic runtime guard facts.** (medium, framework; found by authguards; regression/variant)
+- [x] **Build preflight `UNGUARDED` audit ignores explicit access facts and generic runtime guard facts.** (medium, framework; found by authguards; regression/variant)
   - Observed behavior: the authguards app declared structured access metadata and runtime guards on routes, queries, mutations, auth mutations, and `/api/health`, but `pnpm run build:prod` failed with `WARN UNGUARDED` for every surface. Runtime smoke confirmed `/case/case-admin-1` and `/admin` returned `403` for a non-admin demo session.
   - Root cause: `build-export.ts` passes `accessFactsFromApp(app)` into the graph (`packages/cli/src/commands/build-export.ts:472-481`), and compiler graph merging is additive; the false warning comes from `graph-output.ts` calling `unguardedAccesses(graph)` (`packages/cli/src/graph-output.ts:877-878`) and inspecting raw endpoint/mutation/query/page guard labels instead of `graph.access` (`packages/cli/src/graph-output.ts:1726-1770`). Build facts use placeholder labels such as `query.guard`, `mutation.guard`, and `route.guard` (`packages/cli/src/commands/build-export.ts:578-580,597-600,652-653`), while the audit recognizes only narrower labels such as `authed` or `role:*` (`packages/cli/src/graph-output.ts:1942-1948`).
   - Why it matters: guarded apps fail the deploy gate with a misleading security warning even though runtime enforcement works; this is a fail-closed build papercut, not an auth bypass.
   - Repro evidence: verifier ran `pnpm run build:prod` in `/Users/mini/kovo-dogfood-codex-20260627-authguards` and reproduced the `UNGUARDED` warnings; then signed in and confirmed guarded paths returned `403`.
   - Acceptance: the `UNGUARDED` audit should consume normalized access facts and treat explicit public/verified access plus generic guard-chain facts as satisfying SPEC §10.2/§11.3, with a build fixture proving guarded pages/queries/mutations stay green.
+  - Integrated evidence (2026-06-28): `packages/cli/src/graph-output.ts` now overlays
+    normalized `graph.access` decisions before legacy raw guard-label heuristics, so
+    `guard`/`public`/`verified` access facts suppress false `UNGUARDED` warnings while
+    `missing` still feeds KV436. `packages/cli/src/index.kovo-check.test.ts` proves
+    generic `query.guard`/`route.guard`/`mutation.guard` facts and a public endpoint
+    stay green, and `packages/cli/src/index.kovo-build.test.ts` proves the real
+    `kovo build` preflight accepts guarded page/query/mutation surfaces without
+    `UNGUARDED`. Verification: `pnpm exec vitest run
+packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts`,
+    `pnpm run check:vp`, and `git diff --check` PASS.
 
 - [x] **`createStorageDownloadEndpoint` does not declare `reservedHeaders` for its own `X-Content-Type-Options` header.** (medium, framework; found by files)
   - Observed behavior: after app-side workarounds for already-known capability endpoint metadata gaps, a minted `/_kovo/storage/...` URL returned `500` in dev/posture verification. Adding `reservedHeaders: ['X-Content-Type-Options']` to the returned declaration made the same request return `200`.
@@ -81,10 +91,10 @@ new `bugz` ledger was created.
     `QueryInstanceKey<Input>` and applies it to typed-args query definitions;
     `packages/server/src/query-endpoint.test.ts` proves `instanceKey(input)` can read
     `input.id` without casts. Verification: `pnpm exec vitest run
-    packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts
-    packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts
-    packages/server/src/api/app.test.ts`, `pnpm run check:api-surface`, `pnpm run
-    check:vp`, and `git diff --check` PASS.
+packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts
+packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts
+packages/server/src/api/app.test.ts`, `pnpm run check:api-surface`, `pnpm run
+check:vp`, and `git diff --check` PASS.
 
 - [x] **Optional route search schema fields infer `undefined`, which violates the route search `Record<string, JsonValue>` bound.** (medium, framework type ergonomics; found by navquery; regression/follow-up)
   - Observed behavior: `route('/optional-search', { search: s.object({ next: s.string().optional() }) })` fails TypeScript because `{ next: string | undefined }` is not assignable to `Record<string, JsonValue>`.
@@ -137,5 +147,8 @@ new `bugz` ledger was created.
   `pnpm exec vitest run packages/server/src/capability-route.test.ts packages/server/src/endpoint.test.ts`.
 - 2026-06-28: Fixed and verified Dogfood C type/diagnostic ergonomics with
   `pnpm exec vitest run packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts
-  packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/server/src/api/app.test.ts`,
+packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/server/src/api/app.test.ts`,
   `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
+- 2026-06-28: Fixed and verified build `UNGUARDED` access-fact false positives with
+  `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts
+packages/cli/src/index.kovo-build.test.ts`, `pnpm run check:vp`, and `git diff --check`.

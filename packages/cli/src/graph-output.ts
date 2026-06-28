@@ -1724,8 +1724,13 @@ function accessKey(access: CoreGraph.AccessExplainFact): string {
 }
 
 function unguardedAccesses(input: CoreGraph.KovoExplainInput): UnguardedAccessFact[] {
+  const guardedAccess = guardedAccessKeys(input.access ?? []);
   return [
     ...(input.endpoints ?? [])
+      .filter(
+        (endpoint) =>
+          !hasNormalizedAccess(guardedAccess, endpointAccessKind(endpoint), endpointName(endpoint)),
+      )
       .filter((endpoint) => !hasEndpointAuth(endpoint))
       .map((endpoint) => ({
         detail: [
@@ -1739,6 +1744,7 @@ function unguardedAccesses(input: CoreGraph.KovoExplainInput): UnguardedAccessFa
         name: endpointName(endpoint),
       })),
     ...(input.mutations ?? [])
+      .filter((mutation) => !hasNormalizedAccess(guardedAccess, 'mutation', mutation.key))
       .filter((mutation) => !hasMutationAuth(mutation))
       .map((mutation) => ({
         detail: [
@@ -1754,6 +1760,7 @@ function unguardedAccesses(input: CoreGraph.KovoExplainInput): UnguardedAccessFa
         name: mutation.key,
       })),
     ...(input.queries ?? [])
+      .filter((query) => !hasNormalizedAccess(guardedAccess, 'query', query.query))
       .filter((query) => query.guards !== undefined && !hasAuthGuard(query.guards))
       .map((query) => ({
         detail: [`guards=${list(query.guards)}`, `reads=${list(query.domains)}`].join(' '),
@@ -1761,6 +1768,7 @@ function unguardedAccesses(input: CoreGraph.KovoExplainInput): UnguardedAccessFa
         name: query.query,
       })),
     ...(input.pages ?? [])
+      .filter((page) => !hasNormalizedAccess(guardedAccess, 'page', page.route))
       .filter((page) => page.guards !== undefined && !hasAuthGuard(page.guards))
       .map((page) => ({
         detail: [`guards=${list(page.guards)}`, `queries=${list(page.queries)}`].join(' '),
@@ -1768,6 +1776,27 @@ function unguardedAccesses(input: CoreGraph.KovoExplainInput): UnguardedAccessFa
         name: page.route,
       })),
   ].sort(compareUnguardedAccess);
+}
+
+function guardedAccessKeys(access: readonly CoreGraph.AccessExplainFact[]): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const fact of access) {
+    if (fact.decision === 'missing') continue;
+    keys.add(normalizedAccessKey(fact.kind, fact.name));
+  }
+  return keys;
+}
+
+function hasNormalizedAccess(
+  guardedAccess: ReadonlySet<string>,
+  kind: CoreGraph.AccessExplainFact['kind'],
+  name: string,
+): boolean {
+  return guardedAccess.has(normalizedAccessKey(kind, name));
+}
+
+function normalizedAccessKey(kind: CoreGraph.AccessExplainFact['kind'], name: string): string {
+  return `${kind}\0${name}`;
 }
 
 function unguardedLine(access: UnguardedAccessFact): string {
@@ -1972,6 +2001,12 @@ function hasEndpointVerifiedAuth(endpoint: CoreGraph.EndpointExplain): boolean {
 
 function endpointName(endpoint: CoreGraph.EndpointExplain): string {
   return endpoint.name ?? endpoint.path;
+}
+
+function endpointAccessKind(
+  endpoint: CoreGraph.EndpointExplain,
+): CoreGraph.AccessExplainFact['kind'] {
+  return endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
 }
 
 function compareEndpointExplain(
