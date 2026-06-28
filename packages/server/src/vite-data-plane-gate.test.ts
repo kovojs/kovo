@@ -201,6 +201,51 @@ const VALID_SHAPE_COMPONENT = [
   '});',
 ].join('\n');
 
+const NON_DRIZZLE_OUTPUT_QUERY_SOURCE = [
+  'import { query, s } from "@kovojs/server";',
+  '',
+  'export const status = query({',
+  '  reads: [],',
+  '  output: s.object({',
+  '    summary: s.string(),',
+  '    generatedAt: s.string(),',
+  '    metrics: s.object({ count: s.number().optional() }),',
+  '  }),',
+  '  load: () => ({ summary: "ready", generatedAt: "now", metrics: {} }),',
+  '});',
+].join('\n');
+
+const NON_DRIZZLE_OUTPUT_VALID_COMPONENT = [
+  'import { component } from "@kovojs/server";',
+  'import { status } from "../status";',
+  '',
+  'export const StatusCard = component({',
+  '  queries: { status },',
+  '  render: ({ status }) => (',
+  '    <article>',
+  '      <span data-bind="status.summary">{status.summary}</span>',
+  '      <time data-bind="status.generatedAt">{status.generatedAt}</time>',
+  '      <span data-bind="status.metrics.count">{status.metrics.count}</span>',
+  '    </article>',
+  '  ),',
+  '});',
+].join('\n');
+
+const NON_DRIZZLE_OUTPUT_INVALID_COMPONENT = [
+  'import { component } from "@kovojs/server";',
+  'import { status } from "../status";',
+  '',
+  'export const StatusCard = component({',
+  '  queries: { status },',
+  '  render: () => (',
+  '    <article>',
+  '      <span data-bind="status.summary">Summary</span>',
+  '      <span data-bind="status.missing">Missing</span>',
+  '    </article>',
+  '  ),',
+  '});',
+].join('\n');
+
 // Synthetic drizzle-orm type augmentation so the KV429 symbolic-effect lowering resolves the
 // update/set/where chain (mirrors the @kovojs/drizzle KV429 unit fixtures).
 const DRIZZLE_TYPES = [
@@ -347,6 +392,59 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     );
     expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
       false,
+    );
+  });
+
+  it('feeds non-Drizzle query output schemas to compiler binding validation', async () => {
+    const root = await fixture({
+      'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_VALID_COMPONENT,
+      'src/status.ts': NON_DRIZZLE_OUTPUT_QUERY_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(
+        NON_DRIZZLE_OUTPUT_VALID_COMPONENT,
+        join(root, 'src/components/status-card.tsx'),
+      ),
+    ).resolves.toEqual(expect.objectContaining({ map: null }));
+
+    const componentReport = captured.find((report) => report.fileName.endsWith('status-card.tsx'));
+    expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
+      false,
+    );
+  });
+
+  it('still reports KV302 for fields absent from a non-Drizzle query output schema', async () => {
+    const root = await fixture({
+      'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_INVALID_COMPONENT,
+      'src/status.ts': NON_DRIZZLE_OUTPUT_QUERY_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(
+        NON_DRIZZLE_OUTPUT_INVALID_COMPONENT,
+        join(root, 'src/components/status-card.tsx'),
+      ),
+    ).rejects.toThrow(/KV302[\s\S]*status\.missing/);
+
+    const componentReport = captured.find((report) => report.fileName.endsWith('status-card.tsx'));
+    expect(componentReport?.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV302',
+          message: expect.stringContaining('status.missing'),
+        }),
+      ]),
     );
   });
 
