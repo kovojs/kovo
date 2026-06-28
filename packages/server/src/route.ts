@@ -88,12 +88,18 @@ export type LayoutQueryResults<Queries> = {
     : unknown;
 };
 
+/** Region values passed to layout render slots when no narrower route contract is declared. */
+export type LayoutRegionResults = Readonly<Record<never, never>>;
+
 /** Slots passed to a `layout().render` function: child page/layout HTML plus the lifecycle request. */
-export interface LayoutRenderSlots<Request> {
+export interface LayoutRenderSlots<
+  Request,
+  Regions extends LayoutRegionResults = LayoutRegionResults,
+> {
   /** The child layout or route page output this layout wraps. */
   children: unknown;
   /** Named route-level sibling regions rendered before layout composition (SPEC §4.5/§8). */
-  regions: Readonly<Record<string, unknown>>;
+  regions: Regions;
   /** The request after configured app lifecycle providers have run. */
   request: Request;
 }
@@ -137,16 +143,17 @@ export interface LayoutDefinition<
   Request = unknown,
   Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
   Page extends LayoutRenderResult = LayoutRenderResult,
+  Regions extends LayoutRegionResults = LayoutRegionResults,
 > extends PageHintOptions {
   access?: AccessDecision;
   boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request>;
-  parent?: LayoutDeclaration<Request, any, LayoutRenderResult>;
+  parent?: LayoutDeclaration<Request, any, LayoutRenderResult, any>;
   queries?: Queries;
   render?: (
     queries: LayoutQueryResults<Queries>,
     state: undefined,
-    slots: LayoutRenderSlots<Request>,
+    slots: LayoutRenderSlots<Request, Regions>,
   ) => Page | Promise<Page>;
 }
 
@@ -155,16 +162,18 @@ export interface LayoutDeclaration<
   Request = unknown,
   Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
   Page extends LayoutRenderResult = LayoutRenderResult,
-> extends LayoutDefinition<Request, Queries, Page> {}
+  Regions extends LayoutRegionResults = LayoutRegionResults,
+> extends LayoutDefinition<Request, Queries, Page, Regions> {}
 
 /** App-scoped layout factory whose guards and render slots see the configured request shape. */
 export interface LayoutFactory<Request = unknown> {
   <
     const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
     Page extends LayoutRenderResult = LayoutRenderResult,
+    Regions extends LayoutRegionResults = LayoutRegionResults,
   >(
-    definition: LayoutDefinition<Request, Queries, Page>,
-  ): LayoutDeclaration<Request, Queries, Page>;
+    definition: LayoutDefinition<Request, Queries, Page, Regions>,
+  ): LayoutDeclaration<Request, Queries, Page, Regions>;
 }
 
 /** The typed context a route `page` receives: parsed `params`, `search`, the `path`, and `signUrl`. */
@@ -195,11 +204,16 @@ export interface RouteDefinition<
   Request = unknown,
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
+  Regions extends RouteRegionDefinitions<any, GuardedRequest, Page> = RouteRegionDefinitions<
+    any,
+    GuardedRequest,
+    Page
+  >,
 > extends PageHintOptions {
   access?: AccessDecision;
   boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request, GuardedRequest>;
-  layout?: LayoutDeclaration<any, any, any>;
+  layout?: LayoutDeclaration<any, any, any, RouteRegionResults<Regions>>;
   onUnauthenticated?: UnauthenticatedHandler<Request>;
   page?: (
     context: RouteRequest<Path, ParamsSchema, SearchSchema>,
@@ -211,11 +225,8 @@ export interface RouteDefinition<
     | RouteResponseOutcome
     | Promise<Page | NotFound | Redirect | RouteResponseOutcome>;
   params?: ParamsSchema;
-  regions?: RouteRegionDefinitions<
-    RouteRequest<Path, ParamsSchema, SearchSchema>,
-    GuardedRequest,
-    Page
-  >;
+  regions?: Regions &
+    RouteRegionDefinitions<RouteRequest<Path, ParamsSchema, SearchSchema>, GuardedRequest, Page>;
   search?: SearchSchema;
   staticPaths?: readonly string[];
 }
@@ -227,6 +238,16 @@ export type RouteRegionDefinitions<
   Page extends RoutePageResult = RoutePageResult,
 > = Readonly<Record<string, (context: Context, request: Request) => Page | Promise<Page>>>;
 
+/** Resolved route-region values passed to a layout from a route's `regions` declarations. */
+export type RouteRegionResults<Regions> =
+  Regions extends RouteRegionDefinitions<any, any, any>
+    ? Readonly<{
+        [Name in keyof Regions]: Regions[Name] extends (...args: any[]) => infer Value
+          ? Awaited<Value>
+          : unknown;
+      }>
+    : LayoutRegionResults;
+
 /** A `RouteDefinition` with its `path` attached, as returned by `route()`. */
 export interface RouteDeclaration<
   Path extends string,
@@ -235,7 +256,7 @@ export interface RouteDeclaration<
   Request = unknown,
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
-> extends RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
+> extends RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest, any> {
   path: Path;
 }
 
@@ -259,7 +280,10 @@ export function layout<
   Request = unknown,
   const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
   Page extends LayoutRenderResult = LayoutRenderResult,
->(definition: LayoutDefinition<Request, Queries, Page>): LayoutDeclaration<Request, Queries, Page> {
+  Regions extends LayoutRegionResults = LayoutRegionResults,
+>(
+  definition: LayoutDefinition<Request, Queries, Page, Regions>,
+): LayoutDeclaration<Request, Queries, Page, Regions> {
   const declaration = { ...definition };
   const deps = Object.values(definition.queries ?? {}).map(
     (queryDefinition) => queryDefinition.key,
@@ -281,9 +305,14 @@ export interface RouteFactory<Request = unknown> {
     const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
     const SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
     Page extends RoutePageResult = RoutePageResult,
+    Regions extends RouteRegionDefinitions<any, Request, Page> = RouteRegionDefinitions<
+      any,
+      Request,
+      Page
+    >,
   >(
     path: Path,
-    definition?: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, Request>,
+    definition?: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, Request, Regions>,
   ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, Request>;
 }
 
@@ -319,11 +348,31 @@ export function route<
   Request = unknown,
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
+  Regions extends RouteRegionDefinitions<any, GuardedRequest, Page> = RouteRegionDefinitions<
+    any,
+    GuardedRequest,
+    Page
+  >,
 >(
   path: Path,
-  definition: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> = {},
+  definition: RouteDefinition<
+    Path,
+    ParamsSchema,
+    SearchSchema,
+    Request,
+    Page,
+    GuardedRequest,
+    Regions
+  > = {},
 ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
-  const declaration = { ...definition, path };
+  const declaration = { ...definition, path } as RouteDeclaration<
+    Path,
+    ParamsSchema,
+    SearchSchema,
+    Request,
+    Page,
+    GuardedRequest
+  >;
   const metadata =
     (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage ??
     fallbackRoutePageMetadata(path, definition);
@@ -333,7 +382,7 @@ export function route<
 
 function fallbackRoutePageMetadata<Path extends string>(
   path: Path,
-  definition: RouteDefinition<Path, any, any, any, any, any>,
+  definition: RouteDefinition<Path, any, any, any, any, any, any>,
 ): CompiledRoutePageMetadata | undefined {
   if ((!definition.page && !definition.regions) || !definition.layout) return undefined;
   const layouts = routeLayoutChain(definition.layout);
@@ -600,7 +649,7 @@ function routeGuardFailure(failure: ResolvedGuardFailure): RoutePageFailure {
 }
 
 function getRoutePageMetadata(
-  definition: RouteDefinition<any, any, any, any, any, any>,
+  definition: RouteDefinition<any, any, any, any, any, any, any>,
 ): CompiledRoutePageMetadata | undefined {
   const metadata =
     routePageMetadata.get(definition) ??
@@ -611,7 +660,7 @@ function getRoutePageMetadata(
 }
 
 function fallbackRouteDeclarationMetadata(
-  definition: RouteDefinition<any, any, any, any, any, any>,
+  definition: RouteDefinition<any, any, any, any, any, any, any>,
 ): CompiledRoutePageMetadata | undefined {
   if (!('path' in definition) || typeof definition.path !== 'string') return undefined;
   return fallbackRoutePageMetadata(definition.path, definition);
@@ -682,7 +731,11 @@ async function renderRouteRegions<
   request: GuardedRequest,
   metadata: CompiledRoutePageMetadata | undefined,
 ): Promise<Readonly<Record<string, unknown>>> {
-  const entries = Object.entries(definition.regions ?? {});
+  type RegionRenderer = (
+    context: RouteRequest<Path, ParamsSchema, SearchSchema>,
+    request: GuardedRequest,
+  ) => Page | Promise<Page>;
+  const entries = Object.entries(definition.regions ?? {}) as [string, RegionRenderer][];
   if (entries.length === 0) return {};
   const rendered: Record<string, unknown> = {};
   const segments = routeRegionNavigationSegments(metadata);
