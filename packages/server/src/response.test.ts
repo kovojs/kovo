@@ -98,6 +98,31 @@ describe('server response adapters', () => {
     await expect(response.text()).resolves.toBe('');
   });
 
+  it('preserves cache and security headers on file ETag 304 responses', async () => {
+    const routeResponse = routeOutcomeResponse(
+      respond.file('orders', {
+        contentType: 'text/plain; charset=utf-8',
+        etag: '"orders-v1"',
+        filename: 'orders.txt',
+        headers: {
+          'Cache-Control': 'public, max-age=60',
+          'Content-Security-Policy': "default-src 'none'",
+          'X-Download-Options': 'noopen',
+        },
+      }),
+      { headers: { 'If-None-Match': '"orders-v1"' }, method: 'GET' },
+    );
+    const response = routeResponseToWebResponse(routeResponse, { method: 'GET' });
+
+    expect(response.status).toBe(304);
+    expect(response.headers.get('etag')).toBe('"orders-v1"');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(response.headers.get('content-security-policy')).toBe("default-src 'none'");
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(response.headers.get('x-download-options')).toBe('noopen');
+    await expect(response.text()).resolves.toBe('');
+  });
+
   it('allows blessed same-origin redirect Location headers at the web response boundary', () => {
     const response = serverResponseToWebResponse(
       blessRedirectResponse({

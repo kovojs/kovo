@@ -67,6 +67,84 @@ describe('server static export replay response boundary', () => {
     });
   });
 
+  it('raises concrete KV229 for replayed route redirects', async () => {
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: new Response('', {
+          headers: { Location: '/new-home' },
+          status: 303,
+        }),
+        routePath: '/old-home',
+      }),
+    ).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        {
+          code: 'KV229',
+          message: expect.stringContaining('replay returned redirect status 303'),
+          routePath: '/old-home',
+        },
+      ],
+    });
+  });
+
+  it('raises concrete KV229 for replayed file and stream route outcomes', async () => {
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: new Response('report', {
+          headers: {
+            'Content-Disposition': 'attachment; filename="report.txt"',
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+          status: 200,
+        }),
+        routePath: '/report',
+      }),
+    ).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        {
+          code: 'KV229',
+          message: expect.stringContaining('replay returned a file/stream response'),
+          routePath: '/report',
+        },
+      ],
+    });
+  });
+
+  it('raises concrete KV229 for public deferred route documents', async () => {
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: new Response(
+          [
+            '<!doctype html><main>',
+            '<kovo-defer target="reviews:p1" state="pending">Loading</kovo-defer>',
+            '--kovo-boundary',
+            '<kovo-fragment target="reviews:p1">Reviews ready</kovo-fragment>',
+            '</main>',
+          ].join('\n'),
+          {
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            status: 200,
+          },
+        ),
+        routePath: '/products/p1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        {
+          code: 'KV229',
+          message: expect.stringContaining('deferred/streamed route fragments'),
+          routePath: '/products/p1',
+        },
+      ],
+    });
+  });
+
   it('reports replayed HTML endpoint refs instead of an opaque route 500', async () => {
     await expect(
       readStaticExportReplayedResponse({
