@@ -647,7 +647,14 @@ export default createApp({ endpoints: [download] });
       writeFileSync(
         appPath,
         `
-import { createApp, domain, hmacSignature, s, webhook } from '@kovojs/server';
+import {
+  createApp,
+  createMemoryWebhookReplayStore,
+  domain,
+  hmacSignature,
+  s,
+  webhook,
+} from '@kovojs/server';
 
 const payment = domain('payment');
 
@@ -655,8 +662,10 @@ const paymentWebhook = webhook('payment', {
   handler() {
     return { ok: true };
   },
+  idempotency: (input) => input.id,
   input: s.object({ id: s.string() }),
   path: '/webhooks/payment',
+  replayStore: createMemoryWebhookReplayStore(),
   verify: hmacSignature({
     encoding: 'hex',
     header: 'x-signature',

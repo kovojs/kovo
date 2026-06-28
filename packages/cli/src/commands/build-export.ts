@@ -607,35 +607,21 @@ async function staticDrizzleBuildFacts(
   } catch {
     return { ...emptyStaticDrizzleBuildFacts(), touchGraph: {} };
   }
-  const {
-    analyzeSqlSafetyFromProject,
-    diagnosticsForQueryFacts,
-    extractMassAssignmentFromProject,
-    extractOwnerAuditFromProject,
-    extractQueryFactsFromProject,
-    extractQueryWriteReachabilityFromProject,
-    extractToctouFromProject,
-    extractTouchGraphFromProject,
-  } = drizzle;
-  const queryFacts = extractQueryFactsFromProject({ files: analysisFiles });
-  const queryReadFacts = queryFacts as readonly QueryReadFactLike[];
-  const diagnostics = [
-    ...analyzeSqlSafetyFromProject({ files: analysisFiles }),
-    ...diagnosticsForQueryFacts(queryFacts),
-  ].flatMap(sqlSafetyDiagnosticFact);
-  const touchGraph = extractTouchGraphFromProject({ files: analysisFiles }) as CoreGraph.TouchGraph;
+  const { extractStaticBuildAnalysisFactsFromProject } = drizzle;
+  const facts = extractStaticBuildAnalysisFactsFromProject({ files: analysisFiles });
+  const queryReadFacts = facts.queries as readonly QueryReadFactLike[];
+  const diagnostics = facts.sqlSafetyDiagnostics.flatMap(sqlSafetyDiagnosticFact);
   // SPEC §5.2 requires `kovo build` to preflight the full verifier graph. These
   // static security facts feed KV414/KV438/KV433/KV429 in the production build path.
-  const ownerAudit = extractOwnerAuditFromProject({ files: analysisFiles });
   return {
-    massAssignmentFacts: extractMassAssignmentFromProject({ files: analysisFiles }),
-    ownerDomains: ownerAudit.ownerDomains,
+    massAssignmentFacts: facts.massAssignmentFacts,
+    ownerDomains: facts.ownerDomains,
     queries: queryReadFacts,
-    queryWriteReachability: extractQueryWriteReachabilityFromProject({ files: analysisFiles }),
-    scopeAudits: ownerAudit.scopeAudits,
+    queryWriteReachability: facts.queryWriteReachability,
+    scopeAudits: facts.scopeAudits,
     sqlSafetyDiagnostics: diagnostics,
-    toctouFacts: extractToctouFromProject({ files: analysisFiles }),
-    touchGraph,
+    toctouFacts: facts.toctouFacts,
+    touchGraph: facts.touchGraph,
   };
 }
 

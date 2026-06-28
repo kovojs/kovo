@@ -16,8 +16,12 @@ import type {
   SymbolicValue,
 } from '@kovojs/core/internal/derivation';
 import type {
+  MassAssignmentFact,
+  OwnerDomainFact,
+  QueryWriteReachabilityFact,
   RevealExplainFact,
   ScopeAuditFact,
+  ToctouFact,
   TouchGraph,
   TouchGraphEntry,
 } from '@kovojs/core/internal/graph';
@@ -98,6 +102,11 @@ export {
   collectTrustEscapesFromProject,
   collectUnregisteredSinksFromProject,
 } from './trust-escapes-static.js';
+import {
+  extractMassAssignmentFromProjectExtraction,
+  extractQueryWriteReachabilityFromProjectExtraction,
+  extractToctouFromProjectExtraction,
+} from './static/derivation.js';
 
 /** @internal */ export const IGNORED_LOCAL_CALL_NAMES = new Set([
   'eq',
@@ -749,15 +758,21 @@ export function analyzeSqlSafetyFromProject(
 ): TouchGraphDiagnostic[] {
   const extraction = createProjectExtraction(options);
   try {
-    const contextFiles = projectContextFiles(extraction);
-    const diagnostics = contextFiles.flatMap((file, index) => {
-      const sourceFile = extraction.sourceFiles[index];
-      return sourceFile ? sqlSafetyDiagnosticsForSourceFile(file, sourceFile) : [];
-    });
-    return diagnostics.sort((left, right) => left.site.localeCompare(right.site));
+    return analyzeSqlSafetyFromProjectExtraction(extraction);
   } finally {
     extraction.dispose();
   }
+}
+
+/** @internal */ export function analyzeSqlSafetyFromProjectExtraction(
+  extraction: ProjectExtraction,
+): TouchGraphDiagnostic[] {
+  const contextFiles = projectContextFiles(extraction);
+  const diagnostics = contextFiles.flatMap((file, index) => {
+    const sourceFile = extraction.sourceFiles[index];
+    return sourceFile ? sqlSafetyDiagnosticsForSourceFile(file, sourceFile) : [];
+  });
+  return diagnostics.sort((left, right) => left.site.localeCompare(right.site));
 }
 
 function sqlSafetyDiagnosticsForSourceFile(
@@ -1656,18 +1671,24 @@ function extractTouchGraphFromPreparedFiles(
 ): TouchGraph {
   const extraction = createProjectExtraction(options);
   try {
-    const sourceContext = projectSourceModuleContext(extraction);
-    const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
-
-    return extractTouchGraphFromPreparedFiles(
-      extraction.files,
-      (file) => projectFunctionsForFile(file, projectFunctionExtractions),
-      sourceContext,
-      projectUnresolvedConditionalTableExpressions(extraction),
-    );
+    return extractTouchGraphFromProjectExtraction(extraction);
   } finally {
     extraction.dispose();
   }
+}
+
+/** @internal */ export function extractTouchGraphFromProjectExtraction(
+  extraction: ProjectExtraction,
+): TouchGraph {
+  const sourceContext = projectSourceModuleContext(extraction);
+  const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
+
+  return extractTouchGraphFromPreparedFiles(
+    extraction.files,
+    (file) => projectFunctionsForFile(file, projectFunctionExtractions),
+    sourceContext,
+    projectUnresolvedConditionalTableExpressions(extraction),
+  );
 }
 
 /** @internal */
@@ -1676,46 +1697,50 @@ function extractTouchGraphFromPreparedFiles(
 ): QueryFact[] {
   const extraction = createProjectExtraction(options);
   try {
-    const sourceContext = projectSourceModuleContext(extraction);
-    const contextFiles = projectContextFiles(extraction);
-    const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
-    return extractQueryFactsFromPreparedFiles(
-      extraction.files,
-      (file) => {
-        const index = extraction.files.findIndex(
-          (candidate) => candidate.fileName === file.fileName,
-        );
-        const sourceFile = extraction.sourceFiles[index];
-        if (!sourceFile) return [];
-
-        return extractProjectQueryDefinitions(sourceFile, {
-          ...(file.columnShapes ? { columnShapes: file.columnShapes } : {}),
-          localFunctionReceiverParameters: functionReceiverParametersByKey(
-            (projectFunctionExtractions.get(file.fileName) ?? new Map()).values(),
-          ),
-          namespaceTableNames: projectNamespaceTableNamesByLocal(
-            sourceFile,
-            extraction.tableNamesBySymbol,
-          ),
-          relationalTableNames: projectRelationalTableNamesByProperty(
-            sourceFile,
-            extraction.tableNamesBySymbol,
-          ),
-          relationTargetTableNames: projectRelationTargetTableNamesByProperty(
-            extraction.sourceFiles,
-            extraction.tableNamesBySymbol,
-          ),
-          unmodeledRelationNamesBySymbol: extraction.unmodeledRelationNamesBySymbol,
-          tableNamesBySymbol: extraction.tableNamesBySymbol,
-        });
-      },
-      contextFiles,
-      sourceContext,
-      (file) => projectFunctionsForFile(file, projectFunctionExtractions),
-    );
+    return extractQueryFactsFromProjectExtraction(extraction);
   } finally {
     extraction.dispose();
   }
+}
+
+/** @internal */ export function extractQueryFactsFromProjectExtraction(
+  extraction: ProjectExtraction,
+): QueryFact[] {
+  const sourceContext = projectSourceModuleContext(extraction);
+  const contextFiles = projectContextFiles(extraction);
+  const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
+  return extractQueryFactsFromPreparedFiles(
+    extraction.files,
+    (file) => {
+      const index = extraction.files.findIndex((candidate) => candidate.fileName === file.fileName);
+      const sourceFile = extraction.sourceFiles[index];
+      if (!sourceFile) return [];
+
+      return extractProjectQueryDefinitions(sourceFile, {
+        ...(file.columnShapes ? { columnShapes: file.columnShapes } : {}),
+        localFunctionReceiverParameters: functionReceiverParametersByKey(
+          (projectFunctionExtractions.get(file.fileName) ?? new Map()).values(),
+        ),
+        namespaceTableNames: projectNamespaceTableNamesByLocal(
+          sourceFile,
+          extraction.tableNamesBySymbol,
+        ),
+        relationalTableNames: projectRelationalTableNamesByProperty(
+          sourceFile,
+          extraction.tableNamesBySymbol,
+        ),
+        relationTargetTableNames: projectRelationTargetTableNamesByProperty(
+          extraction.sourceFiles,
+          extraction.tableNamesBySymbol,
+        ),
+        unmodeledRelationNamesBySymbol: extraction.unmodeledRelationNamesBySymbol,
+        tableNamesBySymbol: extraction.tableNamesBySymbol,
+      });
+    },
+    contextFiles,
+    sourceContext,
+    (file) => projectFunctionsForFile(file, projectFunctionExtractions),
+  );
 }
 
 /**
@@ -1728,15 +1753,33 @@ function extractTouchGraphFromPreparedFiles(
  * @internal
  */
 /** @internal */ export function extractOwnerAuditFromProject(options: TouchGraphProjectOptions): {
-  ownerDomains: { domain: string; owner: string }[];
+  ownerDomains: OwnerDomainFact[];
   scopeAudits: ScopeAuditFact[];
 } {
-  const ownerDomains = ownerDomainsFromProject(options);
+  const extraction = createProjectExtraction(options);
+  try {
+    return extractOwnerAuditFromProjectExtraction(extraction);
+  } finally {
+    extraction.dispose();
+  }
+}
+
+/** @internal */ export function extractOwnerAuditFromProjectExtraction(
+  extraction: ProjectExtraction,
+  queries: readonly QueryFact[] = extractQueryFactsFromProjectExtraction(extraction),
+): {
+  ownerDomains: OwnerDomainFact[];
+  scopeAudits: ScopeAuditFact[];
+} {
+  const ownerDomains = ownerDomainsFromProjectExtraction(extraction);
   // SPEC §10.3 / KV414: "a query OR write" reaching an owner table. Reads and writes
   // are both audited (A1 added the write half, which the framework never produced).
   const scopeAudits = [
-    ...scopeAuditsFromQueryFacts(extractQueryFactsFromProject(options), ownerDomains),
-    ...scopeAuditsFromWriteFacts(extractWriteScopeFactsFromProject(options), ownerDomains),
+    ...scopeAuditsFromQueryFacts(queries, ownerDomains),
+    ...scopeAuditsFromWriteFacts(
+      extractWriteScopeFactsFromProjectExtraction(extraction),
+      ownerDomains,
+    ),
   ];
   return { ownerDomains, scopeAudits };
 }
@@ -1755,25 +1798,31 @@ function extractTouchGraphFromPreparedFiles(
 ): WriteScopeFact[] {
   const extraction = createProjectExtraction(options);
   try {
-    const sourceContext = projectSourceModuleContext(extraction);
-    const contextFiles = projectContextFiles(extraction);
-    const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
-    const facts: WriteScopeFact[] = [];
-
-    for (const file of contextFiles) {
-      const fileTables = tablesForFile(file, sourceContext);
-      for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
-        if (fn.summaryOnly) continue;
-        facts.push(...writeScopeFactsForFunction(fn, fileTables));
-      }
-    }
-
-    return facts.sort(
-      (left, right) => left.name.localeCompare(right.name) || left.site.localeCompare(right.site),
-    );
+    return extractWriteScopeFactsFromProjectExtraction(extraction);
   } finally {
     extraction.dispose();
   }
+}
+
+/** @internal */ export function extractWriteScopeFactsFromProjectExtraction(
+  extraction: ProjectExtraction,
+): WriteScopeFact[] {
+  const sourceContext = projectSourceModuleContext(extraction);
+  const contextFiles = projectContextFiles(extraction);
+  const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
+  const facts: WriteScopeFact[] = [];
+
+  for (const file of contextFiles) {
+    const fileTables = tablesForFile(file, sourceContext);
+    for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
+      if (fn.summaryOnly) continue;
+      facts.push(...writeScopeFactsForFunction(fn, fileTables));
+    }
+  }
+
+  return facts.sort(
+    (left, right) => left.name.localeCompare(right.name) || left.site.localeCompare(right.site),
+  );
 }
 
 function writeScopeFactsForFunction(
@@ -1821,22 +1870,24 @@ function writeScopeFactsForFunction(
   return facts;
 }
 
-function ownerDomainsFromProject(
-  options: TouchGraphProjectOptions,
-): { domain: string; owner: string }[] {
+function ownerDomainsFromProject(options: TouchGraphProjectOptions): OwnerDomainFact[] {
   const extraction = createProjectExtraction(options);
   try {
-    const sourceContext = projectSourceModuleContext(extraction);
-    const tables: ExtractedTable[] = [];
-    for (const file of projectContextFiles(extraction)) {
-      for (const entries of tablesForFile(file, sourceContext).values()) {
-        tables.push(...entries);
-      }
-    }
-    return ownerDomainsFromTables(tables);
+    return ownerDomainsFromProjectExtraction(extraction);
   } finally {
     extraction.dispose();
   }
+}
+
+function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): OwnerDomainFact[] {
+  const sourceContext = projectSourceModuleContext(extraction);
+  const tables: ExtractedTable[] = [];
+  for (const file of projectContextFiles(extraction)) {
+    for (const entries of tablesForFile(file, sourceContext).values()) {
+      tables.push(...entries);
+    }
+  }
+  return ownerDomainsFromTables(tables);
 }
 
 /** @internal */
@@ -1865,6 +1916,50 @@ function ownerDomainsFromProject(
         left.domain.localeCompare(right.domain) ||
         left.site.localeCompare(right.site),
     );
+  } finally {
+    extraction.dispose();
+  }
+}
+
+/** @internal */ export interface StaticBuildAnalysisFacts {
+  massAssignmentFacts: readonly MassAssignmentFact[];
+  ownerDomains: readonly OwnerDomainFact[];
+  queries: readonly QueryFact[];
+  queryWriteReachability: readonly QueryWriteReachabilityFact[];
+  scopeAudits: readonly ScopeAuditFact[];
+  sqlSafetyDiagnostics: readonly TouchGraphDiagnostic[];
+  toctouFacts: readonly ToctouFact[];
+  touchGraph: TouchGraph;
+}
+
+/**
+ * Build-facing aggregate for SPEC §11.1/§11.4 static security facts. It creates
+ * one ts-morph project/type-checker and shares it across every project-mode
+ * drizzle pass used by `kovo build`, preserving each individual gate while
+ * avoiding repeated binding of the same app and Drizzle type graph.
+ *
+ * @internal
+ */
+/** @internal */ export function extractStaticBuildAnalysisFactsFromProject(
+  options: TouchGraphProjectOptions,
+): StaticBuildAnalysisFacts {
+  const extraction = createProjectExtraction(options);
+  try {
+    const queries = extractQueryFactsFromProjectExtraction(extraction);
+    const ownerAudit = extractOwnerAuditFromProjectExtraction(extraction, queries);
+    return {
+      massAssignmentFacts: extractMassAssignmentFromProjectExtraction(extraction),
+      ownerDomains: ownerAudit.ownerDomains,
+      queries,
+      queryWriteReachability: extractQueryWriteReachabilityFromProjectExtraction(extraction),
+      scopeAudits: ownerAudit.scopeAudits,
+      sqlSafetyDiagnostics: [
+        ...analyzeSqlSafetyFromProjectExtraction(extraction),
+        ...diagnosticsForQueryFacts(queries),
+      ],
+      toctouFacts: extractToctouFromProjectExtraction(extraction),
+      touchGraph: extractTouchGraphFromProjectExtraction(extraction),
+    };
   } finally {
     extraction.dispose();
   }
@@ -3666,9 +3761,12 @@ export {
 export {
   extractAlgebraicShapesFromProject,
   extractMassAssignmentFromProject,
+  extractMassAssignmentFromProjectExtraction,
   extractQueryWriteReachabilityFromProject,
+  extractQueryWriteReachabilityFromProjectExtraction,
   extractSymbolicEffectsFromProject,
   extractToctouFromProject,
+  extractToctouFromProjectExtraction,
 } from './static/derivation.js';
 /** @internal */
 /** @internal */ export type { SymbolicEffectFact } from './static/derivation.js';

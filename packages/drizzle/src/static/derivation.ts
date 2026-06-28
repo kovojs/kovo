@@ -127,7 +127,10 @@ function tableAnnotationKey(annotation: ExtractedTableAnnotation): string | null
 }
 
 function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtraction {
-  const base = createProjectExtraction(options);
+  return deriveExtractionFromProjectExtraction(createProjectExtraction(options));
+}
+
+function deriveExtractionFromProjectExtraction(base: ProjectExtraction): DeriveExtraction {
   const tablesBySyntheticName = projectTablesBySyntheticName(base);
   const realTableNameBySynthetic = new Map<string, string>();
   for (const [synthetic, table] of tablesBySyntheticName) {
@@ -935,74 +938,88 @@ export function extractMassAssignmentFromProject(
 ): MassAssignmentFact[] {
   const extraction = createDeriveExtraction(options);
   try {
-    const governedByTable = new Map<string, GovernedTableInfo>();
-    for (const table of extraction.tablesBySyntheticName.values()) {
-      const info = governedTableInfo(table);
-      if (info) governedByTable.set(table.annotation.name, info);
-    }
-    if (governedByTable.size === 0) return [];
-
-    const facts: MassAssignmentFact[] = [];
-    extraction.sourceFiles.forEach((sourceFile, index) => {
-      const file = extraction.files[index];
-      if (!file) return;
-
-      const namespaceTableNames = projectNamespaceTableNamesByLocal(
-        sourceFile,
-        extraction.tableNamesBySymbol,
-      );
-      const resolveTable = (node: Node): string | undefined => {
-        const synthetic = projectTableNameForNode(
-          node,
-          extraction.tableNamesBySymbol,
-          namespaceTableNames,
-        );
-        if (!synthetic) return undefined;
-        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
-        if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
-        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
-      };
-      const serverSummaryKeys = serverSummaryKeysForSourceFile(sourceFile);
-      const privilegedHelpers = privilegedWriteHelperNames(sourceFile);
-
-      for (const callback of deriveWriteCallbacks(sourceFile)) {
-        const receivers = projectDrizzleReceivers(callback.fn);
-        const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
-        const symbolContext = symbolProvenanceContextForNodes([callback.body], {
-          inputRoots: callbackInputRootNodes(callback.fn),
-          serverSummaryKeys,
-        });
-        const passwordSinkSymbolKeys = passwordSinkAliasKeysForNodes(
-          [callback.body],
-          privilegedHelpers,
-        );
-        const encryptedAtRestSymbolKeys = encryptedAtRestAliasKeysForNodes(
-          [callback.body],
-          privilegedHelpers,
-        );
-        const name = callback.key ?? '<anonymous>';
-        for (const call of touchBodyCallExpressions(callback.body)) {
-          facts.push(
-            ...massAssignmentFactsForWriteCall(call, {
-              file,
-              governedByTable,
-              name,
-              receivers,
-              resolveTable,
-              sessionContext,
-              symbolContext,
-              passwordSinkSymbolKeys,
-              encryptedAtRestSymbolKeys,
-              privilegedHelpers,
-            }),
-          );
-        }
-      }
-    });
-    return dedupeMassAssignmentFacts(facts);
+    return extractMassAssignmentFromDeriveExtraction(extraction);
   } finally {
     extraction.dispose();
   }
+}
+
+/** @internal */ export function extractMassAssignmentFromProjectExtraction(
+  extraction: ProjectExtraction,
+): MassAssignmentFact[] {
+  return extractMassAssignmentFromDeriveExtraction(
+    deriveExtractionFromProjectExtraction(extraction),
+  );
+}
+
+function extractMassAssignmentFromDeriveExtraction(
+  extraction: DeriveExtraction,
+): MassAssignmentFact[] {
+  const governedByTable = new Map<string, GovernedTableInfo>();
+  for (const table of extraction.tablesBySyntheticName.values()) {
+    const info = governedTableInfo(table);
+    if (info) governedByTable.set(table.annotation.name, info);
+  }
+  if (governedByTable.size === 0) return [];
+
+  const facts: MassAssignmentFact[] = [];
+  extraction.sourceFiles.forEach((sourceFile, index) => {
+    const file = extraction.files[index];
+    if (!file) return;
+
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
+    const resolveTable = (node: Node): string | undefined => {
+      const synthetic = projectTableNameForNode(
+        node,
+        extraction.tableNamesBySymbol,
+        namespaceTableNames,
+      );
+      if (!synthetic) return undefined;
+      const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+      if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
+      return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+    };
+    const serverSummaryKeys = serverSummaryKeysForSourceFile(sourceFile);
+    const privilegedHelpers = privilegedWriteHelperNames(sourceFile);
+
+    for (const callback of deriveWriteCallbacks(sourceFile)) {
+      const receivers = projectDrizzleReceivers(callback.fn);
+      const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
+      const symbolContext = symbolProvenanceContextForNodes([callback.body], {
+        inputRoots: callbackInputRootNodes(callback.fn),
+        serverSummaryKeys,
+      });
+      const passwordSinkSymbolKeys = passwordSinkAliasKeysForNodes(
+        [callback.body],
+        privilegedHelpers,
+      );
+      const encryptedAtRestSymbolKeys = encryptedAtRestAliasKeysForNodes(
+        [callback.body],
+        privilegedHelpers,
+      );
+      const name = callback.key ?? '<anonymous>';
+      for (const call of touchBodyCallExpressions(callback.body)) {
+        facts.push(
+          ...massAssignmentFactsForWriteCall(call, {
+            file,
+            governedByTable,
+            name,
+            receivers,
+            resolveTable,
+            sessionContext,
+            symbolContext,
+            passwordSinkSymbolKeys,
+            encryptedAtRestSymbolKeys,
+            privilegedHelpers,
+          }),
+        );
+      }
+    }
+  });
+  return dedupeMassAssignmentFacts(facts);
 }
 
 interface GovernedTableInfo {
@@ -1690,76 +1707,86 @@ function dedupeMassAssignmentFacts(facts: readonly MassAssignmentFact[]): MassAs
 export function extractToctouFromProject(options: TouchGraphProjectOptions): ToctouFact[] {
   const extraction = createDeriveExtraction(options);
   try {
-    const concurrencyByTable = new Map<string, ConcurrencyTableInfo>();
-    for (const table of extraction.tablesBySyntheticName.values()) {
-      const info = concurrencyTableInfo(table);
-      if (info) concurrencyByTable.set(table.annotation.name, info);
-    }
-    if (concurrencyByTable.size === 0) return [];
-
-    const facts: ToctouFact[] = [];
-    extraction.sourceFiles.forEach((sourceFile, index) => {
-      const file = extraction.files[index];
-      if (!file) return;
-
-      const namespaceTableNames = projectNamespaceTableNamesByLocal(
-        sourceFile,
-        extraction.tableNamesBySymbol,
-      );
-      const resolveTable = (node: Node): string | undefined => {
-        const synthetic = projectTableNameForNode(
-          node,
-          extraction.tableNamesBySymbol,
-          namespaceTableNames,
-        );
-        if (!synthetic) return undefined;
-        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
-        if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
-        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
-      };
-
-      for (const callback of deriveWriteCallbacks(sourceFile)) {
-        const receivers = projectDrizzleReceivers(callback.fn);
-        const paramSymbolKeys = callbackParameterSymbolKeys(callback.fn);
-        const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
-        const symbolContext = symbolProvenanceContextForNodes([callback.body], {
-          inputRoots: callbackInputRootNodes(callback.fn),
-        });
-        for (const call of touchBodyCallExpressions(callback.body)) {
-          const result = symbolicEffectForWriteCall(call, {
-            file,
-            paramSymbolKeys,
-            receivers,
-            resolveTable,
-            sessionContext,
-            symbolContext,
-            ...(callback.key ? { writeKey: callback.key } : {}),
-          });
-          if (!result || result.effect.op !== 'update') continue;
-          const info = concurrencyByTable.get(result.effect.table);
-          if (!info) continue;
-          const setReads = atomicReadsForWriteSet(
-            call,
-            callback.body,
-            resolveTable,
-            concurrencyByTable,
-          );
-          for (const fact of toctouFactsForEffect(
-            result.effect,
-            info,
-            result.site,
-            callback.key,
-            setReads,
-          )) {
-            facts.push(fact);
-          }
-        }
-      }
-    });
-    return dedupeToctouFacts(facts);
+    return extractToctouFromDeriveExtraction(extraction);
   } finally {
     extraction.dispose();
   }
+}
+
+/** @internal */ export function extractToctouFromProjectExtraction(
+  extraction: ProjectExtraction,
+): ToctouFact[] {
+  return extractToctouFromDeriveExtraction(deriveExtractionFromProjectExtraction(extraction));
+}
+
+function extractToctouFromDeriveExtraction(extraction: DeriveExtraction): ToctouFact[] {
+  const concurrencyByTable = new Map<string, ConcurrencyTableInfo>();
+  for (const table of extraction.tablesBySyntheticName.values()) {
+    const info = concurrencyTableInfo(table);
+    if (info) concurrencyByTable.set(table.annotation.name, info);
+  }
+  if (concurrencyByTable.size === 0) return [];
+
+  const facts: ToctouFact[] = [];
+  extraction.sourceFiles.forEach((sourceFile, index) => {
+    const file = extraction.files[index];
+    if (!file) return;
+
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
+    const resolveTable = (node: Node): string | undefined => {
+      const synthetic = projectTableNameForNode(
+        node,
+        extraction.tableNamesBySymbol,
+        namespaceTableNames,
+      );
+      if (!synthetic) return undefined;
+      const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+      if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
+      return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+    };
+
+    for (const callback of deriveWriteCallbacks(sourceFile)) {
+      const receivers = projectDrizzleReceivers(callback.fn);
+      const paramSymbolKeys = callbackParameterSymbolKeys(callback.fn);
+      const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
+      const symbolContext = symbolProvenanceContextForNodes([callback.body], {
+        inputRoots: callbackInputRootNodes(callback.fn),
+      });
+      for (const call of touchBodyCallExpressions(callback.body)) {
+        const result = symbolicEffectForWriteCall(call, {
+          file,
+          paramSymbolKeys,
+          receivers,
+          resolveTable,
+          sessionContext,
+          symbolContext,
+          ...(callback.key ? { writeKey: callback.key } : {}),
+        });
+        if (!result || result.effect.op !== 'update') continue;
+        const info = concurrencyByTable.get(result.effect.table);
+        if (!info) continue;
+        const setReads = atomicReadsForWriteSet(
+          call,
+          callback.body,
+          resolveTable,
+          concurrencyByTable,
+        );
+        for (const fact of toctouFactsForEffect(
+          result.effect,
+          info,
+          result.site,
+          callback.key,
+          setReads,
+        )) {
+          facts.push(fact);
+        }
+      }
+    }
+  });
+  return dedupeToctouFacts(facts);
 }
 
 interface ConcurrencyTableInfo {
@@ -2067,59 +2094,73 @@ export function extractQueryWriteReachabilityFromProject(
 ): QueryWriteReachabilityFact[] {
   const extraction = createDeriveExtraction(options);
   try {
-    const facts: QueryWriteReachabilityFact[] = [];
-    extraction.sourceFiles.forEach((sourceFile, index) => {
-      const file = extraction.files[index];
-      if (!file) return;
-
-      const namespaceTableNames = projectNamespaceTableNamesByLocal(
-        sourceFile,
-        extraction.tableNamesBySymbol,
-      );
-      const resolveTable = (node: Node): string | undefined => {
-        const synthetic = projectTableNameForNode(
-          node,
-          extraction.tableNamesBySymbol,
-          namespaceTableNames,
-        );
-        if (!synthetic) return undefined;
-        const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
-        return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
-      };
-
-      for (const loader of readOnlyQueryLoaders(sourceFile)) {
-        const receivers = mergeProjectDrizzleReceivers(
-          projectDrizzleReceivers(loader.fn),
-          moduleScopeDrizzleReceivers(sourceFile),
-        );
-        for (const call of touchBodyCallExpressions(functionBody(loader.fn))) {
-          const expression = call.getExpression();
-          const operation = staticAccessName(expression);
-          const receiver = staticAccessExpression(expression);
-          if (!operation || !receiver) continue;
-          if (!KV433_DIRECT_WRITE_OPERATIONS.has(operation)) continue;
-          if (!isProjectDrizzleReceiverIdentifier(receiver, receivers)) continue;
-          const tableArgument = call.getArguments()[0];
-          const table =
-            (tableArgument && resolveTable(tableArgument)) || UNRESOLVED_READ_SOURCE_EXPRESSION;
-          facts.push({
-            operation,
-            query: loader.name,
-            site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
-            table,
-          });
-        }
-      }
-    });
-    return facts.sort(
-      (left, right) =>
-        left.query.localeCompare(right.query) ||
-        left.site.localeCompare(right.site) ||
-        left.operation.localeCompare(right.operation),
-    );
+    return extractQueryWriteReachabilityFromDeriveExtraction(extraction);
   } finally {
     extraction.dispose();
   }
+}
+
+/** @internal */ export function extractQueryWriteReachabilityFromProjectExtraction(
+  extraction: ProjectExtraction,
+): QueryWriteReachabilityFact[] {
+  return extractQueryWriteReachabilityFromDeriveExtraction(
+    deriveExtractionFromProjectExtraction(extraction),
+  );
+}
+
+function extractQueryWriteReachabilityFromDeriveExtraction(
+  extraction: DeriveExtraction,
+): QueryWriteReachabilityFact[] {
+  const facts: QueryWriteReachabilityFact[] = [];
+  extraction.sourceFiles.forEach((sourceFile, index) => {
+    const file = extraction.files[index];
+    if (!file) return;
+
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
+    const resolveTable = (node: Node): string | undefined => {
+      const synthetic = projectTableNameForNode(
+        node,
+        extraction.tableNamesBySymbol,
+        namespaceTableNames,
+      );
+      if (!synthetic) return undefined;
+      const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+      return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+    };
+
+    for (const loader of readOnlyQueryLoaders(sourceFile)) {
+      const receivers = mergeProjectDrizzleReceivers(
+        projectDrizzleReceivers(loader.fn),
+        moduleScopeDrizzleReceivers(sourceFile),
+      );
+      for (const call of touchBodyCallExpressions(functionBody(loader.fn))) {
+        const expression = call.getExpression();
+        const operation = staticAccessName(expression);
+        const receiver = staticAccessExpression(expression);
+        if (!operation || !receiver) continue;
+        if (!KV433_DIRECT_WRITE_OPERATIONS.has(operation)) continue;
+        if (!isProjectDrizzleReceiverIdentifier(receiver, receivers)) continue;
+        const tableArgument = call.getArguments()[0];
+        const table =
+          (tableArgument && resolveTable(tableArgument)) || UNRESOLVED_READ_SOURCE_EXPRESSION;
+        facts.push({
+          operation,
+          query: loader.name,
+          site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+          table,
+        });
+      }
+    }
+  });
+  return facts.sort(
+    (left, right) =>
+      left.query.localeCompare(right.query) ||
+      left.site.localeCompare(right.site) ||
+      left.operation.localeCompare(right.operation),
+  );
 }
 
 function moduleScopeDrizzleReceivers(sourceFile: SourceFile): ProjectDrizzleReceivers {
