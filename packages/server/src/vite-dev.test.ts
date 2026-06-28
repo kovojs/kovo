@@ -8,6 +8,7 @@ import { createApp, createRequestHandler } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { endpoint } from './endpoint.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
+import { query } from './query.js';
 import { layout, route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
@@ -457,6 +458,76 @@ describe('server app shell Vite dev seam', () => {
 
       expect(assetFallbackResponse.status).toBe(404);
       expect(assetFallbackBody).toBe('vite fallback');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('does not inject the dev HMR client into typed-read fragment responses', async () => {
+    const app = createApp({
+      queries: [
+        query('directory-stats', {
+          load: () => ({ contacts: 2 }),
+          reads: [],
+        }),
+      ],
+      routes: [
+        route('/directory', {
+          page() {
+            return renderedHtml('<main>Directory</main>');
+          },
+        }),
+      ],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule() {
+        return { default: app };
+      },
+    });
+
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const queryResponse = await fetch(`${origin}/_q/directory-stats`, {
+        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      });
+      const queryBody = await queryResponse.text();
+      const documentResponse = await fetch(`${origin}/directory`, {
+        headers: { Accept: 'text/html' },
+      });
+      const documentBody = await documentResponse.text();
+
+      expect(queryResponse.status).toBe(200);
+      expect(queryResponse.headers.get('content-type')).toContain('text/html');
+      expect(queryBody).toBe('<kovo-query name="directory-stats">{"contacts":2}</kovo-query>');
+      expect(queryBody).not.toContain('<script type="module" src="/@kovo/hmr-client"></script>');
+      expect(documentResponse.status).toBe(200);
+      expect(documentBody).toContain('<script type="module" src="/@kovo/hmr-client"></script>');
+      expect(documentBody).toContain('<main>Directory</main>');
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
