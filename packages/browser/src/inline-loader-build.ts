@@ -837,9 +837,13 @@ function installInlineKovoLoader(im) {
     if (typeof render === 'function') await render(el, source, {});
   };
   const at = (texts) => {
+    let missing = false;
     for (const x of texts || []) {
       const el = sft(x.target);
-      if (!el) continue;
+      if (!el) {
+        missing = true;
+        continue;
+      }
       const text = unescapeHtml(x.text);
       const source = x.mode === 'checkpoint' ? text : (st[x.target] ?? el.textContent ?? '') + text;
       st[x.target] = source;
@@ -848,6 +852,7 @@ function installInlineKovoLoader(im) {
       el.setAttribute?.('data-stream-state', 'streaming');
       void sr(el, source).catch(() => {});
     }
+    return !missing;
   };
   const sfail = () => {
     for (const key in se) se[key].setAttribute?.('data-stream-state', 'error');
@@ -855,9 +860,10 @@ function installInlineKovoLoader(im) {
   const ax = (chunks, applyQueries) => {
     const textStart = chunks.texts[0]?.start ?? 1 / 0;
     af(readFragmentChunksFromElements(chunks.fragments.filter((chunk) => chunk.start < textStart)));
-    at(readStreamTextChunksFromElements(chunks.texts));
+    const appliedTexts = at(readStreamTextChunksFromElements(chunks.texts));
     af(readFragmentChunksFromElements(chunks.fragments.filter((chunk) => chunk.start >= textStart)));
     aq(chunks.queries, applyQueries);
+    return appliedTexts;
   };
   const cp = (body) => {
     const chunks = readMutationResponseElementChunks(body);
@@ -868,11 +874,17 @@ function installInlineKovoLoader(im) {
     }
     if (!end) return body;
     if (!dones.length) {
-      ax(chunks, false);
+      if (!ax(chunks, false)) {
+        sfail();
+        throw Error('Missing kovo-text target');
+      }
       return body.slice(end);
     }
     const complete = dones.some((x) => (readAttribute(x.attrs, 'reason') ?? 'complete') === 'complete');
-    ax(chunks, complete);
+    if (!ax(chunks, complete)) {
+      sfail();
+      throw Error('Missing kovo-text target');
+    }
     for (const x of dones) {
       const reason = readAttribute(x.attrs, 'reason') ?? 'complete';
       if (reason && reason !== 'complete') sfail();
