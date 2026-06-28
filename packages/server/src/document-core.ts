@@ -487,9 +487,10 @@ function stampPerPrincipalRouteOutcomeFloor(
 }
 
 /**
- * SPEC §6.6 / §9.5: authenticated-but-unauthorized guard failures are per-principal HTML
- * documents. They do not pass through the normal 200 document wrapper, so stamp the same
- * conservative document security baseline and no-store/Vary:Cookie floor here.
+ * SPEC §6.6 / §9.5: guard failures and equivalent non-OK auth/cache-sensitive HTML documents are
+ * per-principal outcomes. They do not always pass through the normal 200 document wrapper, so stamp
+ * the same conservative document security baseline and no-store/Vary:Cookie floor here while
+ * preserving the caller's HTTP status.
  *
  * @internal
  */
@@ -522,7 +523,7 @@ export function stampGuardFailureDocumentSecurityFloor(
     'Cache-Control': 'private, no-store',
   };
   headers = mergeVaryHeader(headers, 'Cookie');
-  return { ...response, headers, status: 403 };
+  return { ...response, headers };
 }
 
 /**

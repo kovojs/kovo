@@ -4,6 +4,7 @@ import {
   KOVO_IDEM_FIELD_NAME,
   mutationCsrfOptions,
   validateCsrfToken,
+  verifyCsrfRequestOriginFloor,
   type CsrfValidationOptions,
 } from './csrf.js';
 import {
@@ -15,13 +16,16 @@ import {
 import { reportServerError } from './diagnostics.js';
 import { escapeAttribute, escapeHtml } from './html.js';
 import {
+  explainGuard,
   guardFailureIsUnauthenticated,
   resolveLifecycleRequest,
   runGuard,
   withGuardArgs,
+  type Guard,
   type RequestLifecycleOptions,
   type ResolvedGuardFailure,
 } from './guards.js';
+import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
@@ -34,6 +38,7 @@ import {
   redirectLocationHeader,
   retryAfterHeaders,
   type MutationResponseHeaders,
+  type ResponseHeaders,
 } from './response.js';
 import {
   mutationWireRequestFromHeaders,
@@ -329,6 +334,12 @@ export async function renderMutationResponse<
         audience: definition.key,
       }))
   ) {
+    const reauthResponse = await staleSessionEnhancedCsrfReauthResponse(
+      definition,
+      csrf,
+      wireRequest,
+    );
+    if (reauthResponse) return reauthResponse;
     return {
       body: await renderFailureFragment(
         {
@@ -847,6 +858,8 @@ export async function renderNoJsMutationResponse<
         audience: definition.key,
       }))
   ) {
+    const reauthResponse = await staleSessionNoJsCsrfReauthResponse(definition, csrf, noJsRequest);
+    if (reauthResponse) return reauthResponse;
     const failure: MutationFail = {
       error: { code: 'CSRF', payload: {} },
       ok: false,
@@ -857,7 +870,7 @@ export async function renderNoJsMutationResponse<
       : renderDefaultFailurePage(failure);
     return {
       body,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
       status: 422,
     };
   }
@@ -881,7 +894,7 @@ export async function renderNoJsMutationResponse<
       : renderDefaultFailurePage(noJsInputResult.failure);
     return {
       body,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
       status: 422,
     };
   }
@@ -921,7 +934,10 @@ export async function renderNoJsMutationResponse<
         });
     return {
       body,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', ...retryAfterHeaders(guardFailure) },
+      headers: stampNoJsMutationFailureHeaders({
+        'Content-Type': 'text/html; charset=utf-8',
+        ...retryAfterHeaders(guardFailure),
+      }),
       status,
     };
   }
@@ -968,10 +984,10 @@ export async function renderNoJsMutationResponse<
         : renderDefaultFailurePage(result);
       return {
         body,
-        headers: {
+        headers: stampNoJsMutationFailureHeaders({
           'Content-Type': 'text/html; charset=utf-8',
           ...retryAfterHeaders(result),
-        },
+        }),
         status: result.status,
       };
     }
@@ -1018,10 +1034,10 @@ export async function renderNoJsMutationResponse<
 
     return {
       body,
-      headers: {
+      headers: stampNoJsMutationFailureHeaders({
         'Content-Type': 'text/html; charset=utf-8',
         ...retryAfterHeaders(result),
-      },
+      }),
       status: result.status,
     };
   }
@@ -1365,6 +1381,14 @@ function renderDefaultFailurePage(failure: MutationFail): string {
   return `<!doctype html><html><body><output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output></body></html>`;
 }
 
+function stampNoJsMutationFailureHeaders(headers: ResponseHeaders): ResponseHeaders {
+  return stampGuardFailureDocumentSecurityFloor({
+    body: '',
+    headers,
+    status: 422,
+  }).headers;
+}
+
 function mutationWireResponseHeaders<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): Record<string, string> {
@@ -1394,6 +1418,98 @@ function enhancedMutationReauthResponse<Request>(
     },
     status: 401,
   };
+}
+
+async function staleSessionEnhancedCsrfReauthResponse<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request = Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  csrf: CsrfValidationOptions<Request> | false | undefined,
+  request: MutationWireRequest<Request>,
+): Promise<BufferedMutationWireResponse | undefined> {
+  const lifecycleRequest = await staleSessionCsrfLifecycleRequest(definition, csrf, request);
+  if (!lifecycleRequest) return undefined;
+  return enhancedMutationReauthResponse(
+    {
+      auth: 'unauthenticated',
+      code: 'UNAUTHORIZED',
+      status: 422,
+    },
+    lifecycleRequest,
+    { currentUrl: request.currentUrl ?? '/' },
+  );
+}
+
+async function staleSessionNoJsCsrfReauthResponse<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request = Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  csrf: CsrfValidationOptions<Request> | false | undefined,
+  request: NoJsMutationRequest<Request, Value>,
+): Promise<NoJsMutationResponse | undefined> {
+  const lifecycleRequest = await staleSessionCsrfLifecycleRequest(definition, csrf, request);
+  if (!lifecycleRequest) return undefined;
+  return noJsMutationReauthResponse(
+    {
+      auth: 'unauthenticated',
+      code: 'UNAUTHORIZED',
+      status: 422,
+    },
+    lifecycleRequest,
+    { currentUrl: request.currentUrl ?? '/' },
+  );
+}
+
+async function staleSessionCsrfLifecycleRequest<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request = Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  csrf: CsrfValidationOptions<Request> | false | undefined,
+  request: MutationWireRequest<Request> | NoJsMutationRequest<Request, Value>,
+): Promise<Request | undefined> {
+  if (csrf === undefined || csrf === false) return undefined;
+  if (!sessionGuardedMutation(definition)) return undefined;
+  if (!hasSubmittedCsrfTokenShape(request.rawInput, csrf.field ?? 'kovo-csrf')) return undefined;
+  if (!verifyCsrfRequestOriginFloor(request.request, csrf)) return undefined;
+
+  const lifecycleRequest = await resolveLifecycleRequest(
+    request.request,
+    runMutationOptions(request.csrf, request),
+  );
+  if (requestHasSessionUser(lifecycleRequest)) return undefined;
+  return lifecycleRequest;
+}
+
+function sessionGuardedMutation<Request>(definition: { guard?: Guard<Request> }): boolean {
+  return explainGuard(definition.guard).some((fact) => 'auth' in fact && fact.auth !== undefined);
+}
+
+function requestHasSessionUser(request: unknown): boolean {
+  return Boolean(
+    (request as { session?: { user?: unknown } | null } | null | undefined)?.session?.user,
+  );
+}
+
+function hasSubmittedCsrfTokenShape(rawInput: unknown, field: string): boolean {
+  const submitted = formLikeToRecord(rawInput)[field];
+  return (
+    typeof submitted === 'string' && /^v1\.[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/u.test(submitted)
+  );
 }
 
 function noJsMutationReauthResponse<Request>(
