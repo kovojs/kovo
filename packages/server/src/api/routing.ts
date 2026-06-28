@@ -91,6 +91,7 @@ export type {
   LayoutDefinition,
   LayoutFactory,
   LayoutQueryResults,
+  LayoutRegionResults,
   LayoutRenderResult,
   LayoutRenderSlots,
   RouteBoundaries,
@@ -100,6 +101,7 @@ export type {
   RouteDefinition,
   RoutePageResult,
   RouteRegionDefinitions,
+  RouteRegionResults,
   RouteRequest,
   RouteRequestInput,
 } from '../route.js';

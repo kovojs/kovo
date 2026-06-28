@@ -43,12 +43,13 @@ Security-header regression RSE-1 is filed separately in `plans/bugz-6.md`.
 
 ### B. Typed Authoring Contracts
 
-- [ ] **Layout region names are widened to `Record<string, unknown>`, so typos type-check.** (med, framework; found by `layout-regions-defer`)
+- [x] **Layout region names are widened to `Record<string, unknown>`, so typos type-check.** (med, framework; found by `layout-regions-defer`)
   - Observed behavior: a layout can read `regions.sidebarTypo` while the route declares only `page` and `sidebar`; TypeScript exits 0 and the region silently disappears.
   - Root cause: `packages/server/src/route.ts:92` types `LayoutRenderSlots.regions` as `Readonly<Record<string, unknown>>`; `packages/server/src/route.ts:202` stores route layouts as `LayoutDeclaration<any, any, any>`; `packages/server/src/route.ts:672` returns rendered regions as another unbounded record.
   - Why it matters: SPEC §4.5 says additional region names are scoped to the route/layout contract. This is exactly the kind of string contract Kovo usually makes type-visible.
   - Repro evidence: `pnpm exec tsc --ignoreConfig --noEmit ... scratch-region-contract-hole.tsx` in `layout-regions-defer` exits 0 with `regions.sidebarTypo` against a `{ page, sidebar }` route.
   - Acceptance: a layout that reads an undeclared region key fails type-checking, while declared sibling regions keep their inferred value type.
+  - Evidence: `pnpm exec vitest --run packages/server/src/route.test.ts packages/server/src/app-authoring-context.test.ts` proves uncontracted `regions.sidebarTypo` fails type-checking, declared region values remain typed, and routes must provide layout-required regions.
 
 - [ ] **`kovo explain page --layouts` starts from an empty graph in a built scaffold.** (med, dev-tooling; found by `layout-regions-defer`)
   - Observed behavior: the dev server serves `/docs/layout-regions?view=full` as 200, but `pnpm exec kovo explain page /docs/:slug --layouts` exits with `ERROR NOT_FOUND page /docs/:slug`; `build:prod` leaves no discoverable `graph.json`.
