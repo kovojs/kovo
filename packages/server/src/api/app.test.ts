@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
+import {
+  createFileSystemStorage as coreCreateFileSystemStorage,
+  createMemoryStorage as coreCreateMemoryStorage,
+  createS3CompatibleStorage as coreCreateS3CompatibleStorage,
+  customVerifier as coreCustomVerifier,
+  hmacSignature as coreHmacSignature,
+  standardWebhooks as coreStandardWebhooks,
+} from '@kovojs/core';
 
 import * as packageRootApi from '@kovojs/server';
 import * as packageViteApi from '@kovojs/server/vite';
@@ -414,6 +422,12 @@ describe('server app-shell public API barrels', () => {
       createStorageDownloadEndpoint: capabilityRouteApi.createStorageDownloadEndpoint,
       deriveDownloadKey: capabilityRouteApi.deriveDownloadKey,
       drainCapabilityMintFacts: capabilityRouteApi.drainCapabilityMintFacts,
+      createFileSystemStorage: coreCreateFileSystemStorage,
+      createMemoryStorage: coreCreateMemoryStorage,
+      createS3CompatibleStorage: coreCreateS3CompatibleStorage,
+      customVerifier: coreCustomVerifier,
+      hmacSignature: coreHmacSignature,
+      standardWebhooks: coreStandardWebhooks,
       // SPEC §6.6 / §9.1: rooted file serving is the public local-file sink capability.
       rootedFiles: fileApi.rootedFiles,
       // SPEC §6.6 / plans/most-secure-web-framework.md §3: shell-free command
@@ -457,6 +471,15 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
     expect(publicApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
     expect(publicApi.stylesheet).toBe(hintsApi.stylesheet);
+    expect(publicApi.createMemoryStorage).toBe(coreCreateMemoryStorage);
+    expect(publicApi.createFileSystemStorage).toBe(coreCreateFileSystemStorage);
+    expect(publicApi.createS3CompatibleStorage).toBe(coreCreateS3CompatibleStorage);
+    expect(publicApi.createMemoryWebhookReplayStore).toBe(
+      routingApi.createMemoryWebhookReplayStore,
+    );
+    expect(publicApi.hmacSignature).toBe(coreHmacSignature);
+    expect(publicApi.standardWebhooks).toBe(coreStandardWebhooks);
+    expect(publicApi.customVerifier).toBe(coreCustomVerifier);
     // SPEC.md §9.5: `createApp({ clientModules })` consumers construct a registry,
     // so the constructor stays public at the root and shares the internal value.
     expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(

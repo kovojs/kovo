@@ -658,12 +658,11 @@ function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain
 
 function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {
   const csrf = endpoint.csrf?.exempt === true ? 'exempt' : 'checked';
+  const name = endpointWebhookName(endpoint);
   return {
     ...(endpoint.access === undefined ? {} : { access: endpoint.access }),
     appOwnedSafety: endpoint.response.appOwnedSafety,
-    ...(endpoint.auth === undefined
-      ? {}
-      : { auth: endpoint.auth.kind === 'none' ? 'none' : endpoint.auth.name }),
+    ...(endpoint.auth === undefined ? {} : { auth: endpointCheckAuth(endpoint.auth) }),
     body: endpoint.response.body,
     cache: endpoint.response.cache,
     csrf,
@@ -676,10 +675,23 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
     ...(endpoint.mountJustification === undefined
       ? {}
       : { mountJustification: endpoint.mountJustification }),
+    ...(name === undefined ? {} : { name }),
     path: endpoint.path,
     reason: endpoint.reason,
-    surface: 'endpoint',
+    surface: 'webhook' in endpoint && endpoint.webhook === true ? 'webhook' : 'endpoint',
   };
+}
+
+function endpointCheckAuth(auth: KovoApp['endpoints'][number]['auth']): string {
+  if (auth === undefined) return 'none';
+  if (auth.kind === 'none') return 'none';
+  return `${auth.kind}:${auth.name}`;
+}
+
+function endpointWebhookName(endpoint: KovoApp['endpoints'][number]): string | undefined {
+  if (!('webhook' in endpoint) || endpoint.webhook !== true) return undefined;
+  if (!('name' in endpoint) || typeof endpoint.name !== 'string') return undefined;
+  return endpoint.name;
 }
 
 function buildCheckSourceFiles(appModulePath: string): BuildCheckSourceFile[] {

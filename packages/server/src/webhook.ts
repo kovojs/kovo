@@ -20,11 +20,13 @@ import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 
 const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
 
-/** @internal */
+/** HTTP statuses a webhook failure replay response may store and replay (SPEC §9.1). */
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
-/** @internal */
+
+/** HTTP status a successful webhook replay response stores and replays (SPEC §9.1). */
 export type WebhookSuccessStatus = 200;
-/** @internal */
+
+/** HTTP status union accepted by webhook replay wire responses (SPEC §9.1 / §10.3). */
 export type WebhookResponseStatus = WebhookFailureStatus | WebhookSuccessStatus;
 
 /**
@@ -54,21 +56,21 @@ export interface WebhookChangeOptions<Input = unknown> {
   reason?: string;
 }
 
-/** @internal */
+/** A stored wire response replayed for a duplicate webhook delivery (SPEC §10.3). */
 export interface WebhookWireResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
   WebhookResponseStatus
 > {}
 
-/** @internal */
+/** Atomic idempotency store used by writable webhooks to reserve and replay provider event ids. */
 export interface WebhookReplayStore {
   get(scope: string, idem: string): Promise<WebhookWireResponse> | WebhookWireResponse | undefined;
   reserve(scope: string, idem: string): WebhookReplayReservation | undefined;
   set(scope: string, idem: string, response: WebhookWireResponse): void;
 }
 
-/** @internal */
+/** A held webhook replay reservation, committed with the final response or aborted on failure. */
 export interface WebhookReplayReservation {
   /** Release a pending reservation without committing, so a retry can re-run the handler (A4). */
   abort?(): void;
@@ -170,6 +172,69 @@ export interface WebhookRunResult<Input = unknown, Value = unknown> {
   replayed: boolean;
   response: Response;
   value?: Value;
+}
+
+/**
+ * Create an in-memory webhook replay store for local development and tests.
+ *
+ * The store implements SPEC §10.3's reservation shape: `reserve()` atomically claims
+ * `(webhook, provider-event-id)`, concurrent `get()` calls wait for the committed response, and
+ * `abort()` releases a failed in-flight reservation so the provider can retry.
+ */
+export function createMemoryWebhookReplayStore(): WebhookReplayStore {
+  const responses = new Map<
+    string,
+    | {
+        pending: Promise<WebhookWireResponse>;
+        reject(reason?: unknown): void;
+        resolve(response: WebhookWireResponse): void;
+      }
+    | { response: WebhookWireResponse }
+  >();
+
+  return {
+    get(scope, idem) {
+      const record = responses.get(webhookReplayKey(scope, idem));
+      if (record === undefined) return undefined;
+      if ('pending' in record) return record.pending;
+      return record.response;
+    },
+    reserve(scope, idem) {
+      const key = webhookReplayKey(scope, idem);
+      if (responses.has(key)) return undefined;
+
+      let resolvePending: (response: WebhookWireResponse) => void = () => undefined;
+      let rejectPending: (reason?: unknown) => void = () => undefined;
+      const pending = new Promise<WebhookWireResponse>((resolve, reject) => {
+        resolvePending = resolve;
+        rejectPending = reject;
+      });
+      pending.catch(() => undefined);
+      const record = {
+        pending,
+        reject: rejectPending,
+        resolve: resolvePending,
+      };
+      responses.set(key, record);
+
+      return {
+        abort() {
+          if (responses.get(key) === record) responses.delete(key);
+          rejectPending(new Error('Webhook replay reservation aborted.'));
+        },
+        commit(response: WebhookWireResponse) {
+          responses.set(key, { response });
+          resolvePending(response);
+        },
+      };
+    },
+    set(scope, idem, response) {
+      const key = webhookReplayKey(scope, idem);
+      const existing = responses.get(key);
+      responses.set(key, { response });
+      if (existing && 'pending' in existing) existing.resolve(response);
+    },
+  };
 }
 
 /**
@@ -766,6 +831,10 @@ function webhookChangeHeader(changes: readonly ChangeRecord[]): string {
 
 function webhookReplayScope(name: string): string {
   return `webhook:${name}`;
+}
+
+function webhookReplayKey(scope: string, idem: string): string {
+  return `${scope}\0${idem}`;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

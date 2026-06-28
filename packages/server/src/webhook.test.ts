@@ -6,6 +6,7 @@ import { domain } from './domain.js';
 import { runEndpoint, type EndpointRequest } from './endpoint.js';
 import { s, SchemaValidationError } from './schema.js';
 import {
+  createMemoryWebhookReplayStore as createPublicMemoryWebhookReplayStore,
   runWebhook,
   webhook,
   type WebhookReplayReservation,
@@ -29,6 +30,26 @@ function sign(body: string): string {
 }
 
 describe('server webhook primitive', () => {
+  it('exports a memory replay store that reserves, commits, and replays webhook responses', async () => {
+    const store = createPublicMemoryWebhookReplayStore();
+    const reservation = store.reserve('webhook:public-store', 'evt_1');
+    expect(reservation).toBeTruthy();
+    expect(store.reserve('webhook:public-store', 'evt_1')).toBeUndefined();
+
+    const pending = store.get('webhook:public-store', 'evt_1');
+    expect(pending).toBeInstanceOf(Promise);
+
+    const response: WebhookWireResponse = {
+      body: 'ok',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 200,
+    };
+    reservation?.commit(response);
+
+    await expect(pending).resolves.toBe(response);
+    expect(store.get('webhook:public-store', 'evt_1')).toBe(response);
+  });
+
   it('declares a registry-visible POST endpoint with resolved verifier metadata', () => {
     const verifier = hmacSignature({
       encoding: 'hex',

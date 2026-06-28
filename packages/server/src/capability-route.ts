@@ -329,11 +329,17 @@ export function createStorageDownloadEndpoint(
       'storage read so an object is un-dereferenceable without a token minted for that exact object.',
     // The capability token IS the auth/CSRF defense here: a state-changing verb never reaches this
     // read-only route (non-GET/HEAD fail closed), and the bearer token gates every read.
+    auth: {
+      kind: 'none',
+      justification:
+        'Framework-owned storage download route uses a per-object signed capability token ' +
+        'verified before any storage read (SPEC §6.6); no ambient cookie/session auth is used.',
+    },
     csrf: false,
     csrfJustification:
       'Read-only download gated by a per-request signed capability token (not a cookie/ambient ' +
       'credential), so there is no CSRF surface; non-GET/HEAD methods fail closed.',
-    response: { appOwnedSafety: false, body: 'bytes', cache: 'private' },
+    response: { appOwnedSafety: true, body: 'bytes', cache: 'private' },
     handler,
   });
 }

@@ -1,5 +1,19 @@
-export { Link, href, redirect } from '@kovojs/core';
-export type { DiagnosticCode, JsonValue, LinkDescriptor, Redirect, Route } from '@kovojs/core';
+export {
+  customVerifier,
+  hmacSignature,
+  Link,
+  href,
+  redirect,
+  standardWebhooks,
+} from '@kovojs/core';
+export type {
+  DiagnosticCode,
+  JsonValue,
+  LinkDescriptor,
+  Redirect,
+  Route,
+  WebhookVerifier,
+} from '@kovojs/core';
 export { publicAccess, verifiedAccess } from '../access.js';
 export type {
   AccessDecision,
@@ -90,12 +104,18 @@ export type {
   RouteRequestInput,
 } from '../route.js';
 export type { CookieClass, CookieOptions, UnsafeCookieDowngrade } from '../cookies.js';
-export { webhook } from '../webhook.js';
+export { createMemoryWebhookReplayStore, webhook } from '../webhook.js';
 export type {
   WebhookChangeOptions,
   WebhookDeclaration,
   WebhookDefinition,
   WebhookFail,
+  WebhookFailureStatus,
   WebhookHandlerContext,
+  WebhookReplayReservation,
+  WebhookReplayStore,
+  WebhookResponseStatus,
+  WebhookSuccessStatus,
   WebhookTransactionContext,
+  WebhookWireResponse,
 } from '../webhook.js';

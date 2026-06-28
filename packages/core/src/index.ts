@@ -32,6 +32,16 @@ export type {
   FormValidationFailure,
 } from './forms-types.js';
 export type {
+  FileSystemStorageOptions,
+  MemoryStorageOptions,
+  S3CompatibleGetObjectInput,
+  S3CompatibleGetObjectOutput,
+  S3CompatibleHeadObjectInput,
+  S3CompatibleObjectClient,
+  S3CompatibleObjectMetadata,
+  S3CompatiblePutObjectInput,
+  S3CompatiblePutObjectOutput,
+  S3CompatibleStorageOptions,
   StorageBody,
   StorageCapability,
   StorageGetResult,
@@ -39,6 +49,11 @@ export type {
   StoragePutOptions,
   StoragePutResult,
   StorageStreamResult,
+} from './storage.js';
+export {
+  createFileSystemStorage,
+  createMemoryStorage,
+  createS3CompatibleStorage,
 } from './storage.js';
 export type {
   CustomWebhookVerifier,
