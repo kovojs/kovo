@@ -19,7 +19,7 @@ declare module '@kovojs/core' {
 // runtime apply and rebase seams in the sibling optimism-*.test.ts files.
 describe('optimistic query typing', () => {
   it('types hand-written optimistic plans from mutation forms and query shapes', () => {
-    const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
+    const addToCart = form(addToCartMutation);
     const optimistic = {
       queue: 'cart',
       transforms: {
@@ -47,7 +47,7 @@ describe('optimistic query typing', () => {
   });
 
   it('requires optimistic coverage from generated invalidation sets by default', () => {
-    const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
+    const addToCart = form(addToCartMutation);
     const optimistic = {
       transforms: {
         cart(current, input) {
@@ -78,7 +78,7 @@ describe('optimistic query typing', () => {
   });
 
   it('rejects optimistic plans that do not match mutation input or query values', () => {
-    const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
+    const addToCart = form(addToCartMutation);
     const assertWrongInputRejected = () => {
       ({
         transforms: {
@@ -108,3 +108,12 @@ describe('optimistic query typing', () => {
     expect(assertWrongQueryValueRejected).toBeTypeOf('function');
   });
 });
+
+const addToCartMutation = {
+  input: {
+    parse(input: unknown): { productId: string; quantity: number } {
+      return input as { productId: string; quantity: number };
+    },
+  },
+  key: 'cart/add',
+} as const;

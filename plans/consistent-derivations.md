@@ -156,8 +156,12 @@ packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.te
     passed `pnpm exec vitest run examples/commerce/src/app.test.ts
 examples/crm/src/interactive-app.test.ts examples/stackoverflow/src/interactive-app.test.ts
 examples/stackoverflow/src/optimism-derivation.test.ts`, `pnpm run check:vp`, and
-    `git diff --check`. Remaining gap: direct-test query/domain declarations still need a generated
-    live-target/query-key lowering path before their key-first forms can be removed.
+    `git diff --check`. `packages/core/src/index.ts`, `packages/browser/src/optimism.ts`, and
+    `packages/browser/src/optimism-typing.test.ts` now document and prove `form(addMutation)` as
+    the normal `OptimisticFor` typing path; verification passed `pnpm exec vitest run
+packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`. Remaining gap:
+    direct-test query/domain declarations still need a generated live-target/query-key lowering path
+    before their key-first forms can be removed.
 
 ## Phase 3 - Query Keys
 
@@ -303,9 +307,12 @@ site/tutorial/steps/07-verification/src/app.test.ts`, `pnpm run check:vp`, and `
     mutation values; verification passed `pnpm exec vitest run examples/commerce/src/app.test.ts
 examples/crm/src/interactive-app.test.ts examples/stackoverflow/src/interactive-app.test.ts
 examples/stackoverflow/src/optimism-derivation.test.ts`, `pnpm run check:vp`, and
-    `git diff --check`. Remaining gap: CRM/StackOverflow direct-test query/domain declarations still
-    use explicit names because migrating them currently exposes unkeyed generated live-target query
-    definitions in direct Vitest paths.
+    `git diff --check`. Public API examples and browser typing tests now use mutation-value forms
+    for optimistic authoring; verification passed `pnpm exec vitest run
+packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`. Remaining gap:
+    CRM/StackOverflow direct-test query/domain declarations still use explicit names because
+    migrating them currently exposes unkeyed generated live-target query definitions in direct
+    Vitest paths.
 
 - [ ] **Update generated registries, explain snapshots, compiler tests, server tests, and browser wire tests.**
   - Cover `/_m/*`, `data-mutation`, CSRF audience, replay scope, query wire chunks, domain touch
@@ -388,3 +395,6 @@ site/tutorial/steps/07-verification/src/app.test.ts`, `pnpm run check:vp`, and `
 examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
 examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/optimism-derivation.test.ts`,
   `pnpm run check:vp`, and `git diff --check` passed.
+- 2026-06-27: Updated public `form(addMutation)`/`OptimisticFor` docs and browser typing coverage;
+  `pnpm exec vitest run packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`
+  passed.

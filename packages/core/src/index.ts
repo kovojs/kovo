@@ -865,15 +865,17 @@ function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(
 }
 
 /**
- * Reference a registered mutation as a typed form, or a GET route as a search
- * form via `form.get`. `form(key)` returns a `Form` whose input and failure
- * types come from the mutation registry; `form.get(path)` returns a descriptor
- * with typed `input(name)` accessors for the route's search fields (SPEC §6.3).
+ * Reference a registered mutation value as a typed form, or a GET route as a
+ * search form via `form.get`. `form(addMutation)` returns a `Form` whose input
+ * and failure types come from the mutation definition; `form.get(path)` returns
+ * a descriptor with typed `input(name)` accessors for the route's search fields
+ * (SPEC §6.3).
  *
  * @example
  * import { form } from '@kovojs/core';
+ * import { addToCart } from './mutations';
  *
- * export const addToCart = form('cart/add');
+ * export const addToCartForm = form(addToCart);
  * export const search = form.get('/products');
  */
 export const form = Object.assign(createMutationForm, {

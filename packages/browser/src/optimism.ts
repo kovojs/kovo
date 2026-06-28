@@ -92,13 +92,14 @@ type InvalidatedQueryValues<Definition> = {
  * @example
  * import { form } from '@kovojs/core';
  * import type { OptimisticFor } from '@kovojs/browser';
+ * import { addToCart } from './mutations';
  *
- * const addToCart = form('cart/add');
+ * const addToCartForm = form(addToCart);
  *
  * export const addToCartOptimistic = {
  *   queue: 'cart',
  *   transforms: {},
- * } satisfies OptimisticFor<typeof addToCart>;
+ * } satisfies OptimisticFor<typeof addToCartForm>;
  */
 export type OptimisticFor<
   Definition extends Form<string, any, any>,
