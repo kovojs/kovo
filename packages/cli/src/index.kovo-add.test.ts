@@ -12,6 +12,7 @@ import {
   vendoredUiComponentSource,
   vendoredUiComponents,
 } from './add-catalog.js';
+import { addCommandShell } from './commands/compile.js';
 
 function importsUiPackage(source: string): boolean {
   const uiPackage = /['"]@kovojs\/ui(?:\/[^'"]*)?['"]/;
@@ -110,7 +111,7 @@ describe('kovo add', () => {
     }
   });
 
-  it('surfaces missing package dependencies for copied dialog source', () => {
+  it('installs missing package dependencies for copied toast source', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'src/components/ui');
     writeFileSync(
@@ -130,32 +131,90 @@ describe('kovo add', () => {
       )}\n`,
       'utf8',
     );
+    const install = vi
+      .spyOn(addCommandShell, 'execFileSync')
+      .mockImplementation(() => Buffer.alloc(0));
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(vendoredUiComponents.dialog.requiredPackageDependencies).toEqual([
+      expect(vendoredUiComponents.toast.requiredPackageDependencies).toEqual([
         '@kovojs/core',
         '@kovojs/headless-ui',
+        '@kovojs/icons',
         '@kovojs/style',
       ]);
 
-      expect(main(['add', 'dialog', '--out', outDir])).toBe(0);
+      expect(main(['add', 'toast', '--out', outDir])).toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
+      expect(install).toHaveBeenCalledWith('pnpm', ['install'], {
+        cwd: root,
+        stdio: 'pipe',
+      });
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain(
-        `ADD dialog path=${JSON.stringify(join(outDir, 'dialog.tsx'))} source=tsx package=@kovojs/ui@`,
+        `ADD toast path=${JSON.stringify(join(outDir, 'toast.tsx'))} source=tsx package=@kovojs/ui@`,
       );
       expect(output).toContain(
-        'DEPENDENCIES status=missing packages=@kovojs/headless-ui install="pnpm add @kovojs/headless-ui"',
+        `DEPENDENCIES status=installed packages=@kovojs/headless-ui,@kovojs/icons install="pnpm install" manifest=${JSON.stringify(join(root, 'package.json'))}`,
       );
-      expect(readFileSync(join(outDir, 'dialog.tsx'), 'utf8')).toContain(
-        "from '@kovojs/headless-ui/dialog';",
+      expect(readFileSync(join(outDir, 'toast.tsx'), 'utf8')).toContain(
+        "from '@kovojs/headless-ui/toast';",
       );
+      const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(packageJson.dependencies['@kovojs/headless-ui']).toBe('0.1.3');
+      expect(packageJson.dependencies['@kovojs/icons']).toBe('0.1.3');
     } finally {
+      install.mockRestore();
       stdout.mockRestore();
       stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('preserves local link specs when installing copied UI dependencies', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-link-'));
+    const outDir = join(root, 'src/components/ui');
+    writeFileSync(
+      join(root, 'package.json'),
+      `${JSON.stringify(
+        {
+          dependencies: {
+            '@kovojs/core': 'link:../kovo/packages/core',
+            '@kovojs/style': 'link:../kovo/packages/style',
+            '@kovojs/ui': 'link:../kovo/packages/ui',
+          },
+          packageManager: 'pnpm@10.12.1',
+          type: 'module',
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+    const install = vi
+      .spyOn(addCommandShell, 'execFileSync')
+      .mockImplementation(() => Buffer.alloc(0));
+
+    try {
+      expect(main(['add', 'toast', '--out', outDir])).toBe(0);
+
+      const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(packageJson.dependencies['@kovojs/headless-ui']).toBe(
+        'link:../kovo/packages/headless-ui',
+      );
+      expect(packageJson.dependencies['@kovojs/icons']).toBe('link:../kovo/packages/icons');
+      expect(install).toHaveBeenCalledWith('pnpm', ['install'], {
+        cwd: root,
+        stdio: 'pipe',
+      });
+    } finally {
+      install.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
   });
@@ -209,6 +268,20 @@ describe('kovo add', () => {
         expect.objectContaining({ code: 'KV235' }),
       );
       expect(result.diagnostics, name).toEqual([]);
+    }
+  });
+
+  it('keeps vendored pass-through helpers aligned for checkbox, radio-group, and switch copy-in', () => {
+    for (const componentName of ['checkbox', 'radio-group', 'switch'] as const) {
+      const source = vendoredUiComponents[componentName].source;
+      expect(source).toContain('island?: boolean;');
+      expect(source).toContain('bindings?: boolean;');
+      expect(source).toContain('const includeIsland = options.island ?? true;');
+      expect(source).toContain('const includeBindings = options.bindings ?? true;');
+      expect(source).toContain("name.startsWith('data-bind-prop:')");
+      expect(source).toContain(
+        'attrs.flatMap((name) => [`data-bind:${name}`, `data-bind-prop:${name}`])',
+      );
     }
   });
 
