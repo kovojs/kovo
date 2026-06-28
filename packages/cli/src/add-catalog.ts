@@ -188,6 +188,9 @@ function requiredKovoPackageDependencies(source: string): readonly string[] {
 }
 
 export function vendoredUiComponentSource(source: string): string {
+  const vendoredSourceHeader = '// @kovojs-ui-copy\n';
+  const needsBindingProps =
+    /import\s*\{\s*[^}]*\bbindingProps\b[^}]*\}\s*from '\.\/pass-through\.js';/.test(source);
   let transformed = source
     .replace(
       /\nimport \{ (?:bindingProps, )?passThroughProps \} from '\.\/pass-through\.js';\n/g,
@@ -196,21 +199,27 @@ export function vendoredUiComponentSource(source: string): string {
     .replace(/\nimport \{ uiTheme \} from '\.\/theme\.js';\n/g, '\n');
 
   if (source.includes("from './pass-through.js'")) {
-    transformed = insertAfterImports(transformed, `\n${vendoredPassThroughPropsSource()}\n`);
+    transformed = insertAfterImports(
+      transformed,
+      `\n${vendoredPassThroughPropsSource({ includeBindingProps: needsBindingProps })}\n`,
+    );
   }
 
   if (source.includes("from './theme.js'")) {
     transformed = rewriteUiThemeReferences(transformed);
   }
 
+  transformed = rewriteCopiedChildrenSlots(transformed);
   transformed = rewriteLocalPulseKeyframes(transformed);
   transformed = rewriteVendoredSoundSubset(transformed);
 
-  return canonicalVendoredUiComponentSource(transformed);
+  return canonicalVendoredUiComponentSource(`${vendoredSourceHeader}${transformed}`);
 }
 
 export function normalizedVendoredUiComponentSource(source: string): string {
-  return canonicalVendoredUiComponentSource(source).trim();
+  return canonicalVendoredUiComponentSource(
+    source.replace(/^\s*\/\/ @kovojs-ui-copy\s*\n/, ''),
+  ).trim();
 }
 
 function rewriteVendoredSoundSubset(source: string): string {
@@ -319,6 +328,125 @@ function rewriteUiThemeReferences(source: string): string {
   return transformed;
 }
 
+function rewriteCopiedChildrenSlots(source: string): string {
+  if (!source.includes('props.children')) return source;
+
+  let cursor = 0;
+  let transformed = '';
+
+  while (cursor < source.length) {
+    const headerStart = source.indexOf('render(props:', cursor);
+    if (headerStart === -1) {
+      transformed += source.slice(cursor);
+      break;
+    }
+
+    const bodyStart = renderBodyStart(source, headerStart);
+    if (bodyStart === -1) {
+      transformed += source.slice(cursor);
+      break;
+    }
+
+    const bodyEnd = matchingBraceEnd(source, bodyStart);
+    if (bodyEnd === -1) {
+      transformed += source.slice(cursor);
+      break;
+    }
+
+    const body = source.slice(bodyStart + 1, bodyEnd);
+    transformed += source.slice(cursor, headerStart);
+
+    if (!body.includes('props.children')) {
+      transformed += source.slice(headerStart, bodyEnd + 1);
+      cursor = bodyEnd + 1;
+      continue;
+    }
+
+    const header = source.slice(headerStart, bodyStart);
+    transformed += `${copiedChildrenSlotRenderHeader(header)} {${body.replaceAll(
+      'props.children',
+      'children',
+    )}}`;
+    cursor = bodyEnd + 1;
+  }
+
+  return transformed;
+}
+
+function copiedChildrenSlotRenderHeader(header: string): string {
+  const prefix = 'render(props: ';
+  const suffix = ') ';
+  if (!header.startsWith(prefix) || !header.endsWith(suffix)) return header;
+  const propsType = header.slice(prefix.length, -suffix.length);
+  return `render(props: ${propsType}, _state, { children } = { children: props.children })`;
+}
+
+function renderBodyStart(source: string, start: number): number {
+  let parenDepth = 0;
+  let quote: '"' | "'" | '`' | undefined;
+  let escaped = false;
+
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote !== undefined) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      parenDepth += 1;
+      continue;
+    }
+    if (char === ')') {
+      parenDepth -= 1;
+      continue;
+    }
+    if (char === '{' && parenDepth === 0) return index;
+  }
+  return -1;
+}
+
+function matchingBraceEnd(source: string, start: number): number {
+  let depth = 0;
+  let quote: '"' | "'" | '`' | undefined;
+  let escaped = false;
+
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote !== undefined) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+    if (char !== '}') continue;
+    depth -= 1;
+    if (depth === 0) return index;
+  }
+  return -1;
+}
+
 function vendoredUiFiles(
   componentName: string,
   sourcePath: string,
@@ -424,8 +552,8 @@ function rewriteLocalPulseKeyframes(source: string): string {
   return transformed;
 }
 
-function vendoredPassThroughPropsSource(): string {
-  return `const blockedProps = new Set([
+function vendoredPassThroughPropsSource(options: { includeBindingProps: boolean }): string {
+  const passThroughSource = `const blockedProps = new Set([
   'activeValue',
   'actionValue',
   'autoFocus',
@@ -564,6 +692,11 @@ function bindingProps(props: object, attrs?: readonly string[]): Record<string, 
     ),
   );
 }`;
+  if (options.includeBindingProps) return passThroughSource;
+  return passThroughSource.replace(
+    /\n\/\/ Forward only the compiler-emitted reactive binding stamps[\s\S]*?\n}\s*$/,
+    '\n',
+  );
 }
 
 function importsNonPublicKovoSubpath(source: string): boolean {

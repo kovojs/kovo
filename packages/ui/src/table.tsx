@@ -94,20 +94,30 @@ function escapeHtml(value: unknown): string {
   ) {
     return (value as { html: string }).html;
   }
-  const text =
-    value === null || value === undefined || typeof value === 'boolean' ? '' : String(value);
+  const text = tableTextValue(value);
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 function renderTableChildren(value: unknown): MaybePromise<string> {
   if (Array.isArray(value)) {
     const rendered = value.map((item) => renderTableChildren(item));
-    return rendered.some(isPromiseLike)
-      ? Promise.all(rendered.map((item) => Promise.resolve(item))).then((parts) => parts.join(''))
-      : rendered.join('');
+    return rendered.every(isString)
+      ? rendered.join('')
+      : Promise.all(rendered.map((item) => Promise.resolve(item))).then((parts) => parts.join(''));
   }
   if (isPromiseLike(value)) return Promise.resolve(value).then(renderTableChildren);
   return escapeHtml(value);
+}
+
+function tableTextValue(value: unknown): string {
+  if (value === null || value === undefined || typeof value === 'boolean') return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint') return `${value}`;
+  return JSON.stringify(value) ?? '';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -329,11 +339,25 @@ function tableAttributes(attributes: TablePartAttributes | Record<string, unknow
   let rendered = '';
 
   for (const [name, value] of Object.entries(attributes)) {
-    if (value === undefined || value === '') continue;
-    rendered += ` ${name}="${escapeAttribute(String(value))}"`;
+    const attribute = tableAttributeValue(value);
+    if (attribute === undefined) continue;
+    rendered += ` ${name}="${escapeAttribute(attribute)}"`;
   }
 
   return rendered;
+}
+
+function tableAttributeValue(value: unknown): string | undefined {
+  if (value === undefined || value === '') return undefined;
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'boolean'
+  ) {
+    return `${value}`;
+  }
+  return JSON.stringify(value) ?? undefined;
 }
 
 type TablePartAttributes = Readonly<{

@@ -138,8 +138,33 @@ describe('server static export replay response boundary', () => {
       diagnostics: [
         {
           code: 'KV229',
-          message: expect.stringContaining('deferred/streamed route fragments'),
+          message: expect.stringContaining('deferred, streamed, or fragment route markers'),
           routePath: '/products/p1',
+        },
+      ],
+    });
+  });
+
+  it('reports concrete deferred route markers instead of an opaque route 500', async () => {
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: new Response(
+          '<main><kovo-fragment target="feed">Loading</kovo-fragment></main>',
+          {
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            status: 500,
+          },
+        ),
+        routePath: '/',
+      }),
+    ).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        {
+          code: 'KV229',
+          message: expect.stringContaining('deferred, streamed, or fragment route markers'),
+          routePath: '/',
         },
       ],
     });

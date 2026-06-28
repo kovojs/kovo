@@ -87,6 +87,24 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     expect(diagnostics[0]?.site).toBe('app.ts:9');
   });
 
+  it('excludes Kovo stream.query while keeping managed db.query as KV422', () => {
+    const diagnostics = diagnosticsFor(`
+      import { stream } from '@kovojs/server';
+      export async function* assistant(input: { id: string }, db: any) {
+        yield stream.query({ name: 'assistant', value: { id: input.id } });
+        await db.query("select * from products where id = '" + input.id + "'");
+      }
+    `);
+
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('query() receives request-derived SQL text'),
+        site: 'app.ts:5',
+      },
+    ]);
+  });
+
   it('flags unknown-provenance helpers, untagged templates, and unaudited raw helpers', () => {
     const diagnostics = diagnosticsFor(`
       import { sql } from '@kovojs/drizzle';

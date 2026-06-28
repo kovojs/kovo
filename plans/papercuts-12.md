@@ -19,7 +19,7 @@ the same pass are filed in `plans/bugz-11.md`.
 
 ### A. Copied UI Workflow
 
-- [ ] **Copied nested UI primitives still render literal `[object Promise]` in dev.** (high, framework; found by `ui-copyin-recheck`)
+- [x] **Copied nested UI primitives still render literal `[object Promise]` in dev.** (high, framework; found by `ui-copyin-recheck`)
   - Observed behavior: dev `GET /catalog` returned HTTP 200 but the HTML
     contained 13 literal `[object Promise]` strings in Breadcrumb, Card, Tabs,
     Accordion, Dialog, and Toast child regions.
@@ -38,8 +38,13 @@ the same pass are filed in `plans/bugz-11.md`.
     matches.
   - Acceptance: broad copied UI composition renders without literal promise
     strings in dev and production, with coverage beyond Card-only forwarding.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts` passed with
+    copied-catalog child composition on the compiler-visible slot channel, and
+    dogfood dev `curl http://127.0.0.1:5173/catalog -o /tmp/kovo-ui-copyin-dev-fixed.html && rg '\[object Promise\]' /tmp/kovo-ui-copyin-dev-fixed.html`
+    produced no matches.
 
-- [ ] **Full copied UI catalog makes production build time out or hang.** (high, dev-tooling; found by `ui-copyin-recheck`)
+- [x] **Full copied UI catalog makes production build time out or hang.** (high, dev-tooling; found by `ui-copyin-recheck`)
   - Observed behavior: after copying the broad UI catalog, `pnpm run check`
     failed during `build:prod` with `transport invoke timed out after 60000ms`;
     standalone `pnpm run build:prod` stayed active for several minutes and had
@@ -58,8 +63,12 @@ the same pass are filed in `plans/bugz-11.md`.
   - Acceptance: the broad copied UI catalog either builds within the production
     preflight budget or fails with a concrete diagnostic that names the
     problematic import/render path.
+  - Evidence: 2026-06-28
+    `/Users/mini/kovo-dogfood-20260628g/ui-copyin-recheck` regenerated all 44
+    copied UI components from the scoped worktree and `pnpm run check` passed,
+    including `pnpm run build:prod` and endpoint-posture verification.
 
-- [ ] **`kovo add` dependency insertion leaves `package.json` failing the starter formatter.** (med, dev-tooling; found by `ui-copyin-recheck`)
+- [x] **`kovo add` dependency insertion leaves `package.json` failing the starter formatter.** (med, dev-tooling; found by `ui-copyin-recheck`)
   - Observed behavior: immediately after `kovo add` installed
     `@kovojs/headless-ui` and `@kovojs/icons`, `pnpm run check` failed
     formatting on `package.json`.
@@ -74,8 +83,12 @@ src/components/ui`, then `pnpm run check` reports `package.json`
     formatting.
   - Acceptance: `kovo add` writes formatter-stable manifest changes, with a CLI
     test covering inserted dependency order.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts` passed with
+    sorted dependency insertion coverage; the regenerated dogfood app
+    `pnpm run check` formatter phase reported all 69 files correctly formatted.
 
-- [ ] **Copied UI helper warnings still flood generated app checks.** (low, dev-tooling; found by `ui-copyin-recheck` and `drizzle-optimistic-style-recheck`)
+- [x] **Copied UI helper warnings still flood generated app checks.** (low, dev-tooling; found by `ui-copyin-recheck` and `drizzle-optimistic-style-recheck`)
   - Observed behavior: after formatting, `vp check` reported dozens of warnings
     from copied files, including unused `bindingProps` in copied Command and
     Combobox and table stringification warnings.
@@ -93,10 +106,15 @@ src/components/ui`, then `pnpm run check` reports `package.json`
     warnings.
   - Acceptance: copied UI files are warning-clean under the generated starter
     check profile.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts` passed with
+    unused `bindingProps` omitted from copied Command/Combobox and table
+    stringification warning coverage; dogfood `pnpm run check` reported no
+    warnings, lint errors, or type errors in 62 files.
 
 ### B. Query / Streaming Build Paths
 
-- [ ] **Aliased object-form non-Drizzle query output schemas do not feed binding validation.** (med, framework; found by `query-stream-export-recheck`)
+- [x] **Aliased object-form non-Drizzle query output schemas do not feed binding validation.** (med, framework; found by `query-stream-export-recheck`)
   - Observed behavior: `import { query as defineQuery }` and
     `defineQuery.elevated(...)` failed `build:prod` with KV302 for valid paths
     declared by `output: s.object(...)`: `leads.summary.newest`,
@@ -113,8 +131,12 @@ src/components/ui`, then `pnpm run check` reports `package.json`
     changed back to unaliased `query`.
   - Acceptance: output-schema fact extraction resolves public `query` import
     aliases, with a focused `query as defineQuery` test.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/vite-data-plane-gate.test.ts packages/drizzle/src/sql-safety-static.test.ts`
+    passed with output-schema fact coverage for `query as defineQuery` and
+    namespace/elevated query callees.
 
-- [ ] **Streaming mutation `stream.query(...)` is misclassified as a SQL sink.** (med, framework; found by `query-stream-export-recheck`)
+- [x] **Streaming mutation `stream.query(...)` is misclassified as a SQL sink.** (med, framework; found by `query-stream-export-recheck`)
   - Observed behavior: `kovo build` failed with KV422 for
     `yield stream.query({ name, value })`, reporting `query() receives
 unknown-provenance SQL text`.
@@ -129,10 +151,14 @@ unknown-provenance SQL text`.
     removed.
   - Acceptance: KV422 continues to catch real database `.query(...)` calls while
     excluding Kovo `stream.query(...)`, with focused static-analysis coverage.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/vite-data-plane-gate.test.ts packages/drizzle/src/sql-safety-static.test.ts`
+    passed with `stream.query(...)` excluded from KV422 while `db.query(...)`
+    remains flagged.
 
 ### C. Static Export Diagnostics
 
-- [ ] **Static export still collapses an interactive `/` route to generic KV229 replay 500.** (low, dev-tooling; found by `query-stream-export-recheck`)
+- [x] **Static export still collapses an interactive `/` route to generic KV229 replay 500.** (low, dev-tooling; found by `query-stream-export-recheck`)
   - Observed behavior: `kovo export --skip-non-exportable` emitted a concrete
     KV229 for `/export-blocked/:id`, but `/` reported only `returned status
 500` instead of the deferred/streaming or mutation endpoint reason.
@@ -149,6 +175,10 @@ unknown-provenance SQL text`.
     generic KV229 replay status 500 for `/`.
   - Acceptance: source export replay reports a concrete non-exportable cause or
     the actual render exception, not only generic replay status 500.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/static-export-response.test.ts`
+    passed with replayed 500 HTML containing deferred/fragment markers or
+    mutation endpoint refs reported as concrete KV229 causes.
 
 ## Refuted / Not Carried Forward
 
@@ -167,3 +197,13 @@ unknown-provenance SQL text`.
 - Worker gates across `ui-copyin-recheck`, `query-stream-export-recheck`, and
   `drizzle-optimistic-style-recheck` supplied the command-level reproductions
   recorded under each issue.
+- 2026-06-28 focused fix gates:
+  `pnpm exec vitest run packages/server/src/mutation-endpoint.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/drizzle/src/sql-safety-static.test.ts`
+  and
+  `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-route-outcomes.test.ts packages/server/src/vite-export-replay.test.ts packages/server/src/static-export-response.test.ts packages/server/src/route.test.ts`
+  both passed.
+- 2026-06-28 dogfood verification:
+  `/Users/mini/kovo-dogfood-20260628g/ui-copyin-recheck` regenerated the full
+  copied UI catalog from the scoped worktree and `pnpm run check` passed; dev
+  `/catalog` rendered to `/tmp/kovo-ui-copyin-dev-fixed.html` with no literal
+  `[object Promise]` strings.

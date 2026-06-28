@@ -119,7 +119,7 @@ function routeDocumentNonExportableOutcomeDiagnostics(
     return [
       staticExportDiagnostic(
         routePath,
-        `KV229 static export cannot export route '${routePath}' because replayed HTML contains deferred/streamed route fragments. Static export is L0/L1 only and writes complete no-JS documents; render this content eagerly for export or serve the route dynamically.`,
+        `KV229 static export cannot export route '${routePath}' because replayed HTML contains deferred, streamed, or fragment route markers. Static export is L0/L1 only and writes complete no-JS documents; render this content eagerly for export or serve the route dynamically.`,
         routePath,
       ),
     ];
@@ -160,8 +160,9 @@ function isHtmlDocumentContentType(contentType: string | null): boolean {
 
 function isDeferredRouteDocumentBody(body: string): boolean {
   return (
-    body.includes('<kovo-defer') &&
-    (body.includes('<kovo-fragment ') || body.includes('--kovo-boundary'))
+    body.includes('<kovo-defer') ||
+    body.includes('<kovo-fragment ') ||
+    body.includes('--kovo-boundary')
   );
 }
 

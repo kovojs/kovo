@@ -55,6 +55,10 @@ function soundSubsetFindings(source: string): readonly string[] {
   return findings;
 }
 
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
 describe('kovo add', () => {
   it('keeps the vendored UI catalog synchronized with @kovojs/ui package source', () => {
     expect(availableAddComponents()).toBe(
@@ -165,6 +169,13 @@ describe('kovo add', () => {
       const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
         dependencies: Record<string, string>;
       };
+      expect(Object.keys(packageJson.dependencies)).toEqual([
+        '@kovojs/core',
+        '@kovojs/headless-ui',
+        '@kovojs/icons',
+        '@kovojs/style',
+        '@kovojs/ui',
+      ]);
       expect(packageJson.dependencies['@kovojs/headless-ui']).toBe('0.1.3');
       expect(packageJson.dependencies['@kovojs/icons']).toBe('0.1.3');
     } finally {
@@ -282,6 +293,39 @@ describe('kovo add', () => {
       expect(source).toContain(
         'attrs.flatMap((name) => [`data-bind:${name}`, `data-bind-prop:${name}`])',
       );
+    }
+  });
+
+  it('omits unused binding helpers from copied command and combobox source', () => {
+    expect(vendoredUiComponents.command.source).not.toContain('function bindingProps(');
+    expect(vendoredUiComponents.combobox.source).not.toContain('function bindingProps(');
+    expect(vendoredUiComponents.checkbox.source).toContain('function bindingProps(');
+    expect(vendoredUiComponents['radio-group'].source).toContain('function bindingProps(');
+    expect(vendoredUiComponents.switch.source).toContain('function bindingProps(');
+  });
+
+  it('keeps copied catalog child composition on the compiler-visible slot channel', () => {
+    for (const componentName of [
+      'accordion',
+      'alert',
+      'badge',
+      'breadcrumb',
+      'button',
+      'card',
+      'dialog',
+      'field',
+      'kbd',
+      'progress',
+      'radio-group',
+      'switch',
+      'tabs',
+      'toast',
+      'toggle',
+      'toggle-group',
+    ] as const) {
+      const source = stripComments(vendoredUiComponents[componentName].source);
+      expect(source, componentName).not.toMatch(/\{\s*props\.children(?:\s*\?\?)?/);
+      expect(source, componentName).toMatch(/render\([^)]*,\s*[^)]*,\s*\{\s*children\b/);
     }
   });
 
