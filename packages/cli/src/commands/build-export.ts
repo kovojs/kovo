@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import type { lowerStandaloneSourceDerivedRegistryDeclarations } from '@kovojs/compiler/internal';
 import type { KovoApp, StaticExportCompileDiagnostic, StylesheetAsset } from '@kovojs/server';
 import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
@@ -353,7 +354,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
         kovoBuildStylesheetCss(resolvedAppModulePath),
       ]);
     const app = appFromModule(appModule, options.appModulePath);
-    await runKovoBuildCheckPreflight(app, resolvedAppModulePath);
+    const checkGraph = await runKovoBuildCheckPreflight(app, resolvedAppModulePath);
     const outDir = resolve(options.outDir);
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
@@ -366,10 +367,9 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       clientBuild.assets,
     ]);
     const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets);
-    const serverHandlerSource = await bundleKovoServerHandler(
-      resolvedAppModulePath,
-      buildCssAssets,
-    );
+    const serverHandlerSource = await bundleKovoServerHandler(resolvedAppModulePath, {
+      stylesheetAssets: buildCssAssets,
+    });
     const neutralBuild = await writeKovoNeutralBuild({
       app: buildApp,
       buildStylesheetCss: [...buildStylesheetCss.stylesheetCss, ...clientBuild.stylesheetCss],
@@ -377,6 +377,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       outDir: join(outDir, '.kovo'),
       serverHandlerSource,
     });
+    writeKovoBuildGraphArtifact(neutralBuild, checkGraph);
     const preset =
       selectedPreset.preset ??
       (selectedPreset.name === 'cloudflare'
@@ -457,12 +458,25 @@ function runTypeScriptBuildPreflight(appModulePath: string): void {
   }
 }
 
-async function runKovoBuildCheckPreflight(app: KovoApp, appModulePath: string): Promise<void> {
+async function runKovoBuildCheckPreflight(
+  app: KovoApp,
+  appModulePath: string,
+): Promise<CoreGraph.KovoCheckInput> {
   const graph = await buildCheckGraph(app, appModulePath);
   const result = kovoCheck(graph);
-  if (result.exitCode === 0) return;
+  if (result.exitCode === 0) return graph;
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+}
+
+function writeKovoBuildGraphArtifact(
+  neutralBuild: KovoNeutralBuild,
+  graph: CoreGraph.KovoCheckInput,
+): void {
+  // SPEC §5.3: the build-derived graph is a review/debug artifact, not just an
+  // in-memory preflight input. Persist it in the neutral build metadata directory
+  // so `kovo explain ...` can discover it after an ordinary scaffold build.
+  writeFileSync(join(neutralBuild.outDir, 'graph.json'), `${JSON.stringify(graph, null, 2)}\n`);
 }
 
 function buildCheckFailureOutput(output: string): string {
@@ -1022,10 +1036,14 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
 }
 
 async function loadBuildAppModule(appModulePath: string, root: string): Promise<unknown> {
-  const { createServer } = await import('vite-plus');
+  const [{ lowerStandaloneSourceDerivedRegistryDeclarations }, { createServer }] =
+    await Promise.all([import('@kovojs/compiler/internal'), import('vite-plus')]);
   const server = await createServer({
     appType: 'custom',
     logLevel: 'error',
+    plugins: [
+      sourceDerivedRegistryVitePlugin(root, lowerStandaloneSourceDerivedRegistryDeclarations),
+    ],
     root,
     server: buildTimeViteServerOptions(),
   });
@@ -1047,6 +1065,45 @@ function viteSsrModuleId(filePath: string, root: string): string {
     return `/${relativePath.split(/[\\/]/).join('/')}`;
   }
   return pathToFileURL(filePath).href;
+}
+
+function sourceDerivedRegistryVitePlugin(
+  root: string,
+  lowerRegistryDeclarations: typeof lowerStandaloneSourceDerivedRegistryDeclarations,
+): {
+  enforce: 'pre';
+  name: string;
+  transform(source: string, id: string): null | { code: string; map: null };
+} {
+  return {
+    enforce: 'pre',
+    name: 'kovo-source-derived-registry',
+    transform(source, id) {
+      const fileName = viteSourceFileName(id, root);
+      if (!/\.[cm]?[jt]sx?$/.test(fileName)) return null;
+      const code = lowerRegistryDeclarations({ fileName, source });
+      return code === null ? null : { code, map: null };
+    },
+  };
+}
+
+function viteSourceFileName(id: string, root: string): string {
+  const fileName = id.split(/[?#]/, 1)[0] ?? id;
+  if (!isAbsolute(fileName)) return slashPath(fileName.replace(/^\/+/, ''));
+
+  const relativeFileName = relative(root, fileName);
+  if (
+    relativeFileName !== '' &&
+    !relativeFileName.startsWith('..') &&
+    !isAbsolute(relativeFileName)
+  )
+    return slashPath(relativeFileName);
+
+  return slashPath(fileName.replace(/^\/+/, ''));
+}
+
+function slashPath(fileName: string): string {
+  return fileName.replaceAll('\\', '/');
 }
 
 function findKovoBuildConfig(root: string): string | undefined {
@@ -1316,9 +1373,15 @@ function kovoClientBuildRoot(appModulePath: string): string {
 
 async function bundleKovoServerHandler(
   appModulePath: string,
-  stylesheetAssets: KovoBuildStylesheetAssets = emptyKovoBuildStylesheetAssets(),
+  options: {
+    stylesheetAssets?: KovoBuildStylesheetAssets;
+  },
 ): Promise<string> {
-  const { build } = await import('vite-plus');
+  const [{ lowerStandaloneSourceDerivedRegistryDeclarations }, { build }] = await Promise.all([
+    import('@kovojs/compiler/internal'),
+    import('vite-plus'),
+  ]);
+  const stylesheetAssets = options.stylesheetAssets ?? emptyKovoBuildStylesheetAssets();
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-build-'));
   const entryPath = join(tempDir, 'entry.mjs');
   const outDir = join(tempDir, 'out');
@@ -1349,6 +1412,12 @@ async function bundleKovoServerHandler(
       },
       configFile: false,
       logLevel: 'silent',
+      plugins: [
+        sourceDerivedRegistryVitePlugin(
+          process.cwd(),
+          lowerStandaloneSourceDerivedRegistryDeclarations,
+        ),
+      ],
       resolve: {
         alias: [
           { find: /^@kovojs\/server$/, replacement: requireFromCli.resolve('@kovojs/server') },

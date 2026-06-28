@@ -109,6 +109,114 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
   });
 
+  it('accepts direct owner-column predicates against the session principal when names differ', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'project-access.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const projects = pgTable("projects", { id: text("id").primaryKey(), ownerId: text("owner_id").notNull(), name: text("name").notNull() }, kovo({ domain: "project", key: (t) => t.id, owner: (t) => t.ownerId }));',
+              'export const tasks = pgTable("tasks", { id: text("id").primaryKey(), ownerId: text("owner_id").notNull(), status: text("status").notNull() }, kovo({ domain: "task", key: (t) => t.id, owner: (t) => t.ownerId }));',
+              '',
+              'export const myProjects = query("myProjects", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, context: { request: { session: { userId: string } } }) {',
+              '    return db.select({ id: projects.id }).from(projects).where(eq(projects.ownerId, context.request.session.userId));',
+              '  },',
+              '});',
+              '',
+              'export const projectsByClientOwner = query("projectsByClientOwner", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    return db.select({ id: projects.id }).from(projects).where(eq(projects.ownerId, input.userId));',
+              '  },',
+              '});',
+              '',
+              'export const projectsByUnknownOwner = query("projectsByUnknownOwner", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+              '    const ownerId = "u1";',
+              '    return db.select({ id: projects.id }).from(projects).where(eq(projects.ownerId, ownerId));',
+              '  },',
+              '});',
+              '',
+              'export async function closeMyTasks(db: PgAsyncDatabase<any, any>, request: { session: { userId: string } }) {',
+              '  await db.update(tasks).set({ status: "closed" }).where(eq(tasks.ownerId, request.session.userId));',
+              '}',
+              '',
+              'export async function closeClientTasks(db: PgAsyncDatabase<any, any>, input: { ownerId: string }) {',
+              '  await db.update(tasks).set({ status: "closed" }).where(eq(tasks.ownerId, input.ownerId));',
+              '}',
+              '',
+              'export async function closeUnknownTasks(db: PgAsyncDatabase<any, any>) {',
+              '  const ownerId = "u1";',
+              '  await db.update(tasks).set({ status: "closed" }).where(eq(tasks.ownerId, ownerId));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({
+          detail: a.detail,
+          domain: a.domain,
+          kind: a.kind,
+          name: a.name,
+          scope: a.scope,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      { detail: undefined, domain: 'task', kind: 'write', name: 'closeClientTasks', scope: 'args' },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=ownerId; owner column compared to session:userId',
+        domain: 'task',
+        kind: 'write',
+        name: 'closeMyTasks',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=ownerId; no owner-column session/principal predicate was proven',
+        domain: 'task',
+        kind: 'write',
+        name: 'closeUnknownTasks',
+        scope: 'unknown',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=ownerId; owner column compared to session:userId',
+        domain: 'project',
+        kind: 'query',
+        name: 'myProjects',
+        scope: 'session',
+      },
+      {
+        detail: undefined,
+        domain: 'project',
+        kind: 'query',
+        name: 'projectsByClientOwner',
+        scope: 'args',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=ownerId; no owner-column session/principal predicate was proven',
+        domain: 'project',
+        kind: 'query',
+        name: 'projectsByUnknownOwner',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
   // A1 (SPEC §10.3 / KV414): the IDOR gate covers "a query OR write" reaching an
   // owner table. An owner-table mutation keyed by a client arg must emit a
   // `kind:'write'` scope audit so `kovo check` raises KV414 — the write half the

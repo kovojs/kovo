@@ -387,6 +387,46 @@ export const Button = component({
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('composes generated StyleX classes with same-element theme class writers', () => {
+    const result = compileComponentModule({
+      fileName: 'components/panel.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const vars = style.defineVars({
+  surface: 'white',
+});
+
+const darkTheme = style.createTheme(vars, {
+  surface: '#111827',
+});
+
+const styles = style.create({
+  shell: {
+    backgroundColor: vars.surface,
+    padding: 16,
+  },
+});
+
+export const Panel = component({
+  render: () => <section class={darkTheme.className} style={styles.shell}>Settings</section>,
+});
+`,
+    });
+
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(serverSource).toMatch(
+      /class="kv-dark-theme-[a-z0-9]+ kv-panel-bg-[a-z0-9]+ kv-panel-pad-[a-z0-9]+"/,
+    );
+    expect(serverSource).toContain('data-style-src="components/panel.tsx#shell"');
+    expect(serverSource).not.toContain('class={darkTheme.className}');
+    expect(serverSource).not.toContain('style={styles.shell}');
+    expect(result.diagnostics).toEqual([]);
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+  });
+
   it('reports unmergeable author class expression conflicts with the StyleX lowerer', () => {
     const result = compileComponentModule({
       fileName: 'components/button.tsx',

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
@@ -69,7 +69,11 @@ type InputReadResult =
   | { error: InputReadError; ok: false };
 
 export function readGraphInput(path: string | undefined): InputReadResult {
-  if (!path) return { ok: true, value: {} };
+  if (!path) {
+    const discoveredPath = discoverGraphInputPath();
+    if (discoveredPath === undefined) return { ok: true, value: {} };
+    return readGraphInput(discoveredPath);
+  }
 
   let source: string;
   try {
@@ -101,6 +105,13 @@ export function readGraphInput(path: string | undefined): InputReadResult {
   }
 
   return { ok: true, value: parsed as CoreGraph.KovoExplainInput };
+}
+
+function discoverGraphInputPath(): string | undefined {
+  for (const path of ['graph.json', '.kovo/graph.json', 'dist/.kovo/graph.json']) {
+    if (existsSync(path)) return path;
+  }
+  return undefined;
 }
 
 export function inputErrorMessage(error: InputReadError): string {

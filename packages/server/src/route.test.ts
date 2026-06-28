@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { redirect } from '@kovojs/core';
 
-import { renderedHtml, renderHtmlValue } from './html.js';
+import { renderedHtml, renderHtmlValue, type RenderedHtml } from './html.js';
 import { renderPageHints } from './hints.js';
 import { meta } from './meta.js';
 import {
@@ -11,6 +11,7 @@ import {
   renderRoutePageResponse,
   route,
   runRoutePage,
+  type RoutePageResult,
 } from './route.js';
 import { s } from './schema.js';
 
@@ -102,6 +103,58 @@ describe('route primitives', () => {
     expect(
       renderHtmlValue(await optionalSearchRoute.page?.(parseRouteRequest(optionalSearchRoute), {})),
     ).toBe('none');
+  });
+
+  it('keeps layout region slots closed over the declared route region contract', () => {
+    const assertUnannotatedTypoRejected = () => {
+      layout({
+        render: (_queries, _state, { regions }) => {
+          // @ts-expect-error SPEC §4.5: uncontracted layout regions have no declared keys.
+          regions.sidebarTypo;
+          return renderedHtml('layout');
+        },
+      });
+    };
+    expect(assertUnannotatedTypoRejected).toBeTypeOf('function');
+
+    type DocsRegions = Readonly<{
+      page: RenderedHtml;
+      sidebar: number;
+    }>;
+
+    const DocsLayout = layout<unknown, {}, RoutePageResult, DocsRegions>({
+      render: (_queries, _state, { regions }) => {
+        const page: RenderedHtml = regions.page;
+        const sidebar: number = regions.sidebar;
+        const assertTypoRejected = () => {
+          // @ts-expect-error SPEC §4.5: route/layout region contracts are closed to declared keys.
+          regions.sidebarTypo;
+        };
+
+        expect(assertTypoRejected).toBeTypeOf('function');
+        return renderedHtml(`${page.html}:${sidebar}`);
+      },
+    });
+
+    const docsRoute = route('/guides/:slug', {
+      layout: DocsLayout,
+      regions: {
+        page: ({ params }) => renderedHtml(params.slug),
+        sidebar: () => 1,
+      },
+    });
+    expect(docsRoute.regions?.sidebar).toBeTypeOf('function');
+
+    const assertMissingRegionRejected = () => {
+      route('/missing-region', {
+        // @ts-expect-error SPEC §4.5: DocsLayout reads `sidebar`, so the route must declare it.
+        layout: DocsLayout,
+        regions: {
+          page: () => renderedHtml('page'),
+        },
+      });
+    };
+    expect(assertMissingRegionRejected).toBeTypeOf('function');
   });
 
   it('runs route pages through guards and notFound page outcomes', async () => {

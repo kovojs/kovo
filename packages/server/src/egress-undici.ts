@@ -1,7 +1,12 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
 import type { LookupAddress } from 'node:dns';
-import { createRequire } from 'node:module';
-import type { Agent as UndiciAgent, Dispatcher } from 'undici';
+import {
+  Agent,
+  getGlobalDispatcher,
+  setGlobalDispatcher,
+  type Agent as UndiciAgent,
+  type Dispatcher,
+} from 'undici';
 
 import {
   EgressBlockedError,
@@ -10,10 +15,6 @@ import {
   normalizeIpLiteral,
   type EgressPolicy,
 } from './egress.js';
-
-const require = createRequire(import.meta.url);
-const { Agent, getGlobalDispatcher, setGlobalDispatcher } =
-  require('undici') as typeof import('undici');
 
 /**
  * Layer (a) of the outbound-egress floor (SPEC §6.6): a custom undici dispatcher installed as

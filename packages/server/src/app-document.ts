@@ -266,7 +266,8 @@ export async function renderAppErrorDocumentResponse(
 
   if (renderer) {
     try {
-      return await renderer({ request, status });
+      const rendered = await renderer({ request, status });
+      return renderConfiguredErrorShellDocumentResponse(app, request, rendered, status);
     } catch (error) {
       reportServerError(app.onError, error, {
         operation: 'error-shell',
@@ -287,6 +288,59 @@ export async function renderAppErrorDocumentResponse(
     reportingOrigin: new URL(request.url).origin,
     status,
   });
+}
+
+function renderConfiguredErrorShellDocumentResponse(
+  app: KovoApp,
+  request: Request,
+  response: RoutePageResponse,
+  status: 403 | 404 | 500,
+): RoutePageResponse {
+  // SPEC §9.2/§9.5: configured request-shell error bodies are still framework-owned
+  // documents. They therefore receive the same document security/header floor as route
+  // documents instead of bypassing CSP/XFO/nosniff/cache defaults.
+  const secure =
+    new URL(request.url).protocol === 'https:' ||
+    request.headers.get('x-forwarded-proto') === 'https';
+  const documentResponse = renderRouteDocumentResponse(
+    {
+      ...response,
+      body: typeof response.body === 'string' ? response.body : '',
+      headers: stripContentTypeHeader(response.headers),
+      status,
+    },
+    {
+      ...(app.document.csp === undefined ? {} : { csp: app.document.csp }),
+      ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
+      ...(app.stylesheets.length > 0 ? { hints: { stylesheets: app.stylesheets } } : {}),
+      ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
+      loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
+      noStore: true,
+      reportingOrigin: new URL(request.url).origin,
+      ...(secure ? { secure: true } : {}),
+      wrapNonOk: true,
+    },
+  );
+
+  return {
+    ...documentResponse,
+    headers: mergeVaryHeader(
+      {
+        ...documentResponse.headers,
+        'Cache-Control': 'private, no-store',
+      },
+      'Cookie',
+    ),
+    status,
+  };
+}
+
+function stripContentTypeHeader(
+  headers: RoutePageResponse['headers'],
+): RoutePageResponse['headers'] {
+  return Object.fromEntries(
+    Object.entries(headers).filter(([name]) => name.toLowerCase() !== 'content-type'),
+  );
 }
 
 export function appRequestUrl(url: URL): string {
