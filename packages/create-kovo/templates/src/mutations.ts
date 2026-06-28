@@ -1,4 +1,3 @@
-import { form } from '@kovojs/core';
 import { domain, guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
 
@@ -20,7 +19,6 @@ declare module '@kovojs/core' {
   }
 }
 
-export const addContactForm = form('mutations/add-contact');
 export interface AddContactInput {
   company: string;
   email: string;

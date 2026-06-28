@@ -283,8 +283,13 @@ packages/compiler/src/scan/optimistic-inline.test.ts examples/crm/src/interactiv
     `examples/crm/src/mutations.ts`. Verification passed `pnpm exec vitest run
 packages/create-kovo/src/index.build.test.ts examples/crm/src/interactive-app.test.ts`,
     `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD`.
-    Remaining gap: direct-test starter/example source still has key-first declarations where Vitest
-    imports do not yet pass through Vite source-derived lowering.
+    Public example migration also moved commerce/CRM/StackOverflow mutations and commerce queries to
+    source-derived declarations, refreshed devtool graph JSON, and removed the starter template's
+    stale string-keyed form handle; verification passed `pnpm exec vitest run
+examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
+examples/stackoverflow/src/interactive-app.test.ts packages/create-kovo/src/index.build.test.ts
+packages/core/src/index.test.ts`, `pnpm run check:vp`, and `git diff --check`. Remaining gap:
+    tutorials and some direct-test example query/domain/form handles still have explicit key strings.
 
 - [ ] **Update generated registries, explain snapshots, compiler tests, server tests, and browser wire tests.**
   - Cover `/_m/*`, `data-mutation`, CSRF audience, replay scope, query wire chunks, domain touch
@@ -354,3 +359,7 @@ packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.te
 - 2026-06-27: Added optional static-import resolution for optimistic query value refs; `pnpm exec
 vitest run packages/compiler/src/scan/optimistic-inline.test.ts`, `pnpm run check:vp`, and
   `git diff --check` passed.
+- 2026-06-27: Integrated public examples/templates source-derived migration; `pnpm exec vitest run
+examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
+examples/stackoverflow/src/interactive-app.test.ts packages/create-kovo/src/index.build.test.ts
+packages/core/src/index.test.ts`, `pnpm run check:vp`, and `git diff --check` passed.

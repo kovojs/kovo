@@ -6,7 +6,7 @@ import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 import * as style from '@kovojs/style';
 
-import { addContact, addContactForm } from '../mutations.js';
+import { addContact } from '../mutations.js';
 import { contactsQuery, type ContactListResult, type ContactRow } from '../queries.js';
 
 // The contact book. Rendered as the full page region AND as the fragment that
