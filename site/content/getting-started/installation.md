@@ -70,16 +70,16 @@ The generated `.env` is for local development only. Set `BETTER_AUTH_SECRET` or
 This is the authoritative command table; the [Quickstart](/getting-started/quickstart/) links here rather than
 repeating it.
 
-| Command                          | What it does                                                                   |
-| -------------------------------- | ------------------------------------------------------------------------------ |
-| `vp dev`                         | Dev server with the Kovo compile step.                                         |
-| `npm run check`                  | Full starter gate: `vp check`, sound-subset policy, and endpoint posture.      |
-| `vp check`                       | Typecheck + lint sub-gate; this is where Kovo static errors surface.           |
-| `npm run check:sound-subset`     | Rejects `any`, unchecked casts, and non-null assertions in starter app code.   |
-| `npm run check:endpoint-posture` | Exercises declared endpoint fixtures, then runs `kovo check endpoint-posture`. |
-| `vp test`                        | Vitest suites.                                                                 |
-| `npm run build:prod`             | Production build through `kovo build ./src/app.tsx`.                           |
-| `npm start`                      | Run the emitted Node server from `dist/server/server.mjs`.                     |
+| Command                          | What it does                                                                                               |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `vp dev`                         | Dev server with the Kovo compile step.                                                                     |
+| `npm run check`                  | Full starter gate: `vp check`, sound-subset policy, and endpoint posture.                                  |
+| `vp check`                       | Typecheck + lint sub-gate; this is where Kovo static errors surface.                                       |
+| `npm run check:sound-subset`     | Rejects `any`, unchecked casts, and non-null assertions in starter app code.                               |
+| `npm run check:endpoint-posture` | Exercises declared endpoint fixtures, then runs `kovo check endpoint-posture .kovo/endpoint-posture.json`. |
+| `vp test`                        | Vitest suites.                                                                                             |
+| `npm run build:prod`             | Production build through `kovo build ./src/app.tsx`.                                                       |
+| `npm start`                      | Run the emitted Node server from `dist/server/server.mjs`.                                                 |
 
 ### Two CLIs, two jobs
 
@@ -98,7 +98,7 @@ machine ingress.
 The starter sound-subset script enforces the app-authored subset Kovo relies on for SPEC §6.6
 client-capture and sink guarantees. `npm run check:endpoint-posture` writes
 `.kovo/endpoint-posture.json` from real endpoint requests and validates it with
-`kovo check endpoint-posture`.
+`kovo check endpoint-posture .kovo/endpoint-posture.json`.
 
 </details>
 
