@@ -219,7 +219,7 @@ export const StampConflict = component({
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   handler() {
     return null;
   },
@@ -238,7 +238,7 @@ export const AddToCartForm = component({
     expect(result.diagnostics).toEqual([]);
     const loweredSource = requireLoweredSource(result);
     expect(loweredSource).toContain(
-      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId} class="add"',
+      '<form enhance method="post" action="/_m/add-to-cart-form/add-to-cart" data-mutation="add-to-cart-form/add-to-cart" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId} class="add"',
     );
     expect(loweredSource).toContain(
       "import { renderMutationCsrfField as __kovoRenderMutationCsrfField, renderMutationIdemField as __kovoRenderMutationIdemField } from '@kovojs/server/internal/csrf';",
@@ -251,12 +251,12 @@ export const AddToCartForm = component({
     expect(result.outputContextFacts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          expression: '/_m/cart/add',
+          expression: '/_m/add-to-cart-form/add-to-cart',
           sink: 'action',
           writer: 'typed mutation form lowering',
         }),
         expect.objectContaining({
-          expression: 'cart/add',
+          expression: 'add-to-cart-form/add-to-cart',
           sink: 'data-mutation',
           writer: 'typed mutation form lowering',
         }),
@@ -314,7 +314,7 @@ export const UploadReceiptForm = component({
     const streaming = compileComponentModule({
       fileName: 'streaming-chat-form.tsx',
       source: `
-export const sendMessage = mutation('chat/send', {
+export const sendMessage = mutation({
   handler() {
     return null;
   },
@@ -332,7 +332,7 @@ export const ChatComposer = component({
     const buffered = compileComponentModule({
       fileName: 'buffered-chat-form.tsx',
       source: `
-export const sendMessage = mutation('chat/send', {
+export const sendMessage = mutation({
   handler() {
     return null;
   },
@@ -353,11 +353,11 @@ export const ChatComposer = component({
     const streamingSource = requireLoweredSource(streaming);
     const bufferedSource = requireLoweredSource(buffered);
     expect(streamingSource).toContain(
-      '<form enhance method="post" action="/_m/chat/send" data-mutation="chat/send" data-mutation-stream="true" kovo-fragment-target={`send-message:${slots.threadId}`} kovo-key={slots.threadId} class="composer"',
+      '<form enhance method="post" action="/_m/streaming-chat-form/send-message" data-mutation="streaming-chat-form/send-message" data-mutation-stream="true" kovo-fragment-target={`send-message:${slots.threadId}`} kovo-key={slots.threadId} class="composer"',
     );
     expect(streamingSource).not.toMatch(/\sstream(?:\s|>)/);
     expect(bufferedSource).toContain(
-      '<form enhance method="post" action="/_m/chat/send" data-mutation="chat/send" kovo-fragment-target={`send-message:${slots.threadId}`} kovo-key={slots.threadId} class="composer"',
+      '<form enhance method="post" action="/_m/buffered-chat-form/send-message" data-mutation="buffered-chat-form/send-message" kovo-fragment-target={`send-message:${slots.threadId}`} kovo-key={slots.threadId} class="composer"',
     );
     expect(bufferedSource).not.toContain('data-mutation-stream');
     expect(streaming.outputContextFacts).toEqual(
@@ -467,7 +467,7 @@ export const ProductGrid = component({
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   handler() {
     return null;
   },
@@ -639,7 +639,7 @@ export const ProductGrid = component({
     const result = compileComponentModule({
       fileName: 'product-list.tsx',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   handler() {
     return null;
   },
@@ -673,7 +673,7 @@ export const ProductList = component({
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: s.object({
     productId: s.string(),
     quantity: s.number().int().min(1).default(1),
@@ -697,11 +697,11 @@ export const AddToCartForm = component({
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
       expect.objectContaining({
         message:
-          'Enhanced mutation form fields do not match mutation input schema. unknown field "product" for mutation "cart/add". Expected fields: productId, quantity',
+          'Enhanced mutation form fields do not match mutation input schema. unknown field "product" for mutation "add-to-cart-form/add-to-cart". Expected fields: productId, quantity',
       }),
       expect.objectContaining({
         message:
-          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "cart/add". Expected fields: productId, quantity',
+          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "add-to-cart-form/add-to-cart". Expected fields: productId, quantity',
       }),
     ]);
   });
@@ -710,7 +710,7 @@ export const AddToCartForm = component({
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: s.object({
     productId: s.string(),
     quantity: s.number().int().min(1).default(1),
@@ -733,7 +733,7 @@ export const AddToCartForm = component({
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
       expect.objectContaining({
         message:
-          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "cart/add". Expected fields: productId, quantity',
+          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "add-to-cart-form/add-to-cart". Expected fields: productId, quantity',
       }),
     ]);
   });
@@ -742,7 +742,7 @@ export const AddToCartForm = component({
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: s.object({
     productId: s.string(),
     quantity: s.number().int().min(1).default(1),
@@ -769,7 +769,7 @@ export const AddToCartForm = component({
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: s.object({
     productId: s.string(),
     quantity: s.number().int().min(1).default(1),
@@ -835,7 +835,7 @@ export const AddToCartForm = component({
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: s.object({
     productId: s.string(),
   }),
@@ -868,7 +868,7 @@ export const AddToCartForm = component({
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: s.object({
     productId: s.string(),
   }),
@@ -890,7 +890,7 @@ export const AddToCartForm = component({
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([
       expect.objectContaining({
         message:
-          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "cart/add". Expected fields: productId',
+          'Enhanced mutation form fields do not match mutation input schema. missing required field "productId" for mutation "add-to-cart-form/add-to-cart". Expected fields: productId',
       }),
     ]);
   });

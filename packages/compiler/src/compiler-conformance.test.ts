@@ -275,8 +275,8 @@ describe('compiler conformance corpus', () => {
             "hasQueryStamp": true,
           },
           "moduleFacts": {
-            "clientHasNoHandlerFallback": false,
-            "clientHasQueryPlans": true,
+            "clientHasNoHandlerFallback": true,
+            "clientHasQueryPlans": false,
             "registryHasRoutes": false,
             "serverHasRenderSource": true,
           },
@@ -480,10 +480,6 @@ describe('compiler conformance corpus', () => {
                       "id": "{\`add-to-cart-quantity-error-\${item.id}\`}",
                       "name": "quantity",
                     },
-                  ],
-                  "fields": [
-                    "productId",
-                    "quantity",
                   ],
                   "formErrors": [
                     {
@@ -1118,7 +1114,7 @@ describe('compiler conformance corpus', () => {
           "code": "KV302",
           "help": "Would lower to: a data-bind path that the server renderer and loader can both read from the declared query/state shape.
       Blocked reason: the path is absent from the declared shape, so a server render or client update would read undefined.
-      Fixes: correct the binding path, update the query projection/schema, or extract a named derive with declared inputs.
+      Fixes: correct the binding path, update the query projection/schema, or extract a named derive with declared inputs. For Drizzle-backed queries, bindings follow the statically proven projection shape; flatten or declare the projected shape you bind to instead of relying on a broader load return annotation.
       SPEC §4.8 and §6.2 require bindings to type-check against query shapes.",
           "message": "data-bind path is not present in the declared query shape. cart.total",
           "severity": "error",
