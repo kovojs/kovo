@@ -41,8 +41,8 @@ statusQuery }`, failed `build:prod` with KV302 for valid
     bindings, not only exported variable names, with a focused build test for an
     object-form query alias.
   - Evidence: 2026-06-28 `pnpm exec vitest run
-    packages/compiler/src/compile-component.test.ts
-    packages/server/src/vite-data-plane-gate.test.ts` passed with object-form
+packages/compiler/src/compile-component.test.ts
+packages/server/src/vite-data-plane-gate.test.ts` passed with object-form
     query alias output-shape coverage.
 
 - [x] **Live-target renderer emission skips required imports when the lowered module already imports `@kovojs/server/internal/wire`.** (high, framework; found by `streaming-query-deferred`)
@@ -64,8 +64,8 @@ __kovoAssignDerivedQueryKey }` from the wire module.
     named imports, with coverage for an existing wire import that lacks those
     names.
   - Evidence: 2026-06-28 `pnpm exec vitest run
-    packages/compiler/src/compile-component.test.ts
-    packages/server/src/vite-data-plane-gate.test.ts` passed with live-target
+packages/compiler/src/compile-component.test.ts
+packages/server/src/vite-data-plane-gate.test.ts` passed with live-target
     renderer wire-import merge coverage.
 
 ### B. Copied UI Composition
@@ -87,8 +87,8 @@ http://127.0.0.1:5274/catalog` against the production server returned
   - Acceptance: copied `Card` accepts and renders rich JSX/HTML children without
     literal promise strings, with dev and production coverage.
   - Evidence: 2026-06-28 `pnpm exec vitest --run
-    packages/ui/src/card.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts
-    packages/ui/src/copy-in.test.ts` passed with nested Card/Table children
+packages/ui/src/card.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts
+packages/ui/src/copy-in.test.ts` passed with nested Card/Table children
     rendering without `[object Promise]`.
 
 - [x] **`kovo add tabs` copies a TSX file that imports an uncopied sibling type module.** (med, dev-tooling; found by `ui-registry-rich-composition`)
@@ -107,8 +107,8 @@ http://127.0.0.1:5274/catalog` against the production server returned
   - Acceptance: `kovo add tabs` either vendors required sibling type modules or
     rewrites the copied source to depend only on copied/public imports.
   - Evidence: 2026-06-28 `pnpm exec vitest --run
-    packages/ui/src/card.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts
-    packages/ui/src/copy-in.test.ts` passed with `kovo add tabs` copying
+packages/ui/src/card.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts
+packages/ui/src/copy-in.test.ts` passed with `kovo add tabs` copying
     `navigation-types.ts`.
 
 - [x] **Freshly copied UI source still fails the generated formatter gate.** (med, dev-tooling; found by `ui-registry-rich-composition`)
@@ -130,8 +130,8 @@ exec vp check --fix`, `pnpm run check` passed and `kovo add` remained
   - Acceptance: copied UI files land formatter-stable for the generated app, and
     idempotency remains stable after the formatter.
   - Evidence: 2026-06-28 `pnpm exec vitest --run
-    packages/ui/src/card.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts
-    packages/ui/src/copy-in.test.ts` passed with canonicalized vendored source
+packages/ui/src/card.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts
+packages/ui/src/copy-in.test.ts` passed with canonicalized vendored source
     and copy-in idempotency coverage.
 
 ### C. Endpoint Explain Ergonomics
@@ -155,7 +155,7 @@ publicAccess(...)` and passed build/access checks, but `kovo explain
   - Acceptance: endpoint explain rows surface `publicAccess(...)` decisions and
     justifications for raw endpoints without regressing `auth=none:<reason>`.
   - Evidence: 2026-06-28 `pnpm exec vitest run
-    packages/cli/src/index.kovo-explain.test.ts` passed with
+packages/cli/src/index.kovo-explain.test.ts` passed with
     `auth=public:<justification>` endpoint explain coverage.
 
 ## Refuted / Not Carried Forward

@@ -43,9 +43,9 @@ http://127.0.0.1:5173/dogfood/private` returned `HTTP/1.1 303 See Other`
     cache/security floor as guarded query redirects, including focused coverage
     for `renderHttpGuardFailureResponse` route integration.
   - Evidence: 2026-06-28 `pnpm exec vitest run
-    packages/server/src/route-query-guards.test.ts
-    packages/server/src/guards.test.ts packages/server/src/schema.test.ts
-    packages/server/src/upload-sniff.test.ts` passed with guarded route
+packages/server/src/route-query-guards.test.ts
+packages/server/src/guards.test.ts packages/server/src/schema.test.ts
+packages/server/src/upload-sniff.test.ts` passed with guarded route
     redirect cache-floor coverage.
 
 ### B. Upload Type Enforcement
@@ -72,9 +72,9 @@ http://127.0.0.1:5173/dogfood/private` returned `HTTP/1.1 303 See Other`
     plain `accept([...])`; `accept.unverified(...)` remains the explicit audited
     client-MIME escape and is covered separately.
   - Evidence: 2026-06-28 `pnpm exec vitest run
-    packages/server/src/route-query-guards.test.ts
-    packages/server/src/guards.test.ts packages/server/src/schema.test.ts
-    packages/server/src/upload-sniff.test.ts` passed with verified
+packages/server/src/route-query-guards.test.ts
+packages/server/src/guards.test.ts packages/server/src/schema.test.ts
+packages/server/src/upload-sniff.test.ts` passed with verified
     `accept([...]).store(...)` rejection and `accept.unverified(...)` escape
     coverage.
 
