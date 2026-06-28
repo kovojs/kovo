@@ -17,6 +17,7 @@ import { LoginForm, SignOutForm } from './components/auth-forms.js';
 import { ContactsRegion } from './components/contacts.js';
 import {
   appAuthed,
+  appCsrf,
   appSessionProvider,
   appSignIn,
   appSignOut,
@@ -159,6 +160,7 @@ function HomePage({ request }: { request: AppRequest }): string {
 
 const app = createApp({
   clientModules: createMemoryVersionedClientModuleRegistry(),
+  csrf: appCsrf,
   db: () => appDb,
   document: { lang: 'en' },
   endpoints: [healthEndpoint],

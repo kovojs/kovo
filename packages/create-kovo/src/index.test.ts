@@ -233,6 +233,8 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/auth.ts')).toContain(
       'return request.session?.id ?? request.authCsrfId ?? undefined;',
     );
+    expect(files.get('src/app.tsx')).toContain('appCsrf,');
+    expect(files.get('src/app.tsx')).toContain('csrf: appCsrf,');
     expect(files.get('src/auth.ts')).not.toContain('kovo-starter-anon');
   });
 

@@ -6,6 +6,7 @@ import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import { endpoint } from './endpoint.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import { layout, route } from './route.js';
 import {
@@ -109,6 +110,81 @@ describe('server app shell Vite dev seam', () => {
       },
       status: 500,
     });
+  });
+
+  it('records endpoint posture mismatches in the dev diagnostic ledger', async () => {
+    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
+    const app = createApp({
+      endpoints: [
+        endpoint('/machine/posture-bad', {
+          auth: { justification: 'dev diagnostic regression', kind: 'none' },
+          csrf: false,
+          csrfJustification: 'dev diagnostic regression',
+          handler: () =>
+            new Response('{"ok":true}', {
+              headers: { 'Cache-Control': 'public, max-age=60', 'Content-Type': 'text/plain' },
+            }),
+          method: 'POST',
+          reason: 'dev diagnostic regression',
+          response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+        }),
+      ],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({
+      devDiagnostics: diagnostics,
+      moduleId: '/src/app-shell.ts',
+    });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule() {
+        return { default: app };
+      },
+    });
+
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const firstResponse = await fetch(`${origin}/machine/posture-bad`, { method: 'POST' });
+      await firstResponse.text();
+      expect(firstResponse.status).toBe(500);
+
+      const diagnosticResponse = await fetch(`${origin}/machine/posture-bad`, { method: 'POST' });
+      const diagnosticBody = await diagnosticResponse.text();
+
+      expect(diagnosticResponse.status).toBe(500);
+      expect(diagnosticBody).toContain('<p class="kovo-diagnostic-code">KV423</p>');
+      expect(diagnosticBody).toContain('response posture mismatch');
+      expect(diagnosticBody).toContain('Cache-Control: no-store');
+      expect(diagnosticBody).toContain('content type is not JSON');
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 
   it('wires compiler module diagnostics into app-shell dev middleware', async () => {

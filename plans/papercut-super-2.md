@@ -192,7 +192,8 @@ required.` Removing `recordChange`/`transaction` does NOT clear it; only removin
   - Acceptance: export `createMemoryWebhookReplayStore` + the webhook store types from
     `@kovojs/server` (mirroring mutation/capability).
 
-- [ ] **B4 — A default-CSRF endpoint silently returns 422 "CSRF" forever when `createApp()` has no top-level `csrf` — and the starter wires `csrf` only per-mutation.** (MEDIUM, template; endpoints-C5)
+- [x] **B4 — A default-CSRF endpoint silently returns 422 "CSRF" forever when `createApp()` has no top-level `csrf` — and the starter wires `csrf` only per-mutation.** (MEDIUM, template; endpoints-C5)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts --testNamePattern "sound-subset policy"` proves the starter imports `appCsrf` and wires `createApp({ csrf: appCsrf })`, so default-CSRF endpoints consume the same app CSRF provider as mutations.
   - Observed: the first non-`csrf:false` endpoint an author adds 422s permanently;
     no boot error, no diagnostic distinguishing missing-token from missing-config.
   - Root cause: `validateEndpointCsrf` (`packages/server/src/app-dispatch.ts:126`)
@@ -390,7 +391,8 @@ explicit trusted Kovo escape hatch. dynamic style text` at build.
   - Acceptance: render build-fatal findings with an ERROR/FATAL marker regardless of
     nominal severity class, and/or have the wrapper name the fatal finding(s).
 
-- [ ] **F2 — An endpoint posture mismatch (declared `cache`/`body` vs actual response headers) throws an opaque 500 "Server Error" with zero diagnostic in dev unless `onError` is configured.** (LOW, dev-tooling; endpoints-C4)
+- [x] **F2 — An endpoint posture mismatch (declared `cache`/`body` vs actual response headers) throws an opaque 500 "Server Error" with zero diagnostic in dev unless `onError` is configured.** (LOW, dev-tooling; endpoints-C4)
+  - Evidence: `pnpm exec vitest run packages/server/src/vite-dev.test.ts --testNamePattern "endpoint posture mismatches|route diagnostics"` proves Vite dev records endpoint posture mismatch throws into the dev diagnostic ledger and serves a KV423 diagnostic containing the cache/body drift.
   - Observed: a posture-mismatched endpoint 500s in dev with no console output.
   - Root cause: `reportServerError` no-ops without an app-configured `onError`
     (`diagnostics.ts:43`), so a server-component/endpoint throw yields an opaque 500.
