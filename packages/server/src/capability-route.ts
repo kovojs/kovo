@@ -339,7 +339,12 @@ export function createStorageDownloadEndpoint(
     csrfJustification:
       'Read-only download gated by a per-request signed capability token (not a cookie/ambient ' +
       'credential), so there is no CSRF surface; non-GET/HEAD methods fail closed.',
-    response: { appOwnedSafety: true, body: 'bytes', cache: 'private' },
+    response: {
+      appOwnedSafety: true,
+      body: 'bytes',
+      cache: 'private',
+      reservedHeaders: ['X-Content-Type-Options'],
+    },
     handler,
   });
 }

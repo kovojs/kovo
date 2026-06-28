@@ -48,6 +48,17 @@ function downloadUrl(token: string, key = 'receipts/ord_1.pdf'): string {
 }
 
 describe('capability download route: verify-before-read sink', () => {
+  it('declares framework-owned bytes response posture for build/explain audits', async () => {
+    const storage = await storageWith('a.pdf', 'A');
+    const route = createStorageDownloadEndpoint({ secret: SECRET, storage });
+
+    expect(route.response).toEqual({
+      appOwnedSafety: true,
+      body: 'bytes',
+      cache: 'private',
+      reservedHeaders: ['X-Content-Type-Options'],
+    });
+  });
   it('a VALID scoped signed URL dereferences the object when the route derives the same scope', async () => {
     const key = 'receipts/ord_1.pdf';
     const storage = await storageWith(key, 'receipt-bytes');
