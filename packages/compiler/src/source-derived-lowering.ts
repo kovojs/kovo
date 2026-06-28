@@ -37,6 +37,8 @@ interface SourceDerivedRegistryAssignment {
   primitive: SourceDerivedPrimitive;
 }
 
+type SourceDerivedImportLocals = Readonly<Record<SourceDerivedPrimitive, ReadonlySet<string>>>;
+
 /** @internal Lower standalone app/server registry declarations before Vite evaluates createApp(). */
 export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
   fileName: string;
@@ -67,6 +69,7 @@ function exportedRegistryAssignments(
   sourceFile: ts.SourceFile,
 ): readonly SourceDerivedRegistryAssignment[] {
   const assignments: SourceDerivedRegistryAssignment[] = [];
+  const importLocals = sourceDerivedImportLocals(sourceFile);
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     const exported = hasExportModifier(statement);
@@ -76,7 +79,7 @@ function exportedRegistryAssignments(
       const call = declaration.initializer;
       if (!call || !ts.isCallExpression(call)) continue;
 
-      const primitive = sourceDerivedPrimitive(call);
+      const primitive = sourceDerivedPrimitive(call, importLocals);
       if (primitive === null) continue;
       if (primitive !== 'component' && !exported) continue;
       assignments.push({ binding: declaration.name.text, call, primitive });
@@ -85,27 +88,74 @@ function exportedRegistryAssignments(
   return assignments;
 }
 
-function sourceDerivedPrimitive(call: ts.CallExpression): SourceDerivedPrimitive | null {
+function sourceDerivedPrimitive(
+  call: ts.CallExpression,
+  importLocals: SourceDerivedImportLocals,
+): SourceDerivedPrimitive | null {
   if (ts.isIdentifier(call.expression)) {
-    if (call.expression.text === 'component' && isSingleObjectArgument(call)) return 'component';
-    if (call.expression.text === 'domain' && call.arguments.length === 0) return 'domain';
-    if (call.expression.text === 'mutation' && isSingleObjectArgument(call)) return 'mutation';
-    if (call.expression.text === 'query' && isSingleObjectArgument(call)) return 'query';
-    if (call.expression.text === 'tag' && call.arguments.length === 0) return 'domain';
-    if (call.expression.text === 'webhook' && isPathFirstWebhookCall(call)) return 'webhook';
+    const local = call.expression.text;
+    if (importLocals.component.has(local) && isSingleObjectArgument(call)) return 'component';
+    if (importLocals.domain.has(local) && call.arguments.length === 0) return 'domain';
+    if (importLocals.mutation.has(local) && isSingleObjectArgument(call)) return 'mutation';
+    if (importLocals.query.has(local) && isSingleObjectArgument(call)) return 'query';
+    if (importLocals.webhook.has(local) && isPathFirstWebhookCall(call)) return 'webhook';
     return null;
   }
 
   if (
     ts.isPropertyAccessExpression(call.expression) &&
     ts.isIdentifier(call.expression.expression) &&
-    call.expression.expression.text === 'query' &&
+    importLocals.query.has(call.expression.expression.text) &&
     call.expression.name.text === 'elevated' &&
     isSingleObjectArgument(call)
   ) {
     return 'query';
   }
 
+  return null;
+}
+
+function sourceDerivedImportLocals(sourceFile: ts.SourceFile): SourceDerivedImportLocals {
+  const mutable: Record<SourceDerivedPrimitive, Set<string>> = {
+    component: new Set(['component']),
+    domain: new Set(['domain', 'tag']),
+    mutation: new Set(['mutation']),
+    query: new Set(['query']),
+    webhook: new Set(['webhook']),
+  };
+
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !statement.moduleSpecifier ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    const moduleSpecifier = statement.moduleSpecifier.text;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+
+    for (const element of bindings.elements) {
+      const imported = element.propertyName?.text ?? element.name.text;
+      const primitive = importedSourceDerivedPrimitive(moduleSpecifier, imported);
+      if (primitive) mutable[primitive].add(element.name.text);
+    }
+  }
+
+  return mutable;
+}
+
+function importedSourceDerivedPrimitive(
+  moduleSpecifier: string,
+  imported: string,
+): SourceDerivedPrimitive | null {
+  if (moduleSpecifier === '@kovojs/core' && imported === 'component') return 'component';
+  if (moduleSpecifier !== '@kovojs/server') return null;
+  if (imported === 'domain' || imported === 'tag') return 'domain';
+  if (imported === 'mutation') return 'mutation';
+  if (imported === 'query') return 'query';
+  if (imported === 'webhook') return 'webhook';
   return null;
 }
 
