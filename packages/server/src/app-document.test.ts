@@ -13,6 +13,20 @@ import {
   createMemoryVersionedClientModuleRegistry,
 } from './client-modules.js';
 
+function headerValue(headers: Record<string, string | readonly string[]>, name: string) {
+  const key = Object.keys(headers).find((candidate) => candidate.toLowerCase() === name);
+  const value = key === undefined ? undefined : headers[key];
+  return Array.isArray(value) ? value.join(', ') : value;
+}
+
+function expectDocumentSecurityFloor(headers: Record<string, string | readonly string[]>) {
+  expect(headerValue(headers, 'content-type')).toBe('text/html; charset=utf-8');
+  expect(headerValue(headers, 'content-security-policy')).toContain("default-src 'self'");
+  expect(headerValue(headers, 'x-frame-options')).toBe('DENY');
+  expect(headerValue(headers, 'x-content-type-options')).toBe('nosniff');
+  expect(headerValue(headers, 'cache-control')).toBe('private, no-store');
+}
+
 // ─── DEPLOY-3: module-less app always stamps kovo-build ───────────────────────
 
 describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
@@ -643,7 +657,10 @@ describe('server app document boundary', () => {
         notFound({ status }) {
           return {
             body: `<main data-shell="404">configured:${status}</main>`,
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            headers: {
+              'Content-Type': 'text/plain;charset=UTF-8',
+              'X-Shell': 'kept',
+            },
             status,
           };
         },
@@ -660,7 +677,10 @@ describe('server app document boundary', () => {
     });
 
     expect(response.status).toBe(404);
-    expect(response.body).toBe('<main data-shell="404">configured:404</main>');
+    expect(response.body).toContain('<main data-shell="404">configured:404</main>');
+    expect(response.body).toContain('<!doctype html>');
+    expectDocumentSecurityFloor(response.headers);
+    expect(headerValue(response.headers, 'x-shell')).toBe('kept');
   });
 
   it('renders route failures through the configured 500 shell without leaking internals', async () => {
@@ -695,7 +715,9 @@ describe('server app document boundary', () => {
     });
 
     expect(response.status).toBe(500);
-    expect(response.body).toBe('<main data-shell="500">configured:500</main>');
+    expect(response.body).toContain('<main data-shell="500">configured:500</main>');
+    expect(response.body).toContain('<!doctype html>');
+    expectDocumentSecurityFloor(response.headers);
     expect(response.body).not.toContain('private route detail');
     expect(onError).toHaveBeenCalledTimes(1);
     const [, context] = onError.mock.calls[0]!;
@@ -738,6 +760,8 @@ describe('server app document boundary', () => {
 
     expect(response.status).toBe(403);
     expect(response.body).toContain('configured:403');
+    expect(response.body).toContain('<!doctype html>');
+    expectDocumentSecurityFloor(response.headers);
     expect(response.body).not.toContain('data-secret');
   });
 

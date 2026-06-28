@@ -156,6 +156,14 @@ export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, '
    * (fail-safe: dev/localhost/non-HTTPS is never HSTS-pinned).
    */
   secure?: boolean;
+  /**
+   * Framework-owned configured error shells are non-200 HTML documents that still need
+   * the normal document security/header floor (SPEC §9.2/§9.5). Ordinary route
+   * non-200 outcomes keep passing through unchanged unless this internal option is set.
+   *
+   * @internal
+   */
+  wrapNonOk?: boolean;
 }
 
 /** @internal */
@@ -319,11 +327,18 @@ export function renderRouteDocumentResponse(
   response: DocumentRoutePageResponse,
   options: DocumentResponseOptions = {},
 ): DocumentRoutePageResponseWithCsp {
-  const { csp: cspConfig, noStore, reportingOrigin, secure, ...assemblyOptions } = options;
+  const {
+    csp: cspConfig,
+    noStore,
+    reportingOrigin,
+    secure,
+    wrapNonOk,
+    ...assemblyOptions
+  } = options;
   const contentType = readHeader(response.headers, 'Content-Type');
   if (
     isRouteResponseOutcome(response) ||
-    response.status !== 200 ||
+    (response.status !== 200 && wrapNonOk !== true) ||
     typeof response.body !== 'string' ||
     (contentType !== undefined && !contentType.toLowerCase().includes('text/html'))
   ) {
