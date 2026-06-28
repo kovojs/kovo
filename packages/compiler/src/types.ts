@@ -142,7 +142,7 @@ export interface MutationInputFieldFact {
 }
 
 /** @internal Declared FormData coercion family for a mutation input field. */
-export type MutationInputFieldCoercion = 'boolean' | 'number' | 'string' | 'unknown';
+export type MutationInputFieldCoercion = 'boolean' | 'file' | 'number' | 'string' | 'unknown';
 
 /** @internal Registry-level field facts keyed by mutation key. */
 export type RegistryMutationInputFacts = Readonly<

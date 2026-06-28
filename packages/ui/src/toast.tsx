@@ -364,6 +364,7 @@ export const Toast = component({
       ...(props.variant === undefined ? {} : { variant: props.variant }),
     });
     const styleAttrs = style.attrs(toastStyles.root, props.styles?.root);
+    const ariaLive: ToastPoliteness = attrs['aria-live'] === 'assertive' ? 'assertive' : 'polite';
 
     return (
       <div
@@ -372,7 +373,7 @@ export const Toast = component({
         aria-atomic={attrs['aria-atomic']}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
-        aria-live={attrs['aria-live']}
+        aria-live={ariaLive}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         data-variant={attrs['data-variant']}

@@ -24,6 +24,7 @@ import {
   formLoweringOutputContext,
   importsMutationCsrfField,
   localMutationKey,
+  mutationInputFileFieldsForLocalName,
   mutationFormErrorIdExpression,
   mutationFormErrorProps,
   renderAttributeWithName,
@@ -114,6 +115,7 @@ export function mutationFormExplainFacts(
     if (!mutationKey && !mutationInput) continue;
 
     const slot = componentMutationSlotName(model, binding.localName) ?? binding.localName;
+    const fileFields = mutationInputFileFieldsForLocalName(model, binding.localName, options);
     const fieldErrors = mutationFormFieldErrorFacts(model, form, slot);
     const formErrors = mutationFormErrorFacts(model, form);
 
@@ -122,6 +124,7 @@ export function mutationFormExplainFacts(
       ...(mutationInput === null
         ? {}
         : { fields: mutationInput.fields.map((field) => field.name) }),
+      ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
       ...(formErrors.length === 0 ? {} : { formErrors }),
       mutation: mutationInput?.key ?? mutationKey ?? binding.localName,
       slot,
@@ -323,7 +326,7 @@ export function enhancedMutationFormRenderLowering(
 
     if (options) diagnostics.push(...mutationFormFieldDiagnostics(model, element, options));
 
-    const lowering = enhancedMutationFormLowering(model, element, options?.registryFacts);
+    const lowering = enhancedMutationFormLowering(model, element, options);
     if (!lowering) continue;
 
     replacements.push(...lowering.replacements);

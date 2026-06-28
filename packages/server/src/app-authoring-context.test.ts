@@ -4,8 +4,34 @@ import { createApp } from './app.js';
 import { domain } from './domain.js';
 import { s } from './schema.js';
 import { renderedHtml } from './html.js';
+import { route } from './route.js';
 
 describe('createApp provider-typed authoring context', () => {
+  it('preserves inline route path params for pages and regions in createApp route arrays', () => {
+    const app = createApp({
+      routes: [
+        route('/products/:id', {
+          page(context) {
+            const id: string = context.params.id;
+            // @ts-expect-error sku is not declared by the inline route path.
+            void context.params.sku;
+            return renderedHtml(id);
+          },
+          regions: {
+            details(context) {
+              const id: string = context.params.id;
+              // @ts-expect-error sku is not declared by the inline route path.
+              void context.params.sku;
+              return renderedHtml(id);
+            },
+          },
+        }),
+      ],
+    });
+
+    expect(app.routes.map((candidate) => candidate.path)).toEqual(['/products/:id']);
+  });
+
   it('infers db and session in app-scoped query, mutation, layout, and route callbacks', () => {
     const cart = domain('cart');
     const app = createApp({

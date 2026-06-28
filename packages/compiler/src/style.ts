@@ -1080,15 +1080,27 @@ function dynamicStyleAttributeLowering(
   const queryOnly =
     queryRoots.size === 1 && [...roots].every((root) => root === [...queryRoots][0]);
   const query = stateOnly ? 'state' : queryOnly ? [...queryRoots][0] : null;
-  if (!query) return null;
+  const serverOnly =
+    !stateOnly && (roots.size === 0 || [...roots].every((root) => !knownQueries.has(root)));
+  if (!query && !serverOnly) return null;
 
   const exportName = nextExportName(
     `${sanitizeIdentifier(componentName)}$style_class_derive`,
     nameCounts,
   );
-  const replacement = stateOnly
-    ? `class={${classExpression}} data-bind:class="state.${exportName}"`
-    : `data-derive="${escapeAttribute(`${query}.${exportName}`)}" data-derive-attr="class"`;
+  if (serverOnly) {
+    return {
+      coverage: [],
+      handledSpan: { end: attribute.end, start: attribute.start },
+      replacement: {
+        end: attribute.end,
+        replacement: `class={${classExpression}}`,
+        start: attribute.start,
+      },
+    };
+  }
+
+  if (!query) return null;
   const coverage = styleUpdateCoverage(attribute, componentName, query, stateOnly);
 
   return {
@@ -1143,7 +1155,9 @@ function dynamicStyleAttributeLowering(
         }),
     replacement: {
       end: attribute.end,
-      replacement,
+      replacement: stateOnly
+        ? `class={${classExpression}} data-bind:class="state.${exportName}"`
+        : `data-derive="${escapeAttribute(`${query}.${exportName}`)}" data-derive-attr="class"`,
       start: attribute.start,
     },
   };

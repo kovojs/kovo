@@ -462,7 +462,20 @@ async function runKovoBuildCheckPreflight(app: KovoApp, appModulePath: string): 
   const result = kovoCheck(graph);
   if (result.exitCode === 0) return;
 
-  throw new Error(`kovo build check preflight failed:\n${result.output.trimEnd()}`);
+  throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+}
+
+function buildCheckFailureOutput(output: string): string {
+  const trimmed = output.trimEnd();
+  const fatalWarnings = trimmed.split('\n').flatMap((line) => buildFatalWarningSummaryLine(line));
+  if (fatalWarnings.length === 0) return trimmed;
+  return `${fatalWarnings.join('\n')}\n${trimmed}`;
+}
+
+function buildFatalWarningSummaryLine(line: string): string[] {
+  const match = /^WARN (KV(?:310|311)) (.*)$/.exec(line);
+  if (!match) return [];
+  return [`ERROR BUILD_FATAL ${match[1]} ${match[2]}`];
 }
 
 async function buildCheckGraph(
@@ -503,20 +516,31 @@ async function staticBuildCheckGraph(
   appModulePath: string,
 ): Promise<CoreGraph.KovoCheckInput> {
   const files = buildCheckSourceFiles(appModulePath);
-  const [queries, touchGraphDiagnostics, touchGraph] =
-    files.length === 0 ? [[], [], undefined] : await staticDrizzleBuildFacts(files);
+  const drizzleFacts =
+    files.length === 0 ? emptyStaticDrizzleBuildFacts() : await staticDrizzleBuildFacts(files);
   const liveTargetQueries = liveTargetQueryDefinitions(app);
 
   return {
-    ...(touchGraph === undefined ? {} : { touchGraph }),
-    ...(touchGraphDiagnostics.length === 0 ? {} : { sqlSafetyDiagnostics: touchGraphDiagnostics }),
+    ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
+    ...(drizzleFacts.sqlSafetyDiagnostics.length === 0
+      ? {}
+      : { sqlSafetyDiagnostics: drizzleFacts.sqlSafetyDiagnostics }),
+    ...(drizzleFacts.ownerDomains.length === 0 ? {} : { ownerDomains: drizzleFacts.ownerDomains }),
+    ...(drizzleFacts.scopeAudits.length === 0 ? {} : { scopeAudits: drizzleFacts.scopeAudits }),
+    ...(drizzleFacts.massAssignmentFacts.length === 0
+      ? {}
+      : { massAssignmentFacts: drizzleFacts.massAssignmentFacts }),
+    ...(drizzleFacts.queryWriteReachability.length === 0
+      ? {}
+      : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
+    ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
     endpoints: app.endpoints.map(endpointCheckFact),
     mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, liveTargetQueries)),
     optimistic: app.mutations.flatMap((mutation) =>
       mutationOptimisticCheckFacts(mutation, liveTargetQueries),
     ),
     pages: app.routes.map(routeCheckFact),
-    queries: app.queries.map((query) => queryCheckFact(query, queries)),
+    queries: app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries)),
   };
 }
 
@@ -531,25 +555,50 @@ interface QueryReadFactLike {
   query?: string;
 }
 
+interface StaticDrizzleBuildFacts {
+  massAssignmentFacts: readonly CoreGraph.MassAssignmentFact[];
+  ownerDomains: readonly CoreGraph.OwnerDomainFact[];
+  queries: readonly QueryReadFactLike[];
+  queryWriteReachability: readonly CoreGraph.QueryWriteReachabilityFact[];
+  scopeAudits: readonly CoreGraph.ScopeAuditFact[];
+  sqlSafetyDiagnostics: readonly CoreGraph.SqlSafetyDiagnosticFact[];
+  toctouFacts: readonly CoreGraph.ToctouFact[];
+  touchGraph?: CoreGraph.TouchGraph;
+}
+
+function emptyStaticDrizzleBuildFacts(): StaticDrizzleBuildFacts {
+  return {
+    massAssignmentFacts: [],
+    ownerDomains: [],
+    queries: [],
+    queryWriteReachability: [],
+    scopeAudits: [],
+    sqlSafetyDiagnostics: [],
+    toctouFacts: [],
+  };
+}
+
 async function staticDrizzleBuildFacts(
   files: readonly BuildCheckSourceFile[],
-): Promise<
-  [readonly QueryReadFactLike[], readonly CoreGraph.SqlSafetyDiagnosticFact[], CoreGraph.TouchGraph]
-> {
+): Promise<StaticDrizzleBuildFacts> {
   if (!files.some((file) => /from ['"](?:@kovojs\/drizzle|drizzle-orm)/.test(file.source))) {
-    return [[], [], {}];
+    return { ...emptyStaticDrizzleBuildFacts(), touchGraph: {} };
   }
 
   let drizzle: typeof import('@kovojs/drizzle/internal/static');
   try {
     drizzle = await import('@kovojs/drizzle/internal/static');
   } catch {
-    return [[], [], {}];
+    return { ...emptyStaticDrizzleBuildFacts(), touchGraph: {} };
   }
   const {
     analyzeSqlSafetyFromProject,
     diagnosticsForQueryFacts,
+    extractMassAssignmentFromProject,
+    extractOwnerAuditFromProject,
     extractQueryFactsFromProject,
+    extractQueryWriteReachabilityFromProject,
+    extractToctouFromProject,
     extractTouchGraphFromProject,
   } = drizzle;
   const queryFacts = extractQueryFactsFromProject({ files });
@@ -559,7 +608,19 @@ async function staticDrizzleBuildFacts(
     ...diagnosticsForQueryFacts(queryFacts),
   ].flatMap(sqlSafetyDiagnosticFact);
   const touchGraph = extractTouchGraphFromProject({ files }) as CoreGraph.TouchGraph;
-  return [queryReadFacts, diagnostics, touchGraph];
+  // SPEC §5.2 requires `kovo build` to preflight the full verifier graph. These
+  // static security facts feed KV414/KV438/KV433/KV429 in the production build path.
+  const ownerAudit = extractOwnerAuditFromProject({ files });
+  return {
+    massAssignmentFacts: extractMassAssignmentFromProject({ files }),
+    ownerDomains: ownerAudit.ownerDomains,
+    queries: queryReadFacts,
+    queryWriteReachability: extractQueryWriteReachabilityFromProject({ files }),
+    scopeAudits: ownerAudit.scopeAudits,
+    sqlSafetyDiagnostics: diagnostics,
+    toctouFacts: extractToctouFromProject({ files }),
+    touchGraph,
+  };
 }
 
 function queryCheckFact(
@@ -590,6 +651,7 @@ function mutationCheckFact(
   const registryQueries = (registry?.queries ?? []) as readonly { key: string }[];
   const writes = uniqueSorted(touches.map((touch) => touch.key));
   const inferredWrites = uniqueSorted(inferredTouches.map((touch) => touch.domain));
+  const fileFields = mutation.fileFields ?? [];
   const invalidates = uniqueSorted(
     [...registryQueries, ...liveTargetQueries].map((query) => query.key),
   );
@@ -599,6 +661,7 @@ function mutationCheckFact(
     ...(mutation.csrf === false ? { csrfJustification: 'csrf:false mutation declaration' } : {}),
     ...(mutation.guard === undefined ? {} : { guards: ['mutation.guard'] }),
     ...(invalidates.length === 0 ? {} : { invalidates }),
+    ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
     key: mutation.key,
     ...(writes.length === 0 && inferredWrites.length === 0
       ? {}
@@ -658,12 +721,11 @@ function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain
 
 function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {
   const csrf = endpoint.csrf?.exempt === true ? 'exempt' : 'checked';
+  const name = endpointWebhookName(endpoint);
   return {
     ...(endpoint.access === undefined ? {} : { access: endpoint.access }),
     appOwnedSafety: endpoint.response.appOwnedSafety,
-    ...(endpoint.auth === undefined
-      ? {}
-      : { auth: endpoint.auth.kind === 'none' ? 'none' : endpoint.auth.name }),
+    ...(endpoint.auth === undefined ? {} : { auth: endpointCheckAuth(endpoint.auth) }),
     body: endpoint.response.body,
     cache: endpoint.response.cache,
     csrf,
@@ -676,10 +738,23 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
     ...(endpoint.mountJustification === undefined
       ? {}
       : { mountJustification: endpoint.mountJustification }),
+    ...(name === undefined ? {} : { name }),
     path: endpoint.path,
     reason: endpoint.reason,
-    surface: 'endpoint',
+    surface: 'webhook' in endpoint && endpoint.webhook === true ? 'webhook' : 'endpoint',
   };
+}
+
+function endpointCheckAuth(auth: KovoApp['endpoints'][number]['auth']): string {
+  if (auth === undefined) return 'none';
+  if (auth.kind === 'none') return 'none';
+  return `${auth.kind}:${auth.name}`;
+}
+
+function endpointWebhookName(endpoint: KovoApp['endpoints'][number]): string | undefined {
+  if (!('webhook' in endpoint) || endpoint.webhook !== true) return undefined;
+  if (!('name' in endpoint) || typeof endpoint.name !== 'string') return undefined;
+  return endpoint.name;
 }
 
 function buildCheckSourceFiles(appModulePath: string): BuildCheckSourceFile[] {

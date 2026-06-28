@@ -90,7 +90,7 @@ export interface JsxProps {
 type MaybePromise<Value> = Promise<Value> | Value;
 
 /** @generated JSX automatic-runtime ABI component type (compiler-emitted). */
-export type JsxComponent = (props: any) => any;
+export type JsxComponent<Props extends object = Record<string, never>> = (props: Props) => any;
 
 type KovoJsxComponent = Component<ComponentDefinitionInput>;
 
@@ -137,7 +137,10 @@ export function jsx(
     return jsx('input', props);
   }
   if (isKovoComponent(type)) return renderKovoComponent(type, props, key);
-  if (typeof type === 'function') return type(props);
+  if (typeof type === 'function') {
+    const component = type as JsxComponent<JsxProps>;
+    return toRenderedHtml(renderJsxChildren(component(props)));
+  }
 
   const attributes = renderJsxAttributes(type, props, key);
   if (voidElements.has(type)) return renderedHtml(`<${type}${attributes}>`);
@@ -217,6 +220,7 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
   let rendered = '';
   const key = props['kovo-key'] === undefined ? (props.key ?? jsxKey) : undefined;
   const styleAttrs = kovoStyleInputAttributes(props.style);
+  const viewTransitionStyle = kovoStyleProperty('view-transition-name', props.viewTransitionName);
   let renderedClass = false;
   let renderedStyle = false;
   let renderedStyleSource = false;
@@ -229,6 +233,7 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     if (
       name === 'children' ||
       name === 'key' ||
+      name === 'viewTransitionName' ||
       isRawHtmlAttribute(name) ||
       value === false ||
       value === null ||
@@ -260,7 +265,7 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     }
 
     if (name === 'style' && isStyleProperties(value)) {
-      const style = renderStyleProperties(value);
+      const style = mergedStyle(renderStyleProperties(value), viewTransitionStyle);
       if (style) rendered += ` style="${escapeAttribute(style)}"`;
       renderedStyle = true;
       continue;
@@ -286,10 +291,14 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
   if (styleAttrs?.['data-style-src'] && !renderedStyleSource) {
     rendered += ` data-style-src="${escapeAttribute(styleAttrs['data-style-src'])}"`;
   }
-  if (styleAttrs?.style && !renderedStyle)
-    rendered += ` style="${escapeAttribute(styleAttrs.style)}"`;
+  const finalStyle = mergedStyle(styleAttrs?.style, viewTransitionStyle);
+  if (finalStyle && !renderedStyle) rendered += ` style="${escapeAttribute(finalStyle)}"`;
 
   return rendered;
+}
+
+function mergedStyle(...values: Array<string | undefined>): string {
+  return values.filter(Boolean).join('; ');
 }
 
 function kovoStyleInputAttributes(value: unknown):
@@ -682,12 +691,167 @@ function isPromiseLike<Value>(value: MaybePromise<Value>): value is Promise<Valu
 
 /** @generated JSX automatic-runtime ABI `JSX` namespace (compiler-emitted). */
 export declare namespace JSX {
+  // Kovo's current component render-result model uses an opaque `object` and
+  // existing route/site helpers often annotate JSX-returning helpers as `string`.
+  // Keep the expression result broad while enforcing props, children, and
+  // intrinsic attributes through the call-site prop types below.
   type Element = any;
-  type ElementType = JsxComponent | KovoJsxComponent | string;
+  type ElementType = JsxComponent<any> | KovoJsxComponent | keyof IntrinsicElements;
   interface ElementChildrenAttribute {
-    children: unknown;
+    children: {};
+  }
+  interface IntrinsicAttributes {
+    key?: number | string;
+    'kovo-key'?: number | string;
+  }
+  type AttributeValue = boolean | number | RenderedHtml | string | TrustedHtml | null | undefined;
+  type StyleProperties = Record<string, boolean | number | string | null | undefined>;
+  type AriaBoolean = boolean | 'false' | 'true';
+  interface AriaAttributes {
+    'aria-activedescendant'?: AttributeValue;
+    'aria-atomic'?: AttributeValue;
+    'aria-busy'?: AttributeValue;
+    'aria-controls'?: AttributeValue;
+    'aria-current'?:
+      | boolean
+      | 'date'
+      | 'false'
+      | 'location'
+      | 'page'
+      | 'step'
+      | 'time'
+      | 'true'
+      | undefined;
+    'aria-describedby'?: AttributeValue;
+    'aria-details'?: AttributeValue;
+    'aria-disabled'?: AttributeValue;
+    'aria-expanded'?: AttributeValue;
+    'aria-haspopup'?: AttributeValue;
+    'aria-hidden'?: AttributeValue;
+    'aria-invalid'?: AttributeValue;
+    'aria-label'?: AttributeValue;
+    'aria-labelledby'?: AttributeValue;
+    'aria-live'?: 'assertive' | 'off' | 'polite' | undefined;
+    'aria-modal'?: AttributeValue;
+    'aria-pressed'?: AttributeValue;
+    'aria-selected'?: AttributeValue;
+    'aria-valuemax'?: AttributeValue;
+    'aria-valuemin'?: AttributeValue;
+    'aria-valuenow'?: AttributeValue;
+    'aria-valuetext'?: AttributeValue;
+  }
+  interface HtmlAttributes extends IntrinsicAttributes, AriaAttributes {
+    [attribute: `data-${string}`]: AttributeValue;
+    [attribute: `kovo-${string}`]: AttributeValue;
+    [attribute: `on:${string}`]: string | undefined;
+    action?: AttributeValue;
+    alt?: AttributeValue;
+    acceptCharset?: AttributeValue;
+    autocomplete?: AttributeValue;
+    autoComplete?: AttributeValue;
+    autofocus?: AttributeValue;
+    autoFocus?: AttributeValue;
+    checked?: AttributeValue;
+    children?: unknown;
+    class?: string;
+    className?: string;
+    closedby?: AttributeValue;
+    'clip-rule'?: string;
+    command?: AttributeValue;
+    commandfor?: AttributeValue;
+    contenteditable?: boolean | 'false' | 'plaintext-only' | 'true';
+    cx?: number | string;
+    cy?: number | string;
+    d?: string;
+    decoding?: AttributeValue;
+    disabled?: AttributeValue;
+    download?: AttributeValue;
+    draggable?: boolean | 'false' | 'true';
+    dir?: AttributeValue;
+    enctype?: AttributeValue;
+    encType?: AttributeValue;
+    enhance?: boolean;
+    external?: boolean;
+    fill?: string;
+    'fill-rule'?: string;
+    focusable?: boolean | 'false' | 'true';
+    for?: AttributeValue;
+    form?: AttributeValue;
+    height?: number | string;
+    hidden?: AttributeValue;
+    high?: AttributeValue;
+    href?: AttributeValue;
+    htmlFor?: AttributeValue;
+    html?: TrustedHtml;
+    id?: AttributeValue;
+    inert?: boolean;
+    innerHTML?: TrustedHtml;
+    inputmode?: string;
+    inputMode?: AttributeValue;
+    low?: AttributeValue;
+    max?: AttributeValue;
+    maxLength?: AttributeValue;
+    label?: AttributeValue;
+    list?: AttributeValue;
+    loading?: AttributeValue;
+    method?: string;
+    min?: AttributeValue;
+    minLength?: AttributeValue;
+    mutation?: { key: string };
+    name?: AttributeValue;
+    onClick?: (event?: unknown) => void;
+    onKeyDown?: (event?: unknown) => void;
+    open?: AttributeValue;
+    optimum?: AttributeValue;
+    pattern?: AttributeValue;
+    placeholder?: AttributeValue;
+    popover?: AttributeValue;
+    popovertarget?: AttributeValue;
+    popovertargetaction?: AttributeValue;
+    points?: string;
+    r?: number | string;
+    rawHtml?: TrustedHtml;
+    readOnly?: AttributeValue;
+    rel?: AttributeValue;
+    referrerpolicy?: AttributeValue;
+    referrerPolicy?: AttributeValue;
+    required?: AttributeValue;
+    role?: AttributeValue;
+    rows?: AttributeValue;
+    rx?: number | string;
+    ry?: number | string;
+    sandbox?: AttributeValue;
+    scope?: AttributeValue;
+    selected?: AttributeValue;
+    sizes?: AttributeValue;
+    src?: AttributeValue;
+    srcset?: AttributeValue;
+    srcSet?: AttributeValue;
+    stroke?: string;
+    'stroke-linecap'?: string;
+    'stroke-linejoin'?: string;
+    'stroke-width'?: number | string;
+    step?: AttributeValue;
+    style?: unknown;
+    tabindex?: number;
+    tabIndex?: AttributeValue;
+    target?: AttributeValue;
+    title?: AttributeValue;
+    transform?: string;
+    type?: AttributeValue;
+    value?: AttributeValue;
+    viewBox?: string;
+    viewTransitionName?: AttributeValue;
+    width?: number | string;
+    x?: number | string;
+    x1?: number | string;
+    x2?: number | string;
+    xmlns?: string;
+    y?: number | string;
+    y1?: number | string;
+    y2?: number | string;
   }
   interface IntrinsicElements {
-    [tag: string]: Record<string, unknown>;
+    [tag: string]: HtmlAttributes;
   }
 }

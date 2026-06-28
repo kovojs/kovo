@@ -26,6 +26,14 @@ interface AsyncSchema<T> extends Schema<T> {
   parseAsync(input: unknown): Promise<T>;
 }
 
+type SchemaMetadata =
+  | { kind: 'array'; item: Schema<unknown> }
+  | { kind: 'file' }
+  | { kind: 'object'; shape: Readonly<Record<string, Schema<unknown>>> }
+  | { kind: 'stored-file' };
+
+const schemaMetadata = new WeakMap<Schema<unknown>, SchemaMetadata>();
+
 /**
  * A single field-level validation failure: a human `message` and the `path` of record
  * keys/array indices locating it. Carried on `SchemaValidationError.issues` and surfaced
@@ -122,6 +130,7 @@ export const s = {
         return output;
       },
     };
+    schemaMetadata.set(schema, { item: item as Schema<unknown>, kind: 'array' });
     return schema;
   },
   boolean(): Schema<boolean> {
@@ -197,9 +206,31 @@ export const s = {
         return output as { [Key in keyof Shape]: InferSchema<Shape[Key]> };
       },
     };
+    schemaMetadata.set(schema, { kind: 'object', shape });
     return schema;
   },
 };
+
+/** @internal Returns top-level mutation input fields that require multipart form encoding. */
+export function mutationInputFileFields(schema: Schema<unknown>): readonly string[] {
+  const metadata = schemaMetadata.get(schema);
+  if (metadata?.kind !== 'object') return [];
+
+  return Object.entries(metadata.shape)
+    .filter(([, fieldSchema]) => schemaContainsFile(fieldSchema))
+    .map(([fieldName]) => fieldName);
+}
+
+function schemaContainsFile(schema: Schema<unknown>): boolean {
+  const metadata = schemaMetadata.get(schema);
+  if (!metadata) return false;
+  if (metadata.kind === 'file' || metadata.kind === 'stored-file') return true;
+  if (metadata.kind === 'array') return schemaContainsFile(metadata.item);
+  if (metadata.kind === 'object') {
+    return Object.values(metadata.shape).some((fieldSchema) => schemaContainsFile(fieldSchema));
+  }
+  return false;
+}
 
 /** Minimal uploaded-file shape accepted by `s.file()` schemas (SPEC.md §6). */
 export interface FileLike {
@@ -456,6 +487,7 @@ class FileSchemaImpl implements FileSchema {
   constructor(options: FileSchemaOptions = {}) {
     this.#maxBytes = options.maxBytes;
     this.#accept = options.accept;
+    schemaMetadata.set(this, { kind: 'file' });
   }
 
   maxBytes(value: number): FileSchema {
@@ -488,6 +520,7 @@ class StoredFileSchemaImpl implements StoredFileSchema {
   constructor(fileOptions: FileSchemaOptions, storageOptions: StoredFileSchemaOptions) {
     this.#fileOptions = fileOptions;
     this.#storageOptions = storageOptions;
+    schemaMetadata.set(this, { kind: 'stored-file' });
   }
 
   parse(_input: unknown): StoredFileUpload {

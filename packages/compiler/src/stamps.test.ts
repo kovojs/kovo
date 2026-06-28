@@ -23,6 +23,17 @@ const cartAddMutationInputs = [
   },
 ] as const;
 
+const uploadReceiptMutationInputs = [
+  {
+    coercion: 'file',
+    defaulted: false,
+    name: 'receipt',
+    optional: false,
+    provenance: 'registry',
+    required: true,
+  },
+] as const;
+
 function requireLoweredSource(result: ReturnType<typeof compileComponentModule>): string {
   if (result.loweredSource === null) throw new TypeError('expected lowered source');
   return result.loweredSource;
@@ -263,6 +274,40 @@ export const AddToCartForm = component({
     );
     expect(() => assertRenderEquivalence(result)).not.toThrow();
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('lowers file upload mutation forms with multipart enctype and explain file fields', () => {
+    const result = compileComponentModule({
+      fileName: 'upload-receipt-form.tsx',
+      registryFacts: {
+        mutationInputs: { 'order/receipt': uploadReceiptMutationInputs },
+        mutations: { 'order/receipt': 'typeof uploadReceipt' },
+      },
+      source: `
+import { uploadReceipt } from '../app.js';
+
+export const UploadReceiptForm = component({
+  mutations: { uploadReceipt },
+  render: (_queries, _state, slots) => (
+    <form enhance mutation={uploadReceipt} key={slots.orderId}>
+      <input type="file" name="receipt" />
+    </form>
+  ),
+});
+`,
+    });
+
+    const loweredSource = requireLoweredSource(result);
+    expect(loweredSource).toContain('enctype="multipart/form-data"');
+    expect(result.componentGraphFacts[0]?.mutationForms).toEqual([
+      {
+        enctype: 'multipart/form-data',
+        fields: ['receipt'],
+        fileFields: ['receipt'],
+        mutation: 'order/receipt',
+        slot: 'uploadReceipt',
+      },
+    ]);
   });
 
   it('lowers streaming enhanced mutation forms without changing non-stream forms', () => {

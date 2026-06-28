@@ -126,6 +126,11 @@ import {
   // SPEC §10-§11: domain action objects are executable mutation surfaces; static aliases are
   // followed through ts-morph symbols, while opaque aliases stay visible as KV406.
   const expression = unwrappedStaticExpressionNode(node);
+  // SPEC §10.3: `domain('cart')` is the public invalidation-domain value form, not a
+  // domain action object. It contributes no write callbacks and must not become KV406.
+  if (Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression)) {
+    return { unresolved: false };
+  }
   if (Node.isObjectLiteralExpression(expression)) return { body: expression, unresolved: false };
 
   const factoryReturn = staticObjectFactoryReturnExpression(expression, seen);

@@ -40,7 +40,8 @@ block shipping correct code.
 
 ### A. Capability / file-download surface (built but unbuildable)
 
-- [ ] **A1 — The framework's own `createStorageDownloadEndpoint` cannot pass `kovo build` (KV423 + KV436).** (HIGH, framework; auth-C2 = files-C1)
+- [x] **A1 — The framework's own `createStorageDownloadEndpoint` cannot pass `kovo build` (KV423 + KV436).** (HIGH, framework; auth-C2 = files-C1)
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "storage download endpoint|webhook build facts|Drizzle security extractors|fatal optimistic"` proves a mounted storage download endpoint passes build preflight without KV423/KV436.
   - Observed: registering `createStorageDownloadEndpoint({ storage, secret })` in
     `createApp({ endpoints })` makes `build:prod` exit 1 with
     `ERROR KV423 ENDPOINT /_kovo/storage … missing=appOwnedSafety` and
@@ -64,11 +65,12 @@ block shipping correct code.
     capability-token justification, or KV423/KV436 should exempt the framework-owned
     verify-before-read byte sink. Add a build test mounting the endpoint that exits 0.
 
-- [ ] **A2 — No public `StorageCapability` constructor: `createMemoryStorage`/`createFileSystemStorage`/`createS3CompatibleStorage` are `@internal`, reachable only via the `@kovojs/core/internal/storage` deep import.** (MEDIUM, framework; auth-C3 = files-C3)
+- [x] **A2 — No public `StorageCapability` constructor: `createMemoryStorage`/`createFileSystemStorage`/`createS3CompatibleStorage` are `@internal`, reachable only via the `@kovojs/core/internal/storage` deep import.** (MEDIUM, framework; auth-C3 = files-C3)
+  - Evidence: `pnpm exec vitest run packages/core/src/storage.test.ts packages/core/src/index.test.ts packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts` plus `pnpm run check:api-surface` prove storage factories/options are public and server API exports remain surface-compliant.
   - Observed: `import { createMemoryStorage } from '@kovojs/core'` → TS2305; only
     `@kovojs/core/internal/storage` works.
   - Root cause: `packages/core/src/index.ts:34-42` re-exports only `type
-    StorageCapability`; the three factories (`packages/core/src/storage.ts:148/199/268`)
+StorageCapability`; the three factories (`packages/core/src/storage.ts:148/199/268`)
     are `@internal`, exposed solely through the `./internal/storage` subpath
     (`core/package.json` exports). Yet two public sinks REQUIRE a `StorageCapability`:
     `createStorageDownloadEndpoint` (`capability-route.ts:257`) and `s.file().store()`
@@ -82,9 +84,10 @@ block shipping correct code.
   - Acceptance: re-export the validated factories (and option types) from public
     `@kovojs/core`/`@kovojs/server` and drop the `@internal` tags.
 
-- [ ] **A3 — `mutationFormAttributes()` omits `enctype="multipart/form-data"` for `s.file()` upload mutations, so a no-JS upload form silently posts urlencoded and 422s with no surfaced reason.** (MEDIUM, framework; files-C4)
+- [x] **A3 — `mutationFormAttributes()` omits `enctype="multipart/form-data"` for `s.file()` upload mutations, so a no-JS upload form silently posts urlencoded and 422s with no surfaced reason.** (MEDIUM, framework; files-C4)
+  - Evidence: `pnpm exec vitest run packages/server/src/mutation.test.ts packages/server/src/app-authoring-context.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/style.test.ts --reporter=dot` proves file mutation helpers and compiler lowering emit multipart form facts/attributes.
   - Observed: a no-JS `<form {...mutationFormAttributes(uploadDoc)}>` with `<input
-    type=file>` posts without multipart enctype → 422, no visible message; builds clean.
+type=file>` posts without multipart enctype → 422, no visible message; builds clean.
   - Root cause: `mutationFormAttributes` (`packages/server/src/mutation/definition.ts:399-405`)
     emits no enctype (its return type has no enctype member), and compiler form
     lowering (`packages/compiler/src/emit/server-emit-shared.ts:155-201`) emits
@@ -101,7 +104,8 @@ block shipping correct code.
     `enctype="multipart/form-data"` when the mutation input has an `s.file()` field
     (or emit a diagnostic). Wire the dead `enctype`/`fileFields` explain slots.
 
-- [ ] **A4 — The security guide's capability-URL example does not compile against the real API (path/scope/expiresIn/`ctx.signUrl` all diverge).** (MEDIUM, docs; auth-C4)
+- [x] **A4 — The security guide's capability-URL example does not compile against the real API (path/scope/expiresIn/`ctx.signUrl` all diverge).** (MEDIUM, docs; auth-C4)
+  - Evidence: `node site/scripts/code-snippets-check.mjs site/content/guides` proves the security guide's capability URL snippet uses the shipped `createStorageDownloadEndpoint`/route `signUrl` API shape.
   - Observed: every executable line of the only documented secure-download flow
     fails `tsc`.
   - Root cause: `site/content/guides/security.md:388-406` uses `path` (the option is
@@ -120,7 +124,8 @@ block shipping correct code.
 
 ### B. Webhooks & endpoints (the build gate rejects correct webhooks)
 
-- [ ] **B1 — Every `webhook()` fails `kovo build`/`check`: the surface is misclassified as a plain endpoint → KV423 (missing appOwnedSafety) + KV436 (missing access).** (HIGH, framework; endpoints-C1)
+- [x] **B1 — Every `webhook()` fails `kovo build`/`check`: the surface is misclassified as a plain endpoint → KV423 (missing appOwnedSafety) + KV436 (missing access).** (HIGH, framework; endpoints-C1)
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "storage download endpoint|webhook build facts|Drizzle security extractors|fatal optimistic"` proves signature-verified webhooks serialize as webhook/verifier facts and pass build preflight without KV423/KV436.
   - Observed: a textbook public `webhook()` + `hmacSignature()` → `build:prod` exit 1
     with `ERROR KV423 ENDPOINT /webhooks/payment … missing=appOwnedSafety` and
     `ERROR KV436 ENDPOINT /webhooks/payment … auth=hmac-sha256:hex` (labeled ENDPOINT,
@@ -141,10 +146,11 @@ block shipping correct code.
     and prefix verifier auth as `verifier:<scheme>`; add a build test that a
     signature-verified `webhook()` exits 0.
 
-- [ ] **B2 — A writable `webhook()` fails KV406 "un-analyzable write site" attributed to its `domain('payment')` declaration — the string-key `domain()` form is misread as an un-analyzable write-action object.** (HIGH, framework; endpoints-C2)
+- [x] **B2 — A writable `webhook()` fails KV406 "un-analyzable write site" attributed to its `domain('payment')` declaration — the string-key `domain()` form is misread as an un-analyzable write-action object.** (HIGH, framework; endpoints-C2)
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.write-callbacks-carriers.test.ts --testNamePattern "string-keyed domain"` proves the Drizzle touch graph no longer treats `domain("payment")` as an unresolved write-action object.
   - Observed: `const paymentDomain = domain('payment')` in a writable webhook →
     `ERROR KV406 webhooks.ts:5 Statically un-analyzable write site; manual touches
-    required.` Removing `recordChange`/`transaction` does NOT clear it; only removing
+required.` Removing `recordChange`/`transaction` does NOT clear it; only removing
     the `domain('payment')` declaration does.
   - Root cause: `unresolvedDomainWriteCallbacks`
     (`packages/drizzle/src/static/domain-writes.ts:39-104`, invoked unconditionally
@@ -167,7 +173,8 @@ block shipping correct code.
     the string-key `domain(key)` form as a plain invalidation-domain identifier (not
     a write-action object). Add a fixture: `domain('x')` used by a webhook `recordChange`.
 
-- [ ] **B3 — A writable webhook MANDATES `idempotency()` + a `replayStore`, but no usable store ships and the `WebhookReplayStore` types are `@internal`/unexported (and the mutation store is type-incompatible).** (MEDIUM, framework; endpoints-C3)
+- [x] **B3 — A writable webhook MANDATES `idempotency()` + a `replayStore`, but no usable store ships and the `WebhookReplayStore` types are `@internal`/unexported (and the mutation store is type-incompatible).** (MEDIUM, framework; endpoints-C3)
+  - Evidence: `pnpm exec vitest run packages/core/src/storage.test.ts packages/core/src/index.test.ts packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts` proves `createMemoryWebhookReplayStore` and webhook replay types satisfy the writable webhook posture.
   - Observed: a tx-exposing webhook throws at declaration without `idempotency()` +
     `replayStore`, but there's no `createMemoryWebhookReplayStore`, the store
     interfaces are unexported (TS2305), and `createMemoryMutationReplayStore` is not
@@ -185,7 +192,8 @@ block shipping correct code.
   - Acceptance: export `createMemoryWebhookReplayStore` + the webhook store types from
     `@kovojs/server` (mirroring mutation/capability).
 
-- [ ] **B4 — A default-CSRF endpoint silently returns 422 "CSRF" forever when `createApp()` has no top-level `csrf` — and the starter wires `csrf` only per-mutation.** (MEDIUM, template; endpoints-C5)
+- [x] **B4 — A default-CSRF endpoint silently returns 422 "CSRF" forever when `createApp()` has no top-level `csrf` — and the starter wires `csrf` only per-mutation.** (MEDIUM, template; endpoints-C5)
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts --testNamePattern "sound-subset policy"` proves the starter imports `appCsrf` and wires `createApp({ csrf: appCsrf })`, so default-CSRF endpoints consume the same app CSRF provider as mutations.
   - Observed: the first non-`csrf:false` endpoint an author adds 422s permanently;
     no boot error, no diagnostic distinguishing missing-token from missing-config.
   - Root cause: `validateEndpointCsrf` (`packages/server/src/app-dispatch.ts:126`)
@@ -201,7 +209,8 @@ block shipping correct code.
   - Acceptance: have the starter set `createApp({ csrf: appCsrf })` and/or emit a dev
     warning when a default-CSRF endpoint is registered but `app.csrf` is undefined.
 
-- [ ] **B5 — Webhook verifier helpers (`hmacSignature`/`standardWebhooks`/`customVerifier`) are exported only from `@kovojs/core`, not re-exported from `@kovojs/server` alongside `webhook()`.** (LOW, framework; endpoints-C6)
+- [x] **B5 — Webhook verifier helpers (`hmacSignature`/`standardWebhooks`/`customVerifier`) are exported only from `@kovojs/core`, not re-exported from `@kovojs/server` alongside `webhook()`.** (LOW, framework; endpoints-C6)
+  - Evidence: `pnpm exec vitest run packages/core/src/storage.test.ts packages/core/src/index.test.ts packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts` plus `pnpm run check:api-surface` prove verifier helpers/types are exported from `@kovojs/server` without widening undocumented API.
   - Observed: authoring a verified webhook splits imports across two packages; the
     helpers don't appear in `@kovojs/server` autocomplete.
   - Root cause: `packages/server/src/index.ts` re-exports `webhook` (:339) but not the
@@ -217,7 +226,8 @@ block shipping correct code.
 
 ### C. Typed-routing inference
 
-- [ ] **C1 — Inline `route()` declared in `createApp({ routes: [...] })` loses path-param typing: `context.params` and `regions` callbacks become `unknown`; the SPEC §8 example doesn't typecheck.** (MEDIUM, framework; files-C2 + nav-REGIONS-4)
+- [x] **C1 — Inline `route()` declared in `createApp({ routes: [...] })` loses path-param typing: `context.params` and `regions` callbacks become `unknown`; the SPEC §8 example doesn't typecheck.** (MEDIUM, framework; files-C2 + nav-REGIONS-4)
+  - Evidence: `pnpm exec vitest run packages/server/src/mutation.test.ts packages/server/src/app-authoring-context.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/style.test.ts --reporter=dot` proves inline `route('/x/:id', ...)` entries in `createApp({ routes })` keep typed params for pages and regions.
   - Observed: an inline `route('/x/:id', { page(ctx){ ctx.params.id } })` → TS18046
     `'params' is of type 'unknown'`; the same route declared as a hoisted `const`
     types `params.id` as `string`. Region callbacks lose params the same way.
@@ -240,7 +250,8 @@ block shipping correct code.
 
 ### D. UI / theme / accessibility
 
-- [ ] **D1 — `@kovojs/ui` Table family silently renders `[object Promise]` when composed with natural JSX children.** (HIGH, framework; theme-ui)
+- [x] **D1 — `@kovojs/ui` Table family silently renders `[object Promise]` when composed with natural JSX children.** (HIGH, framework; theme-ui)
+  - Evidence: `pnpm exec vitest run packages/ui/src/table.stylex.test.tsx packages/server/src/jsx-runtime.test.ts scripts/link-local-kovo.test.mjs` proves natural JSX Table composition renders semantic table sections instead of `[object Promise]`.
   - Observed: `<Table><TableHead><TableRow>…</TableRow></TableHead><TableBody>…</TableBody></Table>`
     renders `<table><caption>…</caption>[object Promise][object Promise]</table>` —
     the thead/tbody are gone.
@@ -262,7 +273,8 @@ block shipping correct code.
   - Acceptance: route Table children through the runtime renderable (await Promises)
     instead of a bespoke synchronous `escapeHtml`. Add a JSX-composition test for Table.
 
-- [ ] **D2 — The server JSX namespace is effectively untyped (`Element=any`, `children: unknown`, intrinsics `Record<string,unknown>`), so declared component prop/children types and intrinsic attribute names/aria values are never enforced at call sites.** (MEDIUM, framework; theme-ui)
+- [x] **D2 — The server JSX namespace is effectively untyped (`Element=any`, `children: unknown`, intrinsics `Record<string,unknown>`), so declared component prop/children types and intrinsic attribute names/aria values are never enforced at call sites.** (MEDIUM, framework; theme-ui)
+  - Evidence: `pnpm exec vitest run packages/server/src/jsx-runtime-types.test.ts packages/server/src/jsx-runtime.test.ts` proves the server JSX namespace rejects missing component props, declared component children mismatches, unknown intrinsic attributes, and invalid `aria-live` values while preserving runtime JSX behavior. `JSX.Element` remains broad for current opaque render-result compatibility; call-site props/children/attributes are no longer the untyped escape hatch.
   - Observed: `<Card>{42}{true}{{not:'render'}}<Button>{[1,2,3]}</Button></Card>`
     (children typed `string`) typechecks clean; `onClik`/invalid aria values are
     unchecked app-wide.
@@ -281,15 +293,16 @@ block shipping correct code.
     constrained `Element`, typed intrinsic attributes/aria) so declared shapes are
     enforced.
 
-- [ ] **D3 — The local dogfood flow (`create-kovo` + `link-local-kovo`) doesn't provide `@kovojs/icons` or `@kovojs/headless-ui`; a direct icon import fails with a bare TS2307 / module-not-found.** (LOW, dev-tooling; theme-ui)
+- [x] **D3 — The local dogfood flow (`create-kovo` + `link-local-kovo`) doesn't provide `@kovojs/icons` or `@kovojs/headless-ui`; a direct icon import fails with a bare TS2307 / module-not-found.** (LOW, dev-tooling; theme-ui)
+  - Evidence: `pnpm exec vitest run packages/ui/src/table.stylex.test.tsx packages/server/src/jsx-runtime.test.ts scripts/link-local-kovo.test.mjs` proves `link-local-kovo` now links `@kovojs/icons` and `@kovojs/headless-ui`.
   - Observed: `import { Plus } from '@kovojs/icons/plus'` fails to resolve in a
     linked dogfood app.
   - Root cause: `scripts/link-local-kovo.mjs:6-15` lists 8 packages and omits
     `@kovojs/icons` + `@kovojs/headless-ui`, which `@kovojs/ui` declares as
-    `workspace:*` deps. With pnpm's symlinked node_modules and the kovo monorepo in a
+    `workspace:*` deps. With pnpm's symlinked node*modules and the kovo monorepo in a
     separate tree, a direct import of an unlinked package fails. (`@kovojs/ui`'s own
     internal subpath imports still resolve through the link: target's monorepo
-    node_modules, so only the app's *direct* icon imports break.)
+    node_modules, so only the app's \_direct* icon imports break.)
   - Why it matters: local-dogfood/dev-tooling only — a published `pnpm add @kovojs/ui`
     pulls icons/headless-ui transitively — but it blocks dogfooding the icon surface.
   - Repro: lockfile importer `.` block lacks icons/headless-ui; direct icon import → TS2307.
@@ -298,10 +311,11 @@ block shipping correct code.
 
 ### E. Navigation, events & view transitions
 
-- [ ] **E1 — A prop/local conditional style `style={cond ? a : b}` is rejected as KV236 "dynamic style text"; only query/state-driven conditionals lower.** (HIGH, framework; nav-STYLE-2)
+- [x] **E1 — A prop/local conditional style `style={cond ? a : b}` is rejected as KV236 "dynamic style text"; only query/state-driven conditionals lower.** (HIGH, framework; nav-STYLE-2)
+  - Evidence: `pnpm exec vitest run packages/server/src/mutation.test.ts packages/server/src/app-authoring-context.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/style.test.ts --reporter=dot` proves prop/local conditional `style.create` handle ternaries lower without KV236.
   - Observed: `style={slug === activeSlug ? styles.active : styles.link}` (both
     branches `style.create` handles) → `KV236 … Unsafe output context requires an
-    explicit trusted Kovo escape hatch. dynamic style text` at build.
+explicit trusted Kovo escape hatch. dynamic style text` at build.
   - Root cause: `dynamicStyleAttributeLowering` (`packages/compiler/src/style.ts:1083`)
     returns null unless the condition roots are a known query/island `state`
     (:1078-1082); a prop/local condition yields `query=null`, the span is never
@@ -319,7 +333,8 @@ block shipping correct code.
     `styleClassVariants`) for pure prop/local conditionals between `style.create`
     handles, instead of requiring a query/state derive root.
 
-- [ ] **E2 — SPEC §7 typed fire-and-forget events (`emit`/`on`) are non-functional end-to-end: the lowered `emit(...)` free identifier has no runtime binding, and `on()` has no authoring surface.** (MEDIUM, framework; nav-EVENTS-1)
+- [x] **E2 — SPEC §7 typed fire-and-forget events (`emit`/`on`) are non-functional end-to-end: the lowered `emit(...)` free identifier has no runtime binding, and `on()` has no authoring surface.** (MEDIUM, framework; nav-EVENTS-1)
+  - Evidence: `rg -n "not a shipped v1 authoring surface|not a shipped authoring surface yet" SPEC.md site/content/guides/islands.md` plus `node site/scripts/code-snippets-check.mjs site/content/guides/islands.md` proves SPEC §7 and the islands guide now explicitly remove typed events from the shipped authoring surface and the authored guide snippets still typecheck.
   - Observed: authoring `emit('cart:add', …)` (the import-free form docs prescribe)
     typechecks and lowers, but resolves to an unbound identifier at runtime
     (ReferenceError); `on()` has no recognized form at all.
@@ -338,7 +353,8 @@ block shipping correct code.
   - Acceptance: wire `createEventBus` into the runtime and give `on()` an authoring
     surface, OR strike the prescription from SPEC §7 / `islands.md`.
 
-- [ ] **E3 — `viewTransitionName` silently leaks as an inert HTML attribute when authored in a plain route-page helper function (it is lowered only inside `component()`).** (MEDIUM, framework; nav-VT-3)
+- [x] **E3 — `viewTransitionName` silently leaks as an inert HTML attribute when authored in a plain route-page helper function (it is lowered only inside `component()`).** (MEDIUM, framework; nav-VT-3)
+  - Evidence: `pnpm exec vitest run packages/ui/src/table.stylex.test.tsx packages/server/src/jsx-runtime.test.ts scripts/link-local-kovo.test.mjs` proves direct server JSX lowers `viewTransitionName` to sanitized CSS and does not leak the camelCase prop.
   - Observed: `<span viewTransitionName="page-hero">` in a route `page()` helper
     emits `<span viewTransitionName="page-hero">` verbatim (camelCase, inert), with
     no diagnostic; the same prop inside a `component()` lowers to
@@ -361,7 +377,8 @@ block shipping correct code.
 
 ### F. Diagnostics surfacing
 
-- [ ] **F1 — `kovo build` fails (exit 1) but prints only WARN-labeled findings and no ERROR cause; a SPEC-fatal KV310 is rendered identically to non-fatal WARN UNGUARDED lines.** (LOW, dev-tooling; auth-C5)
+- [x] **F1 — `kovo build` fails (exit 1) but prints only WARN-labeled findings and no ERROR cause; a SPEC-fatal KV310 is rendered identically to non-fatal WARN UNGUARDED lines.** (LOW, dev-tooling; auth-C5)
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "Drizzle security extractors|fatal optimistic"` proves a build-fatal KV310 now gets an `ERROR BUILD_FATAL KV310 ...` summary before the raw verifier output.
   - Observed: removing an optimistic transform makes `build:prod` exit 1 with
     `ERROR kovo build check preflight failed:` then a single `WARN KV310 …` buried
     among 11 same-styled `WARN UNGUARDED …` lines — no per-finding ERROR/FATAL marker
@@ -376,7 +393,8 @@ block shipping correct code.
   - Acceptance: render build-fatal findings with an ERROR/FATAL marker regardless of
     nominal severity class, and/or have the wrapper name the fatal finding(s).
 
-- [ ] **F2 — An endpoint posture mismatch (declared `cache`/`body` vs actual response headers) throws an opaque 500 "Server Error" with zero diagnostic in dev unless `onError` is configured.** (LOW, dev-tooling; endpoints-C4)
+- [x] **F2 — An endpoint posture mismatch (declared `cache`/`body` vs actual response headers) throws an opaque 500 "Server Error" with zero diagnostic in dev unless `onError` is configured.** (LOW, dev-tooling; endpoints-C4)
+  - Evidence: `pnpm exec vitest run packages/server/src/vite-dev.test.ts --testNamePattern "endpoint posture mismatches|route diagnostics"` proves Vite dev records endpoint posture mismatch throws into the dev diagnostic ledger and serves a KV423 diagnostic containing the cache/body drift.
   - Observed: a posture-mismatched endpoint 500s in dev with no console output.
   - Root cause: `reportServerError` no-ops without an app-configured `onError`
     (`diagnostics.ts:43`), so a server-component/endpoint throw yields an opaque 500.

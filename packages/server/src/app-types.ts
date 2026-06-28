@@ -55,8 +55,8 @@ export interface AppAuthoringContext<AppRequest> {
 }
 
 export type AppAuthoringDeclarations<Declaration, AppRequest> =
-  | readonly Declaration[]
-  | ((context: AppAuthoringContext<AppRequest>) => readonly unknown[]);
+  | readonly NoInfer<Declaration>[]
+  | ((context: AppAuthoringContext<AppRequest>) => readonly NoInfer<Declaration>[]);
 
 /**
  * Optional shell renderers for framework-owned error pages in the request shell

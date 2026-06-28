@@ -347,6 +347,20 @@ describe('server jsx runtime', () => {
     );
   });
 
+  it('lowers viewTransitionName to sanitized CSS in direct server JSX', () => {
+    // SPEC.md §8: route-page helper JSX uses the runtime path, so framework-special
+    // view-transition props must not leak as inert camelCase HTML attributes.
+    expect(html(jsx('span', { viewTransitionName: 'page-hero', children: 'Hero' }))).toBe(
+      '<span style="view-transition-name: page-hero">Hero</span>',
+    );
+    expect(html(jsx('span', { viewTransitionName: 'page hero', children: 'Hero' }))).toBe(
+      '<span style="view-transition-name: page-hero">Hero</span>',
+    );
+    expect(html(jsx('span', { viewTransitionName: 'page-hero', children: 'Hero' }))).not.toContain(
+      'viewTransitionName',
+    );
+  });
+
   it('renders raw HTML sinks only from trusted values', () => {
     const browserTrustedHtml = {
       [Symbol.toStringTag]: 'TrustedHTML',

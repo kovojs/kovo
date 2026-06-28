@@ -9,6 +9,8 @@ const kovoPackageNames = [
   '@kovojs/cli',
   '@kovojs/core',
   '@kovojs/drizzle',
+  '@kovojs/headless-ui',
+  '@kovojs/icons',
   '@kovojs/server',
   '@kovojs/style',
   '@kovojs/ui',

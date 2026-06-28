@@ -275,7 +275,11 @@ function renderSemanticAttributes(
       .join('');
   }
 
-  const formMutation = enhancedMutationFormLowering(model, element, options.registryFacts);
+  const formMutation = enhancedMutationFormLowering(
+    model,
+    element,
+    options.registryFacts ? { registryFacts: options.registryFacts } : {},
+  );
   const viewTransitionStyle = semanticViewTransitionStyle(element);
   const fieldErrorDescribedBy = semanticFieldErrorDescribedByAttribute(model, element);
   const semanticAttributes: string[] = [];

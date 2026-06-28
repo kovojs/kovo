@@ -113,6 +113,36 @@ export type {
   PublicAccess,
   VerifiedMachineAccess,
 } from './access.js';
+// SPEC §6.6 / §9.1: storage capability constructors are public app wiring surfaces for
+// upload/file schemas and the framework-owned capability download endpoint.
+export {
+  createFileSystemStorage,
+  createMemoryStorage,
+  createS3CompatibleStorage,
+} from '@kovojs/core';
+export type {
+  FileSystemStorageOptions,
+  MemoryStorageOptions,
+  S3CompatibleGetObjectInput,
+  S3CompatibleGetObjectOutput,
+  S3CompatibleHeadObjectInput,
+  S3CompatibleObjectClient,
+  S3CompatibleObjectMetadata,
+  S3CompatiblePutObjectInput,
+  S3CompatiblePutObjectOutput,
+  S3CompatibleStorageOptions,
+  StorageBody,
+  StorageCapability,
+  StorageGetResult,
+  StorageObjectInfo,
+  StoragePutOptions,
+  StoragePutResult,
+  StorageStreamResult,
+} from '@kovojs/core';
+// SPEC §9.1: verifier builders are part of the webhook authoring surface, so server
+// re-exports them next to `webhook()`.
+export { customVerifier, hmacSignature, standardWebhooks } from '@kovojs/core';
+export type { WebhookVerifier } from '@kovojs/core';
 // SPEC.md §9.5: apps inject a custom versioned client-module registry through
 // `createApp({ clientModules })`. Real example/site consumers (examples/gallery,
 // crm, stackoverflow, reference; site/src/client/modules.ts) construct one with
@@ -336,6 +366,7 @@ export {
   respond,
   route,
   session,
+  createMemoryWebhookReplayStore,
   webhook,
 } from './api/routing.js';
 export type {
@@ -419,6 +450,12 @@ export type {
   WebhookDeclaration,
   WebhookDefinition,
   WebhookFail,
+  WebhookFailureStatus,
   WebhookHandlerContext,
+  WebhookReplayReservation,
+  WebhookReplayStore,
+  WebhookResponseStatus,
+  WebhookSuccessStatus,
   WebhookTransactionContext,
+  WebhookWireResponse,
 } from './api/routing.js';

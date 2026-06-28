@@ -19,6 +19,7 @@ import { readMutationWireHeaders } from './mutation-wire.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
 import { renderFragmentWireHtml } from './wire-html.js';
+import type { ServerErrorDiagnosticContext } from './diagnostics.js';
 
 const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
@@ -179,6 +180,16 @@ export interface KovoAppShellDevModuleDiagnostics {
   source?: string;
 }
 
+interface KovoAppShellDevRequestDiagnostics {
+  diagnostics: readonly DiagnosticDocumentDiagnostic[];
+  href: string;
+  source?: string;
+}
+
+interface KovoAppShellDevRequestDiagnosticStore {
+  requestRecords: Map<string, KovoAppShellDevDiagnosticRecord>;
+}
+
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Stored diagnostic record
  * keyed by source file in the dev diagnostic ledger.
@@ -203,6 +214,11 @@ export interface KovoAppShellDevDiagnosticLedger {
   recordModuleDiagnostics(record: KovoAppShellDevModuleDiagnostics): void;
 }
 
+const requestDiagnosticStores = new WeakMap<
+  KovoAppShellDevDiagnosticLedger,
+  KovoAppShellDevRequestDiagnosticStore
+>();
+
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Creates the dev diagnostic
  * ledger that maps failed modules to teaching diagnostic responses.
@@ -213,8 +229,9 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
   const allHrefToFileName = new Map<string, string>();
   const moduleRecords = new Map<string, KovoAppShellDevDiagnosticRecord>();
   const hrefToFileName = new Map<string, string>();
+  const requestRecords = new Map<string, KovoAppShellDevDiagnosticRecord>();
 
-  return {
+  const ledger: KovoAppShellDevDiagnosticLedger = {
     allDiagnosticsForFile(fileName) {
       return allModuleRecords.get(slashPath(fileName));
     },
@@ -251,6 +268,8 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
       }
     },
   };
+  requestDiagnosticStores.set(ledger, { requestRecords });
+  return ledger;
 }
 
 /**
@@ -306,9 +325,12 @@ export function kovoAppShellViteDevPlugin(
           if (stylesheetResponse) {
             return writeWebResponseToNode(stylesheetResponse, response, request.method ?? 'GET');
           }
-          const app = appWithDevStylesheetAssets(
-            readKovoAppShellViteDevApp(module, appExportName, moduleId),
-            stylesheetAssets,
+          const app = appWithDevDiagnostics(
+            appWithDevStylesheetAssets(
+              readKovoAppShellViteDevApp(module, appExportName, moduleId),
+              stylesheetAssets,
+            ),
+            options.devDiagnostics,
           );
           const shouldHandle = shouldHandleKovoAppShellViteDevRequest(
             request,
@@ -985,6 +1007,9 @@ export function renderKovoAppShellViteDevDiagnosticResponse(
   if (!diagnostics) return undefined;
 
   const url = new URL(request.url ?? '/', 'http://kovo.local');
+  const requestRecord = requestDiagnosticForHref(diagnostics, url.pathname + url.search);
+  if (requestRecord) return renderDiagnosticDocumentForRecord(requestRecord);
+
   const match = matchShellDispatch({
     endpoints: app.endpoints,
     ...(request.method === undefined ? {} : { method: request.method }),
@@ -1077,6 +1102,33 @@ function normalizedModuleHref(href: string): string {
   return slashPath(url.pathname);
 }
 
+function normalizedRequestHref(href: string): string {
+  const url = new URL(href, 'http://kovo.local');
+  return `${slashPath(url.pathname)}${url.search}`;
+}
+
+function requestDiagnosticForHref(
+  diagnostics: KovoAppShellDevDiagnosticLedger,
+  href: string,
+): KovoAppShellDevDiagnosticRecord | undefined {
+  return requestDiagnosticStores.get(diagnostics)?.requestRecords.get(normalizedRequestHref(href));
+}
+
+function recordRequestDiagnostic(
+  diagnostics: KovoAppShellDevDiagnosticLedger,
+  record: KovoAppShellDevRequestDiagnostics,
+): void {
+  const store = requestDiagnosticStores.get(diagnostics);
+  if (!store || !record.diagnostics.some(isErrorDiagnostic)) return;
+
+  const href = normalizedRequestHref(record.href);
+  store.requestRecords.set(href, {
+    diagnostics: record.diagnostics,
+    fileName: href,
+    ...(record.source === undefined ? {} : { source: record.source }),
+  });
+}
+
 function isErrorDiagnostic(diagnostic: DiagnosticDocumentDiagnostic): boolean {
   return diagnosticDefinitions[diagnostic.code].severity === 'error';
 }
@@ -1120,6 +1172,55 @@ function readKovoAppShellViteDevNodeHandler(
   };
   const nodeHandler = toNodeHandler(createRequestHandler(app), nodeOptions);
   return (request, response) => nodeHandler(request, response);
+}
+
+function appWithDevDiagnostics(
+  app: KovoApp,
+  diagnostics: KovoAppShellDevDiagnosticLedger | undefined,
+): KovoApp {
+  if (!diagnostics) return app;
+
+  return {
+    ...app,
+    onError(error, context) {
+      const requestDiagnostic = endpointPostureRequestDiagnostic(error, context);
+      if (requestDiagnostic) recordRequestDiagnostic(diagnostics, requestDiagnostic);
+
+      const result = app.onError?.(error, context);
+      if (result && typeof result === 'object' && 'then' in result) {
+        void result.catch((_error) => undefined);
+      }
+    },
+  };
+}
+
+function endpointPostureRequestDiagnostic(
+  error: unknown,
+  context: ServerErrorDiagnosticContext,
+): KovoAppShellDevRequestDiagnostics | undefined {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!message.includes('response posture mismatch')) return undefined;
+
+  const href = context.url ?? requestHrefFromContext(context.request) ?? '/';
+  return {
+    diagnostics: [
+      {
+        code: 'KV423',
+        help:
+          'Raw endpoint response posture is executable audit metadata in development. ' +
+          'Make the declared response cache/body posture match the returned Response headers, ' +
+          'or update the endpoint declaration when the drift is intentional.',
+        message,
+      },
+    ],
+    href,
+  };
+}
+
+function requestHrefFromContext(request: unknown): string | undefined {
+  if (!(request instanceof Request)) return undefined;
+  const url = new URL(request.url);
+  return `${url.pathname}${url.search}`;
 }
 
 function readKovoAppShellViteDevStylesheetAssets(

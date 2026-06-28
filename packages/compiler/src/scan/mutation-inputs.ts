@@ -154,6 +154,10 @@ function schemaExpressionCoercion(expression: ts.Expression): MutationInputField
           coercion = 'string';
           return;
         }
+        if (name === 'file') {
+          coercion = 'file';
+          return;
+        }
         if (name === 'string' || name === 'number' || name === 'boolean') {
           coercion = name;
           return;
