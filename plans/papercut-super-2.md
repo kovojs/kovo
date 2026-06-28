@@ -84,7 +84,8 @@ StorageCapability`; the three factories (`packages/core/src/storage.ts:148/199/2
   - Acceptance: re-export the validated factories (and option types) from public
     `@kovojs/core`/`@kovojs/server` and drop the `@internal` tags.
 
-- [ ] **A3 — `mutationFormAttributes()` omits `enctype="multipart/form-data"` for `s.file()` upload mutations, so a no-JS upload form silently posts urlencoded and 422s with no surfaced reason.** (MEDIUM, framework; files-C4)
+- [x] **A3 — `mutationFormAttributes()` omits `enctype="multipart/form-data"` for `s.file()` upload mutations, so a no-JS upload form silently posts urlencoded and 422s with no surfaced reason.** (MEDIUM, framework; files-C4)
+  - Evidence: `pnpm exec vitest run packages/server/src/mutation.test.ts packages/server/src/app-authoring-context.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/style.test.ts --reporter=dot` proves file mutation helpers and compiler lowering emit multipart form facts/attributes.
   - Observed: a no-JS `<form {...mutationFormAttributes(uploadDoc)}>` with `<input
 type=file>` posts without multipart enctype → 422, no visible message; builds clean.
   - Root cause: `mutationFormAttributes` (`packages/server/src/mutation/definition.ts:399-405`)
@@ -224,7 +225,8 @@ required.` Removing `recordChange`/`transaction` does NOT clear it; only removin
 
 ### C. Typed-routing inference
 
-- [ ] **C1 — Inline `route()` declared in `createApp({ routes: [...] })` loses path-param typing: `context.params` and `regions` callbacks become `unknown`; the SPEC §8 example doesn't typecheck.** (MEDIUM, framework; files-C2 + nav-REGIONS-4)
+- [x] **C1 — Inline `route()` declared in `createApp({ routes: [...] })` loses path-param typing: `context.params` and `regions` callbacks become `unknown`; the SPEC §8 example doesn't typecheck.** (MEDIUM, framework; files-C2 + nav-REGIONS-4)
+  - Evidence: `pnpm exec vitest run packages/server/src/mutation.test.ts packages/server/src/app-authoring-context.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/style.test.ts --reporter=dot` proves inline `route('/x/:id', ...)` entries in `createApp({ routes })` keep typed params for pages and regions.
   - Observed: an inline `route('/x/:id', { page(ctx){ ctx.params.id } })` → TS18046
     `'params' is of type 'unknown'`; the same route declared as a hoisted `const`
     types `params.id` as `string`. Region callbacks lose params the same way.
@@ -307,7 +309,8 @@ required.` Removing `recordChange`/`transaction` does NOT clear it; only removin
 
 ### E. Navigation, events & view transitions
 
-- [ ] **E1 — A prop/local conditional style `style={cond ? a : b}` is rejected as KV236 "dynamic style text"; only query/state-driven conditionals lower.** (HIGH, framework; nav-STYLE-2)
+- [x] **E1 — A prop/local conditional style `style={cond ? a : b}` is rejected as KV236 "dynamic style text"; only query/state-driven conditionals lower.** (HIGH, framework; nav-STYLE-2)
+  - Evidence: `pnpm exec vitest run packages/server/src/mutation.test.ts packages/server/src/app-authoring-context.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/style.test.ts --reporter=dot` proves prop/local conditional `style.create` handle ternaries lower without KV236.
   - Observed: `style={slug === activeSlug ? styles.active : styles.link}` (both
     branches `style.create` handles) → `KV236 … Unsafe output context requires an
 explicit trusted Kovo escape hatch. dynamic style text` at build.
