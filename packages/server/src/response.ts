@@ -379,7 +379,7 @@ export function routeOutcomeResponse(
   if (outcome.etag && requestHeader(request, 'if-none-match') === outcome.etag) {
     return {
       body: '',
-      headers: { ETag: outcome.etag },
+      headers,
       status: 304,
     };
   }

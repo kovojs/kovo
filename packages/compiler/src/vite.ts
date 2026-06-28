@@ -24,6 +24,7 @@ import {
 } from './persistent-compile-cache.js';
 import { componentOptionObjectEntries, parseComponentModule } from './scan/parse.js';
 import { queryExpressionFromBinding } from './scan/query-binding.js';
+import { deriveRegistryIdentity } from './registry-identities.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 import type {
   HmrImpactClassification,
@@ -687,13 +688,37 @@ function componentLocalQueryShapeFacts(
     .map((entry): QueryShapeFact | null => {
       const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
       if (!queryExpression || queryExpression === entry.key) return null;
-      const sourceFact = factsByQuery.get(queryExpression);
+      const sourceFact =
+        factsByQuery.get(queryExpression) ??
+        factsByQuery.get(importedQueryDerivedKey(model, fileName, queryExpression) ?? '');
       if (!sourceFact) return null;
       return { ...sourceFact, query: entry.key };
     })
     .filter((fact): fact is QueryShapeFact => fact !== null);
 
   return aliases.length === 0 ? facts : [...facts, ...aliases];
+}
+
+function importedQueryDerivedKey(
+  model: ReturnType<typeof parseComponentModule>,
+  fileName: string,
+  queryExpression: string,
+): string | null {
+  const entry = model.namedImports.find(
+    (namedImport) =>
+      namedImport.localName === queryExpression && namedImport.moduleSpecifier.startsWith('.'),
+  );
+  if (!entry) return null;
+
+  return deriveRegistryIdentity(
+    resolveImportedModuleFileName(fileName, entry.moduleSpecifier),
+    entry.importedName,
+  ).key;
+}
+
+function resolveImportedModuleFileName(fileName: string, moduleSpecifier: string): string {
+  const extension = /\.[cm]?[tj]sx?$/.test(moduleSpecifier) ? '' : '.ts';
+  return slashPath(resolve(dirname(fileName), `${moduleSpecifier}${extension}`));
 }
 
 function reportViteDiagnostics(

@@ -963,23 +963,32 @@ function insertDerivedQueryKeyImport(source: string, model: ComponentModuleModel
 }
 
 function exportedObjectFirstQueryCalls(model: ComponentModuleModel) {
-  if (!importsKovoQuery(model)) return [];
+  const queryLocalNames = kovoQueryLocalNames(model);
+  if (queryLocalNames.size === 0) return [];
   return model.calls.filter(
     (call) =>
       call.exportedConstName &&
-      (call.name === 'query' || call.name === 'query.elevated') &&
+      isKovoQueryCallName(call.name, queryLocalNames) &&
       call.arguments.length === 1 &&
       typeof call.argumentStaticValues[0] !== 'string',
   );
 }
 
-function importsKovoQuery(model: ComponentModuleModel): boolean {
-  return model.namedImports.some(
-    (entry) =>
-      entry.moduleSpecifier === '@kovojs/server' &&
-      entry.importedName === 'query' &&
-      entry.localName === 'query',
+function kovoQueryLocalNames(model: ComponentModuleModel): ReadonlySet<string> {
+  return new Set(
+    model.namedImports
+      .filter(
+        (entry) => entry.moduleSpecifier === '@kovojs/server' && entry.importedName === 'query',
+      )
+      .map((entry) => entry.localName),
   );
+}
+
+function isKovoQueryCallName(callName: string, queryLocalNames: ReadonlySet<string>): boolean {
+  for (const localName of queryLocalNames) {
+    if (callName === localName || callName === `${localName}.elevated`) return true;
+  }
+  return false;
 }
 
 export function collectStateDeriveReferenceFacts(

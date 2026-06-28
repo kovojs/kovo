@@ -25,6 +25,15 @@ export async function readStaticExportReplayedResponse(
   const contentType = response.headers.get('content-type');
   const body = await response.text();
 
+  if (options.kind === 'route-document') {
+    const routeOutcomeDiagnostics = routeDocumentNonExportableOutcomeDiagnostics(
+      options,
+      contentType,
+      body,
+    );
+    if (routeOutcomeDiagnostics.length > 0) throw new StaticExportError(routeOutcomeDiagnostics);
+  }
+
   if (response.status !== 200 || !isExpectedStaticExportContentType(options, contentType)) {
     throw new StaticExportError(staticExportReplayResponseDiagnostics(options, contentType, body));
   }
@@ -46,6 +55,13 @@ function staticExportReplayResponseDiagnostics(
   body: string,
 ) {
   if (options.kind === 'route-document') {
+    const routeOutcomeDiagnostics = routeDocumentNonExportableOutcomeDiagnostics(
+      options,
+      contentType,
+      body,
+    );
+    if (routeOutcomeDiagnostics.length > 0) return routeOutcomeDiagnostics;
+
     const endpointDiagnostics = routeDocumentEndpointDiagnostics(
       options.routePath,
       contentType,
@@ -70,6 +86,46 @@ function staticExportReplayResponseDiagnostics(
       `KV229 static export cannot copy client module '${options.href}' because the app handler returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
     ),
   ];
+}
+
+function routeDocumentNonExportableOutcomeDiagnostics(
+  options: StaticExportRouteDocumentResponseOptions,
+  contentType: string | null,
+  body: string,
+) {
+  const { response, routePath } = options;
+  if (response.status >= 300 && response.status < 400) {
+    return [
+      staticExportDiagnostic(
+        routePath,
+        `KV229 static export cannot export route '${routePath}' because replay returned redirect status ${response.status} with Location '${response.headers.get('location') ?? 'none'}'. Static export is L0/L1 only; serve this route dynamically or export the redirect target as a route document.`,
+        routePath,
+      ),
+    ];
+  }
+
+  const contentDisposition = response.headers.get('content-disposition');
+  if (contentDisposition !== null) {
+    return [
+      staticExportDiagnostic(
+        routePath,
+        `KV229 static export cannot export route '${routePath}' because replay returned a file/stream response with Content-Disposition '${contentDisposition}' and Content-Type '${contentType ?? 'none'}'. Static export can write HTML route documents only; move this download behind a dynamic endpoint or remove it from static export.`,
+        routePath,
+      ),
+    ];
+  }
+
+  if (isDeferredRouteDocumentBody(body)) {
+    return [
+      staticExportDiagnostic(
+        routePath,
+        `KV229 static export cannot export route '${routePath}' because replayed HTML contains deferred/streamed route fragments. Static export is L0/L1 only and writes complete no-JS documents; render this content eagerly for export or serve the route dynamically.`,
+        routePath,
+      ),
+    ];
+  }
+
+  return [];
 }
 
 function routeDocumentEndpointDiagnostics(
@@ -100,6 +156,13 @@ function isExpectedStaticExportContentType(
 
 function isHtmlDocumentContentType(contentType: string | null): boolean {
   return contentType?.toLowerCase().includes('text/html') ?? false;
+}
+
+function isDeferredRouteDocumentBody(body: string): boolean {
+  return (
+    body.includes('<kovo-defer') &&
+    (body.includes('<kovo-fragment ') || body.includes('--kovo-boundary'))
+  );
 }
 
 function isJavaScriptClientModuleContentType(contentType: string | null): boolean {

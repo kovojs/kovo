@@ -22,7 +22,7 @@ this pass.
 
 ### A. UI Copy-In And Starter Gates
 
-- [ ] **`kovo add` copied UI source leaves required package dependencies uninstalled.** (med, dev-tooling; found by `ui-copyin-full-catalog`)
+- [x] **`kovo add` copied UI source leaves required package dependencies uninstalled.** (med, dev-tooling; found by `ui-copyin-full-catalog`)
   - Observed behavior: copied dependency-using UI components typechecked only
     after manually adding `@kovojs/headless-ui` and `@kovojs/icons`; the CLI
     printed install hints but left the app in a failing post-command state.
@@ -38,8 +38,13 @@ this pass.
   - Acceptance: the copy-in command either updates/install required packages or
     emits an exact follow-up command that is covered by a CLI test and leaves a
     fresh linked app typecheckable.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/create-kovo/src/index.test.ts`
+    passed with coverage that `kovo add` records missing package dependencies
+    in the nearest manifest, preserves local `link:` Kovo specs, and invokes the
+    app package manager install.
 
-- [ ] **Vendored `PassThroughOptions` is stale and rejects copied checkbox/radio/switch props.** (med, dev-tooling; found by `ui-copyin-full-catalog`)
+- [x] **Vendored `PassThroughOptions` is stale and rejects copied checkbox/radio/switch props.** (med, dev-tooling; found by `ui-copyin-full-catalog`)
   - Observed behavior: copied checkbox/radio/switch source failed typecheck
     after installing dependencies because the vendored helper type lacked
     `island` and `bindings`.
@@ -53,8 +58,12 @@ this pass.
     installed.
   - Acceptance: the vendored helper is generated from or kept equivalent to the
     canonical helper, with copy-in tests for `island` and `bindings`.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/create-kovo/src/index.test.ts`
+    passed with copied source checks covering `PassThroughOptions.island`,
+    `PassThroughOptions.bindings`, and `data-bind-prop:*` forwarding.
 
-- [ ] **Copied child-forwarding UI components render `[object Promise]` in dev.** (high, framework; found by `ui-copyin-full-catalog`)
+- [x] **Copied child-forwarding UI components render `[object Promise]` in dev.** (high, framework; found by `ui-copyin-full-catalog`)
   - Observed behavior: dev `/catalog` returned HTTP 200 with eight literal
     `[object Promise]` occurrences from copied Breadcrumb/Tabs/Card nested
     children; the production build for the same page had zero occurrences.
@@ -65,12 +74,16 @@ this pass.
   - Why it matters: SPEC §4.5 treats children as render-time composition, and
     the dev loop is the first surface authors use to validate copied UI.
   - Repro evidence: `rg -n '\\[object Promise\\]' /tmp/kovo-catalog-dev.html
-    /tmp/kovo-catalog-prod.html` matched only the dev response.
+/tmp/kovo-catalog-prod.html` matched only the dev response.
   - Acceptance: dev and production render nested copied UI children without
     literal promise strings, with coverage for Breadcrumb/Tabs/Card-style child
     forwarding.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/response.test.ts packages/server/src/route-response.test.ts packages/server/src/jsx-runtime.test.ts`
+    passed with JSX runtime coverage for promised children copied through a
+    forwarding component.
 
-- [ ] **Generated sound-subset script flags JSX prose containing `as HTML` as an unchecked cast.** (low, template; found by `ui-copyin-full-catalog`)
+- [x] **Generated sound-subset script flags JSX prose containing `as HTML` as an unchecked cast.** (low, template; found by `ui-copyin-full-catalog`)
   - Observed behavior: starter `scripts/check-sound-subset.mjs` reported a
     violation for ordinary JSX text that included the phrase `as HTML`.
   - Root cause: the generated script scans raw source text with a broad regex
@@ -82,10 +95,14 @@ this pass.
     fail even though no TypeScript assertion was present.
   - Acceptance: the generated check ignores string and JSX text content while
     still catching real unchecked `as` casts.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/create-kovo/src/index.test.ts`
+    passed with starter coverage that JSX/string prose containing `as HTML` is
+    ignored while a real unchecked cast is still reported.
 
 ### B. Query And Static Analysis
 
-- [ ] **External object-form non-Drizzle output schemas still fail through component-local aliases.** (med, framework; found by `streaming-query-live`)
+- [x] **External object-form non-Drizzle output schemas still fail through component-local aliases.** (med, framework; found by `streaming-query-live`)
   - Observed behavior: `directoryAlias.summary.total`,
     `statsAlias.totals.notes`, and `directoryAlias.summary.featuredId` failed
     KV302 even though the imported object-form queries declared matching output
@@ -101,12 +118,16 @@ this pass.
     KV302 diagnostics.
   - Acceptance: object-form query output facts survive imported query aliases,
     with a focused build test using an external query module.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
+    passed with coverage that external source-derived query shape facts are
+    cloned through component-local aliases.
 
-- [ ] **Aliased public `query` imports skip source-derived key assignment.** (med, framework; found by `streaming-query-live`)
+- [x] **Aliased public `query` imports skip source-derived key assignment.** (med, framework; found by `streaming-query-live`)
   - Observed behavior: `import { query as defineQuery } from '@kovojs/server'`
     followed by `defineQuery({ ... })` built to runtime failure:
     `createApp() received query({ ... }) before the compiler assigned its
-    source-derived key.`
+source-derived key.`
   - Root cause: `packages/compiler/src/compile.ts:976-982` requires the local
     import name to be exactly `query`, and
     `packages/compiler/src/source-derived-lowering.ts:88-104` matches call
@@ -119,8 +140,12 @@ this pass.
     assertion.
   - Acceptance: source-derived query lowering tracks imported local bindings,
     including aliases, with regression coverage for `query as defineQuery`.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
+    passed with coverage for `import { query as defineQuery }` and
+    `defineQuery.elevated(...)` source-derived key assignment.
 
-- [ ] **SQL sink detector treats any `.exec(...)` call as a KV422 sink.** (med, framework; found by `ui-copyin-full-catalog`)
+- [x] **SQL sink detector treats any `.exec(...)` call as a KV422 sink.** (med, framework; found by `ui-copyin-full-catalog`)
   - Observed behavior: copied `safe-url.ts` failed `build:prod` because
     `schemePattern.exec(stripped)` was treated as an unsafe SQL sink.
   - Root cause: `packages/drizzle/src/static.ts:1273-1279` recognizes `.exec`
@@ -133,10 +158,14 @@ this pass.
     KV422 at the copied `safe-url.ts` regexp call.
   - Acceptance: KV422 continues to catch database execute calls while excluding
     obvious `RegExp#exec` calls, with focused static-analysis coverage.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/drizzle/src/sql-safety-static.test.ts`
+    passed with coverage that `RegExp#exec` is not KV422 while `db.exec(...)`
+    remains flagged.
 
 ### C. Static Export And Response Semantics
 
-- [ ] **Static export turns a route `redirect()` into a 200 HTML file containing `[object Object]`.** (high, framework; found by `prod-export-route-files`)
+- [x] **Static export turns a route `redirect()` into a 200 HTML file containing `[object Object]`.** (high, framework; found by `prod-export-route-files`)
   - Observed behavior: `dist/export-skip/redirect-doc/index.html` contained
     `[object Object]`, while a production server control for the same route
     returned `303 Location: /export`.
@@ -150,8 +179,12 @@ this pass.
     matched the exported file; the production server returned the correct 303.
   - Acceptance: route redirects during static export are either followed or
     reported as non-exportable, never serialized as object text.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/response.test.ts packages/server/src/route-response.test.ts packages/server/src/jsx-runtime.test.ts`
+    passed with static-export coverage that route `redirect()` fails closed as
+    KV229 without writing an HTML artifact.
 
-- [ ] **ETag 304 for `respond.file` drops declared cache/security headers.** (med, framework; found by `prod-export-route-files`)
+- [x] **ETag 304 for `respond.file` drops declared cache/security headers.** (med, framework; found by `prod-export-route-files`)
   - Observed behavior: conditional requests to a file response returned 304
     with only `ETag`, omitting the route-declared cache/security headers present
     on the full 200 response.
@@ -166,8 +199,12 @@ this pass.
     only `ETag`.
   - Acceptance: 304 file responses retain declared route headers where HTTP
     permits them, with a focused response test.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/response.test.ts packages/server/src/route-response.test.ts packages/server/src/jsx-runtime.test.ts`
+    passed with response coverage that file ETag 304 responses preserve cache,
+    CSP, download, ETag, and nosniff headers.
 
-- [ ] **Static export reports generic 500 for public deferred/streaming routes.** (low, dev-tooling; found by `streaming-query-live`)
+- [x] **Static export reports generic 500 for public deferred/streaming routes.** (low, dev-tooling; found by `streaming-query-live`)
   - Observed behavior: attempting to statically export a public
     deferred/streaming route produced a generic 500-style failure instead of a
     concrete non-exportable-route diagnostic.
@@ -180,10 +217,13 @@ this pass.
     generic 500 path for a route intentionally using dynamic streaming behavior.
   - Acceptance: static export reports a precise non-exportable deferred/streaming
     route reason without changing runtime behavior.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/response.test.ts packages/server/src/route-response.test.ts packages/server/src/jsx-runtime.test.ts`
+    passed with KV229 diagnostics for deferred/streamed route documents.
 
 ### D. Webhook And Docs Ergonomics
 
-- [ ] **Write webhooks without a replay store pass build/explain but 500 on signed delivery.** (med, framework; found by `endpoints-webhooks-access`)
+- [x] **Write webhooks without a replay store pass build/explain but 500 on signed delivery.** (med, framework; found by `endpoints-webhooks-access`)
   - Observed behavior: a webhook declared with `writes`, `idempotency`, and
     `recordChange()` but no `replayStore` passed build/explain, then failed at
     runtime on signed delivery.
@@ -199,8 +239,12 @@ this pass.
     reached.
   - Acceptance: build/posture verification rejects write webhooks that require
     replay protection but omit `replayStore`, with a focused webhook test.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/webhook.test.ts` passed with
+    coverage that declared write webhooks without `replayStore` fail before
+    signed delivery runtime and valid replay posture still passes.
 
-- [ ] **Getting-started docs show an incomplete endpoint-posture command.** (low, docs; found by `endpoints-webhooks-access`)
+- [x] **Getting-started docs show an incomplete endpoint-posture command.** (low, docs; found by `endpoints-webhooks-access`)
   - Observed behavior: docs show bare `kovo check endpoint-posture`, while the
     generated workflow and CLI examples require an explicit fixture path such as
     `.kovo/endpoint-posture.json`.
@@ -212,6 +256,9 @@ this pass.
     showed the missing fixture argument.
   - Acceptance: getting-started docs name the same endpoint-posture command
     shape generated by the starter.
+  - Evidence: 2026-06-28 `pnpm run check:vp` passed after
+    `site/content/getting-started/installation.md` was updated to show
+    `kovo check endpoint-posture .kovo/endpoint-posture.json`.
 
 ## Refuted / Not Carried Forward
 

@@ -69,6 +69,24 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     expect(diagnostics[0]?.message).toContain('execute() receives');
   });
 
+  it('excludes obvious RegExp#exec calls while keeping managed db.exec as KV422', () => {
+    const diagnostics = diagnosticsFor(`
+      const schemePattern = /^[a-z][a-z0-9+.-]*:/i;
+      export async function validateAndLoad(input: { href: string }, db: any) {
+        const stripped = input.href.trim();
+        const schemeMatch = schemePattern.exec(stripped);
+        if (schemeMatch) {
+          return schemeMatch[0];
+        }
+        await db.exec("select * from products where href = '" + input.href + "'");
+      }
+    `);
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV422']);
+    expect(diagnostics[0]?.message).toContain('exec() receives request-derived SQL text');
+    expect(diagnostics[0]?.site).toBe('app.ts:9');
+  });
+
   it('flags unknown-provenance helpers, untagged templates, and unaudited raw helpers', () => {
     const diagnostics = diagnosticsFor(`
       import { sql } from '@kovojs/drizzle';

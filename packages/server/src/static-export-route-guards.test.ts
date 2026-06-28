@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { redirect } from '@kovojs/core';
 
 import { publicAccess } from './access.js';
 import { createApp } from './app.js';
@@ -177,6 +178,33 @@ describe('server static export', () => {
       ],
     });
     expect(replayed).toBe(false);
+  });
+
+  it('fails closed when a static export route returns redirect()', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    try {
+      const app = createApp({
+        routes: [
+          route('/old-home', {
+            page: () => redirect('/new-home' as never, {} as never),
+          }),
+        ],
+      });
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          {
+            code: 'KV229',
+            message: expect.stringContaining('replay returned redirect status 303'),
+            routePath: '/old-home',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'old-home', 'index.html'), 'utf8')).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
   });
 
   it('fails loudly for guarded and session-provider routes', async () => {
@@ -404,7 +432,7 @@ describe('server static export', () => {
           code: 'KV229',
           routePath: '/downloads/orders.pdf',
           message: expect.stringContaining(
-            "can only write successful HTML route documents; '/downloads/orders.pdf' returned status 200 with Content-Type 'application/pdf'",
+            "replay returned a file/stream response with Content-Disposition 'attachment; filename=\"orders.pdf\"' and Content-Type 'application/pdf'",
           ),
         },
       ],

@@ -144,6 +144,34 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     expect(transformed?.code).toContain('"app-shell/order-paid"');
   });
 
+  it('lowers standalone source-derived aliased public query imports', async () => {
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      include: ['src'],
+    });
+    const transformed = await plugin.transform(
+      `
+import { query as defineQuery } from '@kovojs/server';
+
+export const cartQuery = defineQuery({ load: () => ({ count: 1 }), output: {}, reads: [] });
+export const auditQuery = defineQuery.elevated({ load: () => ({ ok: true }), output: {}, reads: [] });
+`,
+      'src/app-shell.ts',
+    );
+
+    expect(compileComponentModule).not.toHaveBeenCalled();
+    expect(transformed).toMatchObject({ map: null });
+    expect(transformed?.code).toContain(
+      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';",
+    );
+    expect(transformed?.code).toContain(
+      'export const cartQuery = __kovoAssignDerivedQueryKey(defineQuery({ load: () => ({ count: 1 }), output: {}, reads: [] }), "app-shell/cart-query")',
+    );
+    expect(transformed?.code).toContain(
+      'export const auditQuery = __kovoAssignDerivedQueryKey(defineQuery.elevated({ load: () => ({ ok: true }), output: {}, reads: [] }), "app-shell/audit-query")',
+    );
+  });
+
   it('lowers standalone source-derived component declarations before runtime rendering', () => {
     const transformed = lowerStandaloneSourceDerivedRegistryDeclarations({
       fileName: 'src/app-shell.tsx',
@@ -803,6 +831,46 @@ export const CartBadge = component({
 
     expect(compileComponentModule).toHaveBeenCalledWith(
       expect.objectContaining({ queryShapeFacts }),
+    );
+  });
+
+  it('passes external query-shape facts through component-local aliases', async () => {
+    const compileComponentModule = vi.fn(() => ({
+      files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+    }));
+    const queryShapeFacts = [
+      {
+        query: 'queries/products/products-query',
+        shape: { name: 'string' as const },
+        source: 'src/queries/products.ts:3',
+      },
+    ];
+    const plugin = createKovoVitePlugin(compileComponentModule, { queryShapeFacts });
+
+    await plugin.transform(
+      `
+import { component } from '@kovojs/core';
+import { productsQuery as externalProducts } from '../queries/products';
+
+export const ProductList = component({
+  queries: { products: externalProducts },
+  render: () => <span data-bind="products.name">Coffee</span>,
+});
+`,
+      'src/components/product-list.tsx',
+    );
+
+    expect(compileComponentModule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryShapeFacts: expect.arrayContaining([
+          queryShapeFacts[0],
+          {
+            query: 'products',
+            shape: { name: 'string' },
+            source: 'src/queries/products.ts:3',
+          },
+        ]),
+      }),
     );
   });
 

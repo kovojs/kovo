@@ -25,7 +25,7 @@ import {
   main,
   writeKovoProject,
 } from './index.js';
-import { resolveDependencyRoot } from './index.test-support.js';
+import { linkStarterBuildDependencies, resolveDependencyRoot } from './index.test-support.js';
 
 const TEMPLATE_FILES = [
   'package.json',
@@ -240,11 +240,12 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/auth.ts')).not.toContain('kovo-starter-anon');
   });
 
-  it('lets check:sound-subset ignore multiline import aliases while still flagging casts', () => {
+  it('lets check:sound-subset ignore import aliases and JSX prose while still flagging casts', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-sound-subset-'));
 
     try {
       writeKovoProject(root, { name: 'Sound Subset Proof' });
+      linkStarterBuildDependencies(root);
       writeFileSync(join(root, 'src/source.ts'), 'export const sourceValue = 1;\n', 'utf8');
       writeFileSync(
         join(root, 'src/import-alias.ts'),
@@ -263,6 +264,21 @@ describe('create-kovo starter (metadata)', () => {
         'const maybeNumber = "1" as number;\nexport const castValue = maybeNumber;\n',
         'utf8',
       );
+      writeFileSync(
+        join(root, 'src/jsx-prose.tsx'),
+        [
+          'export function JsxProse() {',
+          '  return <p>Rendered as HTML prose only.</p>;',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src/string-prose.ts'),
+        'export const message = "Rendered as HTML prose only.";\n',
+        'utf8',
+      );
 
       expect(() =>
         execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
@@ -279,6 +295,8 @@ describe('create-kovo starter (metadata)', () => {
       } catch (error) {
         const stderr = (error as { stderr?: Buffer }).stderr?.toString('utf8') ?? '';
         expect(stderr).not.toContain('import-alias.ts');
+        expect(stderr).not.toContain('jsx-prose.tsx');
+        expect(stderr).not.toContain('string-prose.ts');
       }
     } finally {
       rmSync(root, { force: true, recursive: true });

@@ -11,7 +11,7 @@ import * as style from '@kovojs/style';
 import { validateCsrfToken } from './csrf.js';
 import { escapeText, renderHtmlValue } from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
-import { Fragment, jsx, jsxDEV, jsxs } from './jsx-runtime.js';
+import { Fragment, jsx, jsxDEV, jsxs, type JsxChild } from './jsx-runtime.js';
 import { mutationFormAttributes } from './mutation.js';
 
 const html = (value: unknown): string => renderHtmlValue(value);
@@ -49,6 +49,18 @@ describe('server jsx runtime', () => {
     await expect(asyncHtml(jsx(Card, { children: [jsx(AsyncButton, {})] }))).resolves.toBe(
       '<section class="card"><button>Save</button></section>',
     );
+  });
+
+  it('awaits promised children after props are copied through forwarding components', async () => {
+    const AsyncBadge = async () => jsx('strong', { children: 'Ready' });
+    const Forwarder = (props: { children?: unknown; class?: string }) => {
+      const copied = { ...props };
+      return jsx('section', { ...copied, children: copied.children as JsxChild });
+    };
+
+    await expect(
+      asyncHtml(jsx(Forwarder, { class: 'panel', children: jsx(AsyncBadge, {}) })),
+    ).resolves.toBe('<section class="panel"><strong>Ready</strong></section>');
   });
 
   it('renders boolean attributes bare and omits false, null, and undefined values', () => {

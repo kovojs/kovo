@@ -76,6 +76,43 @@ export const CartBadge = component({
     expect(result.loweredSource).toContain('"components/cart-badge/audit"');
   });
 
+  it('assigns source-derived keys to aliased exported object-first query declarations', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { query as defineQuery } from '@kovojs/server';
+
+export const cart = defineQuery({
+  load: () => ({ count: 2 }),
+  output: {},
+  reads: [],
+});
+
+export const audit = defineQuery.elevated({
+  load: () => ({ ok: true }),
+  output: {},
+  reads: [],
+});
+
+export const CartBadge = component({
+  queries: { cart },
+  render: ({ cart }) => <cart-badge>{cart.count}</cart-badge>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.loweredSource).toContain(
+      'export const cart = __kovoAssignDerivedQueryKey(defineQuery({',
+    );
+    expect(result.loweredSource).toContain('"components/cart-badge/cart"');
+    expect(result.loweredSource).toContain(
+      'export const audit = __kovoAssignDerivedQueryKey(defineQuery.elevated({',
+    );
+    expect(result.loweredSource).toContain('"components/cart-badge/audit"');
+  });
+
   it('merges live-target renderer imports into an existing wire named import', () => {
     const result = compileComponentModule({
       fileName: 'src/components/status-card.tsx',
