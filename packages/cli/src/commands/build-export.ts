@@ -1391,9 +1391,6 @@ async function bundleKovoServerHandler(
     await build({
       appType: 'custom',
       build: {
-        commonjsOptions: {
-          dynamicRequireTargets: [requireFromCli.resolve('undici')],
-        },
         emptyOutDir: true,
         minify: false,
         outDir,
@@ -1417,6 +1414,7 @@ async function bundleKovoServerHandler(
           process.cwd(),
           lowerStandaloneSourceDerivedRegistryDeclarations,
         ),
+        bundledUndiciRuntimeVitePlugin(),
       ],
       resolve: {
         alias: [
@@ -1439,6 +1437,41 @@ async function bundleKovoServerHandler(
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+}
+
+const bundledUndiciRuntimeModuleId = '\0kovo-bundled-undici-runtime';
+
+function bundledUndiciRuntimeVitePlugin(): {
+  enforce: 'pre';
+  load(id: string): null | string;
+  name: string;
+  resolveId(source: string, importer?: string): null | string;
+} {
+  return {
+    enforce: 'pre',
+    name: 'kovo-bundled-undici-runtime',
+    resolveId(source, importer) {
+      const normalizedSource = slashPath(source);
+      const normalizedImporter = importer ? slashPath(importer) : '';
+      if (
+        normalizedSource === './egress-undici-runtime.js' &&
+        normalizedImporter.includes('/egress-undici.')
+      ) {
+        return bundledUndiciRuntimeModuleId;
+      }
+      if (
+        normalizedSource.endsWith('/egress-undici-runtime.js') ||
+        normalizedSource.endsWith('/egress-undici-runtime.ts')
+      ) {
+        return bundledUndiciRuntimeModuleId;
+      }
+      return null;
+    },
+    load(id) {
+      if (id !== bundledUndiciRuntimeModuleId) return null;
+      return "export { Agent, getGlobalDispatcher, setGlobalDispatcher } from 'undici';\n";
+    },
+  };
 }
 
 function kovoServerHandlerEntrySource(

@@ -4,9 +4,9 @@ import {
   Agent,
   getGlobalDispatcher,
   setGlobalDispatcher,
-  type Agent as UndiciAgent,
   type Dispatcher,
-} from 'undici';
+  type UndiciAgentOptions,
+} from './egress-undici-runtime.js';
 
 import {
   EgressBlockedError,
@@ -53,7 +53,7 @@ export class EgressGatingDispatcher extends Agent {
   // dial classify the SAME IP within a request window (DNS-rebind resistance at this layer too).
   #resolutionCache = new Map<string, PinnedResolution>();
 
-  constructor(policy: EgressPolicy, options?: UndiciAgent.Options) {
+  constructor(policy: EgressPolicy, options?: UndiciAgentOptions) {
     super(options);
     this.#policy = policy;
   }

@@ -375,9 +375,15 @@ describe('server app matched dispatch boundary', () => {
     const request = new Request('https://shop.example.test/missing');
 
     const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+    const body = await response.text();
 
     expect(response.status).toBe(404);
-    await expect(response.text()).resolves.toBe('<h1>Missing</h1>');
+    expect(body).toContain('<!doctype html>');
+    expect(body).toContain('<h1>Missing</h1>');
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
+    expect(response.headers.get('x-frame-options')).toBe('DENY');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
   });
 
   // H2 (medium) — SPEC §9.4: /_q/ is a credentialed GET endpoint; non-GET/HEAD methods

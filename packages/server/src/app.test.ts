@@ -703,9 +703,15 @@ describe('server createApp request shell', () => {
     );
 
     const response = await handler(new Request('https://example.test/missing'));
+    const body = await response.text();
 
     expect(response.status).toBe(404);
-    await expect(response.text()).resolves.toBe('<main>404:/missing</main>');
+    expect(body).toContain('<!doctype html>');
+    expect(body).toContain('<main>404:/missing</main>');
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
+    expect(response.headers.get('x-frame-options')).toBe('DENY');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
   });
 
   it('reports failing error shells and falls back to stable no-internals documents', async () => {
