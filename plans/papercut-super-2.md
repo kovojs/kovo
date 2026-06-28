@@ -101,7 +101,8 @@ type=file>` posts without multipart enctype → 422, no visible message; builds 
     `enctype="multipart/form-data"` when the mutation input has an `s.file()` field
     (or emit a diagnostic). Wire the dead `enctype`/`fileFields` explain slots.
 
-- [ ] **A4 — The security guide's capability-URL example does not compile against the real API (path/scope/expiresIn/`ctx.signUrl` all diverge).** (MEDIUM, docs; auth-C4)
+- [x] **A4 — The security guide's capability-URL example does not compile against the real API (path/scope/expiresIn/`ctx.signUrl` all diverge).** (MEDIUM, docs; auth-C4)
+  - Evidence: `node site/scripts/code-snippets-check.mjs site/content/guides` proves the security guide's capability URL snippet uses the shipped `createStorageDownloadEndpoint`/route `signUrl` API shape.
   - Observed: every executable line of the only documented secure-download flow
     fails `tsc`.
   - Root cause: `site/content/guides/security.md:388-406` uses `path` (the option is
@@ -241,7 +242,8 @@ required.` Removing `recordChange`/`transaction` does NOT clear it; only removin
 
 ### D. UI / theme / accessibility
 
-- [ ] **D1 — `@kovojs/ui` Table family silently renders `[object Promise]` when composed with natural JSX children.** (HIGH, framework; theme-ui)
+- [x] **D1 — `@kovojs/ui` Table family silently renders `[object Promise]` when composed with natural JSX children.** (HIGH, framework; theme-ui)
+  - Evidence: `pnpm exec vitest run packages/ui/src/table.stylex.test.tsx packages/server/src/jsx-runtime.test.ts scripts/link-local-kovo.test.mjs` proves natural JSX Table composition renders semantic table sections instead of `[object Promise]`.
   - Observed: `<Table><TableHead><TableRow>…</TableRow></TableHead><TableBody>…</TableBody></Table>`
     renders `<table><caption>…</caption>[object Promise][object Promise]</table>` —
     the thead/tbody are gone.
@@ -282,7 +284,8 @@ required.` Removing `recordChange`/`transaction` does NOT clear it; only removin
     constrained `Element`, typed intrinsic attributes/aria) so declared shapes are
     enforced.
 
-- [ ] **D3 — The local dogfood flow (`create-kovo` + `link-local-kovo`) doesn't provide `@kovojs/icons` or `@kovojs/headless-ui`; a direct icon import fails with a bare TS2307 / module-not-found.** (LOW, dev-tooling; theme-ui)
+- [x] **D3 — The local dogfood flow (`create-kovo` + `link-local-kovo`) doesn't provide `@kovojs/icons` or `@kovojs/headless-ui`; a direct icon import fails with a bare TS2307 / module-not-found.** (LOW, dev-tooling; theme-ui)
+  - Evidence: `pnpm exec vitest run packages/ui/src/table.stylex.test.tsx packages/server/src/jsx-runtime.test.ts scripts/link-local-kovo.test.mjs` proves `link-local-kovo` now links `@kovojs/icons` and `@kovojs/headless-ui`.
   - Observed: `import { Plus } from '@kovojs/icons/plus'` fails to resolve in a
     linked dogfood app.
   - Root cause: `scripts/link-local-kovo.mjs:6-15` lists 8 packages and omits
@@ -339,7 +342,8 @@ explicit trusted Kovo escape hatch. dynamic style text` at build.
   - Acceptance: wire `createEventBus` into the runtime and give `on()` an authoring
     surface, OR strike the prescription from SPEC §7 / `islands.md`.
 
-- [ ] **E3 — `viewTransitionName` silently leaks as an inert HTML attribute when authored in a plain route-page helper function (it is lowered only inside `component()`).** (MEDIUM, framework; nav-VT-3)
+- [x] **E3 — `viewTransitionName` silently leaks as an inert HTML attribute when authored in a plain route-page helper function (it is lowered only inside `component()`).** (MEDIUM, framework; nav-VT-3)
+  - Evidence: `pnpm exec vitest run packages/ui/src/table.stylex.test.tsx packages/server/src/jsx-runtime.test.ts scripts/link-local-kovo.test.mjs` proves direct server JSX lowers `viewTransitionName` to sanitized CSS and does not leak the camelCase prop.
   - Observed: `<span viewTransitionName="page-hero">` in a route `page()` helper
     emits `<span viewTransitionName="page-hero">` verbatim (camelCase, inert), with
     no diagnostic; the same prop inside a `component()` lowers to
