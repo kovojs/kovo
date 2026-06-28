@@ -536,6 +536,7 @@ describe('kovo explain', () => {
           },
           {
             auth: 'none',
+            authJustification: 'public uptime probe',
             csrf: 'checked',
             method: 'GET',
             name: 'health',
@@ -567,7 +568,7 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       ACCESS
-      ACCESS ENDPOINT health decision=public source=auth site=- detail="method=GET path=/healthz mount=exact auth=none csrf=checked" justification=-
+      ACCESS ENDPOINT health decision=public source=auth site=- detail="method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=checked" justification=-
       ACCESS ENDPOINT raw decision=missing source=legacy-guard site=- detail="method=GET path=/raw mount=exact auth=- csrf=checked" justification=-
       ACCESS MUTATION cart/add decision=guard source=legacy-guard site=- detail="guards=authed writes=cart invalidates=- manual-invalidates=-" justification=-
       ACCESS MUTATION inventory/sync decision=missing source=legacy-guard site=- detail="guards=- writes=product invalidates=- manual-invalidates=-" justification=-
@@ -615,6 +616,16 @@ describe('kovo explain', () => {
             rateLimit: 'download:user',
             surface: 'route-file',
           },
+          {
+            auth: 'none',
+            authJustification: 'public uptime probe',
+            body: 'json',
+            cache: 'no-store',
+            csrf: 'checked',
+            method: 'GET',
+            name: 'health',
+            path: '/healthz',
+          },
         ],
       },
       { endpoints: true },
@@ -625,8 +636,9 @@ describe('kovo explain', () => {
       "kovo-explain/v1
       ENDPOINTS
       ENDPOINT app-shell/order-paid surface=webhook method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=1mb rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
+      ENDPOINT health surface=endpoint method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
       ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
-      SUMMARY total=2
+      SUMMARY total=3
       "
     `);
   });

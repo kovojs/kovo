@@ -549,7 +549,7 @@ function routeResponseOutcome(
   options: RouteFileOptions & { disposition: 'attachment' | 'inline' },
 ): RouteResponseOutcome {
   const contentDisposition = options.filename
-    ? `${options.disposition}; filename="${escapeHeaderValue(options.filename)}"`
+    ? `${options.disposition}; filename="${contentDispositionFilename(options.filename)}"`
     : options.disposition;
   return markRouteResponseOutcome({
     body,
@@ -592,6 +592,15 @@ function safeRouteOutcomeHeaders(
 
 function escapeHeaderValue(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+}
+
+function contentDispositionFilename(value: string): string {
+  const normalized = value
+    .replace(/[\u0000-\u001f\u007f]/g, '_')
+    .replace(/[/\\]+/g, '_')
+    .trim();
+  const safe = normalized.length > 0 ? normalized.slice(0, 255) : 'download';
+  return escapeHeaderValue(safe);
 }
 
 function requestHeader(request: unknown, name: string): string | undefined {

@@ -28,6 +28,7 @@ import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 import {
   availableAddComponents,
   isAddComponentName,
+  normalizedVendoredUiComponentSource,
   vendoredUiComponents,
   type AddComponentName,
 } from '../add-catalog.js';
@@ -256,7 +257,10 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
     // SPEC.md §5.2 requires vendored UI to land as TSX app source, not lowered IR.
     if (existsSync(target)) {
       const current = readFileSync(target, 'utf8');
-      if (current === entry.source) {
+      if (
+        normalizedVendoredUiComponentSource(current) ===
+        normalizedVendoredUiComponentSource(entry.source)
+      ) {
         lines.push(
           `SKIP ${component} path=${JSON.stringify(target)} reason=already-current package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
         );

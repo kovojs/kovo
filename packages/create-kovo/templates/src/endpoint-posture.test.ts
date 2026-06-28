@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
 import { describe, expect, it } from 'vitest';
 
@@ -19,9 +19,10 @@ describe('endpoint posture gate', () => {
     try {
       const fact = await healthEndpointPosture();
       await mkdir('.kovo', { recursive: true });
+      const graph = await readEndpointGraph();
       await writeFile(
         '.kovo/endpoint-posture.json',
-        `${JSON.stringify({ endpointPosture: [fact] }, null, 2)}\n`,
+        `${JSON.stringify({ endpoints: graph.endpoints, endpointPosture: [fact] }, null, 2)}\n`,
         'utf8',
       );
 
@@ -63,4 +64,17 @@ async function healthEndpointPosture(): Promise<EndpointPostureFact> {
     observed,
     site: 'src/endpoint-posture.test.ts',
   };
+}
+
+async function readEndpointGraph(): Promise<{ endpoints: unknown[] }> {
+  const graph = JSON.parse(await readFile('dist/.kovo/graph.json', 'utf8')) as unknown;
+  if (
+    typeof graph !== 'object' ||
+    graph === null ||
+    !('endpoints' in graph) ||
+    !Array.isArray(graph.endpoints)
+  ) {
+    throw new Error('dist/.kovo/graph.json does not contain endpoint audit facts');
+  }
+  return { endpoints: graph.endpoints };
 }

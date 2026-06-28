@@ -67,6 +67,39 @@ describe('server static export replay response boundary', () => {
     });
   });
 
+  it('reports replayed HTML endpoint refs instead of an opaque route 500', async () => {
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: new Response(
+          [
+            '<main>',
+            '<form action="/_m/chat/send" data-mutation-stream="true">',
+            '<button>Send</button>',
+            '</form>',
+            '</main>',
+          ].join(''),
+          {
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            status: 500,
+          },
+        ),
+        routePath: '/streaming-deferred',
+      }),
+    ).rejects.toMatchObject({
+      code: 'KV229',
+      diagnostics: [
+        {
+          code: 'KV229',
+          message: expect.stringContaining(
+            "replayed HTML attribute 'action' references server mutation endpoint '/_m/chat/send'",
+          ),
+          routePath: '/streaming-deferred',
+        },
+      ],
+    });
+  });
+
   it('snapshots JavaScript client module responses', async () => {
     await expect(
       readStaticExportReplayedResponse({

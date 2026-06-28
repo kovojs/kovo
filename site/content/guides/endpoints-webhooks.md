@@ -43,7 +43,9 @@ Use `webhook()` for third-party POSTs that write Kovo-owned data:
 
 ```ts
 import { hmacSignature } from '@kovojs/core';
-import { s, webhook } from '@kovojs/server';
+import { domain, s, webhook } from '@kovojs/server';
+
+const order = domain('order');
 
 export const stripeWebhook = webhook('/hooks/stripe', {
   verify: hmacSignature({
@@ -58,8 +60,10 @@ export const stripeWebhook = webhook('/hooks/stripe', {
     })
     .passthrough(),
   idempotency: (event) => event.id,
-  async handler(event, { db }) {
-    await db.orders.applyStripeEvent(event);
+  writes: [order],
+  async handler(event, { recordChange, tx }) {
+    await applyStripeEvent(tx, event);
+    recordChange(order, { keys: [event.id] });
   },
 });
 ```
@@ -68,10 +72,15 @@ The path is explicit because it is the provider-facing address. The webhook regi
 derived from `stripeWebhook` and its module path, so replay and audit names follow the source instead
 of duplicating a string.
 
+Replace `applyStripeEvent(tx, event)` with your transaction-backed write helper. If you do not need
+a transaction wrapper, ignore `tx` and still call `recordChange()` for every domain the webhook
+changes.
+
 The lifecycle is fixed: capture raw bytes, verify, parse/coerce a loose input schema, reserve replay
-by provider event id, run the handler in a transaction, commit, emit the unified change record, and
-return the provider-appropriate 2xx. A redelivered event id replays the stored response and does not
-re-execute the handler.
+by provider event id, run the handler with `tx`, commit, emit every `recordChange()` as the unified
+change record, and return the provider-appropriate 2xx. A redelivered event id replays the stored
+response and does not re-execute the handler. The `writes` list is the static audit fact; the
+`recordChange()` calls are the runtime key-level records.
 
 The verifier kit includes generic HMAC and Standard Webhooks helpers. Provider-specific recipes can
 live in app/example code on top of those helpers; the audit prints the resolved verifier scheme or a
@@ -97,6 +106,14 @@ ctx.cookies.set('download_token', token, {
 });
 ctx.headers.setCacheControl({ private: true, noStore: true });
 ```
+
+## Send CSRF tokens to raw endpoints
+
+Default-CSRF unsafe endpoints accept the same token carriers Kovo can parse before the handler runs:
+form fields and JSON bodies. If your protocol needs `text/plain`, `bytes`, or a signed raw body, use
+`csrf: false` with a verifier, OAuth state, or another non-browser auth scheme and name the
+justification. Browser credential forms should stay as `mutation()` forms so Kovo owns the CSRF
+field, no-JS response, replay, and typed failure UI.
 
 ## Audit the ingress surface
 

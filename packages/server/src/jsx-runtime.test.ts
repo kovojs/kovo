@@ -41,6 +41,16 @@ describe('server jsx runtime', () => {
     await expect(asyncHtml(jsx(Badge, {}))).resolves.toBe('<cart-badge>3</cart-badge>');
   });
 
+  it('awaits async nested children before rendering function component wrappers', async () => {
+    const AsyncButton = async () => jsx('button', { children: 'Save' });
+    const Card = (props: { children?: unknown }) =>
+      jsx('section', { class: 'card', children: props.children as JsxChild });
+
+    await expect(asyncHtml(jsx(Card, { children: [jsx(AsyncButton, {})] }))).resolves.toBe(
+      '<section class="card"><button>Save</button></section>',
+    );
+  });
+
   it('renders boolean attributes bare and omits false, null, and undefined values', () => {
     expect(html(jsx('form', { enhance: true, children: '' }))).toBe('<form enhance></form>');
     expect(
@@ -64,6 +74,28 @@ describe('server jsx runtime', () => {
     // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field.
     expect(formHtml).toContain('action="/_m/cart/add" data-mutation="cart/add" class="add"');
     expect(formHtml).toMatch(/name="Kovo-Idem" value="[^"]+"/);
+  });
+
+  it('lowers direct server JSX streaming mutation and text attributes', () => {
+    // SPEC.md §5.2/§9.1: app source authors TSX-only `stream` and `streamText`;
+    // served framework output exposes the runtime-visible data attributes.
+    const sendMessage = { key: 'chat/send' } as const;
+
+    const formHtml = html(
+      jsx('form', {
+        enhance: true,
+        stream: true,
+        mutation: sendMessage,
+        children: '',
+      }),
+    );
+    const textHtml = html(jsx('p', { streamText: 'assistant:a1', children: '' }));
+
+    expect(formHtml).toContain(
+      'method="post" action="/_m/chat/send" data-mutation="chat/send" data-mutation-stream="true"',
+    );
+    expect(formHtml).not.toMatch(/\sstream(?:\s|>)/);
+    expect(textHtml).toBe('<p data-stream-text="assistant:a1"></p>');
   });
 
   it('renders JSX key identity as kovo-key for direct server JSX forms', () => {

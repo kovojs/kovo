@@ -124,6 +124,13 @@ interface WebhookDefinitionBase<InputSchema extends Schema<unknown>, Value, Tx> 
     context: WebhookTransactionContext<WebhookInputFor<InputSchema>>,
     run: (tx: Tx) => Promise<Result>,
   ) => Promise<Result>;
+  /**
+   * Static write domains this webhook may emit through `context.recordChange(...)`.
+   * Runtime `recordChange` still emits the exact `{ domain, keys, input }` records; this
+   * declaration lets `kovo explain --endpoints` print the webhook write chain without executing
+   * provider traffic (SPEC §11.4).
+   */
+  writes?: readonly Domain[];
 }
 
 interface WebhookVerifiedDefinition {
@@ -257,6 +264,7 @@ export function createMemoryWebhookReplayStore(): WebhookReplayStore {
  *   verify: 'none',
  *   verifyJustification: 'internal test fixture',
  *   input: s.object({ orderId: s.string() }),
+ *   writes: [order],
  *   handler(input, context) {
  *     return { changes: [context.recordChange(order, { keys: [input.orderId] })] };
  *   },

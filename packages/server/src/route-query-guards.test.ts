@@ -10,6 +10,30 @@ import { renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
 
 describe('route and query guard responses', () => {
+  it('stamps non-OK route guard fallback bodies with the document security floor', async () => {
+    const limitedRoute = route('/limited', {
+      guard: guards.rateLimit({ max: 0, per: 'global', windowMs: 60_000 }),
+      page() {
+        return renderedHtml('unreachable');
+      },
+    });
+
+    const response = await renderRoutePageResponse(limitedRoute, {}, {}, String);
+
+    expect(response).toMatchObject({
+      body: 'Too Many Requests',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
+        'Content-Type': 'text/html; charset=utf-8',
+        'Retry-After': '60',
+        'X-Content-Type-Options': 'nosniff',
+        Vary: 'Cookie',
+      },
+      status: 429,
+    });
+  });
+
   it('resolves app session providers before route and query guards', async () => {
     type AppSession = { user: { id: string; roles: readonly string[] } };
     type AppRequest = { headers: Headers; session?: AppSession | null };

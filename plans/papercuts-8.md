@@ -23,7 +23,7 @@ separately in `plans/bugz-9.md`.
 
 ### A. UI Copy-In / Registry
 
-- [ ] **`kovo add` copies UI source that cannot pass the generated app check gate.** (high, dev-tooling/framework; found by `registry-ui-catalog`)
+- [x] **`kovo add` copies UI source that cannot pass the generated app check gate.** (high, dev-tooling/framework; found by `registry-ui-catalog`)
   - Observed behavior: running `kovo add` for
     button/card/command/combobox/select/table/dialog into `src/components/ui`
     succeeds, but the copied files are not clean under
@@ -45,8 +45,9 @@ separately in `plans/bugz-9.md`.
   - Acceptance: copied UI components are formatted and sound-subset-compatible
     for generated apps, or copied sources are excluded by an explicit, reviewed
     generated gate policy.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/webhook.test.ts packages/ui/src/copy-in.test.ts` passed with vendored UI sound-subset coverage.
 
-- [ ] **`kovo add` becomes non-idempotent after the app formatter touches copied source.** (med, dev-tooling/framework; found by `registry-ui-catalog`)
+- [x] **`kovo add` becomes non-idempotent after the app formatter touches copied source.** (med, dev-tooling/framework; found by `registry-ui-catalog`)
   - Observed behavior: after formatting copied `button.tsx`, rerunning
     `kovo add button --out src/components/ui` fails with `reason=would-overwrite`
     instead of `SKIP`.
@@ -63,8 +64,9 @@ separately in `plans/bugz-9.md`.
   - Acceptance: `kovo add` idempotency is based on the same normalized source
     shape it writes/checks, or it has a safe upgrade/diff mode for formatted
     copies.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/webhook.test.ts packages/ui/src/copy-in.test.ts` passed with formatter-only `kovo add` idempotency coverage.
 
-- [ ] **Dev SSR renders nested copied Card children as `[object Promise]` while production is clean.** (med, framework/dev-tooling; found by `registry-ui-catalog`)
+- [x] **Dev SSR renders nested copied Card children as `[object Promise]` while production is clean.** (med, framework/dev-tooling; found by `registry-ui-catalog`)
   - Observed behavior: a public `/catalog` route using copied
     `<Card><Button /></Card>` and nested copied command/combobox/select parts
     renders literal `[object Promise]` in dev SSR; production node output renders
@@ -80,10 +82,11 @@ separately in `plans/bugz-9.md`.
     from the production node server after `pnpm run build:prod`.
   - Acceptance: dev SSR awaits or renders copied UI component children with the
     same semantics as the production compiler path.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed with nested async function-component children rendering as HTML instead of `[object Promise]`.
 
 ### B. Streaming / Deferred
 
-- [ ] **Streaming JSX attributes are missing from public JSX types.** (med, framework; found by `streaming-deferred-mpa`)
+- [x] **Streaming JSX attributes are missing from public JSX types.** (med, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: `<form enhance stream>` and
     `<p streamText="assistant:latest">` fail `tsc` until the app adds a local JSX
     module augmentation.
@@ -98,8 +101,9 @@ separately in `plans/bugz-9.md`.
     `TS2322: Property 'streamText' does not exist`.
   - Acceptance: Kovo's JSX namespace exposes the public streaming attributes with
     the same names accepted by the compiler.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed after `packages/server/src/jsx-runtime.ts` added `stream` / `streamText` JSX attributes.
 
-- [ ] **Served streaming forms keep raw `stream` and never emit `data-mutation-stream`.** (high, framework; found by `streaming-deferred-mpa`)
+- [x] **Served streaming forms keep raw `stream` and never emit `data-mutation-stream`.** (high, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: dev and production route HTML render
     `<form ... enhance stream ... data-mutation="mutations/send-message">` with
     no `data-mutation-stream`, so the browser loader uses the buffered mutation
@@ -115,8 +119,9 @@ separately in `plans/bugz-9.md`.
     no `data-mutation-stream`.
   - Acceptance: authored streaming mutation forms lower to
     `data-mutation-stream="true"` wherever enhanced mutation forms are rendered.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed with direct JSX form lowering coverage, and `pnpm --filter @kovojs/browser exec vitest run src/inline-loader-enhanced-submit.test.ts src/inline-loader-build.test.ts` passed.
 
-- [ ] **Production node output leaves raw `streamText` instead of runtime-visible `data-stream-text`.** (high, framework; found by `streaming-deferred-mpa`)
+- [x] **Production node output leaves raw `streamText` instead of runtime-visible `data-stream-text`.** (high, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: dev served `<p data-stream-text="assistant:latest">`, but
     production node output served `<p streamText="assistant:latest">`; the browser
     runtime searches only for `[data-stream-text="..."]`.
@@ -130,8 +135,9 @@ separately in `plans/bugz-9.md`.
     `data-stream-text`.
   - Acceptance: all production and dev render paths lower `streamText` to
     `data-stream-text` consistently.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed with `streamText` lowering coverage; `pnpm --filter @kovojs/compiler exec vitest run src/stamps.test.ts` preserved compiler lowering coverage.
 
-- [ ] **Missing streaming text targets are silently ignored by the browser runtime.** (med, framework; found by `streaming-deferred-mpa`)
+- [x] **Missing streaming text targets are silently ignored by the browser runtime.** (med, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: a streamed response targeting `assistant:missing` returned
     200 plus `<kovo-done>`, while the runtime skipped the absent target without
     marking failure or refetching.
@@ -145,8 +151,9 @@ separately in `plans/bugz-9.md`.
     `<kovo-text target="assistant:missing">...` followed by `<kovo-done>`.
   - Acceptance: missing streaming text targets trigger a visible failure,
     refetch, or other deterministic recovery rather than silent success.
+  - Evidence: 2026-06-28 `pnpm --filter @kovojs/browser exec vitest run src/inline-loader-enhanced-submit.test.ts src/inline-loader-build.test.ts` passed with missing stream text target failure coverage.
 
-- [ ] **Static export reports a generic 500 for a public streaming/deferred route.** (low, dev-tooling; found by `streaming-deferred-mpa`)
+- [x] **Static export reports a generic 500 for a public streaming/deferred route.** (low, dev-tooling; found by `streaming-deferred-mpa`)
   - Observed behavior: `kovo export --skip-non-exportable` reported
     `/streaming-deferred` as status 500, while the production node server served
     the same public route as 200.
@@ -161,10 +168,11 @@ separately in `plans/bugz-9.md`.
     `WARN KV229 route=/streaming-deferred ... returned status 500`.
   - Acceptance: static export emits the concrete exportability reason for
     streaming/deferred routes rather than an opaque replay 500.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed with replayed HTML endpoint-ref diagnostics coverage.
 
 ### C. Query Shape / Bindings
 
-- [ ] **Non-Drizzle query `output` schemas do not feed query binding shape validation.** (med, framework; found by `streaming-deferred-mpa`)
+- [x] **Non-Drizzle query `output` schemas do not feed query binding shape validation.** (med, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: a plain `query({ output: s.object(...) })` loads
     correctly, but bindings such as `status.summary` and `status.generatedAt`
     are rejected with KV302.
@@ -180,10 +188,11 @@ separately in `plans/bugz-9.md`.
     `status.summary` and `status.generatedAt`.
   - Acceptance: non-Drizzle query `output` schemas produce component query shape
     facts for binding validation.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/vite-data-plane-gate.test.ts` passed with positive `status.summary` / `status.generatedAt` binding coverage and negative `status.missing` KV302 coverage.
 
 ### D. Storage / Capabilities
 
-- [ ] **Multiple storage endpoints make route `ctx.signUrl` mint an unmounted default URL.** (med, framework; found by `storage-multi-capability`)
+- [x] **Multiple storage endpoints make route `ctx.signUrl` mint an unmounted default URL.** (med, framework; found by `storage-multi-capability`)
   - Observed behavior: an app with several `createStorageDownloadEndpoint` mounts
     rendered a route-context signed URL under `/_kovo/storage/...`, which 404ed;
     a manually created signer for `/private-downloads` returned 200 for the same
@@ -202,8 +211,9 @@ separately in `plans/bugz-9.md`.
   - Acceptance: `ctx.signUrl` exposes or derives an unambiguous base path for
     multi-storage apps, or it fails early with a diagnostic requiring explicit
     endpoint selection.
+  - Evidence: 2026-06-28 `pnpm exec vitest --run packages/server/src/capability-route.test.ts packages/server/src/response.test.ts packages/server/src/schema.test.ts` passed with ambiguous multi-endpoint `ctx.signUrl` diagnostic coverage.
 
-- [ ] **Stored-file metadata can override sanitized filename metadata and crash downloads.** (med, framework; found by `storage-multi-capability`)
+- [x] **Stored-file metadata can override sanitized filename metadata and crash downloads.** (med, framework; found by `storage-multi-capability`)
   - Observed behavior: an `s.file().store({ metadata })` hook returning a
     filename containing CR/LF stored successfully, and the later capability
     download returned a 500 instead of a sanitized filename or controlled
@@ -221,8 +231,9 @@ separately in `plans/bugz-9.md`.
   - Acceptance: stored filename metadata is reserved or sanitized after metadata
     merge, and header serialization rejects/normalizes control characters before
     response construction.
+  - Evidence: 2026-06-28 `pnpm exec vitest --run packages/server/src/capability-route.test.ts packages/server/src/response.test.ts packages/server/src/schema.test.ts` passed with stored filename reservation and `Content-Disposition` control-character normalization coverage.
 
-- [ ] **One-time signed URLs are mintable without a replay store but are permanently unusable.** (low, dev-tooling; found by `storage-multi-capability`)
+- [x] **One-time signed URLs are mintable without a replay store but are permanently unusable.** (low, dev-tooling; found by `storage-multi-capability`)
   - Observed behavior: a `oneTime` URL minted for an endpoint without
     `replayStore` returned the same generic 404 as expired/replayed/bad tokens on
     first use.
@@ -236,10 +247,11 @@ separately in `plans/bugz-9.md`.
     headers.
   - Acceptance: one-time minting is coupled to an endpoint replay store or emits a
     clear development/build diagnostic when no matching store can verify it.
+  - Evidence: 2026-06-28 `pnpm exec vitest --run packages/server/src/capability-route.test.ts packages/server/src/response.test.ts packages/server/src/schema.test.ts` passed with one-time signer replay-store enforcement coverage.
 
 ### E. Endpoint / Webhook Tooling
 
-- [ ] **Endpoint posture CI can pass while newly declared endpoints are completely unobserved.** (med, template/dev-tooling; found by `endpoints-webhooks-agent` and `storage-multi-capability`)
+- [x] **Endpoint posture CI can pass while newly declared endpoints are completely unobserved.** (med, template/dev-tooling; found by `endpoints-webhooks-agent` and `storage-multi-capability`)
   - Observed behavior: after adding raw endpoints, webhooks, and storage
     endpoints, generated `pnpm run check` still passed with
     `.kovo/endpoint-posture.json` containing only `GET /api/health`.
@@ -257,8 +269,9 @@ separately in `plans/bugz-9.md`.
   - Acceptance: generated posture checks enumerate declared app endpoints or
     `kovo check endpoint-posture` reports declared endpoints with missing
     observations.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/webhook.test.ts packages/ui/src/copy-in.test.ts` passed with declared-endpoint posture reconciliation coverage.
 
-- [ ] **Default-CSRF `text/plain` endpoints have no valid token carrier and fail with bare CSRF.** (low, framework/docs; found by `endpoints-webhooks-agent`)
+- [x] **Default-CSRF `text/plain` endpoints have no valid token carrier and fail with bare CSRF.** (low, framework/docs; found by `endpoints-webhooks-agent`)
   - Observed behavior: a default-CSRF `endpoint()` with text body posture returned
     422 even when the request carried same-origin `Origin`, the anonymous CSRF
     cookie, and a valid token string in the text body; JSON/form controls passed.
@@ -273,8 +286,9 @@ separately in `plans/bugz-9.md`.
     `HTTP/1.1 422 Unprocessable Entity` body `CSRF`; JSON control returned 200.
   - Acceptance: document the supported CSRF carriers for endpoint body modes or
     add a safe header/query token carrier with clear diagnostics.
+  - Evidence: 2026-06-28 `site/content/guides/endpoints-webhooks.md` documents that default-CSRF raw endpoints accept form/JSON token carriers and directs text/plain/raw protocols to verifier-backed `csrf: false` endpoints.
 
-- [ ] **Machine-ingress endpoint audit drops `auth: none` justification from the endpoint row.** (low, dev-tooling; found by `endpoints-webhooks-agent`)
+- [x] **Machine-ingress endpoint audit drops `auth: none` justification from the endpoint row.** (low, dev-tooling; found by `endpoints-webhooks-agent`)
   - Observed behavior: an `auth: none` endpoint with justification
     `public uptime probe` prints as `auth=none` in `kovo explain --endpoints`; the
     justification appears only in `kovo explain --access`.
@@ -289,8 +303,9 @@ separately in `plans/bugz-9.md`.
     the justification.
   - Acceptance: endpoint explain includes auth justifications inline for
     unauthenticated/custom verifier decisions.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/webhook.test.ts packages/ui/src/copy-in.test.ts` passed with `auth=none:<justification>` endpoint explain coverage.
 
-- [ ] **Webhook guide example destructures a nonexistent `db` from handler context.** (low, docs; found by `endpoints-webhooks-agent`)
+- [x] **Webhook guide example destructures a nonexistent `db` from handler context.** (low, docs; found by `endpoints-webhooks-agent`)
   - Observed behavior: the endpoints/webhooks guide shows
     `async handler(event, { db })`, but `WebhookHandlerContext` exposes `tx`,
     `rawBody`, `request`, `fail`, and `recordChange`, not `db`.
@@ -302,10 +317,11 @@ separately in `plans/bugz-9.md`.
     `TS2339: Property 'db' does not exist on type 'WebhookHandlerContext<...>'`.
   - Acceptance: guide examples use the current webhook context shape and mention
     `tx` / `recordChange` explicitly.
+  - Evidence: 2026-06-28 `site/content/guides/endpoints-webhooks.md` uses `tx` / `recordChange`, declares `writes`, and no longer destructures `db`.
 
 ### F. Auth UX
 
-- [ ] **Session-expired CSRF-protected mutation submits return 422 CSRF instead of the reauth flow.** (med, framework; found by `auth-session-cache`)
+- [x] **Session-expired CSRF-protected mutation submits return 422 CSRF instead of the reauth flow.** (med, framework; found by `auth-session-cache`)
   - Observed behavior: after rendering an authenticated add-contact form and then
     logging out, reusing that specific form token returned enhanced/no-JS 422 CSRF
     responses instead of SPEC §6.5's enhanced 401 `Kovo-Reauth` or no-JS 303 login
@@ -323,6 +339,7 @@ separately in `plans/bugz-9.md`.
   - Acceptance: stale session-bound form submits route through the unauthenticated
     mutation reauth behavior instead of surfacing a generic CSRF failure when the
     token belonged to the previous authenticated render.
+  - Evidence: 2026-06-28 `./node_modules/.bin/vitest run packages/server/src/guards.test.ts packages/server/src/route-query-guards.test.ts` passed with enhanced 401 `Kovo-Reauth` and no-JS 303 login redirect coverage for stale session-bound mutation CSRF.
 
 ## Refuted / Not Carried Forward
 
@@ -353,3 +370,20 @@ separately in `plans/bugz-9.md`.
 - 2026-06-28 first-hand repros from the main agent confirmed the UI copy-in
   sound-subset/idempotency failures, endpoint-posture blind spot, streaming form
   and `streamText` lowering gaps, and route/no-JS mutation header-floor gaps.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`:
+  storage and streaming focused suites plus `git diff --check` and
+  `pnpm run check:vp` passed after the first two implementation merges.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`: auth
+  focused tests plus `git diff --check` and `pnpm run check:vp` passed after the
+  stale-session reauth implementation merge.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`: CLI/template/UI
+  focused tests, `pnpm run check:api-surface`, `git diff --check`, and
+  `pnpm run check:vp` passed after the endpoint tooling and UI copy-in
+  implementation merge.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`:
+  `pnpm exec vitest run packages/server/src/vite-data-plane-gate.test.ts`,
+  `git diff --check`, and `pnpm run check:vp` passed after the query-shape
+  implementation merge.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`: JSX
+  runtime focused tests, `git diff --check`, and `pnpm run check:vp` passed after
+  the dev SSR nested-children fix.

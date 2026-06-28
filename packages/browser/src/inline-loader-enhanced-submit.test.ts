@@ -1045,6 +1045,107 @@ describe('inline loader enhanced submit source', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'marks streaming submissions failed when text targets are missing through %s',
+    async (_name, installSource) => {
+      // SPEC.md §9.1: missing stream text targets must fail or recover; they
+      // cannot silently turn a streamed mutation into a successful no-op.
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        FormData: globalRecord.FormData,
+        TextDecoder: globalRecord.TextDecoder,
+        TextEncoder: globalRecord.TextEncoder,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const formData = { kind: 'missing-target-stream-form-data' };
+      const formAttrs = new Map<string, string>();
+      const form = {
+        action: '/_m/chat/send',
+        getAttribute(name: string) {
+          if (name === 'data-mutation-stream') return 'true';
+          if (name === 'kovo-fragment-target') return 'composer';
+          return formAttrs.get(name) ?? null;
+        },
+        method: 'post',
+        setAttribute(name: string, value: string) {
+          formAttrs.set(name, value);
+        },
+      };
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              '<kovo-text target="assistant:missing">lost</kovo-text><kovo-done></kovo-done>',
+            ),
+          );
+          controller.close();
+        },
+      });
+
+      try {
+        globalRecord.FormData = function FormData() {
+          return formData;
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          getElementById() {
+            return null;
+          },
+          querySelector() {
+            return null;
+          },
+          querySelectorAll() {
+            return [];
+          },
+        };
+        globalRecord.fetch = vi.fn(async () => ({ body }));
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        listeners.get('submit')?.({
+          preventDefault: vi.fn(),
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? form
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(formAttrs.get('data-error-code')).toBe('NETWORK_ERROR');
+        expect(formAttrs.get('kovo-error')).toBe('');
+      } finally {
+        Object.assign(globalRecord, {
+          FormData: originals.FormData,
+          TextDecoder: originals.TextDecoder,
+          TextEncoder: originals.TextEncoder,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'refetches inline delta chunks instead of dispatching them through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;

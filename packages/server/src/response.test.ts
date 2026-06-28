@@ -364,6 +364,25 @@ describe('server response adapters', () => {
     expect(overridden?.contentDisposition).toBe('attachment; filename="download.txt"');
   });
 
+  it('normalizes control characters before serializing Content-Disposition filenames', async () => {
+    const storage = createMemoryStorage();
+    await storage.put('uploads/note', 'note', {
+      contentType: 'text/plain',
+      metadata: { filename: 'note.txt\r\nX-Kovo-Dogfood: injected' },
+    });
+
+    const outcome = await respond.storedFile(storage, 'uploads/note');
+    expect(outcome?.contentDisposition).toBe(
+      'attachment; filename="note.txt__X-Kovo-Dogfood: injected"',
+    );
+
+    const explicit = respond.file('payload', {
+      contentType: 'text/plain',
+      filename: 'a\r\nb.txt',
+    });
+    expect(explicit.contentDisposition).toBe('attachment; filename="a__b.txt"');
+  });
+
   it('refuses to serve a stored SVG/HTML object inline (KV428)', async () => {
     const storage = createMemoryStorage();
     await storage.put('uploads/evil', new TextEncoder().encode('<svg onload="x"/>'), {

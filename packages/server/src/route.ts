@@ -21,6 +21,7 @@ import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { AccessDecision } from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
+import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import type { DeferredRegionCollector } from './jsx-context.js';
 import type { MutationFail } from './mutation.js';
 import { runQuery, type QueryDefinition, type RegisteredQueryDefinition } from './query.js';
@@ -1130,7 +1131,7 @@ export async function renderRoutePageResponse<
     });
     if (authResponse) return authResponse;
 
-    return {
+    return stampGuardFailureDocumentSecurityFloor({
       body:
         result.status === 404
           ? 'Not Found'
@@ -1142,7 +1143,7 @@ export async function renderRoutePageResponse<
         ...retryAfterHeaders(result),
       },
       status: result.status,
-    };
+    });
   }
 
   if ('outcome' in result) {

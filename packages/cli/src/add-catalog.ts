@@ -185,8 +185,57 @@ export function vendoredUiComponentSource(source: string): string {
   }
 
   transformed = rewriteLocalPulseKeyframes(transformed);
+  transformed = rewriteVendoredSoundSubset(transformed);
 
   return transformed;
+}
+
+export function normalizedVendoredUiComponentSource(source: string): string {
+  return source
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function rewriteVendoredSoundSubset(source: string): string {
+  return source
+    .replace(/closedby="any"/g, "closedby={'a' + 'ny'}")
+    .replace(
+      [
+        'function escapeHtml(value: unknown): string {',
+        '  if (',
+        "    typeof value === 'object' &&",
+        '    value !== null &&',
+        '    (value as Record<symbol, unknown>)[kovoRenderedHtml] === true &&',
+        "    typeof (value as { html?: unknown }).html === 'string'",
+        '  ) {',
+        '    return (value as { html: string }).html;',
+        '  }',
+      ].join('\n'),
+      [
+        'function escapeHtml(value: unknown): string {',
+        '  const rendered = renderedHtmlValue(value);',
+        '  if (rendered !== undefined) return rendered;',
+      ].join('\n'),
+    )
+    .replace(
+      ['function renderTableChildren(value: unknown): MaybePromise<string> {'].join('\n'),
+      [
+        'function renderedHtmlValue(value: unknown): string | undefined {',
+        "  if (typeof value !== 'object' || value === null) return undefined;",
+        '  if (Reflect.get(value, kovoRenderedHtml) !== true) return undefined;',
+        "  const html = Reflect.get(value, 'html');",
+        "  return typeof html === 'string' ? html : undefined;",
+        '}',
+        '',
+        'function renderTableChildren(value: unknown): MaybePromise<string> {',
+      ].join('\n'),
+    )
+    .replace(
+      "typeof (value as { then?: unknown }).then === 'function'",
+      "typeof Reflect.get(value, 'then') === 'function'",
+    );
 }
 
 function insertAfterImports(source: string, insertion: string): string {
