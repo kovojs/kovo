@@ -24,7 +24,7 @@ safety.
 
 ### A. Style / Theme CSS Validity
 
-- [ ] **`defineVars()` accepts token names that compile into invalid CSS custom-property names.** (low, framework; found by `style-theme`)
+- [x] **`defineVars()` accepts token names that compile into invalid CSS custom-property names.** (low, framework; found by `style-theme`)
   - Observed behavior: `style.defineVars({ 'AT&TAccent': ..., 'R&D_gap2': ... })`
     succeeds, `pnpm run check` and `pnpm run build:prod` pass, and the built route
     CSS contains invalid identifiers such as
@@ -47,10 +47,11 @@ safety.
     CSS-ident-invalid token names with a clear error or deterministically encode
     them into valid custom-property identifiers. Focused coverage must prove
     `&`-bearing token names cannot produce invalid emitted CSS.
+  - Evidence: `pnpm exec vitest run packages/style/src/engine.test.ts packages/headless-ui/src/primitives/command.test.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/select.test.ts packages/headless-ui/src/primitives/autocomplete.test.ts` proves `defineVars()` rejects `AT&TAccent` / `R&D_gap2` before emitting custom properties and `createTheme()` rejects forged invalid `var(...)` references.
 
 ### B. Headless UI IDREF Validity
 
-- [ ] **Id-less duplicate command/combobox/select instances synthesize duplicate option IDs.** (low, framework; found by `headless-a11y`; duplicate/variant of `plans/bugz-3.md` L17)
+- [x] **Id-less duplicate command/combobox/select instances synthesize duplicate option IDs.** (low, framework; found by `headless-a11y`; duplicate/variant of `plans/bugz-3.md` L17)
   - Observed behavior: rendering two ordinary id-less instances with the same item
     set produced duplicate IDs:
     `command-17y9j0i-item-0`, `combobox-14vfsm8-option-0`, and
@@ -74,6 +75,7 @@ safety.
     Either require a unique app-provided owner/listbox ID with a diagnostic, or
     synthesize a per-instance-valid prefix that keeps each input/trigger and its
     rendered options in the same ID space.
+  - Evidence: `pnpm exec vitest run packages/style/src/engine.test.ts packages/headless-ui/src/primitives/command.test.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/select.test.ts packages/headless-ui/src/primitives/autocomplete.test.ts` proves id-less generated option IDs now require unique `listboxId` / `listId` prefixes and identical sibling item sets no longer share generated option IDs when the required owner IDs differ.
 
 ## Refuted / Not Carried Forward
 
@@ -110,3 +112,6 @@ safety.
   select id-less sibling instances.
 - `pnpm install` at the monorepo root completed after dogfood linking; resolving
   `@material/material-color-utilities` from `packages/style` succeeds.
+- `pnpm run check:vp` in `/Users/mini/kovo-papercuts-6-20260628-083706`: pass
+  after the papercuts-6 implementation slices.
+- `git diff --check` in `/Users/mini/kovo-papercuts-6-20260628-083706`: pass.

@@ -207,16 +207,22 @@ describe('headless-ui autocomplete primitive', () => {
     );
   });
 
-  // bugz-3 L17: an unfiltered render must not collide a filtered-out option with
-  // the matching option on `…-option-0`, and two id-less autocompletes on one
-  // page must not share a synthesized prefix.
-  it('synthesizes collision-free, per-instance autocomplete option ids (L17)', () => {
+  // bugz-3 L17 + papercuts-6 B (SPEC.md §4.6): an unfiltered render must not
+  // collide a filtered-out option with the matching option on `…-option-0`, and
+  // sibling id-less autocompletes need caller-owned list prefixes.
+  it('synthesizes collision-free autocomplete option ids from explicit list ids (L17)', () => {
     const cities: readonly AutocompleteItem[] = [
       { label: 'Austin', value: 'austin' },
       { label: 'Chicago', value: 'chicago' },
     ];
     // Typing 'chi' filters to [chicago]; austin is filtered out.
-    const state = { highlightedValue: 'chicago', inputValue: 'chi', items: cities, open: true };
+    const state = {
+      highlightedValue: 'chicago',
+      inputValue: 'chi',
+      items: cities,
+      listId: 'city-list-a',
+      open: true,
+    };
     expect(autocompleteSuggestions(state).map(({ value }) => value)).toEqual(['chicago']);
 
     const activeDescendant = autocompleteInputAttributes(state)['aria-activedescendant'];
@@ -224,15 +230,21 @@ describe('headless-ui autocomplete primitive', () => {
     expect(chicagoId).toBe(activeDescendant);
     expect(autocompleteOptionAttributes({ ...state, itemValue: 'austin' }).id).toBeUndefined();
 
-    // Two id-less autocompletes with different option sets do not share a prefix.
-    const other: readonly AutocompleteItem[] = [
-      { label: 'Denver', value: 'denver' },
-      { label: 'Dallas', value: 'dallas' },
-    ];
-    const otherState = { highlightedValue: 'denver', inputValue: 'den', items: other, open: true };
-    const otherId = autocompleteOptionAttributes({ ...otherState, itemValue: 'denver' }).id;
-    expect(otherId).toMatch(/-option-0$/);
+    // Two id-less autocompletes with the same option set do not collide when
+    // they provide distinct list ids.
+    const otherState = { ...state, listId: 'city-list-b' };
+    const otherId = autocompleteOptionAttributes({ ...otherState, itemValue: 'chicago' }).id;
+    expect(otherId).toBe('city-list-b-option-0');
     expect(otherId).not.toBe(chicagoId);
+
+    expect(() =>
+      autocompleteInputAttributes({
+        highlightedValue: 'chicago',
+        inputValue: 'chi',
+        items: cities,
+        open: true,
+      }),
+    ).toThrow(/requires listId/);
   });
 
   it('resolves display text and filters enabled suggestions by input value', () => {

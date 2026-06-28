@@ -1052,36 +1052,20 @@ function comboboxFallbackOptionId(
   return `${comboboxFallbackPrefix(state)}-option-${index}`;
 }
 
-// bugz-3 L17 (SPEC.md §4.6): derive a per-instance-unique id prefix. Prefer the
-// app-provided listboxId; otherwise fingerprint the option set so two id-less
-// comboboxes on one page do not both synthesize `combobox-option-0`. The input
-// (aria-activedescendant) and every option see the same `state.items`, so the
-// fingerprint is identical within an instance and the IDREF always resolves.
-// `state.id` is intentionally NOT used: it is the *input* id on the active-
-// descendant path but the *item* id on the option path, which would diverge.
+// bugz-3 L17 / papercuts-6 B (SPEC.md §4.6): synthesized option ids need a
+// caller-owned instance prefix. A pure helper cannot distinguish two identical
+// id-less comboboxes from the same item set, so falling back to an item
+// fingerprint creates duplicate document ids. Require an explicit listboxId for
+// id-less generated IDs instead of guessing a page-global instance identity.
 function comboboxFallbackPrefix(state: {
   items?: readonly ComboboxItem[];
   listboxId?: string;
 }): string {
   if (state.listboxId !== undefined) return state.listboxId;
-  return `combobox-${optionSetFingerprint(state.items)}`;
-}
-
-// Deterministic FNV-1a-32 fingerprint of the option set (value + label +
-// textValue), base36-encoded. Stable across calls within one render and distinct
-// for differing option sets, so synthesized ids are unique across instances.
-function optionSetFingerprint(
-  items: readonly { value: string; label?: string; textValue?: string }[] | undefined,
-): string {
-  let hash = 0x811c9dc5;
-  const seed = (items ?? [])
-    .map((item) => `${item.value} ${item.label ?? ''} ${item.textValue ?? ''}`)
-    .join('');
-  for (let i = 0; i < seed.length; i += 1) {
-    hash ^= seed.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(36);
+  throw new TypeError(
+    'headless-ui combobox requires listboxId to synthesize option ids for id-less items; ' +
+      'pass a unique listboxId or explicit item ids.',
+  );
 }
 
 function comboboxDescribedBy(options: {

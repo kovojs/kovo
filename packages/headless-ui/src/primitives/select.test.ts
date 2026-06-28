@@ -121,6 +121,7 @@ describe('headless-ui select primitive', () => {
   it('builds content, item, and value display attributes', () => {
     const state = {
       items: colorItems,
+      listboxId: 'color-list',
       open: true,
       value: 'red',
     };
@@ -133,10 +134,7 @@ describe('headless-ui select primitive', () => {
     expect(selectItemAttributes({ ...state, itemLabel: 'Red', itemValue: 'red' })).toEqual({
       'aria-selected': 'true',
       'data-state': 'checked',
-      // bugz-3 L17: with no listboxId the synthesized id uses a per-instance
-      // content-fingerprint prefix (`select-<fp>-option-<i>`), not the shared
-      // literal `select` (which collided across id-less instances).
-      id: expect.stringMatching(/^select-[0-9a-z]+-option-0$/),
+      id: 'color-list-option-0',
       label: 'Red',
       role: 'option',
       value: 'red',
@@ -149,7 +147,7 @@ describe('headless-ui select primitive', () => {
       'data-disabled': '',
       'data-highlighted': '',
       'data-state': 'unchecked',
-      id: expect.stringMatching(/^select-[0-9a-z]+-option-1$/),
+      id: 'color-list-option-1',
       role: 'option',
       value: 'green',
     });
@@ -159,6 +157,10 @@ describe('headless-ui select primitive', () => {
     expect(selectValueAttributes({ placeholder: 'Choose color', value: '' })).toEqual({
       'data-placeholder': '',
     });
+
+    expect(() =>
+      selectItemAttributes({ items: colorItems, itemLabel: 'Red', itemValue: 'red', value: 'red' }),
+    ).toThrow(/requires listboxId/);
   });
 
   // J3 (SPEC.md §4.6): an open listbox must expose the highlighted option to
@@ -185,6 +187,10 @@ describe('headless-ui select primitive', () => {
     expect(
       selectTriggerAttributes({ ...state, id: 'color', open: false })['aria-activedescendant'],
     ).toBeUndefined();
+
+    expect(
+      selectItemAttributes({ ...state, listboxId: 'color-list-b', itemValue: 'blue' }).id,
+    ).toBe('color-list-b-option-2');
   });
 
   it('resolves selected value text from item labels, text values, raw values, or placeholder', () => {
