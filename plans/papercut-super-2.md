@@ -68,7 +68,7 @@ block shipping correct code.
   - Observed: `import { createMemoryStorage } from '@kovojs/core'` → TS2305; only
     `@kovojs/core/internal/storage` works.
   - Root cause: `packages/core/src/index.ts:34-42` re-exports only `type
-    StorageCapability`; the three factories (`packages/core/src/storage.ts:148/199/268`)
+StorageCapability`; the three factories (`packages/core/src/storage.ts:148/199/268`)
     are `@internal`, exposed solely through the `./internal/storage` subpath
     (`core/package.json` exports). Yet two public sinks REQUIRE a `StorageCapability`:
     `createStorageDownloadEndpoint` (`capability-route.ts:257`) and `s.file().store()`
@@ -84,7 +84,7 @@ block shipping correct code.
 
 - [ ] **A3 — `mutationFormAttributes()` omits `enctype="multipart/form-data"` for `s.file()` upload mutations, so a no-JS upload form silently posts urlencoded and 422s with no surfaced reason.** (MEDIUM, framework; files-C4)
   - Observed: a no-JS `<form {...mutationFormAttributes(uploadDoc)}>` with `<input
-    type=file>` posts without multipart enctype → 422, no visible message; builds clean.
+type=file>` posts without multipart enctype → 422, no visible message; builds clean.
   - Root cause: `mutationFormAttributes` (`packages/server/src/mutation/definition.ts:399-405`)
     emits no enctype (its return type has no enctype member), and compiler form
     lowering (`packages/compiler/src/emit/server-emit-shared.ts:155-201`) emits
@@ -141,10 +141,11 @@ block shipping correct code.
     and prefix verifier auth as `verifier:<scheme>`; add a build test that a
     signature-verified `webhook()` exits 0.
 
-- [ ] **B2 — A writable `webhook()` fails KV406 "un-analyzable write site" attributed to its `domain('payment')` declaration — the string-key `domain()` form is misread as an un-analyzable write-action object.** (HIGH, framework; endpoints-C2)
+- [x] **B2 — A writable `webhook()` fails KV406 "un-analyzable write site" attributed to its `domain('payment')` declaration — the string-key `domain()` form is misread as an un-analyzable write-action object.** (HIGH, framework; endpoints-C2)
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.write-callbacks-carriers.test.ts --testNamePattern "string-keyed domain"` proves the Drizzle touch graph no longer treats `domain("payment")` as an unresolved write-action object.
   - Observed: `const paymentDomain = domain('payment')` in a writable webhook →
     `ERROR KV406 webhooks.ts:5 Statically un-analyzable write site; manual touches
-    required.` Removing `recordChange`/`transaction` does NOT clear it; only removing
+required.` Removing `recordChange`/`transaction` does NOT clear it; only removing
     the `domain('payment')` declaration does.
   - Root cause: `unresolvedDomainWriteCallbacks`
     (`packages/drizzle/src/static/domain-writes.ts:39-104`, invoked unconditionally
@@ -286,10 +287,10 @@ block shipping correct code.
     linked dogfood app.
   - Root cause: `scripts/link-local-kovo.mjs:6-15` lists 8 packages and omits
     `@kovojs/icons` + `@kovojs/headless-ui`, which `@kovojs/ui` declares as
-    `workspace:*` deps. With pnpm's symlinked node_modules and the kovo monorepo in a
+    `workspace:*` deps. With pnpm's symlinked node*modules and the kovo monorepo in a
     separate tree, a direct import of an unlinked package fails. (`@kovojs/ui`'s own
     internal subpath imports still resolve through the link: target's monorepo
-    node_modules, so only the app's *direct* icon imports break.)
+    node_modules, so only the app's \_direct* icon imports break.)
   - Why it matters: local-dogfood/dev-tooling only — a published `pnpm add @kovojs/ui`
     pulls icons/headless-ui transitively — but it blocks dogfooding the icon surface.
   - Repro: lockfile importer `.` block lacks icons/headless-ui; direct icon import → TS2307.
@@ -301,7 +302,7 @@ block shipping correct code.
 - [ ] **E1 — A prop/local conditional style `style={cond ? a : b}` is rejected as KV236 "dynamic style text"; only query/state-driven conditionals lower.** (HIGH, framework; nav-STYLE-2)
   - Observed: `style={slug === activeSlug ? styles.active : styles.link}` (both
     branches `style.create` handles) → `KV236 … Unsafe output context requires an
-    explicit trusted Kovo escape hatch. dynamic style text` at build.
+explicit trusted Kovo escape hatch. dynamic style text` at build.
   - Root cause: `dynamicStyleAttributeLowering` (`packages/compiler/src/style.ts:1083`)
     returns null unless the condition roots are a known query/island `state`
     (:1078-1082); a prop/local condition yields `query=null`, the span is never
@@ -361,7 +362,8 @@ block shipping correct code.
 
 ### F. Diagnostics surfacing
 
-- [ ] **F1 — `kovo build` fails (exit 1) but prints only WARN-labeled findings and no ERROR cause; a SPEC-fatal KV310 is rendered identically to non-fatal WARN UNGUARDED lines.** (LOW, dev-tooling; auth-C5)
+- [x] **F1 — `kovo build` fails (exit 1) but prints only WARN-labeled findings and no ERROR cause; a SPEC-fatal KV310 is rendered identically to non-fatal WARN UNGUARDED lines.** (LOW, dev-tooling; auth-C5)
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "Drizzle security extractors|fatal optimistic"` proves a build-fatal KV310 now gets an `ERROR BUILD_FATAL KV310 ...` summary before the raw verifier output.
   - Observed: removing an optimistic transform makes `build:prod` exit 1 with
     `ERROR kovo build check preflight failed:` then a single `WARN KV310 …` buried
     among 11 same-styled `WARN UNGUARDED …` lines — no per-finding ERROR/FATAL marker

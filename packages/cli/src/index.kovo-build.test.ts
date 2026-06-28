@@ -235,6 +235,70 @@ export default createApp({
     }
   });
 
+  it('runs Drizzle security extractors before artifact emission', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-security-preflight-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(appPath, securityPreflightAppModuleSource(), 'utf8');
+      writeSecurityPreflightStaticSources(root);
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toContain('ERROR KV414 QUERY accountById');
+      expect(errorOutput).toContain('ERROR KV438 WRITE updateRole');
+      expect(errorOutput).toContain('ERROR KV433 QUERY badRead');
+      expect(errorOutput).toContain('ERROR KV429 WRITE decrementStock');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
+  it('surfaces fatal optimistic coverage gaps as build errors', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fatal-kv310-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(appPath, fatalOptimisticCoverageAppModuleSource(), 'utf8');
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('ERROR BUILD_FATAL KV310 cart/add -> cart');
+      expect(errorOutput).toContain('WARN KV310 cart/add -> cart');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('excludes adjacent test fixtures from the production build graph preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-test-source-filter-'));
     const appPath = join(root, 'src/app.mjs');
@@ -1538,6 +1602,125 @@ export default createApp({
   ],
 });
 `;
+}
+
+function securityPreflightAppModuleSource(): string {
+  return `
+import { createApp, query, route, s } from '@kovojs/server';
+
+const accountById = query('accountById', {
+  access: { kind: 'public', reason: 'security preflight fixture' },
+  load: (input) => ({ id: input?.id ?? 'a1' }),
+  output: s.object({ id: s.string() }),
+});
+
+const badRead = query('badRead', {
+  access: { kind: 'public', reason: 'security preflight fixture' },
+  load: (input) => ({ id: input?.id ?? 'a1' }),
+  output: s.object({ id: s.string() }),
+});
+
+export default createApp({
+  queries: [accountById, badRead],
+  routes: [
+    route('/', {
+      access: { kind: 'public', reason: 'security preflight fixture' },
+      page: () => '<main>Security preflight</main>',
+    }),
+  ],
+});
+`;
+}
+
+function fatalOptimisticCoverageAppModuleSource(): string {
+  return `
+import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
+
+const cart = domain('cart');
+const cartQuery = query('cart', {
+  access: { kind: 'public', reason: 'fatal KV310 fixture' },
+  load: () => ({ count: 0 }),
+  reads: [cart],
+});
+
+const addToCart = mutation('cart/add', {
+  access: { kind: 'public', reason: 'fatal KV310 fixture' },
+  csrf: false,
+  input: s.object({ quantity: s.number().default(1) }),
+  registry: { touches: [cart] },
+  handler: () => ({ ok: true }),
+});
+
+export default createApp({
+  mutations: [addToCart],
+  queries: [cartQuery],
+  routes: [
+    route('/', {
+      access: { kind: 'public', reason: 'fatal KV310 fixture' },
+      page: () => '<main>Cart</main>',
+    }),
+  ],
+});
+`;
+}
+
+function writeSecurityPreflightStaticSources(root: string): void {
+  writeFileSync(
+    join(root, 'schema.ts'),
+    [
+      'import { integer, pgTable, text } from "drizzle-orm/pg-core";',
+      'import { kovo } from "@kovojs/drizzle";',
+      '',
+      'export const accounts = pgTable("accounts", {',
+      '  id: text("id").primaryKey(),',
+      '  ownerId: text("owner_id").notNull(),',
+      '  role: text("role").notNull(),',
+      '  stock: integer("stock").notNull(),',
+      '}, kovo({ domain: "account", key: "id", owner: "ownerId", governed: ["role"], atomic: "stock" }));',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'security.ts'),
+    [
+      'import { eq, sql } from "drizzle-orm";',
+      'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+      'import { query, s } from "@kovojs/server";',
+      'import { accounts } from "./schema";',
+      '',
+      'export const accountById = query("accountById", {',
+      '  output: s.object({ id: s.string() }),',
+      '  async load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
+      '    return db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, input.id));',
+      '  },',
+      '});',
+      '',
+      'export async function updateRole(',
+      '  db: PgAsyncDatabase<any, any>,',
+      '  input: { id: string; role: string },',
+      ') {',
+      '  await db.update(accounts).set({ role: input.role }).where(eq(accounts.id, input.id));',
+      '}',
+      '',
+      'export const badRead = query("badRead", {',
+      '  output: s.object({ id: s.string() }),',
+      '  async load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
+      '    await db.update(accounts).set({ role: "admin" }).where(eq(accounts.id, input.id));',
+      '    return { id: input.id };',
+      '  },',
+      '});',
+      '',
+      'export async function decrementStock(',
+      '  db: PgAsyncDatabase<any, any>,',
+      '  input: { id: string; qty: number },',
+      ') {',
+      '  await db.update(accounts).set({ stock: sql`${accounts.stock} - ${input.qty}` }).where(eq(accounts.id, input.id));',
+      '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
 }
 
 function writeClientEntry(root: string): void {

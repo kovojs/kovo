@@ -8,7 +8,8 @@ not the papercuts ledger.
 
 ## Issues
 
-- [ ] **H1 — `kovo build` preflight never runs the KV414 (IDOR), KV438 (mass-assignment), KV433 (GET-write reachability), or KV429 (lost-update/TOCTOU) static security gates, so an IDOR/owner-scope-missing app builds and deploys green.**
+- [x] **H1 — `kovo build` preflight never runs the KV414 (IDOR), KV438 (mass-assignment), KV433 (GET-write reachability), or KV429 (lost-update/TOCTOU) static security gates, so an IDOR/owner-scope-missing app builds and deploys green.**
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "Drizzle security extractors|fatal optimistic"` proves `kovo build` now feeds Drizzle owner/mass-assignment/query-write/TOCTOU facts into `kovo check` and fails before artifact emission with KV414/KV438/KV433/KV429.
   - Observed behavior: an owner-scoped query (a domain annotated `owner:`) whose
     ownership guard is removed — i.e. it loads any tenant's row by a client-supplied
     key — passes `kovo build` (the starter's `build:prod`/`serve` deploy path) with
@@ -52,7 +53,7 @@ not the papercuts ledger.
     preset emitted. The verifier independently fed a hand-built graph
     (`ownerDomains:[{domain:note}]`, `scopeAudits:[{domain:note,kind:query,scope:args,key:arg:id}]`)
     to `kovo check` → `ERROR KV414 QUERY note ... Owner-table access is not scoped
-    to the session principal (IDOR)`, proving the gate works when fed the facts the
+to the session principal (IDOR)`, proving the gate works when fed the facts the
     build never produces.
   - Acceptance: have `kovo build`'s preflight run
     `extractOwnerAuditFromProject` / `extractMassAssignmentFromProject` /
@@ -66,14 +67,13 @@ not the papercuts ledger.
 
 ## Refuted / Not Carried Forward
 
-- The dogfood auth app's *correct* code (with `guards.owns`) is sound — KV414 is
-  discharged by the guard; the defect is that an *incorrect* app is not caught.
+- The dogfood auth app's _correct_ code (with `guards.owns`) is sound — KV414 is
+  discharged by the guard; the defect is that an _incorrect_ app is not caught.
 - Not a duplicate: `plans/capability-gaps.md` item #1 targets the old `vp build`/
   example plugin and predates this verifier; `bugz`/`bugz-2/3/4` items fix bugs
-  *inside* the extractors, not their absence from the build preflight.
+  _inside_ the extractors, not their absence from the build preflight.
 
 ## Latest Verification
 
-- `kovo build ./src/app.tsx` on an IDOR variant (owner domain, `owns` guard
-  removed) → EXIT 0, zero KV414/KV438/KV433/KV429 (first-hand).
-- `grep -c extractOwnerAuditFromProject|extractMassAssignmentFromProject|extractQueryWriteReachabilityFromProject|extractToctouFromProject packages/cli/src/commands/build-export.ts` = 0; same names present at `packages/cli/src/commands/compile.ts:1204-1265` and defined at `packages/drizzle/src/static.ts:1577`.
+- `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "Drizzle security extractors|fatal optimistic"` → passes, covering the fixed production-build preflight graph.
+- `pnpm exec vitest run packages/drizzle/src/index.write-callbacks-carriers.test.ts --testNamePattern "string-keyed domain"` → passes, covering the adjacent `domain('x')` false-positive fix used by webhook/domain builds.

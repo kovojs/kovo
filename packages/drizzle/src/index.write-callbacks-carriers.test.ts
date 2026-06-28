@@ -734,6 +734,23 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
+  it('does not treat public string-keyed domain values as unresolved write actions', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'webhooks.ts',
+          source: [
+            'import { domain } from "@kovojs/server";',
+            '',
+            'export const paymentDomain = domain("payment");',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({});
+  });
+
   it('marks direct opaque project domain action members as KV406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
