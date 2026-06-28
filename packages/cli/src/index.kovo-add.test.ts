@@ -85,6 +85,7 @@ describe('kovo add', () => {
 
     for (const [name, entry] of Object.entries(vendoredUiComponents)) {
       expect(entry.fileName).toBe(`${name}.tsx`);
+      expect(entry.files.some((file) => file.fileName === `${name}.tsx`)).toBe(true);
       expect(entry.packageVersion).toBe(manifest.version);
       expect(entry.requiredPackageDependencies).toEqual(
         requiredKovoPackageDependencies(entry.source),
@@ -102,6 +103,7 @@ describe('kovo add', () => {
       expect(entry.source).not.toContain('@kovojs/server/internal');
       expect(entry.source).not.toContain("from './pass-through.js'");
       expect(entry.source).not.toContain("from './theme.js'");
+      expect(entry.source).not.toContain('\n\n\n');
       expect(entry.source).not.toContain('kovo-c=');
       expect(entry.source).not.toContain('data-bind=');
       expect(soundSubsetFindings(entry.source), name).toEqual([]);
@@ -619,6 +621,39 @@ describe('kovo add', () => {
       expect(stderr).not.toHaveBeenCalled();
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `SKIP button path=${JSON.stringify(buttonPath)} reason=already-current`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('copies required sibling files for tabs and lands formatter-stable source', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
+    const outDir = join(root, 'ui');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'tabs', '--out', outDir])).toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(join(outDir, 'tabs.tsx'), 'utf8')).toContain(
+        "from './navigation-types.js'",
+      );
+      expect(readFileSync(join(outDir, 'navigation-types.ts'), 'utf8')).toContain(
+        "export type TextDirection = 'ltr' | 'rtl';",
+      );
+      expect(readFileSync(join(outDir, 'tabs.tsx'), 'utf8')).not.toContain('\n\n\n');
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `ADD tabs path=${JSON.stringify(join(outDir, 'tabs.tsx'))} source=tsx`,
+      );
+
+      stdout.mockClear();
+      expect(main(['add', 'tabs', '--out', outDir])).toBe(0);
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `SKIP tabs path=${JSON.stringify(join(outDir, 'tabs.tsx'))} reason=already-current`,
       );
     } finally {
       stdout.mockRestore();
