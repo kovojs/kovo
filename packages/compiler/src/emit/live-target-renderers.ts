@@ -8,6 +8,10 @@ if (!('ScriptTarget' in mutableTs))
   Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
 
 const liveTargetWireModule = '@kovojs/server/internal/wire';
+const liveTargetWireImports = [
+  'componentLiveTargetRenderer',
+  'registerGeneratedLiveTargetRenderer',
+] as const;
 
 export interface EmitLiveTargetRendererExportsOptions {
   componentExpression: string;
@@ -36,13 +40,16 @@ function insertLiveTargetRendererImport(source: string): string {
     true,
     ts.ScriptKind.TSX,
   );
-  const hasWireImport = sourceFile.statements.some(
+  const wireImport = sourceFile.statements.find(
     (statement) =>
       ts.isImportDeclaration(statement) &&
       ts.isStringLiteral(statement.moduleSpecifier) &&
       statement.moduleSpecifier.text === liveTargetWireModule,
   );
-  if (hasWireImport) return source;
+  if (wireImport && ts.isImportDeclaration(wireImport)) {
+    const augmentedSource = augmentLiveTargetRendererImport(source, wireImport);
+    if (augmentedSource) return augmentedSource;
+  }
 
   const importDeclarationEnd =
     sourceFile.statements.findLast((statement) => ts.isImportDeclaration(statement))?.end ?? 0;
@@ -55,6 +62,27 @@ function insertLiveTargetRendererImport(source: string): string {
   }
 
   return `${importLine}${source}`;
+}
+
+function augmentLiveTargetRendererImport(
+  source: string,
+  declaration: ts.ImportDeclaration,
+): string | null {
+  const namedBindings = declaration.importClause?.namedBindings;
+  if (!namedBindings || !ts.isNamedImports(namedBindings)) return null;
+
+  const importedNames = new Set(namedBindings.elements.map((element) => element.name.text));
+  const missing = liveTargetWireImports.filter((name) => !importedNames.has(name));
+  if (missing.length === 0) return source;
+
+  const insertion = `${namedBindings.elements.length > 0 ? ', ' : ''}${missing.join(', ')}`;
+  const insertionPoint =
+    namedBindings.elements.length > 0
+      ? namedBindings.elements[namedBindings.elements.length - 1]?.end
+      : namedBindings.getStart() + 1;
+  if (insertionPoint === undefined) return null;
+
+  return `${source.slice(0, insertionPoint)}${insertion}${source.slice(insertionPoint)}`;
 }
 
 function liveTargetRendererExport(componentExpression: string, fact: LiveTargetFact): string {

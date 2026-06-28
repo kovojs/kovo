@@ -22,6 +22,8 @@ import {
   readPersistentCompileCacheEntryForInput,
   writePersistentCompileCacheEntry,
 } from './persistent-compile-cache.js';
+import { componentOptionObjectEntries, parseComponentModule } from './scan/parse.js';
+import { queryExpressionFromBinding } from './scan/query-binding.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 import type {
   HmrImpactClassification,
@@ -501,7 +503,11 @@ async function compileCachedViteComponentModule(
   fileName: string,
   source: string,
 ): Promise<ViteCompileResult> {
-  const queryShapeFacts = resolveViteQueryShapeFacts(options, fileName);
+  const queryShapeFacts = componentLocalQueryShapeFacts(
+    source,
+    fileName,
+    resolveViteQueryShapeFacts(options, fileName),
+  );
   const registryFacts = resolveViteRegistryFacts(options, fileName);
   const compileOptions = {
     fileName,
@@ -561,7 +567,11 @@ function compileViteComponentModule(
   root: string,
   fileName: string,
   source: string,
-  queryShapeFacts = resolveViteQueryShapeFacts(options, fileName),
+  queryShapeFacts = componentLocalQueryShapeFacts(
+    source,
+    fileName,
+    resolveViteQueryShapeFacts(options, fileName),
+  ),
   registryFacts = resolveViteRegistryFacts(options, fileName),
 ): MaybePromise<ViteCompileResult> {
   return compileComponentModule({
@@ -662,6 +672,28 @@ function resolveViteQueryShapeFacts(
 ): readonly QueryShapeFact[] | undefined {
   if (typeof options.queryShapeFacts === 'function') return options.queryShapeFacts(fileName);
   return options.queryShapeFacts;
+}
+
+function componentLocalQueryShapeFacts(
+  source: string,
+  fileName: string,
+  facts: readonly QueryShapeFact[] | undefined,
+): readonly QueryShapeFact[] | undefined {
+  if (!facts || facts.length === 0) return facts;
+
+  const factsByQuery = new Map(facts.map((fact) => [fact.query, fact]));
+  const model = parseComponentModule(fileName, source);
+  const aliases = componentOptionObjectEntries(model, 'queries')
+    .map((entry): QueryShapeFact | null => {
+      const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
+      if (!queryExpression || queryExpression === entry.key) return null;
+      const sourceFact = factsByQuery.get(queryExpression);
+      if (!sourceFact) return null;
+      return { ...sourceFact, query: entry.key };
+    })
+    .filter((fact): fact is QueryShapeFact => fact !== null);
+
+  return aliases.length === 0 ? facts : [...facts, ...aliases];
 }
 
 function reportViteDiagnostics(

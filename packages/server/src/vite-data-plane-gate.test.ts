@@ -246,6 +246,36 @@ const NON_DRIZZLE_OUTPUT_INVALID_COMPONENT = [
   '});',
 ].join('\n');
 
+const NON_DRIZZLE_OUTPUT_ALIAS_QUERY_SOURCE = [
+  'import { query, s } from "@kovojs/server";',
+  '',
+  'export const statusQuery = query({',
+  '  reads: [],',
+  '  output: s.object({',
+  '    summary: s.string(),',
+  '    generatedAt: s.string(),',
+  '    totals: s.object({ streams: s.number() }),',
+  '  }),',
+  '  load: () => ({ summary: "ready", generatedAt: "now", totals: { streams: 1 } }),',
+  '});',
+].join('\n');
+
+const NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT = [
+  'import { component } from "@kovojs/server";',
+  'import { statusQuery } from "../status";',
+  '',
+  'export const StatusCard = component({',
+  '  queries: { status: statusQuery },',
+  '  render: ({ status }) => (',
+  '    <article>',
+  '      <span data-bind="status.summary">{status.summary}</span>',
+  '      <time data-bind="status.generatedAt">{status.generatedAt}</time>',
+  '      <span data-bind="status.totals.streams">{status.totals.streams}</span>',
+  '    </article>',
+  '  ),',
+  '});',
+].join('\n');
+
 // Synthetic drizzle-orm type augmentation so the KV429 symbolic-effect lowering resolves the
 // update/set/where chain (mirrors the @kovojs/drizzle KV429 unit fixtures).
 const DRIZZLE_TYPES = [
@@ -409,6 +439,30 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     await expect(
       plugin.transform(
         NON_DRIZZLE_OUTPUT_VALID_COMPONENT,
+        join(root, 'src/components/status-card.tsx'),
+      ),
+    ).resolves.toEqual(expect.objectContaining({ map: null }));
+
+    const componentReport = captured.find((report) => report.fileName.endsWith('status-card.tsx'));
+    expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
+      false,
+    );
+  });
+
+  it('validates non-Drizzle query output schemas through component-local query aliases', async () => {
+    const root = await fixture({
+      'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT,
+      'src/status.ts': NON_DRIZZLE_OUTPUT_ALIAS_QUERY_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(
+        NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT,
         join(root, 'src/components/status-card.tsx'),
       ),
     ).resolves.toEqual(expect.objectContaining({ map: null }));
