@@ -69,6 +69,7 @@ interface StyleEnvironment {
   readonly keyframes: readonly KeyframesResult[];
   readonly usages: readonly StyleRuleUsage[];
   readonly bindings: ReadonlyMap<string, StyleBinding>;
+  readonly themeClassBindings: ReadonlyMap<string, string>;
 }
 
 interface StyleIdentityOptions {
@@ -200,6 +201,7 @@ export function extractKovoStyles(
           ...options,
           fileName,
           source,
+          themeClassBindings: environment.themeClassBindings,
         })
       : {
           diagnostics: [],
@@ -287,6 +289,7 @@ function collectStyleEnvironment(
   importedStaticValues: ReadonlyMap<string, unknown> = new Map(),
 ): StyleEnvironment {
   const bindings = new Map<string, StyleBinding>();
+  const themeClassBindings = new Map<string, string>();
   const diagnostics: CompilerDiagnostic[] = [];
   const provenanceReplacements: SourceReplacement[] = [];
   const rules: AtomicRule[] = [];
@@ -361,6 +364,7 @@ function collectStyleEnvironment(
         );
         const resultRules = atomicRulesFromMetadata(result.__rules);
         staticValues.set(node.name.text, result);
+        themeClassBindings.set(`${node.name.text}.className`, result.className);
         rules.push(...resultRules);
         pushRuleUsages(usages, fileName, node.name.text, resultRules);
         continue;
@@ -402,7 +406,15 @@ function collectStyleEnvironment(
     }
   }
 
-  return { bindings, diagnostics, keyframes, provenanceReplacements, rules, usages };
+  return {
+    bindings,
+    diagnostics,
+    keyframes,
+    provenanceReplacements,
+    rules,
+    themeClassBindings,
+    usages,
+  };
 }
 
 function collectImportedStaticValues(
@@ -875,7 +887,9 @@ function styleAttributeReplacements(
   options: Pick<
     CompileComponentOptions,
     'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts' | 'source'
-  >,
+  > & {
+    readonly themeClassBindings: ReadonlyMap<string, string>;
+  },
 ): {
   readonly diagnostics: readonly CompilerDiagnostic[];
   readonly dynamic: readonly DynamicStyleLowering[];
@@ -931,7 +945,9 @@ function staticStyleAttributeReplacement(
   element: ComponentModuleModel['jsxElements'][number],
   styleAttribute: JsxAttributeModel,
   attributes: ReturnType<typeof attrs>,
-  options: Pick<CompileComponentOptions, 'fileName' | 'source'>,
+  options: Pick<CompileComponentOptions, 'fileName' | 'source'> & {
+    readonly themeClassBindings: ReadonlyMap<string, string>;
+  },
 ): {
   diagnostics: readonly CompilerDiagnostic[];
   extraReplacements: readonly SourceReplacement[];
@@ -946,7 +962,7 @@ function staticStyleAttributeReplacement(
   );
 
   if (remaining.class && classAttribute) {
-    const existingClass = staticAttributeString(classAttribute);
+    const existingClass = staticAttributeString(classAttribute, options.themeClassBindings);
     if (existingClass === null) {
       diagnostics.push(
         styleWriterConflictDiagnostic(
@@ -960,7 +976,7 @@ function staticStyleAttributeReplacement(
     } else {
       extraReplacements.push({
         end: classAttribute.end,
-        replacement: `class="${escapeAttribute(`${existingClass} ${remaining.class}`.trim())}"`,
+        replacement: `class="${escapeAttribute(mergeClassNames(existingClass, remaining.class))}"`,
         start: classAttribute.start,
       });
       delete remaining.class;
@@ -968,7 +984,7 @@ function staticStyleAttributeReplacement(
   }
 
   if (remaining['data-style-src'] && styleSrcAttribute) {
-    const existingStyleSrc = staticAttributeString(styleSrcAttribute);
+    const existingStyleSrc = staticAttributeString(styleSrcAttribute, options.themeClassBindings);
     if (existingStyleSrc !== remaining['data-style-src']) {
       diagnostics.push(
         styleWriterConflictDiagnostic(
@@ -1000,11 +1016,35 @@ function styleAttributeReplacement(attributes: ReturnType<typeof attrs>): string
   return parts.length > 0 ? parts.join(' ') : null;
 }
 
-function staticAttributeString(attribute: JsxAttributeModel): string | null {
+function staticAttributeString(
+  attribute: JsxAttributeModel,
+  themeClassBindings: ReadonlyMap<string, string>,
+): string | null {
   if (attribute.value !== undefined) return attribute.value;
+  if (attribute.expression) {
+    const expression = parseExpression(attribute.expression);
+    if (expression) {
+      const themeClass = staticThemeClassName(expression.expression, themeClassBindings);
+      if (themeClass !== null) return themeClass;
+    }
+  }
   return typeof attribute.expressionStaticValue === 'string'
     ? attribute.expressionStaticValue
     : null;
+}
+
+function staticThemeClassName(
+  expression: ts.Expression,
+  themeClassBindings: ReadonlyMap<string, string>,
+): string | null {
+  if (!ts.isPropertyAccessExpression(expression)) return null;
+  if (!ts.isIdentifier(expression.expression)) return null;
+  if (expression.name.text !== 'className') return null;
+  return themeClassBindings.get(`${expression.expression.text}.className`) ?? null;
+}
+
+function mergeClassNames(first: string, second: string): string {
+  return [...new Set([...first.split(/\s+/), ...second.split(/\s+/)].filter(Boolean))].join(' ');
 }
 
 function styleWriterConflictDiagnostic(

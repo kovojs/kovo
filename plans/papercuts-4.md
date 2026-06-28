@@ -58,12 +58,13 @@ Security-header regression RSE-1 is filed separately in `plans/bugz-6.md`.
   - Repro evidence: `pnpm exec kovo explain page /docs/:slug --layouts` in `layout-regions-defer` prints `kovo-explain/v1 ERROR NOT_FOUND page /docs/:slug`; `find . dist src -maxdepth 5 -name graph.json` returns nothing.
   - Acceptance: after build/check, an app author can run a documented `kovo explain page ... --layouts` command that finds the app graph or prints the exact artifact path to use.
 
-- [ ] **`createTheme().className` conflicts with a `style.create` handle on the same component element.** (med, framework; found by `composition-style-packages`)
+- [x] **`createTheme().className` conflicts with a `style.create` handle on the same component element.** (med, framework; found by `composition-style-packages`)
   - Observed behavior: `<section class={duskTheme.className} style={styles.shell}>` in a `component({ render })` fails with KV231 `class (writers: author JSX, style lowerer)`.
   - Root cause: `packages/style/src/engine.ts:424` exposes a public theme `className`; `packages/compiler/src/style.ts:344` extracts theme rules, but `packages/compiler/src/style.ts:948` rejects any non-static authored `class` when the style lowerer also writes `class`, instead of applying SPEC §4.6 class concatenation/dedupe.
   - Why it matters: SPEC §13.1 positions `createTheme` and `style.create` as natural companions; authors should not need wrapper elements just to apply a theme class and local style.
   - Repro evidence: `pnpm exec kovo build ./src/csp1-repro.tsx` in `composition-style-packages` fails at `src/csp1-repro.tsx:44:14` with KV231.
   - Acceptance: theme class values produced by `createTheme()` merge with style-lowered classes, or the style API exposes a first-class same-element theme application shape.
+  - Evidence: `pnpm exec vitest run packages/compiler/src/style.test.ts` proves `createTheme(...).className` composes with same-element `style.create` classes while arbitrary dynamic class conflicts still use KV231.
 
 - [x] **KV414 false-positives on direct `ownerId = session.userId` predicates.** (low, framework; found by `drizzle-data-depth`)
   - Observed behavior: direct secure predicates such as `eq(projects.ownerId, context.request.session.userId)` and `eq(tasks.ownerId, request.session.userId)` are classified as args/unknown owner audits rather than session-scoped owner proofs.
