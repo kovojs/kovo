@@ -94,6 +94,10 @@ export interface StaticExportOptions {
   onNonExportable?: StaticExportNonExportablePolicy;
   origin?: string;
   outDir?: string | URL;
+  /** URL pathname base used to map referenced public assets back to the local root (SPEC §9.5). */
+  publicAssetBase?: string;
+  /** Local directory containing Vite-copied public assets referenced by exported HTML (SPEC §9.5). */
+  publicAssetRoot?: string | URL;
 }
 
 /** Static export output produced by `exportStaticApp()`. */

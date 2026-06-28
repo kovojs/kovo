@@ -252,6 +252,8 @@ describe('kovo export', () => {
       mkdirSync(join(distDir, 'assets'), { recursive: true });
       writeFileSync(join(distDir, 'assets', 'app.css'), 'body{color:red}', 'utf8');
       writeFileSync(join(distDir, 'assets', 'app.js'), 'console.log("app")', 'utf8');
+      writeFileSync(join(distDir, 'kovo-static-mark.svg'), '<svg viewBox="0 0 1 1"></svg>', 'utf8');
+      writeFileSync(join(distDir, 'static-note.txt'), 'static note', 'utf8');
       writeFileSync(
         join(distDir, '.vite', 'manifest.json'),
         JSON.stringify({
@@ -266,7 +268,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
+            '{ path: \'/\', page: () => trustedHtml(\'<main data-export-cli><img src="/kovo-static-mark.svg" alt=""><a href="/static-note.txt">note</a>CLI export</main>\') }',
         }),
         'utf8',
       );
@@ -288,9 +290,15 @@ describe('kovo export', () => {
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('ASSET /assets/app.css status=200 bytes=');
       expect(output).toContain('ASSET /assets/app.js status=200 bytes=');
-      expect(output).toContain('SUMMARY html=1 clientModules=1 assets=2 diagnostics=0');
+      expect(output).toContain('ASSET /kovo-static-mark.svg status=200 bytes=');
+      expect(output).toContain('ASSET /static-note.txt status=200 bytes=');
+      expect(output).toContain('SUMMARY html=1 clientModules=1 assets=4 diagnostics=0');
       expect(readFileSync(join(outDir, 'assets', 'app.css'), 'utf8')).toBe('body{color:red}');
       expect(readFileSync(join(outDir, 'assets', 'app.js'), 'utf8')).toBe('console.log("app")');
+      expect(readFileSync(join(outDir, 'kovo-static-mark.svg'), 'utf8')).toBe(
+        '<svg viewBox="0 0 1 1"></svg>',
+      );
+      expect(readFileSync(join(outDir, 'static-note.txt'), 'utf8')).toBe('static note');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -345,6 +353,45 @@ describe('kovo export', () => {
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('kovo export --manifest asset must stay within --dist');
       expect(() => readFileSync(join(outDir, 'secret.txt'), 'utf8')).toThrow();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('exits zero for skip-mode KV229 warnings after writing selected artifacts', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      symlinkServerPackage(root);
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route: [
+            "{ path: '/', page: () => trustedHtml('<main data-exported>Home</main>') }",
+            "{ path: '/products/:id', page: () => trustedHtml('<main>Product</main>') }",
+          ].join(','),
+        }),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync(['export', appPath, '--out', outDir, '--skip-non-exportable']),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('HTML /index.html status=200 bytes=');
+      expect(output).toContain('WARN KV229 route=/products/:id');
+      expect(output).toContain('SUMMARY html=1 clientModules=1 assets=0 diagnostics=1');
+      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
+        '<main data-exported>Home</main>',
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
