@@ -481,6 +481,50 @@ describe('core authoring APIs', () => {
     expect(assertUnknownFailure).toBeTypeOf('function');
   });
 
+  it('derives form facts directly from mutation definition values', () => {
+    const addToCartMutation = {
+      errors: {
+        OUT_OF_STOCK: { parse: (input: unknown) => input as { availableQuantity: number } },
+      },
+      input: { parse: (input: unknown) => input as { productId: string; quantity: number } },
+      key: 'cart/add',
+    } satisfies CartAddRegistryMutation;
+    const addToCart = form(addToCartMutation);
+    const input = {
+      productId: 'p1',
+      quantity: 2,
+    } satisfies FormInput<typeof addToCart>;
+    const failure = {
+      code: 'OUT_OF_STOCK',
+      payload: { availableQuantity: 0 },
+    } satisfies FormFailure<typeof addToCart>;
+
+    expect(addToCart.key).toBe('cart/add');
+    expect(input.quantity).toBe(2);
+    expect(failure.payload.availableQuantity).toBe(0);
+
+    const assertMissingInput = () => {
+      // @ts-expect-error quantity is required by the mutation definition input schema.
+      const missing = { productId: 'p1' } satisfies FormInput<typeof addToCart>;
+      return missing;
+    };
+    const assertUnknownFailure = () => {
+      // @ts-expect-error PRICE_CHANGED is not declared by the mutation definition error schema.
+      const unknown = { code: 'PRICE_CHANGED', payload: { currentPrice: 2 } } satisfies FormFailure<
+        typeof addToCart
+      >;
+      return unknown;
+    };
+    expect(assertMissingInput).toBeTypeOf('function');
+    expect(assertUnknownFailure).toBeTypeOf('function');
+  });
+
+  it('fails closed when a mutation form value has no resolved key', () => {
+    expect(() => form({ key: undefined as unknown as 'cart/add' })).toThrow(
+      /resolved mutation key/,
+    );
+  });
+
   it('checks fragment target names and props from generated registry facts', () => {
     expect(fragmentTarget('cart-row', { rowId: 'row-1' })).toEqual({
       props: { rowId: 'row-1' },

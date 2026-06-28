@@ -775,6 +775,24 @@ type MutationErrorFailures<Errors> =
       }[Extract<keyof Errors, string>]
     : JsonValue;
 
+type MutationFormSource<Key extends string = string> = {
+  errors?: Record<string, SchemaLike<unknown>>;
+  input?: SchemaLike<unknown>;
+  key: Key;
+};
+
+type MutationFormSourceInput<Definition> = Definition extends { input: infer InputSchema }
+  ? InferSchemaLike<InputSchema> extends infer Input
+    ? Input extends Record<string, JsonValue>
+      ? Input
+      : Record<string, JsonValue>
+    : Record<string, JsonValue>
+  : Record<string, JsonValue>;
+
+type MutationFormSourceFailure<Definition> = Definition extends { errors: infer Errors }
+  ? MutationErrorFailures<Errors>
+  : JsonValue;
+
 /** Extract the input shape of a `Form` definition. */
 export type FormInput<Definition> =
   Definition extends Form<string, infer Input, unknown> ? Input : never;
@@ -783,8 +801,34 @@ function createMutationForm<
   const Key extends RegistryKey<MutationRegistry>,
   Input extends Record<string, JsonValue> = RegistryMutationInput<Key>,
   Failure = RegistryMutationFailure<Key>,
->(key: Key): Form<Key, Input, Failure> {
+>(key: Key): Form<Key, Input, Failure>;
+function createMutationForm<const Definition extends MutationFormSource>(
+  definition: Definition,
+): Form<
+  Definition['key'],
+  MutationFormSourceInput<Definition>,
+  MutationFormSourceFailure<Definition>
+>;
+function createMutationForm(
+  keyOrDefinition: RegistryKey<MutationRegistry> | MutationFormSource,
+): Form<string, Record<string, JsonValue>, JsonValue> {
+  if (typeof keyOrDefinition !== 'string') {
+    assertMutationFormSourceKey(keyOrDefinition);
+    return { key: keyOrDefinition.key };
+  }
+  const key = keyOrDefinition;
   return { key };
+}
+
+function assertMutationFormSourceKey(
+  definition: MutationFormSource,
+): asserts definition is MutationFormSource & { key: string } {
+  if (typeof definition.key !== 'string' || definition.key.length === 0) {
+    throw new TypeError(
+      'form(mutation({ ... })) requires a resolved mutation key. The Kovo compiler derives one ' +
+        'from the exported binding before runtime use; use the compiled artifact or generated key path.',
+    );
+  }
 }
 
 function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(

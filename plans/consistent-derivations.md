@@ -148,8 +148,12 @@ packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.te
     `packages/compiler/src/registry.test.ts` cover object-form mutation values through generated form
     action/data-mutation output and registry metadata. `site/content/guides/mutations.md`,
     `site/content/guides/optimistic.md`, and `docs/worked-example-add-to-cart.md` now use the
-    derived form in public snippets. Remaining gap: key-first declarations still exist in direct-test
-    example/starter source until those non-Vite test paths are migrated or lowered.
+    derived form in public snippets. `packages/core/src/index.ts` now lets `form(addMutation)` derive
+    the component form handle from a mutation value and fail closed when the runtime key is unresolved;
+    verification passed `pnpm exec vitest run packages/core/src/index.test.ts`,
+    `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`. Remaining gap:
+    key-first declarations still exist in direct-test example/starter source until those non-Vite test
+    paths are migrated or lowered.
 
 ## Phase 3 - Query Keys
 
