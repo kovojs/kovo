@@ -240,6 +240,11 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
   const lines = [addOutputVersion];
   mkdirSync(options.outDir, { recursive: true });
   const requiredPackageDependencies = new Set<string>();
+  const plannedWrites: {
+    component: AddComponentName;
+    file: (typeof vendoredUiComponents)[AddComponentName]['files'][number];
+    target: string;
+  }[] = [];
 
   for (const component of options.components) {
     const entry = vendoredUiComponents[component];
@@ -249,33 +254,55 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
         exitCode: 1,
       };
     }
-    const target = resolve(options.outDir, entry.fileName);
     for (const packageName of entry.requiredPackageDependencies) {
       requiredPackageDependencies.add(packageName);
     }
+    for (const file of entry.files) {
+      plannedWrites.push({ component, file, target: resolve(options.outDir, file.fileName) });
+    }
+  }
 
-    // SPEC.md §5.2 requires vendored UI to land as TSX app source, not lowered IR.
-    if (existsSync(target)) {
-      const current = readFileSync(target, 'utf8');
-      if (
-        normalizedVendoredUiComponentSource(current) ===
-        normalizedVendoredUiComponentSource(entry.source)
-      ) {
-        lines.push(
-          `SKIP ${component} path=${JSON.stringify(target)} reason=already-current package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
-        );
-        continue;
-      }
+  for (const planned of plannedWrites) {
+    if (!existsSync(planned.target)) continue;
+    const current = readFileSync(planned.target, 'utf8');
+    if (
+      normalizedVendoredUiComponentSource(current) ===
+      normalizedVendoredUiComponentSource(planned.file.source)
+    ) {
+      continue;
+    }
+    return {
+      error: `${addOutputVersion}\nERROR ${planned.component} path=${JSON.stringify(planned.target)} reason=would-overwrite`,
+      exitCode: 1,
+    };
+  }
 
-      return {
-        error: `${addOutputVersion}\nERROR ${component} path=${JSON.stringify(target)} reason=would-overwrite`,
-        exitCode: 1,
-      };
+  for (const component of options.components) {
+    const entry = vendoredUiComponents[component];
+    if (!entry) continue;
+    const componentTarget = resolve(options.outDir, entry.fileName);
+    const allFilesAlreadyCurrent = entry.files.every((file) => {
+      const target = resolve(options.outDir, file.fileName);
+      return (
+        existsSync(target) &&
+        normalizedVendoredUiComponentSource(readFileSync(target, 'utf8')) ===
+          normalizedVendoredUiComponentSource(file.source)
+      );
+    });
+    if (allFilesAlreadyCurrent) {
+      lines.push(
+        `SKIP ${component} path=${JSON.stringify(componentTarget)} reason=already-current package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
+      );
+      continue;
     }
 
-    writeFileSync(target, entry.source, 'utf8');
+    for (const file of entry.files) {
+      const target = resolve(options.outDir, file.fileName);
+      if (existsSync(target)) continue;
+      writeFileSync(target, file.source, 'utf8');
+    }
     lines.push(
-      `ADD ${component} path=${JSON.stringify(target)} source=tsx package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
+      `ADD ${component} path=${JSON.stringify(componentTarget)} source=tsx package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
     );
   }
 

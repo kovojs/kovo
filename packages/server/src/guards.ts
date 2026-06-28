@@ -1,5 +1,9 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
-import { renderErrorDocument, stampGuardFailureDocumentSecurityFloor } from './document-core.js';
+import {
+  mergeVaryHeader,
+  renderErrorDocument,
+  stampGuardFailureDocumentSecurityFloor,
+} from './document-core.js';
 import { managedDb, type ManagedDbMode } from './managed-db.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import { matchRoute, type RouteLike } from './match.js';
@@ -717,9 +721,17 @@ export async function renderHttpGuardFailureResponse<Request>(
       ? options.onUnauthenticated(context)
       : defaultOnUnauthenticated(context, options.loginPath, options.routes));
 
+    // SPEC §6.6/§9.5: an auth redirect is a session-dependent outcome even when its body is
+    // empty, so it must not be reusable by shared caches across principals.
     return blessRedirectResponse({
       body: '',
-      headers: { Location: redirectLocationHeader(redirectResult.location) },
+      headers: mergeVaryHeader(
+        {
+          'Cache-Control': 'private, no-store',
+          Location: redirectLocationHeader(redirectResult.location),
+        },
+        'Cookie',
+      ),
       status: redirectResult.status,
     });
   }

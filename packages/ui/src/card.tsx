@@ -12,7 +12,7 @@ import { uiTheme } from './theme.js';
  * const props: CardProps = { children: 'Content' };
  */
 export interface CardProps {
-  children?: string;
+  children?: unknown;
   style?: style.StyleInput;
 }
 
