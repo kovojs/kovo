@@ -65,7 +65,7 @@ this pass.
   - Why it matters: SPEC §4.5 treats children as render-time composition, and
     the dev loop is the first surface authors use to validate copied UI.
   - Repro evidence: `rg -n '\\[object Promise\\]' /tmp/kovo-catalog-dev.html
-    /tmp/kovo-catalog-prod.html` matched only the dev response.
+/tmp/kovo-catalog-prod.html` matched only the dev response.
   - Acceptance: dev and production render nested copied UI children without
     literal promise strings, with coverage for Breadcrumb/Tabs/Card-style child
     forwarding.
@@ -106,7 +106,7 @@ this pass.
   - Observed behavior: `import { query as defineQuery } from '@kovojs/server'`
     followed by `defineQuery({ ... })` built to runtime failure:
     `createApp() received query({ ... }) before the compiler assigned its
-    source-derived key.`
+source-derived key.`
   - Root cause: `packages/compiler/src/compile.ts:976-982` requires the local
     import name to be exactly `query`, and
     `packages/compiler/src/source-derived-lowering.ts:88-104` matches call
