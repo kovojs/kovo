@@ -7,8 +7,9 @@ import {
 } from '../output-context-facts.js';
 import type { ComponentModuleModel, JsxAttributeModel, JsxElementModel } from '../scan/parse.js';
 import { componentOptionObjectEntries, componentRenderSlotsParam } from '../scan/parse.js';
+import { mutationInputFactsFromSource } from '../scan/mutation-inputs.js';
 import { escapeAttribute, kebabCase, type SourceReplacement } from '../shared.js';
-import type { RegistryFacts } from '../types.js';
+import type { MutationInputFieldFact, RegistryFacts } from '../types.js';
 
 export function componentMutationSlotName(
   model: ComponentModuleModel,
@@ -119,7 +120,7 @@ export interface EnhancedMutationFormLowering {
 export function enhancedMutationFormLowering(
   model: ComponentModuleModel,
   element: JsxElementModel,
-  registryFacts?: RegistryFacts,
+  options?: { fileName?: string; registryFacts?: RegistryFacts; source?: string },
 ): EnhancedMutationFormLowering | null {
   if (element.tag !== 'form') return null;
 
@@ -129,11 +130,24 @@ export function enhancedMutationFormLowering(
   const mutationKey = localMutationKey(
     model,
     mutationAttribute.expressionBareIdentifierName,
-    registryFacts,
+    options?.registryFacts,
   );
   if (!mutationKey) return null;
 
-  const conflicts = enhancedMutationFormConflicts(element);
+  const fileFields = mutationInputFileFieldsForLocalName(
+    model,
+    mutationAttribute.expressionBareIdentifierName,
+    options,
+  );
+  const multipart = fileFields.length > 0;
+  const enctypeAttribute = element.attributes.find((attribute) => attribute.name === 'enctype');
+  const enctypeConflict =
+    multipart &&
+    enctypeAttribute &&
+    staticStringAttributeValue(enctypeAttribute) !== 'multipart/form-data'
+      ? [{ attribute: enctypeAttribute }]
+      : [];
+  const conflicts = [...enhancedMutationFormConflicts(element), ...enctypeConflict];
   if (conflicts.length > 0) {
     return {
       conflicts,
@@ -150,6 +164,7 @@ export function enhancedMutationFormLowering(
   const streamAttribute = element.attributes.find((attribute) => attribute.name === 'stream');
   const streaming = streamAttribute !== undefined;
   if (!keyAttribute && element.repeatable) return null;
+  const generateEnctype = multipart && !enctypeAttribute;
   const preserveRuntimeMutation = !componentRenderSlotsParam(model);
   const targetBase = kebabCase(mutationAttribute.expressionBareIdentifierName);
   const generatedInMutationSlot = [
@@ -157,6 +172,7 @@ export function enhancedMutationFormLowering(
       ? [`mutation={${mutationAttribute.expressionBareIdentifierName}}`]
       : []),
     ...(methodAttribute ? [] : ['method="post"']),
+    ...(generateEnctype ? ['enctype="multipart/form-data"'] : []),
     `action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
     `data-mutation="${escapeAttribute(mutationKey)}"`,
     ...(streaming ? ['data-mutation-stream="true"'] : []),
@@ -184,6 +200,7 @@ export function enhancedMutationFormLowering(
   ];
   const semanticAttributes = [
     ...(methodAttribute ? [] : [' method="post"']),
+    ...(generateEnctype ? [' enctype="multipart/form-data"'] : []),
     ` action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
     ` data-mutation="${escapeAttribute(mutationKey)}"`,
     ...(streaming ? [' data-mutation-stream="true"'] : []),
@@ -192,6 +209,7 @@ export function enhancedMutationFormLowering(
     'action',
     'data-mutation',
     'data-mutation-stream',
+    ...(generateEnctype ? ['enctype'] : []),
     'key',
     'kovo-fragment-target',
     'kovo-key',
@@ -208,6 +226,15 @@ export function enhancedMutationFormLowering(
       ...(methodAttribute
         ? []
         : [formLoweringOutputContext('method', 'post', 'typed mutation form lowering')]),
+      ...(generateEnctype
+        ? [
+            formLoweringOutputContext(
+              'enctype',
+              'multipart/form-data',
+              'typed mutation file form lowering',
+            ),
+          ]
+        : []),
       formLoweringOutputContext('action', `/_m/${mutationKey}`, 'typed mutation form lowering'),
       formLoweringOutputContext('data-mutation', mutationKey, 'typed mutation form lowering'),
       ...(streaming
@@ -237,6 +264,31 @@ export function enhancedMutationFormLowering(
     replacements,
     semanticAttributes,
   };
+}
+
+export function mutationInputFileFieldsForLocalName(
+  model: ComponentModuleModel,
+  localName: string,
+  options?: { fileName?: string; registryFacts?: RegistryFacts; source?: string },
+): readonly string[] {
+  const fields = mutationInputFieldsForLocalName(model, localName, options);
+  return fields.filter((field) => field.coercion === 'file').map((field) => field.name);
+}
+
+function mutationInputFieldsForLocalName(
+  model: ComponentModuleModel,
+  localName: string,
+  options?: { fileName?: string; registryFacts?: RegistryFacts; source?: string },
+): readonly MutationInputFieldFact[] {
+  if (options?.source && options.fileName) {
+    const localMutation = mutationInputFactsFromSource(options.fileName, options.source).get(
+      localName,
+    );
+    if (localMutation) return localMutation.fields;
+  }
+
+  const mutationKey = localMutationKey(model, localName, options?.registryFacts);
+  return mutationKey ? (options?.registryFacts?.mutationInputs?.[mutationKey] ?? []) : [];
 }
 
 export function importsMutationCsrfField(model: ComponentModuleModel): boolean {

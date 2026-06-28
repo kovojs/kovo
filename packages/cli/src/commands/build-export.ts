@@ -590,6 +590,7 @@ function mutationCheckFact(
   const registryQueries = (registry?.queries ?? []) as readonly { key: string }[];
   const writes = uniqueSorted(touches.map((touch) => touch.key));
   const inferredWrites = uniqueSorted(inferredTouches.map((touch) => touch.domain));
+  const fileFields = mutation.fileFields ?? [];
   const invalidates = uniqueSorted(
     [...registryQueries, ...liveTargetQueries].map((query) => query.key),
   );
@@ -599,6 +600,7 @@ function mutationCheckFact(
     ...(mutation.csrf === false ? { csrfJustification: 'csrf:false mutation declaration' } : {}),
     ...(mutation.guard === undefined ? {} : { guards: ['mutation.guard'] }),
     ...(invalidates.length === 0 ? {} : { invalidates }),
+    ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
     key: mutation.key,
     ...(writes.length === 0 && inferredWrites.length === 0
       ? {}
