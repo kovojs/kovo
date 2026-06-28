@@ -4,8 +4,16 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+export interface VendoredUiFile {
+  fileName: string;
+  requiredPackageDependencies: readonly string[];
+  source: string;
+  sourceHash: string;
+}
+
 export interface VendoredUiComponent {
   fileName: `${string}.tsx`;
+  files: readonly VendoredUiFile[];
   packageVersion: string;
   requiredPackageDependencies: readonly string[];
   source: string;
@@ -29,12 +37,7 @@ export const vendoredUiComponents = Object.freeze(
   Object.fromEntries(
     uiPackageComponentEntries(uiPackageManifest).map(([name, sourcePath]) => [
       name,
-      {
-        fileName: `${name}.tsx`,
-        packageVersion: uiPackageManifest.version ?? '0.0.0',
-        ...readVendoredSource(name, sourcePath),
-        sourceHash: verifyVendoredSourceHash(name, sourcePath),
-      },
+      readVendoredComponent(name, sourcePath),
     ]),
   ),
 ) as Readonly<Record<string, VendoredUiComponent>>;
@@ -108,6 +111,22 @@ function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [strin
     .sort(([left], [right]) => left.localeCompare(right));
 }
 
+function readVendoredComponent(name: string, sourcePath: string): VendoredUiComponent {
+  const mainSourceHash = verifyVendoredSourceHash(name, sourcePath);
+  const mainSource = readVendoredSource(name, sourcePath).source;
+  const files = vendoredUiFiles(name, sourcePath, mainSource);
+  return {
+    fileName: `${name}.tsx`,
+    files,
+    packageVersion: uiPackageManifest.version ?? '0.0.0',
+    requiredPackageDependencies: uniqueSorted(
+      files.flatMap((file) => file.requiredPackageDependencies),
+    ),
+    source: mainSource,
+    sourceHash: mainSourceHash,
+  };
+}
+
 function readVendoredSource(
   name: string,
   sourcePath: string,
@@ -132,7 +151,7 @@ function readVendoredSource(
   }
   return {
     requiredPackageDependencies: requiredKovoPackageDependencies(source),
-    source: source.endsWith('\n') ? source : `${source}\n`,
+    source,
   };
 }
 
@@ -187,15 +206,11 @@ export function vendoredUiComponentSource(source: string): string {
   transformed = rewriteLocalPulseKeyframes(transformed);
   transformed = rewriteVendoredSoundSubset(transformed);
 
-  return transformed;
+  return canonicalVendoredUiComponentSource(transformed);
 }
 
 export function normalizedVendoredUiComponentSource(source: string): string {
-  return source
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+$/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return canonicalVendoredUiComponentSource(source).trim();
 }
 
 function rewriteVendoredSoundSubset(source: string): string {
@@ -302,6 +317,78 @@ function rewriteUiThemeReferences(source: string): string {
   }
 
   return transformed;
+}
+
+function vendoredUiFiles(
+  componentName: string,
+  sourcePath: string,
+  source: string,
+): readonly VendoredUiFile[] {
+  const files = new Map<string, VendoredUiFile>();
+  const queue = [...new Set([`${componentName}.tsx`, ...vendoredRelativeImports(source)])];
+
+  while (queue.length > 0) {
+    const fileName = queue.shift();
+    if (!fileName || files.has(fileName)) continue;
+    const filePath =
+      fileName === `${componentName}.tsx` ? sourcePath : join(uiPackageRoot, 'src', fileName);
+    const fileSource =
+      fileName === `${componentName}.tsx`
+        ? source
+        : canonicalVendoredUiComponentSource(readFileSync(filePath, 'utf8'));
+    const file = {
+      fileName,
+      requiredPackageDependencies: requiredKovoPackageDependencies(fileSource),
+      source: fileSource,
+      sourceHash: sourceHash(fileSource),
+    } satisfies VendoredUiFile;
+    files.set(fileName, file);
+    for (const importedFile of vendoredRelativeImports(fileSource)) {
+      if (!files.has(importedFile) && !queue.includes(importedFile)) queue.push(importedFile);
+    }
+  }
+
+  return [...files.values()].sort((left, right) => left.fileName.localeCompare(right.fileName));
+}
+
+function vendoredRelativeImports(source: string): readonly string[] {
+  const files = new Set<string>();
+  const sourceWithoutComments = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  for (const match of sourceWithoutComments.matchAll(/['"](\.\/[^'"]+)['"]/g)) {
+    const specifier = match[1];
+    if (!specifier) continue;
+    files.add(resolveUiSiblingFileName(specifier.replace(/^\.\//, '')));
+  }
+  return [...files].sort();
+}
+
+function resolveUiSiblingFileName(name: string): string {
+  if (name.endsWith('.ts') || name.endsWith('.tsx')) return name;
+  if (name.endsWith('.js')) {
+    const tsFile = `${name.slice(0, -3)}.ts`;
+    const tsxFile = `${name.slice(0, -3)}.tsx`;
+    if (existsSync(join(uiPackageRoot, 'src', tsFile))) return tsFile;
+    if (existsSync(join(uiPackageRoot, 'src', tsxFile))) return tsxFile;
+  }
+  const tsFile = `${name}.ts`;
+  const tsxFile = `${name}.tsx`;
+  if (existsSync(join(uiPackageRoot, 'src', tsFile))) return tsFile;
+  if (existsSync(join(uiPackageRoot, 'src', tsxFile))) return tsxFile;
+  throw new Error(`@kovojs/ui sibling source was not found: ${name}`);
+}
+
+function canonicalVendoredUiComponentSource(source: string): string {
+  return `${source
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd()}\n`;
+}
+
+function uniqueSorted(values: readonly string[]): readonly string[] {
+  return [...new Set(values)].sort();
 }
 
 function rewriteLocalPulseKeyframes(source: string): string {
