@@ -242,6 +242,37 @@ describe('server schemas', () => {
     expect(stored?.metadata?.filename).toBe('passwd.png');
   });
 
+  it('reserves stored-file filename metadata after app metadata is merged', async () => {
+    const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
+    const uploadAvatar = mutation('profile/avatar', {
+      input: s.object({
+        avatar: s.file().store({
+          keyPrefix: 'avatars',
+          metadata: () => ({
+            filename: 'dogfood.txt\r\nX-Kovo-Dogfood: injected',
+            owner: 'profile',
+          }),
+          storage,
+        }),
+      }),
+      handler(input) {
+        return input.avatar.key;
+      },
+    });
+    const form = new FormData();
+    form.set('avatar', pngFile('../../etc/passwd.png', 'image/png'));
+
+    const result = await runMutation(uploadAvatar, form, {});
+    expect(result).toMatchObject({ ok: true });
+    const key = (result as { value: string }).value;
+    const stored = await storage.get(key);
+
+    expect(stored?.metadata).toMatchObject({
+      filename: 'passwd.png',
+      owner: 'profile',
+    });
+  });
+
   it('does not store invalid multipart file fields', async () => {
     const storage = createMemoryStorage();
     const put = vi.fn<StorageCapability['put']>((key, body, options) =>

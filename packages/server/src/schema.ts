@@ -552,9 +552,11 @@ class StoredFileSchemaImpl implements StoredFileSchema {
     const storage = await this.#storageOptions.storage.put(key, bytes.buffer.slice(0), {
       ...(contentType === '' ? {} : { contentType }),
       metadata: {
-        // The client filename is sanitized download METADATA only — never the key.
-        filename: sanitizeDownloadFilename(file.name),
         ...this.#storageOptions.metadata?.(file),
+        // The client filename is sanitized framework-owned download METADATA only — never the key.
+        // Keep it last so app metadata cannot replace the value that later reaches
+        // Content-Disposition at the stored-file sink (SPEC §6.6 / §9.1).
+        filename: sanitizeDownloadFilename(file.name),
       },
     });
 
