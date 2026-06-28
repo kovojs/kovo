@@ -59,13 +59,63 @@ function insertLiveTargetRendererImport(source: string): string {
 
 function liveTargetRendererExport(componentExpression: string, fact: LiveTargetFact): string {
   const exportName = liveTargetRendererExportName(componentExpression);
+  const queries = liveTargetRendererQueries(fact);
+  const optionLines = [
+    `  component: ${componentExpression},`,
+    `  componentId: ${JSON.stringify(fact.component)},`,
+    ...(queries ? [queries] : []),
+  ];
 
   return `export const ${exportName} = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
-  component: ${componentExpression},
-  componentId: ${JSON.stringify(fact.component)},
+${optionLines.join('\n')}
 }));`;
 }
 
 function liveTargetRendererExportName(componentExpression: string): string {
   return `${componentExpression.replaceAll(/[^A-Za-z0-9_$]/g, '_')}$liveTargetRenderer`;
+}
+
+function liveTargetRendererQueries(fact: LiveTargetFact): string {
+  const bindings = fact.queryBindings
+    .map(liveTargetRendererQueryBinding)
+    .filter((binding): binding is string => binding !== null);
+  if (bindings.length === 0) return '';
+
+  return `  queries: [
+${bindings.join(',\n')}
+  ],`;
+}
+
+function liveTargetRendererQueryBinding(
+  binding: LiveTargetFact['queryBindings'][number],
+): string | null {
+  if (!isExecutableQueryExpression(binding.queryExpression)) return null;
+
+  const args =
+    binding.argsExpression && binding.argsParam
+      ? `, args: (${binding.argsParam}) => ${binding.argsExpression}`
+      : '';
+  return `    { name: ${JSON.stringify(binding.name)}, query: ${binding.queryExpression}${args} }`;
+}
+
+function isExecutableQueryExpression(expressionSource: string): boolean {
+  const sourceFile = ts.createSourceFile(
+    'query-binding-expression.ts',
+    `const __query = ${expressionSource};`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const statement = sourceFile.statements[0];
+  if (!statement || !ts.isVariableStatement(statement)) return false;
+  const initializer = statement.declarationList.declarations[0]?.initializer;
+  if (!initializer) return false;
+
+  return isRuntimeQueryReference(initializer);
+}
+
+function isRuntimeQueryReference(expression: ts.Expression): boolean {
+  if (ts.isIdentifier(expression) || ts.isPropertyAccessExpression(expression)) return true;
+  if (ts.isCallExpression(expression)) return isRuntimeQueryReference(expression.expression);
+  return false;
 }

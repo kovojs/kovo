@@ -317,6 +317,11 @@ packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`. R
 - [ ] **Update generated registries, explain snapshots, compiler tests, server tests, and browser wire tests.**
   - Cover `/_m/*`, `data-mutation`, CSRF audience, replay scope, query wire chunks, domain touch
     graphs, and endpoint audits.
+  - Integrated evidence (2026-06-27): compiler-emitted live-target renderers now pass concrete
+    query definitions and prop-derived args from `LiveTargetFact.queryBindings` into
+    `componentLiveTargetRenderer(...)` while leaving non-executable `{}` test stubs on the runtime
+    fallback path; verification passed `pnpm exec vitest run
+packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts`.
 
 - [ ] **Remove legacy compatibility unless `SPEC.md` explicitly keeps it.**
   - Kovo is in technical preview, so prefer one clean authoring model over compatibility modes.
@@ -397,4 +402,7 @@ examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/op
   `pnpm run check:vp`, and `git diff --check` passed.
 - 2026-06-27: Updated public `form(addMutation)`/`OptimisticFor` docs and browser typing coverage;
   `pnpm exec vitest run packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`
+  passed.
+- 2026-06-27: Emitted generated live-target renderer query bindings from compiler facts; `pnpm exec
+vitest run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts`
   passed.
