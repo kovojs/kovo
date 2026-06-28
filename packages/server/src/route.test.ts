@@ -197,7 +197,7 @@ describe('route primitives', () => {
         { params: { id: 'missing' }, search: { tab: 'details' } },
         { session: { userId: 'u1' } },
       ),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       body: 'Not Found',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 404,

@@ -61,6 +61,11 @@ export interface OtpFieldProps extends OtpFieldStateProps {
   styles?: OtpFieldStyleOverrides;
 }
 
+interface OtpFieldGroupProps {
+  children?: string;
+  styles?: OtpFieldStyleOverrides;
+}
+
 /**
  * Props for the otp field hidden input component.
  *
@@ -237,7 +242,7 @@ export const OtpField = component({
  * const component = OtpFieldGroup;
  */
 export const OtpFieldGroup = component({
-  render(props: { children?: string; styles?: OtpFieldStyleOverrides }) {
+  render(props: OtpFieldGroupProps) {
     const styleAttrs = style.attrs(otpFieldStyles.group, props.styles?.group);
     return <div {...styleAttrs}>{props.children}</div>;
   },

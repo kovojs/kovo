@@ -46,7 +46,7 @@ pass is filed in `plans/papercuts-12.md`.
 
 ### B. Static Export Fail-Closed Boundary
 
-- [ ] **Vite-backed static export serializes `redirect()` route outcomes into status-200 HTML.** (high, security/soundness; found by `webhook-files-export-recheck`)
+- [x] **Vite-backed static export serializes `redirect()` route outcomes into status-200 HTML.** (high, security/soundness; found by `webhook-files-export-recheck`)
   - Observed behavior: `kovo export ./src/export-redirect-only-app.tsx --vite`
     exited 0 and wrote `/old-dogfood/index.html` containing
     `{"location":"/","status":303}` inside the HTML body for a route whose page
@@ -68,10 +68,14 @@ pass is filed in `plans/papercuts-12.md`.
     `{"location":"/","status":303}`.
   - Acceptance: Vite-backed static export treats route redirects like the
     non-Vite path: concrete KV229 fail/skip, no HTML artifact.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/vite-export-replay.test.ts packages/server/src/static-export-response.test.ts packages/server/src/route.test.ts`
+    passed with Vite-backed redirect replay producing KV229 instead of a
+    status-200 HTML artifact.
 
 ### C. Verification Surface Omissions
 
-- [ ] **Endpoint explain omits route `respond.file` / `respond.stream` outcomes.** (med, security/soundness; found by `webhook-files-export-recheck`)
+- [x] **Endpoint explain omits route `respond.file` / `respond.stream` outcomes.** (med, security/soundness; found by `webhook-files-export-recheck`)
   - Observed behavior: the app declared `/download/report.txt` with
     `respond.file(...)` and `/stream/events.ndjson` with `respond.stream(...)`,
     but `kovo explain --endpoints dist/.kovo/graph.json` listed only raw
@@ -90,6 +94,10 @@ pass is filed in `plans/papercuts-12.md`.
     `/download/report.txt` or `/stream/events.ndjson`.
   - Acceptance: route file/stream outcomes appear in explain/check posture with
     their path, method, cache/header/body posture, and route surface.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-route-outcomes.test.ts`
+    passed with `/download/report.txt` and `/stream/events.ndjson` serialized
+    as `route-file` / `route-stream` endpoint explain rows.
 
 ## Refuted / Not Carried Forward
 
@@ -113,3 +121,8 @@ pass is filed in `plans/papercuts-12.md`.
   reproduced the status-200 redirect artifact.
 - `pnpm exec kovo explain --endpoints dist/.kovo/graph.json` in
   `webhook-files-export-recheck`: reproduced missing file/stream route rows.
+- 2026-06-28 focused fix gates:
+  `pnpm exec vitest run packages/server/src/mutation-endpoint.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/drizzle/src/sql-safety-static.test.ts`
+  and
+  `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-route-outcomes.test.ts packages/server/src/vite-export-replay.test.ts packages/server/src/static-export-response.test.ts packages/server/src/route.test.ts`
+  both passed.

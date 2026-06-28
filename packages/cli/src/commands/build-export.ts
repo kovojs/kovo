@@ -594,7 +594,10 @@ function emptyStaticDrizzleBuildFacts(): StaticDrizzleBuildFacts {
 async function staticDrizzleBuildFacts(
   files: readonly BuildCheckSourceFile[],
 ): Promise<StaticDrizzleBuildFacts> {
-  if (!files.some((file) => /from ['"](?:@kovojs\/drizzle|drizzle-orm)/.test(file.source))) {
+  const analysisFiles = files.filter(isBuildSecurityAnalysisSourceFile);
+  if (
+    !analysisFiles.some((file) => /from ['"](?:@kovojs\/drizzle|drizzle-orm)/.test(file.source))
+  ) {
     return { ...emptyStaticDrizzleBuildFacts(), touchGraph: {} };
   }
 
@@ -614,26 +617,37 @@ async function staticDrizzleBuildFacts(
     extractToctouFromProject,
     extractTouchGraphFromProject,
   } = drizzle;
-  const queryFacts = extractQueryFactsFromProject({ files });
+  const queryFacts = extractQueryFactsFromProject({ files: analysisFiles });
   const queryReadFacts = queryFacts as readonly QueryReadFactLike[];
   const diagnostics = [
-    ...analyzeSqlSafetyFromProject({ files }),
+    ...analyzeSqlSafetyFromProject({ files: analysisFiles }),
     ...diagnosticsForQueryFacts(queryFacts),
   ].flatMap(sqlSafetyDiagnosticFact);
-  const touchGraph = extractTouchGraphFromProject({ files }) as CoreGraph.TouchGraph;
+  const touchGraph = extractTouchGraphFromProject({ files: analysisFiles }) as CoreGraph.TouchGraph;
   // SPEC §5.2 requires `kovo build` to preflight the full verifier graph. These
   // static security facts feed KV414/KV438/KV433/KV429 in the production build path.
-  const ownerAudit = extractOwnerAuditFromProject({ files });
+  const ownerAudit = extractOwnerAuditFromProject({ files: analysisFiles });
   return {
-    massAssignmentFacts: extractMassAssignmentFromProject({ files }),
+    massAssignmentFacts: extractMassAssignmentFromProject({ files: analysisFiles }),
     ownerDomains: ownerAudit.ownerDomains,
     queries: queryReadFacts,
-    queryWriteReachability: extractQueryWriteReachabilityFromProject({ files }),
+    queryWriteReachability: extractQueryWriteReachabilityFromProject({ files: analysisFiles }),
     scopeAudits: ownerAudit.scopeAudits,
     sqlSafetyDiagnostics: diagnostics,
-    toctouFacts: extractToctouFromProject({ files }),
+    toctouFacts: extractToctouFromProject({ files: analysisFiles }),
     touchGraph,
   };
+}
+
+function isBuildSecurityAnalysisSourceFile(file: BuildCheckSourceFile): boolean {
+  const source = file.source;
+  if (source.startsWith('// @kovojs-ui-copy\n')) return false;
+  if (/from ['"](?:@kovojs\/server|@kovojs\/drizzle|drizzle-orm)/.test(source)) return true;
+  if (/\b(?:domain|tag|query|mutation|webhook|endpoint)\s*\(/.test(source)) return true;
+  if (/\b(?:db|tx)\s*\.\s*(?:all|get|query|run|execute|select|insert|update|delete)\b/.test(source))
+    return true;
+  if (/\bsql\s*(?:`|\.raw\s*\(|\.identifier\s*\()/.test(source)) return true;
+  return false;
 }
 
 function queryCheckFact(
@@ -1207,6 +1221,7 @@ function sourceDerivedRegistryVitePlugin(
     transform(source, id) {
       const fileName = viteSourceFileName(id, root);
       if (!/\.[cm]?[jt]sx?$/.test(fileName)) return null;
+      if (source.startsWith('// @kovojs-ui-copy\n')) return null;
       const code = lowerRegistryDeclarations({ fileName, source });
       return code === null ? null : { code, map: null };
     },

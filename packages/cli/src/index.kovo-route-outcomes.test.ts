@@ -21,6 +21,11 @@ describe('kovo route outcome graph facts', () => {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><html><body><script type="module" src="/src/client.ts"></script></body></html>',
+        'utf8',
+      );
+      writeFileSync(
         join(root, 'src/client.ts'),
         'export function Client(){ return null; }\n',
         'utf8',
