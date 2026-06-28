@@ -46,7 +46,12 @@ describe('route responses', () => {
       renderRoutePageResponse(fileRoute, {}, { headers: { 'If-None-Match': '"orders-pdf-v1"' } }),
     ).resolves.toEqual({
       body: '',
-      headers: { ETag: '"orders-pdf-v1"' },
+      headers: {
+        'Content-Disposition': 'attachment; filename="orders.pdf"',
+        'Content-Type': 'application/pdf',
+        ETag: '"orders-pdf-v1"',
+        'X-Content-Type-Options': 'nosniff',
+      },
       status: 304,
     });
 
