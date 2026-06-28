@@ -54,7 +54,7 @@ this pass.
   - Acceptance: the vendored helper is generated from or kept equivalent to the
     canonical helper, with copy-in tests for `island` and `bindings`.
 
-- [ ] **Copied child-forwarding UI components render `[object Promise]` in dev.** (high, framework; found by `ui-copyin-full-catalog`)
+- [x] **Copied child-forwarding UI components render `[object Promise]` in dev.** (high, framework; found by `ui-copyin-full-catalog`)
   - Observed behavior: dev `/catalog` returned HTTP 200 with eight literal
     `[object Promise]` occurrences from copied Breadcrumb/Tabs/Card nested
     children; the production build for the same page had zero occurrences.
@@ -69,6 +69,10 @@ this pass.
   - Acceptance: dev and production render nested copied UI children without
     literal promise strings, with coverage for Breadcrumb/Tabs/Card-style child
     forwarding.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/response.test.ts packages/server/src/route-response.test.ts packages/server/src/jsx-runtime.test.ts`
+    passed with JSX runtime coverage for promised children copied through a
+    forwarding component.
 
 - [ ] **Generated sound-subset script flags JSX prose containing `as HTML` as an unchecked cast.** (low, template; found by `ui-copyin-full-catalog`)
   - Observed behavior: starter `scripts/check-sound-subset.mjs` reported a
@@ -140,7 +144,7 @@ source-derived key.`
 
 ### C. Static Export And Response Semantics
 
-- [ ] **Static export turns a route `redirect()` into a 200 HTML file containing `[object Object]`.** (high, framework; found by `prod-export-route-files`)
+- [x] **Static export turns a route `redirect()` into a 200 HTML file containing `[object Object]`.** (high, framework; found by `prod-export-route-files`)
   - Observed behavior: `dist/export-skip/redirect-doc/index.html` contained
     `[object Object]`, while a production server control for the same route
     returned `303 Location: /export`.
@@ -154,8 +158,12 @@ source-derived key.`
     matched the exported file; the production server returned the correct 303.
   - Acceptance: route redirects during static export are either followed or
     reported as non-exportable, never serialized as object text.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/response.test.ts packages/server/src/route-response.test.ts packages/server/src/jsx-runtime.test.ts`
+    passed with static-export coverage that route `redirect()` fails closed as
+    KV229 without writing an HTML artifact.
 
-- [ ] **ETag 304 for `respond.file` drops declared cache/security headers.** (med, framework; found by `prod-export-route-files`)
+- [x] **ETag 304 for `respond.file` drops declared cache/security headers.** (med, framework; found by `prod-export-route-files`)
   - Observed behavior: conditional requests to a file response returned 304
     with only `ETag`, omitting the route-declared cache/security headers present
     on the full 200 response.
@@ -170,8 +178,12 @@ source-derived key.`
     only `ETag`.
   - Acceptance: 304 file responses retain declared route headers where HTTP
     permits them, with a focused response test.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/response.test.ts packages/server/src/route-response.test.ts packages/server/src/jsx-runtime.test.ts`
+    passed with response coverage that file ETag 304 responses preserve cache,
+    CSP, download, ETag, and nosniff headers.
 
-- [ ] **Static export reports generic 500 for public deferred/streaming routes.** (low, dev-tooling; found by `streaming-query-live`)
+- [x] **Static export reports generic 500 for public deferred/streaming routes.** (low, dev-tooling; found by `streaming-query-live`)
   - Observed behavior: attempting to statically export a public
     deferred/streaming route produced a generic 500-style failure instead of a
     concrete non-exportable-route diagnostic.
@@ -184,6 +196,9 @@ source-derived key.`
     generic 500 path for a route intentionally using dynamic streaming behavior.
   - Acceptance: static export reports a precise non-exportable deferred/streaming
     route reason without changing runtime behavior.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/response.test.ts packages/server/src/route-response.test.ts packages/server/src/jsx-runtime.test.ts`
+    passed with KV229 diagnostics for deferred/streamed route documents.
 
 ### D. Webhook And Docs Ergonomics
 
