@@ -316,6 +316,9 @@ export const PayloadCard = component({
       export const PayloadCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
         component: PayloadCard,
         componentId: "payload-card/payload-card",
+        queries: [
+          { name: "product", query: productQuery }
+        ],
       }));
       \`;
       }",

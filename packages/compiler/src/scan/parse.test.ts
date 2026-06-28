@@ -304,7 +304,7 @@ export function renderSource() {
 
   it('records mutation handler property access paths with source spans', () => {
     const source = `
-export const save = mutation('cart/save', {
+export const save = mutation({
   handler(input: Input, request: Request) {
     const text = "request.db";
     return request.db.insert(input);
@@ -324,9 +324,30 @@ export const save = mutation('cart/save', {
     expect(handler?.paramNames).toEqual(['input', 'request']);
   });
 
-  it('records simple destructured mutation handler parameter names', () => {
+  it('records legacy key-first mutation handler property access paths', () => {
     const source = `
 export const save = mutation('cart/save', {
+  handler(input: Input, request: Request) {
+    return request.db.insert(input);
+  },
+});
+`;
+    const [handler] = mutationHandlers(parseComponentModule('cart.mutation.ts', source));
+
+    expect(handler?.bodyPropertyAccesses).toEqual([
+      {
+        end: source.indexOf('request.db.insert') + 'request.db.insert'.length,
+        path: 'request.db.insert',
+        start: source.indexOf('request.db.insert'),
+        terminalName: 'insert',
+      },
+    ]);
+    expect(handler?.paramNames).toEqual(['input', 'request']);
+  });
+
+  it('records simple destructured mutation handler parameter names', () => {
+    const source = `
+export const save = mutation({
   handler({ db }) {
     return db.insert(input);
   },

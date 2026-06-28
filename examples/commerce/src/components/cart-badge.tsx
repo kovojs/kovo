@@ -6,6 +6,10 @@ import * as style from '@kovojs/style';
 import { commerceMessages, type CartQueryResult } from '../domain.js';
 import { cartQuery } from '../queries.js';
 
+function renderOnce<T>(value: T): T {
+  return value;
+}
+
 const cartBadgeStyles = style.create({
   badge: {
     alignItems: 'center',
@@ -43,7 +47,7 @@ export const CartBadge = component({
   render: ({ cart }: { cart: CartQueryResult }) => (
     <cart-badge style={cartBadgeStyles.badge}>
       <span>{t(commerceMessages, 'cartLabel')}</span>
-      <span style={cartBadgeStyles.count}>{cart.count}</span>
+      <span style={cartBadgeStyles.count}>{renderOnce(cart.count)}</span>
     </cart-badge>
   ),
 });

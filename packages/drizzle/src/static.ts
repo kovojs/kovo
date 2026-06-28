@@ -65,6 +65,7 @@ import {
   isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,
   isKovoExtraConfigCallName,
+  type KovoDomainRef,
   type KovoDomainTableAnnotation,
   type KovoFanAnnotation,
   type KovoTableAnnotation,
@@ -692,6 +693,10 @@ type ExtractedDomainTableAnnotation = Omit<KovoDomainTableAnnotation, 'domain'> 
 type ExtractedKovoTableAnnotation =
   | (Omit<KovoTableAnnotation, 'domain'> & { domain: string })
   | Extract<KovoTableAnnotation, { exempt: true }>;
+
+function extractedDomainKey(domain: KovoDomainRef): string {
+  return typeof domain === 'string' ? domain : domain.key;
+}
 
 /** @internal */ export type ExtractedTableAnnotation =
   | (ExtractedKovoTableAnnotation & { name: string })
@@ -1850,14 +1855,16 @@ function extractQueryFactsFromPreparedFiles(
       const localHelperSummary = localQueryHelperSummary(query.localHelperCalls, helperSummaries);
       const reads = queryReadDomains(query.tableExpressions, fileTables);
       const declaredReads = queryReadDomains(query.declaredReadExpressions, fileTables);
-      const helperReads = localHelperSummary.reads.map((read) => read.table.domain);
+      const helperReads = localHelperSummary.reads.map((read) =>
+        extractedDomainKey(read.table.domain),
+      );
       const readOnlyDomains = [
         ...new Set([
           ...queryReadOnlyDomains(query.tableExpressions, fileTables),
           ...queryReadOnlyDomains(query.declaredReadExpressions, fileTables),
           ...localHelperSummary.reads
             .filter((read) => read.table.readOnly === true)
-            .map((read) => read.table.domain),
+            .map((read) => extractedDomainKey(read.table.domain)),
         ]),
       ].sort();
       // SPEC §11.1: fold every read-set source — `.from()`-derived tables, declared `reads:` table

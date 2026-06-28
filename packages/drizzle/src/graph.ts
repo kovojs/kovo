@@ -1,10 +1,10 @@
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type { ReadSite, TouchGraph, TouchGraphEntry, TouchSite } from '@kovojs/core/internal/graph';
-import type { KovoColumnRef } from './drizzle-surface.js';
+import type { KovoColumnRef, KovoDomainRef } from './drizzle-surface.js';
 
 interface GraphDomainTableAnnotation {
-  domain: string;
+  domain: KovoDomainRef;
   key?: KovoColumnRef;
   readOnly?: true;
 }
@@ -58,12 +58,14 @@ export interface TouchGraphDiagnostic {
 /** @internal */
 export function serializeDomainRegistry(tables: readonly DomainRegistryInput[]): string {
   const rows = [...tables].sort((left, right) => left.table.name.localeCompare(right.table.name));
-  const domains = [...new Set(rows.map((row) => row.table.domain))].sort();
-  const domainKey = domains.map((domain) => JSON.stringify(domain)).join(' | ') || 'never';
-  const lines = [`export type DomainKey = ${domainKey};`, '', 'export const tableDomains = {'];
+  const domains = [...new Set(rows.map((row) => domainKey(row.table.domain)))].sort();
+  const domainKeyUnion = domains.map((domain) => JSON.stringify(domain)).join(' | ') || 'never';
+  const lines = [`export type DomainKey = ${domainKeyUnion};`, '', 'export const tableDomains = {'];
 
   for (const row of rows) {
-    lines.push(`  ${JSON.stringify(row.table.name)}: ${JSON.stringify(row.table.domain)},`);
+    lines.push(
+      `  ${JSON.stringify(row.table.name)}: ${JSON.stringify(domainKey(row.table.domain))},`,
+    );
   }
 
   lines.push('} as const satisfies Record<string, DomainKey>;');
@@ -81,7 +83,7 @@ export function createTouchGraphEntry(input: {
     reads: [...(input.reads ?? [])]
       .map((read) => ({
         ...(read.branch === undefined ? {} : { branch: read.branch }),
-        domain: read.table.domain,
+        domain: domainKey(read.table.domain),
         keys: read.readKey ?? null,
         ...(read.predicate === undefined ? {} : { predicate: read.predicate }),
         site: read.site,
@@ -92,7 +94,7 @@ export function createTouchGraphEntry(input: {
     touches: [...(input.writes ?? [])]
       .map((write) => ({
         ...(write.branch === undefined ? {} : { branch: write.branch }),
-        domain: write.table.domain,
+        domain: domainKey(write.table.domain),
         keys: write.writeKey ?? null,
         ...(write.predicate === undefined ? {} : { predicate: write.predicate }),
         site: write.site,
@@ -109,6 +111,10 @@ export function createTouchGraphEntry(input: {
       ? { tables: [...new Set(input.rawTables)].sort() }
       : {}),
   };
+}
+
+function domainKey(domain: KovoDomainRef): string {
+  return typeof domain === 'string' ? domain : domain.key;
 }
 
 function unresolvedMessage(site: UnresolvedSummaryInput): string {

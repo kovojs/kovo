@@ -924,7 +924,7 @@ function mutationHandlerModels(
   source: string,
   call: ts.CallExpression,
 ): MutationHandlerModel[] {
-  const options = call.arguments[1];
+  const options = [...call.arguments].find(ts.isObjectLiteralExpression);
   if (!options || !ts.isObjectLiteralExpression(options)) return [];
 
   return options.properties.flatMap((property) => {

@@ -44,7 +44,7 @@ function providerAmount(input: unknown): number | null {
   return typeof amount === 'number' ? amount : null;
 }
 
-const stripeLite = webhook('stripe-lite', {
+const stripeLite = webhook('/webhooks/stripe-lite', {
   async handler(input, context) {
     const request = context.request as WebhookRequest;
     await request.db.query(
@@ -56,7 +56,6 @@ const stripeLite = webhook('stripe-lite', {
   },
   idempotency: (input) => input.id,
   input: s.object({ id: s.string(), type: s.string() }),
-  path: '/webhooks/stripe-lite',
   replayStore,
   verify: hmacSignature({
     encoding: 'hex',

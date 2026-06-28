@@ -21,20 +21,12 @@ async function readProductPanel(
   return rows[0] ?? { id, label, stock: 0 };
 }
 
-const productP1Query = query('product', {
-  instanceKey: 'product:p1',
-  async load(_input, context) {
+const productQuery = query('product', {
+  args: s.object({ id: s.string(), label: s.string() }),
+  instanceKey: (input) => `product:${input.id}`,
+  async load(input: { id: string; label: string }, context) {
     const request = context?.request as KovoFixtureRequest;
-    return readProductPanel(request.db, 'p1', 'Pen');
-  },
-  reads: [product],
-});
-
-const productP2Query = query('product', {
-  instanceKey: 'product:p2',
-  async load(_input, context) {
-    const request = context?.request as KovoFixtureRequest;
-    return readProductPanel(request.db, 'p2', 'Notebook');
+    return readProductPanel(request.db, input.id, input.label);
   },
   reads: [product],
 });
@@ -54,7 +46,7 @@ const bulkRestock = mutation('table-level-invalidation/restock', {
   csrf: false,
   input: s.object({ category: s.string(), threshold: s.number().int().min(0) }),
   registry: {
-    queries: [productP1Query, productP2Query],
+    queries: [productQuery],
   },
   async handler(input, request: KovoFixtureRequest, context) {
     await request.db.query(
@@ -89,7 +81,7 @@ const home = route('/', {
 
 const app = createApp({
   mutations: [bulkRestock],
-  queries: [productP1Query, productP2Query],
+  queries: [productQuery],
   routes: [home],
   mutationResponses: {
     [bulkRestock.key]: ({ request }) => {

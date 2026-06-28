@@ -10,7 +10,7 @@ describe('compiler direct db diagnostics', () => {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
   handler(input, request) {
     request.db.insert(cartItems).values(input);
@@ -36,7 +36,7 @@ export const addToCart = mutation('cart/add', {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
   handler: async (input, db) => {
     await db.insert(cartItems).values(input);
@@ -62,14 +62,14 @@ export const addToCart = mutation('cart/add', {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
   handler(input, request) {
     request.db.insert(cartItems).values(input);
   },
 });
 
-export const clearCart = mutation('cart/clear', {
+export const clearCart = mutation({
   input: clearCartInput,
   handler(input, db) {
     db.delete(cartItems);
@@ -102,7 +102,7 @@ export const clearCart = mutation('cart/clear', {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
   handler(input, request, context) {
     return cartDomain.addItem(input, request.session.user.id, context);
@@ -120,7 +120,7 @@ export const addToCart = mutation('cart/add', {
       source: `
 const sample = "export const bad = mutation('cart/add', { handler(input, request) { request.db.insert(cartItems).values(input); } });";
 // export const bad = mutation('cart/add', { handler(input, db) { db.insert(cartItems).values(input); } });
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
   handler(input, request, context) {
     return cartDomain.addItem(input, request.session.user.id, context);
@@ -136,7 +136,7 @@ export const addToCart = mutation('cart/add', {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   input: addToCartInput,
   handler(input, request) {
     const message = "request.db.insert(cartItems)";

@@ -43,10 +43,10 @@ describe('realistic-app: commerce real stack driven in a browser (B2/S2/S3)', ()
       expect(initialDocument).toContain('installInlineKovoBootstrap');
       expect(initialDocument).toContain('kovo-runtime.client.js');
       await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
-      await expect(page.locator('form[action="/_m/cart/add"]')).toHaveCount(0);
+      await expect(page.locator('form[action="/_m/domain/add-to-cart"]')).toHaveCount(0);
 
       // The live CSRF/session stack still rejects a raw anonymous mutation.
-      const csrf = await page.request.post(`${origin}/_m/cart/add`, {
+      const csrf = await page.request.post(`${origin}/_m/domain/add-to-cart`, {
         form: { productId: 'p1', quantity: '1' },
         headers: { 'Kovo-Fragment': 'true' },
         failOnStatusCode: false,
@@ -81,7 +81,9 @@ describe('realistic-app: commerce real stack driven in a browser (B2/S2/S3)', ()
       expect(login.ok()).toBe(true);
 
       await shopperPage.goto(`${origin}/cart`, { waitUntil: 'domcontentloaded' });
-      await expect(shopperPage.locator('form[action="/_m/cart/add"]').first()).toBeVisible();
+      await expect(
+        shopperPage.locator('form[action="/_m/domain/add-to-cart"]').first(),
+      ).toBeVisible();
       await expect(shopperPage.getByRole('link', { name: 'More' })).toHaveCount(0);
       await shopperPage.getByRole('button', { name: 'Add to cart' }).first().click();
       await shopperPage.waitForURL((url) => url.pathname === '/cart');

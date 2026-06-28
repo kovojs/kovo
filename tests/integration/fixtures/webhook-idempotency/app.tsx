@@ -38,7 +38,7 @@ const invoiceDomain = domain('invoice');
 export default defineFixture({
   app: () => {
     const replayStore = createReplayStore();
-    const idempotentWebhook = webhook('stripe-idempotent', {
+    const idempotentWebhook = webhook('/webhooks/stripe-idempotent', {
       async handler(input, context) {
         const request = context.request as WebhookRequest;
         await request.db.query(
@@ -50,7 +50,6 @@ export default defineFixture({
       },
       idempotency: (input) => input.id,
       input: s.object({ id: s.string(), type: s.string() }),
-      path: '/webhooks/stripe-idempotent',
       replayStore,
       verify: hmacSignature({
         encoding: 'hex',
