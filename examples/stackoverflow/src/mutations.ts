@@ -2,7 +2,12 @@ import { guards, mutation, s, type MutationContext } from '@kovojs/server';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
-import { type SoRequest } from './model.js';
+import {
+  type PostAnswerInput,
+  type PostQuestionInput,
+  type SoRequest,
+  type VoteUpInput,
+} from './model.js';
 import { answers, questions, votes } from './schema.js';
 
 // Top-level mutation handlers for the demo. Drizzle writes stay inline so the
@@ -10,7 +15,7 @@ import { answers, questions, votes } from './schema.js';
 
 // Insert a new question; score and answer count start at zero.
 export async function postQuestion(
-  { id, title, body }: { id: string; title: string; body: string },
+  { id, title, body }: PostQuestionInput,
   request: SoRequest,
   context: MutationContext<{ DUPLICATE_TITLE: typeof duplicateTitleError }>,
 ) {
@@ -45,7 +50,7 @@ export async function postQuestion(
 
 // Insert an answer and bump the question's answer count.
 export async function postAnswer(
-  { id, questionId, body }: { id: string; questionId: string; body: string },
+  { id, questionId, body }: PostAnswerInput,
   request: SoRequest,
 ): Promise<{ id: string }> {
   const db = request.db;
@@ -75,7 +80,7 @@ export async function postAnswer(
 
 // Insert an upvote and bump the target question's score.
 export async function voteUp(
-  { id, targetId }: { id: string; targetId: string },
+  { id, targetId }: VoteUpInput,
   request: SoRequest,
 ): Promise<{ id: string }> {
   const db = request.db;

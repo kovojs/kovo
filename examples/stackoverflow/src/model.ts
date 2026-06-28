@@ -1,21 +1,29 @@
-import { form, type FormInput } from '@kovojs/core';
 import { domain } from '@kovojs/server';
 
 import type { SoDb } from './db.js';
 
-// Shared demo facts: invalidation domains, typed mutation forms, and the small
+// Shared demo facts: invalidation domains, typed mutation inputs, and the small
 // request/result shapes consumed across the interactive example.
 export const question = domain('question');
 export const answer = domain('answer');
 export const vote = domain('vote');
 
-export const postQuestionForm = form('mutations/post-question-mutation');
-export const postAnswerForm = form('mutations/post-answer-mutation');
-export const voteUpForm = form('mutations/vote-up-mutation');
+export interface PostQuestionInput {
+  body: string;
+  id: string;
+  title: string;
+}
 
-export type PostQuestionInput = FormInput<typeof postQuestionForm>;
-export type PostAnswerInput = FormInput<typeof postAnswerForm>;
-export type VoteUpInput = FormInput<typeof voteUpForm>;
+export interface PostAnswerInput {
+  body: string;
+  id: string;
+  questionId: string;
+}
+
+export interface VoteUpInput {
+  id: string;
+  targetId: string;
+}
 
 export interface SoRequest {
   db: SoDb;

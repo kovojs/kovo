@@ -151,9 +151,13 @@ packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.te
     derived form in public snippets. `packages/core/src/index.ts` now lets `form(addMutation)` derive
     the component form handle from a mutation value and fail closed when the runtime key is unresolved;
     verification passed `pnpm exec vitest run packages/core/src/index.test.ts`,
-    `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`. Remaining gap:
-    key-first declarations still exist in direct-test example/starter source until those non-Vite test
-    paths are migrated or lowered.
+    `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`. The public commerce,
+    CRM, and StackOverflow examples no longer use string-keyed `form('...')` handles; verification
+    passed `pnpm exec vitest run examples/commerce/src/app.test.ts
+examples/crm/src/interactive-app.test.ts examples/stackoverflow/src/interactive-app.test.ts
+examples/stackoverflow/src/optimism-derivation.test.ts`, `pnpm run check:vp`, and
+    `git diff --check`. Remaining gap: direct-test query/domain declarations still need a generated
+    live-target/query-key lowering path before their key-first forms can be removed.
 
 ## Phase 3 - Query Keys
 
@@ -295,6 +299,13 @@ packages/core/src/index.test.ts`, `pnpm run check:vp`, and `git diff --check`. R
 site/tutorial/steps/03-queries/src/app.test.ts site/tutorial/steps/04-mutations/src/app.test.ts
 site/tutorial/steps/05-optimistic/src/app.test.ts site/tutorial/steps/06-streaming/src/app.test.ts
 site/tutorial/steps/07-verification/src/app.test.ts`, `pnpm run check:vp`, and `git diff --check`.
+    Public examples now also remove residual string-keyed form handles and type components from the
+    mutation values; verification passed `pnpm exec vitest run examples/commerce/src/app.test.ts
+examples/crm/src/interactive-app.test.ts examples/stackoverflow/src/interactive-app.test.ts
+examples/stackoverflow/src/optimism-derivation.test.ts`, `pnpm run check:vp`, and
+    `git diff --check`. Remaining gap: CRM/StackOverflow direct-test query/domain declarations still
+    use explicit names because migrating them currently exposes unkeyed generated live-target query
+    definitions in direct Vitest paths.
 
 - [ ] **Update generated registries, explain snapshots, compiler tests, server tests, and browser wire tests.**
   - Cover `/_m/*`, `data-mutation`, CSRF audience, replay scope, query wire chunks, domain touch
@@ -373,3 +384,7 @@ site/tutorial/steps/03-queries/src/app.test.ts site/tutorial/steps/04-mutations/
 site/tutorial/steps/05-optimistic/src/app.test.ts site/tutorial/steps/06-streaming/src/app.test.ts
 site/tutorial/steps/07-verification/src/app.test.ts`, `pnpm run check:vp`, and `git diff --check`
   passed.
+- 2026-06-27: Removed residual string-keyed public example form handles; `pnpm exec vitest run
+examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
+examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/optimism-derivation.test.ts`,
+  `pnpm run check:vp`, and `git diff --check` passed.

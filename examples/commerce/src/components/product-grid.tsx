@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component, FieldError, form, FormError } from '@kovojs/core';
+import { component, FieldError, FormError } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
@@ -7,8 +7,6 @@ import * as style from '@kovojs/style';
 
 import { addToCart, type ProductGridResult } from '../domain.js';
 import { productGridQuery } from '../queries.js';
-
-const addToCartForm = form('domain/add-to-cart');
 
 const productGridStyles = style.create({
   authPrompt: {
@@ -115,7 +113,7 @@ export const ProductGrid = component({
     fallback: renderProductGridError,
     target: 'product-grid',
   },
-  mutations: { addToCart: addToCartForm },
+  mutations: { addToCart },
   queries: { productGrid: productGridQuery },
   render: ({ productGrid }: { productGrid: ProductGridResult }) => {
     const { nextCursor } = productGrid;

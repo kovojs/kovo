@@ -219,9 +219,6 @@ export const commerceSignOut = betterAuthSignOutMutation<
 
 export { cart, order, product, cartQuery, orderHistoryQuery, productGridQuery };
 
-export const addToCartForm = form('domain/add-to-cart');
-export type AddToCartInput = FormInput<typeof addToCartForm>;
-
 export const addToCart = mutation({
   csrf: commerceCsrf,
   defaultRedirectTo: '/cart',
@@ -272,6 +269,9 @@ export const addToCart = mutation({
     return { productId: productId, quantity: quantity };
   },
 });
+
+export const addToCartForm = form(addToCart);
+export type AddToCartInput = FormInput<typeof addToCartForm>;
 
 export const commerceMessageCatalog = {
   cartLabel: 'Cart',

@@ -4,8 +4,6 @@
 export { createSoDb, type SoDb } from './db.js';
 export {
   answer,
-  postAnswerForm,
-  postQuestionForm,
   question,
   type AnswerListResult,
   type PostAnswerInput,
@@ -14,7 +12,6 @@ export {
   type QuestionScoreResult,
   type SoRequest,
   vote,
-  voteUpForm,
   type VoteUpInput,
 } from './model.js';
 export { answerList, questionList, questionScore } from './queries.js';
