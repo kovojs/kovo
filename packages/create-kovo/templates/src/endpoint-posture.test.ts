@@ -67,7 +67,17 @@ async function healthEndpointPosture(): Promise<EndpointPostureFact> {
 }
 
 async function readEndpointGraph(): Promise<{ endpoints: unknown[] }> {
-  const graph = JSON.parse(await readFile('dist/.kovo/graph.json', 'utf8')) as unknown;
+  let source: string;
+  try {
+    source = await readFile('dist/.kovo/graph.json', 'utf8');
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return { endpoints: [] };
+    }
+    throw error;
+  }
+
+  const graph: unknown = JSON.parse(source);
   if (
     typeof graph !== 'object' ||
     graph === null ||

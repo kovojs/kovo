@@ -177,7 +177,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
         check:
-          'vp check && pnpm run check:sound-subset && pnpm run check:endpoint-posture && pnpm run build:prod',
+          'vp check && pnpm run check:sound-subset && pnpm run build:prod && pnpm run check:endpoint-posture',
         'check:endpoint-posture':
           'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
         'check:sound-subset': 'node scripts/check-sound-subset.mjs',
@@ -231,6 +231,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('scripts/check-sound-subset.mjs')).toContain(
       'SPEC.md §6.6 sound subset bans any',
     );
+    expect(files.get('src/endpoint-posture.test.ts')).not.toMatch(/\bas\s+(?!const\b)[A-Za-z_{]/u);
     expect(files.get('src/auth.ts')).toContain(
       'return request.session?.id ?? request.authCsrfId ?? undefined;',
     );
