@@ -101,8 +101,7 @@ Security-header regression RSE-1 is filed separately in `plans/bugz-6.md`.
 
 ## Latest Verification
 
-- `pnpm --filter create-kovo run build:dist`: rebuilt the local scaffolder before dogfooding.
-- Base app: `pnpm run check`, `pnpm run test`, `pnpm run build:prod`, and dev `/login` smoke passed.
-- Author fan-out: each track scaffolded, linked local packages, installed, and ran its applicable gates; exact app dirs are under `/Users/mini/kovo-dogfood-20260627`.
-- Verifiers independently confirmed LRD-1, LRD-2, TRS-1, TRS-2, TRS-3, CSP-1, DDD-1, and RSE-1; RSE-1 was routed to `plans/bugz-6.md`.
-- Main-thread self-checks: `node dist/server/server.mjs` in `typed-read-skew` reproduced the unkeyed mutation startup error; `curl` against `request-shell-errors` reproduced missing 404/500 headers and a hardened 403 control; `tsc` and `kovo explain` in `layout-regions-defer` reproduced the region typing and explainability failures.
+- `pnpm run check`
+- `pnpm run check:api-surface`
+- `pnpm run check:vp`
+- Focused evidence is nested under each completed checkbox above.
