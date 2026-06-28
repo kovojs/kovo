@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -51,6 +52,13 @@ import {
 } from '../shared.js';
 
 const requireFromCli = createRequire(import.meta.url);
+const cliPackageManifest = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+) as { version?: string };
+
+export const addCommandShell = {
+  execFileSync,
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -311,8 +319,25 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
     options.outDir,
   );
   if (missingDependencies.length > 0) {
+    const ensuredDependencies = ensureAddPackageDependencies(missingDependencies, options.outDir);
+    if (!ensuredDependencies.ok) {
+      return {
+        error:
+          `${addOutputVersion}\nERROR DEPENDENCIES reason=${ensuredDependencies.reason}` +
+          ` packages=${missingDependencies.join(',')}` +
+          ` install=${JSON.stringify(ensuredDependencies.installCommand)}` +
+          (ensuredDependencies.packageJsonPath
+            ? ` manifest=${JSON.stringify(ensuredDependencies.packageJsonPath)}`
+            : ''),
+        exitCode: 1,
+      };
+    }
     lines.push(
-      `DEPENDENCIES status=missing packages=${missingDependencies.join(',')} install=${JSON.stringify(addDependencyInstallCommand(missingDependencies, options.outDir))}`,
+      `DEPENDENCIES status=${ensuredDependencies.status} packages=${missingDependencies.join(',')}` +
+        ` install=${JSON.stringify(ensuredDependencies.installCommand)}` +
+        (ensuredDependencies.packageJsonPath
+          ? ` manifest=${JSON.stringify(ensuredDependencies.packageJsonPath)}`
+          : ''),
     );
   }
 
@@ -332,6 +357,74 @@ function missingAddPackageDependencies(
   const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown;
   if (!isRecord(parsed)) return packageNames;
   return packageNames.filter((packageName) => !packageJsonDeclaresPackage(parsed, packageName));
+}
+
+type EnsureAddPackageDependenciesResult =
+  | {
+      installCommand: string;
+      ok: true;
+      packageJsonPath?: string;
+      status: 'follow-up' | 'installed';
+    }
+  | {
+      installCommand: string;
+      ok: false;
+      packageJsonPath?: string;
+      reason: 'install-failed' | 'invalid-package-json';
+    };
+
+function ensureAddPackageDependencies(
+  packageNames: readonly string[],
+  outDir: string,
+): EnsureAddPackageDependenciesResult {
+  const packageJsonPath = findNearestPackageJson(resolve(outDir));
+  const installCommand = addDependencyInstallCommand(packageNames, outDir);
+  if (!packageJsonPath) {
+    return { installCommand, ok: true, status: 'follow-up' };
+  }
+
+  const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown;
+  if (!isRecord(parsed)) {
+    return {
+      installCommand,
+      ok: false,
+      packageJsonPath,
+      reason: 'invalid-package-json',
+    };
+  }
+
+  const missingByManifest = packageNames.filter(
+    (packageName) => !packageJsonDeclaresPackage(parsed, packageName),
+  );
+  if (missingByManifest.length === 0) {
+    return { installCommand, ok: true, packageJsonPath, status: 'installed' };
+  }
+
+  const dependencySpecs = Object.fromEntries(
+    missingByManifest.map((packageName) => [
+      packageName,
+      inferAddDependencySpec(parsed, packageName),
+    ]),
+  );
+  const nextManifest = addDependenciesToPackageJson(parsed, dependencySpecs);
+  writeFileSync(packageJsonPath, `${JSON.stringify(nextManifest, null, 2)}\n`, 'utf8');
+
+  const { args, command } = packageManagerInstallInvocation(packageJsonPath);
+  try {
+    addCommandShell.execFileSync(command, args, {
+      cwd: dirname(packageJsonPath),
+      stdio: 'pipe',
+    });
+  } catch {
+    return {
+      installCommand,
+      ok: false,
+      packageJsonPath,
+      reason: 'install-failed',
+    };
+  }
+
+  return { installCommand, ok: true, packageJsonPath, status: 'installed' };
 }
 
 function findNearestPackageJson(startDir: string): string | undefined {
@@ -364,7 +457,96 @@ function packageBagDeclaresPackage(value: unknown, packageName: string): boolean
 function addDependencyInstallCommand(packageNames: readonly string[], outDir: string): string {
   const packageJsonPath = findNearestPackageJson(resolve(outDir));
   const packageManager = packageJsonPath ? packageManagerName(packageJsonPath) : 'pnpm';
-  return `${packageManager} add ${packageNames.join(' ')}`;
+  if (!packageJsonPath) return `${packageManager} add ${packageNames.join(' ')}`;
+  return `${packageManager} install`;
+}
+
+function addDependenciesToPackageJson(
+  manifest: Record<string, unknown>,
+  dependencySpecs: Readonly<Record<string, string>>,
+): Record<string, unknown> {
+  const currentDependencies = isRecord(manifest.dependencies) ? { ...manifest.dependencies } : {};
+  for (const [packageName, spec] of Object.entries(dependencySpecs)) {
+    currentDependencies[packageName] = spec;
+  }
+  return {
+    ...manifest,
+    dependencies: currentDependencies,
+  };
+}
+
+function inferAddDependencySpec(manifest: Record<string, unknown>, packageName: string): string {
+  if (packageName.startsWith('@kovojs/')) {
+    const inferredKovoSpec = inferExistingKovoPackageSpec(manifest, packageName);
+    if (inferredKovoSpec) return inferredKovoSpec;
+    if (cliPackageManifest.version) return cliPackageManifest.version;
+  }
+  const existingVersion = findDeclaredPackageSpec(manifest, packageName);
+  if (existingVersion) return existingVersion;
+  throw new Error(`Unable to infer package spec for ${packageName}`);
+}
+
+function inferExistingKovoPackageSpec(
+  manifest: Record<string, unknown>,
+  packageName: string,
+): string | undefined {
+  for (const bagName of [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
+  ] as const) {
+    const bag = manifest[bagName];
+    if (!isRecord(bag)) continue;
+    for (const [existingPackageName, existingSpec] of Object.entries(bag)) {
+      if (!existingPackageName.startsWith('@kovojs/') || typeof existingSpec !== 'string') continue;
+      const linkedSpec = inferLinkedKovoPackageSpec(existingPackageName, existingSpec, packageName);
+      if (linkedSpec) return linkedSpec;
+      if (existingSpec.startsWith('workspace:')) return existingSpec;
+      return existingSpec;
+    }
+  }
+  return undefined;
+}
+
+function inferLinkedKovoPackageSpec(
+  existingPackageName: string,
+  existingSpec: string,
+  nextPackageName: string,
+): string | undefined {
+  if (!existingSpec.startsWith('link:')) return undefined;
+  const existingLeaf = existingPackageName.slice('@kovojs/'.length);
+  const linkedPath = existingSpec.slice('link:'.length);
+  const normalized = linkedPath.replaceAll('\\', '/');
+  const suffix = `/packages/${existingLeaf}`;
+  if (!normalized.endsWith(suffix)) return undefined;
+  return `${existingSpec.slice(0, -suffix.length)}/packages/${nextPackageName.slice('@kovojs/'.length)}`;
+}
+
+function findDeclaredPackageSpec(
+  manifest: Record<string, unknown>,
+  packageName: string,
+): string | undefined {
+  for (const bagName of [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
+  ] as const) {
+    const bag = manifest[bagName];
+    if (isRecord(bag) && typeof bag[packageName] === 'string') {
+      return bag[packageName];
+    }
+  }
+  return undefined;
+}
+
+function packageManagerInstallInvocation(packageJsonPath: string): {
+  args: string[];
+  command: 'bun' | 'npm' | 'pnpm' | 'yarn';
+} {
+  const command = packageManagerName(packageJsonPath);
+  return { args: ['install'], command };
 }
 
 function packageManagerName(packageJsonPath: string): 'bun' | 'npm' | 'pnpm' | 'yarn' {
