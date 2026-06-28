@@ -392,6 +392,51 @@ describe('server webhook primitive', () => {
     expect(seenScopes).not.toContain('get:webhook:/webhooks/order-paid:evt_derived');
   });
 
+  it('rejects declared write webhooks without a replay store before signed delivery runtime', () => {
+    const invoice = domain('invoice-declared-missing-replay');
+    let handled = 0;
+
+    expect(() =>
+      webhook('/webhooks/missing-replay-store', {
+        handler(input, context) {
+          handled += 1;
+          context.recordChange(invoice, { keys: [input.id] });
+          return { ok: true };
+        },
+        idempotency: (input) => input.id,
+        input: s.object({ id: s.string() }),
+        verify: hmacSignature({
+          encoding: 'hex',
+          header: 'x-signature',
+          payload: (request) => request.payload,
+          scheme: 'stripe-lite:v1:hmac-sha256',
+          secret: 'whsec_test',
+        }),
+        writes: [invoice],
+      }),
+    ).toThrow(/declares writable domains[\s\S]*idempotency\(\) and replayStore/);
+
+    expect(handled).toBe(0);
+  });
+
+  it('allows declared write webhooks when idempotency and replay store posture are present', () => {
+    const invoice = domain('invoice-declared-with-replay');
+    const wh = webhook('/webhooks/declared-with-replay', {
+      handler(input, context) {
+        context.recordChange(invoice, { keys: [input.id] });
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore: createMemoryWebhookReplayStore(),
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+      writes: [invoice],
+    });
+
+    expect(wh.webhookDefinition.writes).toEqual([invoice]);
+  });
+
   it('fails closed when a write-reaching webhook lacks idempotency replay posture', async () => {
     const invoice = domain('invoice-missing-replay');
     const unsafeWebhook = webhook('/webhooks/missing-replay', {

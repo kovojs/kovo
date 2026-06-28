@@ -565,23 +565,34 @@ function assertWebhookReplayPosture(
 }
 
 /**
- * H8 (SPEC §9.1:875 / §10.3:1151): a webhook that exposes a writable transaction CAN write
- * Kovo-owned data, and the runtime cannot prove whether the handler did. The atomic-reservation
+ * H8 (SPEC §9.1 / §10.3): a webhook that exposes a writable transaction or declares
+ * `writes` for the §11.4 endpoint audit CAN write Kovo-owned data. The atomic-reservation
  * replay floor ("a redelivered event id ... must not re-execute the handler") is therefore
- * mandatory *by construction* for any tx-exposing webhook — not conditional on whether the
- * handler later calls `recordChange()`. Keying the floor on the post-commit recordChange count
- * let a tx-direct / outbox write that never recorded a change double-execute on provider retry.
- * Fail closed at declaration so a write-capable webhook without idempotency()+replayStore cannot
- * exist (technical-preview stronger default: no opt-out, no compatibility mode).
+ * mandatory *by construction* for any declared write-capable webhook — not conditional on
+ * whether the handler later calls `recordChange()`. Keying the floor on the post-commit
+ * recordChange count let a tx-direct / outbox write that never recorded a change double-execute
+ * on provider retry. Fail closed at declaration so a write-capable webhook without
+ * idempotency()+replayStore cannot exist (technical-preview stronger default: no opt-out,
+ * no compatibility mode).
  */
 function assertWebhookWritePosture(
   name: string,
-  definition: { idempotency?: unknown; replayStore?: unknown; transaction?: unknown },
+  definition: {
+    idempotency?: unknown;
+    replayStore?: unknown;
+    transaction?: unknown;
+    writes?: readonly unknown[];
+  },
 ): void {
-  if (definition.transaction === undefined) return;
+  const declaresWrites = (definition.writes?.length ?? 0) > 0;
+  if (definition.transaction === undefined && !declaresWrites) return;
   if (webhookReplayPostureSatisfied(definition)) return;
+  const writeSignal =
+    definition.transaction === undefined
+      ? 'declares writable domains'
+      : 'exposes a writable transaction';
   throw new Error(
-    `Webhook "${name}" exposes a writable transaction but does not declare both idempotency() ` +
+    `Webhook "${name}" ${writeSignal} but does not declare both idempotency() ` +
       `and replayStore. SPEC §10.3 requires an atomic idempotency reservation for any webhook ` +
       `handler that can write, so a redelivered event never re-executes it.`,
   );
