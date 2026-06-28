@@ -44,7 +44,7 @@ separately in `plans/bugz-8.md`.
 
 - [ ] **`ctx.signUrl` always mints default `/_kovo/storage` URLs, so documented custom `createStorageDownloadEndpoint({ basePath })` links are dead.** (med, framework; found by `files-capability`)
   - Observed behavior: mounting `createStorageDownloadEndpoint({ basePath:
-    '/downloads', ... })` while rendering a route with `ctx.signUrl(...)` produces
+'/downloads', ... })` while rendering a route with `ctx.signUrl(...)` produces
     `/_kovo/storage/...` links; dereferencing them returns 404 when the default
     endpoint is not mounted.
   - Root cause: `packages/server/src/app-document.ts:56-59` constructs route

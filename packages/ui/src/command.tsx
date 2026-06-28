@@ -158,6 +158,7 @@ export interface CommandItemProps extends CommandStateProps {
   itemDisabled?: boolean;
   itemLabel?: string;
   itemValue: string;
+  listboxId?: string;
   styles?: CommandStyleOverrides;
 }
 
@@ -620,6 +621,7 @@ export const CommandItem = component({
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
       ...(props.itemLabel === undefined ? {} : { itemLabel: props.itemLabel }),
+      ...(props.listboxId === undefined ? {} : { listboxId: props.listboxId }),
       itemValue: props.itemValue,
     });
     const styleAttrs = style.attrs(commandStyles.item, props.styles?.item);

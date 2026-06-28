@@ -403,6 +403,7 @@ describe('@kovojs/ui styled package foundation', () => {
                       ...(item.disabled === undefined ? {} : { itemDisabled: item.disabled }),
                       itemLabel: item.label,
                       itemValue: item.value,
+                      listboxId: 'command-listbox',
                     }),
                   '',
                 ),

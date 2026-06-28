@@ -92,8 +92,10 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
   it('escapes CommandItem itemLabel but passes children through raw', () => {
     const escaped = html(
       CommandItem.definition.render({
+        items: [{ label: PAYLOAD, value: 'value' }],
         itemLabel: PAYLOAD,
         itemValue: 'value',
+        listboxId: 'command-listbox',
       }),
     );
     expect(escaped).toContain(ESCAPED);
@@ -102,7 +104,9 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     const rawChildren = html(
       CommandItem.definition.render({
         children: RAW_CHILD,
+        items: [{ value: 'value' }],
         itemValue: 'value',
+        listboxId: 'command-listbox',
       }),
     );
     expect(rawChildren).toContain(ESCAPED_CHILD);
