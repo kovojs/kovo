@@ -14,12 +14,17 @@ export interface JsxMutationFailureContext {
 }
 
 export interface JsxFrameworkContext {
+  anonymousCsrfBindings?: Map<string, JsxAnonymousCsrfBinding>;
   csrf?: CsrfValidationOptions<any>;
   deferredRegions?: DeferredRegionCollector;
   maxListItems?: number;
   mutationFailure?: JsxMutationFailureContext;
   onCsrfSetCookie?: (rawSetCookie: string) => void;
   request: unknown;
+}
+
+export interface JsxAnonymousCsrfBinding {
+  value: string;
 }
 
 export interface DeferredRegionCollector {

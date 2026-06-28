@@ -26,12 +26,20 @@ new `bugz` ledger was created.
 
 ### A. Mutation And Refresh Plumbing
 
-- [ ] **Anonymous pages with multiple mutation forms mint one `kovo_csrf` cookie per form, making earlier form tokens unusable.** (medium, framework; found by ladder)
+- [x] **Anonymous pages with multiple mutation forms mint one `kovo_csrf` cookie per form, making earlier form tokens unusable.** (medium, framework; found by ladder)
   - Observed behavior: `GET /ladder` emitted four `Set-Cookie: kovo_csrf=...` headers and four hidden CSRF tokens. Posting the first form with a normal curl cookie jar returned `422`; posting the same token with the first emitted cookie returned `303 /ladder`.
   - Root cause: `renderMutationCsrfField` resolves a binding with `{ mintAnonymous: true }` for each form (`packages/server/src/csrf.ts:158-169`); `resolveCsrfBinding` mints a fresh anonymous secret when the request has no usable cookie (`packages/server/src/csrf.ts:338-365`); page rendering appends every collected cookie (`packages/server/src/app-document.ts:93,114-119`), so the browser retains only the last same-name cookie.
   - Why it matters: a public anonymous page with more than one CSRF-protected mutation form can fail all but the last action before app code runs, breaking normal no-JS and enhanced mutation workflows covered by SPEC §9.1 and §10.3.
   - Repro evidence: verifier started the built ladder app on `127.0.0.1:5200`; `GET /ladder` had four `kovo_csrf` cookies; first-form POST with cookie jar returned `422`; first-form POST with `Cookie: kovo_csrf=<first Set-Cookie value>` returned `303`.
   - Acceptance: render one stable anonymous CSRF binding per response/request context, or otherwise ensure every emitted form token validates against the cookie a browser will retain; add a multi-form anonymous page test that submits the first and last generated forms with a normal cookie jar.
+  - Integrated evidence (2026-06-28): `packages/server/src/csrf.ts` now caches the
+    minted anonymous CSRF binding in the JSX framework render context, so a
+    sessionless document emits one cookie and signs every mutation form token
+    against that retained secret. `packages/server/src/csrf.test.ts` proves two
+    rendered mutation forms emit one `kovo_csrf` cookie and both form tokens
+    validate against that cookie. Verification: `pnpm exec vitest run
+packages/server/src/csrf.test.ts`, `pnpm run check:vp`, and `git diff --check`
+    PASS.
 
 - [ ] **Build KV310 ignores inline optimistic entries unless the invalidated query is also in `mutation.registry.queries` or live targets.** (medium, framework-build-check; found by navquery/authguards/ladder)
   - Observed behavior: mutations with valid inline `optimistic` entries still produced `WARN KV310` for touch-graph-derived query invalidations until the app duplicated those queries in `registry.queries`.
@@ -152,3 +160,6 @@ packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/s
 - 2026-06-28: Fixed and verified build `UNGUARDED` access-fact false positives with
   `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts
 packages/cli/src/index.kovo-build.test.ts`, `pnpm run check:vp`, and `git diff --check`.
+- 2026-06-28: Fixed and verified multi-form anonymous CSRF binding reuse with
+  `pnpm exec vitest run packages/server/src/csrf.test.ts`, `pnpm run check:vp`, and
+  `git diff --check`.

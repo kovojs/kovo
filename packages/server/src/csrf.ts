@@ -163,7 +163,11 @@ export function renderMutationCsrfField<Request>(definition: {
   const context = currentJsxFrameworkContext();
   const csrf = definition.csrf ?? context?.csrf;
   if (!context || !csrf) return '';
-  const binding = resolveCsrfBinding(context.request as Request, csrf, { mintAnonymous: true });
+  context.anonymousCsrfBindings ??= new Map();
+  const binding = resolveCsrfBinding(context.request as Request, csrf, {
+    anonymousCache: context.anonymousCsrfBindings,
+    mintAnonymous: true,
+  });
   if (!binding) return '';
   if (binding.setCookie) context.onCsrfSetCookie?.(binding.setCookie);
   return csrfFieldForBinding(binding.value, csrf, csrfAudience(csrf, definition.key));
@@ -338,7 +342,7 @@ function buildAnonymousCsrfCookieOptions(
 function resolveCsrfBinding<Request>(
   request: Request,
   options: CsrfOptions<Request>,
-  mintOptions: { mintAnonymous?: boolean } = {},
+  mintOptions: { anonymousCache?: Map<string, CsrfBinding>; mintAnonymous?: boolean } = {},
 ): CsrfBinding | undefined {
   const sessionId = options.sessionId(request);
   if (sessionId) return { value: sessionId };
@@ -354,15 +358,28 @@ function resolveCsrfBinding<Request>(
   if (isUsableAnonymousCsrfSecret(existing)) return { value: `anonymous:${existing}` };
   if (!mintOptions.mintAnonymous) return undefined;
 
+  const cookie = buildAnonymousCsrfCookieOptions(request, cookieOptions);
+  const cacheKey = anonymousCsrfCacheKey(name, cookie);
+  const cached = mintOptions.anonymousCache?.get(cacheKey);
+  if (cached) return cached;
+
   const anonymousSecret = randomBytes(32).toString('base64url');
+  const value = `anonymous:${anonymousSecret}`;
+  mintOptions.anonymousCache?.set(cacheKey, { value });
   return {
-    setCookie: serializeCookie(
-      name,
-      anonymousSecret,
-      buildAnonymousCsrfCookieOptions(request, cookieOptions),
-    ),
-    value: `anonymous:${anonymousSecret}`,
+    setCookie: serializeCookie(name, anonymousSecret, cookie),
+    value,
   };
+}
+
+function anonymousCsrfCacheKey(name: string, cookie: CookieOptions): string {
+  return JSON.stringify({
+    maxAge: cookie.maxAge,
+    name,
+    path: cookie.path,
+    sameSite: cookie.sameSite,
+    secure: cookie.secure,
+  });
 }
 
 /**

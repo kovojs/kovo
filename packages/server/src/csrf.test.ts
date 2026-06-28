@@ -197,6 +197,49 @@ describe('csrf helpers', () => {
     ).toBe(false);
   });
 
+  it('reuses one anonymous CSRF cookie across multiple rendered mutation forms', () => {
+    const anonymousCsrf = {
+      field: 'csrf',
+      secret: ANONYMOUS_CSRF_SECRET,
+      sessionId() {
+        return undefined;
+      },
+    };
+    const setCookies: string[] = [];
+    const pageRequest = new Request('https://shop.example.test/signup');
+
+    const html = runWithJsxRequestContext(
+      pageRequest,
+      { onCsrfSetCookie: (cookie) => setCookies.push(cookie) },
+      () =>
+        [
+          renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
+          renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-up' }),
+        ].join(''),
+    );
+    if (typeof html !== 'string') throw new TypeError('expected synchronous CSRF field render');
+
+    expect(setCookies).toHaveLength(1);
+    const cookiePair = setCookies[0]!.split(';')[0]!;
+    const tokens = [...html.matchAll(/value="([^"]+)"/g)].map((match) => match[1]!);
+    expect(tokens).toHaveLength(2);
+
+    const postRequest = new Request('https://shop.example.test/_m/auth/sign-in', {
+      headers: { Cookie: cookiePair, Origin: 'https://shop.example.test' },
+      method: 'POST',
+    });
+    expect(
+      validateCsrfToken({ csrf: tokens[0] }, postRequest, anonymousCsrf, {
+        audience: 'auth/sign-in',
+      }),
+    ).toBe(true);
+    expect(
+      validateCsrfToken({ csrf: tokens[1] }, postRequest, anonymousCsrf, {
+        audience: 'auth/sign-up',
+      }),
+    ).toBe(true);
+  });
+
   // SPEC §6.6/§9.1: the framework's anonymous CSRF cookie declares `class: 'session'`, so the
   // credential floor (HttpOnly + Secure(prod) + SameSite) is default-on at the `serializeCookie`
   // sink rather than relying on a per-call-site `httpOnly: true`. This is a runtime
