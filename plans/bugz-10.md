@@ -20,10 +20,10 @@ friction from the same pass is filed in `plans/papercuts-10.md`.
 
 ### A. Auth Response Floors
 
-- [ ] **Unauthenticated guarded route redirects still bypass the auth cache floor.** (high, security/soundness; found by `auth-cache-response-floors`)
+- [x] **Unauthenticated guarded route redirects still bypass the auth cache floor.** (high, security/soundness; found by `auth-cache-response-floors`)
   - Observed behavior: anonymous `GET /dogfood/private` returns `303 Location:
-    /login?next=%2Fdogfood%2Fprivate` without `Cache-Control: private,
-    no-store` or `Vary: Cookie`; guarded query redirects and other non-OK
+/login?next=%2Fdogfood%2Fprivate` without `Cache-Control: private,
+no-store` or `Vary: Cookie`; guarded query redirects and other non-OK
     failures now carry the expected floor.
   - Root cause: `packages/server/src/guards.ts:720` returns the unauthenticated
     redirect as a bare `blessRedirectResponse(...)`, and
@@ -36,16 +36,21 @@ friction from the same pass is filed in `plans/papercuts-10.md`.
   - Repro evidence: in
     `/Users/mini/kovo-dogfood-20260628e/auth-cache-response-floors`,
     `curl -sS -D /tmp/kovo-auth-private.headers -o /tmp/kovo-auth-private.body
-    http://127.0.0.1:5173/dogfood/private` returned `HTTP/1.1 303 See Other`
+http://127.0.0.1:5173/dogfood/private` returned `HTTP/1.1 303 See Other`
     and `location: /login?next=%2Fdogfood%2Fprivate` with no `Cache-Control` or
     `Vary: Cookie`.
   - Acceptance: unauthenticated route redirects receive the same auth
     cache/security floor as guarded query redirects, including focused coverage
     for `renderHttpGuardFailureResponse` route integration.
+  - Evidence: 2026-06-28 `pnpm exec vitest run
+    packages/server/src/route-query-guards.test.ts
+    packages/server/src/guards.test.ts packages/server/src/schema.test.ts
+    packages/server/src/upload-sniff.test.ts` passed with guarded route
+    redirect cache-floor coverage.
 
 ### B. Upload Type Enforcement
 
-- [ ] **`s.file().accept([...]).store()` accepts client-MIME lies instead of enforcing the server-sniffed allowlist.** (high, security/soundness; found by `storage-capability-files`)
+- [x] **`s.file().accept([...]).store()` accepts client-MIME lies instead of enforcing the server-sniffed allowlist.** (high, security/soundness; found by `storage-capability-files`)
   - Observed behavior: a mutation declared
     `s.file().accept(['text/plain']).store(...)`; uploading HTML/script bytes as
     multipart `type=text/plain` returned `303` and persisted the object. The
@@ -62,10 +67,16 @@ friction from the same pass is filed in `plans/papercuts-10.md`.
     `/Users/mini/kovo-dogfood-20260628e/storage-capability-files`, posting
     `/tmp/kovo-evil.html` with multipart `filename=evil.html;type=text/plain`
     to `/_m/app/upload-file` returned `HTTP/1.1 303 See Other`; `GET
-    /api/files` then listed the stored `evil.html` record with size `26`.
+/api/files` then listed the stored `evil.html` record with size `26`.
   - Acceptance: async stored-file parsing rejects sniffed content types outside
     plain `accept([...])`; `accept.unverified(...)` remains the explicit audited
     client-MIME escape and is covered separately.
+  - Evidence: 2026-06-28 `pnpm exec vitest run
+    packages/server/src/route-query-guards.test.ts
+    packages/server/src/guards.test.ts packages/server/src/schema.test.ts
+    packages/server/src/upload-sniff.test.ts` passed with verified
+    `accept([...]).store(...)` rejection and `accept.unverified(...)` escape
+    coverage.
 
 ## Refuted / Not Carried Forward
 
