@@ -1406,7 +1406,7 @@ function enhancedMutationReauthResponse<Request>(
   request: Request,
   options: { currentUrl?: string },
 ): BufferedMutationWireResponse | undefined {
-  if (!guardFailureIsUnauthenticated(guardFailure, request)) return undefined;
+  if (!mutationGuardFailureIsUnauthenticated(guardFailure, request)) return undefined;
 
   // SPEC §6.5: enhanced unauthenticated mutation guard failures re-enter auth
   // with a 401 Kovo-Reauth directive instead of rendering validation UI.
@@ -1517,7 +1517,7 @@ function noJsMutationReauthResponse<Request>(
   request: Request,
   options: { currentUrl?: string },
 ): NoJsMutationResponse | undefined {
-  if (!guardFailureIsUnauthenticated(guardFailure, request)) return undefined;
+  if (!mutationGuardFailureIsUnauthenticated(guardFailure, request)) return undefined;
 
   return blessRedirectResponse({
     body: '',
@@ -1527,6 +1527,17 @@ function noJsMutationReauthResponse<Request>(
     },
     status: 303 as const,
   });
+}
+
+function mutationGuardFailureIsUnauthenticated<Request>(
+  guardFailure: ResolvedGuardFailure,
+  request: Request,
+): boolean {
+  // SPEC §6.5: mutation reauth is reserved for auth guard failures. Non-auth guard denials such as
+  // RATE_LIMITED must preserve their own status/Retry-After instead of being inferred as sessionless
+  // login redirects.
+  if (guardFailure.code !== 'UNAUTHORIZED' || guardFailure.status !== 422) return false;
+  return guardFailureIsUnauthenticated(guardFailure, request);
 }
 
 function mutationGuardFailureStatus(guardFailure: ResolvedGuardFailure): 403 | 422 | 429 {
