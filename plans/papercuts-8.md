@@ -83,7 +83,7 @@ separately in `plans/bugz-9.md`.
 
 ### B. Streaming / Deferred
 
-- [ ] **Streaming JSX attributes are missing from public JSX types.** (med, framework; found by `streaming-deferred-mpa`)
+- [x] **Streaming JSX attributes are missing from public JSX types.** (med, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: `<form enhance stream>` and
     `<p streamText="assistant:latest">` fail `tsc` until the app adds a local JSX
     module augmentation.
@@ -98,8 +98,9 @@ separately in `plans/bugz-9.md`.
     `TS2322: Property 'streamText' does not exist`.
   - Acceptance: Kovo's JSX namespace exposes the public streaming attributes with
     the same names accepted by the compiler.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed after `packages/server/src/jsx-runtime.ts` added `stream` / `streamText` JSX attributes.
 
-- [ ] **Served streaming forms keep raw `stream` and never emit `data-mutation-stream`.** (high, framework; found by `streaming-deferred-mpa`)
+- [x] **Served streaming forms keep raw `stream` and never emit `data-mutation-stream`.** (high, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: dev and production route HTML render
     `<form ... enhance stream ... data-mutation="mutations/send-message">` with
     no `data-mutation-stream`, so the browser loader uses the buffered mutation
@@ -115,8 +116,9 @@ separately in `plans/bugz-9.md`.
     no `data-mutation-stream`.
   - Acceptance: authored streaming mutation forms lower to
     `data-mutation-stream="true"` wherever enhanced mutation forms are rendered.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed with direct JSX form lowering coverage, and `pnpm --filter @kovojs/browser exec vitest run src/inline-loader-enhanced-submit.test.ts src/inline-loader-build.test.ts` passed.
 
-- [ ] **Production node output leaves raw `streamText` instead of runtime-visible `data-stream-text`.** (high, framework; found by `streaming-deferred-mpa`)
+- [x] **Production node output leaves raw `streamText` instead of runtime-visible `data-stream-text`.** (high, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: dev served `<p data-stream-text="assistant:latest">`, but
     production node output served `<p streamText="assistant:latest">`; the browser
     runtime searches only for `[data-stream-text="..."]`.
@@ -130,8 +132,9 @@ separately in `plans/bugz-9.md`.
     `data-stream-text`.
   - Acceptance: all production and dev render paths lower `streamText` to
     `data-stream-text` consistently.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed with `streamText` lowering coverage; `pnpm --filter @kovojs/compiler exec vitest run src/stamps.test.ts` preserved compiler lowering coverage.
 
-- [ ] **Missing streaming text targets are silently ignored by the browser runtime.** (med, framework; found by `streaming-deferred-mpa`)
+- [x] **Missing streaming text targets are silently ignored by the browser runtime.** (med, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: a streamed response targeting `assistant:missing` returned
     200 plus `<kovo-done>`, while the runtime skipped the absent target without
     marking failure or refetching.
@@ -145,8 +148,9 @@ separately in `plans/bugz-9.md`.
     `<kovo-text target="assistant:missing">...` followed by `<kovo-done>`.
   - Acceptance: missing streaming text targets trigger a visible failure,
     refetch, or other deterministic recovery rather than silent success.
+  - Evidence: 2026-06-28 `pnpm --filter @kovojs/browser exec vitest run src/inline-loader-enhanced-submit.test.ts src/inline-loader-build.test.ts` passed with missing stream text target failure coverage.
 
-- [ ] **Static export reports a generic 500 for a public streaming/deferred route.** (low, dev-tooling; found by `streaming-deferred-mpa`)
+- [x] **Static export reports a generic 500 for a public streaming/deferred route.** (low, dev-tooling; found by `streaming-deferred-mpa`)
   - Observed behavior: `kovo export --skip-non-exportable` reported
     `/streaming-deferred` as status 500, while the production node server served
     the same public route as 200.
@@ -161,6 +165,7 @@ separately in `plans/bugz-9.md`.
     `WARN KV229 route=/streaming-deferred ... returned status 500`.
   - Acceptance: static export emits the concrete exportability reason for
     streaming/deferred routes rather than an opaque replay 500.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed with replayed HTML endpoint-ref diagnostics coverage.
 
 ### C. Query Shape / Bindings
 
@@ -183,7 +188,7 @@ separately in `plans/bugz-9.md`.
 
 ### D. Storage / Capabilities
 
-- [ ] **Multiple storage endpoints make route `ctx.signUrl` mint an unmounted default URL.** (med, framework; found by `storage-multi-capability`)
+- [x] **Multiple storage endpoints make route `ctx.signUrl` mint an unmounted default URL.** (med, framework; found by `storage-multi-capability`)
   - Observed behavior: an app with several `createStorageDownloadEndpoint` mounts
     rendered a route-context signed URL under `/_kovo/storage/...`, which 404ed;
     a manually created signer for `/private-downloads` returned 200 for the same
@@ -202,8 +207,9 @@ separately in `plans/bugz-9.md`.
   - Acceptance: `ctx.signUrl` exposes or derives an unambiguous base path for
     multi-storage apps, or it fails early with a diagnostic requiring explicit
     endpoint selection.
+  - Evidence: 2026-06-28 `pnpm exec vitest --run packages/server/src/capability-route.test.ts packages/server/src/response.test.ts packages/server/src/schema.test.ts` passed with ambiguous multi-endpoint `ctx.signUrl` diagnostic coverage.
 
-- [ ] **Stored-file metadata can override sanitized filename metadata and crash downloads.** (med, framework; found by `storage-multi-capability`)
+- [x] **Stored-file metadata can override sanitized filename metadata and crash downloads.** (med, framework; found by `storage-multi-capability`)
   - Observed behavior: an `s.file().store({ metadata })` hook returning a
     filename containing CR/LF stored successfully, and the later capability
     download returned a 500 instead of a sanitized filename or controlled
@@ -221,8 +227,9 @@ separately in `plans/bugz-9.md`.
   - Acceptance: stored filename metadata is reserved or sanitized after metadata
     merge, and header serialization rejects/normalizes control characters before
     response construction.
+  - Evidence: 2026-06-28 `pnpm exec vitest --run packages/server/src/capability-route.test.ts packages/server/src/response.test.ts packages/server/src/schema.test.ts` passed with stored filename reservation and `Content-Disposition` control-character normalization coverage.
 
-- [ ] **One-time signed URLs are mintable without a replay store but are permanently unusable.** (low, dev-tooling; found by `storage-multi-capability`)
+- [x] **One-time signed URLs are mintable without a replay store but are permanently unusable.** (low, dev-tooling; found by `storage-multi-capability`)
   - Observed behavior: a `oneTime` URL minted for an endpoint without
     `replayStore` returned the same generic 404 as expired/replayed/bad tokens on
     first use.
@@ -236,6 +243,7 @@ separately in `plans/bugz-9.md`.
     headers.
   - Acceptance: one-time minting is coupled to an endpoint replay store or emits a
     clear development/build diagnostic when no matching store can verify it.
+  - Evidence: 2026-06-28 `pnpm exec vitest --run packages/server/src/capability-route.test.ts packages/server/src/response.test.ts packages/server/src/schema.test.ts` passed with one-time signer replay-store enforcement coverage.
 
 ### E. Endpoint / Webhook Tooling
 
@@ -353,3 +361,6 @@ separately in `plans/bugz-9.md`.
 - 2026-06-28 first-hand repros from the main agent confirmed the UI copy-in
   sound-subset/idempotency failures, endpoint-posture blind spot, streaming form
   and `streamText` lowering gaps, and route/no-JS mutation header-floor gaps.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`:
+  storage and streaming focused suites plus `git diff --check` and
+  `pnpm run check:vp` passed after the first two implementation merges.
