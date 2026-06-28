@@ -1,5 +1,9 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import {
+  renderServerRenderable,
+  type InternalServerRenderable,
+} from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
@@ -84,7 +88,6 @@ function renderedHtml(html: string): RenderedHtml {
 }
 
 function escapeHtml(value: unknown): string {
-  if (Array.isArray(value)) return value.map((item) => escapeHtml(item)).join('');
   if (
     typeof value === 'object' &&
     value !== null &&
@@ -96,6 +99,10 @@ function escapeHtml(value: unknown): string {
   const text =
     value === null || value === undefined || typeof value === 'boolean' ? '' : String(value);
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+async function renderTableChildren(value: unknown): Promise<string> {
+  return renderServerRenderable(value as InternalServerRenderable);
 }
 
 function escapeAttribute(value: string): string {
@@ -169,7 +176,7 @@ export const tableStyles = style.create({
  * const component = Table;
  */
 export const Table = component({
-  render(props: TableProps) {
+  async render(props: TableProps) {
     const wrapperAttrs = style.attrs(tableStyles.wrapper, props.styles?.wrapper);
     const tableAttrs = style.attrs(tableStyles.table, props.styles?.table);
     const captionAttrs = style.attrs(tableStyles.caption, props.styles?.caption);
@@ -179,7 +186,7 @@ export const Table = component({
         : `<caption${tableAttributes(captionAttrs)}>${escapeHtml(props.caption)}</caption>`;
 
     return renderedHtml(
-      `<div${tableAttributes(wrapperAttrs)}><table${tableAttributes(tableAttrs)}>${caption}${escapeHtml(props.children)}</table></div>`,
+      `<div${tableAttributes(wrapperAttrs)}><table${tableAttributes(tableAttrs)}>${caption}${await renderTableChildren(props.children)}</table></div>`,
     );
   },
 });
@@ -192,8 +199,12 @@ export const Table = component({
  * const component = TableHead;
  */
 export const TableHead = component({
-  render(props: TableSectionProps) {
-    return tablePart('thead', style.attrs(tableStyles.head, props.styles?.head), props.children);
+  async render(props: TableSectionProps) {
+    return tablePart(
+      'thead',
+      style.attrs(tableStyles.head, props.styles?.head),
+      await renderTableChildren(props.children),
+    );
   },
 });
 
@@ -205,8 +216,12 @@ export const TableHead = component({
  * const component = TableBody;
  */
 export const TableBody = component({
-  render(props: TableSectionProps) {
-    return tablePart('tbody', style.attrs(tableStyles.body, props.styles?.body), props.children);
+  async render(props: TableSectionProps) {
+    return tablePart(
+      'tbody',
+      style.attrs(tableStyles.body, props.styles?.body),
+      await renderTableChildren(props.children),
+    );
   },
 });
 
@@ -218,8 +233,12 @@ export const TableBody = component({
  * const component = TableRow;
  */
 export const TableRow = component({
-  render(props: TableSectionProps) {
-    return tablePart('tr', style.attrs(tableStyles.row, props.styles?.row), props.children);
+  async render(props: TableSectionProps) {
+    return tablePart(
+      'tr',
+      style.attrs(tableStyles.row, props.styles?.row),
+      await renderTableChildren(props.children),
+    );
   },
 });
 
@@ -231,7 +250,7 @@ export const TableRow = component({
  * const component = TableHeaderCell;
  */
 export const TableHeaderCell = component({
-  render(props: TableCellProps) {
+  async render(props: TableCellProps) {
     return tablePart(
       'th',
       {
@@ -239,7 +258,7 @@ export const TableHeaderCell = component({
         colspan: props.colSpan,
         scope: props.scope ?? 'col',
       },
-      props.children,
+      await renderTableChildren(props.children),
     );
   },
 });
@@ -252,11 +271,11 @@ export const TableHeaderCell = component({
  * const component = TableCell;
  */
 export const TableCell = component({
-  render(props: TableCellProps) {
+  async render(props: TableCellProps) {
     return tablePart(
       'td',
       { ...style.attrs(tableStyles.cell, props.styles?.cell), colspan: props.colSpan },
-      props.children,
+      await renderTableChildren(props.children),
     );
   },
 });
@@ -264,12 +283,12 @@ export const TableCell = component({
 function tablePart(
   tag: 'tbody' | 'td' | 'th' | 'thead' | 'tr',
   attributes: TablePartAttributes,
-  children: unknown,
+  children: string,
 ): RenderedHtml {
   // SPEC.md §5.2 keeps vendored styled components as app-authored TSX source. These table
   // parts still emit semantic HTML, while avoiding isolated JSX <tr>/<td> bodies
   // that the compiler correctly rejects when compiled without their table parent.
-  return renderedHtml(`<${tag}${tableAttributes(attributes)}>${escapeHtml(children)}</${tag}>`);
+  return renderedHtml(`<${tag}${tableAttributes(attributes)}>${children}</${tag}>`);
 }
 
 function tableAttributes(attributes: TablePartAttributes | Record<string, unknown>): string {
