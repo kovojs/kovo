@@ -17,12 +17,13 @@ dial with a reused pre-floor socket.
 
 ### A. Outbound Egress Floor
 
-- [ ] **Raw `node:http` keep-alive sockets opened before the egress floor remain usable for blocked private-network destinations.** (high, security; found by `security-egress`)
+- [x] **Raw `node:http` keep-alive sockets opened before the egress floor remain usable for blocked private-network destinations.** (high, security; found by `security-egress`)
   - Observed behavior: after installing the empty-allowlist egress floor, a fresh raw `node:http` request to the local test server is blocked, but a request reusing the socket opened before `createApp()` succeeds with `reusedSocket: true` and `status: 200`.
   - Root cause direction: `packages/server/src/egress.ts:507` gates raw `node:http` at `net.Socket.prototype.connect`, and `packages/server/src/egress-undici.ts:20` documents that pooled reuse skips `net.connect`; the undici per-request layer intentionally covers `fetch`, but it does not see raw `node:http`/`node:https`.
   - Why it matters: SPEC §6.6 requires a deny floor for private-network egress. An app or dependency that opens a keep-alive raw HTTP socket before Kovo bootstrap can continue using it after the floor is installed.
   - Evidence: `pnpm exec vitest run src/egress-prewarm.verify.test.ts` in `/Users/mini/kovo-dogfood-20260628/security-egress` passed; the test asserts `fresh` matches `{ ok: false, blocked: true }` while `reused` matches `{ ok: true, reusedSocket: true, status: 200 }`.
   - Acceptance: installing or re-installing the egress floor must close, poison, or otherwise deny pre-existing raw HTTP(S) sockets that target disallowed private-network destinations, or fail loudly before serving if such sockets cannot be controlled.
+  - Fix evidence: `pnpm exec vitest --run packages/server/src/egress.test.ts packages/server/src/egress-bootstrap.test.ts packages/server/src/egress-undici.test.ts` proves raw HTTP idle and active pre-floor keep-alive sockets are denied/poisoned under `allowInternal: []`, while existing net and undici egress floors still pass.
 
 ## Refuted / Not Carried Forward
 
@@ -31,4 +32,4 @@ dial with a reused pre-floor socket.
 
 ## Latest Verification
 
-- `pnpm exec vitest run src/egress-prewarm.verify.test.ts` in `/Users/mini/kovo-dogfood-20260628/security-egress`
+- `pnpm exec vitest --run packages/server/src/egress.test.ts packages/server/src/egress-bootstrap.test.ts packages/server/src/egress-undici.test.ts`
