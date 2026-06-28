@@ -354,7 +354,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
         kovoBuildStylesheetCss(resolvedAppModulePath),
       ]);
     const app = appFromModule(appModule, options.appModulePath);
-    await runKovoBuildCheckPreflight(app, resolvedAppModulePath);
+    const checkGraph = await runKovoBuildCheckPreflight(app, resolvedAppModulePath);
     const outDir = resolve(options.outDir);
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
@@ -377,6 +377,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       outDir: join(outDir, '.kovo'),
       serverHandlerSource,
     });
+    writeKovoBuildGraphArtifact(neutralBuild, checkGraph);
     const preset =
       selectedPreset.preset ??
       (selectedPreset.name === 'cloudflare'
@@ -457,12 +458,25 @@ function runTypeScriptBuildPreflight(appModulePath: string): void {
   }
 }
 
-async function runKovoBuildCheckPreflight(app: KovoApp, appModulePath: string): Promise<void> {
+async function runKovoBuildCheckPreflight(
+  app: KovoApp,
+  appModulePath: string,
+): Promise<CoreGraph.KovoCheckInput> {
   const graph = await buildCheckGraph(app, appModulePath);
   const result = kovoCheck(graph);
-  if (result.exitCode === 0) return;
+  if (result.exitCode === 0) return graph;
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+}
+
+function writeKovoBuildGraphArtifact(
+  neutralBuild: KovoNeutralBuild,
+  graph: CoreGraph.KovoCheckInput,
+): void {
+  // SPEC §5.3: the build-derived graph is a review/debug artifact, not just an
+  // in-memory preflight input. Persist it in the neutral build metadata directory
+  // so `kovo explain ...` can discover it after an ordinary scaffold build.
+  writeFileSync(join(neutralBuild.outDir, 'graph.json'), `${JSON.stringify(graph, null, 2)}\n`);
 }
 
 function buildCheckFailureOutput(output: string): string {

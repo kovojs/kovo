@@ -26,7 +26,7 @@ import { createApp, route } from '@kovojs/server';
 import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
-import { mainAsync } from './index.js';
+import { main, mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
 const dockerIt = process.env.KOVO_TEST_DOCKER === '1' && dockerAvailable() ? it : it.skip;
@@ -137,6 +137,16 @@ describe('kovo build', () => {
       expect(readFileSync(join(outDir, '.kovo/server/handler.mjs'), 'utf8')).toContain(
         'app/add-to-cart',
       );
+      const graphPath = join(outDir, '.kovo/graph.json');
+      expect(existsSync(graphPath)).toBe(true);
+      expect(JSON.parse(readFileSync(graphPath, 'utf8'))).toMatchObject({
+        pages: [{ route: '/typed' }],
+      });
+      stdout.mockClear();
+      expect(
+        await withCwd(root, async () => main(['explain', 'page', '/typed', '--layouts'])),
+      ).toBe(0);
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain('PAGE /typed');
 
       const serverModule = (await import(
         `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`

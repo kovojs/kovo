@@ -53,12 +53,13 @@ Security-header regression RSE-1 is filed separately in `plans/bugz-6.md`.
   - Acceptance: a layout that reads an undeclared region key fails type-checking, while declared sibling regions keep their inferred value type.
   - Evidence: `pnpm exec vitest --run packages/server/src/route.test.ts packages/server/src/app-authoring-context.test.ts` proves uncontracted `regions.sidebarTypo` fails type-checking, declared region values remain typed, and routes must provide layout-required regions.
 
-- [ ] **`kovo explain page --layouts` starts from an empty graph in a built scaffold.** (med, dev-tooling; found by `layout-regions-defer`)
+- [x] **`kovo explain page --layouts` starts from an empty graph in a built scaffold.** (med, dev-tooling; found by `layout-regions-defer`)
   - Observed behavior: the dev server serves `/docs/layout-regions?view=full` as 200, but `pnpm exec kovo explain page /docs/:slug --layouts` exits with `ERROR NOT_FOUND page /docs/:slug`; `build:prod` leaves no discoverable `graph.json`.
   - Root cause: `packages/cli/src/graph-output.ts:71` returns `{}` when no graph path is supplied, `packages/cli/src/graph-output.ts:593` searches that empty `graph.pages`, and `packages/cli/src/commands/build-export.ts:523` builds the check graph in memory without persisting a normal explain artifact.
   - Why it matters: SPEC §4.5/§5.3 advertises layout explainability, but the ordinary scaffold/build workflow gives authors no obvious graph to pass.
   - Repro evidence: `pnpm exec kovo explain page /docs/:slug --layouts` in `layout-regions-defer` prints `kovo-explain/v1 ERROR NOT_FOUND page /docs/:slug`; `find . dist src -maxdepth 5 -name graph.json` returns nothing.
   - Acceptance: after build/check, an app author can run a documented `kovo explain page ... --layouts` command that finds the app graph or prints the exact artifact path to use.
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-explain.test.ts` proves `kovo build` writes `dist/.kovo/graph.json` and pathless `kovo explain page /typed --layouts` discovers it from the built app root.
 
 - [x] **`createTheme().className` conflicts with a `style.create` handle on the same component element.** (med, framework; found by `composition-style-packages`)
   - Observed behavior: `<section class={duskTheme.className} style={styles.shell}>` in a `component({ render })` fails with KV231 `class (writers: author JSX, style lowerer)`.
