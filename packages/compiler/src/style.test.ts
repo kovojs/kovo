@@ -557,4 +557,42 @@ export const CartButton = component({
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
     expect(() => assertFixpoint(result)).not.toThrow();
   });
+
+  it('lowers prop/local conditional style object handles to server-rendered class output', () => {
+    const result = compileComponentModule({
+      fileName: 'components/nav-link.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const linkStyles = style.create({
+  active: {
+    color: 'green',
+  },
+  inactive: {
+    color: 'gray',
+  },
+});
+
+export const NavLink = component({
+  render: (_queries, _state, props: { active: boolean }) => (
+    <a style={props.active ? linkStyles.active : linkStyles.inactive}>Docs</a>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    expect(serverSource).toContain('class={((props.active))');
+    expect(serverSource).toContain('kv-link-fg-');
+    expect(serverSource).not.toContain('style={props.active');
+    expect(serverSource).not.toContain('data-derive-attr="class"');
+    expect(clientSource).not.toContain('style_class_derive');
+    expect(result.queryUpdatePlans).toEqual([]);
+    expect(result.updateCoverage).toEqual([]);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
 });

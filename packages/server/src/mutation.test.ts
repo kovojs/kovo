@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Secret } from '@kovojs/core';
+import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
 import { invalidate } from './change-record.js';
 import { domain, tag } from './domain.js';
@@ -99,6 +100,34 @@ describe('server mutation lifecycle', () => {
     expect(renderMutationFormAttributes(addToCart)).toBe(
       'method="post" action="/_m/cart/add" enhance data-mutation="cart/add"',
     );
+  });
+
+  it('emits multipart form attributes for file upload mutation inputs', () => {
+    const uploadAvatar = mutation('profile/avatar', {
+      input: s.object({ avatar: s.file(), caption: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+    const uploadReceipt = mutation('order/receipt', {
+      input: s.object({
+        receipt: s.file().store({ keyPrefix: 'receipts', storage: createMemoryStorage() }),
+      }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    expect(uploadAvatar).toMatchObject({
+      enctype: 'multipart/form-data',
+      fileFields: ['avatar'],
+    });
+    expect(mutationFormAttributes(uploadAvatar)).toMatchObject({
+      enctype: 'multipart/form-data',
+    });
+    expect(renderMutationFormAttributes(uploadAvatar)).toContain('enctype="multipart/form-data"');
+    expect(uploadReceipt.fileFields).toEqual(['receipt']);
+    expect(mutationFormAttributes(uploadReceipt).enctype).toBe('multipart/form-data');
   });
 
   it('returns typed validation failures from ctx.fail', async () => {

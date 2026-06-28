@@ -52,6 +52,8 @@ import type {
   AppAuthoringDeclarations,
   AppLifecycleRequest,
   AppMutationDeclaration,
+  AppQueryDeclaration,
+  AppRouteDeclaration,
   CreateAppOptions,
   KovoApp,
   RequestHandler,
@@ -99,23 +101,25 @@ export function createApp<
   bootstrapEgressFloor(options.egress);
 
   const authoringContext = appAuthoringContext<AppRequest>();
-  const routes = resolveAppAuthoringDeclarations(options.routes, authoringContext);
+  const routes = resolveAppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>(
+    options.routes,
+    authoringContext,
+  ) as readonly AppRouteDeclaration<AppRequest>[];
   const liveTargetRenderers =
     options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers();
   const queries = appQueryRegistry(
-    resolveAppAuthoringDeclarations(options.queries, authoringContext) as readonly QueryDefinition<
-      string,
-      unknown,
-      unknown,
-      AppRequest
-    >[],
+    resolveAppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>(
+      options.queries,
+      authoringContext,
+    ) as readonly QueryDefinition<string, unknown, unknown, AppRequest>[],
     liveTargetRendererQueries(liveTargetRenderers),
     routeLayoutQueries(routes),
   );
   const mutations = assertUniqueMutationKeys(
-    resolveAppAuthoringDeclarations(options.mutations, authoringContext).map(
-      withGeneratedMutationTouches,
-    ),
+    resolveAppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>(
+      options.mutations,
+      authoringContext,
+    ).map(withGeneratedMutationTouches),
   );
   const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
   ensureKovoLoaderRuntimeClientModule(clientModules);

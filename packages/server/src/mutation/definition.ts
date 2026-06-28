@@ -12,7 +12,7 @@ import type { Domain } from '../domain.js';
 import type { Guard, RequestLifecycleOptions } from '../guards.js';
 import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
-import type { InferSchema, Schema } from '../schema.js';
+import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
 import type { JsonSerializable } from '../json-boundary.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
 
@@ -231,7 +231,11 @@ export interface MutationDefinition<
   csrf?: CsrfValidationOptions<Request> | false;
   /** Static/common POST-redirect-GET target for successful no-JS submissions (SPEC §9.1). */
   defaultRedirectTo?: string;
+  /** @internal Derived from `input` when the schema contains `s.file()` fields. */
+  enctype?: 'multipart/form-data';
   errors?: Errors;
+  /** @internal Top-level input field names that require multipart form encoding. */
+  fileFields?: readonly string[];
   guard?: Guard<Request, GuardedRequest>;
   handler: (
     input: InferSchema<InputSchema>,
@@ -277,6 +281,9 @@ export interface MutationDefinition<
  */
 export interface MutationFormDefinition<Key extends string = string, Request = unknown> {
   csrf?: CsrfValidationOptions<Request> | false;
+  enctype?: 'multipart/form-data';
+  fileFields?: readonly string[];
+  input?: Schema<unknown>;
   key: Key;
 }
 
@@ -288,6 +295,8 @@ export interface MutationFormAttributes<Key extends string = string, Request = u
   'data-mutation': Key;
   /** Enables the SPEC §9.1 enhanced fragment submit path. */
   enhance: true;
+  /** Required for no-JS file uploads when the mutation input contains `s.file()`. */
+  enctype?: 'multipart/form-data';
   /** Mutation forms post by default. */
   method: 'post';
   /** Typed mutation value retained for server JSX runtime CSRF injection. */
@@ -384,7 +393,12 @@ export function mutation<
     'key'
   >,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key } {
-  return { ...definition, key };
+  const fileFields = mutationInputFileFields(definition.input);
+  return {
+    ...definition,
+    ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
+    key,
+  };
 }
 
 /**
@@ -396,10 +410,13 @@ export function mutation<
 export function mutationFormAttributes<const Key extends string, Request = unknown>(
   definition: MutationFormDefinition<Key, Request>,
 ): MutationFormAttributes<Key, Request> {
+  const fileFields =
+    definition.fileFields ?? (definition.input ? mutationInputFileFields(definition.input) : []);
   return {
     action: `/_m/${definition.key}`,
     'data-mutation': definition.key,
     enhance: true,
+    ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const }),
     method: 'post',
     mutation: definition,
   };
@@ -418,7 +435,7 @@ export function renderMutationFormAttributes<const Key extends string>(
   const attributes = mutationFormAttributes(definition);
   return `method="${attributes.method}" action="${escapeAttribute(
     attributes.action,
-  )}" enhance data-mutation="${escapeAttribute(attributes['data-mutation'])}"`;
+  )}"${attributes.enctype ? ` enctype="${attributes.enctype}"` : ''} enhance data-mutation="${escapeAttribute(attributes['data-mutation'])}"`;
 }
 
 /**
