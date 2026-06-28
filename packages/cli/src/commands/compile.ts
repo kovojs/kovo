@@ -471,8 +471,14 @@ function addDependenciesToPackageJson(
   }
   return {
     ...manifest,
-    dependencies: currentDependencies,
+    dependencies: sortRecordKeys(currentDependencies),
   };
+}
+
+function sortRecordKeys(record: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(record).sort(([left], [right]) => left.localeCompare(right)),
+  );
 }
 
 function inferAddDependencySpec(manifest: Record<string, unknown>, packageName: string): string {

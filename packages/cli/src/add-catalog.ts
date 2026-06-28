@@ -188,6 +188,8 @@ function requiredKovoPackageDependencies(source: string): readonly string[] {
 }
 
 export function vendoredUiComponentSource(source: string): string {
+  const needsBindingProps =
+    /import\s*\{\s*[^}]*\bbindingProps\b[^}]*\}\s*from '\.\/pass-through\.js';/.test(source);
   let transformed = source
     .replace(
       /\nimport \{ (?:bindingProps, )?passThroughProps \} from '\.\/pass-through\.js';\n/g,
@@ -196,13 +198,17 @@ export function vendoredUiComponentSource(source: string): string {
     .replace(/\nimport \{ uiTheme \} from '\.\/theme\.js';\n/g, '\n');
 
   if (source.includes("from './pass-through.js'")) {
-    transformed = insertAfterImports(transformed, `\n${vendoredPassThroughPropsSource()}\n`);
+    transformed = insertAfterImports(
+      transformed,
+      `\n${vendoredPassThroughPropsSource({ includeBindingProps: needsBindingProps })}\n`,
+    );
   }
 
   if (source.includes("from './theme.js'")) {
     transformed = rewriteUiThemeReferences(transformed);
   }
 
+  transformed = rewriteCopiedChildrenSlots(transformed);
   transformed = rewriteLocalPulseKeyframes(transformed);
   transformed = rewriteVendoredSoundSubset(transformed);
 
@@ -319,6 +325,17 @@ function rewriteUiThemeReferences(source: string): string {
   return transformed;
 }
 
+function rewriteCopiedChildrenSlots(source: string): string {
+  if (!source.includes('props.children')) return source;
+
+  return source
+    .replaceAll('props.children', 'children')
+    .replace(
+      /render\(props: ([^)]+)\) \{/g,
+      'render(props: $1, _state = undefined, { children } = { children: props.children }) {',
+    );
+}
+
 function vendoredUiFiles(
   componentName: string,
   sourcePath: string,
@@ -424,8 +441,8 @@ function rewriteLocalPulseKeyframes(source: string): string {
   return transformed;
 }
 
-function vendoredPassThroughPropsSource(): string {
-  return `const blockedProps = new Set([
+function vendoredPassThroughPropsSource(options: { includeBindingProps: boolean }): string {
+  const passThroughSource = `const blockedProps = new Set([
   'activeValue',
   'actionValue',
   'autoFocus',
@@ -564,6 +581,11 @@ function bindingProps(props: object, attrs?: readonly string[]): Record<string, 
     ),
   );
 }`;
+  if (options.includeBindingProps) return passThroughSource;
+  return passThroughSource.replace(
+    /\n\/\/ Forward only the compiler-emitted reactive binding stamps[\s\S]*?\n}\s*$/,
+    '\n',
+  );
 }
 
 function importsNonPublicKovoSubpath(source: string): boolean {
