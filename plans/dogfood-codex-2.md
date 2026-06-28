@@ -41,12 +41,21 @@ new `bugz` ledger was created.
 packages/server/src/csrf.test.ts`, `pnpm run check:vp`, and `git diff --check`
     PASS.
 
-- [ ] **Build KV310 ignores inline optimistic entries unless the invalidated query is also in `mutation.registry.queries` or live targets.** (medium, framework-build-check; found by navquery/authguards/ladder)
+- [x] **Build KV310 ignores inline optimistic entries unless the invalidated query is also in `mutation.registry.queries` or live targets.** (medium, framework-build-check; found by navquery/authguards/ladder)
   - Observed behavior: mutations with valid inline `optimistic` entries still produced `WARN KV310` for touch-graph-derived query invalidations until the app duplicated those queries in `registry.queries`.
   - Root cause: build graph extraction derives invalidates from `registry.queries` plus live-target queries (`packages/cli/src/commands/build-export.ts:583-601`) and emits optimistic coverage only for that same subset (`packages/cli/src/commands/build-export.ts:609-628`); later KV310 checks touch-graph/query domain intersections (`packages/cli/src/graph-output.ts:2130-2145`), which can be wider than the coverage facts.
   - Why it matters: authors can follow the mutation API and diagnostic intent yet still fail the deploy gate until they learn to repeat query membership in a separate registry field. This strains SPEC §10.6 / KV310 coverage ergonomics.
   - Repro evidence: verifier created and removed a minimal navquery file; `kovo build ... --no-cache` with `registry: { touches: [contactDomain] }` emitted `WARN KV310 verifyAddContact -> verifyContacts`; adding only `queries: [verifyContactsQuery]` removed the warning.
   - Acceptance: build preflight should emit optimistic coverage facts for every declared optimistic key that intersects derived writes/touches, or KV310 should diagnose the missing `registry.queries` prerequisite explicitly with a focused fixture.
+  - Integrated evidence (2026-06-28): `packages/cli/src/commands/build-export.ts`
+    now emits optimistic coverage for every authored `mutation.optimistic` query key,
+    not only keys duplicated in `registry.queries` or live targets.
+    `packages/cli/src/index.kovo-build.test.ts` proves `kovo build` accepts a mutation
+    with `registry: { touches: [contactDomain] }` plus inline
+    `optimistic: { contacts: 'await-fragment' }` and no `registry.queries`
+    duplication. Verification: `pnpm exec vitest run
+packages/cli/src/index.kovo-build.test.ts`, `pnpm run check:vp`, and
+    `git diff --check` PASS.
 
 - [ ] **Query-backed component roots can render without refresh/live-target stamps, leaving enhanced mutation refresh with an empty body.** (medium, framework; found by ladder; duplicate family)
   - Observed behavior: `GET /ladder` had no `kovo-deps`, `kovo-fragment-target`, `kovo-live-component`, or `kovo-live-token` despite `LadderRegion` declaring `queries: { ladder: ladderQuery }`; an enhanced-style mutation returned `200`, `Kovo-Changes: [{"domain":"ladderItem"}]`, `text/vnd.kovo.fragment+html`, and a 0-byte body.
@@ -163,3 +172,6 @@ packages/cli/src/index.kovo-build.test.ts`, `pnpm run check:vp`, and `git diff -
 - 2026-06-28: Fixed and verified multi-form anonymous CSRF binding reuse with
   `pnpm exec vitest run packages/server/src/csrf.test.ts`, `pnpm run check:vp`, and
   `git diff --check`.
+- 2026-06-28: Fixed and verified build KV310 inline optimistic coverage with
+  `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts`, `pnpm run check:vp`,
+  and `git diff --check`.

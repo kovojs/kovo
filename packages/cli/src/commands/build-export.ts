@@ -677,17 +677,22 @@ function mutationOptimisticCheckFacts(
   if (optimistic === undefined) return [];
 
   const registryQueries = (mutation.registry?.queries ?? []) as readonly { key: string }[];
-  return uniqueQueries([...registryQueries, ...liveTargetQueries]).flatMap((query) => {
-    const entry = optimistic[query.key];
-    if (entry === undefined) return [];
-    return [
-      {
-        mutation: mutation.key,
-        query: query.key,
-        status: entry === 'await-fragment' ? 'await-fragment' : 'hand-written',
-      },
-    ];
-  });
+  const optimisticQueries = Object.keys(optimistic)
+    .filter(isString)
+    .map((key) => ({ key }));
+  return uniqueQueries([...registryQueries, ...liveTargetQueries, ...optimisticQueries]).flatMap(
+    (query) => {
+      const entry = optimistic[query.key];
+      if (entry === undefined) return [];
+      return [
+        {
+          mutation: mutation.key,
+          query: query.key,
+          status: entry === 'await-fragment' ? 'await-fragment' : 'hand-written',
+        },
+      ];
+    },
+  );
 }
 
 function liveTargetQueryDefinitions(app: KovoApp): readonly { key: string }[] {

@@ -299,6 +299,71 @@ export default createApp({
     }
   });
 
+  it('counts inline optimistic query entries without registry query duplication', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-inline-optimistic-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, domain, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
+
+const contactDomain = domain('contact');
+
+const contactsQuery = query('contacts', {
+  access: publicAccess('inline optimistic fixture'),
+  reads: [contactDomain],
+  load() {
+    return { items: [] };
+  },
+});
+
+const addContact = mutation('contacts/add', {
+  access: publicAccess('inline optimistic fixture'),
+  csrf: false,
+  csrfJustification: 'non-browser regression fixture',
+  input: s.object({ name: s.string() }),
+  optimistic: { contacts: 'await-fragment' },
+  registry: { touches: [contactDomain] },
+  handler() {
+    return { ok: true };
+  },
+});
+
+export default createApp({
+  mutations: [addContact],
+  queries: [contactsQuery],
+  routes: [
+    route('/contacts', {
+      access: publicAccess('inline optimistic fixture'),
+      page: () => trustedHtml('<main>Contacts</main>', 'inline optimistic fixture'),
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('KV310');
+      expect(existsSync(outDir)).toBe(true);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('runs Drizzle security extractors before artifact emission', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-security-preflight-'));
     const appPath = join(root, 'app.mjs');
