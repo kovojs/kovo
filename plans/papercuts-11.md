@@ -89,7 +89,7 @@ this pass.
 
 ### B. Query And Static Analysis
 
-- [ ] **External object-form non-Drizzle output schemas still fail through component-local aliases.** (med, framework; found by `streaming-query-live`)
+- [x] **External object-form non-Drizzle output schemas still fail through component-local aliases.** (med, framework; found by `streaming-query-live`)
   - Observed behavior: `directoryAlias.summary.total`,
     `statsAlias.totals.notes`, and `directoryAlias.summary.featuredId` failed
     KV302 even though the imported object-form queries declared matching output
@@ -105,8 +105,12 @@ this pass.
     KV302 diagnostics.
   - Acceptance: object-form query output facts survive imported query aliases,
     with a focused build test using an external query module.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
+    passed with coverage that external source-derived query shape facts are
+    cloned through component-local aliases.
 
-- [ ] **Aliased public `query` imports skip source-derived key assignment.** (med, framework; found by `streaming-query-live`)
+- [x] **Aliased public `query` imports skip source-derived key assignment.** (med, framework; found by `streaming-query-live`)
   - Observed behavior: `import { query as defineQuery } from '@kovojs/server'`
     followed by `defineQuery({ ... })` built to runtime failure:
     `createApp() received query({ ... }) before the compiler assigned its
@@ -123,6 +127,10 @@ source-derived key.`
     assertion.
   - Acceptance: source-derived query lowering tracks imported local bindings,
     including aliases, with regression coverage for `query as defineQuery`.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
+    passed with coverage for `import { query as defineQuery }` and
+    `defineQuery.elevated(...)` source-derived key assignment.
 
 - [x] **SQL sink detector treats any `.exec(...)` call as a KV422 sink.** (med, framework; found by `ui-copyin-full-catalog`)
   - Observed behavior: copied `safe-url.ts` failed `build:prod` because
