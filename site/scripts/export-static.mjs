@@ -43,6 +43,19 @@ const SITE_APP_CSS_REQUIRED_ATOMS = [
   'kv-site-gallery-',
   'kv-site-search-dialog-',
 ];
+const STAGED_STATIC_EXPORT_PUBLIC_ASSETS = [
+  {
+    content: 'Staged during site export; overwritten by site/src/aux.ts.\n',
+    path: 'llms.txt',
+  },
+  {
+    // The Avatar gallery intentionally renders its error-state fixture with
+    // this URL. The bytes are deliberately not a decodable PNG, preserving the
+    // browser error path while avoiding a static-host 404.
+    content: 'invalid image payload for the Avatar error-state fixture\n',
+    path: 'avatars/missing.png',
+  },
+];
 
 // Pure content guard for the served stylesheet: throw a clear, actionable error
 // if it is short or missing site app atoms. Exported for resilience tests.
@@ -156,6 +169,14 @@ export async function buildSiteUiCss(outPath = uiStylesheetPath) {
   }
 }
 
+export async function stageStaticExportReferencedPublicAssets(rootDir = cssDistDir) {
+  for (const asset of STAGED_STATIC_EXPORT_PUBLIC_ASSETS) {
+    const target = path.join(rootDir, asset.path);
+    await mkdir(path.dirname(target), { recursive: true });
+    writeFileSync(target, asset.content);
+  }
+}
+
 // Resolve the bundled stylesheet from the Vite manifest.
 function builtStylesheetPath() {
   const manifestPath = path.join(cssDistDir, '.vite/manifest.json');
@@ -250,6 +271,7 @@ export async function exportSiteStaticApp({
   // Fail loudly if the bundled stylesheet is short or missing app atoms,
   // rather than shipping an unstyled docs shell (SPEC §6.1.1, §13.1).
   assertServedStylesheet();
+  await stageStaticExportReferencedPublicAssets();
 
   const manifestFile = path.join(cssDistDir, '.vite/manifest.json');
   const viteServer = await createViteServer({

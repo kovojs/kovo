@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,6 +10,7 @@ import {
   assertExtractedSiteAppCss,
   assertServedStylesheetContent,
   assertServedUiStylesheetContent,
+  stageStaticExportReferencedPublicAssets,
 } from './export-static.mjs';
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -78,5 +80,18 @@ describe('site export CSS guards', () => {
     expect(() =>
       assertServedUiStylesheetContent('.kv-site-chrome-a{}', '/assets/kovo-ui.css'),
     ).toThrow(/missing required component atoms \(kv-button-, kv-switch-, kv-dialog-\)/);
+  });
+
+  it('stages generated and intentional-error assets before static export replay', async () => {
+    const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-site-export-assets-'));
+    try {
+      await stageStaticExportReferencedPublicAssets(tempRoot);
+      expect(readFileSync(resolve(tempRoot, 'llms.txt'), 'utf8')).toContain(
+        'overwritten by site/src/aux.ts',
+      );
+      expect(existsSync(resolve(tempRoot, 'avatars/missing.png'))).toBe(true);
+    } finally {
+      rmSync(tempRoot, { force: true, recursive: true });
+    }
   });
 });
