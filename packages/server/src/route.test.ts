@@ -230,15 +230,16 @@ describe('route primitives', () => {
     });
   });
 
-  it('does not treat forged plain redirect-shaped route page objects as redirects', async () => {
+  it('treats structural redirect-shaped route page objects as non-document outcomes', async () => {
     const forgedRoute = route('/forged', {
       page: () => ({ location: '/admin', status: 303 }) as any,
     });
 
-    const response = await renderRoutePageResponse(forgedRoute, {}, {});
-
-    expect(response.status).toBe(200);
-    expect(response.headers.Location).toBeUndefined();
+    await expect(renderRoutePageResponse(forgedRoute, {}, {})).resolves.toEqual({
+      body: '',
+      headers: { Location: '/admin' },
+      status: 303,
+    });
   });
 
   it('escapes default route string returns as text', async () => {

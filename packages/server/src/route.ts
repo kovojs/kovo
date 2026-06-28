@@ -1298,17 +1298,25 @@ function isNotFound(value: unknown): value is NotFound {
   );
 }
 
-// SPEC §6.4: redirect() returns { location: string, status: 303 }.
+// SPEC §6.4: redirect() returns { location: string, status: 303 }. Vite module
+// runner boundaries can drop the non-enumerable blessed witness, so the route
+// shell also treats the exact structural redirect shape as a fail-closed
+// non-document outcome instead of rendering it into status-200 HTML.
 function isRedirect(value: unknown): value is Redirect {
   return (
     typeof value === 'object' &&
     value !== null &&
-    isBlessedSink('core:route-redirect', value) &&
+    (isBlessedSink('core:route-redirect', value) || isStructuralRouteRedirect(value)) &&
     'status' in value &&
     value.status === 303 &&
     'location' in value &&
     typeof (value as { location: unknown }).location === 'string'
   );
+}
+
+function isStructuralRouteRedirect(value: object): boolean {
+  const keys = Object.keys(value);
+  return keys.length === 2 && keys.includes('location') && keys.includes('status');
 }
 
 function isRouteResponseOutcome(value: unknown): value is RouteResponseOutcome {

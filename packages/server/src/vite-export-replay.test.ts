@@ -335,6 +335,49 @@ describe('server app shell Vite plugin', () => {
     }
   });
 
+  it('fails closed when Vite-backed static export replays a redirect route outcome', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-redirect-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-redirect-export-'));
+
+    try {
+      const build = createKovoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/old-home', {
+              page() {
+                return { location: '/', status: 303 } as never;
+              },
+            }),
+            route('/', {
+              page() {
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+        }),
+        manifest: {},
+        routeEntryMap: {},
+      });
+
+      await expect(exportKovoAppShellViteBuild(build, { distDir, outDir })).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          {
+            code: 'KV229',
+            message: expect.stringContaining('replay returned redirect status 303'),
+            routePath: '/old-home',
+          },
+        ],
+      });
+      await expect(readFile(join(outDir, 'old-home', 'index.html'), 'utf8')).rejects.toThrow();
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
   it('runs app-shell static export from the Vite plugin writeBundle hook', async () => {
     const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-export-dist-'));
     const exportDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-export-out-'));

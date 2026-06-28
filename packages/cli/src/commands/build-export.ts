@@ -533,6 +533,7 @@ async function staticBuildCheckGraph(
   const drizzleFacts =
     files.length === 0 ? emptyStaticDrizzleBuildFacts() : await staticDrizzleBuildFacts(files);
   const queryReadSets = app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries));
+  const routeOutcomeFacts = routeFileStreamEndpointFacts(app.routes, files);
 
   return {
     ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
@@ -548,7 +549,7 @@ async function staticBuildCheckGraph(
       ? {}
       : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
     ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
-    endpoints: app.endpoints.map(endpointCheckFact),
+    endpoints: [...app.endpoints.map(endpointCheckFact), ...routeOutcomeFacts],
     mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
     optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
     pages: app.routes.map(routeCheckFact),
@@ -748,6 +749,94 @@ function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain
     queries: uniqueSorted(layoutQueries.map((query) => query.key)),
     route: route.path,
   };
+}
+
+function routeFileStreamEndpointFacts(
+  routes: readonly KovoApp['routes'][number][],
+  files: readonly BuildCheckSourceFile[],
+): CoreGraph.EndpointExplain[] {
+  const outcomeByPath = sourceRouteOutcomeKinds(files);
+  return routes.flatMap((route) => {
+    const outcome = outcomeByPath.get(route.path);
+    if (outcome === undefined) return [];
+    return [routeFileStreamEndpointFact(route, outcome)];
+  });
+}
+
+function routeFileStreamEndpointFact(
+  route: KovoApp['routes'][number],
+  outcome: 'file' | 'stream',
+): CoreGraph.EndpointExplain {
+  return {
+    ...(route.access === undefined ? {} : { access: route.access }),
+    ...(route.guard === undefined
+      ? {}
+      : {
+          auth: 'session+guard',
+          guards: ['route.guard'],
+        }),
+    body: outcome === 'file' ? 'bytes' : 'stream',
+    cache: route.guard === undefined ? 'route-default' : 'private,no-store',
+    headers: ['Content-Disposition', 'Content-Type'],
+    method: 'GET',
+    mount: 'exact',
+    name: route.path,
+    path: route.path,
+    reason: `route respond.${outcome} outcome`,
+    surface: outcome === 'file' ? 'route-file' : 'route-stream',
+  };
+}
+
+function sourceRouteOutcomeKinds(
+  files: readonly BuildCheckSourceFile[],
+): Map<string, 'file' | 'stream'> {
+  const outcomes = new Map<string, 'file' | 'stream'>();
+  for (const file of files) {
+    for (const match of file.source.matchAll(/route\s*\(\s*(['"`])([^'"`]+)\1/g)) {
+      const path = match[2];
+      if (path === undefined || outcomes.has(path)) continue;
+      const body = routeDeclarationSourceBody(file.source, match.index ?? 0);
+      if (body.includes('respond.stream')) {
+        outcomes.set(path, 'stream');
+      } else if (body.includes('respond.file')) {
+        outcomes.set(path, 'file');
+      }
+    }
+  }
+  return outcomes;
+}
+
+function routeDeclarationSourceBody(source: string, start: number): string {
+  let depth = 0;
+  let quote: '"' | "'" | '`' | undefined;
+  let escaped = false;
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote !== undefined) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char !== ')') continue;
+    depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1);
+  }
+
+  return source.slice(start);
 }
 
 function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {
