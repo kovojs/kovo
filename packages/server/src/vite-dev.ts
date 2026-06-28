@@ -707,6 +707,7 @@ function injectKovoHmrScriptIntoNodeResponse(
   request: IncomingMessage,
 ): ServerResponse {
   if (request.method === 'HEAD') return response;
+  if (isKovoFragmentOrQueryReadRequest(request)) return response;
 
   const chunks: Buffer[] = [];
   const write = Reflect.get(response, 'write') as ServerResponse['write'];
@@ -807,6 +808,14 @@ function shouldInjectKovoHmrScript(
   if (status < 200 || status >= 600) return false;
   if (typeof body === 'string' && body.includes(kovoHmrClientPath)) return false;
   return (contentType ?? '').toLowerCase().includes('text/html');
+}
+
+function isKovoFragmentOrQueryReadRequest(request: IncomingMessage): boolean {
+  // SPEC §9.4 / §9.5.1: dev HMR injection is for full documents; fragment and typed-read
+  // HTML chunks are app-shell wire responses and must stay inspectable as emitted.
+  if (readHeader(request.headers, 'Kovo-Fragment')?.toLowerCase() === 'true') return true;
+  if (!request.url) return false;
+  return new URL(request.url, 'http://kovo.local').pathname.startsWith('/_q/');
 }
 
 function injectKovoHmrScript(html: string): string {

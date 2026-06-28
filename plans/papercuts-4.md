@@ -73,12 +73,13 @@ Security-header regression RSE-1 is filed separately in `plans/bugz-6.md`.
 
 ### C. Dev Typed-Read Wire
 
-- [ ] **Dev `/_q` typed-read responses are prefixed with the Kovo HMR client script.** (low, dev-tooling; found by `typed-read-skew`)
+- [x] **Dev `/_q` typed-read responses are prefixed with the Kovo HMR client script.** (low, dev-tooling; found by `typed-read-skew`)
   - Observed behavior: direct `GET /_q/directory-stats` returns a body beginning with `<script type=\"module\" src=\"/@kovo/hmr-client\"></script><kovo-query ...>`.
   - Root cause: `packages/server/src/query.ts:776` returns successful query reads as `text/html`, and the dev HMR wrapper injects into HTML responses; loader-style typed reads use `Accept: text/html` and `Kovo-Fragment: true`.
   - Why it matters: SPEC §9.4 treats the typed-read endpoint as inspectable wire. Curling it in dev shows extra executable dev markup that is not part of the query chunk.
   - Repro evidence: `curl -H 'Accept: text/html' -H 'Kovo-Fragment: true' http://127.0.0.1:5179/_q/directory-stats` in `typed-read-skew` returned 200 and an HMR-prefixed body.
   - Acceptance: dev HMR injection skips fragment/query endpoint responses, or those endpoints use a content type/path marker that cannot be mistaken for full documents.
+  - Evidence: `pnpm exec vitest --run packages/server/src/vite-dev.test.ts` proves dev `/_q` typed-read fragment responses are not HMR-prefixed while full route documents still receive the HMR client.
 
 ## Refuted / Not Carried Forward
 
