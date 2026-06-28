@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
+import { createApp, createRequestHandler } from './app.js';
 import {
   CAPABILITY_TOKEN_PARAM,
   DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
@@ -11,14 +12,19 @@ import {
 } from './capability-route.js';
 import { createMemoryCapabilityReplayStore, signCapability } from './capability-url.js';
 import { runEndpoint } from './endpoint.js';
+import { renderedHtml } from './html.js';
+import { route } from './route.js';
 
 const SECRET = 'capability-route-test-secret-at-least-32-characters-long';
 const BASE = DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH;
 
 /** Seed a memory storage with one object so the route has something to (potentially) read. */
-async function storageWith(key: string, body: string) {
+async function storageWith(key: string, body: string, metadata?: Readonly<Record<string, string>>) {
   const storage = createMemoryStorage();
-  await storage.put(key, body, { contentType: 'text/plain' });
+  await storage.put(key, body, {
+    contentType: 'text/plain',
+    ...(metadata === undefined ? {} : { metadata }),
+  });
   return storage;
 }
 
@@ -91,6 +97,36 @@ describe('capability download route: verify-before-read sink', () => {
     const response = await runEndpoint(route, new Request(`https://app.example${url}`));
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('A');
+  });
+
+  it('uses stored upload filename metadata when no endpoint filename override is supplied', async () => {
+    const key = 'uploads/note';
+    const storage = await storageWith(key, 'note-body', { filename: 'note.txt' });
+    const route = createStorageDownloadEndpoint({ secret: SECRET, storage });
+    const ctx = createSignUrl({ secret: SECRET });
+    const { url } = await ctx.signUrl({ key });
+
+    const response = await runEndpoint(route, new Request(`https://app.example${url}`));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="note.txt"');
+  });
+
+  it('lets explicit endpoint filenames override stored upload filename metadata', async () => {
+    const key = 'uploads/note';
+    const storage = await storageWith(key, 'note-body', { filename: 'note.txt' });
+    const route = createStorageDownloadEndpoint({
+      secret: SECRET,
+      storage,
+      storedFile: { filename: 'download.txt' },
+    });
+    const ctx = createSignUrl({ secret: SECRET });
+    const { url } = await ctx.signUrl({ key });
+
+    const response = await runEndpoint(route, new Request(`https://app.example${url}`));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="download.txt"');
   });
 
   it('REJECTS a token minted for a DIFFERENT object (no cross-object read)', async () => {
@@ -329,5 +365,36 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     const { url } = await ctx.signUrl({ key });
     const response = await runEndpoint(route, new Request(`https://app.example${url}`));
     expect(response.status).toBe(200);
+  });
+
+  it('composes with a custom createStorageDownloadEndpoint basePath mounted on the app', async () => {
+    const key = 'receipts/custom.txt';
+    const storage = await storageWith(key, 'custom-download', { filename: 'custom.txt' });
+    const app = createApp({
+      csrf: { secret: SECRET, sessionId: () => 'anonymous' },
+      endpoints: [
+        createStorageDownloadEndpoint({ basePath: '/downloads', secret: SECRET, storage }),
+      ],
+      routes: [
+        route('/', {
+          async page(context) {
+            if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
+            const signed = await context.signUrl({ key });
+            return renderedHtml(`<a href="${signed.url}">Download</a>`);
+          },
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+
+    const document = await handler(new Request('https://app.example/'));
+    const html = await document.text();
+    const href = html.match(/href="([^"]+)"/)?.[1];
+
+    expect(href?.startsWith('/downloads/receipts/custom.txt?')).toBe(true);
+    const response = await handler(new Request(`https://app.example${href}`));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="custom.txt"');
+    expect(await response.text()).toBe('custom-download');
   });
 });

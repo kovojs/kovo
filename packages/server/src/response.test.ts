@@ -348,6 +348,22 @@ describe('server response adapters', () => {
     expect(await respond.storedFile(storage, 'missing')).toBeUndefined();
   });
 
+  it('uses stored filename metadata by default for stored file downloads', async () => {
+    const storage = createMemoryStorage();
+    await storage.put('uploads/note', 'note', {
+      contentType: 'text/plain',
+      metadata: { filename: 'note.txt' },
+    });
+
+    const outcome = await respond.storedFile(storage, 'uploads/note');
+    expect(outcome?.contentDisposition).toBe('attachment; filename="note.txt"');
+
+    const overridden = await respond.storedFile(storage, 'uploads/note', {
+      filename: 'download.txt',
+    });
+    expect(overridden?.contentDisposition).toBe('attachment; filename="download.txt"');
+  });
+
   it('refuses to serve a stored SVG/HTML object inline (KV428)', async () => {
     const storage = createMemoryStorage();
     await storage.put('uploads/evil', new TextEncoder().encode('<svg onload="x"/>'), {

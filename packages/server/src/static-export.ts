@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -106,7 +106,12 @@ async function documentPublicAssetInputs(options: {
   const publicAssets: StaticExportAssetInput[] = [];
   const diagnostics: ReturnType<typeof staticExportDiagnostic>[] = [];
 
-  for (const hrefPath of documentReferencedStaticAssetPaths(options.artifacts, base)) {
+  const referencedPaths = new Set([
+    ...documentReferencedStaticAssetPaths(options.artifacts, base),
+    ...(await stylesheetReferencedStaticAssetPaths(options.configuredAssets, base)),
+  ]);
+
+  for (const hrefPath of [...referencedPaths].sort()) {
     if (existingPaths.has(hrefPath) || documentPaths.has(hrefPath)) continue;
     if (hrefPath.startsWith('/c/') || hrefPath.startsWith('/assets/')) continue;
 
@@ -136,7 +141,33 @@ function documentReferencedStaticAssetPaths(
   const paths = new Set<string>();
   for (const artifact of artifacts) {
     for (const rawHref of htmlAttributeUrls(artifact.body)) {
-      const hrefPath = staticExportPublicHrefPath(rawHref, base);
+      const hrefPath = staticExportPublicHrefPath(rawHref, base, 'https://kovo.local/');
+      if (hrefPath !== undefined) paths.add(hrefPath);
+    }
+  }
+  return [...paths].sort();
+}
+
+async function stylesheetReferencedStaticAssetPaths(
+  configuredAssets: readonly NonNullable<StaticExportOptions['assets']>[number][],
+  base: string,
+): Promise<string[]> {
+  const paths = new Set<string>();
+  for (const asset of configuredAssets) {
+    if (path.posix.extname(asset.path) !== '.css') continue;
+    const source = staticExportConfiguredAssetSource(asset.source);
+    if (source === undefined) continue;
+
+    let css: string;
+    try {
+      css = await readFile(source, 'utf8');
+    } catch {
+      continue;
+    }
+
+    const cssUrlBase = `https://kovo.local${path.posix.dirname(asset.path).replace(/\/+$/, '')}/`;
+    for (const rawHref of cssUrlUrls(css)) {
+      const hrefPath = staticExportPublicHrefPath(rawHref, base, cssUrlBase);
       if (hrefPath !== undefined) paths.add(hrefPath);
     }
   }
@@ -160,7 +191,21 @@ function htmlAttributeUrls(html: string): string[] {
   return urls;
 }
 
-function staticExportPublicHrefPath(rawHref: string, base: string): string | undefined {
+function cssUrlUrls(css: string): string[] {
+  const urls: string[] = [];
+  const urlPattern = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^'")]*))\s*\)/gi;
+  for (const match of css.matchAll(urlPattern)) {
+    const rawUrl = match[1] ?? match[2] ?? match[3];
+    if (rawUrl !== undefined) urls.push(rawUrl.trim());
+  }
+  return urls;
+}
+
+function staticExportPublicHrefPath(
+  rawHref: string,
+  base: string,
+  resolutionBase: string,
+): string | undefined {
   if (
     rawHref === '' ||
     rawHref.startsWith('#') ||
@@ -174,7 +219,7 @@ function staticExportPublicHrefPath(rawHref: string, base: string): string | und
 
   let url: URL;
   try {
-    url = new URL(rawHref, 'https://kovo.local');
+    url = new URL(rawHref, resolutionBase);
   } catch {
     return undefined;
   }
@@ -186,6 +231,14 @@ function staticExportPublicHrefPath(rawHref: string, base: string): string | und
   if (url.pathname.endsWith('/')) return undefined;
   if (path.posix.extname(url.pathname) === '') return undefined;
   return url.pathname;
+}
+
+function staticExportConfiguredAssetSource(source: string | URL): string | undefined {
+  if (source instanceof URL) {
+    if (source.protocol === 'file:') return fileURLToPath(source);
+    return undefined;
+  }
+  return source;
 }
 
 function staticExportPublicAssetSource(root: string, base: string, hrefPath: string): string {

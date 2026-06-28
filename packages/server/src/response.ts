@@ -342,11 +342,12 @@ export const respond = {
           'known-passive type. Serve as an attachment, or rasterize/re-encode the bytes.',
       );
     }
+    const filename = options.filename ?? object.metadata?.filename;
     return routeResponseOutcome(object.body, {
       // Server truth: the served type is the SNIFFED type, never the stored (possibly-client) type.
       contentType: sniffed.contentType,
       disposition,
-      ...(options.filename === undefined ? {} : { filename: options.filename }),
+      ...(filename === undefined ? {} : { filename }),
       ...(object.etag === undefined ? {} : { etag: object.etag }),
     });
   },

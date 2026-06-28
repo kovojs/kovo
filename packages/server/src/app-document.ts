@@ -9,7 +9,7 @@ import {
   renderRouteDocumentResponse,
 } from './document-core.js';
 import { normalizeForwardedSetCookie } from './cookies.js';
-import { createSignUrl } from './capability-route.js';
+import { createSignUrl, storageDownloadEndpointBasePath } from './capability-route.js';
 import { signingKeyRingFromCsrfSecret } from './csrf.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
@@ -53,10 +53,14 @@ export async function renderAppRouteDocumentResponse({
   // SPEC §6.6 / §9.1: thread `ctx.signUrl` onto the page context when a framework signing secret is
   // configured (the CSRF/anonymous-CSRF HMAC secret). A page can then mint a short-lived, scope-bound
   // capability URL for a stored object pointing at the framework download route's verify sink.
+  const storageDownloadBasePath = appStorageDownloadBasePath(app);
   const signUrlContext =
     app.csrf?.secret === undefined
       ? undefined
-      : createSignUrl({ secret: signingKeyRingFromCsrfSecret(app.csrf.secret) });
+      : createSignUrl({
+          secret: signingKeyRingFromCsrfSecret(app.csrf.secret),
+          ...(storageDownloadBasePath === undefined ? {} : { basePath: storageDownloadBasePath }),
+        });
   const signUrl =
     signUrlContext === undefined ? undefined : signUrlContext.signUrl.bind(signUrlContext);
   const routeInput: RouteRequestInput = {
@@ -211,6 +215,13 @@ export async function renderAppRouteDocumentResponse({
   }
 
   return withRefreshCookies(documentResponse);
+}
+
+function appStorageDownloadBasePath(app: KovoApp): string | undefined {
+  const basePaths = app.endpoints
+    .map((definition) => storageDownloadEndpointBasePath(definition))
+    .filter((basePath): basePath is string => basePath !== undefined);
+  return basePaths.length === 1 ? basePaths[0] : undefined;
 }
 
 /**

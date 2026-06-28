@@ -34,7 +34,12 @@
 import type { StorageCapability } from '@kovojs/core';
 import { normalizeStorageKey } from '@kovojs/core/internal/storage';
 
-import { endpoint, type EndpointDeclaration } from './endpoint.js';
+import {
+  endpoint,
+  type EndpointDeclaration,
+  type EndpointMethod,
+  type EndpointMount,
+} from './endpoint.js';
 import {
   DEFAULT_CAPABILITY_TTL_MS,
   signCapability,
@@ -104,6 +109,11 @@ export interface CapabilityMintFact {
 }
 
 const capabilityMintFacts: CapabilityMintFact[] = [];
+const STORAGE_DOWNLOAD_ENDPOINT_BASE_PATH = Symbol('kovo.storageDownloadEndpointBasePath');
+
+type StorageDownloadEndpointDeclaration = EndpointDeclaration<string, 'GET', 'prefix'> & {
+  [STORAGE_DOWNLOAD_ENDPOINT_BASE_PATH]?: string;
+};
 
 /**
  * Drain the recorded `ctx.signUrl(...)` capability-mint facts (SPEC §6.6, audit-only).
@@ -318,7 +328,7 @@ export function createStorageDownloadEndpoint(
     });
   };
 
-  return endpoint(basePath, {
+  const declaration = endpoint(basePath, {
     method: 'GET',
     mount: 'prefix',
     mountJustification:
@@ -347,8 +357,21 @@ export function createStorageDownloadEndpoint(
     },
     handler,
   });
+  Object.defineProperty(declaration, STORAGE_DOWNLOAD_ENDPOINT_BASE_PATH, {
+    configurable: false,
+    enumerable: false,
+    value: basePath,
+  });
+  return declaration;
 }
 
 function capabilityRouteAudience(basePath: string): string {
   return `storage-download:${basePath.replace(/\/+$/, '')}`;
+}
+
+/** @internal */
+export function storageDownloadEndpointBasePath(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+): string | undefined {
+  return (definition as StorageDownloadEndpointDeclaration)[STORAGE_DOWNLOAD_ENDPOINT_BASE_PATH];
 }
