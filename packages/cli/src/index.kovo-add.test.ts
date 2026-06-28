@@ -21,6 +21,19 @@ function importsUiPackage(source: string): boolean {
   );
 }
 
+function requiredKovoPackageDependencies(source: string): readonly string[] {
+  const sourceWithoutComments = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  return [
+    ...new Set(
+      [...sourceWithoutComments.matchAll(/['"](@kovojs\/[^/'"]+)(?:\/[^'"]*)?['"]/g)].map(
+        (match) => match[1],
+      ),
+    ),
+  ].sort();
+}
+
 describe('kovo add', () => {
   it('keeps the vendored UI catalog synchronized with @kovojs/ui package source', () => {
     expect(availableAddComponents()).toBe(
@@ -53,6 +66,9 @@ describe('kovo add', () => {
     for (const [name, entry] of Object.entries(vendoredUiComponents)) {
       expect(entry.fileName).toBe(`${name}.tsx`);
       expect(entry.packageVersion).toBe(manifest.version);
+      expect(entry.requiredPackageDependencies).toEqual(
+        requiredKovoPackageDependencies(entry.source),
+      );
       expect(entry.sourceHash).toBe(manifest.kovo.vendoredSourceHashes[name]);
       expect(entry.sourceHash).toMatch(/^sha256-/);
       expect(entry.source).toBe(
@@ -68,6 +84,94 @@ describe('kovo add', () => {
       expect(entry.source).not.toContain("from './theme.js'");
       expect(entry.source).not.toContain('kovo-c=');
       expect(entry.source).not.toContain('data-bind=');
+    }
+  });
+
+  it('surfaces missing package dependencies for copied dialog source', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
+    const outDir = join(root, 'src/components/ui');
+    writeFileSync(
+      join(root, 'package.json'),
+      `${JSON.stringify(
+        {
+          dependencies: {
+            '@kovojs/core': '0.1.3',
+            '@kovojs/style': '0.1.3',
+            '@kovojs/ui': '0.1.3',
+          },
+          packageManager: 'pnpm@10.12.1',
+          type: 'module',
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(vendoredUiComponents.dialog.requiredPackageDependencies).toEqual([
+        '@kovojs/core',
+        '@kovojs/headless-ui',
+        '@kovojs/style',
+      ]);
+
+      expect(main(['add', 'dialog', '--out', outDir])).toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain(
+        `ADD dialog path=${JSON.stringify(join(outDir, 'dialog.tsx'))} source=tsx package=@kovojs/ui@`,
+      );
+      expect(output).toContain(
+        'DEPENDENCIES status=missing packages=@kovojs/headless-ui install="pnpm add @kovojs/headless-ui"',
+      );
+      expect(readFileSync(join(outDir, 'dialog.tsx'), 'utf8')).toContain(
+        "from '@kovojs/headless-ui/dialog';",
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not print dependency instructions when copied component imports are already declared', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
+    const outDir = join(root, 'src/components/ui');
+    writeFileSync(
+      join(root, 'package.json'),
+      `${JSON.stringify(
+        {
+          dependencies: {
+            '@kovojs/core': '0.1.3',
+            '@kovojs/headless-ui': '0.1.3',
+            '@kovojs/style': '0.1.3',
+            '@kovojs/ui': '0.1.3',
+          },
+          packageManager: 'pnpm@10.12.1',
+          type: 'module',
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'dialog', '--out', outDir])).toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain(`ADD dialog path=${JSON.stringify(join(outDir, 'dialog.tsx'))}`);
+      expect(output).not.toContain('DEPENDENCIES status=missing');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
     }
   });
 
