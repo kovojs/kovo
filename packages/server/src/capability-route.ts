@@ -109,10 +109,15 @@ export interface CapabilityMintFact {
 }
 
 const capabilityMintFacts: CapabilityMintFact[] = [];
-const STORAGE_DOWNLOAD_ENDPOINT_BASE_PATH = Symbol('kovo.storageDownloadEndpointBasePath');
+const STORAGE_DOWNLOAD_ENDPOINT_INFO = Symbol('kovo.storageDownloadEndpointInfo');
+
+export interface StorageDownloadEndpointInfo {
+  readonly basePath: string;
+  readonly oneTimeReplayStore: boolean;
+}
 
 type StorageDownloadEndpointDeclaration = EndpointDeclaration<string, 'GET', 'prefix'> & {
-  [STORAGE_DOWNLOAD_ENDPOINT_BASE_PATH]?: string;
+  [STORAGE_DOWNLOAD_ENDPOINT_INFO]?: StorageDownloadEndpointInfo;
 };
 
 /**
@@ -150,6 +155,7 @@ export function createSignUrl(options: {
   secret: SigningSecret;
   basePath?: string;
   defaultScope?: string;
+  oneTimeReplayStore?: boolean;
   now?: () => number;
 }): SignUrlContext {
   const basePath = options.basePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH;
@@ -162,6 +168,14 @@ export function createSignUrl(options: {
       const scope = signOptions.scope ?? options.defaultScope;
       const expiresIn = signOptions.expiresIn ?? DEFAULT_CAPABILITY_TTL_MS;
       const oneTime = signOptions.oneTime === true;
+      if (oneTime && options.oneTimeReplayStore !== true) {
+        throw new Error(
+          'ctx.signUrl({ oneTime: true }) requires a storage download endpoint with a replayStore. ' +
+            'One-time capability URLs are unusable without a replay store at the verify sink ' +
+            '(SPEC §6.6); pass oneTimeReplayStore: true for an explicit signer bound to such an ' +
+            'endpoint, or configure replayStore on createStorageDownloadEndpoint().',
+        );
+      }
       const signed: SignedCapability = await signCapability(
         options.secret,
         {
@@ -357,10 +371,13 @@ export function createStorageDownloadEndpoint(
     },
     handler,
   });
-  Object.defineProperty(declaration, STORAGE_DOWNLOAD_ENDPOINT_BASE_PATH, {
+  Object.defineProperty(declaration, STORAGE_DOWNLOAD_ENDPOINT_INFO, {
     configurable: false,
     enumerable: false,
-    value: basePath,
+    value: {
+      basePath,
+      oneTimeReplayStore: options.replayStore !== undefined,
+    } satisfies StorageDownloadEndpointInfo,
   });
   return declaration;
 }
@@ -373,5 +390,12 @@ function capabilityRouteAudience(basePath: string): string {
 export function storageDownloadEndpointBasePath(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
 ): string | undefined {
-  return (definition as StorageDownloadEndpointDeclaration)[STORAGE_DOWNLOAD_ENDPOINT_BASE_PATH];
+  return storageDownloadEndpointInfo(definition)?.basePath;
+}
+
+/** @internal */
+export function storageDownloadEndpointInfo(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+): StorageDownloadEndpointInfo | undefined {
+  return (definition as StorageDownloadEndpointDeclaration)[STORAGE_DOWNLOAD_ENDPOINT_INFO];
 }

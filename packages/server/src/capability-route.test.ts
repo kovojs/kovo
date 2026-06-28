@@ -337,9 +337,34 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(oneTime).toBe(false);
   });
 
+  it('refuses to mint one-time URLs unless the signer is bound to a replay-store endpoint', async () => {
+    const ctx = createSignUrl({ secret: SECRET });
+
+    await expect(ctx.signUrl({ key: 'a.pdf', oneTime: true })).rejects.toThrow(
+      /requires a storage download endpoint with a replayStore/u,
+    );
+  });
+
+  it('mints one-time URLs when the selected endpoint has a replay store', async () => {
+    const key = 'once.txt';
+    const storage = await storageWith(key, 'once');
+    const replayStore = createMemoryCapabilityReplayStore();
+    const route = createStorageDownloadEndpoint({ secret: SECRET, storage, replayStore });
+    const ctx = createSignUrl({ secret: SECRET, oneTimeReplayStore: true });
+
+    const { url, oneTime } = await ctx.signUrl({ key, oneTime: true });
+    const first = await runEndpoint(route, new Request(`https://app.example${url}`));
+    const second = await runEndpoint(route, new Request(`https://app.example${url}`));
+
+    expect(oneTime).toBe(true);
+    expect(first.status).toBe(200);
+    expect(await first.text()).toBe('once');
+    expect(second.status).toBe(404);
+  });
+
   it('records a capability-mint fact per signUrl call (drained for kovo explain --capabilities)', async () => {
     drainCapabilityMintFacts();
-    const ctx = createSignUrl({ secret: SECRET });
+    const ctx = createSignUrl({ secret: SECRET, oneTimeReplayStore: true });
     await ctx.signUrl({ key: 'a.pdf', scope: 't1', expiresIn: 1234, oneTime: true });
     await ctx.signUrl({ key: 'b.pdf' });
     const facts = drainCapabilityMintFacts();
@@ -396,5 +421,39 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="custom.txt"');
     expect(await response.text()).toBe('custom-download');
+  });
+
+  it('route ctx.signUrl fails clearly when multiple storage download endpoints are mounted', async () => {
+    const key = 'receipts/custom.txt';
+    const storage = await storageWith(key, 'custom-download');
+    const errors: unknown[] = [];
+    const app = createApp({
+      csrf: { secret: SECRET, sessionId: () => 'anonymous' },
+      endpoints: [
+        createStorageDownloadEndpoint({ basePath: '/private-downloads', secret: SECRET, storage }),
+        createStorageDownloadEndpoint({ basePath: '/public-downloads', secret: SECRET, storage }),
+      ],
+      onError(error) {
+        errors.push(error);
+      },
+      routes: [
+        route('/', {
+          async page(context) {
+            if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
+            await context.signUrl({ key });
+            return renderedHtml('<main>unreachable</main>');
+          },
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+
+    const response = await handler(new Request('https://app.example/'));
+
+    expect(response.status).toBe(500);
+    expect(errors).toHaveLength(1);
+    expect(String(errors[0])).toContain('ctx.signUrl() is ambiguous');
+    expect(String(errors[0])).toContain('/private-downloads');
+    expect(String(errors[0])).toContain('/public-downloads');
   });
 });
