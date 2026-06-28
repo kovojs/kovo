@@ -19,7 +19,7 @@ pass is filed in `plans/papercuts-12.md`.
 
 ### A. Mutation Failure Semantics
 
-- [ ] **No-JS mutation rate-limit denials are rewritten to login redirects for sessionless requests.** (high, security/soundness; found by `auth-storage-regression-2`)
+- [x] **No-JS mutation rate-limit denials are rewritten to login redirects for sessionless requests.** (high, security/soundness; found by `auth-storage-regression-2`)
   - Observed behavior: `guards.rateLimit({ max: 0, per: 'global' })` returned
     `429 Retry-After` for route and query guards, but the same guard on a no-JS
     mutation returned `303 Location: /login?next=%2F` with no `Retry-After`.
@@ -39,6 +39,10 @@ pass is filed in `plans/papercuts-12.md`.
   - Acceptance: no-JS mutation guard failures preserve non-auth status mapping
     before reauth redirect handling, with focused coverage for rate-limit 429
     and unauthenticated auth-guard 303.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest --run packages/server/src/mutation-endpoint.test.ts`
+    passed with no-JS mutation coverage for rate-limit `429 Retry-After` and
+    true unauthenticated auth-guard `303` reauth.
 
 ### B. Static Export Fail-Closed Boundary
 
