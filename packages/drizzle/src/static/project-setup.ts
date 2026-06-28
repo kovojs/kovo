@@ -61,11 +61,13 @@ import {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
+      lib: ['lib.es2022.d.ts'],
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       noEmit: true,
       skipLibCheck: true,
       strict: true,
       target: ts.ScriptTarget.ESNext,
+      types: [],
       ...options.compilerOptions,
     },
     skipAddingFilesFromTsConfig: true,
@@ -129,6 +131,10 @@ import {
   extraction: ProjectExtraction,
 ): Map<string, Map<string, ExtractedFunction>> {
   const extractionsByFile = new Map<string, Map<string, ExtractedFunction>>();
+  const relationTargetTableNames = projectRelationTargetTableNamesByProperty(
+    extraction.sourceFiles,
+    extraction.tableNamesBySymbol,
+  );
 
   extraction.sourceFiles.forEach((sourceFile, index) => {
     const file = extraction.files[index];
@@ -141,10 +147,6 @@ import {
     );
     const relationalTableNames = projectRelationalTableNamesByProperty(
       sourceFile,
-      extraction.tableNamesBySymbol,
-    );
-    const relationTargetTableNames = projectRelationTargetTableNamesByProperty(
-      extraction.sourceFiles,
       extraction.tableNamesBySymbol,
     );
     const objectCallbacks = projectObjectLiteralCallbacks(sourceFile);

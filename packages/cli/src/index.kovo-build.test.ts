@@ -326,6 +326,55 @@ export default createApp({
     }
   });
 
+  it('skips project-mode Drizzle analysis for apps without Drizzle imports', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-no-drizzle-fast-path-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    vi.doMock('@kovojs/drizzle/internal/static', () => {
+      throw new Error('Drizzle analyzer should not load for non-Drizzle apps');
+    });
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, publicAccess, route } from '@kovojs/server';
+
+const domain = () => 'not drizzle';
+domain();
+
+export default createApp({
+  routes: [
+    route('/fast-path', {
+      access: publicAccess('non-Drizzle build fast path fixture'),
+      page: () => '<main>Fast path</main>',
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      expect(existsSync(join(outDir, '.kovo/graph.json'))).toBe(true);
+    } finally {
+      vi.doUnmock('@kovojs/drizzle/internal/static');
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('counts inline optimistic query entries without registry query duplication', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-inline-optimistic-'));
     const appPath = join(root, 'app.mjs');

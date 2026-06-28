@@ -1,6 +1,6 @@
 # Plan: Make `kovo check` / `kovo build` fast
 
-Status: **in progress / shared project implemented; cache and pipeline work open**
+Status: **in progress / shared project, fast path, and analyzer-surface trims implemented; cache and pipeline work open**
 Owner: perf
 Last verified: 2026-06-28
 
@@ -75,11 +75,15 @@ app's check time; all must preserve SPEC.md §11.1 soundness.
     expected KV414/KV407 diagnostics and improved from ~47s wall/~52s user to 37.37s wall/39.63s
     user.
 
-- [ ] **2. Syntactic fast-path: skip project-mode drizzle analysis when the app uses no
+- [x] **2. Syntactic fast-path: skip project-mode drizzle analysis when the app uses no
       Drizzle receivers/schema.** Impact: **very high for non-DB apps**, none for DB apps ·
       Effort: low · Risk: low. A cheap `ts.createSourceFile` pre-scan can prove "no drizzle
       import / no receiver surface" and short-circuit the entire expensive type-checker path.
       The project-mode passes are the cost; many apps don't need them.
+  - Evidence (2026-06-28): `packages/cli/src/index.kovo-build.test.ts` now mocks
+    `@kovojs/drizzle/internal/static` to throw and proves `kovo build` for a non-Drizzle app
+    still succeeds; `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "skips project-mode Drizzle analysis|loads TypeScript app modules|fails before artifact emission when the derived kovo check graph"`
+    passed.
 
 - [ ] **3. Content-addressed incremental cache for the analysis.** Impact: **high**
       (repeat runs / dev / CI with warm cache) · Effort: medium-high · Risk: medium (cache
@@ -94,20 +98,28 @@ app's check time; all must preserve SPEC.md §11.1 soundness.
       instead of recomputing. Consider whether `build:prod` is even required in `check` or can
       be a graph-only analysis run.
 
-- [ ] **5. Narrow the type-checker's input surface.** Impact: medium-high · Effort:
+- [x] **5. Narrow the type-checker's input surface.** Impact: medium-high · Effort:
       low-medium · Risk: low-medium. `skipLibCheck` is already on. Add `types: []` (stop
       auto-including every `@types/*`, e.g. node/vitest, into the drizzle project), trim `lib`
       to the minimum the analysis needs, and share a `ts.createDocumentRegistry` so `.d.ts`
       ASTs are parsed once even across any projects that must stay separate. The drizzle
       analysis only needs `drizzle-orm` types + app source.
+  - Evidence (2026-06-28): `packages/drizzle/src/static/project-setup.ts` sets the shared
+    ts-morph project to `types: []` and `lib: ['lib.es2022.d.ts']`; `pnpm exec vitest run packages/drizzle/src packages/cli/src/index.kovo-build.test.ts`
+    passed with 642 tests.
 
-- [ ] **6. Cut redundant AST traversals inside a pass.** Impact: medium · Effort: medium ·
+- [x] **6. Cut redundant AST traversals inside a pass.** Impact: medium · Effort: medium ·
       Risk: low. `projectFunctionExtractionsByFileName` walks `getDescendantsOfKind(FunctionDeclaration)`
       and `getVariableDeclarations()` twice each and re-runs cross-file work
       (`projectRelationTargetTableNamesByProperty(extraction.sourceFiles, …)`) once per file →
       O(files²). Walk each file's descendants once, hoist cross-file computations out of the
       per-file loop. ts-morph node-wrapping (`cloneNode`, `getCompilerForEachDescendantsIterator`)
       is ~3% and scales with traversal count.
+  - Evidence (2026-06-28): `projectRelationTargetTableNamesByProperty(extraction.sourceFiles, …)`
+    is hoisted once per extraction in `packages/drizzle/src/static/project-setup.ts` and
+    `packages/drizzle/src/static.ts`; `pnpm exec vitest run packages/drizzle/src packages/cli/src/index.kovo-build.test.ts`
+    passed, and `examples/commerce` `pnpm exec kovo build ./src/app.tsx --preset node --out dist-fast-check-measure`
+    still emitted the expected KV414/KV407 diagnostics while timing at 36.53s real/38.30s user.
 
 - [ ] **7. Lazy-load pglite and eliminate the stray `spawnSync`.** Impact: low-medium ·
       Effort: low · Risk: low. `@electric-sql/pglite` (WASM Postgres) loads during static

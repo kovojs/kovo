@@ -1710,6 +1710,10 @@ function extractTouchGraphFromPreparedFiles(
   const sourceContext = projectSourceModuleContext(extraction);
   const contextFiles = projectContextFiles(extraction);
   const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
+  const relationTargetTableNames = projectRelationTargetTableNamesByProperty(
+    extraction.sourceFiles,
+    extraction.tableNamesBySymbol,
+  );
   return extractQueryFactsFromPreparedFiles(
     extraction.files,
     (file) => {
@@ -1730,10 +1734,7 @@ function extractTouchGraphFromPreparedFiles(
           sourceFile,
           extraction.tableNamesBySymbol,
         ),
-        relationTargetTableNames: projectRelationTargetTableNamesByProperty(
-          extraction.sourceFiles,
-          extraction.tableNamesBySymbol,
-        ),
+        relationTargetTableNames,
         unmodeledRelationNamesBySymbol: extraction.unmodeledRelationNamesBySymbol,
         tableNamesBySymbol: extraction.tableNamesBySymbol,
       });
