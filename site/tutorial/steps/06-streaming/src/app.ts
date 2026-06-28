@@ -6,6 +6,7 @@ import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
 import * as productListComponent from './components/product-list.js';
+import { cart, product } from './domains.js';
 import {
   cartQuery,
   loadCart,
@@ -54,13 +55,13 @@ export const shopCsrf = {
 // runtime-verifies the declaration against observed writes.
 export const addToCartTouches = [
   {
-    domain: 'cart',
+    domain: cart.key,
     keys: null,
     site: 'site/tutorial/steps/06-streaming/src/app.ts:addToCart',
     via: 'cart_items',
   },
   {
-    domain: 'product',
+    domain: product.key,
     keys: 'arg:productId',
     predicate: 'eq',
     site: 'site/tutorial/steps/06-streaming/src/app.ts:addToCart',

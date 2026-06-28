@@ -19,7 +19,8 @@ import { count, eq, sql } from 'drizzle-orm';
 
 import type { CommerceDb } from './db.js';
 import { commerceCartPageMeta } from './graph.js';
-import { cart, cartQuery, order, orderHistoryQuery, product, productGridQuery } from './queries.js';
+import { cart, order, product } from './model.js';
+import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 
 export { commerceCartPageMeta, commerceStylesheetHrefs } from './graph.js';

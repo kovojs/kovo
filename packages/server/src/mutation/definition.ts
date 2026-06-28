@@ -480,16 +480,16 @@ export function mutation(
 
   // SPEC §6.3: app authors may write `mutation({ input, handler })`; the stable wire key is
   // source-derived by the compiler because runtime JavaScript cannot prove export binding names.
-	  // Compiler-emitted IR assigns `.key` immediately after the declaration. Until then, helpers that
-	  // need a wire endpoint fail closed through `assertMutationKey`.
-	  const fileFields = mutationInputFileFields(keyOrDefinition.input);
-	  const queue = normalizeMutationQueue(keyOrDefinition.queue);
-	  return {
-	    ...keyOrDefinition,
-	    ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
-	    ...(queue === undefined ? {} : { queue }),
-	  } as MutationDefinition<string> & { key: string };
-	}
+  // Compiler-emitted IR assigns `.key` immediately after the declaration. Until then, helpers that
+  // need a wire endpoint fail closed through `assertMutationKey`.
+  const fileFields = mutationInputFileFields(keyOrDefinition.input);
+  const queue = normalizeMutationQueue(keyOrDefinition.queue);
+  return {
+    ...keyOrDefinition,
+    ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
+    ...(queue === undefined ? {} : { queue }),
+  } as MutationDefinition<string> & { key: string };
+}
 
 /**
  * @internal Compiler-emitted/generated ABI for SPEC §4.1 source-derived mutation identities.

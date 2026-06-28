@@ -1,6 +1,8 @@
 import { kovo } from '@kovojs/drizzle';
 import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
+import { contact } from './model.js';
+
 // The app's data model. This is the part you change first.
 //
 // The `kovo({ domain, key })` annotation registers the `contact` domain and the
@@ -15,7 +17,7 @@ export const contacts = pgTable(
     email: text('email').notNull(),
     company: text('company').notNull().default(''),
   },
-  kovo({ domain: 'contact', key: (table) => table.id }),
+  kovo({ domain: contact, key: (table) => table.id }),
 );
 
 // --- Auth infrastructure -------------------------------------------------------

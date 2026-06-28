@@ -1,6 +1,8 @@
 import { kovo } from '@kovojs/drizzle';
 import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
 
+import { cart, order, product } from './model.js';
+
 export const products = pgTable(
   'products',
   {
@@ -11,7 +13,7 @@ export const products = pgTable(
     stock: integer('stock').notNull(),
     unitPrice: integer('unit_price').notNull(),
   },
-  kovo({ domain: 'product', key: (t) => t.id }),
+  kovo({ domain: product, key: (t) => t.id }),
 );
 
 export const cartItems = pgTable(
@@ -22,7 +24,7 @@ export const cartItems = pgTable(
     qty: integer('qty').notNull(),
     unitPrice: integer('unit_price').notNull(),
   },
-  kovo({ domain: 'cart', key: (t) => t.id }),
+  kovo({ domain: cart, key: (t) => t.id }),
 );
 
 export const orders = pgTable(
@@ -36,5 +38,5 @@ export const orders = pgTable(
   },
   // SPEC §10.1: orders are principal-owned (the order's user); the §10.3 IDOR
   // audit checks that order reads are scoped to that owner.
-  kovo({ domain: 'order', key: (t) => t.id, owner: (t) => t.userId }),
+  kovo({ domain: order, key: (t) => t.id, owner: (t) => t.userId }),
 );

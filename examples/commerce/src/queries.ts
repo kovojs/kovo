@@ -1,15 +1,8 @@
-import {
-  domain,
-  guards,
-  publicAccess,
-  query,
-  s,
-  type QueryLoadContext,
-  type Reader,
-} from '@kovojs/server';
+import { guards, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
 import { eq, gt, sum } from 'drizzle-orm';
 
 import type { CommerceDb } from './db.js';
+import { cart, order } from './model.js';
 import { cartItems, orders, products } from './schema.js';
 
 export interface CartQueryResult {
@@ -43,10 +36,6 @@ export interface CommerceQueryRequest {
   // scopes the rows. Cart/product reads remain global (no session needed).
   session?: { id?: string; user?: { id?: string } | null } | null;
 }
-
-export const cart = domain('cart');
-export const order = domain('order');
-export const product = domain('product');
 
 // SPEC §9.4/§10.3 (MARQUEE): a query loader destructures the framework-owned read-only handle
 // `{ db }` (typed `Reader<CommerceDb>` — the write verbs are removed at the type level and throw
@@ -127,7 +116,7 @@ export const orderHistoryQuery = query({
   // order id ships only the new order row instead of the whole history.
   // (Compiler-derived delta meta is the deferred zero-config piece; this
   // declares it explicitly today.)
-  delta: [{ domain: 'order', key: 'id', path: 'items' }],
+  delta: [{ domain: order.key, key: 'id', path: 'items' }],
 });
 
 // SPEC §9.4 (MARQUEE): the framework provides `context.db` as the read-only managed handle. A loader

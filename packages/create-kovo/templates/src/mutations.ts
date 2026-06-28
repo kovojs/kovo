@@ -1,21 +1,20 @@
-import { domain, guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';
+import { guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
 
 import { appCsrf, type AppRequest } from './auth.js';
-import type { ContactListResult } from './queries.js';
+import { contact } from './model.js';
+import { contactsQuery, type ContactListResult } from './queries.js';
 import { contacts } from './schema.js';
-
-const contact = domain('contact');
 
 // Register the query result + the queries this mutation invalidates. The compiler
 // uses these to type-check optimistic coverage (KV310) and to refresh the contact
 // list after a write (SPEC.md §11.1).
 declare module '@kovojs/core' {
   interface QueryRegistry {
-    contacts: ContactListResult;
+    'queries/contacts-query': ContactListResult;
   }
   interface InvalidationSets {
-    'mutations/add-contact': 'contacts';
+    'mutations/add-contact': 'queries/contacts-query';
   }
 }
 
@@ -40,7 +39,7 @@ export const addContact = mutation({
     company: s.string(),
   }),
   optimistic: {
-    contacts(draft: ContactListResult, $input: AddContactInput) {
+    [contactsQuery.key](draft: ContactListResult, $input: AddContactInput) {
       const row = {
         id: `pending-${$input.email}`,
         name: $input.name,

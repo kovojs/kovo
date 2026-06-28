@@ -76,7 +76,7 @@
         "startLine": 6,
         "anchorLine": 8,
         "endLine": 8,
-        "code": "// Shared demo facts: invalidation domains, typed mutation inputs, and the small\n// request/result shapes consumed across the interactive example.\nexport const question = domain('question');",
+        "code": "// Shared demo facts: invalidation domains, typed mutation inputs, and the small\n// request/result shapes consumed across the interactive example.\nexport const question = domain();",
         "lang": "ts"
       }
     },
@@ -168,7 +168,7 @@
         "startLine": 9,
         "anchorLine": 9,
         "endLine": 9,
-        "code": "export const answer = domain('answer');",
+        "code": "export const answer = domain();",
         "lang": "ts"
       }
     },
@@ -255,7 +255,7 @@
         "startLine": 10,
         "anchorLine": 10,
         "endLine": 10,
-        "code": "export const vote = domain('vote');",
+        "code": "export const vote = domain();",
         "lang": "ts"
       }
     },
@@ -270,7 +270,7 @@
         "startLine": 20,
         "anchorLine": 22,
         "endLine": 43,
-        "code": "// The list is ordered by stable id so a vote changes the score without reshuffling\n// rows while a fragment response is being applied.\nexport const questionList = query('questionList', {\n  load: async (_input: unknown, context?: SoQueryLoadContext) => {\n    const db = requireSoQueryDb(context);\n    const items = await db\n      .select({\n        authorId: questions.authorId,\n        authorName: questions.authorName,\n        body: questions.body,\n        createdAt: questions.createdAt,\n        id: questions.id,\n        tags: questions.tags,\n        title: questions.title,\n        score: questions.score,\n        answerCount: questions.answerCount,\n      })\n      .from(questions)\n      .orderBy(questions.id);\n    // Keep the explicit property for the artifact generator.\n    return { items: items };\n  },\n  reads: [question],\n});",
+        "code": "// The list is ordered by stable id so a vote changes the score without reshuffling\n// rows while a fragment response is being applied.\nexport const questionList = query({\n  load: async (_input: unknown, context?: SoQueryLoadContext) => {\n    const db = requireSoQueryDb(context);\n    const items = await db\n      .select({\n        authorId: questions.authorId,\n        authorName: questions.authorName,\n        body: questions.body,\n        createdAt: questions.createdAt,\n        id: questions.id,\n        tags: questions.tags,\n        title: questions.title,\n        score: questions.score,\n        answerCount: questions.answerCount,\n      })\n      .from(questions)\n      .orderBy(questions.id);\n    // Keep the explicit property for the artifact generator.\n    return { items: items };\n  },\n  reads: [question],\n});",
         "lang": "ts"
       }
     },
@@ -285,7 +285,7 @@
         "startLine": 45,
         "anchorLine": 46,
         "endLine": 61,
-        "code": "// All answers, ordered by stable id.\nexport const answerList = query('answerList', {\n  load: async (_input: unknown, context?: SoQueryLoadContext) => {\n    const db = requireSoQueryDb(context);\n    const items = await db\n      .select({\n        id: answers.id,\n        questionId: answers.questionId,\n        body: answers.body,\n        score: answers.score,\n      })\n      .from(answers)\n      .orderBy(answers.id);\n    return { items: items };\n  },\n  reads: [answer],\n});",
+        "code": "// All answers, ordered by stable id.\nexport const answerList = query({\n  load: async (_input: unknown, context?: SoQueryLoadContext) => {\n    const db = requireSoQueryDb(context);\n    const items = await db\n      .select({\n        id: answers.id,\n        questionId: answers.questionId,\n        body: answers.body,\n        score: answers.score,\n      })\n      .from(answers)\n      .orderBy(answers.id);\n    return { items: items };\n  },\n  reads: [answer],\n});",
         "lang": "ts"
       }
     },
@@ -300,7 +300,7 @@
         "startLine": 63,
         "anchorLine": 63,
         "endLine": 88,
-        "code": "export const questionDetail = query('questionDetail', {\n  args: s.object({ id: s.string() }),\n  load: async (\n    input: { id: string },\n    context?: SoQueryLoadContext,\n  ): Promise<QuestionDetailResult | null> => {\n    const db = requireSoQueryDb(context);\n    const [row] = await db\n      .select({\n        id: questions.id,\n        title: questions.title,\n        body: questions.body,\n        authorId: questions.authorId,\n        score: questions.score,\n        answerCount: questions.answerCount,\n        authorName: questions.authorName,\n        tags: questions.tags,\n        createdAt: questions.createdAt,\n      })\n      .from(questions)\n      .where(eq(questions.id, input.id))\n      .limit(1);\n    return row ?? null;\n  },\n  reads: [question],\n});",
+        "code": "export const questionDetail = query({\n  args: s.object({ id: s.string() }),\n  load: async (\n    input: { id: string },\n    context?: SoQueryLoadContext,\n  ): Promise<QuestionDetailResult | null> => {\n    const db = requireSoQueryDb(context);\n    const [row] = await db\n      .select({\n        id: questions.id,\n        title: questions.title,\n        body: questions.body,\n        authorId: questions.authorId,\n        score: questions.score,\n        answerCount: questions.answerCount,\n        authorName: questions.authorName,\n        tags: questions.tags,\n        createdAt: questions.createdAt,\n      })\n      .from(questions)\n      .where(eq(questions.id, input.id))\n      .limit(1);\n    return row ?? null;\n  },\n  reads: [question],\n});",
         "lang": "ts"
       }
     },
@@ -315,7 +315,7 @@
         "startLine": 90,
         "anchorLine": 90,
         "endLine": 113,
-        "code": "export const questionAnswers = query('questionAnswers', {\n  args: s.object({ questionId: s.string() }),\n  load: async (\n    input: { questionId: string },\n    context?: SoQueryLoadContext,\n  ): Promise<QuestionAnswersResult> => {\n    const db = requireSoQueryDb(context);\n    return db\n      .select({\n        id: answers.id,\n        questionId: answers.questionId,\n        body: answers.body,\n        score: answers.score,\n        accepted: answers.accepted,\n        authorId: answers.authorId,\n        authorName: answers.authorName,\n        createdAt: answers.createdAt,\n      })\n      .from(answers)\n      .where(eq(answers.questionId, input.questionId))\n      .orderBy(asc(answers.id));\n  },\n  reads: [answer],\n});",
+        "code": "export const questionAnswers = query({\n  args: s.object({ questionId: s.string() }),\n  load: async (\n    input: { questionId: string },\n    context?: SoQueryLoadContext,\n  ): Promise<QuestionAnswersResult> => {\n    const db = requireSoQueryDb(context);\n    return db\n      .select({\n        id: answers.id,\n        questionId: answers.questionId,\n        body: answers.body,\n        score: answers.score,\n        accepted: answers.accepted,\n        authorId: answers.authorId,\n        authorName: answers.authorName,\n        createdAt: answers.createdAt,\n      })\n      .from(answers)\n      .where(eq(answers.questionId, input.questionId))\n      .orderBy(asc(answers.id));\n  },\n  reads: [answer],\n});",
         "lang": "ts"
       }
     },
@@ -330,7 +330,7 @@
         "startLine": 115,
         "anchorLine": 116,
         "endLine": 123,
-        "code": "// Total score across all question votes.\nexport const questionScore = query('questionScore', {\n  load: async (_input: unknown, context?: SoQueryLoadContext) => {\n    const db = requireSoQueryDb(context);\n    const rows = await db.select({ value: sum(votes.value) }).from(votes);\n    return { score: Number(rows[0]?.value ?? 0) };\n  },\n  reads: [vote],\n});",
+        "code": "// Total score across all question votes.\nexport const questionScore = query({\n  load: async (_input: unknown, context?: SoQueryLoadContext) => {\n    const db = requireSoQueryDb(context);\n    const rows = await db.select({ value: sum(votes.value) }).from(votes);\n    return { score: Number(rows[0]?.value ?? 0) };\n  },\n  reads: [vote],\n});",
         "lang": "ts"
       }
     }

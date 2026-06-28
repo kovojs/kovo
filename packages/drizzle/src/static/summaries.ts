@@ -2596,7 +2596,8 @@ function objectLiteralStaticPathInputPath(
 
 /** @internal */ export function isAsyncMaterializedViewAnnotation(
   annotation: ExtractedTableAnnotation,
-): annotation is KovoDomainTableAnnotation & {
+): annotation is ExtractedTableAnnotation & {
+  domain: string;
   name: string;
   relation: 'materialized-view';
   refresh: 'async';

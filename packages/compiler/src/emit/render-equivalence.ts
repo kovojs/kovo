@@ -276,13 +276,11 @@ function renderSemanticAttributes(
       .join('');
   }
 
-  const formMutation = enhancedMutationFormLowering(
-    model,
-    element,
-    options.registryFacts || options.fileName
-      ? { fileName: options.fileName, registryFacts: options.registryFacts }
-      : {},
-  );
+  const mutationFormOptions: SemanticRenderContext = {};
+  if (options.fileName !== undefined) mutationFormOptions.fileName = options.fileName;
+  if (options.registryFacts !== undefined)
+    mutationFormOptions.registryFacts = options.registryFacts;
+  const formMutation = enhancedMutationFormLowering(model, element, mutationFormOptions);
   const viewTransitionStyle = semanticViewTransitionStyle(element);
   const fieldErrorDescribedBy = semanticFieldErrorDescribedByAttribute(model, element);
   const semanticAttributes: string[] = [];

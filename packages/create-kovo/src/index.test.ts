@@ -38,6 +38,7 @@ const TEMPLATE_FILES = [
   'src/schema.ts',
   'src/db.ts',
   'src/auth.ts',
+  'src/model.ts',
   'src/queries.ts',
   'src/mutations.ts',
   'src/components/contacts.tsx',

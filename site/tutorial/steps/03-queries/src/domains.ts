@@ -6,6 +6,6 @@ import { domain } from '@kovojs/server';
 // examples/commerce uses.
 
 // snippet:domains
-export const cart = domain('cart');
-export const product = domain('product');
+export const cart = domain();
+export const product = domain();
 // /snippet

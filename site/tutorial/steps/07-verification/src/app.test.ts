@@ -27,6 +27,7 @@ import {
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
 import { createShopDb, type ShopDb } from './db.js';
+import { cart, order, product } from './domains.js';
 import { cartQuery, orderHistoryQuery, productsQuery } from './queries.js';
 
 // Tutorial step 07: the whole behavior surface is checkable without a
@@ -228,9 +229,9 @@ describe('tutorial step 07 — testing & verification', () => {
       touchGraph: shopTouchGraph as unknown as ShopTouchGraph,
       verification: {
         domainByTable: {
-          cart_items: 'cart',
-          orders: 'order',
-          products: 'product',
+          cart_items: cart.key,
+          orders: order.key,
+          products: product.key,
         },
       },
     });
@@ -247,9 +248,9 @@ describe('tutorial step 07 — testing & verification', () => {
       }),
     ).resolves.toMatchObject({
       changes: [
-        { domain: 'cart', input: { productId: 'p1', quantity: 2 } },
-        { domain: 'order', input: { productId: 'p1', quantity: 2 } },
-        { domain: 'product', input: { productId: 'p1', quantity: 2 }, keys: ['p1'] },
+        { domain: cart.key, input: { productId: 'p1', quantity: 2 } },
+        { domain: order.key, input: { productId: 'p1', quantity: 2 } },
+        { domain: product.key, input: { productId: 'p1', quantity: 2 }, keys: ['p1'] },
       ],
       ok: true,
       rerunQueries: [cartQuery.key, productsQuery.key, orderHistoryQuery.key],
@@ -338,7 +339,7 @@ describe('tutorial step 07 — testing & verification', () => {
     expect(success.body).toContain('<kovo-fragment target="order-history">');
     expect(success.body).toContain('kovo-key="order-1"');
     expect(success.headers['Kovo-Changes']).toBe(
-      '[{"domain":"cart"},{"domain":"order"},{"domain":"product","keys":["p1"]}]',
+      `[{"domain":"${cart.key}"},{"domain":"${order.key}"},{"domain":"${product.key}","keys":["p1"]}]`,
     );
 
     const failure = await submitAddToCart(

@@ -5,6 +5,7 @@ import { guards, mutation, route, s, session, type MutationFail } from '@kovojs/
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
+import { cart, order, product } from './domains.js';
 import { OrderHistory } from './components/order-history.js';
 import * as productListComponent from './components/product-list.js';
 import {
@@ -62,19 +63,19 @@ export const shopCsrf = {
 
 export const addToCartTouches = [
   {
-    domain: 'cart',
+    domain: cart.key,
     keys: null,
     site: 'site/tutorial/steps/07-verification/src/app.ts:addToCart',
     via: 'cart_items',
   },
   {
-    domain: 'order',
+    domain: order.key,
     keys: null,
     site: 'site/tutorial/steps/07-verification/src/app.ts:addToCart',
     via: 'orders',
   },
   {
-    domain: 'product',
+    domain: product.key,
     keys: 'arg:productId',
     predicate: 'eq',
     site: 'site/tutorial/steps/07-verification/src/app.ts:addToCart',

@@ -30,7 +30,7 @@ type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;
 // extracted from this loader so the compiler knows it depends on the `contact`
 // domain and refreshes after `contacts/add`. The read shows the signed-in user's
 // data, so its KV436 access decision is the session-presence guard (SPEC §10.2).
-export const contactsQuery = query('contacts', {
+export const contactsQuery = query({
   guard: appAuthed,
   async load(_input: unknown, context?: AppQueryLoadContext): Promise<ContactListResult> {
     const db = requireDb(context);

@@ -97,11 +97,11 @@
       "label": "queries/cart-query",
       "data": {},
       "source": {
-        "file": "queries.ts",
-        "startLine": 41,
-        "anchorLine": 41,
-        "endLine": 41,
-        "code": "export const cart = domain('cart');",
+        "file": "model.ts",
+        "startLine": 3,
+        "anchorLine": 3,
+        "endLine": 3,
+        "code": "export const cart = domain();",
         "lang": "ts"
       }
     },
@@ -112,11 +112,11 @@
       "label": "product",
       "data": {},
       "source": {
-        "file": "queries.ts",
-        "startLine": 43,
-        "anchorLine": 43,
-        "endLine": 43,
-        "code": "export const product = domain('product');",
+        "file": "model.ts",
+        "startLine": 5,
+        "anchorLine": 5,
+        "endLine": 5,
+        "code": "export const product = domain();",
         "lang": "ts"
       }
     },
@@ -127,11 +127,11 @@
       "label": "order",
       "data": {},
       "source": {
-        "file": "queries.ts",
-        "startLine": 42,
-        "anchorLine": 42,
-        "endLine": 42,
-        "code": "export const order = domain('order');",
+        "file": "model.ts",
+        "startLine": 4,
+        "anchorLine": 4,
+        "endLine": 4,
+        "code": "export const order = domain();",
         "lang": "ts"
       }
     },

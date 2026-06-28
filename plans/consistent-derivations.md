@@ -1,9 +1,9 @@
 # Consistent Derivations Plan
 
 **Status:** Active implementation started 2026-06-27. Baseline/SPEC contract, runtime/compiler
-identity slices, Vite standalone lowering, and docs-focused migration are integrated. Drift
-diagnostics, query-reference ergonomics, first-class queue objects, and remaining legacy cleanup are
-still open.
+identity slices, Vite standalone lowering, docs-focused migration, imported optimistic query-value
+lowering, and starter/example/tutorial source migration are integrated. Remaining legacy API
+compatibility cleanup is still open.
 **Source of truth:** `SPEC.md` remains normative. This plan should update `SPEC.md` first, then code,
 tests, generated artifacts, and docs.
 
@@ -139,7 +139,7 @@ packages/compiler/src/registry.test.ts packages/compiler/src/diagnostic-coverage
 packages/compiler/src/spec-coverage-map.test.ts packages/core/src/diagnostics.test.ts`,
     `pnpm run check:vp`, and `git diff --check`.
 
-- [ ] **Update mutation form lowering and registry typing to use mutation values instead of authored key strings.**
+- [x] **Update mutation form lowering and registry typing to use mutation values instead of authored key strings.**
   - `<form mutation={addToCart}>` should continue to be the normal author path.
   - Direct helpers should accept the mutation definition object; bare string helpers should be
     reserved for generated IR or removed from app-facing docs.
@@ -160,11 +160,15 @@ examples/stackoverflow/src/optimism-derivation.test.ts`, `pnpm run check:vp`, an
     `packages/browser/src/optimism-typing.test.ts` now document and prove `form(addMutation)` as
     the normal `OptimisticFor` typing path; verification passed `pnpm exec vitest run
 packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`. Remaining gap:
-    direct-test query/domain declarations still need a generated live-target/query-key lowering path
-    before their key-first forms can be removed. `packages/browser/src/submit-context-apply.test.ts`
-    now exercises `ctx.submit` with mutation-value form handles; verification passed
+    `packages/browser/src/submit-context-apply.test.ts`
+    exercises `ctx.submit` with mutation-value form handles; verification passed
     `pnpm exec vitest run packages/browser/src/submit-context-apply.test.ts
 packages/browser/src/submit-context-failure.test.ts`.
+    Current-session evidence (2026-06-28): the authored-surface scan
+    `rg -n "\b(domain|tag)\(\s*['\"]|\bquery\(\s*['\"]|\bmutation\(\s*['\"]|\bform\(\s*['\"]" packages/create-kovo/templates examples site/tutorial site/content docs`
+    finds no app-facing string-keyed `form(...)`, `query(...)`, or `mutation(...)` calls; the only
+    remaining hits are the documented `domain('billing')`/`tag('billing:invoice')` escape hatch.
+    Verification passed `git diff --check`.
 
 ## Phase 3 - Query Keys
 
@@ -194,7 +198,7 @@ packages/compiler/src/compile-component.test.ts packages/compiler/src/registry-i
     `query.elevated({ ... })` declarations are assigned derived keys before `createApp()` consumes
     them.
 
-- [ ] **Replace string-keyed query references in authoring surfaces.**
+- [x] **Replace string-keyed query references in authoring surfaces.**
   - Optimistic maps should not require authors to spell query keys manually when query values are in
     scope.
   - Component `queries` object keys remain render-local names; the backing query identity should come
@@ -208,8 +212,14 @@ packages/compiler/src/scan/optimistic-inline.test.ts examples/crm/src/interactiv
     The scanner now also resolves imported query value references when the caller supplies static
     imported source, including explicit-key queries and source-derived object-form query exports;
     `pnpm exec vitest run packages/compiler/src/scan/optimistic-inline.test.ts`, `pnpm run
-check:vp`, and `git diff --check` passed. Remaining gap: the production lowering caller still needs
-    to pass the resolver, so this authoring-surface item remains open.
+check:vp`, and `git diff --check` passed. Current-session evidence (2026-06-28):
+    `packages/cli/src/commands/compile.ts` now feeds mutation source context and local relative
+    static imports into the production `compile drizzle-optimistic` lowering path, and
+    `packages/cli/src/index.kovo-compile.test.ts` proves an imported object-form query value
+    suppresses generated optimistic code by its source-derived key. Verification passed
+    `pnpm exec vitest run packages/cli/src/index.kovo-compile.test.ts --testNamePattern
+    "Drizzle optimistic|drizzle-optimistic|imported query value"`, `pnpm exec vitest run
+packages/compiler/src/scan/optimistic-inline.test.ts`, and `git diff --check`.
 
 - [x] **Add query key drift and collision diagnostics.**
   - Duplicate derived query keys and changed derived query keys must be reported before generated
@@ -245,14 +255,16 @@ packages/server/src/change-record.test.ts packages/drizzle/src/index.writes-rece
     `pnpm run check:vp`, `pnpm run check:api-surface`, and `git diff --check HEAD~1..HEAD`.
     Authored guides now show zero-argument `domain()` in the default snippets.
 
-- [ ] **Keep explicit domain/tag names only as an escape hatch for intentionally shared external vocabulary.**
+- [x] **Keep explicit domain/tag names only as an escape hatch for intentionally shared external vocabulary.**
   - Document when `domain('billing')` is still clearer than deriving from a local binding.
   - The default should favor derivation in starter templates and guides.
   - Integrated evidence (2026-06-27): `site/content/guides/data-layer.md` and
     `site/content/guides/queries.md` now favor zero-argument domains in public snippets, and
     `site/content/guides/data-layer.md` documents explicit `domain('billing')`/`tag(...)` as shared
-    external vocabulary rather than local declaration identity. Remaining gap: starter/example source
-    still needs migration.
+    external vocabulary rather than local declaration identity. Current-session evidence
+    (2026-06-28): starter templates, commerce, StackOverflow devtool snippets, and tutorial step
+    sources now use `domain()` for local invalidation identities, while the authored-surface scan
+    above leaves only the documented shared-vocabulary escape hatch.
 
 ## Phase 5 - Queues And Shared Groups
 
@@ -284,7 +296,7 @@ packages/compiler/src/scan/optimistic-inline.test.ts examples/crm/src/interactiv
 
 ## Phase 6 - Migration And Verification
 
-- [ ] **Update examples, tutorials, docs, and starter templates to the derived forms.**
+- [x] **Update examples, tutorials, docs, and starter templates to the derived forms.**
   - Replace redundant first-argument registry names in docs after the implementation and tests land.
   - Keep public examples aligned with the rule: paths explicit, registry identities derived.
   - Integrated evidence (2026-06-27): docs-focused migration updated
@@ -300,8 +312,7 @@ packages/create-kovo/src/index.build.test.ts examples/crm/src/interactive-app.te
 examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
 examples/stackoverflow/src/interactive-app.test.ts packages/create-kovo/src/index.build.test.ts
 packages/core/src/index.test.ts`, `pnpm run check:vp`, and `git diff --check`. Remaining gap:
-    some direct-test example query/domain/form handles still have explicit key strings. Tutorial step
-    source now uses derived query and mutation identities with `form(addToCart)` where applicable;
+    Tutorial step source now uses derived query and mutation identities with `form(addToCart)` where applicable;
     verification passed `pnpm exec vitest --run
 site/tutorial/steps/03-queries/src/app.test.ts site/tutorial/steps/04-mutations/src/app.test.ts
 site/tutorial/steps/05-optimistic/src/app.test.ts site/tutorial/steps/06-streaming/src/app.test.ts
@@ -312,16 +323,24 @@ examples/crm/src/interactive-app.test.ts examples/stackoverflow/src/interactive-
 examples/stackoverflow/src/optimism-derivation.test.ts`, `pnpm run check:vp`, and
     `git diff --check`. Public API examples and browser typing tests now use mutation-value forms
     for optimistic authoring; verification passed `pnpm exec vitest run
-packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`. Remaining gap:
-    CRM and StackOverflow direct-test query/domain declarations now use source-derived object forms,
+packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`. CRM and
+    StackOverflow direct-test query/domain declarations now use source-derived object forms,
     with generated graph setup assigning derived keys and registering live-target renderers after key
     assignment; verification passed `pnpm exec vitest run
 examples/crm/src/interactive-app.test.ts examples/crm/src/optimistic.test.ts`, `pnpm exec vitest
 run examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/optimism-derivation.test.ts`,
     `pnpm --filter @kovojs/example-devtool check`, and `node examples/devtool/scripts/conformance.mjs`.
-    Remaining gap: starter and some non-direct example/tutorial domain surfaces still need migration.
+    Current-session evidence (2026-06-28): `packages/create-kovo/templates/src/model.ts` and
+    `examples/commerce/src/model.ts` provide derived domain declarations consumed by schema/query
+    code; tutorial steps 03-07 now use derived domains while manual touch facts read from the
+    domain values; devtool fixture snippets were refreshed to the derived forms. Verification passed
+    `pnpm exec vitest --run packages/create-kovo/src/index.build.test.ts --testNamePattern "production build graph gate"`,
+    `pnpm exec vitest run packages/create-kovo/src/index.test.ts --testNamePattern "real template file set|database dialect"`,
+    `pnpm exec vitest run examples/commerce/src/app.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/pagination.test.ts`,
+    `pnpm exec vitest --run site/tutorial/steps/03-queries/src/app.test.ts site/tutorial/steps/04-mutations/src/app.test.ts site/tutorial/steps/05-optimistic/src/app.test.ts site/tutorial/steps/06-streaming/src/app.test.ts site/tutorial/steps/07-verification/src/app.test.ts`,
+    `pnpm --filter @kovojs/example-devtool check`, and the authored-surface scan above.
 
-- [ ] **Update generated registries, explain snapshots, compiler tests, server tests, and browser wire tests.**
+- [x] **Update generated registries, explain snapshots, compiler tests, server tests, and browser wire tests.**
   - Cover `/_m/*`, `data-mutation`, CSRF audience, replay scope, query wire chunks, domain touch
     graphs, and endpoint audits.
   - Integrated evidence (2026-06-27): compiler-emitted live-target renderers now pass concrete
@@ -336,6 +355,14 @@ packages/drizzle/src/index.writes-receivers.test.ts --testNamePattern "object-fo
     `pnpm exec vitest run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts --testNamePattern "object-form query|Stack Overflow-style"`,
     `pnpm exec vitest run packages/server/src/query-endpoint.test.ts --testNamePattern "derived query keys|args bindings|parameterized query args"`,
     and `node examples/stackoverflow/scripts/generate-registry.mjs`.
+    Current-session evidence (2026-06-28): production `compile drizzle-optimistic` lowering now
+    feeds mutation source context plus local relative static imports into
+    `inlineOptimisticPlansFromSource`, so imported query-value overrides suppress generated
+    optimistic derivations by the source-derived query key. Verification passed `pnpm exec vitest run
+    packages/cli/src/index.kovo-compile.test.ts --testNamePattern "Drizzle optimistic|drizzle-optimistic|imported query value"`,
+    `pnpm exec vitest run packages/compiler/src/scan/optimistic-inline.test.ts`,
+    `node examples/stackoverflow/scripts/generate-registry.mjs`, `node
+    examples/devtool/scripts/conformance.mjs`, and `git diff --check`.
 
 - [ ] **Remove legacy compatibility unless `SPEC.md` explicitly keeps it.**
   - Kovo is in technical preview, so prefer one clean authoring model over compatibility modes.
@@ -430,3 +457,6 @@ examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/op
   `pnpm exec vitest run packages/compiler/src/vite.test.ts`, focused Drizzle/server query tests,
   `pnpm --filter @kovojs/example-devtool check`, `node examples/stackoverflow/scripts/generate-registry.mjs`,
   `node examples/devtool/scripts/conformance.mjs`, and `git diff --check` passed.
+- 2026-06-28: Integrated imported optimistic query-value lowering and final starter/commerce/tutorial
+  source-derived migration; focused CLI/compiler/starter/commerce/tutorial/devtool checks, `pnpm run
+check:vp`, and `git diff --check` passed.

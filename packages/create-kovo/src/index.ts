@@ -102,6 +102,7 @@ const templateFiles: readonly TemplateFile[] = [
   { path: 'src/schema.ts', sqlitePath: 'src/schema.sqlite.ts' },
   { path: 'src/db.ts', sqlitePath: 'src/db.sqlite.ts' },
   { path: 'src/auth.ts', sqlitePath: 'src/auth.sqlite.ts' },
+  'src/model.ts',
   'src/queries.ts',
   'src/mutations.ts',
   'src/components/contacts.tsx',

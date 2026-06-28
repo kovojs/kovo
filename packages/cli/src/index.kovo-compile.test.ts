@@ -1037,6 +1037,116 @@ export const addToCart = mutation('cart/add', {
     }
   });
 
+  it('resolves imported query value overrides in Drizzle optimistic source context', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-optimistic-imported-'));
+    const sourceDir = join(root, 'src/features/cart');
+    const queriesPath = join(sourceDir, 'queries.ts');
+    const mutationsPath = join(sourceDir, 'mutations.ts');
+    const inputPath = join(root, 'optimistic.json');
+    const outPath = join(root, 'cart-add.ts');
+    const factsPath = join(root, 'optimistic-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousCwd = process.cwd();
+
+    try {
+      process.chdir(root);
+      mkdirSync(sourceDir, { recursive: true });
+      writeFileSync(
+        queriesPath,
+        `
+export const cartSummary = query({
+  load: () => ({ count: 0 }),
+  reads: [],
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        mutationsPath,
+        `
+import { cartSummary as summary } from './queries';
+
+export const addToCart = mutation({
+  optimistic: {
+    [summary.key](draft, input) {
+      draft.count = (draft.count ?? 0) + input.quantity;
+    },
+  },
+  handler() {},
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        inputPath,
+        JSON.stringify(
+          {
+            constName: 'cartAddDerivedOptimistic',
+            effects: [
+              {
+                op: 'insert',
+                table: 'cart_items',
+                values: { qty: { kind: 'param', path: 'quantity' } },
+              },
+            ],
+            entries: [
+              {
+                query: 'features/cart/queries/cart-summary',
+                shape: {
+                  fields: {
+                    count: {
+                      arith: { column: 'qty', kind: 'col' },
+                      kind: 'sum',
+                      rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' },
+                    },
+                  },
+                  query: 'features/cart/queries/cart-summary',
+                },
+              },
+            ],
+            formImport: { name: 'addToCart', path: '../../app.js' },
+            mutation: 'features/cart/mutations/add-to-cart',
+            mutationSource: {
+              fileName: 'src/features/cart/mutations.ts',
+              source: readFileSync(mutationsPath, 'utf8'),
+            },
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'drizzle-optimistic',
+          inputPath,
+          '--out',
+          outPath,
+          '--facts-out',
+          factsPath,
+        ]),
+      ).resolves.toBe(0);
+
+      const source = readFileSync(outPath, 'utf8');
+      expect(stderr).not.toHaveBeenCalled();
+      expect(source).not.toContain('features/cart/queries/cart-summary:');
+      expect(source).toContain(
+        'Overridden in the mutation module (derivation suppressed): features/cart/queries/cart-summary.',
+      );
+      expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
+        { query: 'features/cart/queries/cart-summary', status: 'hand-written' },
+      ]);
+    } finally {
+      process.chdir(previousCwd);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('bridges materialized-view refresh facts into Drizzle optimistic await-fragment entries', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-optimistic-matview-'));
     const inputPath = join(root, 'optimistic.json');

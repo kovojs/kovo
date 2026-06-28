@@ -498,13 +498,13 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(publicApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
-	    expect(publicApi.createMemoryWebhookReplayStore).toBe(
-	      routingApi.createMemoryWebhookReplayStore,
-	    );
-	    expect(publicApi.webhook).toBe(routingApi.webhook);
-	    expect(publicApi.customVerifier).toBe(coreApi.customVerifier);
-	    expect(publicApi.hmacSignature).toBe(coreApi.hmacSignature);
-	    expect(publicApi.standardWebhooks).toBe(coreApi.standardWebhooks);
+    expect(publicApi.createMemoryWebhookReplayStore).toBe(
+      routingApi.createMemoryWebhookReplayStore,
+    );
+    expect(publicApi.webhook).toBe(routingApi.webhook);
+    expect(publicApi.customVerifier).toBe(coreApi.customVerifier);
+    expect(publicApi.hmacSignature).toBe(coreApi.hmacSignature);
+    expect(publicApi.standardWebhooks).toBe(coreApi.standardWebhooks);
     expect(publicValues).not.toHaveProperty('parseRouteRequest');
     expect(publicValues).not.toHaveProperty('endpointMatches');
     expect(publicValues).not.toHaveProperty('runEndpoint');

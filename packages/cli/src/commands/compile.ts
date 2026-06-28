@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type {
@@ -1416,6 +1416,10 @@ interface DrizzleOptimisticCommandInput {
     optimisticStatus?: unknown;
   }[];
   mutation?: string;
+  mutationSource?: {
+    fileName: string;
+    source: string;
+  };
   overrides?: readonly string[];
   queryDomains?: readonly {
     domains?: readonly string[];
@@ -1433,6 +1437,7 @@ async function runCompileDrizzleOptimisticCommand(
   const derivedEntries: Parameters<typeof serializeDerivedOptimistic>[0]['entries'][number][] = [];
   const awaitFragmentQueries: string[] = [];
   const matviewAwaitFragmentQueries = materializedViewAwaitFragmentQueries(input);
+  const authoredOptimisticStatuses = await authoredOptimisticStatusesFromInput(input);
   const facts: {
     derivation?: { proof?: DerivationProof; reason?: unknown; status: 'PUNTED' | 'derived' };
     query: string;
@@ -1441,7 +1446,9 @@ async function runCompileDrizzleOptimisticCommand(
 
   for (const entry of input.entries) {
     const status =
-      entry.status ?? (matviewAwaitFragmentQueries.has(entry.query) ? 'await-fragment' : 'derived');
+      authoredOptimisticStatuses.get(entry.query) ??
+      entry.status ??
+      (matviewAwaitFragmentQueries.has(entry.query) ? 'await-fragment' : 'derived');
     if (status === 'await-fragment') {
       awaitFragmentQueries.push(entry.query);
       facts.push({
@@ -1502,6 +1509,7 @@ async function runCompileDrizzleOptimisticCommand(
     input.entries
       .filter((entry) => {
         const status =
+          authoredOptimisticStatuses.get(entry.query) ??
           entry.status ??
           (matviewAwaitFragmentQueries.has(entry.query) ? 'await-fragment' : 'derived');
         return status !== 'derived' && status !== 'await-fragment';
@@ -1527,6 +1535,69 @@ async function runCompileDrizzleOptimisticCommand(
     });
   }
   return compileArtifactsResult(options.check, artifacts);
+}
+
+async function authoredOptimisticStatusesFromInput(
+  input: DrizzleOptimisticCommandInput,
+): Promise<ReadonlyMap<string, DrizzleOptimisticEntryStatus>> {
+  const mutationSource = input.mutationSource;
+  if (!mutationSource) return new Map();
+
+  const { inlineOptimisticPlansFromSource } = await import('@kovojs/compiler/internal');
+  const plans = inlineOptimisticPlansFromSource(mutationSource.fileName, mutationSource.source, {
+    resolveStaticImport: resolveLocalStaticImport,
+  });
+  const matchingPlans =
+    input.mutation === undefined ? plans : plans.filter((plan) => plan.mutation === input.mutation);
+  const selectedPlans = matchingPlans.length > 0 ? matchingPlans : plans;
+
+  const statuses = new Map<string, DrizzleOptimisticEntryStatus>();
+  for (const plan of selectedPlans) {
+    for (const transform of plan.transforms) {
+      statuses.set(transform.query, transform.status);
+    }
+  }
+  return statuses;
+}
+
+function resolveLocalStaticImport(
+  fromFileName: string,
+  moduleSpecifier: string,
+): { fileName: string; source: string } | null {
+  if (!moduleSpecifier.startsWith('.') && !moduleSpecifier.startsWith('/')) return null;
+  const fromPath = resolve(fromFileName);
+  const basePath = resolve(dirname(fromPath), moduleSpecifier);
+  for (const candidate of localImportCandidates(basePath)) {
+    if (!existsSync(candidate)) continue;
+    return {
+      fileName: normalizePath(relative(process.cwd(), candidate)),
+      source: readFileSync(candidate, 'utf8'),
+    };
+  }
+  return null;
+}
+
+function localImportCandidates(basePath: string): string[] {
+  const candidates = new Set<string>();
+  candidates.add(basePath);
+
+  const extension = extname(basePath);
+  if (extension === '.js' || extension === '.jsx' || extension === '.mjs' || extension === '.cjs') {
+    const withoutExtension = basePath.slice(0, -extension.length);
+    for (const replacement of ['.ts', '.tsx', '.mts', '.cts']) {
+      candidates.add(`${withoutExtension}${replacement}`);
+    }
+  }
+
+  for (const extensionCandidate of ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']) {
+    candidates.add(`${basePath}${extensionCandidate}`);
+    candidates.add(join(basePath, `index${extensionCandidate}`));
+  }
+  return [...candidates];
+}
+
+function normalizePath(path: string): string {
+  return path.replaceAll('\\', '/');
 }
 
 function derivationProofForResult(

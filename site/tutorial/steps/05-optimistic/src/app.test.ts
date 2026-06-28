@@ -23,6 +23,7 @@ import {
 } from './app.js';
 import { CartBadge } from './components/cart-badge.js';
 import { createShopDb } from './db.js';
+import { cart, product } from './domains.js';
 import { cartQuery, productsQuery } from './queries.js';
 
 // Tutorial step 05: invalidation is derived from declared touches, server
@@ -193,7 +194,7 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
     expect(response.body).toContain('<kovo-fragment target="product-list">');
     // The sanitized write summary: domains and keys, never input values.
     expect(response.headers['Kovo-Changes']).toBe(
-      '[{"domain":"cart"},{"domain":"product","keys":["p1"]}]',
+      `[{"domain":"${cart.key}"},{"domain":"${product.key}","keys":["p1"]}]`,
     );
   });
   // /snippet
@@ -239,8 +240,8 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
 
   it('records declared touches as change records on the mutation result', async () => {
     expect(addToCart.registry?.inferredTouches?.map((touch) => touch.domain)).toEqual([
-      'cart',
-      'product',
+      cart.key,
+      product.key,
     ]);
   });
 });

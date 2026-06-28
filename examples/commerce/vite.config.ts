@@ -32,7 +32,7 @@ export const commerceViteConfig = defineConfig({
     ? [kovo({ app: '/src/app.tsx' })]
     : [
         exampleKovoCompilerPlugin({
-          include: ['src/components', 'src/domain.ts', 'src/queries.ts'],
+          include: ['src/components', 'src/domain.ts', 'src/model.ts', 'src/queries.ts'],
           registryFacts: commerceRegistryFacts,
         }),
         ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app.tsx' })]),
