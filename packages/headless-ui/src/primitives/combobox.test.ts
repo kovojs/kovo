@@ -207,16 +207,22 @@ describe('headless-ui combobox primitive', () => {
     });
   });
 
-  // bugz-3 L17: an unfiltered render must not collide a filtered-out option with
-  // the matching option on `…-option-0`, and two id-less comboboxes on one page
-  // must not share a synthesized prefix.
-  it('synthesizes collision-free, per-instance combobox option ids (L17)', () => {
+  // bugz-3 L17 + papercuts-6 B (SPEC.md §4.6): an unfiltered render must not
+  // collide a filtered-out option with the matching option on `…-option-0`, and
+  // sibling id-less comboboxes need caller-owned listbox prefixes.
+  it('synthesizes collision-free combobox option ids from explicit listbox ids (L17)', () => {
     const fruit: readonly ComboboxItem[] = Object.freeze([
       { label: 'Apple', value: 'apple' },
       { label: 'Banana', value: 'banana' },
     ]);
     // Query 'ban' filters to [banana]; apple is filtered out.
-    const state = { highlightedValue: 'banana', items: fruit, open: true, value: 'ban' };
+    const state = {
+      highlightedValue: 'banana',
+      items: fruit,
+      listboxId: 'fruit-list-a',
+      open: true,
+      value: 'ban',
+    };
     expect(comboboxFilteredItems(state).map(({ value }) => value)).toEqual(['banana']);
 
     const activeDescendant = comboboxInputAttributes(state)['aria-activedescendant'];
@@ -226,15 +232,21 @@ describe('headless-ui combobox primitive', () => {
     expect(bananaId).toBe(activeDescendant);
     expect(comboboxOptionAttributes({ ...state, itemValue: 'apple' }).id).toBeUndefined();
 
-    // Two id-less comboboxes with different option sets do not share a prefix.
-    const other: readonly ComboboxItem[] = Object.freeze([
-      { label: 'Cherry', value: 'cherry' },
-      { label: 'Date', value: 'date' },
-    ]);
-    const otherState = { highlightedValue: 'cherry', items: other, open: true, value: 'che' };
-    const otherId = comboboxOptionAttributes({ ...otherState, itemValue: 'cherry' }).id;
-    expect(otherId).toMatch(/-option-0$/);
+    // Two id-less comboboxes with the same option set do not collide when they
+    // provide distinct listbox ids.
+    const otherState = { ...state, listboxId: 'fruit-list-b' };
+    const otherId = comboboxOptionAttributes({ ...otherState, itemValue: 'banana' }).id;
+    expect(otherId).toBe('fruit-list-b-option-0');
     expect(otherId).not.toBe(bananaId);
+
+    expect(() =>
+      comboboxInputAttributes({
+        highlightedValue: 'banana',
+        items: fruit,
+        open: true,
+        value: 'ban',
+      }),
+    ).toThrow(/requires listboxId/);
   });
 
   it('resolves display text from option labels, text values, raw values, or placeholder', () => {

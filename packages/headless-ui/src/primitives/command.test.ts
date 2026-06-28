@@ -245,11 +245,11 @@ describe('headless-ui command primitive', () => {
     });
   });
 
-  // bugz-3 M13: with no explicit per-item ids and no listboxId (the default
-  // command palette), the synthesized aria-activedescendant must reference an id
-  // the rendered option actually carries — previously commandItemAttributes
-  // emitted no fallback id, so the IDREF dangled (getElementById → null).
-  it('synthesizes a command option id matching the input aria-activedescendant (M13/L17)', () => {
+  // bugz-3 M13/L17 + papercuts-6 B (SPEC.md §4.6): synthesized option ids need
+  // a caller-owned listbox prefix. That keeps the input aria-activedescendant and
+  // the rendered option in one ID space without guessing a document-global
+  // instance id from the item set.
+  it('synthesizes command option ids from explicit listbox ids only (M13/L17)', () => {
     const idlessItems: readonly CommandItem[] = Object.freeze([
       { label: 'Alpha', value: 'alpha' },
       { label: 'Beta', value: 'beta' },
@@ -258,6 +258,7 @@ describe('headless-ui command primitive', () => {
       highlightedValue: 'beta',
       inputValue: 'beta',
       items: idlessItems,
+      listboxId: 'command-list-a',
       open: true,
     };
 
@@ -265,7 +266,7 @@ describe('headless-ui command primitive', () => {
     expect(commandFilteredItems(state).map(({ value }) => value)).toEqual(['beta']);
 
     const activeDescendant = commandInputAttributes(state)['aria-activedescendant'];
-    expect(activeDescendant).toMatch(/^command-[0-9a-z]+-item-0$/);
+    expect(activeDescendant).toBe('command-list-a-item-0');
 
     // The rendered option carries exactly that id (no dangling IDREF).
     expect(commandItemAttributes({ ...state, itemValue: 'beta' }).id).toBe(activeDescendant);
@@ -274,20 +275,25 @@ describe('headless-ui command primitive', () => {
     // matching item on `…-item-0`.
     expect(commandItemAttributes({ ...state, itemValue: 'alpha' }).id).toBeUndefined();
 
-    // L17: a second id-less palette with a different item set does not share the
-    // synthesized prefix.
+    // L17: a second id-less palette with the same item set does not collide when
+    // the app provides its own listbox id.
     const otherState = {
-      highlightedValue: 'gamma',
-      inputValue: 'gamma',
-      items: Object.freeze([
-        { label: 'Gamma', value: 'gamma' },
-        { label: 'Delta', value: 'delta' },
-      ]) as readonly CommandItem[],
+      ...state,
+      listboxId: 'command-list-b',
       open: true,
     };
-    const otherId = commandItemAttributes({ ...otherState, itemValue: 'gamma' }).id;
-    expect(otherId).toMatch(/^command-[0-9a-z]+-item-0$/);
+    const otherId = commandItemAttributes({ ...otherState, itemValue: 'beta' }).id;
+    expect(otherId).toBe('command-list-b-item-0');
     expect(otherId).not.toBe(activeDescendant);
+
+    expect(() =>
+      commandInputAttributes({
+        highlightedValue: 'beta',
+        inputValue: 'beta',
+        items: idlessItems,
+        open: true,
+      }),
+    ).toThrow(/requires listboxId/);
   });
 
   it('filters items and resolves selected value text from labels, text values, or raw values', () => {
