@@ -64,12 +64,13 @@ Security-header regression RSE-1 is filed separately in `plans/bugz-6.md`.
   - Repro evidence: `pnpm exec kovo build ./src/csp1-repro.tsx` in `composition-style-packages` fails at `src/csp1-repro.tsx:44:14` with KV231.
   - Acceptance: theme class values produced by `createTheme()` merge with style-lowered classes, or the style API exposes a first-class same-element theme application shape.
 
-- [ ] **KV414 false-positives on direct `ownerId = session.userId` predicates.** (low, framework; found by `drizzle-data-depth`)
+- [x] **KV414 false-positives on direct `ownerId = session.userId` predicates.** (low, framework; found by `drizzle-data-depth`)
   - Observed behavior: direct secure predicates such as `eq(projects.ownerId, context.request.session.userId)` and `eq(tasks.ownerId, request.session.userId)` are classified as args/unknown owner audits rather than session-scoped owner proofs.
   - Root cause: `packages/drizzle/src/static/summaries.ts:583` only proves owner-private scope when the private key exactly matches the owner column name, such as `session:${owner}`; `packages/drizzle/src/static.ts:396` and `packages/drizzle/src/static.ts:570` then let arg-keyed predicates win or fall through.
   - Why it matters: this is fail-closed, not a bypass, but it blocks a straightforward secure owner-scoped app and nudges authors toward weakening annotations.
   - Repro evidence: the verifier's app-local extraction over `drizzle-data-depth` produced non-session owner audits for `task-list`, `comment-list`, `complete-task`, and `add-comment`; production graph output would emit KV414 for those non-`session` audits.
   - Acceptance: direct predicates comparing an annotated owner column to the configured session principal are accepted as session-scoped owner proofs even when the column is named `ownerId` and the session field is `userId`.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts` and `pnpm exec vitest --run packages/drizzle/src` prove direct `ownerId = session.userId` read/write predicates are session-scoped while arg-keyed and unknown owner predicates still fail closed.
 
 ### C. Dev Typed-Read Wire
 
