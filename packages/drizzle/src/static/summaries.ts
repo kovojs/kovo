@@ -491,8 +491,9 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
 
 /**
  * Narrow Authorization-gates-DATA proof for owner-table reads (OPP-28): the owner
- * column itself must be compared against the matching session/principal private
- * symbol, e.g. `{ owner:userId }` with `eq(orders.userId, req.session.userId)`.
+ * column itself must be compared against the configured session principal or
+ * matching guard private symbol, e.g. `{ owner:ownerId }` with
+ * `eq(projects.ownerId, req.session.userId)`.
  * This is deliberately stricter than `querySessionAnchoredDomains`, which accepts a
  * session predicate on any column of the table.
  */
@@ -624,7 +625,12 @@ function resolvedQueryOwnerTableDomainForPrincipal(
 }
 
 function privateScopeMatchesOwner(privateKey: string, owner: string): boolean {
-  return privateKey === `session:${owner}` || privateKey === `guard:${owner}`;
+  // SPEC §10.3 KV414: a direct session-principal predicate proves the owner row
+  // is scoped to the current principal even when schema and session names differ
+  // (`ownerId` column vs `session.userId`). Guard summaries remain exact-name
+  // matched because they are author-declared principal facts, not the configured
+  // session principal itself.
+  return privateKey.startsWith('session:') || privateKey === `guard:${owner}`;
 }
 
 /**
