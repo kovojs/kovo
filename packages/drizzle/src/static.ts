@@ -768,6 +768,7 @@ function sqlSafetyDiagnosticsForSourceFile(
   const scopes = new Map<Node, Map<string, SqlTextSafety>>();
   const nativeDrizzleSqlReceivers = nativeDrizzleSqlReceiverTexts(sourceFile);
   const kovoSqlReceivers = kovoSqlReceiverTextsForSourceFile(sourceFile);
+  const kovoMutationStreamReceivers = kovoMutationStreamReceiverTexts(sourceFile);
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
   // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
   // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
@@ -804,6 +805,7 @@ function sqlSafetyDiagnosticsForSourceFile(
     const sinkName = sqlSinkName(call);
     if (!sinkName) continue;
     if (sqlSinkReceiverIsRawDriverClient(call, rawDriverClients)) continue;
+    if (sqlSinkReceiverIsKovoMutationStream(call, kovoMutationStreamReceivers)) continue;
     const [statement] = call.getArguments();
     const safety = sqlTextSafety(statement, scopes);
     if (safety === 'safe') continue;
@@ -900,6 +902,19 @@ function kovoSqlReceiverTextsForSourceFile(sourceFile: SourceFile): Set<string> 
   }
 
   kovoSqlReceiverTextsCache.set(sourceFile, receivers);
+  return receivers;
+}
+
+function kovoMutationStreamReceiverTexts(sourceFile: SourceFile): Set<string> {
+  const receivers = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== KOVO_SERVER_MODULE_SPECIFIER) continue;
+    for (const named of declaration.getNamedImports()) {
+      if (named.getName() === 'stream') receivers.add(named.getAliasNode()?.getText() ?? 'stream');
+    }
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) receivers.add(`${namespace.getText()}.stream`);
+  }
   return receivers;
 }
 
@@ -1268,6 +1283,19 @@ function sqlSinkReceiverIsRawDriverClient(
   return Boolean(
     receiver && Node.isIdentifier(receiver) && rawDriverClients.has(receiver.getText()),
   );
+}
+
+function sqlSinkReceiverIsKovoMutationStream(
+  call: CallExpression,
+  kovoMutationStreamReceivers: ReadonlySet<string>,
+): boolean {
+  if (kovoMutationStreamReceivers.size === 0) return false;
+  const expression = call.getExpression();
+  const receiver =
+    Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)
+      ? expression.getExpression()
+      : undefined;
+  return Boolean(receiver && kovoMutationStreamReceivers.has(receiver.getText()));
 }
 
 function sqlSinkName(call: CallExpression): string | null {

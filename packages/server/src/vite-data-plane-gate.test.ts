@@ -260,6 +260,20 @@ const NON_DRIZZLE_OUTPUT_ALIAS_QUERY_SOURCE = [
   '});',
 ].join('\n');
 
+const NON_DRIZZLE_OUTPUT_IMPORTED_QUERY_ALIAS_SOURCE = [
+  'import { query as defineQuery, s } from "@kovojs/server";',
+  '',
+  'export const statusQuery = defineQuery.elevated({',
+  '  reads: [],',
+  '  output: s.object({',
+  '    summary: s.string(),',
+  '    generatedAt: s.string(),',
+  '    totals: s.object({ streams: s.number() }),',
+  '  }),',
+  '  load: () => ({ summary: "ready", generatedAt: "now", totals: { streams: 1 } }),',
+  '});',
+].join('\n');
+
 const NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT = [
   'import { component } from "@kovojs/server";',
   'import { statusQuery } from "../status";',
@@ -453,6 +467,30 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     const root = await fixture({
       'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT,
       'src/status.ts': NON_DRIZZLE_OUTPUT_ALIAS_QUERY_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(
+        NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT,
+        join(root, 'src/components/status-card.tsx'),
+      ),
+    ).resolves.toEqual(expect.objectContaining({ map: null }));
+
+    const componentReport = captured.find((report) => report.fileName.endsWith('status-card.tsx'));
+    expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
+      false,
+    );
+  });
+
+  it('validates object-form output schemas declared through imported query aliases', async () => {
+    const root = await fixture({
+      'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT,
+      'src/status.ts': NON_DRIZZLE_OUTPUT_IMPORTED_QUERY_ALIAS_SOURCE,
     });
     const captured: CapturedReport[] = [];
     const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
