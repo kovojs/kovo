@@ -577,27 +577,6 @@ function ownerAuthorizationDataProofDetail(
     for (const domain of fact.reads) {
       if (!owners.has(domain)) continue;
 
-      // Fail-closed: an arg-keyed owner write is IDOR even if also session-anchored.
-      const argKeys = new Set(
-        (fact.argScopedWriteKeys ?? [])
-          .filter((scoped) => scoped.domain === domain)
-          .map((scoped) => scoped.key),
-      );
-      if (argKeys.size === 0 && fact.argScopedWrites.includes(domain)) argKeys.add('');
-      if (argKeys.size > 0) {
-        for (const key of argKeys) {
-          audits.push({
-            domain,
-            ...(key ? { key } : {}),
-            kind: 'write',
-            name: fact.name,
-            scope: 'args',
-            site: fact.site,
-          });
-        }
-        continue;
-      }
-
       const ownerSessionScoped = (fact.ownerScopedSessionWrites ?? []).includes(domain);
       if (ownerSessionScoped) {
         const privateKey = (fact.ownerScopedPrivateWriteKeys ?? []).find(
@@ -620,6 +599,28 @@ function ownerAuthorizationDataProofDetail(
           scope: 'session',
           site: fact.site,
         });
+        continue;
+      }
+
+      // Fail-closed: an arg-keyed owner write is IDOR unless the owner column is
+      // already proven to match the current principal.
+      const argKeys = new Set(
+        (fact.argScopedWriteKeys ?? [])
+          .filter((scoped) => scoped.domain === domain)
+          .map((scoped) => scoped.key),
+      );
+      if (argKeys.size === 0 && fact.argScopedWrites.includes(domain)) argKeys.add('');
+      if (argKeys.size > 0) {
+        for (const key of argKeys) {
+          audits.push({
+            domain,
+            ...(key ? { key } : {}),
+            kind: 'write',
+            name: fact.name,
+            scope: 'args',
+            site: fact.site,
+          });
+        }
         continue;
       }
 
@@ -1766,20 +1767,20 @@ function extractTouchGraphFromPreparedFiles(
 
 /** @internal */ export function extractOwnerAuditFromProjectExtraction(
   extraction: ProjectExtraction,
-  queries: readonly QueryFact[] = extractQueryFactsFromProjectExtraction(extraction),
+  queries?: readonly QueryFact[],
+  writeFacts?: readonly WriteScopeFact[],
 ): {
   ownerDomains: OwnerDomainFact[];
   scopeAudits: ScopeAuditFact[];
 } {
+  const writes = writeFacts ?? extractWriteScopeFactsFromProjectExtraction(extraction);
+  const queryFacts = queries ?? extractQueryFactsFromProjectExtraction(extraction);
   const ownerDomains = ownerDomainsFromProjectExtraction(extraction);
   // SPEC §10.3 / KV414: "a query OR write" reaching an owner table. Reads and writes
   // are both audited (A1 added the write half, which the framework never produced).
   const scopeAudits = [
-    ...scopeAuditsFromQueryFacts(queries, ownerDomains),
-    ...scopeAuditsFromWriteFacts(
-      extractWriteScopeFactsFromProjectExtraction(extraction),
-      ownerDomains,
-    ),
+    ...scopeAuditsFromQueryFacts(queryFacts, ownerDomains),
+    ...scopeAuditsFromWriteFacts(writes, ownerDomains),
   ];
   return { ownerDomains, scopeAudits };
 }
@@ -1945,8 +1946,9 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
 ): StaticBuildAnalysisFacts {
   const extraction = createProjectExtraction(options);
   try {
+    const writeScopeFacts = extractWriteScopeFactsFromProjectExtraction(extraction);
     const queries = extractQueryFactsFromProjectExtraction(extraction);
-    const ownerAudit = extractOwnerAuditFromProjectExtraction(extraction, queries);
+    const ownerAudit = extractOwnerAuditFromProjectExtraction(extraction, queries, writeScopeFacts);
     return {
       massAssignmentFacts: extractMassAssignmentFromProjectExtraction(extraction),
       ownerDomains: ownerAudit.ownerDomains,

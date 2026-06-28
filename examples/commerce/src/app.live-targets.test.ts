@@ -32,7 +32,7 @@ describe('commerce authored live-target artifacts', () => {
 
     expect(response.status, body).toBe(200);
     expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
-    expect(kovoQueryJsonValues(body, 'orderHistory')).toEqual([
+    expect(kovoQueryJsonValues(body, 'queries/order-history-query')).toEqual([
       {
         items: [
           { id: 'order-1', productId: 'p1', qty: 2, total: 2998, userId: 'u1' },
@@ -40,7 +40,7 @@ describe('commerce authored live-target artifacts', () => {
         ],
       },
     ]);
-    expect(kovoQueryJsonValues(body, 'productGrid')).toEqual([
+    expect(kovoQueryJsonValues(body, 'queries/product-grid-query')).toEqual([
       expect.objectContaining({
         items: expect.arrayContaining([expect.objectContaining({ id: 'p2', stock: 1 })]),
       }),

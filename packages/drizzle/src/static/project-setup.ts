@@ -66,7 +66,6 @@ import {
       skipLibCheck: true,
       strict: true,
       target: ts.ScriptTarget.ESNext,
-      types: [],
       ...options.compilerOptions,
     },
     skipAddingFilesFromTsConfig: true,

@@ -100,9 +100,6 @@ app's check time; all must preserve SPEC.md §11.1 soundness.
       to the minimum the analysis needs, and share a `ts.createDocumentRegistry` so `.d.ts`
       ASTs are parsed once even across any projects that must stay separate. The drizzle
       analysis only needs `drizzle-orm` types + app source.
-  - Partial evidence (2026-06-28): `packages/drizzle/src/static/project-setup.ts` now defaults
-    the analysis project to `types: []`, with caller `compilerOptions` still applied last. The
-    `lib` and document-registry parts remain open.
 
 - [ ] **6. Cut redundant AST traversals inside a pass.** Impact: medium · Effort: medium ·
       Risk: low. `projectFunctionExtractionsByFileName` walks `getDescendantsOfKind(FunctionDeclaration)`

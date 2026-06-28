@@ -131,7 +131,7 @@ describe('server static export app replay boundary', () => {
           code: 'KV229',
           concretePath: '/downloads/orders.pdf',
           message: expect.stringContaining(
-            "successful HTML route documents; '/downloads/orders.pdf' returned status 200 with Content-Type 'application/pdf'",
+            "file/stream response with Content-Disposition 'attachment; filename=\"orders.pdf\"' and Content-Type 'application/pdf'",
           ),
           routePath: '/downloads/orders.pdf',
         },
@@ -198,7 +198,7 @@ describe('server static export app replay boundary', () => {
         code: 'KV229',
         concretePath: '/products/download',
         message: expect.stringContaining(
-          "can only write successful HTML route documents; '/products/download' returned status 200",
+          "file/stream response with Content-Disposition 'attachment; filename=\"orders.pdf\"' and Content-Type 'application/pdf'",
         ),
         routePath: '/products/download',
       },

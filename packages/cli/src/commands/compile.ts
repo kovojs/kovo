@@ -52,9 +52,33 @@ import {
 } from '../shared.js';
 
 const requireFromCli = createRequire(import.meta.url);
-const cliPackageManifest = JSON.parse(
-  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
-) as { version?: string };
+const cliPackageManifest = readCliPackageManifest();
+
+function readCliPackageManifest(): { version?: string } {
+  const candidates = [
+    // Source/tests: packages/cli/src/commands/compile.ts.
+    new URL('../../package.json', import.meta.url),
+    // Published package: node_modules/@kovojs/cli/dist/*.mjs.
+    new URL('../package.json', import.meta.url),
+    // CI build artifact: repo checkout plus top-level dist/*.mjs chunks.
+    new URL('../packages/cli/package.json', import.meta.url),
+    // Unbundled build shapes used by some local diagnostics.
+    new URL('../../../package.json', import.meta.url),
+    new URL('./package.json', import.meta.url),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(readFileSync(candidate, 'utf8')) as { version?: string };
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT' || code === 'ENOTDIR') continue;
+      throw error;
+    }
+  }
+
+  return {};
+}
 
 export const addCommandShell = {
   execFileSync,

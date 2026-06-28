@@ -120,6 +120,7 @@ describe('@kovojs/ui styled package foundation', () => {
       form: 'checkout-form',
       invalid: true,
       items,
+      listboxId: 'plan-listbox',
       name: 'plan',
       required: true,
       value: 'growth',
@@ -159,8 +160,8 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(trigger).toContain('id="plan" role="combobox" type="button"');
     expect(trigger).toContain('role="listbox"');
     expect(trigger).toContain('aria-selected="true"');
-    expect(trigger).toMatch(
-      /data-state="checked" id="select-[^"]+-option-1" label="Growth" role="option" value="growth"/,
+    expect(trigger).toContain(
+      'data-state="checked" id="plan-listbox-option-1" label="Growth" role="option" value="growth"',
     );
     expect(trigger).toContain('aria-disabled="true"');
     expect(trigger).toContain('data-disabled="" data-state="unchecked"');

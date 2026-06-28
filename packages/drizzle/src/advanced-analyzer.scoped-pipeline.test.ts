@@ -876,12 +876,11 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
         scope: 'session',
       },
       {
-        detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        detail: undefined,
         domain: 'case',
         kind: 'write',
         name: 'opaqueArchiveCase',
-        scope: 'unknown',
+        scope: 'args',
       },
       {
         detail:

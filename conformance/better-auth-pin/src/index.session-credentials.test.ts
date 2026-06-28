@@ -231,14 +231,24 @@ describe('Better Auth pinned conformance', () => {
       headers: requestHeaders(),
     });
 
-    await expect(
-      renderRoutePageResponse(accountRoute, {}, { headers: requestHeaders() }, String, {
+    const unauthenticatedAccount = await renderRoutePageResponse(
+      accountRoute,
+      {},
+      { headers: requestHeaders() },
+      String,
+      {
         currentUrl: '/account',
         sessionProvider,
-      }),
-    ).resolves.toEqual({
+      },
+    );
+
+    expect(unauthenticatedAccount).toMatchObject({
       body: '',
-      headers: { Location: '/login?next=%2Faccount' },
+      headers: expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        Location: '/login?next=%2Faccount',
+        Vary: 'Cookie',
+      }),
       status: 303,
     });
 

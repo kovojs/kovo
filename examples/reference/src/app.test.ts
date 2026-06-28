@@ -207,9 +207,13 @@ describe('reference auth adoption', () => {
   });
 
   it('renders authed and role guards through the reference app flow', async () => {
-    await expect(renderReferenceAccountRoute(referenceAuthRequest())).resolves.toEqual({
+    await expect(renderReferenceAccountRoute(referenceAuthRequest())).resolves.toMatchObject({
       body: '',
-      headers: { Location: '/login?next=%2Faccount' },
+      headers: expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        Location: '/login?next=%2Faccount',
+        Vary: 'Cookie',
+      }),
       status: 303,
     });
 
@@ -304,9 +308,13 @@ describe('reference auth adoption', () => {
     });
 
     const anonymous = referenceAuthRequest();
-    await expect(renderReferenceAccountRoute(anonymous, auth)).resolves.toEqual({
+    await expect(renderReferenceAccountRoute(anonymous, auth)).resolves.toMatchObject({
       body: '',
-      headers: { Location: '/login?next=%2Faccount' },
+      headers: expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        Location: '/login?next=%2Faccount',
+        Vary: 'Cookie',
+      }),
       status: 303,
     });
 

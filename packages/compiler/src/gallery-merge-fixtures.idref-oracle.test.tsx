@@ -759,8 +759,8 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "selectRootAttributes",
         },
         {
-          "diagnostics": 7,
-          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="true" aria-haspopup="author-aria" role="presentation" type="author-selectTriggerAttributes" aria-activedescendant="author-aria-activedescendant" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
+          "diagnostics": 8,
+          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="true" aria-haspopup="author-aria" role="presentation" type="author-selectTriggerAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
           "name": "selectTriggerAttributes",
         },
         {

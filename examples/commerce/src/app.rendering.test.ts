@@ -29,7 +29,7 @@ function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
       meta: commerceMeta,
       stylesheets: commerceStylesheets,
     },
-    { queries: { cart } },
+    { queries: { 'queries/cart-query': cart } },
   );
 }
 

@@ -49,15 +49,20 @@ describe('no-JS mutation responses', () => {
       },
     });
 
-    await expect(
-      renderNoJsMutationResponse(addToCart, {
-        rawInput: { productId: 'p1' },
-        redirectTo: '/cart',
-        request: {},
-      }),
-    ).resolves.toEqual({
+    const response = await renderNoJsMutationResponse(addToCart, {
+      rawInput: { productId: 'p1' },
+      redirectTo: '/cart',
+      request: {},
+    });
+
+    expect(response).toMatchObject({
       body: '<!doctype html><html><body><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></body></html>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+      }),
       status: 422,
     });
   });
@@ -89,17 +94,22 @@ describe('no-JS mutation responses', () => {
       },
     });
 
-    await expect(
-      renderNoJsMutationResponse(addToCart, {
-        rawInput: { productId: 'p1', quantity: 2 },
-        redirectTo: '/cart',
-        renderFailurePage: (failure) =>
-          renderComponentMutationFailure(AddToCartForm, {}, failure, { formName: 'addToCart' }),
-        request: {},
-      }),
-    ).resolves.toEqual({
+    const response = await renderNoJsMutationResponse(addToCart, {
+      rawInput: { productId: 'p1', quantity: 2 },
+      redirectTo: '/cart',
+      renderFailurePage: (failure) =>
+        renderComponentMutationFailure(AddToCartForm, {}, failure, { formName: 'addToCart' }),
+      request: {},
+    });
+
+    expect(response).toMatchObject({
       body: '<!doctype html><html><body><form><output role="alert">Only 3 left.</output></form></body></html>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+      }),
       status: 422,
     });
   });
@@ -145,15 +155,20 @@ describe('no-JS mutation responses', () => {
       },
     });
 
-    await expect(
-      renderNoJsMutationResponse(addToCart, {
-        rawInput: { productId: 'p1', quantity: 0 },
-        redirectTo: '/cart',
-        request: {},
-      }),
-    ).resolves.toEqual({
+    const response = await renderNoJsMutationResponse(addToCart, {
+      rawInput: { productId: 'p1', quantity: 0 },
+      redirectTo: '/cart',
+      request: {},
+    });
+
+    expect(response).toMatchObject({
       body: '<!doctype html><html><body><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></body></html>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+      }),
       status: 422,
     });
   });

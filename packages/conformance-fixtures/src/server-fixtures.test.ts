@@ -177,16 +177,19 @@ describe('@kovojs/test server fixture facts', () => {
         status: 422,
       },
     });
-    expect(fact.route).toEqual({
-      notFound: {
-        body: 'Not Found',
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        status: 404,
-      },
-      success: {
-        ok: true,
-        value: 'u1:p1:details',
-      },
+    expect(fact.route.success).toEqual({
+      ok: true,
+      value: 'u1:p1:details',
+    });
+    expect(fact.route.notFound).toMatchObject({
+      body: 'Not Found',
+      headers: expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+      }),
+      status: 404,
     });
     expect(fact.csrf).toEqual({
       field: expect.stringMatching(

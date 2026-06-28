@@ -1506,17 +1506,16 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
       status: 422,
     },
   });
-  assert.deepEqual(fact.route, {
-    notFound: {
-      body: 'Not Found',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: 404,
-    },
-    success: {
-      ok: true,
-      value: 'u1:p1:details',
-    },
+  assert.deepEqual(fact.route.success, {
+    ok: true,
+    value: 'u1:p1:details',
   });
+  assert.equal(fact.route.notFound.body, 'Not Found');
+  assert.equal(fact.route.notFound.status, 404);
+  assert.equal(fact.route.notFound.headers['Content-Type'], 'text/html; charset=utf-8');
+  assert.equal(fact.route.notFound.headers['Cache-Control'], 'private, no-store');
+  assert.equal(fact.route.notFound.headers.Vary, 'Cookie');
+  assert.equal(fact.route.notFound.headers['X-Content-Type-Options'], 'nosniff');
   assert.match(
     fact.csrf.field,
     /^<input type="hidden" name="csrf" value="(?:v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|[A-Za-z0-9+/=_-]+)">$/,

@@ -583,6 +583,7 @@ export const selectSample = {
   items: [{ label: 'One', value: 'one' }],
   label: 'One',
   labelledBy: 'label',
+  listboxId: 'select-listbox',
   name: 'select',
   open: true,
   placeholder: 'Pick one',
