@@ -112,7 +112,7 @@ describe('CRM optimistic demo behavior', () => {
 });
 
 function queryContext(db: CrmDb) {
-  return { db, request: {} };
+  return { db, request: { db } };
 }
 
 function createDealEffect(input: CreateDealInput) {
