@@ -180,11 +180,14 @@ export interface KovoAppShellDevModuleDiagnostics {
   source?: string;
 }
 
-/** @internal App-shell Vite dev/host internal (SPEC.md §9.5). Request-time diagnostics. */
-export interface KovoAppShellDevRequestDiagnostics {
+interface KovoAppShellDevRequestDiagnostics {
   diagnostics: readonly DiagnosticDocumentDiagnostic[];
   href: string;
   source?: string;
+}
+
+interface KovoAppShellDevRequestDiagnosticStore {
+  requestRecords: Map<string, KovoAppShellDevDiagnosticRecord>;
 }
 
 /**
@@ -207,11 +210,14 @@ export interface KovoAppShellDevDiagnosticRecord {
 export interface KovoAppShellDevDiagnosticLedger {
   allDiagnosticsForFile(fileName: string): KovoAppShellDevDiagnosticRecord | undefined;
   allDiagnosticsForModuleHref(href: string): KovoAppShellDevDiagnosticRecord | undefined;
-  diagnosticsForRequestHref(href: string): KovoAppShellDevDiagnosticRecord | undefined;
   diagnosticsForModuleHref(href: string): KovoAppShellDevDiagnosticRecord | undefined;
   recordModuleDiagnostics(record: KovoAppShellDevModuleDiagnostics): void;
-  recordRequestDiagnostics(record: KovoAppShellDevRequestDiagnostics): void;
 }
+
+const requestDiagnosticStores = new WeakMap<
+  KovoAppShellDevDiagnosticLedger,
+  KovoAppShellDevRequestDiagnosticStore
+>();
 
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Creates the dev diagnostic
@@ -225,7 +231,7 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
   const hrefToFileName = new Map<string, string>();
   const requestRecords = new Map<string, KovoAppShellDevDiagnosticRecord>();
 
-  return {
+  const ledger: KovoAppShellDevDiagnosticLedger = {
     allDiagnosticsForFile(fileName) {
       return allModuleRecords.get(slashPath(fileName));
     },
@@ -236,9 +242,6 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
     diagnosticsForModuleHref(href) {
       const fileName = hrefToFileName.get(normalizedModuleHref(href));
       return fileName === undefined ? undefined : moduleRecords.get(fileName);
-    },
-    diagnosticsForRequestHref(href) {
-      return requestRecords.get(normalizedRequestHref(href));
     },
     recordModuleDiagnostics(record) {
       const fileName = slashPath(record.fileName);
@@ -264,17 +267,9 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
         hrefToFileName.set(normalizedModuleHref(href), fileName);
       }
     },
-    recordRequestDiagnostics(record) {
-      const href = normalizedRequestHref(record.href);
-      const nextRecord: KovoAppShellDevDiagnosticRecord = {
-        diagnostics: record.diagnostics,
-        fileName: href,
-        ...(record.source === undefined ? {} : { source: record.source }),
-      };
-      if (!record.diagnostics.some(isErrorDiagnostic)) return;
-      requestRecords.set(href, nextRecord);
-    },
   };
+  requestDiagnosticStores.set(ledger, { requestRecords });
+  return ledger;
 }
 
 /**
@@ -1012,7 +1007,7 @@ export function renderKovoAppShellViteDevDiagnosticResponse(
   if (!diagnostics) return undefined;
 
   const url = new URL(request.url ?? '/', 'http://kovo.local');
-  const requestRecord = diagnostics.diagnosticsForRequestHref(url.pathname + url.search);
+  const requestRecord = requestDiagnosticForHref(diagnostics, url.pathname + url.search);
   if (requestRecord) return renderDiagnosticDocumentForRecord(requestRecord);
 
   const match = matchShellDispatch({
@@ -1112,6 +1107,28 @@ function normalizedRequestHref(href: string): string {
   return `${slashPath(url.pathname)}${url.search}`;
 }
 
+function requestDiagnosticForHref(
+  diagnostics: KovoAppShellDevDiagnosticLedger,
+  href: string,
+): KovoAppShellDevDiagnosticRecord | undefined {
+  return requestDiagnosticStores.get(diagnostics)?.requestRecords.get(normalizedRequestHref(href));
+}
+
+function recordRequestDiagnostic(
+  diagnostics: KovoAppShellDevDiagnosticLedger,
+  record: KovoAppShellDevRequestDiagnostics,
+): void {
+  const store = requestDiagnosticStores.get(diagnostics);
+  if (!store || !record.diagnostics.some(isErrorDiagnostic)) return;
+
+  const href = normalizedRequestHref(record.href);
+  store.requestRecords.set(href, {
+    diagnostics: record.diagnostics,
+    fileName: href,
+    ...(record.source === undefined ? {} : { source: record.source }),
+  });
+}
+
 function isErrorDiagnostic(diagnostic: DiagnosticDocumentDiagnostic): boolean {
   return diagnosticDefinitions[diagnostic.code].severity === 'error';
 }
@@ -1167,7 +1184,7 @@ function appWithDevDiagnostics(
     ...app,
     onError(error, context) {
       const requestDiagnostic = endpointPostureRequestDiagnostic(error, context);
-      if (requestDiagnostic) diagnostics.recordRequestDiagnostics(requestDiagnostic);
+      if (requestDiagnostic) recordRequestDiagnostic(diagnostics, requestDiagnostic);
 
       const result = app.onError?.(error, context);
       if (result && typeof result === 'object' && 'then' in result) {

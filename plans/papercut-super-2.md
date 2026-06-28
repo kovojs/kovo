@@ -273,7 +273,8 @@ required.` Removing `recordChange`/`transaction` does NOT clear it; only removin
   - Acceptance: route Table children through the runtime renderable (await Promises)
     instead of a bespoke synchronous `escapeHtml`. Add a JSX-composition test for Table.
 
-- [ ] **D2 — The server JSX namespace is effectively untyped (`Element=any`, `children: unknown`, intrinsics `Record<string,unknown>`), so declared component prop/children types and intrinsic attribute names/aria values are never enforced at call sites.** (MEDIUM, framework; theme-ui)
+- [x] **D2 — The server JSX namespace is effectively untyped (`Element=any`, `children: unknown`, intrinsics `Record<string,unknown>`), so declared component prop/children types and intrinsic attribute names/aria values are never enforced at call sites.** (MEDIUM, framework; theme-ui)
+  - Evidence: `pnpm exec vitest run packages/server/src/jsx-runtime-types.test.ts packages/server/src/jsx-runtime.test.ts` proves the server JSX namespace rejects missing component props, declared component children mismatches, unknown intrinsic attributes, and invalid `aria-live` values while preserving runtime JSX behavior. `JSX.Element` remains broad for current opaque render-result compatibility; call-site props/children/attributes are no longer the untyped escape hatch.
   - Observed: `<Card>{42}{true}{{not:'render'}}<Button>{[1,2,3]}</Button></Card>`
     (children typed `string`) typechecks clean; `onClik`/invalid aria values are
     unchecked app-wide.
@@ -332,7 +333,8 @@ explicit trusted Kovo escape hatch. dynamic style text` at build.
     `styleClassVariants`) for pure prop/local conditionals between `style.create`
     handles, instead of requiring a query/state derive root.
 
-- [ ] **E2 — SPEC §7 typed fire-and-forget events (`emit`/`on`) are non-functional end-to-end: the lowered `emit(...)` free identifier has no runtime binding, and `on()` has no authoring surface.** (MEDIUM, framework; nav-EVENTS-1)
+- [x] **E2 — SPEC §7 typed fire-and-forget events (`emit`/`on`) are non-functional end-to-end: the lowered `emit(...)` free identifier has no runtime binding, and `on()` has no authoring surface.** (MEDIUM, framework; nav-EVENTS-1)
+  - Evidence: `rg -n "not a shipped v1 authoring surface|not a shipped authoring surface yet" SPEC.md site/content/guides/islands.md` plus `node site/scripts/code-snippets-check.mjs site/content/guides/islands.md` proves SPEC §7 and the islands guide now explicitly remove typed events from the shipped authoring surface and the authored guide snippets still typecheck.
   - Observed: authoring `emit('cart:add', …)` (the import-free form docs prescribe)
     typechecks and lowers, but resolves to an unbound identifier at runtime
     (ReferenceError); `on()` has no recognized form at all.

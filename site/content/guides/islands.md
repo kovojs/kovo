@@ -277,16 +277,12 @@ When one island's change must reach another, prefer them in this order (SPEC §7
 1. **The URL.** A filter writes `?max=500` or is a GET form whose fragment response is the grid, both
    typed against the route's `search` schema. See [routing](/guides/routing/). This is the default —
    it's shareable, bookmarkable, and survives reload.
-2. **Typed fire-and-forget events.** Registry-checked `emit('cart:added', {…})`. The payload type may
-   **not overlap query data** — if you're sending server facts over an event, you wanted an optimistic
-   transform, and that's **lint KV320**.
-3. **Shared client state.** Last resort, lint-gated with a required justification comment.
+2. **Scoped client state.** Use it only for local UI intent, not server/query facts. It stays
+   lint-gated with a required justification comment.
 
-```ts
-// preferred: server facts flow through queries + optimism, not events
-emit('filter:changed', { max: 500 }); // ✓ UI intent, no query data
-emit('cart:updated', { count: 3 }); // ✗ KV320 — count is server truth; use a transform
-```
+Typed fire-and-forget events are not a shipped authoring surface yet. If two islands need to share
+server facts, route that through queries, mutations, and optimistic transforms instead of a client
+event bus.
 
 ## State inside server-refreshable targets
 
@@ -335,8 +331,8 @@ Update coverage exhaustiveness: SPEC §4.9. The Interaction Ladder and cross-isl
 SPEC §7. Server-refreshable fragment targets and KV420: SPEC §4.5 and §9.1. Server fact in local
 state is **KV301**; unserializable closure capture is **KV201**;
 hand-written stamp disagreement is **KV222**, redundant stamp is **KV223**; `on:load` without
-justification is **KV211**; event payload overlapping query data is **KV320**; an uncovered
-query/state-dependent position is **KV311**. Time-dependent rendered positions and derives require
+justification is **KV211**; an uncovered query/state-dependent position is **KV311**. Time-dependent
+rendered positions and derives require
 declared `clocks`, query `.refresh({ every | at | until })`, or `renderOnce`: SPEC §4.8 and §4.9;
 missing cadence is **KV312**, and raw clock reads in derives are **KV315**.
 

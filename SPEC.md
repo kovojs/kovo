@@ -771,7 +771,7 @@ Interactions must use the lowest layer that suffices. The compiler enforces L0 s
 | **L3** | Optimistic: compiler-derived or declared transforms over query values                                                                   | Instant badge tick                    | transform module                       |
 | **L4** | Live: SSE pushing the same fragment/query vocabulary; BroadcastChannel tab sync + refetch-on-focus cover common lower-cost cases (§9.3) | Order status, presence                | `<kovo-live>` subscriber               |
 
-**Cross-island coordination**, in order of preference: (1) **the URL** — filter writes `?max=500`, or is a GET form whose fragment response is the grid, both typed against the route's `search` schema (§6.4); (2) **typed fire-and-forget events** — registry-checked `emit('cart:added', {…})`, payload types may not overlap query data (lint `KV320`: if you're sending server facts over an event, you wanted an optimistic transform); (3) **shared client state** — last resort, lint-gated with required justification comment.
+**Cross-island coordination**, in order of preference: (1) **the URL** — filter writes `?max=500`, or is a GET form whose fragment response is the grid, both typed against the route's `search` schema (§6.4); (2) **scoped client state** — only when the state is local UI intent rather than server/query facts, and still lint-gated with a required justification comment. Typed fire-and-forget cross-island events (`emit(...)`/`on(...)`) are not a shipped v1 authoring surface; the repo's internal event-bus experiments do not create public runtime bindings or a registry contract.
 
 ---
 
