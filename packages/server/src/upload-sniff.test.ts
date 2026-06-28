@@ -32,6 +32,17 @@ describe('upload byte sniffer (KV428)', () => {
     expect(sniffUploadBytes(new TextEncoder().encode('   <svg/>')).inlineSafe).toBe(false);
   });
 
+  it('distinguishes passive text/plain bytes from active markup', () => {
+    expect(sniffUploadBytes(new TextEncoder().encode('hello\nworld'))).toEqual({
+      contentType: 'text/plain',
+      inlineSafe: false,
+    });
+    expect(sniffUploadBytes(html)).toEqual({
+      contentType: 'application/octet-stream',
+      inlineSafe: false,
+    });
+  });
+
   it('rejects a polyglot: image magic bytes carrying embedded markup', () => {
     const polyglot = new Uint8Array([
       0x47,

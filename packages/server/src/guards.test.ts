@@ -855,7 +855,11 @@ describe('server guard and session primitives', () => {
       ),
     ).resolves.toEqual({
       body: '',
-      headers: { Location: '/signin?continue=%2F' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        Location: '/signin?continue=%2F',
+        Vary: 'Cookie',
+      },
       status: 303,
     });
   });

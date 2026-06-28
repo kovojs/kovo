@@ -535,6 +535,15 @@ class StoredFileSchemaImpl implements StoredFileSchema {
   async parseAsync(input: unknown): Promise<StoredFileUpload> {
     const file = parseFileLike(input, this.#fileOptions);
     const bytes = new Uint8Array(await file.arrayBuffer());
+    const sniffed = sniffUploadBytes(bytes);
+    const accept = this.#fileOptions.accept;
+    if (!isUnverifiedAcceptance(accept) && accept && accept.length > 0) {
+      // SPEC §6.6/§9.1: plain `accept([...])` is the verified path. On stored uploads the bytes are
+      // available, so the allowlist is enforced against server-sniffed truth rather than `file.type`.
+      if (!accept.includes(sniffed.contentType)) {
+        throw validationError(`Expected file type ${accept.join(', ')}`);
+      }
+    }
 
     // KV428 (SPEC §6.6/§9.1): the storage key is SERVER-GENERATED and opaque (random UUID), never
     // derived from the client filename. This kills path traversal / overwrite by construction — an
@@ -547,7 +556,7 @@ class StoredFileSchemaImpl implements StoredFileSchema {
     // deep sniff is free.
     const contentType = isUnverifiedAcceptance(this.#fileOptions.accept)
       ? file.type
-      : sniffUploadBytes(bytes).contentType;
+      : sniffed.contentType;
 
     const storage = await this.#storageOptions.storage.put(key, bytes.buffer.slice(0), {
       ...(contentType === '' ? {} : { contentType }),

@@ -7,6 +7,7 @@ import { runMutation } from './mutation.js';
 import { type Schema, entriesToRecord, parseSchemaAsync, s } from './schema.js';
 import { unsafeRegex } from './redos.js';
 import { testMutation as mutation } from './test-fixtures.js';
+import { accept } from './upload-sniff.js';
 
 describe('server schemas', () => {
   it('keeps chained schema constraints immutable', () => {
@@ -240,6 +241,61 @@ describe('server schemas', () => {
     expect(stored?.contentType).toBe('image/png');
     // The client filename survives only as sanitized download metadata (no path segments).
     expect(stored?.metadata?.filename).toBe('passwd.png');
+  });
+
+  it('enforces stored upload accept allowlists against sniffed bytes', async () => {
+    const storage = createMemoryStorage();
+    const put = vi.fn<StorageCapability['put']>((key, body, options) =>
+      storage.put(key, body, options),
+    );
+    const uploadDocument = mutation('profile/document', {
+      input: s.object({
+        document: s
+          .file()
+          .accept(['text/plain'])
+          .store({ keyPrefix: 'documents', storage: { ...storage, put } }),
+      }),
+      handler(input) {
+        return input.document.key;
+      },
+    });
+    const form = new FormData();
+    form.set('document', formDataFile(['<script>alert(1)</script>'], 'evil.html', 'text/plain'));
+
+    await expect(runMutation(uploadDocument, form, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected file type text/plain', path: ['document'] }] },
+      },
+      ok: false,
+      status: 422,
+    });
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('keeps accept.unverified as the audited client-MIME escape for stored uploads', async () => {
+    const storage = createMemoryStorage();
+    const uploadDocument = mutation('profile/document-unverified', {
+      input: s.object({
+        document: s
+          .file()
+          .accept(accept.unverified(['text/plain'], 'legacy text importer trusts client MIME'))
+          .store({ keyPrefix: 'documents', storage }),
+      }),
+      handler(input) {
+        return {
+          contentType: input.document.storage.contentType,
+          key: input.document.key,
+        };
+      },
+    });
+    const form = new FormData();
+    form.set('document', formDataFile(['<script>alert(1)</script>'], 'evil.html', 'text/plain'));
+
+    const result = await runMutation(uploadDocument, form, {});
+    expect(result).toMatchObject({ ok: true, value: { contentType: 'text/plain' } });
+    const key = (result as { value: { key: string } }).value.key;
+    await expect(storage.get(key)).resolves.toMatchObject({ contentType: 'text/plain' });
   });
 
   it('reserves stored-file filename metadata after app metadata is merged', async () => {
