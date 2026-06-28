@@ -289,7 +289,12 @@ packages/create-kovo/src/index.build.test.ts examples/crm/src/interactive-app.te
 examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
 examples/stackoverflow/src/interactive-app.test.ts packages/create-kovo/src/index.build.test.ts
 packages/core/src/index.test.ts`, `pnpm run check:vp`, and `git diff --check`. Remaining gap:
-    tutorials and some direct-test example query/domain/form handles still have explicit key strings.
+    some direct-test example query/domain/form handles still have explicit key strings. Tutorial step
+    source now uses derived query and mutation identities with `form(addToCart)` where applicable;
+    verification passed `pnpm exec vitest --run
+site/tutorial/steps/03-queries/src/app.test.ts site/tutorial/steps/04-mutations/src/app.test.ts
+site/tutorial/steps/05-optimistic/src/app.test.ts site/tutorial/steps/06-streaming/src/app.test.ts
+site/tutorial/steps/07-verification/src/app.test.ts`, `pnpm run check:vp`, and `git diff --check`.
 
 - [ ] **Update generated registries, explain snapshots, compiler tests, server tests, and browser wire tests.**
   - Cover `/_m/*`, `data-mutation`, CSRF audience, replay scope, query wire chunks, domain touch
@@ -363,3 +368,8 @@ vitest run packages/compiler/src/scan/optimistic-inline.test.ts`, `pnpm run chec
 examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts
 examples/stackoverflow/src/interactive-app.test.ts packages/create-kovo/src/index.build.test.ts
 packages/core/src/index.test.ts`, `pnpm run check:vp`, and `git diff --check` passed.
+- 2026-06-27: Integrated tutorial step source-derived migration; `pnpm exec vitest --run
+site/tutorial/steps/03-queries/src/app.test.ts site/tutorial/steps/04-mutations/src/app.test.ts
+site/tutorial/steps/05-optimistic/src/app.test.ts site/tutorial/steps/06-streaming/src/app.test.ts
+site/tutorial/steps/07-verification/src/app.test.ts`, `pnpm run check:vp`, and `git diff --check`
+  passed.
