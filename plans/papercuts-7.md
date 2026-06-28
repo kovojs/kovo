@@ -22,7 +22,7 @@ separately in `plans/bugz-8.md`.
 
 ### A. Static Export
 
-- [ ] **Static export copies public assets referenced from HTML but misses public assets referenced from exported CSS.** (med, framework; found by `static-deploy-skew`)
+- [x] **Static export copies public assets referenced from HTML but misses public assets referenced from exported CSS.** (med, framework; found by `static-deploy-skew`)
   - Observed behavior: the exported stylesheet contains `background:url(/static-bg.txt)`,
     and `dist/.kovo-client/static-bg.txt` exists, but
     `dist/export-static-audit/static-bg.txt` is absent. HTML-referenced public
@@ -39,14 +39,14 @@ separately in `plans/bugz-8.md`.
   - Acceptance: static export discovers and copies public-root assets referenced
     by emitted CSS assets, without re-copying or escaping URLs outside the public
     asset root.
+  - Evidence: `pnpm exec vitest run packages/server/src/static-export-assets.test.ts packages/server/src/capability-route.test.ts packages/server/src/response.test.ts` passes; `static-export-assets.test.ts` covers copying public assets referenced from CSS `url(...)`.
 
 ### B. File / Capability Downloads
 
-- [ ] **`ctx.signUrl` always mints default `/_kovo/storage` URLs, so documented custom `createStorageDownloadEndpoint({ basePath })` links are dead.** (med, framework; found by `files-capability`)
-  - Observed behavior: mounting `createStorageDownloadEndpoint({ basePath:
-    '/downloads', ... })` while rendering a route with `ctx.signUrl(...)` produces
-    `/_kovo/storage/...` links; dereferencing them returns 404 when the default
-    endpoint is not mounted.
+- [x] **`ctx.signUrl` always mints default `/_kovo/storage` URLs, so documented custom `createStorageDownloadEndpoint({ basePath })` links are dead.** (med, framework; found by `files-capability`)
+  - Observed behavior: mounting a `/downloads` storage endpoint while rendering a
+    route with `ctx.signUrl(...)` produces `/_kovo/storage/...` links;
+    dereferencing them returns 404 when the default endpoint is not mounted.
   - Root cause: `packages/server/src/app-document.ts:56-59` constructs route
     `signUrl` with only the app CSRF-derived secret, so route context never sees a
     custom storage endpoint `basePath`; `createSignUrl` supports `basePath` in
@@ -62,8 +62,9 @@ separately in `plans/bugz-8.md`.
   - Acceptance: `ctx.signUrl` can be configured or derived from mounted storage
     endpoints so custom `basePath` routes mint matching URLs and audiences, or the
     documented custom-basePath pattern is replaced with a supported API.
+  - Evidence: `pnpm exec vitest run packages/server/src/static-export-assets.test.ts packages/server/src/capability-route.test.ts packages/server/src/response.test.ts` passes; `capability-route.test.ts` covers `ctx.signUrl` composing with a custom mounted storage `basePath`.
 
-- [ ] **Stored upload filename metadata is not used by `respond.storedFile` / `createStorageDownloadEndpoint`.** (low, framework; found by `files-capability`)
+- [x] **Stored upload filename metadata is not used by `respond.storedFile` / `createStorageDownloadEndpoint`.** (low, framework; found by `files-capability`)
   - Observed behavior: `s.file().store()` stores sanitized filename metadata, but
     the capability download response emits `Content-Disposition: attachment`
     without a filename unless the endpoint is configured with one static
@@ -80,10 +81,11 @@ separately in `plans/bugz-8.md`.
     returns `Content-Disposition: attachment`, not `attachment; filename="note.txt"`.
   - Acceptance: stored-file responses use sanitized per-object filename metadata
     by default when no explicit static filename override is supplied.
+  - Evidence: `pnpm exec vitest run packages/server/src/static-export-assets.test.ts packages/server/src/capability-route.test.ts packages/server/src/response.test.ts` passes; `response.test.ts` and `capability-route.test.ts` cover stored filename metadata and explicit override precedence.
 
 ### C. Graph / Explain Diagnostics
 
-- [ ] **Build graph mutation `invalidates` are inconsistent with query read sets and optimistic coverage.** (med, dev-tooling; found by `optimistic-live`)
+- [x] **Build graph mutation `invalidates` are inconsistent with query read sets and optimistic coverage.** (med, dev-tooling; found by `optimistic-live`)
   - Observed behavior: `kovo explain query queries/contact-detail-query` says the
     detail query is invalidated by contact mutations, but
     `kovo explain mutation mutations/update-contact --optimistic` prints only
@@ -106,10 +108,11 @@ separately in `plans/bugz-8.md`.
   - Acceptance: mutation explain/graph invalidates use one derived source of truth
     that includes proven query read-set intersections/optimistic keys and does not
     copy unrelated live target queries onto every mutation.
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-explain.test.ts` passes; `index.kovo-build.test.ts` covers derived invalidates, optimistic keys, graph output, and mutation explain output.
 
 ### D. UI Primitive Plumbing
 
-- [ ] **`@kovojs/ui` `CommandItem` cannot consume the `listboxId` required by the command ID fix.** (low, framework; found by `style-headless-regression`)
+- [x] **`@kovojs/ui` `CommandItem` cannot consume the `listboxId` required by the command ID fix.** (low, framework; found by `style-headless-regression`)
   - Observed behavior: after `plans/papercuts-6.md`, headless command item ID
     synthesis requires `listboxId` for id-less items. `CommandInput` accepts
     `listboxId`, but `CommandItem` does not expose or forward it, so
@@ -128,10 +131,11 @@ separately in `plans/bugz-8.md`.
   - Acceptance: styled `CommandItem` exposes and forwards `listboxId` to
     `commandItemAttributes`, and duplicate command instances can use unique
     listbox IDs without explicit per-item IDs.
+  - Evidence: `pnpm exec vitest run packages/ui/src/command.stylex.test.tsx packages/ui/src/index.overlays.test.tsx packages/ui/src/xss-escaping.test.tsx` passes; `command.stylex.test.tsx` covers forwarding `listboxId` to id-less command items.
 
 ### E. Drizzle Diagnostics
 
-- [ ] **Nested RQB relation projections false-positive when relation name differs from table export.** (med, framework; found by `drizzle-depth`)
+- [x] **Nested RQB relation projections false-positive when relation name differs from table export.** (med, framework; found by `drizzle-depth`)
   - Observed behavior: `projectSecretExtrasProbe` correctly gets KV410 for raw
     extras, but also incorrectly gets KV406 for `notes.id` even though `notes`
     uses `columns: { id: true }`.
@@ -148,6 +152,7 @@ separately in `plans/bugz-8.md`.
   - Acceptance: nested RQB projection extraction resolves relation property names
     to the target table when checking declared columns, so legitimate
     `columns: { id: true }` projections do not emit KV406.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.toctou-readonly.test.ts packages/drizzle/src/index.recognizer-alias-bugz3.test.ts` passes; `index.recognizer-alias-bugz3.test.ts` covers nested relation projection columns resolved through target table names.
 
 ## Refuted / Not Carried Forward
 
@@ -165,15 +170,15 @@ separately in `plans/bugz-8.md`.
 
 ## Latest Verification
 
-- In `/Users/mini/kovo-dogfood-20260628c/base-pristine`, `pnpm run check`,
-  `pnpm run test`, `pnpm run build:prod`, and a dev HTTP smoke passed.
-- In `/Users/mini/kovo-dogfood-20260628c/static-deploy-skew`, static export
-  writes HTML-referenced public assets but leaves CSS `url(/static-bg.txt)`
-  unresolved in the export directory.
-- In `/Users/mini/kovo-dogfood-20260628c/files-capability`, `pnpm run check`
-  passed for the file/capability app.
-- In `/Users/mini/kovo-dogfood-20260628c/style-headless-regression`,
-  `pnpm exec vitest run src/style-headless-regression.test.ts` passed.
-- In `/Users/mini/kovo-dogfood-20260628c/drizzle-depth`, `pnpm run check` exits
-  with expected deliberate diagnostics and reproduces the RQB relation projection
-  false positive.
+- 2026-06-28 in `/Users/mini/kovo-bugz8-papercuts7-20260628-090857`:
+  `pnpm exec vitest run packages/ui/src/command.stylex.test.tsx packages/ui/src/index.overlays.test.tsx packages/ui/src/xss-escaping.test.tsx`
+  passed.
+- 2026-06-28 in `/Users/mini/kovo-bugz8-papercuts7-20260628-090857`:
+  `pnpm exec vitest run packages/server/src/static-export-assets.test.ts packages/server/src/capability-route.test.ts packages/server/src/response.test.ts`
+  passed.
+- 2026-06-28 in `/Users/mini/kovo-bugz8-papercuts7-20260628-090857`:
+  `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-explain.test.ts`
+  passed.
+- 2026-06-28 in `/Users/mini/kovo-bugz8-papercuts7-20260628-090857`:
+  `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.toctou-readonly.test.ts packages/drizzle/src/index.recognizer-alias-bugz3.test.ts`
+  passed.

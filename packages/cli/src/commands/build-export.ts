@@ -532,7 +532,7 @@ async function staticBuildCheckGraph(
   const files = buildCheckSourceFiles(appModulePath);
   const drizzleFacts =
     files.length === 0 ? emptyStaticDrizzleBuildFacts() : await staticDrizzleBuildFacts(files);
-  const liveTargetQueries = liveTargetQueryDefinitions(app);
+  const queryReadSets = app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries));
 
   return {
     ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
@@ -549,12 +549,10 @@ async function staticBuildCheckGraph(
       : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
     ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
     endpoints: app.endpoints.map(endpointCheckFact),
-    mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, liveTargetQueries)),
-    optimistic: app.mutations.flatMap((mutation) =>
-      mutationOptimisticCheckFacts(mutation, liveTargetQueries),
-    ),
+    mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
+    optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
     pages: app.routes.map(routeCheckFact),
-    queries: app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries)),
+    queries: queryReadSets,
   };
 }
 
@@ -657,18 +655,18 @@ function queryCheckFact(
 
 function mutationCheckFact(
   mutation: KovoApp['mutations'][number],
-  liveTargetQueries: readonly { key: string }[],
+  queryReadSets: readonly CoreGraph.QueryReadSet[],
 ): CoreGraph.MutationExplain {
   const registry = mutation.registry;
   const touches = (registry?.touches ?? []) as readonly { key: string }[];
   const inferredTouches = (registry?.inferredTouches ?? []) as readonly { domain: string }[];
-  const registryQueries = (registry?.queries ?? []) as readonly { key: string }[];
   const writes = uniqueSorted(touches.map((touch) => touch.key));
   const inferredWrites = uniqueSorted(inferredTouches.map((touch) => touch.domain));
   const fileFields = mutation.fileFields ?? [];
-  const invalidates = uniqueSorted(
-    [...registryQueries, ...liveTargetQueries].map((query) => query.key),
-  );
+  const invalidates = mutationInvalidatedQueryKeys(mutation, queryReadSets, [
+    ...writes,
+    ...inferredWrites,
+  ]);
   return {
     ...(mutation.access === undefined ? {} : { access: mutation.access }),
     csrf: mutation.csrf === false ? 'exempt' : 'checked',
@@ -685,36 +683,50 @@ function mutationCheckFact(
 
 function mutationOptimisticCheckFacts(
   mutation: KovoApp['mutations'][number],
-  liveTargetQueries: readonly { key: string }[],
 ): CoreGraph.OptimisticCoverage[] {
   const optimistic = mutation.optimistic as Record<string, unknown> | undefined;
   if (optimistic === undefined) return [];
 
-  const registryQueries = (mutation.registry?.queries ?? []) as readonly { key: string }[];
   const optimisticQueries = Object.keys(optimistic)
     .filter(isString)
     .map((key) => ({ key }));
-  return uniqueQueries([...registryQueries, ...liveTargetQueries, ...optimisticQueries]).flatMap(
-    (query) => {
-      const entry = optimistic[query.key];
-      if (entry === undefined) return [];
-      return [
-        {
-          mutation: mutation.key,
-          query: query.key,
-          status: entry === 'await-fragment' ? 'await-fragment' : 'hand-written',
-        },
-      ];
-    },
-  );
+  return uniqueQueries(optimisticQueries).flatMap((query) => {
+    const entry = optimistic[query.key];
+    if (entry === undefined) return [];
+    return [
+      {
+        mutation: mutation.key,
+        query: query.key,
+        status: entry === 'await-fragment' ? 'await-fragment' : 'hand-written',
+      },
+    ];
+  });
 }
 
-function liveTargetQueryDefinitions(app: KovoApp): readonly { key: string }[] {
-  return uniqueQueries(
-    app.liveTargetRenderers.flatMap(
-      (renderer) => (renderer.queryDefinitions ?? []) as readonly { key: string }[],
-    ),
-  );
+function mutationInvalidatedQueryKeys(
+  mutation: KovoApp['mutations'][number],
+  queryReadSets: readonly CoreGraph.QueryReadSet[],
+  writeDomains: readonly string[],
+): string[] {
+  // SPEC §10.4/§10.6: graph/explain and optimistic coverage share one derived
+  // invalidated-query set; live targets are consumers, not mutation-wide invalidations.
+  const registryQueries = (mutation.registry?.queries ?? []) as readonly { key: string }[];
+  const optimistic = mutation.optimistic as Record<string, unknown> | undefined;
+  const optimisticQueryKeys =
+    optimistic === undefined ? [] : Object.keys(optimistic).filter(isString);
+  const writtenDomains = new Set(writeDomains);
+  const intersectingQueries =
+    writtenDomains.size === 0
+      ? []
+      : queryReadSets
+          .filter((query) => query.domains.some((domain) => writtenDomains.has(domain)))
+          .map((query) => query.query);
+
+  return uniqueSorted([
+    ...registryQueries.map((query) => query.key),
+    ...intersectingQueries,
+    ...optimisticQueryKeys,
+  ]);
 }
 
 function uniqueQueries(queries: readonly { key: string }[]): { key: string }[] {

@@ -15,7 +15,7 @@ mutation probes.
 
 ### A. Drizzle Static Security Gates
 
-- [ ] **Write-side KV414 misses owner-table writes keyed by destructured mutation input.** (high, security/soundness; found by `drizzle-depth`)
+- [x] **Write-side KV414 misses owner-table writes keyed by destructured mutation input.** (high, security/soundness; found by `drizzle-depth`)
   - Observed behavior: `unsafeSpendBudget` updates owner-annotated `projects` by
     destructured client `projectId` with no owner predicate, but `kovo build` emits
     no WRITE KV414 for `src/mutations.ts:147-150`.
@@ -34,8 +34,9 @@ mutation probes.
   - Acceptance: write-side owner-scope analysis treats destructured mutation input
     bindings as client-controlled instance keys and emits KV414 for owner-table
     writes lacking a proven session owner predicate.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.toctou-readonly.test.ts packages/drizzle/src/index.recognizer-alias-bugz3.test.ts` passes; `index.scope-audits.test.ts` covers destructured mutation input as a write-side owner-table args key.
 
-- [ ] **KV429 misses read-then-absolute-write lost updates on atomic columns.** (high, security/soundness; found by `drizzle-depth`)
+- [x] **KV429 misses read-then-absolute-write lost updates on atomic columns.** (high, security/soundness; found by `drizzle-depth`)
   - Observed behavior: `unsafeSpendBudget` reads `projects.budgetCents`, computes
     `nextBudget`, then writes `budgetCents` without version/CAS, but `kovo build`
     emits no KV429.
@@ -54,6 +55,7 @@ mutation probes.
   - Acceptance: static derivation/lost-update analysis recognizes read-then
     absolute-write flows into atomic columns and emits KV429 unless a CAS/version
     guard or allowed atomic update pattern is proven.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.toctou-readonly.test.ts packages/drizzle/src/index.recognizer-alias-bugz3.test.ts` passes; `index.toctou-readonly.test.ts` covers read-then-absolute-write KV429 and version-guard discharge.
 
 ## Refuted / Not Carried Forward
 
@@ -65,8 +67,7 @@ mutation probes.
 
 ## Latest Verification
 
-- In `/Users/mini/kovo-dogfood-20260628c/drizzle-depth`, `pnpm exec tsc --noEmit`,
-  `node scripts/check-sound-subset.mjs`, and `pnpm run test` passed.
-- In `/Users/mini/kovo-dogfood-20260628c/drizzle-depth`, `pnpm run check` exits 1
-  with expected deliberate diagnostics but no WRITE KV414 for `unsafeSpendBudget`
-  and no KV429 for its read-then-absolute-write pattern.
+- 2026-06-28 in `/Users/mini/kovo-bugz8-papercuts7-20260628-090857`:
+  `pnpm exec vitest run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.toctou-readonly.test.ts packages/drizzle/src/index.recognizer-alias-bugz3.test.ts`
+  passed, covering the two fixed Drizzle security/soundness gaps and the nested
+  RQB relation projection regression.

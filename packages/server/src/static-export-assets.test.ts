@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -248,6 +248,67 @@ describe('server static export', () => {
     } finally {
       await rm(outDir, { force: true, recursive: true });
       await rm(publicRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('copies public assets referenced by exported CSS url(...) values', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    const publicRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-public-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-assets-'));
+    try {
+      await mkdir(path.join(publicRoot, 'icons'), { recursive: true });
+      await writeFile(path.join(publicRoot, 'static-bg.txt'), 'css public bg\n', 'utf8');
+      await writeFile(path.join(publicRoot, 'icons', 'mark.svg'), '<svg></svg>', 'utf8');
+      const cssSource = path.join(sourceDir, 'styles.css');
+      await writeFile(
+        cssSource,
+        [
+          '.hero { background: url("/static-bg.txt"); }',
+          '.mark { background: url(../icons/mark.svg#logo); }',
+          '.hash { background: url("#paint"); }',
+          '.data { background: url(data:image/png;base64,aaaa); }',
+          '.external { background: url("https://cdn.example.test/bg.png"); }',
+          '.built { background: url("/assets/chunk.png"); }',
+        ].join('\n'),
+        'utf8',
+      );
+      const app = createApp({
+        routes: [
+          route('/', {
+            page: () => trustedHtml('<main>Home</main>'),
+            stylesheets: ['/assets/styles.css'],
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, {
+        assets: [
+          {
+            contentType: 'text/css; charset=utf-8',
+            path: '/assets/styles.css',
+            source: cssSource,
+          },
+        ],
+        outDir,
+        publicAssetRoot: publicRoot,
+      });
+
+      expect(result.assets.map((asset) => asset.path)).toEqual([
+        '/assets/styles.css',
+        '/icons/mark.svg',
+        '/static-bg.txt',
+      ]);
+      await expect(readFile(path.join(outDir, 'static-bg.txt'), 'utf8')).resolves.toBe(
+        'css public bg\n',
+      );
+      await expect(readFile(path.join(outDir, 'icons', 'mark.svg'), 'utf8')).resolves.toBe(
+        '<svg></svg>',
+      );
+      await expect(readFile(path.join(outDir, 'assets', 'chunk.png'), 'utf8')).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(publicRoot, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
     }
   });
 

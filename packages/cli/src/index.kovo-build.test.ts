@@ -391,6 +391,139 @@ export default createApp({
     }
   });
 
+  it('derives mutation invalidates from read-set intersections and optimistic keys', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-derived-invalidates-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, domain, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
+
+const contactDomain = domain('contact');
+const authDomain = domain('auth');
+
+const contactsQuery = query('queries/contacts-query', {
+  access: publicAccess('derived invalidates fixture'),
+  reads: [contactDomain],
+  load() {
+    return { items: [] };
+  },
+});
+
+const contactDetailQuery = query('queries/contact-detail-query', {
+  access: publicAccess('derived invalidates fixture'),
+  reads: [contactDomain],
+  load() {
+    return { item: null };
+  },
+});
+
+const authQuery = query('queries/auth-session-query', {
+  access: publicAccess('derived invalidates fixture'),
+  reads: [authDomain],
+  load() {
+    return { user: null };
+  },
+});
+
+const updateContact = mutation('mutations/update-contact', {
+  access: publicAccess('derived invalidates fixture'),
+  csrf: false,
+  csrfJustification: 'non-browser regression fixture',
+  input: s.object({ name: s.string() }),
+  optimistic: {
+    'queries/contacts-query': 'await-fragment',
+    'queries/contact-detail-query': 'await-fragment',
+  },
+  registry: {
+    queries: [contactsQuery],
+    touches: [contactDomain],
+  },
+  handler() {
+    return { ok: true };
+  },
+});
+
+const signIn = mutation('mutations/sign-in', {
+  access: publicAccess('derived invalidates fixture'),
+  csrf: false,
+  csrfJustification: 'non-browser regression fixture',
+  input: s.object({ email: s.string() }),
+  optimistic: { 'queries/auth-session-query': 'await-fragment' },
+  registry: {
+    queries: [authQuery],
+    touches: [authDomain],
+  },
+  handler() {
+    return { ok: true };
+  },
+});
+
+export default createApp({
+  liveTargetRenderers: [
+    {
+      component: 'contacts/detail',
+      queryDefinitions: [contactDetailQuery],
+      render: () => trustedHtml('<section>Contact</section>', 'derived invalidates fixture'),
+    },
+  ],
+  mutations: [updateContact, signIn],
+  queries: [contactsQuery, contactDetailQuery, authQuery],
+  routes: [
+    route('/contacts', {
+      access: publicAccess('derived invalidates fixture'),
+      page: () => trustedHtml('<main>Contacts</main>', 'derived invalidates fixture'),
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+
+      const graphPath = join(outDir, '.kovo/graph.json');
+      const graph = JSON.parse(readFileSync(graphPath, 'utf8')) as {
+        mutations: { invalidates?: string[]; key: string }[];
+      };
+      expect(
+        graph.mutations.find((mutation) => mutation.key === 'mutations/update-contact')
+          ?.invalidates,
+      ).toEqual(['queries/contact-detail-query', 'queries/contacts-query']);
+      expect(
+        graph.mutations.find((mutation) => mutation.key === 'mutations/sign-in')?.invalidates,
+      ).toEqual(['queries/auth-session-query']);
+
+      stdout.mockClear();
+      expect(
+        main(['explain', 'mutation', 'mutations/update-contact', '--optimistic', graphPath]),
+      ).toBe(0);
+      const explainOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(explainOutput).toContain(
+        'invalidates: queries/contact-detail-query,queries/contacts-query',
+      );
+      expect(explainOutput).toContain('OPTIMISTIC queries/contact-detail-query await-fragment');
+      expect(explainOutput).not.toContain('queries/auth-session-query');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('runs Drizzle security extractors before artifact emission', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-security-preflight-'));
     const appPath = join(root, 'app.mjs');

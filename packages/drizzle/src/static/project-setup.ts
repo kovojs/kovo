@@ -144,7 +144,7 @@ import {
       extraction.tableNamesBySymbol,
     );
     const relationTargetTableNames = projectRelationTargetTableNamesByProperty(
-      sourceFile,
+      extraction.sourceFiles,
       extraction.tableNamesBySymbol,
     );
     const objectCallbacks = projectObjectLiteralCallbacks(sourceFile);

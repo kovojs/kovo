@@ -118,6 +118,7 @@ import {
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
+  relationTargetTableName: (relation: string) => string | undefined = () => undefined,
 ): QueryShapeSelection | null {
   const call = relationalQueryCallFromQueryBody(body, receiverReferences);
   if (!call) return null;
@@ -136,6 +137,7 @@ import {
     table,
     projection,
     columnShapes,
+    relationTargetTableName,
   );
 
   return {
@@ -163,6 +165,7 @@ function appendRelationalProjectionShape(
   table: string,
   projection: RelationalProjection,
   columnShapes: Readonly<Record<string, QueryShape>>,
+  relationTargetTableName: (relation: string) => string | undefined,
 ): void {
   for (const column of projection.columns) {
     const columnShape = columnShapes[`${table}.${column}`];
@@ -185,13 +188,15 @@ function appendRelationalProjectionShape(
     const relationShape: Record<string, QueryShape> = {};
     const relationUnresolvedPaths: string[] = [];
     const relationOpaquePaths: string[] = [];
+    const relationTable = relationTargetTableName(relation) ?? relation;
     appendRelationalProjectionShape(
       relationShape,
       relationUnresolvedPaths,
       relationOpaquePaths,
-      relation,
+      relationTable,
       relationProjection,
       columnShapes,
+      relationTargetTableName,
     );
     shape[relation] = relationShape;
     unresolvedPaths.push(...relationUnresolvedPaths.map((path) => `${relation}.${path}`));

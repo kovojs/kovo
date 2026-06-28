@@ -53,14 +53,20 @@ describe('@kovojs/ui Command StyleX slots', () => {
                 children:
                   CommandItem.definition.render({
                     highlightedValue: 'open-file',
+                    items: commandItems,
                     itemLabel: 'Open file',
                     itemValue: 'open-file',
+                    listboxId: 'command-listbox',
+                    open: true,
                     value: 'open-file',
                   }) +
                   CommandItem.definition.render({
+                    items: commandItems,
                     itemDisabled: true,
                     itemLabel: 'Archive file',
                     itemValue: 'archive-file',
+                    listboxId: 'command-listbox',
+                    open: true,
                     value: 'open-file',
                   }) +
                   CommandEmpty.definition.render({
@@ -144,7 +150,10 @@ describe('@kovojs/ui Command StyleX slots', () => {
               CommandListbox.definition.render({
                 children:
                   CommandItem.definition.render({
+                    items: [{ value: 'first' }],
                     itemValue: 'first',
+                    listboxId: 'custom-command-listbox',
+                    open: true,
                     styles: { item: overrides.item },
                   }) +
                   CommandEmpty.definition.render({
@@ -167,6 +176,20 @@ describe('@kovojs/ui Command StyleX slots', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
+  });
+
+  it('forwards listboxId to id-less command items', () => {
+    expect(
+      String(
+        CommandItem.definition.render({
+          highlightedValue: 'open-file',
+          itemValue: 'open-file',
+          items: commandItems,
+          listboxId: 'command-listbox',
+          open: true,
+        }),
+      ),
+    ).toContain('id="command-listbox-item-0"');
   });
 
   it('exports StyleX style groups', () => {

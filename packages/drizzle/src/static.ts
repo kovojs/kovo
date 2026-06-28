@@ -1651,7 +1651,7 @@ function extractTouchGraphFromPreparedFiles(
             extraction.tableNamesBySymbol,
           ),
           relationTargetTableNames: projectRelationTargetTableNamesByProperty(
-            sourceFile,
+            extraction.sourceFiles,
             extraction.tableNamesBySymbol,
           ),
           unmodeledRelationNamesBySymbol: extraction.unmodeledRelationNamesBySymbol,
@@ -2414,7 +2414,13 @@ function extractQueryDefinitionsFromSourceFile(
         receiverReferences,
         options.columnShapes,
         receiverMode,
-      ) ?? relationalShapeFromQueryBody(bodyObject, receiverReferences, options.columnShapes);
+      ) ??
+      relationalShapeFromQueryBody(
+        bodyObject,
+        receiverReferences,
+        options.columnShapes,
+        options.relationalRelationTableName,
+      );
     const outputShape = queryOutputShape(bodyObject);
     const shape =
       selection && !isEmptyQueryShape(selection.shape)

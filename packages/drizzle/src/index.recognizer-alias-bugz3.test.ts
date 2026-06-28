@@ -444,4 +444,55 @@ describe('bugz-4 H2/M5: relational-query with() relations contribute read securi
     );
     expect(kv435.some((diagnostic) => diagnostic.message.includes('author.leaked'))).toBe(true);
   });
+
+  it('resolves nested RQB relation projection columns through target table names', () => {
+    const facts = extractQueryFactsFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'query: { projects: { findMany(value?: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'schema.ts',
+            source: [
+              'export const projects = pgTable("projects", {',
+              '  id: text("id").primaryKey(),',
+              '}, kovo({ domain: "project", key: "id" }));',
+              'export const projectNotes = pgTable("project_notes", {',
+              '  id: text("id").primaryKey(),',
+              '  projectId: text("project_id").notNull(),',
+              '}, kovo({ domain: "project-note", key: "id" }));',
+              'export const projectsRelations = relations(projects, ({ many }) => ({',
+              '  notes: many(projectNotes),',
+              '}));',
+            ].join('\n'),
+          },
+          {
+            fileName: 'project.queries.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { projectNotes, projects } from "./schema";',
+              '',
+              'export const projectSecretExtrasProbe = query("project-secret-extras-probe", {',
+              '  reads: [projects, projectNotes],',
+              '  output: s.object({ id: s.string() }),',
+              '  load(_input, db: PgAsyncDatabase<any, any>) {',
+              '    return db.query.projects.findMany({',
+              '      columns: { id: true },',
+              '      with: { notes: { columns: { id: true } } },',
+              '    });',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(facts.map((fact) => fact.shape)).toEqual([{ id: 'string', notes: { id: 'string' } }]);
+    const kv406 = diagnosticsForQueryFacts(facts).filter(
+      (diagnostic) => diagnostic.code === 'KV406',
+    );
+    expect(kv406).toEqual([]);
+  });
 });

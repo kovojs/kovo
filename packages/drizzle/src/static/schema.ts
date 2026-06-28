@@ -166,12 +166,12 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
 }
 
 /** @internal */ export function projectRelationTargetTableNamesByProperty(
-  sourceFile: SourceFile,
+  sourceFile: SourceFile | readonly SourceFile[],
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): ReadonlyMap<string, string> {
   const names = new Map<string, string>();
   const ambiguous = new Set<string>();
-  const namespaceTableNames = projectNamespaceTableNamesByLocal(sourceFile, tableNamesBySymbol);
+  const sourceFiles = Array.isArray(sourceFile) ? sourceFile : [sourceFile];
 
   const append = (name: string, tableName: string) => {
     const existing = names.get(name);
@@ -182,21 +182,24 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
     names.set(name, tableName);
   };
 
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (relationCallName(call) !== 'relations') continue;
-    const relationObject = relationDefinitionObject(call);
-    if (!relationObject) continue;
+  for (const file of sourceFiles) {
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(file, tableNamesBySymbol);
+    for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      if (relationCallName(call) !== 'relations') continue;
+      const relationObject = relationDefinitionObject(call);
+      if (!relationObject) continue;
 
-    for (const property of relationObject.getProperties()) {
-      if (!Node.isPropertyAssignment(property)) continue;
-      const relation = propertyNameText(property.getNameNode(), true);
-      const target = relationTargetTableName(
-        property.getInitializer(),
-        tableNamesBySymbol,
-        namespaceTableNames,
-      );
-      if (!relation || !target) continue;
-      append(relation, target);
+      for (const property of relationObject.getProperties()) {
+        if (!Node.isPropertyAssignment(property)) continue;
+        const relation = propertyNameText(property.getNameNode(), true);
+        const target = relationTargetTableName(
+          property.getInitializer(),
+          tableNamesBySymbol,
+          namespaceTableNames,
+        );
+        if (!relation || !target) continue;
+        append(relation, target);
+      }
     }
   }
 
