@@ -5,6 +5,7 @@ import {
   registeredGeneratedMutationTouches,
   registerGeneratedMutationTouchRegistry,
 } from './generated-mutation-registry.js';
+import { guards } from './guards.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { renderMutationEndpointResponse as renderMutationEndpointResponseBase } from './mutation.js';
 import { query } from './query.js';
@@ -117,6 +118,64 @@ describe('server mutation endpoint routing', () => {
       }),
     ).resolves.toMatchObject({
       headers: { Location: '/' },
+      status: 303,
+    });
+  });
+
+  it('preserves no-JS mutation rate-limit denials as 429 with Retry-After', async () => {
+    const addToCart = mutation('cart/add', {
+      guard: guards.rateLimit<{ session?: { id?: string } | null }>({
+        max: 0,
+        per: 'global',
+        windowMs: 2_000,
+      }),
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(addToCart, {
+        headers: {},
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: '<!doctype html><html><body><output role="alert" data-error-code="RATE_LIMITED">{}</output></body></html>',
+      headers: expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        'Retry-After': '2',
+      }),
+      status: 429,
+    });
+  });
+
+  it('redirects true no-JS unauthenticated auth guard failures to login', async () => {
+    const addToCart = mutation('cart/add', {
+      guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(addToCart, {
+        currentUrl: '/cart',
+        headers: {},
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: { session: null },
+      }),
+    ).resolves.toEqual({
+      body: '',
+      headers: {
+        'Cache-Control': 'no-store',
+        Location: '/login?next=%2Fcart',
+      },
       status: 303,
     });
   });
@@ -345,9 +404,9 @@ describe('server mutation endpoint routing', () => {
         redirectTo: '/cart',
         request: {},
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       body: '<!doctype html><html><body><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></body></html>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: expect.objectContaining({ 'Content-Type': 'text/html; charset=utf-8' }),
       status: 422,
     });
   });
