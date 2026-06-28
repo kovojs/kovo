@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { KovoViteMiddleware } from './internal.js';
 import { kovoVitePlugin } from './index.js';
+import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 import { createKovoVitePlugin } from './vite.js';
 import type { HmrImpactMetadata } from './types.js';
 
@@ -133,6 +134,28 @@ export const orderPaid = webhook('/webhooks/order-paid', {
       'export const orderPaid = __kovoAssignDerivedWebhookName(webhook',
     );
     expect(transformed?.code).toContain('"app-shell/order-paid"');
+  });
+
+  it('lowers standalone source-derived component declarations before runtime rendering', () => {
+    const transformed = lowerStandaloneSourceDerivedRegistryDeclarations({
+      fileName: 'src/app-shell.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+const LocalRegion = component({ queries: { cart: cartQuery }, render() { return '<section />'; } });
+export const ExportedRegion = component({ queries: { cart: cartQuery }, render() { return '<article />'; } });
+`,
+    });
+
+    expect(transformed).toContain(
+      "import { assignDerivedComponentName as __kovoAssignDerivedComponentName } from '@kovojs/server/internal/wire';",
+    );
+    expect(transformed).toContain(
+      `const LocalRegion = __kovoAssignDerivedComponentName(component({ queries: { cart: cartQuery }, render() { return '<section />'; } }), "app-shell/local-region")`,
+    );
+    expect(transformed).toContain(
+      `export const ExportedRegion = __kovoAssignDerivedComponentName(component({ queries: { cart: cartQuery }, render() { return '<article />'; } }), "app-shell/exported-region")`,
+    );
   });
 
   it('throws registry-error diagnostics from the Vite transform with teaching text', async () => {

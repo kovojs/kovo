@@ -1,11 +1,16 @@
 import ts from 'typescript';
 
+import { deriveComponentNames } from './component-names.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import { parseSourceFile } from './scan/parse.js';
 import { applySourceReplacements, type SourceReplacement } from './shared.js';
 
 const helperModule = '@kovojs/server/internal/wire';
 const helperImports = {
+  component: {
+    imported: 'assignDerivedComponentName',
+    local: '__kovoAssignDerivedComponentName',
+  },
   mutation: {
     imported: 'assignDerivedMutationKey',
     local: '__kovoAssignDerivedMutationKey',
@@ -39,7 +44,7 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
 
   const replacements: SourceReplacement[] = assignments.map((assignment) => {
     const helper = helperImports[assignment.primitive].local;
-    const key = deriveRegistryIdentity(options.fileName, assignment.binding).key;
+    const key = derivedAssignmentKey(options.fileName, assignment);
     return {
       end: assignment.call.end,
       replacement: `${helper}(${options.source.slice(
@@ -60,7 +65,7 @@ function exportedRegistryAssignments(
   const assignments: SourceDerivedRegistryAssignment[] = [];
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
-    if (!hasExportModifier(statement)) continue;
+    const exported = hasExportModifier(statement);
 
     for (const declaration of statement.declarationList.declarations) {
       if (!ts.isIdentifier(declaration.name)) continue;
@@ -69,6 +74,7 @@ function exportedRegistryAssignments(
 
       const primitive = sourceDerivedPrimitive(call);
       if (primitive === null) continue;
+      if (primitive !== 'component' && !exported) continue;
       assignments.push({ binding: declaration.name.text, call, primitive });
     }
   }
@@ -77,6 +83,7 @@ function exportedRegistryAssignments(
 
 function sourceDerivedPrimitive(call: ts.CallExpression): SourceDerivedPrimitive | null {
   if (ts.isIdentifier(call.expression)) {
+    if (call.expression.text === 'component' && isSingleObjectArgument(call)) return 'component';
     if (call.expression.text === 'mutation' && isSingleObjectArgument(call)) return 'mutation';
     if (call.expression.text === 'query' && isSingleObjectArgument(call)) return 'query';
     if (call.expression.text === 'webhook' && isPathFirstWebhookCall(call)) return 'webhook';
@@ -134,6 +141,16 @@ function requiredPrimitives(
   assignments: readonly SourceDerivedRegistryAssignment[],
 ): ReadonlySet<SourceDerivedPrimitive> {
   return new Set(assignments.map((assignment) => assignment.primitive));
+}
+
+function derivedAssignmentKey(
+  fileName: string,
+  assignment: SourceDerivedRegistryAssignment,
+): string {
+  if (assignment.primitive === 'component') {
+    return deriveComponentNames(fileName, { localName: assignment.binding }).registryKey;
+  }
+  return deriveRegistryIdentity(fileName, assignment.binding).key;
 }
 
 function hasExportModifier(statement: ts.VariableStatement): boolean {

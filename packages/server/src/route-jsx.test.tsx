@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { validateCsrfToken } from './csrf.js';
 import { domain } from './domain.js';
+import { assignDerivedComponentName } from './internal/wire.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { defineCompiledRoutePage } from './route-ir.js';
@@ -70,6 +71,37 @@ describe('route JSX pages', () => {
       body: '<cart-badge>3</cart-badge>',
       status: 200,
     });
+  });
+
+  it('stamps source-derived query-backed component roots during SSR', async () => {
+    const ladder = domain('ladderItem');
+    const ladderQuery = query('ladderItems', {
+      load() {
+        return { count: 2 };
+      },
+      reads: [ladder],
+    });
+    const LadderRegion = assignDerivedComponentName(
+      component({
+        queries: { ladder: ladderQuery },
+        render: ({ ladder }: { ladder: { count: number } }) => (
+          <section data-count={ladder.count}>Ladder</section>
+        ),
+      }),
+      'app-shell/ladder-region',
+    );
+    const ladderRoute = route('/ladder', {
+      page: () => <LadderRegion />,
+    });
+
+    const response = await renderRoutePageResponse(ladderRoute, {}, {});
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain('kovo-c="ladder-region"');
+    expect(response.body).toContain('kovo-deps="ladderItems"');
+    expect(response.body).toContain('kovo-fragment-target="ladder-region"');
+    expect(response.body).toContain('kovo-live-component="app-shell/ladder-region"');
+    expect(response.body).toMatch(/ kovo-live-token="[A-Za-z0-9_-]+"/);
   });
 
   it('loads prop-bound component queries from route params', async () => {

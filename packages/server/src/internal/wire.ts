@@ -3,6 +3,7 @@ export {
   type ComponentLiveTargetQueryBinding,
   type ComponentLiveTargetRendererOptions,
 } from '../live-target-renderer.js';
+export { assignDerivedComponentName } from '../component-root-stamps.js';
 export {
   collectGeneratedLiveTargetRenderers,
   registerGeneratedLiveTargetRenderer,

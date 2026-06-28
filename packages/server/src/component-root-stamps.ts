@@ -7,6 +7,29 @@ import type { QueryDefinition } from './query.js';
 
 type StampComponent = Component<ComponentDefinitionInput>;
 
+/**
+ * @internal Compiler-emitted/generated ABI for SPEC §4.1/§4.8 source-derived component identity.
+ *
+ * Runtime-only `component({ ... })` cannot know the source module path or binding. Generated
+ * modules call this before rendering so SSR refresh stamps and live-target tokens carry the same
+ * stable identity as fully compiled component modules.
+ */
+export function assignDerivedComponentName<ComponentType extends StampComponent>(
+  component: ComponentType,
+  name: string,
+): ComponentType {
+  if (!name) {
+    throw new TypeError('assignDerivedComponentName() requires a non-empty component name.');
+  }
+  if (typeof component.name === 'string' && component.name.length > 0 && component.name !== name) {
+    throw new TypeError(
+      `Cannot assign derived component name "${name}" to component already named "${component.name}".`,
+    );
+  }
+  component.name = name;
+  return component;
+}
+
 export interface ComponentRootStampOptions<Request = unknown> {
   component: StampComponent;
   componentName?: string;

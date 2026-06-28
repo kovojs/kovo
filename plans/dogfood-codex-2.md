@@ -57,12 +57,23 @@ packages/server/src/csrf.test.ts`, `pnpm run check:vp`, and `git diff --check`
 packages/cli/src/index.kovo-build.test.ts`, `pnpm run check:vp`, and
     `git diff --check` PASS.
 
-- [ ] **Query-backed component roots can render without refresh/live-target stamps, leaving enhanced mutation refresh with an empty body.** (medium, framework; found by ladder; duplicate family)
+- [x] **Query-backed component roots can render without refresh/live-target stamps, leaving enhanced mutation refresh with an empty body.** (medium, framework; found by ladder; duplicate family)
   - Observed behavior: `GET /ladder` had no `kovo-deps`, `kovo-fragment-target`, `kovo-live-component`, or `kovo-live-token` despite `LadderRegion` declaring `queries: { ladder: ladderQuery }`; an enhanced-style mutation returned `200`, `Kovo-Changes: [{"domain":"ladderItem"}]`, `text/vnd.kovo.fragment+html`, and a 0-byte body.
   - Root cause: `component-root-stamps.ts` only stamps when it has component query metadata and a usable component name (`packages/server/src/component-root-stamps.ts:21-79`); `jsx-runtime` calls `stampKovoComponentRoot` without a generated component name and relies on `component.name` (`packages/server/src/jsx-runtime.ts:543-571`). The built throwaway app had `var LadderRegion = component({ queries: ... })` but no emitted name assignment, so metadata returned null.
   - Why it matters: SPEC §9.1/§9.3 refresh and live-target behavior depends on DOM target metadata. Without it, successful mutations can visibly do nothing.
   - Repro evidence: verifier grepped `/ladder` output for the four stamp attributes and found zero occurrences; the enhanced mutation response had change metadata and an empty body.
   - Acceptance: compiler/runtime should preserve a stable component name for query-backed component roots or otherwise pass the generated component identity into stamping; add an SSR test asserting initial query-backed roots carry refresh target metadata.
+  - Integrated evidence (2026-06-28): `packages/server/src/component-root-stamps.ts`
+    now exposes the generated `assignDerivedComponentName(...)` ABI and standalone
+    lowering wraps top-level `component({ ... })` declarations with source-derived
+    component identities. `packages/server/src/route-jsx.test.tsx` proves a
+    source-derived query-backed component root renders `kovo-c`, `kovo-deps`,
+    `kovo-fragment-target`, `kovo-live-component`, and `kovo-live-token` stamps.
+    Verification: `pnpm exec vitest run packages/compiler/src/vite.test.ts
+packages/server/src/route-jsx.test.tsx` and `pnpm exec vp check --fix
+packages/compiler/src/source-derived-lowering.ts packages/compiler/src/vite.test.ts
+packages/server/src/component-root-stamps.ts packages/server/src/internal/wire.ts
+packages/server/src/route-jsx.test.tsx` PASS.
 
 ### B. Build And Posture Audits
 
