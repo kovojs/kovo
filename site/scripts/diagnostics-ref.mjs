@@ -67,7 +67,12 @@ function byCode(a, b) {
 function escapeCell(value) {
   // Markdown table cells: escape pipes and collapse newlines to <br> so the
   // multi-line help text stays on one row.
-  return String(value).replaceAll('|', '\\|').replace(/\n/g, '<br>');
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('|', '\\|')
+    .replace(/\n/g, '<br>');
 }
 
 async function* walkSourceFiles(dir) {

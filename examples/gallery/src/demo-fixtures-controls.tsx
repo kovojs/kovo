@@ -535,6 +535,7 @@ export function SelectDemo(): string {
   const state = {
     form: 'gallery-select-form',
     items,
+    listboxId: 'gallery-select-listbox',
     name: 'gallery-plan',
     required: true,
     value: 'growth',
@@ -567,6 +568,7 @@ export function SelectDemo(): string {
                       }),
                     )
                     .join(''),
+                  id: 'gallery-select-listbox',
                   label: 'Plans',
                   labelledBy: 'gallery-select-label',
                 }),

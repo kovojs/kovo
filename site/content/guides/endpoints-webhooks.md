@@ -47,6 +47,11 @@ import { domain, s, webhook } from '@kovojs/server';
 
 const order = domain('order');
 
+async function applyStripeEvent(tx: unknown, event: { id: string; type: string }) {
+  void tx;
+  void event;
+}
+
 export const stripeWebhook = webhook('/hooks/stripe', {
   verify: hmacSignature({
     header: 'stripe-signature',

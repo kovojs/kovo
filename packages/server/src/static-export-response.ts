@@ -159,11 +159,16 @@ function isHtmlDocumentContentType(contentType: string | null): boolean {
 }
 
 function isDeferredRouteDocumentBody(body: string): boolean {
+  const scannableBody = bodyWithoutPreformattedCode(body);
   return (
-    body.includes('<kovo-defer') ||
-    body.includes('<kovo-fragment ') ||
-    body.includes('--kovo-boundary')
+    scannableBody.includes('<kovo-defer') ||
+    scannableBody.includes('<kovo-fragment ') ||
+    scannableBody.includes('--kovo-boundary')
   );
+}
+
+function bodyWithoutPreformattedCode(body: string): string {
+  return body.replace(/<pre\b[\s\S]*?<\/pre>/gi, '');
 }
 
 function isJavaScriptClientModuleContentType(contentType: string | null): boolean {

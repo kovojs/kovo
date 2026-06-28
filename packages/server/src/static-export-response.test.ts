@@ -145,6 +145,33 @@ describe('server static export replay response boundary', () => {
     });
   });
 
+  it('allows marker-looking documentation text inside preformatted code blocks', async () => {
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: new Response(
+          [
+            '<!doctype html><main>',
+            '<pre class="shiki"><code>',
+            '<span>&lt;kovo-fragment target=&quot;docs&quot;&gt;</span>',
+            '<span>--kovo-boundary</span>',
+            '</code></pre>',
+            '<p>Docs page</p>',
+            '</main>',
+          ].join(''),
+          {
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            status: 200,
+          },
+        ),
+        routePath: '/docs/streaming',
+      }),
+    ).resolves.toMatchObject({
+      body: expect.stringContaining('--kovo-boundary'),
+      status: 200,
+    });
+  });
+
   it('reports concrete deferred route markers instead of an opaque route 500', async () => {
     await expect(
       readStaticExportReplayedResponse({
