@@ -260,10 +260,11 @@ export const TableBody = component({
  */
 export const TableRow = component({
   render(props: TableSectionProps) {
+    const rowChildren = props.children;
     return tablePartWithChildren(
       'tr',
       style.attrs(tableStyles.row, props.styles?.row),
-      props.children,
+      rowChildren,
     );
   },
 });
