@@ -24,6 +24,7 @@ import {
   Link,
   Stylesheet,
 } from './document-structured.js';
+import { jsx } from './jsx-runtime.js';
 
 // G1 (bugs-part3 CSP-1): the deferred apply/cleanup scripts now carry a CSP hash attr.
 const deferredApplyScriptBody =
@@ -196,6 +197,33 @@ describe('server app shell document assembly', () => {
     );
     expect(document.csp.scripts).toContain(themeHash);
     expect(document.csp.styles).toContain(styleHash);
+  });
+
+  it('preserves structured document primitives through the automatic JSX runtime', () => {
+    const source = 'document.documentElement.dataset.theme="dark";';
+    const hash = cspSha256(source);
+    const structured = jsx(Document, {
+      children: jsx(Head, {
+        children: [
+          jsx(InlineScript, { children: source, id: 'theme', run: 'beforePaint' }),
+          jsx(FontPreload, { href: '/fonts/inter.woff2' }),
+        ],
+      }),
+      lang: 'en-US',
+    });
+
+    const document = renderDocument({
+      body: '<main>Home</main>',
+      document: structured as ReturnType<typeof Document>,
+    });
+
+    expect(document.html).toContain(
+      `<script id="theme" data-kovo-run="beforePaint" data-kovo-csp-hash="${hash}">${source}</script>`,
+    );
+    expect(document.html).toContain(
+      '<link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>',
+    );
+    expect(document.csp.scripts).toContain(hash);
   });
 
   it('rejects invalid structured document sinks with teaching errors', () => {

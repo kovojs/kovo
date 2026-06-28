@@ -63,6 +63,8 @@ const voidElements = new Set([
 const kovoFormKeyFieldName = 'kovo-form-key';
 const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
 const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
+const documentConfigBrand = Symbol.for('kovo.document.config');
+const documentNodeBrand = Symbol.for('kovo.document.node');
 
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
 export type JsxNode =
@@ -116,7 +118,7 @@ export function jsx(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
   key?: unknown,
-): MaybePromise<RenderedHtml> {
+): MaybePromise<RenderedHtml | object> {
   if (isErrorBoundaryComponent(type)) {
     return renderErrorBoundary(props as unknown as ErrorBoundaryProps);
   }
@@ -138,8 +140,8 @@ export function jsx(
   }
   if (isKovoComponent(type)) return renderKovoComponent(type, props, key);
   if (typeof type === 'function') {
-    const component = type as JsxComponent<JsxProps>;
-    return toRenderedHtml(renderJsxChildren(component(props)));
+    const functionComponent = type as JsxComponent<JsxProps>;
+    return renderFunctionComponentResult(functionComponent(props));
   }
 
   const attributes = renderJsxAttributes(type, props, key);
@@ -212,8 +214,23 @@ export function jsxDEV(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
   key?: unknown,
-): MaybePromise<RenderedHtml> {
+): MaybePromise<RenderedHtml | object> {
   return jsx(type, props, key);
+}
+
+function renderFunctionComponentResult(value: unknown): MaybePromise<RenderedHtml | object> {
+  if (isPromiseLike(value)) return value.then(renderFunctionComponentResult);
+  if (isStructuredDocumentValue(value)) return value;
+  return toRenderedHtml(renderJsxChildren(value as JsxChild));
+}
+
+function isStructuredDocumentValue(value: unknown): value is object {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    ((value as Record<symbol, unknown>)[documentConfigBrand] === true ||
+      (value as Record<symbol, unknown>)[documentNodeBrand] === true)
+  );
 }
 
 function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): string {
