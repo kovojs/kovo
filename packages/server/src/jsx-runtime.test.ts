@@ -66,6 +66,28 @@ describe('server jsx runtime', () => {
     expect(formHtml).toMatch(/name="Kovo-Idem" value="[^"]+"/);
   });
 
+  it('lowers direct server JSX streaming mutation and text attributes', () => {
+    // SPEC.md §5.2/§9.1: app source authors TSX-only `stream` and `streamText`;
+    // served framework output exposes the runtime-visible data attributes.
+    const sendMessage = { key: 'chat/send' } as const;
+
+    const formHtml = html(
+      jsx('form', {
+        enhance: true,
+        stream: true,
+        mutation: sendMessage,
+        children: '',
+      }),
+    );
+    const textHtml = html(jsx('p', { streamText: 'assistant:a1', children: '' }));
+
+    expect(formHtml).toContain(
+      'method="post" action="/_m/chat/send" data-mutation="chat/send" data-mutation-stream="true"',
+    );
+    expect(formHtml).not.toMatch(/\sstream(?:\s|>)/);
+    expect(textHtml).toBe('<p data-stream-text="assistant:a1"></p>');
+  });
+
   it('renders JSX key identity as kovo-key for direct server JSX forms', () => {
     const addToCart = { key: 'cart/add' } as const;
 

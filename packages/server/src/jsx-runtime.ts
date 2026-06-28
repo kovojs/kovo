@@ -262,6 +262,15 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       rendered += renderMutationFormAttributes(value.key, props);
       continue;
     }
+    if (name === 'stream') {
+      continue;
+    }
+    if (name === 'streamText') {
+      if (props['data-stream-text'] === undefined) {
+        rendered += ` data-stream-text="${escapeAttribute(attributeText(name, value))}"`;
+      }
+      continue;
+    }
 
     if (styleAttrs && name === 'style') {
       continue;
@@ -340,6 +349,9 @@ function renderMutationFormAttributes(key: string, props: JsxProps): string {
     props.method === undefined ? ' method="post"' : '',
     props.action === undefined ? ` action="${escapeAttribute(`/_m/${key}`)}"` : '',
     props['data-mutation'] === undefined ? ` data-mutation="${escapeAttribute(key)}"` : '',
+    props.stream === true && props['data-mutation-stream'] === undefined
+      ? ' data-mutation-stream="true"'
+      : '',
   ].join('');
 }
 
@@ -845,6 +857,8 @@ export declare namespace JSX {
     srcset?: AttributeValue;
     srcSet?: AttributeValue;
     stroke?: string;
+    stream?: boolean;
+    streamText?: string;
     'stroke-linecap'?: string;
     'stroke-linejoin'?: string;
     'stroke-width'?: number | string;

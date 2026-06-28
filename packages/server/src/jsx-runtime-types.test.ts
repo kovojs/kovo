@@ -54,6 +54,11 @@ const ok = (
 );
 
 const raw = <section html={trustedHtml('<em>safe</em>')} />;
+const streaming = (
+  <form enhance stream mutation={{ key: 'chat/send' }}>
+    <p streamText="assistant:a1" aria-live="polite" />
+  </form>
+);
 
 // @ts-expect-error SPEC §4.1: component props must be enforced at JSX call sites.
 const missingRequiredProp = <Panel />;
@@ -69,6 +74,7 @@ const badAria = <span aria-live="maybe" />;
 
 void ok;
 void raw;
+void streaming;
 void missingRequiredProp;
 void badChild;
 void badAttribute;
