@@ -63,7 +63,7 @@ describe('commerce authored live-target artifacts', () => {
     expect(htmlFormFacts(body)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          action: '/_m/cart/add',
+          action: '/_m/domain/add-to-cart',
           fields: expect.arrayContaining([
             expect.objectContaining({ name: 'productId', value: 'p2' }),
           ]),

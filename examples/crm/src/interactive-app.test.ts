@@ -109,7 +109,7 @@ describe('crm interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'addContact',
+      'mutations/add-contact',
       withCsrf({
         id: insertedContactId,
         name: 'Edsger Dijkstra',
@@ -136,7 +136,7 @@ describe('crm interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'addContact',
+      'mutations/add-contact',
       withCsrf({
         id: duplicateEmailContactId,
         name: 'Duplicate Contact',
@@ -158,7 +158,7 @@ describe('crm interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'addContact',
+      'mutations/add-contact',
       withCsrf({
         id: 'contact-card" onmouseover="alert(1)',
         name: 'Attacker Controlled',
@@ -181,7 +181,7 @@ describe('crm interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'createDeal',
+      'mutations/create-deal',
       withCsrf({
         id: insertedDealId,
         contactId: contact.id,
@@ -215,7 +215,7 @@ describe('crm interactive app', () => {
 
     const unownedResult = await postForm(
       handler,
-      'createDeal',
+      'mutations/create-deal',
       withCsrf({
         id: unownedDealInputId,
         contactId: unowned.id,
@@ -230,7 +230,7 @@ describe('crm interactive app', () => {
 
     const invalidStageResult = await postForm(
       handler,
-      'createDeal',
+      'mutations/create-deal',
       withCsrf({
         id: invalidStageDealId,
         contactId: 'c1',
@@ -250,7 +250,7 @@ describe('crm interactive app', () => {
 
     const { status } = await postForm(
       handler,
-      'addContact',
+      'mutations/add-contact',
       withCsrf({
         id: spoofedOwnerContactId,
         name: 'Spoofed Owner',
@@ -275,7 +275,7 @@ describe('crm interactive app', () => {
     // d1 is seeded 'open'; move it to 'proposal'.
     const { status, html } = await postForm(
       handler,
-      'moveDeal',
+      'mutations/move-deal',
       withCsrf({ dealId: 'd1', stage: 'proposal' }),
       `${dealDetailTarget}:d1=activityList contactList dealList`,
       liveHeader(`${dealDetailTarget}:d1`, dealDetailComponent, { dealId: 'd1' }),
@@ -295,7 +295,7 @@ describe('crm interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'moveDeal',
+      'mutations/move-deal',
       withCsrf({ dealId: unowned.id, stage: 'proposal' }),
       `${dealDetailTarget}:${unowned.id}=activityList contactList dealList`,
       liveHeader(`${dealDetailTarget}:${unowned.id}`, dealDetailComponent, { dealId: unowned.id }),
@@ -315,7 +315,7 @@ describe('crm interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'closeDeal',
+      'mutations/close-deal',
       withCsrf({ dealId: 'd1' }),
       `${dealDetailTarget}:d1=activityList contactList dealList`,
       liveHeader(`${dealDetailTarget}:d1`, dealDetailComponent, { dealId: 'd1' }),

@@ -9,9 +9,9 @@ export const question = domain('question');
 export const answer = domain('answer');
 export const vote = domain('vote');
 
-export const postQuestionForm = form('postQuestion');
-export const postAnswerForm = form('postAnswer');
-export const voteUpForm = form('voteUp');
+export const postQuestionForm = form('mutations/post-question-mutation');
+export const postAnswerForm = form('mutations/post-answer-mutation');
+export const voteUpForm = form('mutations/vote-up-mutation');
 
 export type PostQuestionInput = FormInput<typeof postQuestionForm>;
 export type PostAnswerInput = FormInput<typeof postAnswerForm>;

@@ -1,4 +1,12 @@
-import { guards, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
+import {
+  domain,
+  guards,
+  publicAccess,
+  query,
+  s,
+  type QueryLoadContext,
+  type Reader,
+} from '@kovojs/server';
 import { eq, gt, sum } from 'drizzle-orm';
 
 import type { CommerceDb } from './db.js';
@@ -36,9 +44,9 @@ export interface CommerceQueryRequest {
   session?: { id?: string; user?: { id?: string } | null } | null;
 }
 
-export const cart = { key: 'cart' } as const;
-export const order = { key: 'order' } as const;
-export const product = { key: 'product' } as const;
+export const cart = domain('cart');
+export const order = domain('order');
+export const product = domain('product');
 
 // SPEC §9.4/§10.3 (MARQUEE): a query loader destructures the framework-owned read-only handle
 // `{ db }` (typed `Reader<CommerceDb>` — the write verbs are removed at the type level and throw
@@ -50,7 +58,7 @@ type CommerceQueryLoadContext = QueryLoadContext<CommerceQueryRequest, CommerceD
   session?: CommerceQueryRequest['session'];
 };
 
-export const cartQuery = query('cart', {
+export const cartQuery = query({
   // Public storefront browsing — the cart/catalog is visible without authentication
   // (KV436 access decision, SPEC §10.2); checkout-class writes stay guarded.
   access: publicAccess('public storefront browsing'),
@@ -63,7 +71,7 @@ export const cartQuery = query('cart', {
   },
 });
 
-export const productGridQuery = query('productGrid', {
+export const productGridQuery = query({
   access: publicAccess('public storefront browsing'),
   async load(input: unknown, context?: CommerceQueryLoadContext): Promise<ProductGridResult> {
     const db = requireCommerceQueryDb(context);
@@ -91,7 +99,7 @@ export const productGridQuery = query('productGrid', {
   },
 });
 
-export const orderHistoryQuery = query('orderHistory', {
+export const orderHistoryQuery = query({
   // SECURITY (SECURITY_FINDINGS.md M9): order history is per-user, so this read must
   // require an authenticated session — the endpoint guard rejects unauthenticated
   // callers, and the `load` below additionally scopes the rowset to that user's id

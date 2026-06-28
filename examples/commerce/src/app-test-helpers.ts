@@ -197,9 +197,9 @@ export interface CommerceScenarioEnhancedOptions extends CommerceScenarioRequest
 
 const commerceOrigin = 'https://commerce.test';
 const cartPageTargets = [
-  { queries: 'cart', target: 'cart-badge' },
-  { queries: 'productGrid', target: 'product-grid' },
-  { queries: 'orderHistory', target: 'order-history' },
+  { queries: 'queries/cart-query', target: 'cart-badge' },
+  { queries: 'queries/product-grid-query', target: 'product-grid' },
+  { queries: 'queries/order-history-query', target: 'order-history' },
 ];
 
 export function createCommerceScenarioClient(shell = createCommerceApp()): CommerceScenarioClient {
@@ -295,7 +295,7 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
     input: AddToCartInput,
     options?: CommerceScenarioRequestOptions,
   ): Promise<Response> {
-    return postForm('/_m/cart/add', await addToCartFields(input), {
+    return postForm('/_m/domain/add-to-cart', await addToCartFields(input), {
       ...options,
       headers: {
         ...headersRecord(options?.headers),
@@ -315,13 +315,13 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
         ? enhancedMutationHeaders({
             formTarget: 'product-grid',
             liveTargets,
-            targets: [{ queries: 'productGrid', target: 'product-grid' }],
+            targets: [{ queries: 'queries/product-grid-query', target: 'product-grid' }],
           })
         : enhancedMutationHeaders({
             liveTargets,
             targets: cartPageTargets,
           });
-    return postForm('/_m/cart/add', await addToCartFields(input), {
+    return postForm('/_m/domain/add-to-cart', await addToCartFields(input), {
       ...options,
       headers: {
         ...headersRecord(options.headers),
@@ -338,7 +338,7 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
     if (quantity === undefined) throw new Error('Expected add-to-cart quantity input');
     const cartPage = await get('/cart');
     const html = await cartPage.text();
-    const fields = formFieldsByName(html, '/_m/cart/add', productId);
+    const fields = formFieldsByName(html, '/_m/domain/add-to-cart', productId);
     const csrf = fields.csrf?.value;
     const formKey = fields['kovo-form-key']?.value;
     if (csrf === undefined) throw new Error('Expected add-to-cart CSRF field');

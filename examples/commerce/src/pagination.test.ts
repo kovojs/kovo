@@ -34,7 +34,7 @@ describe('commerce read-side pagination accumulation', () => {
 
     // The server ships ONLY the new page (page 2) as a keyed append-delta.
     const wire = renderQueryPageWireHtml({
-      name: 'productGrid',
+      name: 'queries/product-grid-query',
       path: 'items',
       keyField: 'id',
       rows: secondPage.items,
@@ -61,7 +61,7 @@ describe('commerce read-side pagination accumulation', () => {
 
     // Treat page 2 as "older" content arriving above the held page-1 rows.
     const wire = renderQueryPageWireHtml({
-      name: 'productGrid',
+      name: 'queries/product-grid-query',
       path: 'items',
       keyField: 'id',
       mode: 'prepend',
@@ -85,7 +85,7 @@ describe('commerce read-side pagination accumulation', () => {
     // A page that overlaps the held rows (p2) plus genuinely new content would be rare,
     // but a retried/overlapping fetch must reconcile in place rather than duplicate.
     const wire = renderQueryPageWireHtml({
-      name: 'productGrid',
+      name: 'queries/product-grid-query',
       path: 'items',
       keyField: 'id',
       rows: firstPage.items,

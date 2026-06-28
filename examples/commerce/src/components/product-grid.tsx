@@ -8,7 +8,7 @@ import * as style from '@kovojs/style';
 import { addToCart, type ProductGridResult } from '../domain.js';
 import { productGridQuery } from '../queries.js';
 
-const addToCartForm = form('cart/add');
+const addToCartForm = form('domain/add-to-cart');
 
 const productGridStyles = style.create({
   authPrompt: {

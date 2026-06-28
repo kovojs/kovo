@@ -56,9 +56,9 @@ const derivationFacts = writeExampleCoreRegistry({
   queryModule: '../queries.js',
   // Mutation key → touch-graph function name (the inline Drizzle write handlers in mutations.ts).
   mutationTouchGraphKeys: {
-    postAnswer: 'postAnswer',
-    postQuestion: 'postQuestion',
-    voteUp: 'voteUp',
+    'mutations/post-answer-mutation': 'postAnswer',
+    'mutations/post-question-mutation': 'postQuestion',
+    'mutations/vote-up-mutation': 'voteUp',
   },
   // Compact declared query → read-domain graph (SPEC.md §10.2/§11.1): the project query-fact
   // analyzer cannot prove reads through this example's `Reader<SoDb>` + `requireSoQueryDb(context)`

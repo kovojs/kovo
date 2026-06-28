@@ -26,23 +26,29 @@ export default defineConfig({
   plugins: [
     exampleKovoCompilerPlugin({ include: ['site/tutorial/steps'] }),
     exampleKovoCompilerPlugin({
-      include: ['examples/commerce/src/components'],
+      include: [
+        'examples/commerce/src/components',
+        'examples/commerce/src/domain.ts',
+        'examples/commerce/src/queries.ts',
+      ],
       registryFacts: commerceRegistryFacts,
     }),
     exampleDrizzleRegistryPlugin({
       appEntries: ['examples/crm/src/app-shell.ts', 'examples/crm/src/interactive-app.tsx'],
       sourceRoot: 'examples/crm/src',
     }),
-    exampleKovoCompilerPlugin({ include: ['examples/crm/src/components'] }),
+    exampleKovoCompilerPlugin({
+      include: ['examples/crm/src/components', 'examples/crm/src/mutations.ts'],
+    }),
     exampleDrizzleRegistryPlugin({
       appEntries: [
         'examples/stackoverflow/src/app-shell.ts',
         'examples/stackoverflow/src/interactive-app.tsx',
       ],
       mutationTouchGraphKeys: {
-        postAnswer: 'postAnswer',
-        postQuestion: 'postQuestion',
-        voteUp: 'voteUp',
+        'mutations/post-answer-mutation': 'postAnswer',
+        'mutations/post-question-mutation': 'postQuestion',
+        'mutations/vote-up-mutation': 'voteUp',
       },
       sourceRoot: 'examples/stackoverflow/src',
     }),
@@ -51,6 +57,7 @@ export default defineConfig({
         'examples/stackoverflow/src/components/question-card.tsx',
         'examples/stackoverflow/src/components/question-detail.tsx',
         'examples/stackoverflow/src/components/question-list.tsx',
+        'examples/stackoverflow/src/mutations.ts',
       ],
     }),
   ],

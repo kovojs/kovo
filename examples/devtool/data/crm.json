@@ -4,10 +4,10 @@
   "blurb": "contacts · deals · pipeline",
   "nodes": [
     {
-      "id": "mutation:addContact",
+      "id": "mutation:mutations/add-contact",
       "kind": "mutation",
-      "name": "addContact",
-      "label": "addContact",
+      "name": "mutations/add-contact",
+      "label": "mutations/add-contact",
       "data": {
         "guards": ["authed"],
         "writes": ["contact"],
@@ -16,7 +16,7 @@
         "session": "crmSession",
         "optimistic": [
           {
-            "mutation": "addContact",
+            "mutation": "mutations/add-contact",
             "query": "contactList",
             "status": "derived",
             "derivation": { "status": "derived" }
@@ -48,7 +48,7 @@
         "startLine": 70,
         "anchorLine": 70,
         "endLine": 84,
-        "code": "export const addContact = mutation('addContact', {\n  csrf: crmCsrf,\n  errors: {\n    DUPLICATE_EMAIL: duplicateEmailError,\n  },\n  guard: authed,\n  input: s.object({\n    id: s.string(),\n    name: s.string(),\n    email: s.string(),\n    ownerId: s.string(),\n  }),\n  registry: { touches: [contact] },\n  handler: addContactHandler,\n});",
+        "code": "export const addContact = mutation({\n  csrf: crmCsrf,\n  errors: {\n    DUPLICATE_EMAIL: duplicateEmailError,\n  },\n  guard: authed,\n  input: s.object({\n    id: s.string(),\n    name: s.string(),\n    email: s.string(),\n    ownerId: s.string(),\n  }),\n  registry: { touches: [contact] },\n  handler: addContactHandler,\n});",
         "lang": "ts",
         "touches": [
           {
@@ -76,10 +76,10 @@
       }
     },
     {
-      "id": "mutation:createDeal",
+      "id": "mutation:mutations/create-deal",
       "kind": "mutation",
-      "name": "createDeal",
-      "label": "createDeal",
+      "name": "mutations/create-deal",
+      "label": "mutations/create-deal",
       "data": {
         "guards": ["authed"],
         "writes": ["contact", "deal"],
@@ -88,26 +88,26 @@
         "session": "crmSession",
         "optimistic": [
           {
-            "mutation": "createDeal",
+            "mutation": "mutations/create-deal",
             "query": "contactDealCount",
             "status": "derived",
             "derivation": { "status": "derived" }
           },
-          { "mutation": "createDeal", "query": "contactList", "status": "hand-written" },
+          { "mutation": "mutations/create-deal", "query": "contactList", "status": "hand-written" },
           {
-            "mutation": "createDeal",
+            "mutation": "mutations/create-deal",
             "query": "dealList",
             "status": "derived",
             "derivation": { "status": "derived" }
           },
           {
-            "mutation": "createDeal",
+            "mutation": "mutations/create-deal",
             "query": "openDeals",
             "status": "derived",
             "derivation": { "status": "derived" }
           },
           {
-            "mutation": "createDeal",
+            "mutation": "mutations/create-deal",
             "query": "pipelineByStage",
             "status": "hand-written",
             "derivation": {
@@ -140,7 +140,7 @@
         "startLine": 101,
         "anchorLine": 101,
         "endLine": 113,
-        "code": "export const createDeal = mutation('createDeal', {\n  csrf: crmCsrf,\n  guard: authed,\n  input: s.object({\n    id: s.string(),\n    contactId: s.string(),\n    stage: s.string(),\n    amount: s.number().int().min(0),\n    ownerId: s.string(),\n  }),\n  registry: { touches: [contact, deal] },\n  handler: createDealHandler,\n});",
+        "code": "export const createDeal = mutation({\n  csrf: crmCsrf,\n  guard: authed,\n  input: s.object({\n    id: s.string(),\n    contactId: s.string(),\n    stage: s.string(),\n    amount: s.number().int().min(0),\n    ownerId: s.string(),\n  }),\n  registry: { touches: [contact, deal] },\n  handler: createDealHandler,\n});",
         "lang": "ts",
         "touches": [
           {
@@ -174,10 +174,10 @@
       }
     },
     {
-      "id": "mutation:moveDeal",
+      "id": "mutation:mutations/move-deal",
       "kind": "mutation",
-      "name": "moveDeal",
-      "label": "moveDeal",
+      "name": "mutations/move-deal",
+      "label": "mutations/move-deal",
       "data": {
         "guards": ["authed"],
         "writes": ["deal"],
@@ -186,19 +186,19 @@
         "session": "crmSession",
         "optimistic": [
           {
-            "mutation": "moveDeal",
+            "mutation": "mutations/move-deal",
             "query": "contactDealCount",
             "status": "derived",
             "derivation": { "status": "derived" }
           },
           {
-            "mutation": "moveDeal",
+            "mutation": "mutations/move-deal",
             "query": "dealList",
             "status": "derived",
             "derivation": { "status": "derived" }
           },
           {
-            "mutation": "moveDeal",
+            "mutation": "mutations/move-deal",
             "query": "openDeals",
             "status": "await-fragment",
             "derivation": {
@@ -207,7 +207,7 @@
             }
           },
           {
-            "mutation": "moveDeal",
+            "mutation": "mutations/move-deal",
             "query": "pipelineByStage",
             "status": "await-fragment",
             "derivation": {
@@ -234,7 +234,7 @@
         "startLine": 145,
         "anchorLine": 145,
         "endLine": 154,
-        "code": "export const moveDeal = mutation('moveDeal', {\n  csrf: crmCsrf,\n  guard: authed,\n  input: s.object({\n    dealId: s.string(),\n    stage: s.string(),\n  }),\n  registry: { touches: [deal] },\n  handler: moveDealHandler,\n});",
+        "code": "export const moveDeal = mutation({\n  csrf: crmCsrf,\n  guard: authed,\n  input: s.object({\n    dealId: s.string(),\n    stage: s.string(),\n  }),\n  registry: { touches: [deal] },\n  handler: moveDealHandler,\n});",
         "lang": "ts",
         "touches": [
           {
@@ -247,10 +247,10 @@
       }
     },
     {
-      "id": "mutation:closeDeal",
+      "id": "mutation:mutations/close-deal",
       "kind": "mutation",
-      "name": "closeDeal",
-      "label": "closeDeal",
+      "name": "mutations/close-deal",
+      "label": "mutations/close-deal",
       "data": {
         "guards": ["authed"],
         "writes": ["deal"],
@@ -259,15 +259,15 @@
         "session": "crmSession",
         "optimistic": [
           {
-            "mutation": "closeDeal",
+            "mutation": "mutations/close-deal",
             "query": "contactDealCount",
             "status": "derived",
             "derivation": { "status": "derived" }
           },
-          { "mutation": "closeDeal", "query": "dealList", "status": "await-fragment" },
-          { "mutation": "closeDeal", "query": "openDeals", "status": "hand-written" },
+          { "mutation": "mutations/close-deal", "query": "dealList", "status": "await-fragment" },
+          { "mutation": "mutations/close-deal", "query": "openDeals", "status": "hand-written" },
           {
-            "mutation": "closeDeal",
+            "mutation": "mutations/close-deal",
             "query": "pipelineByStage",
             "status": "await-fragment",
             "derivation": {
@@ -294,7 +294,7 @@
         "startLine": 198,
         "anchorLine": 198,
         "endLine": 206,
-        "code": "export const closeDeal = mutation('closeDeal', {\n  csrf: crmCsrf,\n  guard: authed,\n  input: s.object({\n    dealId: s.string(),\n  }),\n  registry: { touches: [deal] },\n  handler: closeDealHandler,\n});",
+        "code": "export const closeDeal = mutation({\n  csrf: crmCsrf,\n  guard: authed,\n  input: s.object({\n    dealId: s.string(),\n  }),\n  registry: { touches: [deal] },\n  handler: closeDealHandler,\n});",
         "lang": "ts",
         "touches": [
           {
@@ -384,36 +384,36 @@
   ],
   "edges": [
     {
-      "id": "mutation:addContact->domain:contact:writes",
-      "from": "mutation:addContact",
+      "id": "mutation:mutations/add-contact->domain:contact:writes",
+      "from": "mutation:mutations/add-contact",
       "to": "domain:contact",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:createDeal->domain:contact:writes",
-      "from": "mutation:createDeal",
+      "id": "mutation:mutations/create-deal->domain:contact:writes",
+      "from": "mutation:mutations/create-deal",
       "to": "domain:contact",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:createDeal->domain:deal:writes",
-      "from": "mutation:createDeal",
+      "id": "mutation:mutations/create-deal->domain:deal:writes",
+      "from": "mutation:mutations/create-deal",
       "to": "domain:deal",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:moveDeal->domain:deal:writes",
-      "from": "mutation:moveDeal",
+      "id": "mutation:mutations/move-deal->domain:deal:writes",
+      "from": "mutation:mutations/move-deal",
       "to": "domain:deal",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:closeDeal->domain:deal:writes",
-      "from": "mutation:closeDeal",
+      "id": "mutation:mutations/close-deal->domain:deal:writes",
+      "from": "mutation:mutations/close-deal",
       "to": "domain:deal",
       "kind": "writes",
       "data": {}

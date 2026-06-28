@@ -1,10 +1,12 @@
-import { form, type FormInput } from '@kovojs/core';
-import { guards, mutation, s, type MutationContext } from '@kovojs/server';
+import { form } from '@kovojs/core';
+import { domain, guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
 
 import { appCsrf, type AppRequest } from './auth.js';
 import type { ContactListResult } from './queries.js';
 import { contacts } from './schema.js';
+
+const contact = domain('contact');
 
 // Register the query result + the queries this mutation invalidates. The compiler
 // uses these to type-check optimistic coverage (KV310) and to refresh the contact
@@ -14,32 +16,35 @@ declare module '@kovojs/core' {
     contacts: ContactListResult;
   }
   interface InvalidationSets {
-    addContact: 'contacts';
+    'mutations/add-contact': 'contacts';
   }
 }
 
-export const addContactForm = form('addContact');
-export type AddContactInput = FormInput<typeof addContactForm>;
+export const addContactForm = form('mutations/add-contact');
+export interface AddContactInput {
+  company: string;
+  email: string;
+  name: string;
+}
 
 const duplicateEmailError = s.object({ email: s.string() });
 
 // One real write: validate input, guard it behind a session, insert a row, and
 // predict the optimistic list update. No-JS clients POST to the typed mutation
 // endpoint and get the refreshed page; `enhance` upgrades the same form to a fragment swap.
-export const addContact = mutation('addContact', {
+export const addContact = mutation({
   csrf: appCsrf,
   errors: { DUPLICATE_EMAIL: duplicateEmailError },
   guard: guards.authed<AppRequest>(),
   input: s.object({
-    id: s.string(),
     name: s.string(),
     email: s.string(),
     company: s.string(),
   }),
   optimistic: {
-    contacts(draft, $input) {
+    contacts(draft: ContactListResult, $input: AddContactInput) {
       const row = {
-        id: $input.id,
+        id: `pending-${$input.email}`,
         name: $input.name,
         email: $input.email,
         company: $input.company,
@@ -49,8 +54,9 @@ export const addContact = mutation('addContact', {
       else draft.items.splice(index, 0, row);
     },
   },
+  registry: { touches: [contact] },
   async handler(
-    { id, name, email, company },
+    { name, email, company },
     request: AppRequest,
     context: MutationContext<{ DUPLICATE_EMAIL: typeof duplicateEmailError }>,
   ) {
@@ -59,7 +65,10 @@ export const addContact = mutation('addContact', {
     if (existing) {
       return context.fail('DUPLICATE_EMAIL', { email });
     }
-    await db.insert(contacts).values({ id, name, email, company });
+    const id = `c-${crypto.randomUUID()}`;
+    await db
+      .insert(contacts)
+      .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });
     return { id };
   },
 });

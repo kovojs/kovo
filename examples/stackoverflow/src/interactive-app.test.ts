@@ -227,7 +227,7 @@ describe('stackoverflow interactive app', () => {
     );
 
     const response = await handler(
-      new Request('http://example.test/_m/voteUp', {
+      new Request('http://example.test/_m/mutations/vote-up-mutation', {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
@@ -238,7 +238,11 @@ describe('stackoverflow interactive app', () => {
           'Kovo-Targets': `${questionListTarget}=questionList questionScore`,
         },
         body: new URLSearchParams(
-          withCsrf('voteUp', { id: 'v-test', targetId: first.id, userId: 'demo-viewer' }),
+          withCsrf('mutations/vote-up-mutation', {
+            id: 'v-test',
+            targetId: first.id,
+            userId: 'demo-viewer',
+          }),
         ),
       }),
     );
@@ -285,8 +289,8 @@ describe('stackoverflow interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'postAnswer',
-      withCsrf('postAnswer', {
+      'mutations/post-answer-mutation',
+      withCsrf('mutations/post-answer-mutation', {
         id: 'a-test-1',
         questionId: question.id,
         body: 'A fresh demo answer.',
@@ -328,8 +332,8 @@ describe('stackoverflow interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'postAnswer',
-      withCsrf('postAnswer', {
+      'mutations/post-answer-mutation',
+      withCsrf('mutations/post-answer-mutation', {
         id: 'a-browser-header-1',
         questionId: question.id,
         body: 'Visible without refresh.',
@@ -350,8 +354,8 @@ describe('stackoverflow interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'postQuestion',
-      withCsrf('postQuestion', {
+      'mutations/post-question-mutation',
+      withCsrf('mutations/post-question-mutation', {
         id: 'q-test-1',
         title: 'How do I demo Kovo?',
         body: 'Asking for a friend.',
@@ -377,8 +381,8 @@ describe('stackoverflow interactive app', () => {
 
     const { status, html } = await postForm(
       handler,
-      'postQuestion',
-      withCsrf('postQuestion', {
+      'mutations/post-question-mutation',
+      withCsrf('mutations/post-question-mutation', {
         id: 'q-duplicate-title',
         title: question.title,
         body: 'Asking again should surface a typed form failure.',
@@ -413,8 +417,8 @@ describe('stackoverflow interactive app', () => {
 
     const { status } = await postForm(
       handler,
-      'postQuestion',
-      withSessionCsrf(sessionA, 'postQuestion', {
+      'mutations/post-question-mutation',
+      withSessionCsrf(sessionA, 'mutations/post-question-mutation', {
         id: 'q-session-a-only',
         title,
         body: 'This should not appear in another browser session.',

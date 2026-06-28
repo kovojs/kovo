@@ -4,10 +4,10 @@
   "blurb": "questions · answers · votes",
   "nodes": [
     {
-      "id": "mutation:postQuestion",
+      "id": "mutation:mutations/post-question-mutation",
       "kind": "mutation",
-      "name": "postQuestion",
-      "label": "postQuestion",
+      "name": "mutations/post-question-mutation",
+      "label": "mutations/post-question-mutation",
       "data": {
         "guards": ["authed"],
         "writes": ["question"],
@@ -17,11 +17,15 @@
         "optimistic": [
           {
             "derivation": { "status": "derived" },
-            "mutation": "postQuestion",
+            "mutation": "mutations/post-question-mutation",
             "query": "questionList",
             "status": "derived"
           },
-          { "mutation": "postQuestion", "query": "questionDetail", "status": "await-fragment" }
+          {
+            "mutation": "mutations/post-question-mutation",
+            "query": "questionDetail",
+            "status": "await-fragment"
+          }
         ],
         "touch": {
           "reads": [
@@ -49,7 +53,7 @@
         "startLine": 87,
         "anchorLine": 87,
         "endLine": 100,
-        "code": "export const postQuestionMutation = mutation('postQuestion', {\n  input: s.object({\n    id: s.string(),\n    title: s.string(),\n    body: s.string(),\n    authorId: s.string(),\n  }),\n  csrf: soCsrf,\n  errors: {\n    DUPLICATE_TITLE: duplicateTitleError,\n  },\n  registry: { touches: [question] },\n  handler: postQuestion,\n});",
+        "code": "export const postQuestionMutation = mutation({\n  input: s.object({\n    id: s.string(),\n    title: s.string(),\n    body: s.string(),\n    authorId: s.string(),\n  }),\n  csrf: soCsrf,\n  errors: {\n    DUPLICATE_TITLE: duplicateTitleError,\n  },\n  registry: { touches: [question] },\n  handler: postQuestion,\n});",
         "lang": "ts",
         "touches": [
           {
@@ -77,10 +81,10 @@
       }
     },
     {
-      "id": "mutation:postAnswer",
+      "id": "mutation:mutations/post-answer-mutation",
       "kind": "mutation",
-      "name": "postAnswer",
-      "label": "postAnswer",
+      "name": "mutations/post-answer-mutation",
+      "label": "mutations/post-answer-mutation",
       "data": {
         "guards": ["authed"],
         "writes": ["answer", "question"],
@@ -90,18 +94,26 @@
         "optimistic": [
           {
             "derivation": { "status": "derived" },
-            "mutation": "postAnswer",
+            "mutation": "mutations/post-answer-mutation",
             "query": "answerList",
             "status": "derived"
           },
           {
             "derivation": { "status": "derived" },
-            "mutation": "postAnswer",
+            "mutation": "mutations/post-answer-mutation",
             "query": "questionList",
             "status": "derived"
           },
-          { "mutation": "postAnswer", "query": "questionAnswers", "status": "await-fragment" },
-          { "mutation": "postAnswer", "query": "questionDetail", "status": "await-fragment" }
+          {
+            "mutation": "mutations/post-answer-mutation",
+            "query": "questionAnswers",
+            "status": "await-fragment"
+          },
+          {
+            "mutation": "mutations/post-answer-mutation",
+            "query": "questionDetail",
+            "status": "await-fragment"
+          }
         ],
         "touch": {
           "reads": [],
@@ -127,7 +139,7 @@
         "startLine": 102,
         "anchorLine": 102,
         "endLine": 112,
-        "code": "export const postAnswerMutation = mutation('postAnswer', {\n  input: s.object({\n    id: s.string(),\n    questionId: s.string(),\n    body: s.string(),\n    authorId: s.string(),\n  }),\n  csrf: soCsrf,\n  registry: { touches: [answer, question] },\n  handler: postAnswer,\n});",
+        "code": "export const postAnswerMutation = mutation({\n  input: s.object({\n    id: s.string(),\n    questionId: s.string(),\n    body: s.string(),\n    authorId: s.string(),\n  }),\n  csrf: soCsrf,\n  registry: { touches: [answer, question] },\n  handler: postAnswer,\n});",
         "lang": "ts",
         "touches": [
           {
@@ -161,10 +173,10 @@
       }
     },
     {
-      "id": "mutation:voteUp",
+      "id": "mutation:mutations/vote-up-mutation",
       "kind": "mutation",
-      "name": "voteUp",
-      "label": "voteUp",
+      "name": "mutations/vote-up-mutation",
+      "label": "mutations/vote-up-mutation",
       "data": {
         "guards": ["authed"],
         "writes": ["vote", "question"],
@@ -174,17 +186,21 @@
         "optimistic": [
           {
             "derivation": { "status": "derived" },
-            "mutation": "voteUp",
+            "mutation": "mutations/vote-up-mutation",
             "query": "questionList",
             "status": "derived"
           },
           {
             "derivation": { "status": "derived" },
-            "mutation": "voteUp",
+            "mutation": "mutations/vote-up-mutation",
             "query": "questionScore",
             "status": "derived"
           },
-          { "mutation": "voteUp", "query": "questionDetail", "status": "await-fragment" }
+          {
+            "mutation": "mutations/vote-up-mutation",
+            "query": "questionDetail",
+            "status": "await-fragment"
+          }
         ],
         "touch": {
           "reads": [],
@@ -210,7 +226,7 @@
         "startLine": 114,
         "anchorLine": 114,
         "endLine": 123,
-        "code": "export const voteUpMutation = mutation('voteUp', {\n  input: s.object({\n    id: s.string(),\n    targetId: s.string(),\n    userId: s.string(),\n  }),\n  csrf: soCsrf,\n  registry: { touches: [vote, question] },\n  handler: voteUp,\n});",
+        "code": "export const voteUpMutation = mutation({\n  input: s.object({\n    id: s.string(),\n    targetId: s.string(),\n    userId: s.string(),\n  }),\n  csrf: soCsrf,\n  registry: { touches: [vote, question] },\n  handler: voteUp,\n});",
         "lang": "ts",
         "touches": [
           {
@@ -321,36 +337,36 @@
   ],
   "edges": [
     {
-      "id": "mutation:postQuestion->domain:question:writes",
-      "from": "mutation:postQuestion",
+      "id": "mutation:mutations/post-question-mutation->domain:question:writes",
+      "from": "mutation:mutations/post-question-mutation",
       "to": "domain:question",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:postAnswer->domain:answer:writes",
-      "from": "mutation:postAnswer",
+      "id": "mutation:mutations/post-answer-mutation->domain:answer:writes",
+      "from": "mutation:mutations/post-answer-mutation",
       "to": "domain:answer",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:postAnswer->domain:question:writes",
-      "from": "mutation:postAnswer",
+      "id": "mutation:mutations/post-answer-mutation->domain:question:writes",
+      "from": "mutation:mutations/post-answer-mutation",
       "to": "domain:question",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:voteUp->domain:vote:writes",
-      "from": "mutation:voteUp",
+      "id": "mutation:mutations/vote-up-mutation->domain:vote:writes",
+      "from": "mutation:mutations/vote-up-mutation",
       "to": "domain:vote",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:voteUp->domain:question:writes",
-      "from": "mutation:voteUp",
+      "id": "mutation:mutations/vote-up-mutation->domain:question:writes",
+      "from": "mutation:mutations/vote-up-mutation",
       "to": "domain:question",
       "kind": "writes",
       "data": {}

@@ -43,10 +43,15 @@ declare module '@kovojs/core' {
   }
 
   interface InvalidationSets {
-    addContact: 'contactList';
-    closeDeal: 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
-    createDeal: 'contactDealCount' | 'contactList' | 'dealList' | 'openDeals' | 'pipelineByStage';
-    moveDeal: 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
+    'mutations/add-contact': 'contactList';
+    'mutations/close-deal': 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
+    'mutations/create-deal':
+      | 'contactDealCount'
+      | 'contactList'
+      | 'dealList'
+      | 'openDeals'
+      | 'pipelineByStage';
+    'mutations/move-deal': 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
   }
 }
 
@@ -124,7 +129,7 @@ export async function addContactHandler(
   return { id };
 }
 
-export const addContact = mutation('addContact', {
+export const addContact = mutation({
   csrf: crmCsrf,
   errors: {
     DUPLICATE_EMAIL: duplicateEmailError,
@@ -136,7 +141,7 @@ export const addContact = mutation('addContact', {
     email: s.string(),
   }),
   optimistic: {
-    contactList(draft, $input) {
+    contactList(draft: ContactListResult, $input: AddContactInput) {
       const row = {
         dealCount: 0,
         email: $input.email,
@@ -174,7 +179,7 @@ export async function createDealHandler(
   return { id };
 }
 
-export const createDeal = mutation('createDeal', {
+export const createDeal = mutation({
   csrf: crmCsrf,
   errors: {
     CONTACT_NOT_FOUND: contactOwnershipError,
@@ -187,17 +192,17 @@ export const createDeal = mutation('createDeal', {
     amount: s.number().int().min(0),
   }),
   optimistic: {
-    contactDealCount(draft, _$input) {
+    contactDealCount(draft: ContactDealCountResult, _$input: CreateDealInput) {
       draft.count = (draft.count ?? 0) + 1;
     },
     // Hand-written optimistic patches for UI values the generated plan cannot know:
     // contactList needs the server-side dealCount increment, and pipelineByStage is a
     // grouped summary.
-    contactList(draft, $input) {
+    contactList(draft: ContactListResult, $input: CreateDealInput) {
       const target = draft.items.find((item) => item.id === $input.contactId);
       if (target) target.dealCount += 1;
     },
-    dealList(draft, $input) {
+    dealList(draft: DealListResult, $input: CreateDealInput) {
       const row = {
         amount: $input.amount,
         contactId: $input.contactId,
@@ -210,7 +215,7 @@ export const createDeal = mutation('createDeal', {
       if (index < 0) draft.items.push(row);
       else draft.items.splice(index, 0, row);
     },
-    openDeals(draft, $input) {
+    openDeals(draft: OpenDealsResult, $input: CreateDealInput) {
       const row = {
         amount: $input.amount,
         contactId: $input.contactId,
@@ -223,7 +228,7 @@ export const createDeal = mutation('createDeal', {
       if (index < 0) draft.items.push(row);
       else draft.items.splice(index, 0, row);
     },
-    pipelineByStage(draft, $input) {
+    pipelineByStage(draft: PipelineByStageResult, $input: CreateDealInput) {
       const bucket = draft.buckets.find((entry) => entry.stage === $input.stage);
       if (bucket) bucket.total += $input.amount;
       else draft.buckets.push({ stage: $input.stage, total: $input.amount });
@@ -254,7 +259,7 @@ export async function moveDealHandler(
   return { dealId };
 }
 
-export const moveDeal = mutation('moveDeal', {
+export const moveDeal = mutation({
   csrf: crmCsrf,
   errors: {
     DEAL_NOT_FOUND: dealOwnershipError,
@@ -265,8 +270,8 @@ export const moveDeal = mutation('moveDeal', {
     stage: crmStageSchema,
   }),
   optimistic: {
-    contactDealCount(_draft, _$input) {},
-    dealList(draft, $input) {
+    contactDealCount(_draft: ContactDealCountResult, _$input: MoveDealInput) {},
+    dealList(draft: DealListResult, $input: MoveDealInput) {
       const target = draft.items.find((entry) => entry.id === $input.dealId);
       if (target) target.stage = $input.stage;
     },
@@ -321,7 +326,7 @@ export async function closeDealHandler(
   return { dealId };
 }
 
-export const closeDeal = mutation('closeDeal', {
+export const closeDeal = mutation({
   csrf: crmCsrf,
   errors: {
     DEAL_NOT_FOUND: dealOwnershipError,
@@ -331,10 +336,10 @@ export const closeDeal = mutation('closeDeal', {
     dealId: s.string(),
   }),
   optimistic: {
-    contactDealCount(_draft, _$input) {},
+    contactDealCount(_draft: ContactDealCountResult, _$input: CloseDealInput) {},
     // A closed deal leaves the open list immediately. Views that include the
     // server-computed commission wait for the returned fragment.
-    openDeals(draft, $input) {
+    openDeals(draft: OpenDealsResult, $input: CloseDealInput) {
       const index = draft.items.findIndex((item) => item.id === $input.dealId);
       if (index >= 0) draft.items.splice(index, 1);
     },

@@ -7,10 +7,10 @@ export const contact = domain('contact');
 export const deal = domain('deal');
 export const activity = domain('activity');
 
-export const addContactForm = form('addContact');
-export const createDealForm = form('createDeal');
-export const moveDealForm = form('moveDeal');
-export const closeDealForm = form('closeDeal');
+export const addContactForm = form('mutations/add-contact');
+export const createDealForm = form('mutations/create-deal');
+export const moveDealForm = form('mutations/move-deal');
+export const closeDealForm = form('mutations/close-deal');
 
 export const CRM_DEMO_USER_ID = 'u1';
 export const CRM_STAGES = ['lead', 'qualified', 'open', 'proposal', 'won', 'lost'] as const;

@@ -18,9 +18,9 @@ if (!setupState[setupKey]) {
   setupState[setupKey] = true;
 
   registerGeneratedQueryReadRegistry([
-    { query: 'cart', domains: ['cart'] },
-    { query: 'productGrid', domains: ['product'] },
-    { query: 'orderHistory', domains: ['order'] },
+    { query: 'queries/cart-query', domains: ['cart'] },
+    { query: 'queries/product-grid-query', domains: ['product'] },
+    { query: 'queries/order-history-query', domains: ['order'] },
 
     { query: 'contactList', domains: ['contact'] },
     { query: 'contactDealCount', domains: ['deal'] },
@@ -37,24 +37,24 @@ if (!setupState[setupKey]) {
   ]);
 
   registerGeneratedMutationTouchRegistry({
-    'cart/add': [
+    'domain/add-to-cart': [
       { domain: 'cart', keys: null, via: 'cart_items' },
       { domain: 'order', keys: null, via: 'orders' },
       { domain: 'product', keys: 'arg:productId', via: 'products' },
     ],
-    addContact: [{ domain: 'contact', keys: null, via: 'contacts' }],
-    createDeal: [
+    'mutations/add-contact': [{ domain: 'contact', keys: null, via: 'contacts' }],
+    'mutations/create-deal': [
       { domain: 'deal', keys: null, via: 'deals' },
       { domain: 'contact', keys: null, via: 'contacts' },
     ],
-    moveDeal: [{ domain: 'deal', keys: null, via: 'deals' }],
-    closeDeal: [{ domain: 'deal', keys: null, via: 'deals' }],
-    postQuestion: [{ domain: 'question', keys: null, via: 'questions' }],
-    postAnswer: [
+    'mutations/move-deal': [{ domain: 'deal', keys: null, via: 'deals' }],
+    'mutations/close-deal': [{ domain: 'deal', keys: null, via: 'deals' }],
+    'mutations/post-question-mutation': [{ domain: 'question', keys: null, via: 'questions' }],
+    'mutations/post-answer-mutation': [
       { domain: 'answer', keys: null, via: 'answers' },
       { domain: 'question', keys: null, via: 'questions' },
     ],
-    voteUp: [
+    'mutations/vote-up-mutation': [
       { domain: 'vote', keys: null, via: 'votes' },
       { domain: 'question', keys: null, via: 'questions' },
     ],

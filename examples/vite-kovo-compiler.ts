@@ -76,7 +76,7 @@ export function exampleDrizzleRegistryPlugin(
 
 export function commerceKovoCompilerPlugin(): KovoVitePrePlugin {
   return exampleKovoCompilerPlugin({
-    include: ['src/components'],
+    include: ['src/components', 'src/domain.ts', 'src/queries.ts'],
     registryFacts: commerceRegistryFacts,
   });
 }
@@ -104,7 +104,7 @@ function requiredString(name: string) {
 
 export const commerceRegistryFacts = {
   mutationInputs: {
-    'cart/add': [
+    'domain/add-to-cart': [
       requiredString('productId'),
       {
         coercion: 'number' as const,
@@ -116,5 +116,5 @@ export const commerceRegistryFacts = {
       },
     ],
   },
-  mutations: { 'cart/add': 'typeof addToCart' },
+  mutations: { 'domain/add-to-cart': 'typeof addToCart' },
 } satisfies RegistryFacts;

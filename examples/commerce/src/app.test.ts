@@ -62,9 +62,9 @@ describe('commerce app HTTP entry', () => {
     expect(html).toContain('<!doctype html>');
     expectCommerceShellDocument(html);
 
-    const query = await fetch(`${origin}/_q/cart`);
+    const query = await fetch(`${origin}/_q/queries/cart-query`);
     expect(query.status).toBe(200);
-    expect(kovoQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 0 }]);
+    expect(kovoQueryJsonValues(await query.text(), 'queries/cart-query')).toEqual([{ count: 0 }]);
   });
 
   it('serves every commerce route as no-JS full HTML documents', async () => {
@@ -130,7 +130,7 @@ describe('commerce app HTTP entry', () => {
     enhancedForm.set('productId', 'p1');
     enhancedForm.set('quantity', '2');
     enhancedForm.set('csrf', csrfToken(sessionRequest, commerceCsrf, { mutation: addToCart }));
-    const enhanced = await fetch(`${origin}/_m/cart/add`, {
+    const enhanced = await fetch(`${origin}/_m/domain/add-to-cart`, {
       body: enhancedForm,
       headers: {
         cookie: sessionCookie,
@@ -155,7 +155,7 @@ describe('commerce app HTTP entry', () => {
     noJsForm.set('productId', 'p2');
     noJsForm.set('quantity', '1');
     noJsForm.set('csrf', csrfToken(sessionRequest, commerceCsrf, { mutation: addToCart }));
-    const noJs = await fetch(`${origin}/_m/cart/add`, {
+    const noJs = await fetch(`${origin}/_m/domain/add-to-cart`, {
       body: noJsForm,
       headers: {
         cookie: sessionCookie,
@@ -170,11 +170,11 @@ describe('commerce app HTTP entry', () => {
     expect(noJs.headers.get('location')).toBe('/cart');
     await expect(noJs.text()).resolves.toBe('');
 
-    const query = await fetch(`${origin}/_q/cart`, {
+    const query = await fetch(`${origin}/_q/queries/cart-query`, {
       headers: { cookie: sessionCookie },
     });
     expect(query.status).toBe(200);
-    expect(kovoQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 3 }]);
+    expect(kovoQueryJsonValues(await query.text(), 'queries/cart-query')).toEqual([{ count: 3 }]);
   });
 
   it('dispatches shell login and logout mutations', async () => {
@@ -273,7 +273,7 @@ describe('commerce app HTTP entry', () => {
 
 function expectCommerceShellDocument(html: string): void {
   expect(htmlElementCount(html, commerceShellSelector)).toBe(1);
-  expect(htmlFormActions(html)).not.toContain('/_m/cart/add');
+  expect(htmlFormActions(html)).not.toContain('/_m/domain/add-to-cart');
 }
 
 async function signInCookie(db: ReturnType<typeof createCommerceApp>['db']): Promise<string> {

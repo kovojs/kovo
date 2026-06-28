@@ -20,9 +20,9 @@ let cachedFacts: ExampleOptimisticDerivationFact[] | undefined;
 function facts(): ExampleOptimisticDerivationFact[] {
   cachedFacts ??= exampleOptimisticDerivationFacts({
     mutationTouchGraphKeys: {
-      postAnswer: 'postAnswer',
-      postQuestion: 'postQuestion',
-      voteUp: 'voteUp',
+      'mutations/post-answer-mutation': 'postAnswer',
+      'mutations/post-question-mutation': 'postQuestion',
+      'mutations/vote-up-mutation': 'voteUp',
     },
     queries: [
       { query: 'questionList', domains: ['question'] },
@@ -48,13 +48,13 @@ function factFor(
 describe('voteUp optimistic derivation (SPEC §10.5)', () => {
   it('COMPILER-DERIVES questionScore (INSERT × SUM) and questionList (UPDATE × AGG)', () => {
     const all = facts();
-    expect(factFor(all, 'voteUp', 'questionScore')?.status).toBe('derived');
-    expect(factFor(all, 'voteUp', 'questionList')?.status).toBe('derived');
+    expect(factFor(all, 'mutations/vote-up-mutation', 'questionScore')?.status).toBe('derived');
+    expect(factFor(all, 'mutations/vote-up-mutation', 'questionList')?.status).toBe('derived');
   }, 120_000);
 
   it('NAMES the questionDetail punt (keyed whole-row return) instead of silently dropping it', () => {
     const all = facts();
-    const detail = factFor(all, 'voteUp', 'questionDetail');
+    const detail = factFor(all, 'mutations/vote-up-mutation', 'questionDetail');
     expect(detail?.status).toBe('hand-written');
     // The punt is named with its reason for `kovo explain --optimistic` (§10.5/§10.6).
     expect(detail?.reason).toMatch(/no in-grammar §10\.5 query shape/);

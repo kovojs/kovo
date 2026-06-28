@@ -8,7 +8,6 @@ import { Card } from '@kovojs/ui/card';
 import * as style from '@kovojs/style';
 
 import { addContact, type CrmRequest } from '../mutations.js';
-import { addContactForm } from '../model.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId } from '../components/chrome.js';
 
@@ -119,7 +118,7 @@ function renderContactCard(contact: ContactRow): string {
   });
 }
 
-type ContactsRenderSlots = ComponentRenderSlots<{ addContact: typeof addContactForm }> & {
+type ContactsRenderSlots = ComponentRenderSlots<{ addContact: typeof addContact }> & {
   request?: CrmRequest | undefined;
 };
 interface DuplicateEmailFailure {
@@ -133,7 +132,7 @@ const defaultContactsRenderSlots: ContactsRenderSlots = {
 
 // Rendered as both the full page region and the add-contact fragment payload.
 export const ContactsRegion = component({
-  mutations: { addContact: addContactForm },
+  mutations: { addContact },
   queries: { contactList: contactListQuery },
   render: (
     { contactList }: { contactList: ContactListResult },

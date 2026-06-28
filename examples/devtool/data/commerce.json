@@ -4,10 +4,10 @@
   "blurb": "cart · products · orders",
   "nodes": [
     {
-      "id": "mutation:cart/add",
+      "id": "mutation:domain/add-to-cart",
       "kind": "mutation",
-      "name": "cart/add",
-      "label": "cart/add",
+      "name": "domain/add-to-cart",
+      "label": "domain/add-to-cart",
       "data": {
         "guards": ["authed", "rateLimit:session"],
         "writes": ["cart", "product", "order"],
@@ -17,20 +17,20 @@
         "optimistic": [
           {
             "derivation": { "status": "derived" },
-            "mutation": "cart/add",
-            "query": "cart",
+            "mutation": "domain/add-to-cart",
+            "query": "queries/cart-query",
             "status": "derived"
           },
           {
             "derivation": { "status": "derived" },
-            "mutation": "cart/add",
-            "query": "productGrid",
+            "mutation": "domain/add-to-cart",
+            "query": "queries/product-grid-query",
             "status": "derived"
           },
           {
             "derivation": { "status": "derived" },
-            "mutation": "cart/add",
-            "query": "orderHistory",
+            "mutation": "domain/add-to-cart",
+            "query": "queries/order-history-query",
             "status": "derived"
           }
         ],
@@ -65,7 +65,7 @@
         "startLine": 217,
         "anchorLine": 217,
         "endLine": 256,
-        "code": "export const addToCart = mutation('cart/add', {\n  csrf: commerceCsrf,\n  defaultRedirectTo: '/cart',\n  errors: {\n    OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),\n  },\n  input: s.object({\n    productId: s.string(),\n    quantity: s.number().int().min(1).default(1),\n  }),\n  guard: guards.all(\n    betterAuthAuthed<CommerceRequest>(),\n    guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),\n  ),\n  registry: {\n    inferredTouches: addToCartInferredTouches,\n  },\n  transaction(request: CommerceRequest, run) {\n    return request.db.transaction((tx) => run({ ...request, db: tx as unknown as CommerceDb }));\n  },\n  async handler({ productId, quantity }, request: CommerceRequest, context) {\n    const currentSession = commerceSession.parse(request);\n    const db = request.db;\n    const found = (await db.select().from(products).where(eq(products.id, productId)).limit(1))[0];\n    if (!found || found.stock < quantity) {\n      return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });\n    }\n\n    const existingOrders = await db.select({ value: count() }).from(orders);\n    const orderId = `order-${Number(existingOrders[0]?.value ?? 0) + 1}`;\n\n    await db.insert(cartItems).values({\n      productId: productId,\n      qty: quantity,\n      unitPrice: found.unitPrice,\n    });\n    await db.insert(orders).values({\n      id: orderId,\n      productId: productId,\n      qty: quantity,",
+        "code": "export const addToCart = mutation({\n  csrf: commerceCsrf,\n  defaultRedirectTo: '/cart',\n  errors: {\n    OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),\n  },\n  input: s.object({\n    productId: s.string(),\n    quantity: s.number().int().min(1).default(1),\n  }),\n  guard: guards.all(\n    betterAuthAuthed<CommerceRequest>(),\n    guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),\n  ),\n  registry: {\n    inferredTouches: addToCartInferredTouches,\n  },\n  transaction(request: CommerceRequest, run) {\n    return request.db.transaction((tx) => run({ ...request, db: tx as unknown as CommerceDb }));\n  },\n  async handler({ productId, quantity }, request: CommerceRequest, context) {\n    const currentSession = commerceSession.parse(request);\n    const db = request.db;\n    const found = (await db.select().from(products).where(eq(products.id, productId)).limit(1))[0];\n    if (!found || found.stock < quantity) {\n      return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });\n    }\n\n    const existingOrders = await db.select({ value: count() }).from(orders);\n    const orderId = `order-${Number(existingOrders[0]?.value ?? 0) + 1}`;\n\n    await db.insert(cartItems).values({\n      productId: productId,\n      qty: quantity,\n      unitPrice: found.unitPrice,\n    });\n    await db.insert(orders).values({\n      id: orderId,\n      productId: productId,\n      qty: quantity,",
         "lang": "ts",
         "touches": [
           {
@@ -93,8 +93,8 @@
     {
       "id": "domain:cart",
       "kind": "domain",
-      "name": "cart",
-      "label": "cart",
+      "name": "queries/cart-query",
+      "label": "queries/cart-query",
       "data": {},
       "source": {
         "file": "queries.ts",
@@ -160,47 +160,47 @@
       "source": null
     },
     {
-      "id": "query:cart",
+      "id": "query:queries/cart-query",
       "kind": "query",
-      "name": "cart",
-      "label": "cart",
+      "name": "queries/cart-query",
+      "label": "queries/cart-query",
       "data": { "domains": ["cart"], "guards": [] },
       "source": {
         "file": "queries.ts",
         "startLine": 50,
         "anchorLine": 50,
         "endLine": 57,
-        "code": "export const cartQuery = query('cart', {\n  async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<CartQueryResult> {\n    const db = requireCommerceQueryDb(context);\n    const rows = await db.select({ value: sum(cartItems.qty) }).from(cartItems);\n    return { count: Number(rows[0]?.value ?? 0) };\n  },\n  reads: [cart],\n});",
+        "code": "export const cartQuery = query({\n  async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<CartQueryResult> {\n    const db = requireCommerceQueryDb(context);\n    const rows = await db.select({ value: sum(cartItems.qty) }).from(cartItems);\n    return { count: Number(rows[0]?.value ?? 0) };\n  },\n  reads: [cart],\n});",
         "lang": "ts"
       }
     },
     {
-      "id": "query:productGrid",
+      "id": "query:queries/product-grid-query",
       "kind": "query",
-      "name": "productGrid",
-      "label": "productGrid",
+      "name": "queries/product-grid-query",
+      "label": "queries/product-grid-query",
       "data": { "domains": ["product"], "guards": [] },
       "source": {
         "file": "queries.ts",
         "startLine": 59,
         "anchorLine": 59,
         "endLine": 85,
-        "code": "export const productGridQuery = query('productGrid', {\n  async load(input: unknown, context?: CommerceQueryLoadContext): Promise<ProductGridResult> {\n    const db = requireCommerceQueryDb(context);\n    const { after, limit } = (input ?? {}) as ProductGridInput;\n    const pageSize = limit ?? 2;\n    const items = await db\n      .select({\n        id: products.id,\n        name: products.name,\n        category: products.category,\n        emoji: products.emoji,\n        stock: products.stock,\n        unitPrice: products.unitPrice,\n      })\n      .from(products)\n      .where(after ? gt(products.id, after) : undefined)\n      .orderBy(products.id)\n      .limit(pageSize);\n    const last = items.at(-1);\n    const more = last\n      ? await db.select({ id: products.id }).from(products).where(gt(products.id, last.id)).limit(1)\n      : [];\n    const nextCursor = more.length > 0 ? (last?.id ?? null) : null;\n    return { items: items, nextCursor: nextCursor };\n  },\n  reads: [product],\n});",
+        "code": "export const productGridQuery = query({\n  async load(input: unknown, context?: CommerceQueryLoadContext): Promise<ProductGridResult> {\n    const db = requireCommerceQueryDb(context);\n    const { after, limit } = (input ?? {}) as ProductGridInput;\n    const pageSize = limit ?? 2;\n    const items = await db\n      .select({\n        id: products.id,\n        name: products.name,\n        category: products.category,\n        emoji: products.emoji,\n        stock: products.stock,\n        unitPrice: products.unitPrice,\n      })\n      .from(products)\n      .where(after ? gt(products.id, after) : undefined)\n      .orderBy(products.id)\n      .limit(pageSize);\n    const last = items.at(-1);\n    const more = last\n      ? await db.select({ id: products.id }).from(products).where(gt(products.id, last.id)).limit(1)\n      : [];\n    const nextCursor = more.length > 0 ? (last?.id ?? null) : null;\n    return { items: items, nextCursor: nextCursor };\n  },\n  reads: [product],\n});",
         "lang": "ts"
       }
     },
     {
-      "id": "query:orderHistory",
+      "id": "query:queries/order-history-query",
       "kind": "query",
-      "name": "orderHistory",
-      "label": "orderHistory",
+      "name": "queries/order-history-query",
+      "label": "queries/order-history-query",
       "data": { "domains": ["order"], "guards": [] },
       "source": {
         "file": "queries.ts",
         "startLine": 87,
         "anchorLine": 87,
         "endLine": 117,
-        "code": "export const orderHistoryQuery = query('orderHistory', {\n  // SECURITY (SECURITY_FINDINGS.md M9): order history is per-user, so this read must\n  // require an authenticated session — the endpoint guard rejects unauthenticated\n  // callers, and the `load` below additionally scopes the rowset to that user's id\n  // so no caller can ever observe another user's orders.\n  guard: guards.authed<CommerceQueryRequest>(),\n  async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<OrderHistoryResult> {\n    const db = requireCommerceQueryDb(context);\n    const userId = requireCommerceQueryUserId(context);\n    // Orders are an append-only log. The user filter keeps the rowset scoped to\n    // the authenticated session.\n    const items = await db\n      .select({\n        id: orders.id,\n        productId: orders.productId,\n        qty: orders.qty,\n        total: orders.total,\n        userId: orders.userId,\n      })\n      .from(orders)\n      .where(eq(orders.userId, userId));\n    return { items: items };\n  },\n  // SPEC §9.1.1: the `items` collection is keyed by order `id` and scoped by the\n  // `order` domain, so an `order`-touching mutation that carries the changed\n  // order id ships only the new order row instead of the whole history.\n  // (Compiler-derived delta meta is the deferred zero-config piece; this\n  // declares it explicitly today.)\n  delta: [{ domain: 'order', key: 'id', path: 'items' }],\n  reads: [order],\n});",
+        "code": "export const orderHistoryQuery = query({\n  // SECURITY (SECURITY_FINDINGS.md M9): order history is per-user, so this read must\n  // require an authenticated session — the endpoint guard rejects unauthenticated\n  // callers, and the `load` below additionally scopes the rowset to that user's id\n  // so no caller can ever observe another user's orders.\n  guard: guards.authed<CommerceQueryRequest>(),\n  async load(_input: unknown, context?: CommerceQueryLoadContext): Promise<OrderHistoryResult> {\n    const db = requireCommerceQueryDb(context);\n    const userId = requireCommerceQueryUserId(context);\n    // Orders are an append-only log. The user filter keeps the rowset scoped to\n    // the authenticated session.\n    const items = await db\n      .select({\n        id: orders.id,\n        productId: orders.productId,\n        qty: orders.qty,\n        total: orders.total,\n        userId: orders.userId,\n      })\n      .from(orders)\n      .where(eq(orders.userId, userId));\n    return { items: items };\n  },\n  // SPEC §9.1.1: the `items` collection is keyed by order `id` and scoped by the\n  // `order` domain, so an `order`-touching mutation that carries the changed\n  // order id ships only the new order row instead of the whole history.\n  // (Compiler-derived delta meta is the deferred zero-config piece; this\n  // declares it explicitly today.)\n  delta: [{ domain: 'order', key: 'id', path: 'items' }],\n  reads: [order],\n});",
         "lang": "ts"
       }
     },
@@ -265,7 +265,7 @@
             ],
             "fields": ["productId", "quantity"],
             "formErrors": [{ "code": "OUT_OF_STOCK" }],
-            "mutation": "cart/add",
+            "mutation": "domain/add-to-cart",
             "slot": "addToCart"
           }
         ],
@@ -344,22 +344,22 @@
   ],
   "edges": [
     {
-      "id": "mutation:cart/add->domain:cart:writes",
-      "from": "mutation:cart/add",
+      "id": "mutation:domain/add-to-cart->domain:cart:writes",
+      "from": "mutation:domain/add-to-cart",
       "to": "domain:cart",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:cart/add->domain:product:writes",
-      "from": "mutation:cart/add",
+      "id": "mutation:domain/add-to-cart->domain:product:writes",
+      "from": "mutation:domain/add-to-cart",
       "to": "domain:product",
       "kind": "writes",
       "data": {}
     },
     {
-      "id": "mutation:cart/add->domain:order:writes",
-      "from": "mutation:cart/add",
+      "id": "mutation:domain/add-to-cart->domain:order:writes",
+      "from": "mutation:domain/add-to-cart",
       "to": "domain:order",
       "kind": "writes",
       "data": {}
@@ -372,51 +372,51 @@
       "data": {}
     },
     {
-      "id": "domain:cart->query:cart:backs",
+      "id": "domain:cart->query:queries/cart-query:backs",
       "from": "domain:cart",
-      "to": "query:cart",
+      "to": "query:queries/cart-query",
       "kind": "backs",
       "data": {}
     },
     {
-      "id": "domain:product->query:productGrid:backs",
+      "id": "domain:product->query:queries/product-grid-query:backs",
       "from": "domain:product",
-      "to": "query:productGrid",
+      "to": "query:queries/product-grid-query",
       "kind": "backs",
       "data": {}
     },
     {
-      "id": "domain:order->query:orderHistory:backs",
+      "id": "domain:order->query:queries/order-history-query:backs",
       "from": "domain:order",
-      "to": "query:orderHistory",
+      "to": "query:queries/order-history-query",
       "kind": "backs",
       "data": {}
     },
     {
-      "id": "query:cart->component:components/cart-badge/cart-badge:feeds",
-      "from": "query:cart",
+      "id": "query:queries/cart-query->component:components/cart-badge/cart-badge:feeds",
+      "from": "query:queries/cart-query",
       "to": "component:components/cart-badge/cart-badge",
       "kind": "feeds",
       "data": {}
     },
     {
-      "id": "query:orderHistory->component:components/order-history/order-history:feeds",
-      "from": "query:orderHistory",
+      "id": "query:queries/order-history-query->component:components/order-history/order-history:feeds",
+      "from": "query:queries/order-history-query",
       "to": "component:components/order-history/order-history",
       "kind": "feeds",
       "data": {}
     },
     {
-      "id": "query:productGrid->component:components/product-grid/product-grid:feeds",
-      "from": "query:productGrid",
+      "id": "query:queries/product-grid-query->component:components/product-grid/product-grid:feeds",
+      "from": "query:queries/product-grid-query",
       "to": "component:components/product-grid/product-grid",
       "kind": "feeds",
       "data": {}
     },
     {
-      "id": "component:components/product-grid/product-grid->mutation:cart/add:emits",
+      "id": "component:components/product-grid/product-grid->mutation:domain/add-to-cart:emits",
       "from": "component:components/product-grid/product-grid",
-      "to": "mutation:cart/add",
+      "to": "mutation:domain/add-to-cart",
       "kind": "emits",
       "data": { "slot": "addToCart", "fields": ["productId", "quantity"] }
     }

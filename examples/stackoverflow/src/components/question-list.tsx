@@ -5,7 +5,7 @@ import * as style from '@kovojs/style';
 
 import { postQuestionMutation } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
-import { postQuestionForm, type QuestionListItem, type SoRequest } from '../model.js';
+import { type QuestionListItem, type SoRequest } from '../model.js';
 import { freshId } from '../components/chrome.js';
 import { newestFirst, renderQuestionRow } from '../components/question-card.js';
 
@@ -30,7 +30,9 @@ const so = {
 
 type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
 type QuestionScoreQueryResult = Awaited<ReturnType<typeof questionScore.load>>;
-type QuestionListRenderSlots = ComponentRenderSlots<{ postQuestion: typeof postQuestionForm }> & {
+type QuestionListRenderSlots = ComponentRenderSlots<{
+  postQuestion: typeof postQuestionMutation;
+}> & {
   request?: SoRequest | undefined;
 };
 interface DuplicateTitleFailure {
@@ -152,7 +154,7 @@ const FILTER_TABS = ['Newest', 'Active', 'Bountied', 'Unanswered'] as const;
 
 // Interactive region rendered inside the full page and fragment responses.
 export const QuestionListRegion = component({
-  mutations: { postQuestion: postQuestionForm },
+  mutations: { postQuestion: postQuestionMutation },
   queries: { questionList, questionScore },
   render: (
     {

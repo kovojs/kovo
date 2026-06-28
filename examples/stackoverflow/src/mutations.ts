@@ -132,7 +132,7 @@ async function findExistingQuestionTitle(
   return existing;
 }
 
-export const postQuestionMutation = mutation('postQuestion', {
+export const postQuestionMutation = mutation({
   input: s.object({
     id: s.string(),
     title: s.string(),
@@ -146,7 +146,7 @@ export const postQuestionMutation = mutation('postQuestion', {
   handler: postQuestion,
 });
 
-export const postAnswerMutation = mutation('postAnswer', {
+export const postAnswerMutation = mutation({
   input: s.object({
     id: s.string(),
     questionId: s.string(),
@@ -157,7 +157,7 @@ export const postAnswerMutation = mutation('postAnswer', {
   handler: postAnswer,
 });
 
-export const voteUpMutation = mutation('voteUp', {
+export const voteUpMutation = mutation({
   input: s.object({
     id: s.string(),
     targetId: s.string(),

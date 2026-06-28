@@ -33,9 +33,9 @@ export const soViteConfig = defineConfig({
     exampleDrizzleRegistryPlugin({
       appEntries: ['src/app-shell.ts', 'src/interactive-app.tsx'],
       mutationTouchGraphKeys: {
-        postAnswer: 'postAnswer',
-        postQuestion: 'postQuestion',
-        voteUp: 'voteUp',
+        'mutations/post-answer-mutation': 'postAnswer',
+        'mutations/post-question-mutation': 'postQuestion',
+        'mutations/vote-up-mutation': 'voteUp',
       },
       sourceRoot: 'src',
     }),
@@ -44,6 +44,7 @@ export const soViteConfig = defineConfig({
         'src/components/question-card.tsx',
         'src/components/question-detail.tsx',
         'src/components/question-list.tsx',
+        'src/mutations.ts',
       ],
     }),
     ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app-shell.ts' })]),

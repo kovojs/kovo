@@ -23,9 +23,9 @@ describe('commerce example', () => {
     const fieldsByName = htmlFormFieldsByName(addForm);
 
     expect(addForm).toMatchObject({
-      action: '/_m/cart/add',
+      action: '/_m/domain/add-to-cart',
       attrs: {
-        'data-mutation': 'cart/add',
+        'data-mutation': 'domain/add-to-cart',
         enhance: '',
         method: 'post',
       },
@@ -36,7 +36,9 @@ describe('commerce example', () => {
       attrs: { max: '5', min: '1', type: 'number' },
       value: '1',
     });
-    expect(htmlFormFacts(html).some((pageForm) => pageForm.action === '/_m/cart/add')).toBe(false);
+    expect(
+      htmlFormFacts(html).some((pageForm) => pageForm.action === '/_m/domain/add-to-cart'),
+    ).toBe(false);
     expect(html).toContain('/login?next=%2Fcart');
 
     const login = await client.signIn({ remoteAddress: '203.0.113.69' });
@@ -44,9 +46,9 @@ describe('commerce example', () => {
 
     const authedPage = await client.get('/cart');
     const authedHtml = await authedPage.text();
-    expect(htmlFormFacts(authedHtml).some((pageForm) => pageForm.action === '/_m/cart/add')).toBe(
-      true,
-    );
+    expect(
+      htmlFormFacts(authedHtml).some((pageForm) => pageForm.action === '/_m/domain/add-to-cart'),
+    ).toBe(true);
   });
 
   it('handles no-JS addToCart success as POST-redirect-GET', async () => {
@@ -88,9 +90,9 @@ describe('commerce example', () => {
     const body = await response.text();
     expect(response.status, body).toBe(200);
     expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
-    expect(body).toContain('<kovo-query name="cart"');
-    expect(body).toContain('<kovo-query name="productGrid"');
-    expect(body).toContain('<kovo-query name="orderHistory"');
+    expect(body).toContain('<kovo-query name="queries/cart-query"');
+    expect(body).toContain('<kovo-query name="queries/product-grid-query"');
+    expect(body).toContain('<kovo-query name="queries/order-history-query"');
     expect(body).toContain('"stock":1');
     expect(transactions).toBe(2);
   });
@@ -127,7 +129,7 @@ describe('commerce example', () => {
     expect(htmlFormFacts(body)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          action: '/_m/cart/add',
+          action: '/_m/domain/add-to-cart',
           attrs: expect.objectContaining({ enhance: '', method: 'post' }),
           fields: expect.arrayContaining([
             expect.objectContaining({ name: 'productId', value: 'p2' }),

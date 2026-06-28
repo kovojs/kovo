@@ -209,7 +209,7 @@ function renderContactCard(contact: ContactRow): string {
   });
 }
 
-type ContactsRenderSlots = ComponentRenderSlots<{ addContact: typeof addContactForm }>;
+type ContactsRenderSlots = ComponentRenderSlots<{ addContact: typeof addContact }>;
 interface DuplicateEmailFailure {
   code: 'DUPLICATE_EMAIL';
   payload: { email: string };
@@ -219,7 +219,7 @@ const defaultContactsRenderSlots: ContactsRenderSlots = {
 };
 
 export const ContactsRegion = component({
-  mutations: { addContact: addContactForm },
+  mutations: { addContact },
   queries: { contacts: contactsQuery },
   render: (
     { contacts }: { contacts: ContactListResult },
