@@ -1173,6 +1173,53 @@ export const CartBadge = component({
     ]);
   });
 
+  it('reports KV235 for app-authored key-first registry identities', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-model.ts',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: {},
+  handler() {},
+});
+export const cartQuery = query('cart', {
+  load: () => ({ count: 0 }),
+  reads: [],
+});
+export const auditQuery = query.elevated('audit', {
+  load: () => ({ ok: true }),
+  reads: [],
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toMatchObject([
+      {
+        code: 'KV235',
+        fileName: 'cart-model.ts',
+        help: expect.stringContaining('use `mutation({ input, handler })`'),
+        message:
+          'App source hard-codes a mutation registry identity; use the source-derived object form.',
+        severity: 'error',
+      },
+      {
+        code: 'KV235',
+        fileName: 'cart-model.ts',
+        help: expect.stringContaining('use `query({ load, reads })`'),
+        message:
+          'App source hard-codes a query registry identity; use the source-derived object form.',
+        severity: 'error',
+      },
+      {
+        code: 'KV235',
+        fileName: 'cart-model.ts',
+        help: expect.stringContaining('use `query.elevated({ load, reads })`'),
+        message:
+          'App source hard-codes a query.elevated registry identity; use the source-derived object form.',
+        severity: 'error',
+      },
+    ]);
+  });
+
   it('reports KV235 for string-literal dynamic imports from non-public Kovo subpaths', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

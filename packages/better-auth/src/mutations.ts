@@ -1,4 +1,5 @@
 import { mutation } from '@kovojs/server';
+import { assignDerivedMutationKey } from '@kovojs/server/internal/wire';
 import type { MutationDefinition } from '@kovojs/server';
 
 import {
@@ -22,6 +23,26 @@ import type {
   BetterAuthSignOutLike,
   BetterAuthSignUpEmailLike,
 } from './internal.js';
+
+type MutationWithAssignedKey<Definition, Key extends string> =
+  Definition extends MutationDefinition<
+    string,
+    infer InputSchema,
+    infer Errors,
+    infer Request,
+    infer Value,
+    infer GuardedRequest
+  >
+    ? MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key }
+    : Definition & { key: Key };
+
+function assignBetterAuthMutationKey<Key extends string, Definition extends { key: string }>(
+  definition: Definition,
+  key: Key,
+): MutationWithAssignedKey<Definition, Key> {
+  assignDerivedMutationKey(definition as unknown as MutationDefinition<string>, key);
+  return definition as unknown as MutationWithAssignedKey<Definition, Key>;
+}
 
 /**
  * Builds a typed Kovo mutation that signs a user in via Better Auth email/password.
@@ -47,44 +68,48 @@ export function betterAuthSignInEmailMutation<
   BetterAuthCredentialMutationValue<'signed-in'>,
   GuardedRequest
 > & { key: Key } {
-  return mutation(options.key ?? ('auth/sign-in' as Key), {
-    ...credentialMutationDefinitionOptions(
-      options,
-      betterAuthCredentialMutationTouches.signInEmail,
-    ),
-    errors: betterAuthCredentialMutationErrors,
-    input: betterAuthSignInEmailInput,
-    redirectTo: (result) => result.value.redirectTo,
-    async handler(input, request, context) {
-      try {
-        const response = await auth.api.signInEmail({
-          asResponse: true,
-          body: {
-            email: input.email,
-            password: input.password,
-          },
-          headers: request.headers,
-        });
+  return assignBetterAuthMutationKey(
+    mutation({
+      ...credentialMutationDefinitionOptions(
+        options,
+        betterAuthCredentialMutationTouches.signInEmail,
+      ),
+      errors: betterAuthCredentialMutationErrors,
+      input: betterAuthSignInEmailInput,
+      redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-in'> }) =>
+        result.value.redirectTo,
+      async handler(input, request, context) {
+        try {
+          const response = await auth.api.signInEmail({
+            asResponse: true,
+            body: {
+              email: input.email,
+              password: input.password,
+            },
+            headers: request.headers,
+          });
 
-        const success = await resolveBetterAuthCredentialSuccess(response, context, {
-          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
-          status: 'signed-in',
-        });
+          const success = await resolveBetterAuthCredentialSuccess(response, context, {
+            redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
+            status: 'signed-in',
+          });
 
-        if (success === null) {
-          return context.fail('INVALID_CREDENTIALS', {});
+          if (success === null) {
+            return context.fail('INVALID_CREDENTIALS', {});
+          }
+
+          return success;
+        } catch (error) {
+          if (isBetterAuthCredentialFailureError(error)) {
+            return context.fail('INVALID_CREDENTIALS', {});
+          }
+
+          throw error;
         }
-
-        return success;
-      } catch (error) {
-        if (isBetterAuthCredentialFailureError(error)) {
-          return context.fail('INVALID_CREDENTIALS', {});
-        }
-
-        throw error;
-      }
-    },
-  });
+      },
+    }),
+    options.key ?? ('auth/sign-in' as Key),
+  );
 }
 
 /**
@@ -109,45 +134,49 @@ export function betterAuthSignUpEmailMutation<
   BetterAuthCredentialMutationValue<'signed-up'>,
   GuardedRequest
 > & { key: Key } {
-  return mutation(options.key ?? ('auth/sign-up' as Key), {
-    ...credentialMutationDefinitionOptions(
-      options,
-      betterAuthCredentialMutationTouches.signUpEmail,
-    ),
-    errors: betterAuthCredentialMutationErrors,
-    input: betterAuthSignUpEmailInput,
-    redirectTo: (result) => result.value.redirectTo,
-    async handler(input, request, context) {
-      try {
-        const response = await auth.api.signUpEmail({
-          asResponse: true,
-          body: {
-            email: input.email,
-            name: input.name,
-            password: input.password,
-          },
-          headers: request.headers,
-        });
+  return assignBetterAuthMutationKey(
+    mutation({
+      ...credentialMutationDefinitionOptions(
+        options,
+        betterAuthCredentialMutationTouches.signUpEmail,
+      ),
+      errors: betterAuthCredentialMutationErrors,
+      input: betterAuthSignUpEmailInput,
+      redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-up'> }) =>
+        result.value.redirectTo,
+      async handler(input, request, context) {
+        try {
+          const response = await auth.api.signUpEmail({
+            asResponse: true,
+            body: {
+              email: input.email,
+              name: input.name,
+              password: input.password,
+            },
+            headers: request.headers,
+          });
 
-        const success = await resolveBetterAuthCredentialSuccess(response, context, {
-          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
-          status: 'signed-up',
-        });
+          const success = await resolveBetterAuthCredentialSuccess(response, context, {
+            redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
+            status: 'signed-up',
+          });
 
-        if (success === null) {
-          return context.fail('INVALID_CREDENTIALS', {});
+          if (success === null) {
+            return context.fail('INVALID_CREDENTIALS', {});
+          }
+
+          return success;
+        } catch (error) {
+          if (isBetterAuthCredentialFailureError(error)) {
+            return context.fail('INVALID_CREDENTIALS', {});
+          }
+
+          throw error;
         }
-
-        return success;
-      } catch (error) {
-        if (isBetterAuthCredentialFailureError(error)) {
-          return context.fail('INVALID_CREDENTIALS', {});
-        }
-
-        throw error;
-      }
-    },
-  });
+      },
+    }),
+    options.key ?? ('auth/sign-up' as Key),
+  );
 }
 
 /**
@@ -172,23 +201,28 @@ export function betterAuthSignOutMutation<
   BetterAuthCredentialMutationValue<'signed-out'>,
   GuardedRequest
 > & { key: Key } {
-  return mutation(options.key ?? ('auth/sign-out' as Key), {
-    ...credentialMutationDefinitionOptions(options, betterAuthCredentialMutationTouches.signOut),
-    input: betterAuthSignOutInput,
-    redirectTo: (result) => result.value.redirectTo,
-    async handler(_input, request, context) {
-      const response = await auth.api.signOut({
-        asResponse: true,
-        headers: request.headers,
-      });
+  return assignBetterAuthMutationKey(
+    mutation({
+      ...credentialMutationDefinitionOptions(options, betterAuthCredentialMutationTouches.signOut),
+      errors: {},
+      input: betterAuthSignOutInput,
+      redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-out'> }) =>
+        result.value.redirectTo,
+      async handler(_input, request, context) {
+        const response = await auth.api.signOut({
+          asResponse: true,
+          headers: request.headers,
+        });
 
-      forwardBetterAuthSetCookie(response.headers, context);
-      setSessionRevocationClearSiteData(context);
+        forwardBetterAuthSetCookie(response.headers, context);
+        setSessionRevocationClearSiteData(context);
 
-      return {
-        redirectTo: options.defaultRedirectTo ?? '/login',
-        status: 'signed-out',
-      };
-    },
-  });
+        return {
+          redirectTo: options.defaultRedirectTo ?? '/login',
+          status: 'signed-out' as const,
+        };
+      },
+    }),
+    options.key ?? ('auth/sign-out' as Key),
+  );
 }

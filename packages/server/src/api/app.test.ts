@@ -502,9 +502,9 @@ describe('server app-shell public API barrels', () => {
       routingApi.createMemoryWebhookReplayStore,
     );
     expect(publicApi.webhook).toBe(routingApi.webhook);
-    expect(publicApi.customVerifier).toBe(coreApi.customVerifier);
-    expect(publicApi.hmacSignature).toBe(coreApi.hmacSignature);
-    expect(publicApi.standardWebhooks).toBe(coreApi.standardWebhooks);
+    expect(publicApi.customVerifier).toBe(coreCustomVerifier);
+    expect(publicApi.hmacSignature).toBe(coreHmacSignature);
+    expect(publicApi.standardWebhooks).toBe(coreStandardWebhooks);
     expect(publicValues).not.toHaveProperty('parseRouteRequest');
     expect(publicValues).not.toHaveProperty('endpointMatches');
     expect(publicValues).not.toHaveProperty('runEndpoint');

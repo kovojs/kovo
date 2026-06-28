@@ -314,8 +314,8 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
 function appAuthoringContext<AppRequest>(): AppAuthoringContext<AppRequest> {
   return {
     layout: layout as AppAuthoringContext<AppRequest>['layout'],
-    mutation: mutation as AppAuthoringContext<AppRequest>['mutation'],
-    query: query as AppAuthoringContext<AppRequest>['query'],
+    mutation: mutation as unknown as AppAuthoringContext<AppRequest>['mutation'],
+    query: query as unknown as AppAuthoringContext<AppRequest>['query'],
     route: route as AppAuthoringContext<AppRequest>['route'],
   };
 }

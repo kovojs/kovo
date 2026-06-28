@@ -371,43 +371,30 @@ export interface MutationFactory<Request = unknown> {
   <
     InputSchema extends Schema<unknown>,
     Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
+    ContextRequest extends Request = Request,
     Value = unknown,
-    GuardedRequest extends Request = Request,
+    GuardedRequest extends ContextRequest = ContextRequest,
   >(
     definition: Omit<
-      MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest>,
+      MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest>,
       'key'
     >,
-  ): MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest> & {
+  ): MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest> & {
     key: string;
   };
-  <
-    const Key extends string,
-    InputSchema extends Schema<unknown>,
-    Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
-    Value = unknown,
-    GuardedRequest extends Request = Request,
-  >(
-    key: Key,
-    definition: Omit<
-      MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
-      'key'
-    >,
-  ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key };
 }
 
 /**
- * Declare a typed write. A mutation couples a stable key, an input `Schema`, a
- * `handler` that performs the write, optional typed `errors`, an optional
- * `guard`, an optional static `defaultRedirectTo`, and an optional `transaction` wrapper. The input schema doubles as
- * `FormData` coercion; `context.fail(code, payload)` returns a typed failure;
- * `context.invalidate(domain)` records what the write touched so dependent
- * queries rerun (SPEC §10.3). CSRF is default-on — supply `csrf` or set it to
- * `false` with justification.
+ * Declare a typed write. App-authored mutations use object form and the compiler derives the stable
+ * registry key from the exported binding plus module path (SPEC §4.1/§10.3). A mutation couples an
+ * input `Schema`, a `handler` that performs the write, optional typed `errors`, an optional `guard`,
+ * an optional static `defaultRedirectTo`, and an optional `transaction` wrapper. The input schema
+ * doubles as `FormData` coercion; `context.fail(code, payload)` returns a typed failure;
+ * `context.invalidate(domain)` records what the write touched so dependent queries rerun. CSRF is
+ * default-on — supply `csrf` or set it to `false` with justification.
  *
- * @param key - The mutation's stable registry key.
  * @param definition - Input schema, handler, and optional errors/guard/transaction/csrf.
- * @returns A `MutationDefinition` carrying `key`.
+ * @returns A `MutationDefinition` that receives its stable key from compiler-emitted metadata.
  * @example
  * import { mutation, s } from '@kovojs/server';
  *
@@ -415,7 +402,7 @@ export interface MutationFactory<Request = unknown> {
  *   db: { add(productId: string, quantity: number): void };
  * }
  *
- * export const addToCart = mutation('cart/add', {
+ * export const addToCart = mutation({
  *   csrf: false,
  *   input: s.object({
  *     productId: s.string(),

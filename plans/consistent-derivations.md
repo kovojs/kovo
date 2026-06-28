@@ -2,8 +2,8 @@
 
 **Status:** Active implementation started 2026-06-27. Baseline/SPEC contract, runtime/compiler
 identity slices, Vite standalone lowering, docs-focused migration, imported optimistic query-value
-lowering, and starter/example/tutorial source migration are integrated. Remaining legacy API
-compatibility cleanup is still open.
+lowering, starter/example/tutorial source migration, and legacy public API cleanup are integrated
+locally. Push and CI monitoring remain pending.
 **Source of truth:** `SPEC.md` remains normative. This plan should update `SPEC.md` first, then code,
 tests, generated artifacts, and docs.
 
@@ -364,10 +364,25 @@ packages/drizzle/src/index.writes-receivers.test.ts --testNamePattern "object-fo
     `node examples/stackoverflow/scripts/generate-registry.mjs`, `node
     examples/devtool/scripts/conformance.mjs`, and `git diff --check`.
 
-- [ ] **Remove legacy compatibility unless `SPEC.md` explicitly keeps it.**
+- [x] **Remove legacy compatibility unless `SPEC.md` explicitly keeps it.**
   - Kovo is in technical preview, so prefer one clean authoring model over compatibility modes.
   - If a temporary migration parser is needed for generated IR fixpoint tests, keep it internal and
     document the removal point.
+  - Evidence (2026-06-28): `packages/server/src/api/data.ts`,
+    `packages/server/src/mutation/definition.ts`, and `packages/server/src/query.ts` now expose
+    object-form-only public `mutation`/`query` factory types, while the runtime key-first
+    implementation remains available only to generated/internal/test ABI. `packages/compiler/src/validate/authoring-surface.ts`
+    emits `KV235` for exported app-authored key-first `mutation(...)`, `query(...)`, and
+    `query.elevated(...)` declarations, proved by `pnpm exec vitest run
+packages/compiler/src/compile-component.test.ts --testNamePattern "KV235|key-first registry"`.
+    `packages/better-auth/src/mutations.ts` keeps its configurable external auth keys by assigning
+    internal derived keys after object-form construction. Verification passed `pnpm run check:vp`,
+    `pnpm run check:api-surface`, `pnpm exec vitest run
+packages/better-auth/src/index.credential-mutations.test.ts packages/better-auth/src/index.session.test.ts`,
+    `pnpm exec vitest run packages/server/src/api/app.test.ts --testNamePattern "public API|data|app-shell"`,
+    the authored-surface scan `rg -n "\b(query|mutation)(\.elevated)?\(\s*['\"]"
+packages/create-kovo/templates examples site/tutorial site/content docs -g '*.ts' -g '*.tsx' -g
+'*.md'`, and `git diff --check`.
 
 ## Latest Verification
 
@@ -460,3 +475,7 @@ examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/op
 - 2026-06-28: Integrated imported optimistic query-value lowering and final starter/commerce/tutorial
   source-derived migration; focused CLI/compiler/starter/commerce/tutorial/devtool checks, `pnpm run
 check:vp`, and `git diff --check` passed.
+- 2026-06-28: Removed key-first public `mutation`/`query` factory types and added `KV235` app
+  authoring diagnostics for exported key-first registry identities; `pnpm run check:vp`, `pnpm run
+  check:api-surface`, focused compiler/server/Better Auth tests, the authored-surface scan, and
+  `git diff --check` passed.

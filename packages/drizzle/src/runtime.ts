@@ -17,6 +17,7 @@ export type {
   KovoColumnRef,
   KovoConfidentialAtRestColumnAnnotation,
   KovoConcurrencyColumnAnnotation,
+  KovoDomainRef,
   KovoDomainTableAnnotation,
   KovoFanAnnotation,
   KovoGovernedColumnAnnotation,

@@ -13,6 +13,12 @@ interface StringRender {
   start: number;
 }
 
+interface KeyFirstRegistryCall {
+  length: number;
+  primitive: 'mutation' | 'query' | 'query.elevated';
+  start: number;
+}
+
 export function validateAuthoringSurface(
   options: InternalCompileComponentOptions,
   model: ComponentModuleModel | null = null,
@@ -46,6 +52,18 @@ export function validateAuthoringSurface(
           source: options.source,
           specifier: specifier.specifier,
           start: specifier.start,
+        }),
+      ),
+    ...(model?.calls ?? [])
+      .map(keyFirstRegistryCall)
+      .filter((call): call is KeyFirstRegistryCall => call !== null)
+      .map((call) =>
+        keyFirstRegistryIdentityDiagnostic({
+          fileName: options.fileName,
+          length: call.length,
+          primitive: call.primitive,
+          source: options.source,
+          start: call.start,
         }),
       ),
     ...renderDiagnostics(options.fileName, options.source, renders),
@@ -113,6 +131,52 @@ function appLocalGeneratedImportDiagnostic({
     ].join('\n'),
     message:
       'App source imports an app-local generated artifact; import the authored source instead.',
+  };
+}
+
+function keyFirstRegistryCall(
+  call: ComponentModuleModel['calls'][number],
+): KeyFirstRegistryCall | null {
+  if (!call.exportedConstName) return null;
+  if (call.name !== 'mutation' && call.name !== 'query' && call.name !== 'query.elevated') {
+    return null;
+  }
+  if (typeof call.argumentStaticValues[0] !== 'string') return null;
+  const span = call.argumentSpans[0] ?? { end: call.end, start: call.start };
+  return {
+    length: span.end - span.start,
+    primitive: call.name,
+    start: span.start,
+  };
+}
+
+function keyFirstRegistryIdentityDiagnostic({
+  fileName,
+  length,
+  primitive,
+  source,
+  start,
+}: {
+  fileName: string;
+  length: number;
+  primitive: KeyFirstRegistryCall['primitive'];
+  source: string;
+  start: number;
+}): CompilerDiagnostic {
+  const sourceForm =
+    primitive === 'mutation'
+      ? 'mutation({ input, handler })'
+      : primitive === 'query.elevated'
+        ? 'query.elevated({ load, reads })'
+        : 'query({ load, reads })';
+  return {
+    ...diagnosticFor(fileName, 'KV235', source, start, length),
+    help: [
+      `Blocked reason: app source hard-codes a ${primitive} registry identity that the compiler can derive from the exported binding and module path.`,
+      `Fixes: use \`${sourceForm}\` and let the compiler emit the source-derived registry key; keep string registry keys only in compiler-emitted/generated ABI.`,
+      'SPEC.md §4.1: app-authored TSX and server modules do not write registry-name strings merely to repeat facts the compiler can derive.',
+    ].join('\n'),
+    message: `App source hard-codes a ${primitive} registry identity; use the source-derived object form.`,
   };
 }
 

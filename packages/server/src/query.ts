@@ -243,7 +243,9 @@ export interface QueryFactory<Request = unknown> {
   <
     Input,
     Value,
-    const Definition extends QueryArgsDeclarationDefinition<string, Value, Input, Request>,
+    ContextRequest extends Request = Request,
+    const Definition extends QueryArgsDeclarationDefinition<string, Value, Input, ContextRequest> =
+      QueryArgsDeclarationDefinition<string, Value, Input, ContextRequest>,
   >(
     definition: Definition,
     ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
@@ -252,56 +254,38 @@ export interface QueryFactory<Request = unknown> {
         : [never]
       : []
   ): QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] };
-  <const Definition extends QueryDeclarationDefinition<Request, any>>(
+  <
+    ContextRequest extends Request = Request,
+    const Definition extends QueryDeclarationDefinition<ContextRequest, any> =
+      QueryDeclarationDefinition<ContextRequest, any>,
+  >(
     definition: Definition,
-    ...jsonBoundary: QueryDefinitionBoundary<Definition, QueryDeclarationDefinition<Request, any>>
+    ...jsonBoundary: QueryDefinitionBoundary<
+      Definition,
+      QueryDeclarationDefinition<ContextRequest, any>
+    >
   ): Definition extends { args: Schema<infer Input> }
     ? QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] }
     : Definition & { key: string; reads: readonly Domain[] };
-  <
-    const Key extends string,
-    Input,
-    Value,
-    const Definition extends Omit<
-      QueryArgsDeclarationDefinition<Key, Value, Input, Request>,
-      'key'
-    >,
-  >(
-    key: Key,
-    definition: Definition,
-    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
-      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
-        ? []
-        : [never]
-      : []
-  ): QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] };
-  <const Key extends string, const Definition extends QueryDeclarationDefinition<Request, any>>(
-    key: Key,
-    definition: Definition,
-    ...jsonBoundary: QueryDefinitionBoundary<Definition, QueryDeclarationDefinition<Request, any>>
-  ): Definition extends { args: Schema<infer Input> }
-    ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] }
-    : Definition & { key: Key; reads: readonly Domain[] };
   /** SPEC §9.4/§10.3 (KV433): the audited GET-write escape — see `query.elevated`. */
   elevated: QueryFactory<Request>;
 }
 
 /**
- * Declare a typed read. A query couples a stable key, a `load` function, and the
- * domains it `reads`. The read set is the entire invalidation declaration —
- * nothing else registers anywhere; when a mutation touches a domain in `reads`,
- * this query reruns (SPEC §10.2). Optional `args` validate inputs, `output`
- * validates results, and `version`/`instanceKey` control caching identity.
+ * Declare a typed read. App-authored queries use object form and the compiler derives the stable
+ * registry key from the exported binding plus module path (SPEC §4.1/§10.2). The read set is the
+ * entire invalidation declaration: when a mutation touches a domain in `reads`, this query reruns.
+ * Optional `args` validate inputs, `output` validates results, and `version`/`instanceKey` control
+ * caching identity.
  *
- * @param key - The query's stable registry key.
  * @param definition - `load`, `reads`, and optional `args`/`output`/`guard`/`version`.
- * @returns A query definition carrying `key`.
+ * @returns A query definition that receives its stable key from compiler-emitted metadata.
  * @example
  * import { domain, query } from '@kovojs/server';
  *
- * const product = domain('product');
+ * export const product = domain();
  *
- * export const productsQuery = query('products', {
+ * export const productsQuery = query({
  *   load: () => ({ items: [] as { id: string }[] }),
  *   reads: [product],
  * });
@@ -501,9 +485,8 @@ function queryElevated(
   return buildQueryDefinition(key, definition, true);
 }
 
-// Attach the audited escape to the `query` factory. Typed against the same overloads as `query`
-// (minus the elevated marker the factory owns) so `query.elevated('name', { load, reads })` type-
-// checks identically to `query('name', …)`.
+// Attach the audited escape to the `query` factory. Public app authoring exposes only object form;
+// the implementation still accepts key-first generated/internal construction.
 interface QueryElevated {
   <
     Input,

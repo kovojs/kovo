@@ -17,7 +17,19 @@ export type {
 export { domain, tag } from '../domain.js';
 export type { Domain, Tag } from '../domain.js';
 export type { JsonSerializable } from '../json-boundary.js';
-export { errorBoundary, mutation, queue, stream, write } from '../mutation.js';
+export { errorBoundary, queue, stream, write } from '../mutation.js';
+import { mutation as mutationImplementation } from '../mutation.js';
+import { query as queryImplementation } from '../query.js';
+import type { MutationFactory } from '../mutation.js';
+import type { QueryFactory } from '../query.js';
+
+/**
+ * Declare a typed write using source-derived registry identity (SPEC §4.1/§10.3).
+ *
+ * App-authored mutations use `mutation({ input, handler })`; the compiler derives the stable
+ * `/_m/*` key from the exported binding plus module path and emits the generated metadata.
+ */
+export const mutation = mutationImplementation as unknown as MutationFactory;
 // KV429 (SPEC §10.3/§11.1): mutation handler signals a stale-version conflict via
 // StaleVersionError; the lifecycle converts it into a typed HTTP 409 (STALE_VERSION).
 export { StaleVersionError } from '../mutation.js';
@@ -58,7 +70,15 @@ export type {
   QueryReadConfig,
   QueryResult,
 } from '../query.js';
-export { drainElevatedQueryFacts, query } from '../query.js';
+
+/**
+ * Declare a typed read using source-derived registry identity (SPEC §4.1/§10.2).
+ *
+ * App-authored queries use `query({ load, reads })`; the compiler derives the stable `/_q/*` key
+ * from the exported binding plus module path and emits the generated metadata.
+ */
+export const query = queryImplementation as unknown as QueryFactory;
+export { drainElevatedQueryFacts } from '../query.js';
 // SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle. `Reader<Db>`
 // is the read-only loader-handle type mirror; `KovoReadonlyHandleError` is the fail-closed runtime
 // throw a `query()` loader's write verb raises.
