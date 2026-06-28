@@ -219,6 +219,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     uninstall?.();
     // Keep this net.connect-layer suite on fresh dials; pooled reuse is covered by egress-undici.test.ts.
     server.closeIdleConnections();
+    http.globalAgent.destroy();
   });
 
   it('self-probe reports not-installed before install, installed after', () => {
@@ -268,17 +269,17 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     expect(await res.text()).toBe('ok');
   });
 
-  it('DENIES a metadata literal IP synchronously at connect (before any socket dial)', () => {
+  it('DENIES a metadata literal IP before any socket dial', async () => {
     uninstall = installNetConnectFloor(emptyPolicy());
-    let thrown: unknown;
-    try {
-      http.get({ host: '169.254.169.254', port: 80 });
-    } catch (e) {
-      thrown = e;
-    }
-    expect(thrown).toBeInstanceOf(EgressBlockedError);
-    expect((thrown as EgressBlockedError).name).toBe(EGRESS_BLOCKED_ERROR_NAME);
-    expect((thrown as EgressBlockedError).classification).toBe('metadata');
+    await expect(
+      new Promise((resolve, reject) => {
+        const req = http.get({ host: '169.254.169.254', port: 80 }, (res) => {
+          res.resume();
+          res.on('end', resolve);
+        });
+        req.on('error', reject);
+      }),
+    ).rejects.toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME, classification: 'metadata' });
   });
 
   it('ALLOWS the metadata literal IP inside a credential frame (then fails on the dial, not the floor)', async () => {
@@ -306,6 +307,66 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     uninstall = installNetConnectFloor(emptyPolicy());
     await expect(fetch(`http://127.0.0.1:${port}/a`)).rejects.toThrow();
     await expect(fetch(`http://127.0.0.1:${port}/b`)).rejects.toThrow();
+  });
+
+  it('DENIES a raw http keep-alive socket opened before the floor is installed', async () => {
+    let requests = 0;
+    const keepAliveServer = http.createServer((_req, res) => {
+      requests += 1;
+      res.end('ok');
+    });
+    await new Promise<void>((r) => keepAliveServer.listen(0, '127.0.0.1', () => r()));
+    const keepAlivePort = (keepAliveServer.address() as AddressInfo).port;
+
+    const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+    const lookup: http.RequestOptions['lookup'] = (_hostname, opts, cb) => {
+      const callback = (typeof opts === 'function' ? opts : cb) as (
+        err: Error | null,
+        address: string | { address: string; family: number }[],
+        family?: number,
+      ) => void;
+      const lookupOptions = (typeof opts === 'function' ? {} : opts) as { all?: boolean };
+      if (lookupOptions.all) callback(null, [{ address: '127.0.0.1', family: 4 }]);
+      else callback(null, '127.0.0.1', 4);
+    };
+    const request = (): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const req = http.get(
+          {
+            host: 'prewarmed-internal.test',
+            port: keepAlivePort,
+            agent,
+            lookup,
+          },
+          (res) => {
+            let data = '';
+            res.on('data', (chunk) => (data += chunk));
+            res.on('end', () => resolve(data));
+          },
+        );
+        req.on('error', reject);
+      });
+
+    try {
+      await expect(request()).resolves.toBe('ok');
+      const socketPoolName = agent.getName({
+        host: 'prewarmed-internal.test',
+        port: keepAlivePort,
+        localAddress: undefined,
+        family: undefined,
+      });
+      expect(agent.freeSockets[socketPoolName]?.length).toBeGreaterThan(0);
+
+      uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
+      await expect(request()).rejects.toMatchObject({
+        name: EGRESS_BLOCKED_ERROR_NAME,
+        classification: 'loopback',
+      });
+      expect(requests).toBe(1);
+    } finally {
+      agent.destroy();
+      keepAliveServer.close();
+    }
   });
 
   it('does not block a public destination (allowlist absence is irrelevant to public)', () => {
