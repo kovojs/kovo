@@ -1274,6 +1274,7 @@ function sqlSinkName(call: CallExpression): string | null {
   const expression = call.getExpression();
   if (Node.isPropertyAccessExpression(expression)) {
     const name = expression.getName();
+    if (name === 'exec' && isRegExpExecReceiver(expression.getExpression())) return null;
     return name === 'execute' || name === 'query' || name === 'exec' || name === 'prepare'
       ? name
       : null;
@@ -1283,6 +1284,7 @@ function sqlSinkName(call: CallExpression): string | null {
     const argument = expression.getArgumentExpression();
     if (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument)) {
       const name = argument.getLiteralText();
+      if (name === 'exec' && isRegExpExecReceiver(expression.getExpression())) return null;
       return name === 'execute' || name === 'query' || name === 'exec' || name === 'prepare'
         ? name
         : null;
@@ -1291,6 +1293,27 @@ function sqlSinkName(call: CallExpression): string | null {
   }
 
   return null;
+}
+
+function isRegExpExecReceiver(receiver: Node): boolean {
+  if (receiver.getKind() === SyntaxKind.RegularExpressionLiteral) return true;
+  return typeIsRegExpInstance(receiver.getType());
+}
+
+function typeIsRegExpInstance(type: MorphType): boolean {
+  const symbolName = type.getSymbol()?.getName() ?? type.getAliasSymbol()?.getName();
+  if (symbolName === 'RegExp') return true;
+  const text = type.getText();
+  if (text === 'RegExp' || text === 'globalThis.RegExp') return true;
+  const apparent = type.getApparentType();
+  if (apparent !== type) {
+    const apparentSymbolName =
+      apparent.getSymbol()?.getName() ?? apparent.getAliasSymbol()?.getName();
+    if (apparentSymbolName === 'RegExp') return true;
+    const apparentText = apparent.getText();
+    if (apparentText === 'RegExp' || apparentText === 'globalThis.RegExp') return true;
+  }
+  return false;
 }
 
 function sqlTextSafety(
