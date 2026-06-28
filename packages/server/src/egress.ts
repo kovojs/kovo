@@ -718,19 +718,27 @@ function evaluateHttpAgentRequest(
 
   const getName = (agent as unknown as { getName?: (opts: AgentRequestOptions) => string }).getName;
   const name = typeof getName === 'function' ? getName.call(agent, options) : undefined;
-  const freeSockets = (agent as unknown as { freeSockets?: Record<string, AgentSocket[]> })
-    .freeSockets;
-  const sockets = name ? freeSockets?.[name] : undefined;
-  if (!sockets || sockets.length === 0) return null;
+  const agentState = agent as unknown as {
+    freeSockets?: Record<string, AgentSocket[]>;
+    sockets?: Record<string, AgentSocket[]>;
+  };
+  const socketGroups = name
+    ? [agentState.freeSockets?.[name], agentState.sockets?.[name]].filter(
+        (sockets): sockets is AgentSocket[] => sockets !== undefined && sockets.length > 0,
+      )
+    : [];
+  if (socketGroups.length === 0) return null;
 
-  for (const socket of sockets) {
-    const resolvedIp = socket.remoteAddress;
-    if (!resolvedIp) continue;
-    const socketPort = Number(socket.remotePort ?? port);
-    const blocked = evaluateEgress({ host, port: socketPort, resolvedIp, policy });
-    if (blocked) {
-      for (const pooled of sockets) pooled.destroy(blocked);
-      return blocked;
+  for (const sockets of socketGroups) {
+    for (const socket of sockets) {
+      const resolvedIp = socket.remoteAddress;
+      if (!resolvedIp) continue;
+      const socketPort = Number(socket.remotePort ?? port);
+      const blocked = evaluateEgress({ host, port: socketPort, resolvedIp, policy });
+      if (blocked) {
+        for (const group of socketGroups) for (const pooled of group) pooled.destroy(blocked);
+        return blocked;
+      }
     }
   }
   return null;

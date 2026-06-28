@@ -369,6 +369,84 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     }
   });
 
+  it('DENIES a raw http request queued behind a pre-floor active keep-alive socket', async () => {
+    let requests = 0;
+    let releaseHeldResponse: (() => void) | undefined;
+    let markHeldRequestStarted: (() => void) | undefined;
+    const heldRequestStarted = new Promise<void>((resolve) => {
+      markHeldRequestStarted = resolve;
+    });
+    const keepAliveServer = http.createServer((req, res) => {
+      requests += 1;
+      if (req.url === '/hold') {
+        markHeldRequestStarted?.();
+        releaseHeldResponse = () => res.end('ok');
+        return;
+      }
+      res.end('unexpected');
+    });
+    await new Promise<void>((r) => keepAliveServer.listen(0, '127.0.0.1', () => r()));
+    const keepAlivePort = (keepAliveServer.address() as AddressInfo).port;
+
+    const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+    const lookup: http.RequestOptions['lookup'] = (_hostname, opts, cb) => {
+      const callback = (typeof opts === 'function' ? opts : cb) as (
+        err: Error | null,
+        address: string | { address: string; family: number }[],
+        family?: number,
+      ) => void;
+      const lookupOptions = (typeof opts === 'function' ? {} : opts) as { all?: boolean };
+      if (lookupOptions.all) callback(null, [{ address: '127.0.0.1', family: 4 }]);
+      else callback(null, '127.0.0.1', 4);
+    };
+    const request = (path: string): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const req = http.get(
+          {
+            host: 'prewarmed-active-internal.test',
+            path,
+            port: keepAlivePort,
+            agent,
+            lookup,
+          },
+          (res) => {
+            let data = '';
+            res.on('data', (chunk) => (data += chunk));
+            res.on('end', () => resolve(data));
+          },
+        );
+        req.on('error', reject);
+      });
+
+    const heldRequest = request('/hold');
+    try {
+      await heldRequestStarted;
+      const socketPoolName = agent.getName({
+        host: 'prewarmed-active-internal.test',
+        port: keepAlivePort,
+        localAddress: undefined,
+        family: undefined,
+      });
+      expect(agent.sockets[socketPoolName]?.length).toBeGreaterThan(0);
+
+      uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
+      await expect(request('/queued')).rejects.toMatchObject({
+        name: EGRESS_BLOCKED_ERROR_NAME,
+        classification: 'loopback',
+      });
+      expect(requests).toBe(1);
+      releaseHeldResponse?.();
+      await expect(heldRequest).rejects.toMatchObject({
+        name: EGRESS_BLOCKED_ERROR_NAME,
+        classification: 'loopback',
+      });
+    } finally {
+      releaseHeldResponse?.();
+      agent.destroy();
+      keepAliveServer.close();
+    }
+  });
+
   it('does not block a public destination (allowlist absence is irrelevant to public)', () => {
     uninstall = installNetConnectFloor(emptyPolicy());
     // A literal public IP passes the synchronous check (we don't actually dial it).
