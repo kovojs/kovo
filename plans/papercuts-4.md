@@ -27,19 +27,21 @@ Security-header regression RSE-1 is filed separately in `plans/bugz-6.md`.
 
 ### A. Production Node Preset Startup
 
-- [ ] **Node preset server imports the raw app module and loses source-derived mutation keys.** (high, framework; found by `typed-read-skew`)
+- [x] **Node preset server imports the raw app module and loses source-derived mutation keys.** (high, framework; found by `typed-read-skew`)
   - Observed behavior: `pnpm run build:prod` emitted a node preset artifact, but `node dist/server/server.mjs` failed before listening with `createApp() received a mutation without a derived key`.
   - Root cause: `packages/cli/src/commands/build-export.ts:1375` emits a server handler that imports the raw app module by file URL; the Vite transform path that calls `lowerStandaloneSourceDerivedRegistryDeclarations` lives at `packages/compiler/src/vite.ts:266`, and the helper injects `assignDerivedMutationKey` at `packages/compiler/src/source-derived-lowering.ts:41`. `packages/server/src/app.ts:261` then correctly fails closed on the unkeyed mutation.
   - Why it matters: SPEC §6.1/§6.3 make mutation keys source-derived framework metadata; a valid scaffold-style app can pass build and still be undeployable.
   - Repro evidence: in `typed-read-skew`, `node dist/server/server.mjs` exits 1 at `dist/server/server/handler.mjs:11521`; the emitted handler contains `addContact` in `createApp({ mutations: [...] })` and no `assignDerivedMutationKey`.
   - Acceptance: a production node preset app with object-form `mutation({ ... })` starts successfully without app-authored registry-key strings, and the emitted handler contains compiler-derived mutation metadata.
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts` proves the Node preset bundle contains compiler-derived object-form mutation metadata, starts, serves the route, and dispatches the derived-key mutation.
 
-- [ ] **Regression: node preset output still requires app-local `undici`.** (med, framework; found by `typed-read-skew`)
+- [x] **Regression: node preset output still requires app-local `undici`.** (med, framework; found by `typed-read-skew`)
   - Observed behavior: before the app-local workaround, the built server failed with `Cannot find module 'undici'`.
   - Root cause: `packages/server/src/egress-undici.ts:14` uses `createRequire(...)(\"undici\")`; `packages/cli/src/commands/build-export.ts:1331` declares `undici` as a dynamic require target, but the emitted handler still contains `createRequire(import.meta.url)(\"undici\")`.
   - Why it matters: `plans/papercuts-3.md` marked this fixed, but a standalone scaffold can again build successfully and fail late at production startup.
   - Repro evidence: verifier inspection found `createRequire(import.meta.url)(\"undici\")` in `dist/server/server/handler.mjs`; the direct `undici` dependency added in the throwaway app masked the crash and exposed the next startup failure above.
   - Acceptance: a fresh scaffold's `pnpm run build:prod && node dist/server/server.mjs` reaches listen without adding `undici` to the app package.
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts` and `pnpm exec vitest run packages/server/src/egress-undici.test.ts packages/server/src/egress-bootstrap.test.ts` prove emitted handlers no longer contain `createRequire(import.meta.url)("undici")`, node preset startup reaches listen, and egress undici behavior still works.
 
 ### B. Typed Authoring Contracts
 
