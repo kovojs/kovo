@@ -1768,7 +1768,9 @@ function localConstFrozenScalarPrivateScope(
   if (!Node.isIdentifier(node)) return undefined;
 
   const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
-  const declaration = symbol?.getDeclarations()?.[0];
+  const declaration = symbol
+    ?.getDeclarations()
+    ?.find((candidate): candidate is BindingElement => Node.isBindingElement(candidate));
   if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
   if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
 
@@ -2370,7 +2372,7 @@ function localDestructuredInputPath(expression: Node, depth: number): string[] |
   if (declaration.getInitializer()) return undefined;
 
   const binding = objectBindingPathAndVariable(declaration);
-  if (!binding) return undefined;
+  if (!binding) return objectBindingPathFromParameter(declaration);
   const { path, variable } = binding;
   const declarationList = variable.getParent();
   if (!Node.isVariableDeclarationList(declarationList)) return undefined;
@@ -2385,6 +2387,27 @@ function localDestructuredInputPath(expression: Node, depth: number): string[] |
   const object = localConstLiteralRootValue(initializer);
   if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
   return objectLiteralStaticPathInputPath(object, path, depth + 1);
+}
+
+function objectBindingPathFromParameter(declaration: BindingElement): string[] | undefined {
+  const path: string[] = [];
+  let element: BindingElement | undefined = declaration;
+
+  while (element) {
+    if (isRestBindingElement(element) || element.getInitializer()) return undefined;
+    const propertyName = objectBindingPropertyName(element);
+    if (!propertyName) return undefined;
+    path.unshift(propertyName);
+
+    const pattern = element.getParent();
+    if (!Node.isObjectBindingPattern(pattern)) return undefined;
+    const parent = pattern.getParent();
+    if (Node.isParameterDeclaration(parent)) return path;
+    if (!Node.isBindingElement(parent)) return undefined;
+    element = parent;
+  }
+
+  return undefined;
 }
 
 function objectLiteralStaticPathInputPath(
@@ -3112,6 +3135,7 @@ function objectLiteralStaticPathInputPath(
 /** @internal */ export function writeInstanceKeyComparisons(
   chain: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
+  paramSymbolKeys: ReadonlySet<string> = new Set(),
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): QueryInstanceKeyComparisons {
   const calls = [
@@ -3134,9 +3158,16 @@ function objectLiteralStaticPathInputPath(
         }
       : sessionContext;
 
+  const toOperand = (node: Node): QueryInstanceKeyOperand => {
+    const operand = queryInstanceKeyOperand(node, resolveIdentifier, predicateSessionContext);
+    if (operand.inputKey) return operand;
+    const argument = argumentKey(node, paramSymbolKeys, predicateSessionContext);
+    return argument?.startsWith('arg:') ? { ...operand, inputKey: argument } : operand;
+  };
+
   const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
-    left: queryInstanceKeyOperand(left, resolveIdentifier, predicateSessionContext),
-    right: queryInstanceKeyOperand(right, resolveIdentifier, predicateSessionContext),
+    left: toOperand(left),
+    right: toOperand(right),
   });
 
   return {
@@ -3686,15 +3717,18 @@ function comparisonPnf(
   const provenance = privateScopeForExpression(node, sessionContext);
   if (provenance) return privateScopeKey(provenance);
 
+  const inputPath = inputKeyPathForExpression(node);
+  if (inputPath) return `arg:${inputPath}`;
+
   if (Node.isIdentifier(node)) {
-    const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
+    const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node) ?? node.getSymbol());
     return symbolKey && paramSymbolKeys.has(symbolKey) ? `arg:${node.getText()}` : undefined;
   }
   if (!Node.isPropertyAccessExpression(node)) return undefined;
 
   const base = unwrappedStaticExpressionNode(node.getExpression());
   if (!Node.isIdentifier(base)) return undefined;
-  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(base));
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(base) ?? base.getSymbol());
   if (!symbolKey || !paramSymbolKeys.has(symbolKey)) return undefined;
 
   return `arg:${node.getName()}`;

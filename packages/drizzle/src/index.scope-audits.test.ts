@@ -247,6 +247,42 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     expect(auditScopes(audit)).toContainEqual({ domain: 'order', kind: 'write', scope: 'args' });
   });
 
+  it('A1: treats destructured mutation input as a write-side owner-table args key', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'project.mutations.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const projects = pgTable("projects", { id: text("id").primaryKey(), ownerId: text("owner_id").notNull(), budgetCents: integer("budget_cents").notNull() }, kovo({ domain: "project", key: "id", owner: "ownerId" }));',
+              '',
+              'export const unsafeSpendBudget = domain({',
+              '  spend: write(async (db: PgAsyncDatabase<any, any>, { projectId }: { projectId: string }) => {',
+              '    await db.update(projects).set({ budgetCents: 0 }).where(eq(projects.id, projectId));',
+              '  }),',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({
+        domain: a.domain,
+        kind: a.kind,
+        name: a.name,
+        scope: a.scope,
+      })),
+    ).toEqual([
+      { domain: 'project', kind: 'write', name: 'unsafeSpendBudget.spend', scope: 'args' },
+    ]);
+  });
+
   // A1 negative: a write keyed by `req.session.*` is session-scoped (safe), not KV414.
   it('A1: keeps a session-anchored owner-table mutation scope:session (no KV414)', () => {
     const audit = extractOwnerAuditFromProject(

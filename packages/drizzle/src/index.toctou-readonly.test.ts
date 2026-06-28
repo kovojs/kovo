@@ -96,6 +96,36 @@ describe('KV429 TOCTOU lost-update gate', () => {
     expect(result).toEqual([]);
   });
 
+  it('flags read-then-absolute-write flows into an atomic column', () => {
+    const result = toctou(
+      ATOMIC_SCHEMA,
+      buy(
+        [
+          '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+          '  const nextStock = Math.max(0, Number(row?.stock ?? 0) - input.qty);',
+          '  await db.update(products).set({ stock: nextStock }).where(eq(products.id, input.id));',
+        ].join('\n'),
+      ),
+    );
+    expect(result).toEqual([
+      { column: 'stock', name: 'buy', site: 'inventory.domain.ts:7', table: 'products' },
+    ]);
+  });
+
+  it('discharges read-then-absolute-write flows with a version-column guard', () => {
+    const result = toctou(
+      ATOMIC_SCHEMA,
+      buy(
+        [
+          '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+          '  const nextStock = Math.max(0, Number(row?.stock ?? 0) - input.qty);',
+          '  await db.update(products).set({ stock: nextStock, ver: sql`${products.ver} + 1` }).where(and(eq(products.id, input.id), eq(products.ver, input.prevVer)));',
+        ].join('\n'),
+      ),
+    );
+    expect(result).toEqual([]);
+  });
+
   it('does not flag tables without an atomic/version annotation', () => {
     const result = toctou(
       'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock") }, kovo({ domain: "product", key: "id" }));',

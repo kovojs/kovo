@@ -758,6 +758,7 @@ import {
       instanceKeyComparisons: writeInstanceKeyComparisons(
         chain,
         resolveWriteTableIdentifier,
+        paramSymbolKeys,
         sessionContext,
       ),
       operation,

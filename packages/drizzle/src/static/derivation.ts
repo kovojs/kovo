@@ -1738,7 +1738,19 @@ export function extractToctouFromProject(options: TouchGraphProjectOptions): Toc
           if (!result || result.effect.op !== 'update') continue;
           const info = concurrencyByTable.get(result.effect.table);
           if (!info) continue;
-          for (const fact of toctouFactsForEffect(result.effect, info, result.site, callback.key)) {
+          const setReads = atomicReadsForWriteSet(
+            call,
+            callback.body,
+            resolveTable,
+            concurrencyByTable,
+          );
+          for (const fact of toctouFactsForEffect(
+            result.effect,
+            info,
+            result.site,
+            callback.key,
+            setReads,
+          )) {
             facts.push(fact);
           }
         }
@@ -1774,6 +1786,7 @@ function toctouFactsForEffect(
   info: ConcurrencyTableInfo,
   site: string,
   name: string | undefined,
+  setReads: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
 ): ToctouFact[] {
   const facts: ToctouFact[] = [];
   // The set of columns the WHERE guards by an eq-predicate. An opaque/multi-row match
@@ -1790,7 +1803,13 @@ function toctouFactsForEffect(
 
   for (const column of info.atomic) {
     const setValue = effect.sets[column];
-    if (!setValue || !valueReadsColumn(setValue, column)) continue;
+    if (
+      !setValue ||
+      (!valueReadsColumn(setValue, column) &&
+        !setReads.get(column)?.has(atomicColumnKey(effect.table, column)))
+    ) {
+      continue;
+    }
     // Read-then-write on the atomic column: safe only if the WHERE eq-guards the atomic
     // column itself (true CAS) OR a declared version column.
     if (guardedColumns.has(column) || versionGuardedAndUpdated) continue;
@@ -1806,6 +1825,194 @@ function valueReadsColumn(value: SymbolicValue, column: string): boolean {
     return valueReadsColumn(value.left, column) || valueReadsColumn(value.right, column);
   }
   return false;
+}
+
+type AtomicColumnKey = string;
+
+interface AtomicReadFlow {
+  rowColumnsBySymbol: Map<string, Map<string, AtomicColumnKey>>;
+  valueColumnsBySymbol: Map<string, Set<AtomicColumnKey>>;
+}
+
+function atomicColumnKey(table: string, column: string): AtomicColumnKey {
+  return `${table}\0${column}`;
+}
+
+function atomicReadsForWriteSet(
+  call: CallExpression,
+  body: Node,
+  resolveTable: (node: Node) => string | undefined,
+  concurrencyByTable: ReadonlyMap<string, ConcurrencyTableInfo>,
+): Map<string, Set<AtomicColumnKey>> {
+  const chain = drizzleWriteChainRoot(call);
+  const setCall = chainCallByName(chain, 'set');
+  const argument = setCall?.getArguments()[0];
+  const object = argument ? unwrappedStaticExpressionNode(argument) : undefined;
+  if (!object || !Node.isObjectLiteralExpression(object)) return new Map();
+
+  const flow = atomicReadFlowBefore(body, call, resolveTable, concurrencyByTable);
+  const readsBySetColumn = new Map<string, Set<AtomicColumnKey>>();
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      continue;
+    }
+    const column = propertyNameText(property.getNameNode());
+    if (!column) continue;
+    const valueNode = Node.isShorthandPropertyAssignment(property)
+      ? property.getNameNode()
+      : property.getInitializer();
+    if (!valueNode) continue;
+    const reads = atomicReadsForExpression(valueNode, flow);
+    if (reads.size > 0) readsBySetColumn.set(column, reads);
+  }
+  return readsBySetColumn;
+}
+
+function atomicReadFlowBefore(
+  body: Node,
+  before: Node,
+  resolveTable: (node: Node) => string | undefined,
+  concurrencyByTable: ReadonlyMap<string, ConcurrencyTableInfo>,
+): AtomicReadFlow {
+  const flow: AtomicReadFlow = {
+    rowColumnsBySymbol: new Map(),
+    valueColumnsBySymbol: new Map(),
+  };
+  const declarations = body
+    .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+    .filter((declaration) => declaration.getStart() < before.getStart())
+    .sort((left, right) => left.getStart() - right.getStart());
+
+  for (const declaration of declarations) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const projection = selectAtomicProjectionColumns(initializer, resolveTable, concurrencyByTable);
+    if (projection.size > 0) {
+      assignProjectedRowBinding(declaration.getNameNode(), projection, flow);
+    }
+
+    const reads = atomicReadsForExpression(initializer, flow);
+    if (reads.size > 0) assignAtomicReadBinding(declaration.getNameNode(), reads, flow);
+  }
+
+  return flow;
+}
+
+function selectAtomicProjectionColumns(
+  expression: Node,
+  resolveTable: (node: Node) => string | undefined,
+  concurrencyByTable: ReadonlyMap<string, ConcurrencyTableInfo>,
+): Map<string, AtomicColumnKey> {
+  const columns = new Map<string, AtomicColumnKey>();
+  const node = unwrapAwait(expression);
+  const calls = [
+    ...(Node.isCallExpression(node) ? [node] : []),
+    ...node.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+  for (const call of calls) {
+    if (!isSelectQueryCallName(staticAccessName(call.getExpression()))) continue;
+    const projection = selectProjectionArgument(call);
+    const object = projection ? unwrappedStaticExpressionNode(projection) : undefined;
+    if (!object || !Node.isObjectLiteralExpression(object)) continue;
+    for (const property of object.getProperties()) {
+      if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+        continue;
+      }
+      const output = propertyNameText(property.getNameNode());
+      const value = Node.isShorthandPropertyAssignment(property)
+        ? property.getNameNode()
+        : property.getInitializer();
+      if (!output || !value) continue;
+      const column = writeColumnReference(value, resolveTable);
+      const base = staticAccessExpression(unwrappedStaticExpressionNode(value));
+      const table = base ? resolveTable(base) : undefined;
+      const info = table ? concurrencyByTable.get(table) : undefined;
+      if (!table || !column || !info?.atomic.has(column)) continue;
+      columns.set(output, atomicColumnKey(table, column));
+    }
+  }
+  return columns;
+}
+
+function assignProjectedRowBinding(
+  binding: Node,
+  projection: Map<string, AtomicColumnKey>,
+  flow: AtomicReadFlow,
+): void {
+  if (Node.isIdentifier(binding)) {
+    const key = symbolKeyForBinding(binding);
+    if (key) flow.rowColumnsBySymbol.set(key, new Map(projection));
+    return;
+  }
+
+  if (Node.isArrayBindingPattern(binding)) {
+    for (const element of binding.getElements()) {
+      if (!Node.isBindingElement(element) || element.getText().trimStart().startsWith('...')) {
+        continue;
+      }
+      const name = element.getNameNode();
+      if (!Node.isIdentifier(name)) continue;
+      const key = symbolKeyForBinding(name);
+      if (key) flow.rowColumnsBySymbol.set(key, new Map(projection));
+    }
+  }
+}
+
+function assignAtomicReadBinding(
+  binding: Node,
+  reads: Set<AtomicColumnKey>,
+  flow: AtomicReadFlow,
+): void {
+  if (Node.isIdentifier(binding)) {
+    const key = symbolKeyForBinding(binding);
+    if (key) flow.valueColumnsBySymbol.set(key, new Set(reads));
+    return;
+  }
+
+  if (Node.isObjectBindingPattern(binding)) {
+    for (const element of binding.getElements()) {
+      if (element.getText().trimStart().startsWith('...')) continue;
+      const name = element.getNameNode();
+      if (!Node.isIdentifier(name)) continue;
+      const key = symbolKeyForBinding(name);
+      if (key) flow.valueColumnsBySymbol.set(key, new Set(reads));
+    }
+  }
+}
+
+function atomicReadsForExpression(expression: Node, flow: AtomicReadFlow): Set<AtomicColumnKey> {
+  const reads = new Set<AtomicColumnKey>();
+  const visit = (node: Node): void => {
+    const unwrapped = unwrappedStaticExpressionNode(node);
+    if (Node.isIdentifier(unwrapped)) {
+      const key = symbolKeyForBinding(unwrapped);
+      for (const column of key ? (flow.valueColumnsBySymbol.get(key) ?? []) : []) {
+        reads.add(column);
+      }
+    }
+
+    if (Node.isPropertyAccessExpression(unwrapped) || Node.isElementAccessExpression(unwrapped)) {
+      const property = staticAccessName(unwrapped);
+      const root = staticExpressionRootIdentifier(unwrapped);
+      const rootKey = root ? symbolKeyForBinding(root) : undefined;
+      const column =
+        rootKey && property ? flow.rowColumnsBySymbol.get(rootKey)?.get(property) : undefined;
+      if (column) reads.add(column);
+    }
+  };
+
+  visit(expression);
+  for (const descendant of expression.getDescendants()) visit(descendant);
+  return reads;
+}
+
+function unwrapAwait(expression: Node): Node {
+  const node = unwrappedStaticExpressionNode(expression);
+  return Node.isAwaitExpression(node) ? unwrappedStaticExpressionNode(node.getExpression()) : node;
+}
+
+function symbolKeyForBinding(node: Node): string | undefined {
+  return resolvedSymbolKey(symbolForIdentifierReference(node) ?? node.getSymbol());
 }
 
 function dedupeToctouFacts(facts: readonly ToctouFact[]): ToctouFact[] {
