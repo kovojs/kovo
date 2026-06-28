@@ -27,6 +27,7 @@ import {
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
 import { createShopDb, type ShopDb } from './db.js';
+import { cartQuery, orderHistoryQuery, productsQuery } from './queries.js';
 
 // Tutorial step 07: the whole behavior surface is checkable without a
 // browser — kovo check over the app graph, kovo explain as the queryable
@@ -161,11 +162,11 @@ describe('tutorial step 07 — testing & verification', () => {
   // /snippet
 
   // snippet:kovo-explain-test
-  it('explains the cart/add mutation as a stable, diffable artifact', () => {
+  it('explains the addToCart mutation as a stable, diffable artifact', () => {
     const explanation = kovoExplain(shopGraph, {
       kind: 'mutation',
       optimistic: true,
-      target: 'cart/add',
+      target: addToCart.key,
     });
 
     expect(explanation.exitCode).toBe(0);
@@ -183,15 +184,15 @@ describe('tutorial step 07 — testing & verification', () => {
   // /snippet
 
   // snippet:intent-test
-  it('answers "what updates when cart/add commits" mechanically', () => {
-    const mutationExplain = kovoExplain(shopGraph, { kind: 'mutation', target: 'cart/add' });
+  it('answers "what updates when addToCart commits" mechanically', () => {
+    const mutationExplain = kovoExplain(shopGraph, { kind: 'mutation', target: addToCart.key });
     const pageExplain = kovoExplain(shopGraph, { kind: 'page', target: '/' });
     const pageQueries = explainList(explainLine(pageExplain.output, 'queries: '));
 
     expect(pageQueries).toEqual(['cart', 'products', 'orderHistory']);
 
     // Set operations over printed graphs: every query this page renders is
-    // updated by cart/add, and each names its consuming component.
+    // updated by addToCart, and each names its consuming component.
     const updates = explainLine(mutationExplain.output, 'updates: ');
     for (const query of pageQueries) {
       const queryExplain = kovoExplain(shopGraph, { kind: 'query', target: query });
@@ -200,7 +201,7 @@ describe('tutorial step 07 — testing & verification', () => {
       expect(updates).toContain(`${query}->`);
       expect(consumers.some((consumer) => consumer.startsWith('component:'))).toBe(true);
       expect(explainList(explainLine(queryExplain.output, 'invalidated-by: '))).toContain(
-        'cart/add',
+        addToCart.key,
       );
     }
   });
@@ -251,7 +252,7 @@ describe('tutorial step 07 — testing & verification', () => {
         { domain: 'product', input: { productId: 'p1', quantity: 2 }, keys: ['p1'] },
       ],
       ok: true,
-      rerunQueries: ['cart', 'products', 'orderHistory'],
+      rerunQueries: [cartQuery.key, productsQuery.key, orderHistoryQuery.key],
     });
     // Observed writes ⊆ declared touches — the SPEC.md §11.2 invariant.
     expect(harness.verificationDiagnostics()).toEqual([]);
@@ -276,11 +277,11 @@ describe('tutorial step 07 — testing & verification', () => {
     const compareStrings = (left: string, right: string) => left.localeCompare(right);
     const commerceGraph = readTempCommerceGraph() as TutorialGraphComparison;
     const commerceCartAdd = commerceGraph.mutations.find((entry) => entry.key === 'cart/add');
-    const shopCartAdd = shopGraph.mutations.find((entry) => entry.key === 'cart/add');
+    const shopCartAdd = shopGraph.mutations.find((entry) => entry.key === addToCart.key);
 
-    // Same mutation key — and therefore the same named POST: /_m/cart/add.
-    expect(addToCart.key).toBe('cart/add');
-    expect(renderShopPage()).toContain('action="/_m/cart/add"');
+    // The tutorial now lets the compiler derive the mutation key from the
+    // exported binding and module path; the no-JS form action follows that key.
+    expect(renderShopPage()).toContain(`action="/_m/${addToCart.key}"`);
     expect(renderShopPage()).toContain('name="kovo-form-key" value="p1"');
 
     // Same input field vocabulary and write set.
@@ -300,15 +301,21 @@ describe('tutorial step 07 — testing & verification', () => {
       orderHistory: 'orderHistory',
       products: 'productGrid',
     };
+    const mutationKeyMap: Record<string, string> = {
+      [addToCart.key]: 'cart/add',
+    };
     const pairKey = (entry: { mutation: string; query: string }) =>
       `${entry.mutation} ${entry.query}`;
     const shopPairs = shopGraph.optimistic.map((entry) =>
-      pairKey({ mutation: entry.mutation, query: queryNameMap[entry.query] ?? entry.query }),
+      pairKey({
+        mutation: mutationKeyMap[entry.mutation] ?? entry.mutation,
+        query: queryNameMap[entry.query] ?? entry.query,
+      }),
     );
     const commercePairs = commerceGraph.optimistic
       .filter((entry) => entry.mutation === 'cart/add')
       .map(pairKey);
-    // Both apps cover exactly the same three cart/add (mutation × query) pairs.
+    // Both apps cover exactly the same three normalized (mutation x query) pairs.
     expect([...shopPairs].sort(compareStrings)).toEqual([...commercePairs].sort(compareStrings));
     expect(shopPairs).toHaveLength(3);
     // No pair is UNHANDLED on either side (commerce derived, shop hand-written/await).
@@ -323,11 +330,11 @@ describe('tutorial step 07 — testing & verification', () => {
         'Kovo-Fragment': 'true',
         'Kovo-Live-Targets':
           'cart-badge#components/cart-badge/cart-badge:{}; product-list#components/product-list/product-list:{}; order-history#components/order-history/order-history:{}',
-        'Kovo-Targets': 'cart-badge=cart; product-list=products; order-history=orderHistory',
+        'Kovo-Targets': `cart-badge=${cartQuery.key}; product-list=${productsQuery.key}; order-history=${orderHistoryQuery.key}`,
       },
     );
     expect(success.headers['Content-Type']).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
-    expect(success.body).toContain('<kovo-query name="cart">{"count":2}</kovo-query>');
+    expect(success.body).toContain(`<kovo-query name="${cartQuery.key}">{"count":2}</kovo-query>`);
     expect(success.body).toContain('<kovo-fragment target="order-history">');
     expect(success.body).toContain('kovo-key="order-1"');
     expect(success.headers['Kovo-Changes']).toBe(

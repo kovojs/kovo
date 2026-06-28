@@ -19,7 +19,7 @@ import {
 import { createShopDb } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
 import { ProductList } from './components/product-list.js';
-import { loadCart, loadProducts } from './queries.js';
+import { cartQuery, loadCart, loadProducts, productsQuery } from './queries.js';
 
 // Tutorial step 06: <kovo-defer> streams the product list out of order inside
 // one response, reusing the mutation wire's fragment/query vocabulary
@@ -86,7 +86,7 @@ function renderShopPageDeferredStream(db = createShopDb(), request?: ShopRequest
             target: 'product-list',
           },
         ],
-        queries: [{ name: 'products', value: products }],
+        queries: [{ name: productsQuery.key, value: products }],
       },
     ],
     closeHtml: '</main></body></html>',
@@ -136,7 +136,7 @@ describe('tutorial step 06 — streaming & defer', () => {
   it('guarantees deferred query JSON arrives before or with its consumers', () => {
     const response = renderShopPageDeferredStream(createShopDb());
 
-    const queryIndex = response.body.indexOf('<kovo-query name="products">');
+    const queryIndex = response.body.indexOf(`<kovo-query name="${productsQuery.key}">`);
     const fragmentIndex = response.body.indexOf('<kovo-fragment target="product-list">');
     expect(queryIndex).toBeGreaterThan(-1);
     expect(queryIndex).toBeLessThan(fragmentIndex);
@@ -152,11 +152,11 @@ describe('tutorial step 06 — streaming & defer', () => {
         'Kovo-Fragment': 'true',
         'Kovo-Live-Targets':
           'cart-badge#components/cart-badge/cart-badge:{}; product-list#components/product-list/product-list:{}',
-        'Kovo-Targets': 'cart-badge=cart; product-list=products',
+        'Kovo-Targets': `cart-badge=${cartQuery.key}; product-list=${productsQuery.key}`,
       },
     );
 
     expect(response.status).toBe(200);
-    expect(response.body).toContain('<kovo-query name="cart">{"count":1}</kovo-query>');
+    expect(response.body).toContain(`<kovo-query name="${cartQuery.key}">{"count":1}</kovo-query>`);
   });
 });

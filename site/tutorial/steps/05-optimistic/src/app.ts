@@ -1,12 +1,19 @@
 import { form, type FormInput } from '@kovojs/core';
-import type { OptimisticPlan } from '@kovojs/browser';
+import type { OptimisticFor } from '@kovojs/browser';
 import { mutation, route, s, type MutationFail } from '@kovojs/server';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
 import * as productListComponent from './components/product-list.js';
-import { cartQuery, loadCart, loadProducts, productsQuery } from './queries.js';
+import {
+  cartQuery,
+  loadCart,
+  loadProducts,
+  productsQuery,
+  type CartResult,
+  type ProductsResult,
+} from './queries.js';
 
 // Tutorial step 05 (chapter 5): the mutation declares what it touches, the
 // framework derives which queries to re-run (SPEC.md sections 10.3, 11.1),
@@ -38,8 +45,6 @@ export const shopCsrf = {
 };
 
 // snippet:form-value
-export const addToCartForm = form('cart/add');
-export type AddToCartInput = FormInput<typeof addToCartForm>;
 // /snippet
 
 // snippet:touches
@@ -65,7 +70,7 @@ export const addToCartTouches = [
 ] as const;
 // /snippet
 
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   csrf: shopCsrf,
   input: s.object({
     productId: s.string(),
@@ -116,7 +121,22 @@ export const addToCart = mutation('cart/add', {
   },
 });
 
-export const addToCartOptimistic = optimisticPlan<AddToCartInput>(addToCart);
+// snippet:form-value
+export const addToCartForm = form(addToCart);
+export type AddToCartInput = FormInput<typeof addToCartForm>;
+// /snippet
+
+export const addToCartOptimistic = {
+  queue: 'cart',
+  transforms: {
+    cart(current: CartResult | undefined, input: AddToCartInput) {
+      return {
+        count: (current?.count ?? 0) + input.quantity,
+      };
+    },
+    products: 'await-fragment',
+  },
+} satisfies OptimisticFor<typeof addToCartForm, { cart: CartResult; products: ProductsResult }>;
 
 export function renderShopPage(
   db: ShopDb = createShopDb(),
@@ -144,14 +164,4 @@ function tutorialDeploymentSecret(envName: string, fallback: string): string {
     throw new Error(`${envName} must be set to a deployment-specific secret in production.`);
   }
   return fallback;
-}
-
-function optimisticPlan<Input>(definition: {
-  optimistic?: Record<string, unknown>;
-  queue?: string;
-}): OptimisticPlan<Input> {
-  return {
-    ...(definition.queue ? { queue: definition.queue } : {}),
-    transforms: (definition.optimistic ?? {}) as OptimisticPlan<Input>['transforms'],
-  };
 }

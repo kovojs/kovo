@@ -23,6 +23,7 @@ import {
 } from './app.js';
 import { CartBadge } from './components/cart-badge.js';
 import { createShopDb } from './db.js';
+import { cartQuery, productsQuery } from './queries.js';
 
 // Tutorial step 05: invalidation is derived from declared touches, server
 // truth rides the same wire as fragments, and every optimistic prediction is
@@ -179,15 +180,15 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
         'Kovo-Fragment': 'true',
         'Kovo-Live-Targets':
           'cart-badge#components/cart-badge/cart-badge:{}; product-list#components/product-list/product-list:{}',
-        'Kovo-Targets': 'cart-badge=cart; product-list=products',
+        'Kovo-Targets': `cart-badge=${cartQuery.key}; product-list=${productsQuery.key}`,
       },
     );
 
     expect(response.status).toBe(200);
     // Server truth for every invalidated query, as readable chunks: the
     // loader replaces each value and runs its update plan (SPEC.md §9.1).
-    expect(response.body).toContain('<kovo-query name="cart">{"count":2}</kovo-query>');
-    expect(response.body).toContain('<kovo-query name="products">');
+    expect(response.body).toContain(`<kovo-query name="${cartQuery.key}">{"count":2}</kovo-query>`);
+    expect(response.body).toContain(`<kovo-query name="${productsQuery.key}">`);
     expect(response.body).toContain('<kovo-fragment target="cart-badge">');
     expect(response.body).toContain('<kovo-fragment target="product-list">');
     // The sanitized write summary: domains and keys, never input values.

@@ -20,6 +20,7 @@ import {
 } from './app.js';
 import { CartBadge } from './components/cart-badge.js';
 import { createShopDb } from './db.js';
+import { cartQuery, productsQuery } from './queries.js';
 
 // Tutorial step 04: one mutation endpoint, two response modes:
 // POST-redirect-GET without JavaScript, fragment wire with it.
@@ -124,8 +125,11 @@ describe('tutorial step 04 — mutations & forms', () => {
   it('renders the add-to-cart form, CSRF token included, as the page output', () => {
     const request = shopRequest();
     const html = renderShopPage(request.db, undefined, request);
+    const action = `/_m/${addToCart.key}`;
 
-    expect(html).toContain('enhance method="post" action="/_m/cart/add" data-mutation="cart/add"');
+    expect(html).toContain(
+      `enhance method="post" action="${action}" data-mutation="${addToCart.key}"`,
+    );
     expect(html).toContain('name="kovo-csrf"');
     expect(html).toContain('name="productId" value="p1"');
     expect(html).toContain('name="quantity" type="number" min="1" max="5" value="1"');
@@ -166,7 +170,7 @@ describe('tutorial step 04 — mutations & forms', () => {
 
     expect(response.status).toBe(422);
     expect(response.headers['Content-Type']).toBe('text/html; charset=utf-8');
-    expect(response.body).toContain('enhance method="post" action="/_m/cart/add"');
+    expect(response.body).toContain(`enhance method="post" action="/_m/${addToCart.key}"`);
     expect(response.body).toContain('data-error-code="OUT_OF_STOCK"');
     expect(response.body).toContain('Only 2 available.');
     expect(request.db.cartItems).toEqual([]); // fail() rolled the transaction back
@@ -183,7 +187,7 @@ describe('tutorial step 04 — mutations & forms', () => {
         'Kovo-Fragment': 'true',
         'Kovo-Live-Targets':
           'cart-badge#components/cart-badge/cart-badge:{}; product-list#components/product-list/product-list:{}',
-        'Kovo-Targets': 'cart-badge=cart; product-list=products',
+        'Kovo-Targets': `cart-badge=${cartQuery.key}; product-list=${productsQuery.key}`,
       },
     );
 

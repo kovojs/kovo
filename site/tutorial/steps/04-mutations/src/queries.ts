@@ -29,12 +29,12 @@ function dbFrom(context?: QueryLoadContext<ShopRequest>): ShopDb {
   return context?.request?.db ?? createShopDb();
 }
 
-export const cartQuery = query('cart', {
+export const cartQuery = query({
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadCart(dbFrom(context)),
   reads: [cart],
 });
 
-export const productsQuery = query('products', {
+export const productsQuery = query({
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadProducts(dbFrom(context)),
   reads: [product],
 });

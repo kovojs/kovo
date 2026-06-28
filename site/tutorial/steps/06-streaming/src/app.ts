@@ -6,7 +6,14 @@ import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
 import * as productListComponent from './components/product-list.js';
-import { cartQuery, loadCart, loadProducts, productsQuery } from './queries.js';
+import {
+  cartQuery,
+  loadCart,
+  loadProducts,
+  productsQuery,
+  type CartResult,
+  type ProductsResult,
+} from './queries.js';
 
 // Tutorial step 06 (chapter 6), carried from step 05: the mutation declares what it touches, the
 // framework derives which queries to re-run (SPEC.md sections 10.3, 11.1),
@@ -37,8 +44,6 @@ export const shopCsrf = {
 };
 
 // snippet:form-value
-export const addToCartForm = form('cart/add');
-export type AddToCartInput = FormInput<typeof addToCartForm>;
 // /snippet
 
 // snippet:touches
@@ -65,7 +70,7 @@ export const addToCartTouches = [
 // /snippet
 
 // snippet:add-to-cart
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   csrf: shopCsrf,
   input: s.object({
     productId: s.string(),
@@ -101,6 +106,11 @@ export const addToCart = mutation('cart/add', {
 });
 // /snippet
 
+// snippet:form-value
+export const addToCartForm = form(addToCart);
+export type AddToCartInput = FormInput<typeof addToCartForm>;
+// /snippet
+
 // snippet:optimistic
 // SPEC.md section 10.4: optimism is keyed to queries, never islands. The
 // cart count is predictable from the input alone — a pure transform. The
@@ -111,14 +121,14 @@ export const addToCart = mutation('cart/add', {
 export const addToCartOptimistic = {
   queue: 'cart',
   transforms: {
-    cart(current, input) {
+    cart(current: CartResult | undefined, input: AddToCartInput) {
       return {
         count: (current?.count ?? 0) + input.quantity,
       };
     },
     products: 'await-fragment',
   },
-} satisfies OptimisticFor<typeof addToCartForm>;
+} satisfies OptimisticFor<typeof addToCartForm, { cart: CartResult; products: ProductsResult }>;
 // /snippet
 
 export function renderShopPage(

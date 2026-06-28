@@ -29,12 +29,12 @@ export function loadProducts(db: ShopDb): ProductsResult {
 // /snippet
 
 // snippet:queries
-export const cartQuery = query('cart', {
+export const cartQuery = query({
   load: (_input: unknown) => loadCart(createShopDb()),
   reads: [cart],
 });
 
-export const productsQuery = query('products', {
+export const productsQuery = query({
   load: (_input: unknown) => loadProducts(createShopDb()),
   reads: [product],
 });

@@ -43,7 +43,7 @@ export const addToCartInput = s.object({
 // /snippet
 
 // snippet:add-to-cart
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   csrf: shopCsrf,
   input: addToCartInput,
   errors: {

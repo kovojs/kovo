@@ -14,6 +14,9 @@ import {
   loadProducts,
   orderHistoryQuery,
   productsQuery,
+  type CartResult,
+  type OrderHistoryResult,
+  type ProductsResult,
 } from './queries.js';
 
 // Tutorial step 07 (chapter 7): the finished app is commerce-shaped — three
@@ -57,9 +60,6 @@ export const shopCsrf = {
   },
 };
 
-export const addToCartForm = form('cart/add');
-export type AddToCartInput = FormInput<typeof addToCartForm>;
-
 export const addToCartTouches = [
   {
     domain: 'cart',
@@ -91,7 +91,7 @@ export const shopTouchGraph = {
 } as const;
 
 // snippet:add-to-cart
-export const addToCart = mutation('cart/add', {
+export const addToCart = mutation({
   csrf: shopCsrf,
   input: s.object({
     productId: s.string(),
@@ -139,10 +139,13 @@ export const addToCart = mutation('cart/add', {
 });
 // /snippet
 
+export const addToCartForm = form(addToCart);
+export type AddToCartInput = FormInput<typeof addToCartForm>;
+
 export const addToCartOptimistic = {
   queue: 'cart',
   transforms: {
-    cart(current, input) {
+    cart(current: CartResult | undefined, input: AddToCartInput) {
       return {
         count: (current?.count ?? 0) + input.quantity,
       };
@@ -150,7 +153,14 @@ export const addToCartOptimistic = {
     orderHistory: 'await-fragment',
     products: 'await-fragment',
   },
-} satisfies OptimisticFor<typeof addToCartForm>;
+} satisfies OptimisticFor<
+  typeof addToCartForm,
+  {
+    cart: CartResult;
+    orderHistory: OrderHistoryResult;
+    products: ProductsResult;
+  }
+>;
 
 // snippet:graph
 // The app graph: every fact kovo check and kovo explain reason over. In the
@@ -168,15 +178,15 @@ export const shopGraph = {
       guards: ['authed', 'rateLimit:session'],
       invalidates: ['cart', 'product', 'order'],
       inputFields: ['productId', 'quantity'],
-      key: 'cart/add',
+      key: addToCart.key,
       session: 'shopSession',
       writes: ['cart', 'product', 'order'],
     },
   ],
   optimistic: [
-    { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-    { mutation: 'cart/add', query: 'products', status: 'await-fragment' },
-    { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+    { mutation: addToCart.key, query: 'cart', status: 'hand-written' },
+    { mutation: addToCart.key, query: 'products', status: 'await-fragment' },
+    { mutation: addToCart.key, query: 'orderHistory', status: 'await-fragment' },
   ],
   pages: [
     {

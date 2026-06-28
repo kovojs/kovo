@@ -15,11 +15,11 @@ declare module '@kovojs/core' {
   }
 
   interface MutationRegistry {
-    'cart/add': typeof import('./app.js').addToCart;
+    'app/add-to-cart': typeof import('./app.js').addToCart;
   }
 
   interface InvalidationSets {
-    'cart/add': 'cart' | 'products';
+    'app/add-to-cart': 'cart' | 'products';
   }
 }
 // /snippet

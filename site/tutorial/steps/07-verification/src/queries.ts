@@ -44,17 +44,17 @@ function dbFrom(context?: QueryLoadContext<ShopRequest>): ShopDb {
 }
 
 // snippet:queries
-export const cartQuery = query('cart', {
+export const cartQuery = query({
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadCart(dbFrom(context)),
   reads: [cart],
 });
 
-export const productsQuery = query('products', {
+export const productsQuery = query({
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadProducts(dbFrom(context)),
   reads: [product],
 });
 
-export const orderHistoryQuery = query('orderHistory', {
+export const orderHistoryQuery = query({
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) =>
     loadOrderHistory(dbFrom(context)),
   reads: [order],
