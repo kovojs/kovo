@@ -20,7 +20,7 @@ The standalone production build passed. A fresh `pnpm run check` and a fresh
 
 ### A. Starter Endpoint Posture
 
-- [ ] **Fresh starter endpoint-posture test fails before a production build and violates the starter sound-subset gate.** (high, template/dev-tooling; found by `base-pristine`)
+- [x] **Fresh starter endpoint-posture test fails before a production build and violates the starter sound-subset gate.** (high, template/dev-tooling; found by `base-pristine`)
   - Observed behavior: a newly scaffolded linked app fails `pnpm run check` at
     `check:sound-subset` because generated `src/endpoint-posture.test.ts` uses
     an unchecked cast; `pnpm run test` also fails on a fresh tree because the
@@ -46,6 +46,10 @@ The standalone production build passed. A fresh `pnpm run check` and a fresh
   - Acceptance: a fresh linked scaffold passes `pnpm run check`, `pnpm run test`,
     and `pnpm run build:prod` in any normal first-run order, while endpoint
     posture still reconciles observed facts against declared graph endpoints.
+  - Evidence: 2026-06-28 in `/Users/mini/kovo-dogfood-20260628e/base-fixed`,
+    `pnpm run test`, `pnpm run check`, and `pnpm run build:prod` passed in
+    first-run order after the generated endpoint-posture test became graph-optional
+    and cast-free.
 
 ## Refuted / Not Carried Forward
 
@@ -58,3 +62,8 @@ The standalone production build passed. A fresh `pnpm run check` and a fresh
   `pnpm run check` failed at generated sound-subset, fresh `pnpm run test`
   failed before build due missing `dist/.kovo/graph.json`, `pnpm run build:prod`
   passed, and `pnpm run test` passed after the build.
+- 2026-06-28 in `/Users/mini/kovo-papercuts9-20260628-104038`:
+  `pnpm exec vitest run packages/create-kovo/src/index.test.ts`,
+  `git diff --check`, and `pnpm run check:vp` passed.
+- 2026-06-28 in `/Users/mini/kovo-dogfood-20260628e/base-fixed`: `pnpm run test`,
+  `pnpm run check`, and `pnpm run build:prod` passed in first-run order.
