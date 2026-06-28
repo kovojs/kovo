@@ -96,7 +96,7 @@ src/components/ui`, then `pnpm run check` reports `package.json`
 
 ### B. Query / Streaming Build Paths
 
-- [ ] **Aliased object-form non-Drizzle query output schemas do not feed binding validation.** (med, framework; found by `query-stream-export-recheck`)
+- [x] **Aliased object-form non-Drizzle query output schemas do not feed binding validation.** (med, framework; found by `query-stream-export-recheck`)
   - Observed behavior: `import { query as defineQuery }` and
     `defineQuery.elevated(...)` failed `build:prod` with KV302 for valid paths
     declared by `output: s.object(...)`: `leads.summary.newest`,
@@ -113,8 +113,12 @@ src/components/ui`, then `pnpm run check` reports `package.json`
     changed back to unaliased `query`.
   - Acceptance: output-schema fact extraction resolves public `query` import
     aliases, with a focused `query as defineQuery` test.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/vite-data-plane-gate.test.ts packages/drizzle/src/sql-safety-static.test.ts`
+    passed with output-schema fact coverage for `query as defineQuery` and
+    namespace/elevated query callees.
 
-- [ ] **Streaming mutation `stream.query(...)` is misclassified as a SQL sink.** (med, framework; found by `query-stream-export-recheck`)
+- [x] **Streaming mutation `stream.query(...)` is misclassified as a SQL sink.** (med, framework; found by `query-stream-export-recheck`)
   - Observed behavior: `kovo build` failed with KV422 for
     `yield stream.query({ name, value })`, reporting `query() receives
 unknown-provenance SQL text`.
@@ -129,6 +133,10 @@ unknown-provenance SQL text`.
     removed.
   - Acceptance: KV422 continues to catch real database `.query(...)` calls while
     excluding Kovo `stream.query(...)`, with focused static-analysis coverage.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/server/src/vite-data-plane-gate.test.ts packages/drizzle/src/sql-safety-static.test.ts`
+    passed with `stream.query(...)` excluded from KV422 while `db.query(...)`
+    remains flagged.
 
 ### C. Static Export Diagnostics
 
