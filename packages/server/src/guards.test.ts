@@ -7,6 +7,7 @@ import {
   stampStaticSql,
   stampTrustedSql,
 } from '@kovojs/core/internal/sql-safety';
+import { csrfToken } from './csrf.js';
 import {
   explainGuard,
   guards,
@@ -733,6 +734,108 @@ describe('server guard and session primitives', () => {
     });
   });
 
+  it('routes stale session-bound enhanced mutation CSRF failures through reauth', async () => {
+    type Request = { session?: { id?: string; user?: { id: string } | null } | null };
+    const csrf = {
+      secret: 'stale-enhanced-csrf-secret-0123456789abcdef',
+      sessionId: (request: Request) => request.session?.id,
+    };
+    const guarded = mutation('cart/add', {
+      csrf,
+      guard: guards.authed<Request>(),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+    const staleToken = csrfToken({ session: { id: 's1', user: { id: 'u1' } } }, csrf, {
+      audience: 'cart/add',
+    });
+
+    await expect(
+      renderMutationResponse(guarded, {
+        currentUrl: '/cart',
+        rawInput: { 'kovo-csrf': staleToken, productId: 'p1' },
+        request: { session: null },
+      }),
+    ).resolves.toEqual({
+      body: '',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Reauth': '/login?next=%2Fcart',
+        Vary: 'Cookie',
+      },
+      status: 401,
+    });
+  });
+
+  it('routes stale session-bound no-JS mutation CSRF failures through login redirect', async () => {
+    type Request = { session?: { id?: string; user?: { id: string } | null } | null };
+    const csrf = {
+      secret: 'stale-nojs-csrf-secret-0123456789abcdef0123',
+      sessionId: (request: Request) => request.session?.id,
+    };
+    const guarded = mutation('cart/add', {
+      csrf,
+      guard: guards.authed<Request>(),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+    const staleToken = csrfToken({ session: { id: 's1', user: { id: 'u1' } } }, csrf, {
+      audience: 'cart/add',
+    });
+
+    await expect(
+      renderNoJsMutationResponse(guarded, {
+        currentUrl: '/cart',
+        rawInput: { 'kovo-csrf': staleToken, productId: 'p1' },
+        redirectTo: '/cart',
+        request: { session: null },
+      }),
+    ).resolves.toEqual({
+      body: '',
+      headers: {
+        'Cache-Control': 'no-store',
+        Location: '/login?next=%2Fcart',
+      },
+      status: 303,
+    });
+  });
+
+  it('stamps no-JS mutation CSRF failure pages with the document security floor', async () => {
+    const guarded = mutation('cart/add', {
+      csrf: {
+        secret: 'nojs-failure-floor-csrf-secret-0123456789abc',
+        sessionId: () => 's1',
+      },
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    const response = await renderNoJsMutationResponse(guarded, {
+      rawInput: { productId: 'p1' },
+      redirectTo: '/cart',
+      request: { session: { id: 's1' } },
+    });
+
+    expect(response).toMatchObject({
+      body: '<!doctype html><html><body><output role="alert" data-error-code="CSRF">{}</output></body></html>',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff',
+        Vary: 'Cookie',
+      },
+      status: 422,
+    });
+  });
+
   it('sanitizes next before invoking custom onUnauthenticated handlers', async () => {
     await expect(
       renderHttpGuardFailureResponse(
@@ -801,19 +904,25 @@ describe('server guard and session primitives', () => {
         request,
       }),
     ).resolves.toMatchObject({ status: 303 });
-    await expect(
-      renderNoJsMutationResponse(guarded, {
-        rawInput: { productId: 'p1' },
-        redirectTo: '/cart',
-        request,
-      }),
-    ).resolves.toEqual({
+    const rateLimited = await renderNoJsMutationResponse(guarded, {
+      rawInput: { productId: 'p1' },
+      redirectTo: '/cart',
+      request,
+    });
+    expect(rateLimited).toMatchObject({
       body: '<!doctype html><html><body><output role="alert" data-error-code="RATE_LIMITED">{}</output></body></html>',
       headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
         'Content-Type': 'text/html; charset=utf-8',
         'Retry-After': '60',
+        'X-Content-Type-Options': 'nosniff',
+        Vary: 'Cookie',
       },
       status: 429,
+    });
+    expect(rateLimited.headers).toMatchObject({
+      'Retry-After': '60',
     });
   });
 });
