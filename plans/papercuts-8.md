@@ -23,7 +23,7 @@ separately in `plans/bugz-9.md`.
 
 ### A. UI Copy-In / Registry
 
-- [ ] **`kovo add` copies UI source that cannot pass the generated app check gate.** (high, dev-tooling/framework; found by `registry-ui-catalog`)
+- [x] **`kovo add` copies UI source that cannot pass the generated app check gate.** (high, dev-tooling/framework; found by `registry-ui-catalog`)
   - Observed behavior: running `kovo add` for
     button/card/command/combobox/select/table/dialog into `src/components/ui`
     succeeds, but the copied files are not clean under
@@ -45,8 +45,9 @@ separately in `plans/bugz-9.md`.
   - Acceptance: copied UI components are formatted and sound-subset-compatible
     for generated apps, or copied sources are excluded by an explicit, reviewed
     generated gate policy.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/webhook.test.ts packages/ui/src/copy-in.test.ts` passed with vendored UI sound-subset coverage.
 
-- [ ] **`kovo add` becomes non-idempotent after the app formatter touches copied source.** (med, dev-tooling/framework; found by `registry-ui-catalog`)
+- [x] **`kovo add` becomes non-idempotent after the app formatter touches copied source.** (med, dev-tooling/framework; found by `registry-ui-catalog`)
   - Observed behavior: after formatting copied `button.tsx`, rerunning
     `kovo add button --out src/components/ui` fails with `reason=would-overwrite`
     instead of `SKIP`.
@@ -63,6 +64,7 @@ separately in `plans/bugz-9.md`.
   - Acceptance: `kovo add` idempotency is based on the same normalized source
     shape it writes/checks, or it has a safe upgrade/diff mode for formatted
     copies.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/webhook.test.ts packages/ui/src/copy-in.test.ts` passed with formatter-only `kovo add` idempotency coverage.
 
 - [ ] **Dev SSR renders nested copied Card children as `[object Promise]` while production is clean.** (med, framework/dev-tooling; found by `registry-ui-catalog`)
   - Observed behavior: a public `/catalog` route using copied
@@ -247,7 +249,7 @@ separately in `plans/bugz-9.md`.
 
 ### E. Endpoint / Webhook Tooling
 
-- [ ] **Endpoint posture CI can pass while newly declared endpoints are completely unobserved.** (med, template/dev-tooling; found by `endpoints-webhooks-agent` and `storage-multi-capability`)
+- [x] **Endpoint posture CI can pass while newly declared endpoints are completely unobserved.** (med, template/dev-tooling; found by `endpoints-webhooks-agent` and `storage-multi-capability`)
   - Observed behavior: after adding raw endpoints, webhooks, and storage
     endpoints, generated `pnpm run check` still passed with
     `.kovo/endpoint-posture.json` containing only `GET /api/health`.
@@ -265,8 +267,9 @@ separately in `plans/bugz-9.md`.
   - Acceptance: generated posture checks enumerate declared app endpoints or
     `kovo check endpoint-posture` reports declared endpoints with missing
     observations.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/webhook.test.ts packages/ui/src/copy-in.test.ts` passed with declared-endpoint posture reconciliation coverage.
 
-- [ ] **Default-CSRF `text/plain` endpoints have no valid token carrier and fail with bare CSRF.** (low, framework/docs; found by `endpoints-webhooks-agent`)
+- [x] **Default-CSRF `text/plain` endpoints have no valid token carrier and fail with bare CSRF.** (low, framework/docs; found by `endpoints-webhooks-agent`)
   - Observed behavior: a default-CSRF `endpoint()` with text body posture returned
     422 even when the request carried same-origin `Origin`, the anonymous CSRF
     cookie, and a valid token string in the text body; JSON/form controls passed.
@@ -281,8 +284,9 @@ separately in `plans/bugz-9.md`.
     `HTTP/1.1 422 Unprocessable Entity` body `CSRF`; JSON control returned 200.
   - Acceptance: document the supported CSRF carriers for endpoint body modes or
     add a safe header/query token carrier with clear diagnostics.
+  - Evidence: 2026-06-28 `site/content/guides/endpoints-webhooks.md` documents that default-CSRF raw endpoints accept form/JSON token carriers and directs text/plain/raw protocols to verifier-backed `csrf: false` endpoints.
 
-- [ ] **Machine-ingress endpoint audit drops `auth: none` justification from the endpoint row.** (low, dev-tooling; found by `endpoints-webhooks-agent`)
+- [x] **Machine-ingress endpoint audit drops `auth: none` justification from the endpoint row.** (low, dev-tooling; found by `endpoints-webhooks-agent`)
   - Observed behavior: an `auth: none` endpoint with justification
     `public uptime probe` prints as `auth=none` in `kovo explain --endpoints`; the
     justification appears only in `kovo explain --access`.
@@ -297,8 +301,9 @@ separately in `plans/bugz-9.md`.
     the justification.
   - Acceptance: endpoint explain includes auth justifications inline for
     unauthenticated/custom verifier decisions.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/webhook.test.ts packages/ui/src/copy-in.test.ts` passed with `auth=none:<justification>` endpoint explain coverage.
 
-- [ ] **Webhook guide example destructures a nonexistent `db` from handler context.** (low, docs; found by `endpoints-webhooks-agent`)
+- [x] **Webhook guide example destructures a nonexistent `db` from handler context.** (low, docs; found by `endpoints-webhooks-agent`)
   - Observed behavior: the endpoints/webhooks guide shows
     `async handler(event, { db })`, but `WebhookHandlerContext` exposes `tx`,
     `rawBody`, `request`, `fail`, and `recordChange`, not `db`.
@@ -310,6 +315,7 @@ separately in `plans/bugz-9.md`.
     `TS2339: Property 'db' does not exist on type 'WebhookHandlerContext<...>'`.
   - Acceptance: guide examples use the current webhook context shape and mention
     `tx` / `recordChange` explicitly.
+  - Evidence: 2026-06-28 `site/content/guides/endpoints-webhooks.md` uses `tx` / `recordChange`, declares `writes`, and no longer destructures `db`.
 
 ### F. Auth UX
 
@@ -368,3 +374,7 @@ separately in `plans/bugz-9.md`.
 - 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`: auth
   focused tests plus `git diff --check` and `pnpm run check:vp` passed after the
   stale-session reauth implementation merge.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`: CLI/template/UI
+  focused tests, `pnpm run check:api-surface`, `git diff --check`, and
+  `pnpm run check:vp` passed after the endpoint tooling and UI copy-in
+  implementation merge.
