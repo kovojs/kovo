@@ -41,6 +41,16 @@ describe('server jsx runtime', () => {
     await expect(asyncHtml(jsx(Badge, {}))).resolves.toBe('<cart-badge>3</cart-badge>');
   });
 
+  it('awaits async nested children before rendering function component wrappers', async () => {
+    const AsyncButton = async () => jsx('button', { children: 'Save' });
+    const Card = (props: { children?: unknown }) =>
+      jsx('section', { class: 'card', children: props.children as JsxChild });
+
+    await expect(asyncHtml(jsx(Card, { children: [jsx(AsyncButton, {})] }))).resolves.toBe(
+      '<section class="card"><button>Save</button></section>',
+    );
+  });
+
   it('renders boolean attributes bare and omits false, null, and undefined values', () => {
     expect(html(jsx('form', { enhance: true, children: '' }))).toBe('<form enhance></form>');
     expect(

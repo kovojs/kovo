@@ -66,7 +66,7 @@ separately in `plans/bugz-9.md`.
     copies.
   - Evidence: 2026-06-28 `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/webhook.test.ts packages/ui/src/copy-in.test.ts` passed with formatter-only `kovo add` idempotency coverage.
 
-- [ ] **Dev SSR renders nested copied Card children as `[object Promise]` while production is clean.** (med, framework/dev-tooling; found by `registry-ui-catalog`)
+- [x] **Dev SSR renders nested copied Card children as `[object Promise]` while production is clean.** (med, framework/dev-tooling; found by `registry-ui-catalog`)
   - Observed behavior: a public `/catalog` route using copied
     `<Card><Button /></Card>` and nested copied command/combobox/select parts
     renders literal `[object Promise]` in dev SSR; production node output renders
@@ -82,6 +82,7 @@ separately in `plans/bugz-9.md`.
     from the production node server after `pnpm run build:prod`.
   - Acceptance: dev SSR awaits or renders copied UI component children with the
     same semantics as the production compiler path.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/jsx-runtime.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/static-export-response.test.ts` passed with nested async function-component children rendering as HTML instead of `[object Promise]`.
 
 ### B. Streaming / Deferred
 
@@ -171,7 +172,7 @@ separately in `plans/bugz-9.md`.
 
 ### C. Query Shape / Bindings
 
-- [ ] **Non-Drizzle query `output` schemas do not feed query binding shape validation.** (med, framework; found by `streaming-deferred-mpa`)
+- [x] **Non-Drizzle query `output` schemas do not feed query binding shape validation.** (med, framework; found by `streaming-deferred-mpa`)
   - Observed behavior: a plain `query({ output: s.object(...) })` loads
     correctly, but bindings such as `status.summary` and `status.generatedAt`
     are rejected with KV302.
@@ -187,6 +188,7 @@ separately in `plans/bugz-9.md`.
     `status.summary` and `status.generatedAt`.
   - Acceptance: non-Drizzle query `output` schemas produce component query shape
     facts for binding validation.
+  - Evidence: 2026-06-28 `pnpm exec vitest run packages/server/src/vite-data-plane-gate.test.ts` passed with positive `status.summary` / `status.generatedAt` binding coverage and negative `status.missing` KV302 coverage.
 
 ### D. Storage / Capabilities
 
@@ -378,3 +380,10 @@ separately in `plans/bugz-9.md`.
   focused tests, `pnpm run check:api-surface`, `git diff --check`, and
   `pnpm run check:vp` passed after the endpoint tooling and UI copy-in
   implementation merge.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`:
+  `pnpm exec vitest run packages/server/src/vite-data-plane-gate.test.ts`,
+  `git diff --check`, and `pnpm run check:vp` passed after the query-shape
+  implementation merge.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`: JSX
+  runtime focused tests, `git diff --check`, and `pnpm run check:vp` passed after
+  the dev SSR nested-children fix.

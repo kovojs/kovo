@@ -571,6 +571,14 @@ function isRawHtmlAttribute(name: string): boolean {
 }
 
 function renderJsxChildren(children: JsxChild): MaybePromise<string> {
+  if (isPromiseLike(children)) return children.then((resolved) => renderJsxChildren(resolved));
+  if (Array.isArray(children)) {
+    const rendered = children.map((child) => renderJsxChildren(child));
+    if (rendered.some(isPromiseLike)) {
+      return Promise.all(rendered).then((parts) => parts.join(''));
+    }
+    return rendered.join('');
+  }
   return renderServerRenderable(children);
 }
 
