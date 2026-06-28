@@ -313,7 +313,7 @@ separately in `plans/bugz-9.md`.
 
 ### F. Auth UX
 
-- [ ] **Session-expired CSRF-protected mutation submits return 422 CSRF instead of the reauth flow.** (med, framework; found by `auth-session-cache`)
+- [x] **Session-expired CSRF-protected mutation submits return 422 CSRF instead of the reauth flow.** (med, framework; found by `auth-session-cache`)
   - Observed behavior: after rendering an authenticated add-contact form and then
     logging out, reusing that specific form token returned enhanced/no-JS 422 CSRF
     responses instead of SPEC §6.5's enhanced 401 `Kovo-Reauth` or no-JS 303 login
@@ -331,6 +331,7 @@ separately in `plans/bugz-9.md`.
   - Acceptance: stale session-bound form submits route through the unauthenticated
     mutation reauth behavior instead of surfacing a generic CSRF failure when the
     token belonged to the previous authenticated render.
+  - Evidence: 2026-06-28 `./node_modules/.bin/vitest run packages/server/src/guards.test.ts packages/server/src/route-query-guards.test.ts` passed with enhanced 401 `Kovo-Reauth` and no-JS 303 login redirect coverage for stale session-bound mutation CSRF.
 
 ## Refuted / Not Carried Forward
 
@@ -364,3 +365,6 @@ separately in `plans/bugz-9.md`.
 - 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`:
   storage and streaming focused suites plus `git diff --check` and
   `pnpm run check:vp` passed after the first two implementation merges.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`: auth
+  focused tests plus `git diff --check` and `pnpm run check:vp` passed after the
+  stale-session reauth implementation merge.

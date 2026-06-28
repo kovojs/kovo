@@ -20,7 +20,7 @@ security floor is materially false or missing; app-author friction is filed in
 
 ### A. Response Security Floors
 
-- [ ] **Route and no-JS mutation failure responses bypass the per-principal cache/security floor.** (high, security/soundness; found by `auth-session-cache`)
+- [x] **Route and no-JS mutation failure responses bypass the per-principal cache/security floor.** (high, security/soundness; found by `auth-session-cache`)
   - Observed behavior: anonymous guarded route redirects and route
     `guards.rateLimit` 429 responses ship only `Vary: Origin` plus minimal
     headers, and no-JS mutation failure pages ship no cache-control or
@@ -47,6 +47,7 @@ security floor is materially false or missing; app-author friction is filed in
   - Acceptance: all route and no-JS mutation non-OK HTML/auth/cache-sensitive
     responses are stamped with the same no-store, `Vary: Cookie`, and document
     security baseline as equivalent guarded documents and enhanced failures.
+  - Evidence: 2026-06-28 `./node_modules/.bin/vitest run packages/server/src/guards.test.ts packages/server/src/route-query-guards.test.ts` passed with route 429 and no-JS mutation failure security-floor coverage.
 
 ### B. Audit Proof Surface
 
@@ -95,3 +96,6 @@ security floor is materially false or missing; app-author friction is filed in
 - 2026-06-28 first-hand repros from the main agent confirmed the missing route
   non-OK cache/security headers and the webhook endpoint audit `writes=-`
   false negative.
+- 2026-06-28 in `/Users/mini/kovo-bugz9-papercuts8-20260628-101516`:
+  auth focused tests plus `git diff --check` and `pnpm run check:vp` passed after
+  the response-floor implementation merge.
