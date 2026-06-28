@@ -626,6 +626,15 @@ describe('kovo explain', () => {
             name: 'health',
             path: '/healthz',
           },
+          {
+            access: { kind: 'public', reason: 'public echo endpoint is CSRF checked' },
+            body: 'json',
+            cache: 'no-store',
+            csrf: 'checked',
+            method: 'POST',
+            name: 'echo',
+            path: '/api/echo-json',
+          },
         ],
       },
       { endpoints: true },
@@ -636,9 +645,10 @@ describe('kovo explain', () => {
       "kovo-explain/v1
       ENDPOINTS
       ENDPOINT app-shell/order-paid surface=webhook method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=1mb rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
+      ENDPOINT echo surface=endpoint method=POST path=/api/echo-json mount=exact auth=public:public echo endpoint is CSRF checked csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
       ENDPOINT health surface=endpoint method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
       ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
-      SUMMARY total=3
+      SUMMARY total=4
       "
     `);
   });

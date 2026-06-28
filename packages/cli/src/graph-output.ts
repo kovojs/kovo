@@ -2078,6 +2078,9 @@ function endpointAuth(endpoint: CoreGraph.EndpointExplain): string {
   if (endpoint.auth === 'none' && endpoint.authJustification) {
     return `none:${endpoint.authJustification}`;
   }
+  if (endpoint.auth === undefined && endpoint.access?.kind === 'public') {
+    return `public:${endpoint.access.reason}`;
+  }
   return endpoint.auth ?? list(endpoint.guards);
 }
 
