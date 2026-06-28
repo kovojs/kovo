@@ -64,7 +64,7 @@ export const CartBadge = component({
 
     expect(result.diagnostics).toEqual([]);
     expect(result.loweredSource).toContain(
-      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';",
+      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey, componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
     );
     expect(result.loweredSource).toContain(
       'export const cart = __kovoAssignDerivedQueryKey(query({',
@@ -74,6 +74,37 @@ export const CartBadge = component({
       'export const audit = __kovoAssignDerivedQueryKey(query.elevated({',
     );
     expect(result.loweredSource).toContain('"components/cart-badge/audit"');
+  });
+
+  it('merges live-target renderer imports into an existing wire named import', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/status-card.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { query } from '@kovojs/server';
+
+export const statusQuery = query({
+  load: () => ({ summary: 'ready' }),
+  reads: [],
+});
+
+export const StatusCard = component({
+  queries: { status: statusQuery },
+  render: ({ status }) => <status-card><span>{status.summary}</span></status-card>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
+    expect(result.loweredSource).toContain(
+      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey, componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
+    );
+    expect(result.loweredSource).not.toContain(
+      "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
+    );
+    expect(result.loweredSource).toContain(
+      'export const StatusCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({',
+    );
   });
 
   it('fails closed on malformed TSX before emitting artifacts', () => {
