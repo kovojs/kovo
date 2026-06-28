@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createRequire } from 'node:module';
 import { registerHooks } from 'node:module';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
@@ -540,7 +541,8 @@ interface CompilerQueryShapeFact {
 interface RuntimeQueryShapeFactLike {
   query: string;
   shape: unknown;
-  site: string;
+  source?: string;
+  site?: string;
 }
 
 interface RuntimeMutationTouchSiteLike {
@@ -704,26 +706,38 @@ async function collectCompilerQueryShapeFacts(
   if (files.length === 0) return [];
 
   const drizzle = await importKovoDrizzleStaticModule();
-  return compilerQueryShapeFacts(drizzle.extractQueryFactsFromProject({ files }));
+  const drizzleFacts = compilerQueryShapeFacts(drizzle.extractQueryFactsFromProject({ files }));
+  const drizzleQueries = new Set(drizzleFacts.map((fact) => fact.query));
+  const outputFacts = outputSchemaQueryShapeFacts(files).filter(
+    (fact) => !drizzleQueries.has(fact.query),
+  );
+  return compilerQueryShapeFacts([...drizzleFacts, ...outputFacts]);
 }
 
 function compilerQueryShapeFacts(
   queryFacts: readonly unknown[],
 ): readonly CompilerQueryShapeFact[] {
   return queryFacts
-    .filter((fact): fact is RuntimeQueryShapeFactLike & { shape: CompilerQueryShape } => {
-      const candidate = fact as RuntimeQueryShapeFactLike;
-      return (
-        typeof candidate.query === 'string' &&
-        typeof candidate.site === 'string' &&
-        isCompilerQueryShape(candidate.shape) &&
-        isSubstantiveCompilerQueryShape(candidate.shape)
-      );
-    })
+    .filter(
+      (
+        fact,
+      ): fact is RuntimeQueryShapeFactLike & { shape: CompilerQueryShape } & (
+          | { site: string }
+          | { source: string }
+        ) => {
+        const candidate = fact as RuntimeQueryShapeFactLike;
+        return (
+          typeof candidate.query === 'string' &&
+          (typeof candidate.site === 'string' || typeof candidate.source === 'string') &&
+          isCompilerQueryShape(candidate.shape) &&
+          isSubstantiveCompilerQueryShape(candidate.shape)
+        );
+      },
+    )
     .map((fact) => ({
       query: fact.query,
       shape: fact.shape,
-      source: fact.site,
+      source: fact.source ?? fact.site ?? '<unknown>',
     }))
     .sort(
       (left, right) =>
@@ -785,6 +799,243 @@ function isSubstantiveCompilerQueryShape(shape: CompilerQueryShape): boolean {
   if (Array.isArray(shape)) return shape.some(isSubstantiveCompilerQueryShape);
   if ('kind' in shape) return isSubstantiveCompilerQueryShape(shape.shape);
   return Object.keys(shape).length > 0;
+}
+
+type TypeScriptModule = typeof import('typescript');
+
+let loadedTypeScript: TypeScriptModule | undefined;
+
+function typeScript(): TypeScriptModule {
+  loadedTypeScript ??= createRequire(import.meta.url)('typescript') as TypeScriptModule;
+  return loadedTypeScript;
+}
+
+/**
+ * SPEC.md §4.8/§6.2/§10.2: non-Drizzle queries with declared `output` schemas still publish
+ * typed query-shape facts so KV302 binding validation checks schema fields, not loader source text.
+ */
+function outputSchemaQueryShapeFacts(
+  files: readonly DataPlaneSourceFile[],
+): readonly CompilerQueryShapeFact[] {
+  return files.flatMap((file) => outputSchemaQueryShapeFactsFromSource(file.fileName, file.source));
+}
+
+function outputSchemaQueryShapeFactsFromSource(
+  fileName: string,
+  source: string,
+): readonly CompilerQueryShapeFact[] {
+  const ts = typeScript();
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const facts: CompilerQueryShapeFact[] = [];
+
+  const visit = (node: import('typescript').Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      const fact = outputSchemaQueryShapeFactFromVariable(ts, sourceFile, node);
+      if (fact) facts.push(fact);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return facts;
+}
+
+function outputSchemaQueryShapeFactFromVariable(
+  ts: TypeScriptModule,
+  sourceFile: import('typescript').SourceFile,
+  node: import('typescript').VariableDeclaration,
+): CompilerQueryShapeFact | null {
+  const initializer = unwrapTsExpression(ts, node.initializer);
+  if (!initializer || !ts.isCallExpression(initializer)) return null;
+  if (!isQueryCallee(ts, initializer.expression)) return null;
+
+  const declaration = staticQueryDeclaration(ts, node, initializer);
+  if (!declaration) return null;
+  const output = objectPropertyExpression(ts, declaration.definition, 'output');
+  if (!output) return null;
+  const shape = compilerQueryShapeFromSchemaExpression(ts, output);
+  if (!shape || !isSubstantiveCompilerQueryShape(shape)) return null;
+
+  const line = sourceFile.getLineAndCharacterOfPosition(output.getStart(sourceFile)).line + 1;
+  return {
+    query: declaration.query,
+    shape,
+    source: `${sourceFile.fileName}:${line}`,
+  };
+}
+
+function staticQueryDeclaration(
+  ts: TypeScriptModule,
+  node: import('typescript').VariableDeclaration,
+  call: import('typescript').CallExpression,
+): { definition: import('typescript').ObjectLiteralExpression; query: string } | null {
+  const [firstArgument, secondArgument] = call.arguments;
+  if (
+    firstArgument &&
+    (ts.isStringLiteralLike(firstArgument) || ts.isNoSubstitutionTemplateLiteral(firstArgument))
+  ) {
+    const definition = unwrapTsExpression(ts, secondArgument);
+    return definition && ts.isObjectLiteralExpression(definition)
+      ? { definition, query: firstArgument.text }
+      : null;
+  }
+
+  const definition = unwrapTsExpression(ts, firstArgument);
+  if (!definition || !ts.isObjectLiteralExpression(definition)) return null;
+  if (!ts.isIdentifier(node.name) || !isExportedVariableDeclaration(ts, node)) return null;
+  return { definition, query: node.name.text };
+}
+
+function compilerQueryShapeFromSchemaExpression(
+  ts: TypeScriptModule,
+  expression: import('typescript').Expression,
+): CompilerQueryShape | null {
+  const current = unwrapTsExpression(ts, expression);
+  if (!current) return null;
+  if (ts.isCallExpression(current)) {
+    return compilerQueryShapeFromSchemaCall(ts, current);
+  }
+  if (ts.isPropertyAccessExpression(current)) {
+    const receiverShape = compilerQueryShapeFromSchemaExpression(ts, current.expression);
+    if (!receiverShape) return null;
+    if (current.name.text === 'optional') return { kind: 'optional', shape: receiverShape };
+    if (current.name.text === 'nullable' || current.name.text === 'nullish') {
+      return { kind: 'nullable', shape: receiverShape };
+    }
+    return receiverShape;
+  }
+  return null;
+}
+
+function compilerQueryShapeFromSchemaCall(
+  ts: TypeScriptModule,
+  call: import('typescript').CallExpression,
+): CompilerQueryShape | null {
+  const callee = call.expression;
+  if (!ts.isPropertyAccessExpression(callee)) return null;
+
+  const receiver = callee.expression;
+  const method = callee.name.text;
+  const receiverShape = compilerQueryShapeFromSchemaExpression(ts, receiver);
+
+  if (receiverShape) {
+    if (method === 'optional') return { kind: 'optional', shape: receiverShape };
+    if (method === 'nullable' || method === 'nullish') {
+      return { kind: 'nullable', shape: receiverShape };
+    }
+    return receiverShape;
+  }
+
+  if (!ts.isIdentifier(receiver) || receiver.text !== 's') return null;
+  switch (method) {
+    case 'array': {
+      const item = call.arguments[0];
+      const itemShape = item ? compilerQueryShapeFromSchemaExpression(ts, item) : null;
+      return [itemShape ?? 'object'];
+    }
+    case 'boolean':
+      return 'boolean';
+    case 'number':
+      return 'number';
+    case 'object': {
+      const shapeArg = call.arguments[0];
+      if (!shapeArg) return {};
+      const object = unwrapTsExpression(ts, shapeArg);
+      if (!object || !ts.isObjectLiteralExpression(object)) return 'object';
+      return compilerQueryShapeFromSchemaObject(ts, object);
+    }
+    case 'string':
+    case 'enum':
+      return 'string';
+    default:
+      return null;
+  }
+}
+
+function compilerQueryShapeFromSchemaObject(
+  ts: TypeScriptModule,
+  object: import('typescript').ObjectLiteralExpression,
+): CompilerQueryShape {
+  const shape: Record<string, CompilerQueryShape> = {};
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const name = propertyNameText(ts, property.name);
+    if (!name) continue;
+    const child = compilerQueryShapeFromSchemaExpression(ts, property.initializer);
+    if (child) shape[name] = child;
+  }
+  return shape;
+}
+
+function objectPropertyExpression(
+  ts: TypeScriptModule,
+  object: import('typescript').ObjectLiteralExpression,
+  propertyName: string,
+): import('typescript').Expression | null {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    if (propertyNameText(ts, property.name) === propertyName) return property.initializer;
+  }
+  return null;
+}
+
+function propertyNameText(
+  ts: TypeScriptModule,
+  name: import('typescript').PropertyName,
+): string | null {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return null;
+}
+
+function isQueryCallee(ts: TypeScriptModule, expression: import('typescript').Expression): boolean {
+  if (ts.isIdentifier(expression)) return expression.text === 'query';
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === 'elevated' &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'query'
+  );
+}
+
+function isExportedVariableDeclaration(
+  ts: TypeScriptModule,
+  declaration: import('typescript').VariableDeclaration,
+): boolean {
+  let current: import('typescript').Node = declaration;
+  while (current.parent) {
+    current = current.parent;
+    if (ts.isVariableStatement(current)) {
+      return (
+        current.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
+        false
+      );
+    }
+  }
+  return false;
+}
+
+function unwrapTsExpression(
+  ts: TypeScriptModule,
+  expression: import('typescript').Expression | undefined,
+): import('typescript').Expression | null {
+  let current = expression;
+  while (
+    current &&
+    (ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current) ||
+      ts.isParenthesizedExpression(current) ||
+      ts.isNonNullExpression(current))
+  ) {
+    current = current.expression;
+  }
+  return current ?? null;
 }
 
 function serializeRuntimeRegistryModule(registry: RuntimeRegistryFacts): string {
