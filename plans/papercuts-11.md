@@ -120,7 +120,7 @@ source-derived key.`
   - Acceptance: source-derived query lowering tracks imported local bindings,
     including aliases, with regression coverage for `query as defineQuery`.
 
-- [ ] **SQL sink detector treats any `.exec(...)` call as a KV422 sink.** (med, framework; found by `ui-copyin-full-catalog`)
+- [x] **SQL sink detector treats any `.exec(...)` call as a KV422 sink.** (med, framework; found by `ui-copyin-full-catalog`)
   - Observed behavior: copied `safe-url.ts` failed `build:prod` because
     `schemePattern.exec(stripped)` was treated as an unsafe SQL sink.
   - Root cause: `packages/drizzle/src/static.ts:1273-1279` recognizes `.exec`
@@ -133,6 +133,10 @@ source-derived key.`
     KV422 at the copied `safe-url.ts` regexp call.
   - Acceptance: KV422 continues to catch database execute calls while excluding
     obvious `RegExp#exec` calls, with focused static-analysis coverage.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/drizzle/src/sql-safety-static.test.ts`
+    passed with coverage that `RegExp#exec` is not KV422 while `db.exec(...)`
+    remains flagged.
 
 ### C. Static Export And Response Semantics
 
