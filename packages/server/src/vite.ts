@@ -852,7 +852,7 @@ function outputSchemaQueryShapeFactFromVariable(
 ): CompilerQueryShapeFact | null {
   const initializer = unwrapTsExpression(ts, node.initializer);
   if (!initializer || !ts.isCallExpression(initializer)) return null;
-  if (!isQueryCallee(ts, initializer.expression)) return null;
+  if (!isQueryCallee(ts, sourceFile, initializer.expression)) return null;
 
   const declaration = staticQueryDeclaration(ts, node, initializer);
   if (!declaration) return null;
@@ -994,14 +994,54 @@ function propertyNameText(
   return null;
 }
 
-function isQueryCallee(ts: TypeScriptModule, expression: import('typescript').Expression): boolean {
-  if (ts.isIdentifier(expression)) return expression.text === 'query';
+function isQueryCallee(
+  ts: TypeScriptModule,
+  sourceFile: import('typescript').SourceFile,
+  expression: import('typescript').Expression,
+): boolean {
+  const queryBindings = kovoServerQueryBindings(ts, sourceFile);
+  if (ts.isIdentifier(expression)) return queryBindings.identifiers.has(expression.text);
+  if (ts.isPropertyAccessExpression(expression) && expression.name.text === 'query') {
+    return (
+      ts.isIdentifier(expression.expression) &&
+      queryBindings.namespaces.has(expression.expression.text)
+    );
+  }
   return (
     ts.isPropertyAccessExpression(expression) &&
     expression.name.text === 'elevated' &&
-    ts.isIdentifier(expression.expression) &&
-    expression.expression.text === 'query'
+    isQueryCallee(ts, sourceFile, expression.expression)
   );
+}
+
+function kovoServerQueryBindings(
+  ts: TypeScriptModule,
+  sourceFile: import('typescript').SourceFile,
+): { identifiers: Set<string>; namespaces: Set<string> } {
+  const identifiers = new Set<string>();
+  const namespaces = new Set<string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const moduleSpecifier = statement.moduleSpecifier;
+    if (!ts.isStringLiteralLike(moduleSpecifier) || moduleSpecifier.text !== '@kovojs/server') {
+      continue;
+    }
+    const clause = statement.importClause;
+    const bindings = clause?.namedBindings;
+    if (!bindings) continue;
+    if (ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+      continue;
+    }
+    for (const element of bindings.elements) {
+      if ((element.propertyName?.text ?? element.name.text) === 'query') {
+        identifiers.add(element.name.text);
+      }
+    }
+  }
+
+  return { identifiers, namespaces };
 }
 
 function isExportedVariableDeclaration(
