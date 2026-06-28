@@ -1539,6 +1539,12 @@ export async function runExportCommand(options: KovoExportOptions): Promise<CliC
       diagnostics: staticExportDiagnosticsFromModule(appModule),
       ...(options.origin === undefined ? {} : { origin: options.origin }),
       outDir: options.outDir,
+      ...(manifestPlan.publicAssetRoot === undefined
+        ? {}
+        : {
+            publicAssetBase: options.assetBase,
+            publicAssetRoot: manifestPlan.publicAssetRoot,
+          }),
     });
 
     return kovoExportResult(result, options);
@@ -1575,6 +1581,7 @@ interface ExportManifestPlan {
     path: string;
     source: string;
   }[];
+  publicAssetRoot?: string;
   stylesheetHref?: string;
 }
 
@@ -1618,6 +1625,7 @@ async function staticExportManifestPlan(options: KovoExportOptions): Promise<Exp
 
   return {
     assets: [...assets.values()],
+    publicAssetRoot: distDir,
     ...(stylesheetHref === undefined ? {} : { stylesheetHref }),
   };
 }
@@ -1761,7 +1769,24 @@ function kovoExportResult(
     `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} assets=${result.assets.length} diagnostics=${result.diagnostics.length} outDir=${JSON.stringify(options.outDir)}`,
   );
 
-  return { exitCode: result.diagnostics.length > 0 ? 1 : 0, output: `${lines.join('\n')}\n` };
+  return {
+    exitCode: exportResultExitCode(result, options),
+    output: `${lines.join('\n')}\n`,
+  };
+}
+
+function exportResultExitCode(
+  result: Awaited<ReturnType<(typeof import('@kovojs/server'))['exportStaticApp']>>,
+  options: KovoExportOptions,
+): 0 | 1 {
+  if (result.diagnostics.length === 0) return 0;
+  if (
+    options.onNonExportable === 'skip' &&
+    result.diagnostics.every((diagnostic) => diagnostic.code === 'KV229')
+  ) {
+    return 0;
+  }
+  return 1;
 }
 
 function kovoBuildResult(options: {
