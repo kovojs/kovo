@@ -12,6 +12,7 @@ function symlinkServerPackage(root: string): void {
   mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
   symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
   symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+  symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
 }
 
 function appModuleSource(options: {
@@ -125,6 +126,63 @@ describe('kovo export', () => {
       expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
         '<main data-export-tsx>TSX export</main>',
       );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('exports Vite-loaded TSX component queries with the same server runtime instance', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      symlinkServerPackage(root);
+      writeFileSync(
+        appPath,
+        [
+          '/** @jsxImportSource @kovojs/server */',
+          "import { component } from '@kovojs/core';",
+          "import { createApp, publicAccess, query, route } from '@kovojs/server';",
+          '',
+          "const greetingQuery = query('greeting', {",
+          "  access: publicAccess('static export component query'),",
+          "  load: () => ({ message: 'Hello from query' }),",
+          '});',
+          '',
+          'const Greeting = component({',
+          '  queries: { greeting: greetingQuery },',
+          '  render({ greeting }) {',
+          '    return <main data-component-query>{greeting.message}</main>;',
+          '  },',
+          '});',
+          '',
+          'export default createApp({',
+          '  queries: [greetingQuery],',
+          '  routes: [',
+          '    route("/", {',
+          "      access: publicAccess('static export route'),",
+          '      page: () => <Greeting />,',
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('kovo-export/v1\nHTML /index.html status=200 bytes=');
+      const html = readFileSync(join(outDir, 'index.html'), 'utf8');
+      expect(html).toContain('<main data-component-query>Hello from query</main>');
+      expect(html).not.toContain('Server Error');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

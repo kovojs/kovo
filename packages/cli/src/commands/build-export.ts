@@ -60,12 +60,19 @@ type ExportArgParseResult =
   | { message: string; ok: false };
 
 type KovoBuildPresetName = 'cloudflare' | 'node' | 'vercel';
+type ExportStaticApp = (typeof import('@kovojs/server'))['exportStaticApp'];
 
 interface KovoBuildOptions {
   appModulePath: string;
   cache: boolean;
   outDir: string;
   preset?: KovoBuildPresetName;
+}
+
+interface LoadedExportAppModule {
+  appModule: unknown;
+  close?: () => Promise<void>;
+  exportStaticApp: ExportStaticApp;
 }
 
 type BuildArgParseResult = { ok: true; options: KovoBuildOptions } | { message: string; ok: false };
@@ -1653,17 +1660,17 @@ function kovoServerHandlerEntrySource(
 }
 
 export async function runExportCommand(options: KovoExportOptions): Promise<CliCommandResult> {
+  let loadedExport: LoadedExportAppModule | undefined;
   try {
     const manifestPlan = await staticExportManifestPlan(options);
-    const { exportStaticApp } = await import('@kovojs/server');
-    const appModule = await loadExportAppModule(options);
-    const app = appFromModule(appModule, options.appModulePath);
-    const result = await exportStaticApp(app, {
+    loadedExport = await loadExportAppModule(options);
+    const app = appFromModule(loadedExport.appModule, options.appModulePath);
+    const result = await loadedExport.exportStaticApp(app, {
       ...(manifestPlan.assets.length === 0 ? {} : { assets: manifestPlan.assets }),
       ...(options.onNonExportable === undefined
         ? {}
         : { onNonExportable: options.onNonExportable }),
-      diagnostics: staticExportDiagnosticsFromModule(appModule),
+      diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
       ...(options.origin === undefined ? {} : { origin: options.origin }),
       outDir: options.outDir,
       ...(manifestPlan.publicAssetRoot === undefined
@@ -1677,26 +1684,49 @@ export async function runExportCommand(options: KovoExportOptions): Promise<CliC
     return kovoExportResult(result, options);
   } catch (error) {
     return exportErrorResult(error);
+  } finally {
+    await loadedExport?.close?.();
   }
 }
 
-async function loadExportAppModule(options: KovoExportOptions): Promise<unknown> {
+async function loadExportAppModule(options: KovoExportOptions): Promise<LoadedExportAppModule> {
   if (!options.vite && !exportAppModuleNeedsVite(options.appModulePath)) {
-    return await import(pathToFileURL(resolve(options.appModulePath)).href);
+    const { exportStaticApp } = await import('@kovojs/server');
+    return {
+      appModule: await import(pathToFileURL(resolve(options.appModulePath)).href),
+      exportStaticApp,
+    };
   }
 
   const { createServer } = await import('vite-plus');
+  const root = resolve(options.root ?? process.cwd());
   const server = await createServer({
     appType: 'custom',
     logLevel: 'error',
-    root: resolve(options.root ?? process.cwd()),
+    root,
     server: buildTimeViteServerOptions(),
   });
   try {
-    return await server.ssrLoadModule(options.appModulePath);
-  } finally {
+    const [appModule, serverModule] = await Promise.all([
+      server.ssrLoadModule(options.appModulePath),
+      server.ssrLoadModule(viteSsrModuleId(requireFromCli.resolve('@kovojs/server'), root)),
+    ]);
+    return {
+      appModule,
+      close: () => server.close(),
+      exportStaticApp: exportStaticAppFromModule(serverModule),
+    };
+  } catch (error) {
     await server.close();
+    throw error;
   }
+}
+
+function exportStaticAppFromModule(moduleValue: unknown): ExportStaticApp {
+  if (isRecord(moduleValue) && typeof moduleValue.exportStaticApp === 'function') {
+    return moduleValue.exportStaticApp as ExportStaticApp;
+  }
+  throw new Error('@kovojs/server must export exportStaticApp for kovo export.');
 }
 
 function exportAppModuleNeedsVite(appModulePath: string): boolean {
