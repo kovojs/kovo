@@ -172,7 +172,10 @@ describe('query endpoints', () => {
     const productQuery = query('productDetail', {
       args: s.object({ id: s.string(), max: s.number().int().default(10) }),
       guard: (request: ProductQueryRequest) => request.session?.userId === 'u1',
-      instanceKey: (input) => `product:${(input as { id: string }).id}`,
+      instanceKey(input) {
+        const id: string = input.id;
+        return `product:${id}`;
+      },
       load(input: ProductQueryInput, { request }: { request: ProductQueryRequest }) {
         return { id: input.id, max: input.max, userId: request.session?.userId };
       },
@@ -450,7 +453,10 @@ describe('query endpoints', () => {
   it('dispatches typed read endpoints through a query registry', async () => {
     const productQuery = query('product', {
       args: s.object({ id: s.string() }),
-      instanceKey: (input) => `product:${(input as { id: string }).id}`,
+      instanceKey(input) {
+        const id: string = input.id;
+        return `product:${id}`;
+      },
       load(input: { id: string }) {
         return { id: input.id, name: 'Mug' };
       },

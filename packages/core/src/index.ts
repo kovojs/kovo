@@ -346,11 +346,14 @@ type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}
 type PathParams<Path extends string> =
   PathParamNames<Path> extends never ? {} : Record<PathParamNames<Path>, string>;
 
+/** JSON URL search values accepted by typed routes; `undefined` means omit the key. */
+export type RouteSearchValue = JsonValue | undefined;
+
 /** A route descriptor: typed path, param/search shapes, and prefetch policy. */
 export interface Route<
   Path extends string,
   Params extends Record<string, string> = PathParams<Path>,
-  Search extends Record<string, JsonValue> = Record<string, JsonValue>,
+  Search extends Record<string, RouteSearchValue> = Record<string, JsonValue>,
 > {
   path: Path;
   params?: Params;
@@ -361,7 +364,7 @@ export interface Route<
 /** Options accepted by `route()`: param/search shapes and prefetch policy. */
 export interface RouteOptions<
   Params extends Record<string, string> = Record<string, never>,
-  Search extends Record<string, JsonValue> = Record<string, JsonValue>,
+  Search extends Record<string, RouteSearchValue> = Record<string, JsonValue>,
 > {
   params?: Params;
   prefetch?: 'conservative' | 'moderate' | false;
@@ -375,7 +378,7 @@ type RouteFor<Path extends string> = Path extends keyof RouteRegistry
   : Route<Path>;
 
 type RouteParams<Definition> =
-  Definition extends Route<string, infer Params, Record<string, JsonValue>> ? Params : never;
+  Definition extends Route<string, infer Params, Record<string, RouteSearchValue>> ? Params : never;
 
 type RouteSearch<Definition> =
   Definition extends Route<string, Record<string, string>, infer Search> ? Search : never;
@@ -408,7 +411,7 @@ type RouteGetFormArgs<Definition> = keyof RouteParams<Definition> extends never
 export function route<
   const Path extends string,
   Params extends Record<string, string> = PathParams<Path>,
-  Search extends Record<string, JsonValue> = Record<string, JsonValue>,
+  Search extends Record<string, RouteSearchValue> = Record<string, JsonValue>,
 >(path: Path, options: RouteOptions<Params, Search> = {}): Route<Path, Params, Search> {
   return { ...options, path };
 }
@@ -432,7 +435,7 @@ export function href<const Path extends RegistryKey<RouteRegistry>>(
 ): string {
   return buildHref(
     path,
-    options as { params?: Record<string, string>; search?: Record<string, JsonValue> },
+    options as { params?: Record<string, string>; search?: Record<string, RouteSearchValue> },
   );
 }
 
@@ -440,7 +443,7 @@ export function href<const Path extends RegistryKey<RouteRegistry>>(
 export interface LinkProps {
   children?: ComponentRenderResult;
   params?: Record<string, string>;
-  search?: Record<string, JsonValue>;
+  search?: Record<string, RouteSearchValue>;
   to: keyof RouteRegistry extends never ? string : Extract<keyof RouteRegistry, string>;
   [attribute: string]: unknown;
 }
@@ -511,7 +514,7 @@ export function redirect<const Path extends RegistryKey<RouteRegistry>>(
 
 function buildHref(
   path: string,
-  options: { params?: Record<string, string>; search?: Record<string, JsonValue> },
+  options: { params?: Record<string, string>; search?: Record<string, RouteSearchValue> },
 ): string {
   const params = options.params ?? {};
   // H1 (bugs-part4 L6-1): the param name is the whole segment after `:` up to the
@@ -659,7 +662,7 @@ export interface GetFormDescriptor {
 }
 
 /** Typed GET-form input descriptor and JSX component. */
-export interface GetFormInputHelper<Search extends Record<string, JsonValue>> {
+export interface GetFormInputHelper<Search extends Record<string, RouteSearchValue>> {
   <const Name extends Extract<keyof Search, string>>(name: Name): GetFormInput<Name>;
   <const Name extends Extract<keyof Search, string>>(
     props: GetFormInputProps<Name>,
@@ -669,7 +672,7 @@ export interface GetFormInputHelper<Search extends Record<string, JsonValue>> {
 /** A GET-route search form: its action, `Form` descriptor, and typed `input(name)` accessors. */
 export interface GetForm<
   Path extends string,
-  Search extends Record<string, JsonValue> = Record<string, JsonValue>,
+  Search extends Record<string, RouteSearchValue> = Record<string, JsonValue>,
 > {
   action: string;
   Form: GetFormDescriptor;

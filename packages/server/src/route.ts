@@ -1,4 +1,4 @@
-import type { JsonValue, Redirect } from '@kovojs/core';
+import type { JsonValue, Redirect, RouteSearchValue } from '@kovojs/core';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
@@ -65,7 +65,7 @@ type MaybeSchema<Value> = Schema<Value> | undefined;
 type RouteParamsFor<Path extends string, ParamsSchema extends MaybeSchema<Record<string, string>>> =
   ParamsSchema extends Schema<infer Params> ? Params : PathParams<Path>;
 
-type RouteSearchFor<SearchSchema extends MaybeSchema<Record<string, JsonValue>>> =
+type RouteSearchFor<SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>> =
   SearchSchema extends Schema<infer Search> ? Search : Record<string, JsonValue>;
 
 type LayoutQueryMap<Request> = Readonly<Record<string, QueryDefinition<string, any, any, Request>>>;
@@ -171,7 +171,7 @@ export interface LayoutFactory<Request = unknown> {
 export interface RouteRequest<
   Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-  SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
 > {
   params: RouteParamsFor<Path, ParamsSchema>;
   path: Path;
@@ -191,7 +191,7 @@ export interface RouteRequest<
 export interface RouteDefinition<
   Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-  SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
   Request = unknown,
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
@@ -231,7 +231,7 @@ export type RouteRegionDefinitions<
 export interface RouteDeclaration<
   Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-  SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
   Request = unknown,
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
@@ -279,7 +279,7 @@ export interface RouteFactory<Request = unknown> {
   <
     const Path extends string,
     const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-    const SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+    const SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
     Page extends RoutePageResult = RoutePageResult,
   >(
     path: Path,
@@ -315,7 +315,7 @@ export interface RouteFactory<Request = unknown> {
 export function route<
   const Path extends string,
   const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-  const SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+  const SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
   Request = unknown,
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
@@ -393,7 +393,7 @@ function layoutNavigationSegmentId(layoutDeclaration: LayoutDeclaration<any, any
 export function parseRouteRequest<
   const Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>>,
-  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
   Request,
   Page extends RoutePageResult,
 >(
@@ -451,7 +451,7 @@ export interface RouteJsxContextOptions<Request> {
 export async function runRoutePage<
   const Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>>,
-  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
   Request,
   Page extends RoutePageResult,
   GuardedRequest extends Request = Request,
@@ -469,7 +469,7 @@ export async function runRoutePage<
 async function runRoutePageInternal<
   const Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>>,
-  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
   Request,
   Page extends RoutePageResult,
   GuardedRequest extends Request = Request,
@@ -672,7 +672,7 @@ async function renderLayoutChain<Request>(
 async function renderRouteRegions<
   const Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>>,
-  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
   Request,
   Page extends RoutePageResult,
   GuardedRequest extends Request,
@@ -1007,7 +1007,7 @@ export function routeHasBoundary(
 export async function renderRoutePageResponse<
   const Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>>,
-  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
   Request,
   Page extends RoutePageResult,
   GuardedRequest extends Request = Request,
@@ -1188,7 +1188,7 @@ async function renderRouteBoundaryBody<Page, Request>(
 function routeCurrentUrl<
   const Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>>,
-  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
   Request,
   Page extends RoutePageResult,
 >(

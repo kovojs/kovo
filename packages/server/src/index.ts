@@ -277,6 +277,7 @@ export type {
   QueryDeclarationDefinition,
   QueryDefinition,
   QueryDefinitionBoundary,
+  QueryInstanceKey,
   JsonSerializable,
   QueryLoadContext,
   QueryReadConfig,

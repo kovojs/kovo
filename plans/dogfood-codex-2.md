@@ -71,26 +71,45 @@ new `bugz` ledger was created.
 
 ### C. Type And Diagnostic Ergonomics
 
-- [ ] **`query().instanceKey` is typed as `unknown` instead of the validated query args input.** (low, framework type ergonomics; found by navquery)
+- [x] **`query().instanceKey` is typed as `unknown` instead of the validated query args input.** (low, framework type ergonomics; found by navquery)
   - Observed behavior: with `args: s.object({ id: s.string() })`, `load(input: { id: string })` is typed, but `instanceKey(input) { input.id }` fails TypeScript because `input` is `unknown`. The starter sound-subset discourages the cast authors naturally reach for.
   - Root cause: query definitions type `instanceKey` as `(input: unknown) => string | undefined` across the args declarations (`packages/server/src/query.ts:147-153,190-204,215-227`); the typed-args overload preserves `Input` for `load` but not `instanceKey` (`packages/server/src/query.ts:286-300`).
   - Why it matters: arg-backed typed reads are a core SPEC §9.4 path; the identity hook needs the same validated input as `load` and `version`.
   - Repro evidence: verifier created and removed a temporary navquery file; `pnpm exec tsc --noEmit --pretty false --project tsconfig.json` produced `TS18046: 'input' is of type 'unknown'` for `input.id` inside `instanceKey`.
   - Acceptance: type `instanceKey` against `Input` for typed-args queries and add a type test proving casts are unnecessary.
+  - Integrated evidence (2026-06-28): `packages/server/src/query.ts` now exposes
+    `QueryInstanceKey<Input>` and applies it to typed-args query definitions;
+    `packages/server/src/query-endpoint.test.ts` proves `instanceKey(input)` can read
+    `input.id` without casts. Verification: `pnpm exec vitest run
+    packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts
+    packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts
+    packages/server/src/api/app.test.ts`, `pnpm run check:api-surface`, `pnpm run
+    check:vp`, and `git diff --check` PASS.
 
-- [ ] **Optional route search schema fields infer `undefined`, which violates the route search `Record<string, JsonValue>` bound.** (medium, framework type ergonomics; found by navquery; regression/follow-up)
+- [x] **Optional route search schema fields infer `undefined`, which violates the route search `Record<string, JsonValue>` bound.** (medium, framework type ergonomics; found by navquery; regression/follow-up)
   - Observed behavior: `route('/optional-search', { search: s.object({ next: s.string().optional() }) })` fails TypeScript because `{ next: string | undefined }` is not assignable to `Record<string, JsonValue>`.
   - Root cause: route/search types constrain `Search` to `Record<string, JsonValue>` (`packages/core/src/index.ts:335-349`; `packages/server/src/route.ts:68-69,171-178,191-219,277-287,315-325`), while schema `.optional()` returns a schema whose value includes `undefined` (`packages/server/src/schema.ts:282,390`).
   - Why it matters: optional search params are ordinary typed navigation ergonomics under SPEC §6.4; authors currently encode absence as `''` or a default instead of the natural optional shape.
   - Repro evidence: verifier created and removed a temporary navquery file; `pnpm exec tsc --noEmit --pretty false --project tsconfig.json` produced `TS2322` for the optional search schema.
   - Acceptance: support absent optional search keys at the route type boundary, or provide a first-class optional-query-param helper whose output satisfies the route schema bound.
+  - Integrated evidence (2026-06-28): `packages/core/src/index.ts` now publishes
+    `RouteSearchValue = JsonValue | undefined`, and `packages/server/src/route.ts`
+    accepts search schemas whose optional fields include `undefined`.
+    `packages/server/src/route.test.ts` and `packages/core/src/index.test.ts` prove
+    optional search fields type-check, omit `undefined` from `href`, and remain
+    available to GET form helpers. Verification: same focused suite and gates above.
 
-- [ ] **Query binding validation follows the statically extracted Drizzle projection shape, not the broader load return annotation, with weak author guidance.** (low, docs/diagnostic; found by navquery)
+- [x] **Query binding validation follows the statically extracted Drizzle projection shape, not the broader load return annotation, with weak author guidance.** (low, docs/diagnostic; found by navquery)
   - Observed behavior: a query loader returning a typed nested result such as `{ item, related }` failed KV302 for a binding like `contact.item.name`; flattening to the projection-like shape passed.
   - Root cause: Drizzle extraction selects static projection shape and only falls back to output shape when static selection is empty (`packages/drizzle/src/static.ts:1521-1555,2312-2323`; `packages/drizzle/src/static/query-shapes.ts:78-115`); compiler binding validation then checks `data-bind` paths against those query-shape facts (`packages/compiler/src/analyze/query-shapes.ts:46-52`; `packages/compiler/src/validate/bindings.ts:39-57`).
   - Why it matters: the behavior is conservative and defensible, but the author-visible TypeScript return annotation suggests the path exists. Diagnostics/docs should explain the projection-shape contract or expose an explicit output-shape path.
   - Repro evidence: source-level verifier confirmed the extractor/validator path; navquery authoring hit KV302 until the result shape was flattened.
   - Acceptance: improve KV302 help/docs for Drizzle-backed query bindings so authors know bindings follow the proven projection shape unless an explicit supported output shape is present.
+  - Integrated evidence (2026-06-28): `packages/core/src/diagnostics.ts` KV302 help
+    now explains the Drizzle projection-shape contract, and
+    `site/content/guides/queries.md` documents binding the projected shape.
+    `packages/core/src/diagnostics.test.ts` locks the diagnostic text. Verification:
+    same focused suite and gates above.
 
 ## Refuted / Not Carried Forward
 
@@ -116,3 +135,7 @@ new `bugz` ledger was created.
 - Verifier agents independently confirmed: capability reserved-header omission, navquery KV310/`instanceKey`/optional search/query-shape behavior, authguards `UNGUARDED` false positives, and ladder CSRF/stamp findings.
 - 2026-06-28: Fixed and verified the capability download reserved-header posture with
   `pnpm exec vitest run packages/server/src/capability-route.test.ts packages/server/src/endpoint.test.ts`.
+- 2026-06-28: Fixed and verified Dogfood C type/diagnostic ergonomics with
+  `pnpm exec vitest run packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts
+  packages/core/src/index.test.ts packages/core/src/diagnostics.test.ts packages/server/src/api/app.test.ts`,
+  `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.

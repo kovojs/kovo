@@ -83,6 +83,27 @@ describe('route primitives', () => {
     expect(assertBadRedirect).toBeTypeOf('function');
   });
 
+  it('accepts optional route search schema fields', async () => {
+    const optionalSearchRoute = route('/optional-search', {
+      page({ search }) {
+        const next: string | undefined = search.next;
+        // @ts-expect-error SPEC §6.4: optional search fields preserve their declared value type.
+        const numberNext: number = search.next;
+        return renderedHtml(next ?? 'none');
+      },
+      search: s.object({ next: s.string().optional() }),
+    });
+
+    expect(parseRouteRequest(optionalSearchRoute, { search: {} })).toEqual({
+      params: {},
+      path: '/optional-search',
+      search: {},
+    });
+    expect(
+      renderHtmlValue(await optionalSearchRoute.page?.(parseRouteRequest(optionalSearchRoute), {})),
+    ).toBe('none');
+  });
+
   it('runs route pages through guards and notFound page outcomes', async () => {
     const productRoute = route('/products/:id', {
       guard: (request: { session?: { userId?: string } | null }) =>

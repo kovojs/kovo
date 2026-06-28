@@ -278,6 +278,13 @@ Each of these is a bug class in other stacks:
 A teammate who ships a new component with `queries: { cart: cartQuery }` next month gets correct
 refresh behavior from every cart mutation ever written, with nothing to remember.
 
+## Bind the projected shape
+
+`data-bind` paths follow the query shape Kovo can prove. For Drizzle-backed queries, that is the
+static projection shape extracted from the query builder. If your loader annotates a broader return
+type, bindings still use the proven projection. Keep the projection shape aligned with the DOM path
+you bind to, or extract a named derive that reshapes the value explicitly.
+
 ## Next
 
 - [Mutations & forms](/guides/mutations/) — the write side of this graph.

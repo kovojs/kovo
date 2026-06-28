@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   component,
+  createFileSystemStorage,
+  createMemoryStorage,
+  createS3CompatibleStorage,
   FieldError,
   form,
   FormError,
@@ -16,6 +19,10 @@ import {
   type FormInput,
   type FormValidationFailure,
   type JsonValue,
+  type MemoryStorageOptions,
+  type RouteSearchValue,
+  type S3CompatibleObjectClient,
+  type S3CompatibleStorageOptions,
   type Secret,
   type Serializable,
   trustedReveal,
@@ -33,6 +40,15 @@ interface TestSchema<Value> {
 interface ServerSchema<Value = unknown> {
   parse(input: unknown): Value;
 }
+
+// eslint-disable-next-line no-unused-vars -- compile-time public import assertion only.
+type PublicMemoryStorageOptions = MemoryStorageOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public import assertion only.
+type PublicS3Client = S3CompatibleObjectClient;
+// eslint-disable-next-line no-unused-vars -- compile-time public import assertion only.
+type PublicS3StorageOptions = S3CompatibleStorageOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public import assertion only.
+type PublicRouteSearchValue = RouteSearchValue;
 
 interface CartAddRegistryMutation {
   errors: {
@@ -66,6 +82,9 @@ declare module './index.js' {
     '/products': ReturnType<typeof route<'/products', {}, { max: number; sort: string }>>;
     '/products/:id': ReturnType<
       typeof route<'/products/:id', { id: string }, { max: number; sort: string }>
+    >;
+    '/optional-search': ReturnType<
+      typeof route<'/optional-search', {}, { next: string | undefined }>
     >;
     // H1 (bugs-part4 L6-1): param names use the same whole-segment grammar as the
     // matcher (server match.ts) and the `PathParamNames` type extractor, so hyphen
@@ -586,6 +605,10 @@ describe('core authoring APIs', () => {
       status: 303,
     });
     expect(href('/files/:name.json', { params: { 'name.json': 'report' } })).toBe('/files/report');
+    expect(href('/optional-search', { search: { next: undefined } })).toBe('/optional-search');
+    expect(href('/optional-search', { search: { next: 'cart' } })).toBe(
+      '/optional-search?next=cart',
+    );
 
     const assertMissingParam = () => {
       // @ts-expect-error id is required by the route path.
@@ -623,6 +646,7 @@ describe('core authoring APIs', () => {
     expect(productFilter.Form({ children: null })).toBeUndefined();
     expect(productFilter.input({ name: 'max', type: 'number' })).toBeUndefined();
     expect(productDetailFilter.action).toBe('/products/p1');
+    expect(form.get('/optional-search').input('next')).toEqual({ name: 'next' });
 
     const assertUnknownSearchField = () => {
       // @ts-expect-error sku is not part of the route search schema.

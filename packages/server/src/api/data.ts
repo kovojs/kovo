@@ -53,6 +53,7 @@ export type {
   QueryDeclarationDefinition,
   QueryDefinitionBoundary,
   QueryDefinition,
+  QueryInstanceKey,
   QueryLoadContext,
   QueryReadConfig,
   QueryResult,

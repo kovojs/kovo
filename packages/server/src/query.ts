@@ -120,7 +120,7 @@ export interface QueryDefinition<
   guard?: {
     call(request: Request): GuardResult | Promise<GuardResult>;
   }['call'];
-  instanceKey?: ((input: unknown) => string | undefined) | string;
+  instanceKey?: QueryInstanceKey<Input>;
   load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
   key: Key;
   output?: Schema<Value>;
@@ -128,6 +128,9 @@ export interface QueryDefinition<
   reads?: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
+
+/** Compute or declare a stable per-input query instance key (SPEC §9.4/§10.2). */
+export type QueryInstanceKey<Input> = ((input: Input) => string | undefined) | string;
 
 /** A query input schema that also binds component props to query args in app-authored TSX. */
 export type QueryArgsSchema<Input> = Schema<Input> & {
@@ -150,7 +153,7 @@ interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Reque
   args: Schema<Input>;
   delta?: readonly QueryDeltaListMeta[];
   guard?: BivariantGuard<Request>;
-  instanceKey?: ((input: unknown) => string | undefined) | string;
+  instanceKey?: QueryInstanceKey<Input>;
   key?: Key;
   load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
   output?: Schema<Value>;
@@ -813,7 +816,7 @@ export async function renderQueryRegistryEndpointResponse<Request>(
 
 export function readQueryInstanceKey<const Key extends string, Value, Input, Request>(
   queryDefinition: QueryDefinition<Key, Value, Input, Request>,
-  input: unknown,
+  input: Input,
 ): string | undefined {
   if (queryDefinition.instanceKey === undefined) return undefined;
   if (typeof queryDefinition.instanceKey === 'function') return queryDefinition.instanceKey(input);
