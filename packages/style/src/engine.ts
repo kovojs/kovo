@@ -383,6 +383,7 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
   for (const [token, value] of Object.entries(tokens)) {
     assertCssNameSafe(token, 'style.defineVars', 'token');
     const cssProperty = `--kovo-${namespace}-${toKebabCase(token)}`;
+    assertCssCustomPropertyNameSafe(cssProperty, 'style.defineVars', token);
     result[token] = `var(${cssProperty})`;
     if (value != null) {
       assertCssValueSafe(value, 'style.defineVars', token);
@@ -444,9 +445,15 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
   for (const token of Object.keys(overrides) as Array<Extract<keyof Tokens, string>>) {
     const value = overrides[token];
     if (value == null) continue;
+    assertCssNameSafe(token, 'style.createTheme', 'token');
+    assertCssCustomPropertyNameSafe(
+      `--kovo-token-${toKebabCase(token)}`,
+      'style.createTheme',
+      token,
+    );
     assertCssValueSafe(value, 'style.createTheme', token);
     const tokenValue = baseTokens[token];
-    const cssProperty = tokenValue.slice(4, -1);
+    const cssProperty = assertCssVarReferenceSafe(tokenValue, 'style.createTheme', token);
     rules.push({
       atRules: [],
       className,
@@ -616,6 +623,8 @@ function assertObjectInput(
 // element (`</style>`). Ordinary values — `1px solid red`, `var(--x)`,
 // `color-mix(in srgb, #fff 50%, #000)`, `#16a34a` — contain none of these.
 const UNSAFE_CSS_DELIMITERS = new Set(['<', '>', '{', '}', ';', '\\']);
+const CSS_CUSTOM_PROPERTY_NAME = /^--[A-Za-z_][A-Za-z0-9_-]*$/;
+const CSS_VAR_REFERENCE = /^var\((--[A-Za-z_][A-Za-z0-9_-]*)\)$/;
 
 /**
  * Reject author CSS values that could break out of the declaration or rule they
@@ -652,6 +661,38 @@ function assertCssValueSafe(
 
 function assertCssNameSafe(value: string, apiName: string, role: string): void {
   assertCssSyntaxFragmentSafe(value, apiName, role, true);
+}
+
+function assertCssCustomPropertyNameSafe(
+  cssProperty: string,
+  apiName: string,
+  token: string,
+): void {
+  if (!CSS_CUSTOM_PROPERTY_NAME.test(cssProperty)) {
+    throw new TypeError(
+      `${apiName} rejected CSS-invalid token "${token}": generated custom property ` +
+        `${JSON.stringify(cssProperty)} is not a valid unescaped CSS custom-property name.`,
+    );
+  }
+}
+
+function assertCssVarReferenceSafe(value: unknown, apiName: string, token: string): string {
+  if (typeof value !== 'string') {
+    throw new TypeError(
+      `${apiName} rejected token "${token}": base token must be a style.defineVars() ` +
+        'variable reference.',
+    );
+  }
+
+  const match = CSS_VAR_REFERENCE.exec(value);
+  if (!match) {
+    throw new TypeError(
+      `${apiName} rejected token "${token}": base token reference ${JSON.stringify(value)} ` +
+        'does not contain a valid unescaped CSS custom-property name.',
+    );
+  }
+
+  return match[1] as string;
 }
 
 function assertCssSyntaxFragmentSafe(
