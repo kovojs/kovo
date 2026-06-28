@@ -115,18 +115,26 @@ export const addToCart = mutation({
 Use a queue value when several mutations intentionally share one queue:
 
 ```ts
+import { mutation, queue, s } from '@kovojs/server';
+
 export const checkoutQueue = queue('checkout');
+const couponInput = s.object({ code: s.string() });
+const orderInput = s.object({ cartId: s.string() });
 
 export const applyCoupon = mutation({
-  input: applyCouponInput,
+  input: couponInput,
   queue: checkoutQueue,
-  handler: applyCouponHandler,
+  handler(input) {
+    return { code: input.code };
+  },
 });
 
 export const submitOrder = mutation({
-  input: submitOrderInput,
+  input: orderInput,
   queue: checkoutQueue,
-  handler: submitOrderHandler,
+  handler(input) {
+    return { cartId: input.cartId };
+  },
 });
 ```
 

@@ -477,5 +477,5 @@ examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/op
 check:vp`, and `git diff --check` passed.
 - 2026-06-28: Removed key-first public `mutation`/`query` factory types and added `KV235` app
   authoring diagnostics for exported key-first registry identities; `pnpm run check:vp`, `pnpm run
-  check:api-surface`, focused compiler/server/Better Auth tests, the authored-surface scan, and
+check:api-surface`, focused compiler/server/Better Auth tests, the authored-surface scan, and
   `git diff --check` passed.

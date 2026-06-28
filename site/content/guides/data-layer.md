@@ -42,6 +42,8 @@ billing adapter, a generated schema bridge, or a package boundary may need sever
 same invalidation word:
 
 ```ts
+import { domain, tag } from '@kovojs/server';
+
 export const billing = domain('billing');
 export const invoice = tag('billing:invoice');
 ```

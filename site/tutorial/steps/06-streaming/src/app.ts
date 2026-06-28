@@ -44,9 +44,6 @@ export const shopCsrf = {
   },
 };
 
-// snippet:form-value
-// /snippet
-
 // snippet:touches
 // SPEC.md section 11.1: with the blessed @kovojs/drizzle adapter these touch
 // sites are extracted from the write ASTs and committed as a reviewable
@@ -107,7 +104,7 @@ export const addToCart = mutation({
 });
 // /snippet
 
-// snippet:form-value
+// snippet:streaming-form-value
 export const addToCartForm = form(addToCart);
 export type AddToCartInput = FormInput<typeof addToCartForm>;
 // /snippet
