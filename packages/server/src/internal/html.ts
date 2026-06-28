@@ -1,3 +1,4 @@
+export { renderServerRenderable, type InternalServerRenderable } from '../renderable.js';
 export {
   escapeAttribute,
   escapeHtml,

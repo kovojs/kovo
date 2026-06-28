@@ -217,6 +217,7 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
   let rendered = '';
   const key = props['kovo-key'] === undefined ? (props.key ?? jsxKey) : undefined;
   const styleAttrs = kovoStyleInputAttributes(props.style);
+  const viewTransitionStyle = kovoStyleProperty('view-transition-name', props.viewTransitionName);
   let renderedClass = false;
   let renderedStyle = false;
   let renderedStyleSource = false;
@@ -229,6 +230,7 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     if (
       name === 'children' ||
       name === 'key' ||
+      name === 'viewTransitionName' ||
       isRawHtmlAttribute(name) ||
       value === false ||
       value === null ||
@@ -260,7 +262,7 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     }
 
     if (name === 'style' && isStyleProperties(value)) {
-      const style = renderStyleProperties(value);
+      const style = mergedStyle(renderStyleProperties(value), viewTransitionStyle);
       if (style) rendered += ` style="${escapeAttribute(style)}"`;
       renderedStyle = true;
       continue;
@@ -286,10 +288,14 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
   if (styleAttrs?.['data-style-src'] && !renderedStyleSource) {
     rendered += ` data-style-src="${escapeAttribute(styleAttrs['data-style-src'])}"`;
   }
-  if (styleAttrs?.style && !renderedStyle)
-    rendered += ` style="${escapeAttribute(styleAttrs.style)}"`;
+  const finalStyle = mergedStyle(styleAttrs?.style, viewTransitionStyle);
+  if (finalStyle && !renderedStyle) rendered += ` style="${escapeAttribute(finalStyle)}"`;
 
   return rendered;
+}
+
+function mergedStyle(...values: Array<string | undefined>): string {
+  return values.filter(Boolean).join('; ');
 }
 
 function kovoStyleInputAttributes(value: unknown):

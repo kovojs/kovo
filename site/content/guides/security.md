@@ -386,27 +386,30 @@ Do not hand-build storage URLs or raw download endpoints. Use a framework downlo
 short-lived signed URL from the request context.
 
 ```ts
-import { createStorageDownloadEndpoint, guards, mutation } from '@kovojs/server';
+import { createStorageDownloadEndpoint, guards, route } from '@kovojs/server';
 
 export const downloads = createStorageDownloadEndpoint({
-  path: '/downloads',
+  basePath: '/downloads',
+  secret: process.env.KOVO_CAPABILITY_SECRET!,
   storage: invoicesBucket,
-  scope: ({ req }) => `user:${req.session.user.id}`,
+  scope: () => 'invoice-download',
 });
 
-export const invoiceDownload = mutation('invoice/download', {
+export const invoiceRoute = route('/account/invoice', {
   guard: guards.authed(),
-  handler: async (_input, ctx) => ({
-    href: await ctx.signUrl({
-      key: `invoices/${ctx.req.session.user.id}/latest.pdf`,
-      scope: `user:${ctx.req.session.user.id}`,
-      expiresIn: '10m',
-    }),
-  }),
+  page: async ({ signUrl }, req) => {
+    const signed = await signUrl!({
+      key: `invoices/${req.session.user.id}/latest.pdf`,
+      scope: 'invoice-download',
+      expiresIn: 10 * 60 * 1000,
+    });
+
+    return <a href={signed.url}>Download latest invoice</a>;
+  },
 });
 ```
 
-`ctx.signUrl(...)` uses `signCapability` under the hood. The download endpoint verifies the method,
+`signUrl(...)` uses `signCapability` under the hood. The download endpoint verifies the method,
 key, expiry, and scope before any storage read. A leaked URL is still a bearer credential, so keep the
 expiry short and prefer one-time URLs for sensitive exports. Every mint appears in
 `kovo explain --capabilities`.
