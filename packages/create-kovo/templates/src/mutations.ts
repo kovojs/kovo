@@ -63,7 +63,7 @@ export const addContact = mutation({
     if (existing) {
       return context.fail('DUPLICATE_EMAIL', { email });
     }
-    const id = `c-${crypto.randomUUID()}`;
+    const id = crypto.randomUUID();
     await db
       .insert(contacts)
       .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });

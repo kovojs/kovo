@@ -70,6 +70,8 @@ interface RenderedHtml {
   toString(): string;
 }
 
+type MaybePromise<Value> = Promise<Value> | Value;
+
 function renderedHtml(html: string): RenderedHtml {
   return {
     [kovoRenderedHtml]: true,
@@ -97,12 +99,14 @@ function escapeHtml(value: unknown): string {
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-async function renderTableChildren(value: unknown): Promise<string> {
+function renderTableChildren(value: unknown): MaybePromise<string> {
   if (Array.isArray(value)) {
-    const rendered = await Promise.all(value.map((item) => renderTableChildren(item)));
-    return rendered.join('');
+    const rendered = value.map((item) => renderTableChildren(item));
+    return rendered.some(isPromiseLike)
+      ? Promise.all(rendered.map((item) => Promise.resolve(item))).then((parts) => parts.join(''))
+      : rendered.join('');
   }
-  if (isPromiseLike(value)) return renderTableChildren(await value);
+  if (isPromiseLike(value)) return Promise.resolve(value).then(renderTableChildren);
   return escapeHtml(value);
 }
 
@@ -186,7 +190,7 @@ export const tableStyles = style.create({
  * const component = Table;
  */
 export const Table = component({
-  async render(props: TableProps) {
+  render(props: TableProps) {
     const wrapperAttrs = style.attrs(tableStyles.wrapper, props.styles?.wrapper);
     const tableAttrs = style.attrs(tableStyles.table, props.styles?.table);
     const captionAttrs = style.attrs(tableStyles.caption, props.styles?.caption);
@@ -195,8 +199,10 @@ export const Table = component({
         ? ''
         : `<caption${tableAttributes(captionAttrs)}>${escapeHtml(props.caption)}</caption>`;
 
-    return renderedHtml(
-      `<div${tableAttributes(wrapperAttrs)}><table${tableAttributes(tableAttrs)}>${caption}${await renderTableChildren(props.children)}</table></div>`,
+    return withTableChildren(props.children, (children) =>
+      renderedHtml(
+        `<div${tableAttributes(wrapperAttrs)}><table${tableAttributes(tableAttrs)}>${caption}${children}</table></div>`,
+      ),
     );
   },
 });
@@ -209,11 +215,11 @@ export const Table = component({
  * const component = TableHead;
  */
 export const TableHead = component({
-  async render(props: TableSectionProps) {
-    return tablePart(
+  render(props: TableSectionProps) {
+    return tablePartWithChildren(
       'thead',
       style.attrs(tableStyles.head, props.styles?.head),
-      await renderTableChildren(props.children),
+      props.children,
     );
   },
 });
@@ -226,11 +232,11 @@ export const TableHead = component({
  * const component = TableBody;
  */
 export const TableBody = component({
-  async render(props: TableSectionProps) {
-    return tablePart(
+  render(props: TableSectionProps) {
+    return tablePartWithChildren(
       'tbody',
       style.attrs(tableStyles.body, props.styles?.body),
-      await renderTableChildren(props.children),
+      props.children,
     );
   },
 });
@@ -243,11 +249,11 @@ export const TableBody = component({
  * const component = TableRow;
  */
 export const TableRow = component({
-  async render(props: TableSectionProps) {
-    return tablePart(
+  render(props: TableSectionProps) {
+    return tablePartWithChildren(
       'tr',
       style.attrs(tableStyles.row, props.styles?.row),
-      await renderTableChildren(props.children),
+      props.children,
     );
   },
 });
@@ -260,15 +266,15 @@ export const TableRow = component({
  * const component = TableHeaderCell;
  */
 export const TableHeaderCell = component({
-  async render(props: TableCellProps) {
-    return tablePart(
+  render(props: TableCellProps) {
+    return tablePartWithChildren(
       'th',
       {
         ...style.attrs(tableStyles.headerCell, props.styles?.headerCell),
         colspan: props.colSpan,
         scope: props.scope ?? 'col',
       },
-      await renderTableChildren(props.children),
+      props.children,
     );
   },
 });
@@ -281,14 +287,32 @@ export const TableHeaderCell = component({
  * const component = TableCell;
  */
 export const TableCell = component({
-  async render(props: TableCellProps) {
-    return tablePart(
+  render(props: TableCellProps) {
+    return tablePartWithChildren(
       'td',
       { ...style.attrs(tableStyles.cell, props.styles?.cell), colspan: props.colSpan },
-      await renderTableChildren(props.children),
+      props.children,
     );
   },
 });
+
+function withTableChildren(
+  value: unknown,
+  render: (children: string) => RenderedHtml,
+): MaybePromise<RenderedHtml> {
+  const children = renderTableChildren(value);
+  return isPromiseLike(children) ? children.then(render) : render(children);
+}
+
+function tablePartWithChildren(
+  tag: 'tbody' | 'td' | 'th' | 'thead' | 'tr',
+  attributes: TablePartAttributes,
+  children: unknown,
+): MaybePromise<RenderedHtml> {
+  return withTableChildren(children, (renderedChildren) =>
+    tablePart(tag, attributes, renderedChildren),
+  );
+}
 
 function tablePart(
   tag: 'tbody' | 'td' | 'th' | 'thead' | 'tr',

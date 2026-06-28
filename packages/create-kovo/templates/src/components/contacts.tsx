@@ -175,10 +175,6 @@ const styles = style.create({
   },
 });
 
-function freshId(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID()}`;
-}
-
 function renderContactCard(contact: ContactRow): string {
   const initials =
     contact.name
@@ -243,7 +239,6 @@ export const ContactsRegion = component({
 
         {/* No-JS posts to the typed mutation endpoint; `enhance` upgrades it to a fragment swap. */}
         <form {...mutationFormAttributes(addContact)} style={styles.formPanel}>
-          <input type="hidden" name="id" value={freshId('c')} />
           <div style={styles.formHeader}>
             <p style={styles.formTitle}>New contact</p>
             <p style={styles.muted}>Keep the people you work with close at hand.</p>
