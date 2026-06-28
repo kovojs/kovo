@@ -7,7 +7,8 @@ closed.
 ## Scope
 
 Dogfooded linked local apps under `/Users/mini/kovo-dogfood-20260628`:
-`baseline`, `ui-copy-regression`, and `query-stream-regression`.
+`baseline`, `ui-copy-regression`, `query-stream-regression`, and
+`storage-webhook-regression`.
 
 The baseline starter passed `pnpm run check`, `pnpm run test`, and a dev HTTP
 smoke for `/` and `/login`. `plans/bugz-11.md` and `plans/papercuts-12.md`
@@ -84,6 +85,19 @@ dist-export-selfcheck` reported `replayed HTML contains deferred, streamed,
 or fragment route markers`; `pnpm run check` and `pnpm run test` passed in
     the same dogfood app.
 
+## Refuted / Covered Tracks
+
+- [x] **Storage capability downloads and writable webhook posture did not expose
+      a framework issue.** (storage/webhook dogfood; found no carry-forward
+      issue)
+  - Evidence: 2026-06-28
+    `/Users/mini/kovo-dogfood-20260628/storage-webhook-regression`
+    `pnpm run check` passed, including `kovo build ./src/app.tsx` and
+    `kovo check endpoint-posture .kovo/endpoint-posture.json` with `OK`
+    results for `GET /api/health`, `GET /downloads`, and
+    `POST /webhooks/receipt-created`; `pnpm run test` passed 7 tests covering
+    one-time capability replay rejection and webhook idempotency/change headers.
+
 ## Deferred Observations
 
 Copied-catalog cold import/dev render remains slow, but this pass did not carry
@@ -103,3 +117,6 @@ work is pending.
   `pnpm run test`, and `pnpm exec kovo export ./src/app.tsx
 --skip-non-exportable --out dist-export-selfcheck` passed with concrete KV229
   diagnostics for non-exportable dynamic route content.
+- `/Users/mini/kovo-dogfood-20260628/storage-webhook-regression`: `pnpm run
+check` and `pnpm run test` passed, including endpoint-posture coverage for
+  the storage download endpoint and webhook.
