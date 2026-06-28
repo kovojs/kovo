@@ -201,7 +201,11 @@ describe('route and query guard responses', () => {
       renderRoutePageResponse(authedRoute, { search: { tab: 'settings' } }, { session: null }),
     ).resolves.toEqual({
       body: '',
-      headers: { Location: '/signin?continue=%2Faccount%3Ftab%3Dsettings' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        Location: '/signin?continue=%2Faccount%3Ftab%3Dsettings',
+        Vary: 'Cookie',
+      },
       status: 303,
     });
     const routeForbidden = await renderRoutePageResponse(

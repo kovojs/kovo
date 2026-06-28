@@ -118,8 +118,27 @@ export function sniffUploadBytes(bytes: Uint8Array): SniffedContentType {
     return { contentType: recognized, inlineSafe: !active && recognized !== 'application/zip' };
   }
 
+  if (!active && looksLikePlainText(bytes)) {
+    return { contentType: 'text/plain', inlineSafe: false };
+  }
+
   // Unrecognised bytes (or active-content markup): octet-stream, never inline-safe.
   return UNKNOWN;
+}
+
+function looksLikePlainText(bytes: Uint8Array): boolean {
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return false;
+  }
+  for (const byte of bytes) {
+    if (byte === 0) return false;
+    if (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d && byte !== 0x0c) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /** Recognise a passive (non-active-content) media type by magic bytes; `undefined` if unknown. */
