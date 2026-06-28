@@ -22,7 +22,7 @@ this pass.
 
 ### A. UI Copy-In And Starter Gates
 
-- [ ] **`kovo add` copied UI source leaves required package dependencies uninstalled.** (med, dev-tooling; found by `ui-copyin-full-catalog`)
+- [x] **`kovo add` copied UI source leaves required package dependencies uninstalled.** (med, dev-tooling; found by `ui-copyin-full-catalog`)
   - Observed behavior: copied dependency-using UI components typechecked only
     after manually adding `@kovojs/headless-ui` and `@kovojs/icons`; the CLI
     printed install hints but left the app in a failing post-command state.
@@ -38,8 +38,13 @@ this pass.
   - Acceptance: the copy-in command either updates/install required packages or
     emits an exact follow-up command that is covered by a CLI test and leaves a
     fresh linked app typecheckable.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/create-kovo/src/index.test.ts`
+    passed with coverage that `kovo add` records missing package dependencies
+    in the nearest manifest, preserves local `link:` Kovo specs, and invokes the
+    app package manager install.
 
-- [ ] **Vendored `PassThroughOptions` is stale and rejects copied checkbox/radio/switch props.** (med, dev-tooling; found by `ui-copyin-full-catalog`)
+- [x] **Vendored `PassThroughOptions` is stale and rejects copied checkbox/radio/switch props.** (med, dev-tooling; found by `ui-copyin-full-catalog`)
   - Observed behavior: copied checkbox/radio/switch source failed typecheck
     after installing dependencies because the vendored helper type lacked
     `island` and `bindings`.
@@ -53,6 +58,10 @@ this pass.
     installed.
   - Acceptance: the vendored helper is generated from or kept equivalent to the
     canonical helper, with copy-in tests for `island` and `bindings`.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/create-kovo/src/index.test.ts`
+    passed with copied source checks covering `PassThroughOptions.island`,
+    `PassThroughOptions.bindings`, and `data-bind-prop:*` forwarding.
 
 - [x] **Copied child-forwarding UI components render `[object Promise]` in dev.** (high, framework; found by `ui-copyin-full-catalog`)
   - Observed behavior: dev `/catalog` returned HTTP 200 with eight literal
@@ -74,7 +83,7 @@ this pass.
     passed with JSX runtime coverage for promised children copied through a
     forwarding component.
 
-- [ ] **Generated sound-subset script flags JSX prose containing `as HTML` as an unchecked cast.** (low, template; found by `ui-copyin-full-catalog`)
+- [x] **Generated sound-subset script flags JSX prose containing `as HTML` as an unchecked cast.** (low, template; found by `ui-copyin-full-catalog`)
   - Observed behavior: starter `scripts/check-sound-subset.mjs` reported a
     violation for ordinary JSX text that included the phrase `as HTML`.
   - Root cause: the generated script scans raw source text with a broad regex
@@ -86,6 +95,10 @@ this pass.
     fail even though no TypeScript assertion was present.
   - Acceptance: the generated check ignores string and JSX text content while
     still catching real unchecked `as` casts.
+  - Evidence: 2026-06-28
+    `pnpm exec vitest run packages/cli/src/index.kovo-add.test.ts packages/create-kovo/src/index.test.ts`
+    passed with starter coverage that JSX/string prose containing `as HTML` is
+    ignored while a real unchecked cast is still reported.
 
 ### B. Query And Static Analysis
 
