@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import dns from 'node:dns';
+import http from 'node:http';
 import net from 'node:net';
 import type { LookupAddress } from 'node:dns';
 
@@ -515,8 +516,10 @@ function ipInCidr(ip: string, cidr: string): boolean {
 // ---------------------------------------------------------------------------
 
 const ORIGINAL_CONNECT = Symbol.for('kovo.egress.originalConnect');
+const ORIGINAL_HTTP_AGENT_ADD_REQUEST = Symbol.for('kovo.egress.originalHttpAgentAddRequest');
 const FLOOR_INSTALLED = Symbol.for('kovo.egress.installed');
 const FLOOR_WRAPPER = Symbol.for('kovo.egress.connectWrapper');
+const HTTP_AGENT_FLOOR_WRAPPER = Symbol.for('kovo.egress.httpAgentWrapper');
 const FLOOR_HARDENING = Symbol.for('kovo.egress.hardening');
 
 interface ConnectOptions {
@@ -531,13 +534,32 @@ type ConnectFn = (...args: unknown[]) => net.Socket;
 
 interface FlooredNetModule {
   [ORIGINAL_CONNECT]?: ConnectFn;
+  [ORIGINAL_HTTP_AGENT_ADD_REQUEST]?: AddRequestFn;
   [FLOOR_INSTALLED]?: EgressPolicy;
   [FLOOR_WRAPPER]?: ConnectFn;
+  [HTTP_AGENT_FLOOR_WRAPPER]?: AddRequestFn;
   [FLOOR_HARDENING]?: {
     mode: EgressHardeningMode;
     warn: (message: string) => void;
   };
 }
+
+type AddRequestFn = (
+  this: http.Agent,
+  req: http.ClientRequest,
+  options: AgentRequestOptions,
+) => void;
+
+interface AgentRequestOptions {
+  host?: string;
+  hostname?: string;
+  port?: number | string;
+  defaultPort?: number | string;
+  protocol?: string;
+  [key: string]: unknown;
+}
+
+type AgentSocket = net.Socket & { remotePort?: number };
 
 /**
  * Install the `net.Socket.prototype.connect` enforcement layer for `policy`. Idempotent: a
@@ -563,6 +585,7 @@ export function installNetConnectFloor(
   if (flooredNet[ORIGINAL_CONNECT]) {
     // Already installed — just swap the active policy.
     flooredNet[FLOOR_INSTALLED] = policy;
+    installHttpAgentReuseFloor(flooredNet);
     applyNetConnectHardening(flooredNet, proto, hardening, warn);
     return makeUninstall(flooredNet, proto);
   }
@@ -643,9 +666,74 @@ export function installNetConnectFloor(
 
   flooredNet[FLOOR_WRAPPER] = patchedConnect;
   proto.connect = patchedConnect;
+  installHttpAgentReuseFloor(flooredNet);
   applyNetConnectHardening(flooredNet, proto, hardening, warn);
 
   return makeUninstall(flooredNet, proto);
+}
+
+function installHttpAgentReuseFloor(flooredNet: FlooredNetModule): void {
+  const agentProto = http.Agent.prototype as unknown as { addRequest: AddRequestFn };
+  if (flooredNet[ORIGINAL_HTTP_AGENT_ADD_REQUEST]) return;
+
+  const original = agentProto.addRequest;
+  flooredNet[ORIGINAL_HTTP_AGENT_ADD_REQUEST] = original;
+
+  const patchedAddRequest = function patchedAddRequest(
+    this: http.Agent,
+    req: http.ClientRequest,
+    options: AgentRequestOptions,
+  ): void {
+    const activePolicy = flooredNet[FLOOR_INSTALLED];
+    if (!activePolicy) return original.call(this, req, options);
+
+    const blocked = evaluateHttpAgentRequest(this, options, activePolicy);
+    if (blocked) {
+      // Raw node:http/node:https keep-alive reuse skips net.Socket.prototype.connect. Deny the
+      // request at the agent boundary so a socket opened before Kovo installed the SPEC §6.6
+      // runtime floor cannot carry another request to a now-blocked private destination.
+      throw blocked;
+    }
+
+    return original.call(this, req, options);
+  };
+
+  flooredNet[HTTP_AGENT_FLOOR_WRAPPER] = patchedAddRequest;
+  agentProto.addRequest = patchedAddRequest;
+}
+
+function evaluateHttpAgentRequest(
+  agent: http.Agent,
+  options: AgentRequestOptions,
+  policy: EgressPolicy,
+): EgressBlockedError | null {
+  const host = String(options.hostname ?? options.host ?? 'localhost');
+  const port = Number(
+    options.port ?? options.defaultPort ?? (options.protocol === 'https:' ? 443 : 80),
+  );
+  const literalIp = normalizeIpLiteral(host);
+  if (literalIp !== null) {
+    return evaluateEgress({ host, port, resolvedIp: literalIp, policy });
+  }
+
+  const getName = (agent as unknown as { getName?: (opts: AgentRequestOptions) => string }).getName;
+  const name = typeof getName === 'function' ? getName.call(agent, options) : undefined;
+  const freeSockets = (agent as unknown as { freeSockets?: Record<string, AgentSocket[]> })
+    .freeSockets;
+  const sockets = name ? freeSockets?.[name] : undefined;
+  if (!sockets || sockets.length === 0) return null;
+
+  for (const socket of sockets) {
+    const resolvedIp = socket.remoteAddress;
+    if (!resolvedIp) continue;
+    const socketPort = Number(socket.remotePort ?? port);
+    const blocked = evaluateEgress({ host, port: socketPort, resolvedIp, policy });
+    if (blocked) {
+      for (const pooled of sockets) pooled.destroy(blocked);
+      return blocked;
+    }
+  }
+  return null;
 }
 
 function makeUninstall(flooredNet: FlooredNetModule, proto: { connect: ConnectFn }): () => void {
@@ -657,9 +745,19 @@ function makeUninstall(flooredNet: FlooredNetModule, proto: { connect: ConnectFn
         writable: true,
         configurable: true,
       });
+      const originalAddRequest = flooredNet[ORIGINAL_HTTP_AGENT_ADD_REQUEST];
+      if (originalAddRequest) {
+        Object.defineProperty(http.Agent.prototype, 'addRequest', {
+          value: originalAddRequest,
+          writable: true,
+          configurable: true,
+        });
+      }
       delete flooredNet[ORIGINAL_CONNECT];
+      delete flooredNet[ORIGINAL_HTTP_AGENT_ADD_REQUEST];
       delete flooredNet[FLOOR_INSTALLED];
       delete flooredNet[FLOOR_WRAPPER];
+      delete flooredNet[HTTP_AGENT_FLOOR_WRAPPER];
       delete flooredNet[FLOOR_HARDENING];
     }
   };
