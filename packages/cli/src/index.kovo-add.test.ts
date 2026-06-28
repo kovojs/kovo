@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { main } from './index.js';
 import {
   availableAddComponents,
+  normalizedVendoredUiComponentSource,
   vendoredUiComponentSource,
   vendoredUiComponents,
 } from './add-catalog.js';
@@ -32,6 +33,25 @@ function requiredKovoPackageDependencies(source: string): readonly string[] {
       ),
     ),
   ].sort();
+}
+
+function soundSubsetFindings(source: string): readonly string[] {
+  const findings: string[] = [];
+  let inImportStatement = false;
+  for (const [index, line] of source.split('\n').entries()) {
+    const text = line.includes('//') ? line.slice(0, line.indexOf('//')) : line;
+    if (/^\s*(?:\/\*|\*|\*\/)/.test(text)) continue;
+    if (inImportStatement || /^\s*import\b/.test(text)) {
+      inImportStatement = !/;\s*$/.test(text);
+      continue;
+    }
+    if (/\bany\b/.test(text)) findings.push(`line ${index + 1}: any`);
+    if (/\bas\s+(?!const\b)[A-Za-z_{]/.test(text)) findings.push(`line ${index + 1}: cast`);
+    if (/[A-Za-z0-9_$)\]]!\s*(?:[.;,\])}]|\?|$)/.test(text)) {
+      findings.push(`line ${index + 1}: non-null`);
+    }
+  }
+  return findings;
 }
 
 describe('kovo add', () => {
@@ -84,6 +104,7 @@ describe('kovo add', () => {
       expect(entry.source).not.toContain("from './theme.js'");
       expect(entry.source).not.toContain('kovo-c=');
       expect(entry.source).not.toContain('data-bind=');
+      expect(soundSubsetFindings(entry.source), name).toEqual([]);
     }
   });
 
@@ -567,6 +588,37 @@ describe('kovo add', () => {
       expect(stderr).not.toHaveBeenCalled();
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `SKIP button path=${JSON.stringify(join(outDir, 'button.tsx'))} reason=already-current`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('is idempotent after formatter-only whitespace changes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
+    const outDir = join(root, 'ui');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+      const buttonPath = join(outDir, 'button.tsx');
+      const formattedOnly = readFileSync(buttonPath, 'utf8')
+        .replace(/\n{2,}/g, '\n\n\n')
+        .replace(/\n/g, '  \n');
+      expect(normalizedVendoredUiComponentSource(formattedOnly)).toBe(
+        normalizedVendoredUiComponentSource(vendoredUiComponents.button.source),
+      );
+      writeFileSync(buttonPath, formattedOnly, 'utf8');
+      stdout.mockClear();
+
+      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `SKIP button path=${JSON.stringify(buttonPath)} reason=already-current`,
       );
     } finally {
       stdout.mockRestore();

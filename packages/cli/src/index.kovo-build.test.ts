@@ -647,7 +647,9 @@ export default createApp({ endpoints: [download] });
       writeFileSync(
         appPath,
         `
-import { createApp, hmacSignature, s, webhook } from '@kovojs/server';
+import { createApp, domain, hmacSignature, s, webhook } from '@kovojs/server';
+
+const payment = domain('payment');
 
 const paymentWebhook = webhook('payment', {
   handler() {
@@ -662,6 +664,7 @@ const paymentWebhook = webhook('payment', {
     scheme: 'hmac-sha256:hex',
     secret: 'whsec_test',
   }),
+  writes: [payment],
 });
 
 export default createApp({ endpoints: [paymentWebhook] });
@@ -674,6 +677,12 @@ export default createApp({ endpoints: [paymentWebhook] });
       expect(exitCode, errorOutput).toBe(0);
       expect(errorOutput).not.toContain('KV423');
       expect(errorOutput).not.toContain('KV436');
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        endpoints?: { name?: string; writes?: string[] }[];
+      };
+      expect(graph.endpoints).toContainEqual(
+        expect.objectContaining({ name: 'payment', writes: ['payment'] }),
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

@@ -775,6 +775,14 @@ export function kovoCheck(
         pushFinding(line, line.startsWith('ERROR '));
       }
     }
+    if (family === 'endpoint-posture') {
+      for (const line of missingEndpointPostureLines(
+        graph.endpoints ?? [],
+        graph.endpointPosture ?? [],
+      )) {
+        pushFinding(line, true);
+      }
+    }
   }
 
   if (includeAll || family === 'optimistic') {
@@ -1281,6 +1289,23 @@ function endpointPostureVerificationLines(
   }
 
   return failures.map((failure) => `ERROR ENDPOINT-POSTURE ${site}${fact.endpoint} ${failure}`);
+}
+
+function missingEndpointPostureLines(
+  endpoints: readonly CoreGraph.EndpointExplain[],
+  facts: readonly CoreGraph.EndpointPostureVerificationFact[],
+): string[] {
+  const observed = new Set(facts.filter((fact) => fact.observed).map((fact) => fact.endpoint));
+  return endpoints
+    .filter((endpoint) => endpoint.method !== undefined)
+    .map((endpoint) => endpointPostureKey(endpoint))
+    .filter((endpoint) => !observed.has(endpoint))
+    .sort()
+    .map((endpoint) => `ERROR ENDPOINT-POSTURE ${endpoint} declared endpoint was not observed.`);
+}
+
+function endpointPostureKey(endpoint: CoreGraph.EndpointExplain): string {
+  return `${endpoint.method ?? 'ANY'} ${endpoint.path}`;
 }
 
 function staticDiagnosticLine(diagnostic: CoreGraph.StaticDiagnosticFact): string {
@@ -2050,6 +2075,9 @@ function compareRevealExplain(
 }
 
 function endpointAuth(endpoint: CoreGraph.EndpointExplain): string {
+  if (endpoint.auth === 'none' && endpoint.authJustification) {
+    return `none:${endpoint.authJustification}`;
+  }
   return endpoint.auth ?? list(endpoint.guards);
 }
 
