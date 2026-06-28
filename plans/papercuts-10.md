@@ -70,7 +70,7 @@ __kovoAssignDerivedQueryKey }` from the wire module.
 
 ### B. Copied UI Composition
 
-- [ ] **Copied `Card` renders nested rich children as literal `[object Promise]` in dev and production.** (high, framework; found by `ui-registry-rich-composition`)
+- [x] **Copied `Card` renders nested rich children as literal `[object Promise]` in dev and production.** (high, framework; found by `ui-registry-rich-composition`)
   - Observed behavior: a public `/catalog` route using copied
     `<Card><div><Table>...</Table></div></Card>` returned HTTP 200 but rendered
     a literal `[object Promise]` inside the card body in both dev and production.
@@ -86,8 +86,12 @@ http://127.0.0.1:5274/catalog` against the production server returned
     `HTTP/1.1 200` and `rg '\\[object Promise\\]'` matched the response.
   - Acceptance: copied `Card` accepts and renders rich JSX/HTML children without
     literal promise strings, with dev and production coverage.
+  - Evidence: 2026-06-28 `pnpm exec vitest --run
+    packages/ui/src/card.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts
+    packages/ui/src/copy-in.test.ts` passed with nested Card/Table children
+    rendering without `[object Promise]`.
 
-- [ ] **`kovo add tabs` copies a TSX file that imports an uncopied sibling type module.** (med, dev-tooling; found by `ui-registry-rich-composition`)
+- [x] **`kovo add tabs` copies a TSX file that imports an uncopied sibling type module.** (med, dev-tooling; found by `ui-registry-rich-composition`)
   - Observed behavior: `kovo add tabs --out src/components/ui-tabs-repro`
     succeeded, but the app could not typecheck because copied `tabs.tsx` imports
     `./navigation-types.js`, which was not copied.
@@ -102,8 +106,12 @@ http://127.0.0.1:5274/catalog` against the production server returned
     produced `TS2307: Cannot find module './navigation-types.js'`.
   - Acceptance: `kovo add tabs` either vendors required sibling type modules or
     rewrites the copied source to depend only on copied/public imports.
+  - Evidence: 2026-06-28 `pnpm exec vitest --run
+    packages/ui/src/card.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts
+    packages/ui/src/copy-in.test.ts` passed with `kovo add tabs` copying
+    `navigation-types.ts`.
 
-- [ ] **Freshly copied UI source still fails the generated formatter gate.** (med, dev-tooling; found by `ui-registry-rich-composition`)
+- [x] **Freshly copied UI source still fails the generated formatter gate.** (med, dev-tooling; found by `ui-registry-rich-composition`)
   - Observed behavior: after copying button/card/table/command/combobox/select/
     dialog/badge/alert/popover, the first `pnpm run check` failed on formatter
     issues in framework-supplied copied files; `vp check --fix` made the gate
@@ -121,10 +129,14 @@ exec vp check --fix`, `pnpm run check` passed and `kovo add` remained
     idempotent.
   - Acceptance: copied UI files land formatter-stable for the generated app, and
     idempotency remains stable after the formatter.
+  - Evidence: 2026-06-28 `pnpm exec vitest --run
+    packages/ui/src/card.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts
+    packages/ui/src/copy-in.test.ts` passed with canonicalized vendored source
+    and copy-in idempotency coverage.
 
 ### C. Endpoint Explain Ergonomics
 
-- [ ] **Endpoint explain hides `publicAccess(...)` justification on raw endpoints.** (low, dev-tooling; found by `endpoints-webhooks-posture`)
+- [x] **Endpoint explain hides `publicAccess(...)` justification on raw endpoints.** (low, dev-tooling; found by `endpoints-webhooks-posture`)
   - Observed behavior: default-CSRF raw endpoints declared `access:
 publicAccess(...)` and passed build/access checks, but `kovo explain
 --endpoints` printed `auth=-` with no public justification; `kovo explain
@@ -142,6 +154,9 @@ publicAccess(...)` and passed build/access checks, but `kovo explain
     `decision=public ... justification=...`.
   - Acceptance: endpoint explain rows surface `publicAccess(...)` decisions and
     justifications for raw endpoints without regressing `auth=none:<reason>`.
+  - Evidence: 2026-06-28 `pnpm exec vitest run
+    packages/cli/src/index.kovo-explain.test.ts` passed with
+    `auth=public:<justification>` endpoint explain coverage.
 
 ## Refuted / Not Carried Forward
 
