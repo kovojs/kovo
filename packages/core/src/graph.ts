@@ -314,6 +314,7 @@ export interface EndpointExplain {
   access?: AccessDecisionFact;
   appOwnedSafety?: boolean;
   auth?: string;
+  authJustification?: string;
   body?: string;
   bodySize?: string;
   cache?: string;
@@ -735,7 +736,11 @@ function pageAccessFact(page: PageExplain): AccessExplainFact {
 function endpointAccessFact(endpoint: EndpointExplain): AccessExplainFact {
   const kind: AccessExplainFact['kind'] = endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
   const name = endpoint.name ?? endpoint.path;
-  const detail = `method=${endpoint.method ?? 'ANY'} path=${endpoint.path} mount=${endpoint.mount ?? 'exact'} auth=${endpoint.auth ?? '-'}`;
+  const auth =
+    endpoint.auth === 'none' && endpoint.authJustification
+      ? `none:${endpoint.authJustification}`
+      : (endpoint.auth ?? '-');
+  const detail = `method=${endpoint.method ?? 'ANY'} path=${endpoint.path} mount=${endpoint.mount ?? 'exact'} auth=${auth}`;
 
   const explicit = explicitAccessExplainFact(kind, name, endpoint.access);
   if (explicit) {

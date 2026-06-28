@@ -1361,6 +1361,12 @@ describe('kovo check', () => {
     expect(
       kovoCheck(
         {
+          endpoints: [
+            {
+              method: 'GET',
+              path: '/api/health',
+            },
+          ],
           endpointPosture: [
             {
               endpoint: 'GET /api/health',
@@ -1375,6 +1381,43 @@ describe('kovo check', () => {
     ).toEqual({
       exitCode: 0,
       output: 'kovo-check/v1\nOK ENDPOINT-POSTURE src/endpoint-posture.test.ts GET /api/health\n',
+    });
+  });
+
+  it('fails endpoint posture when a declared endpoint has no observed fixture', () => {
+    expect(
+      kovoCheck(
+        {
+          endpoints: [
+            {
+              method: 'GET',
+              path: '/api/health',
+            },
+            {
+              method: 'POST',
+              path: '/webhooks/audit',
+              surface: 'webhook',
+            },
+          ],
+          endpointPosture: [
+            {
+              endpoint: 'GET /api/health',
+              failures: [],
+              observed: true,
+              site: 'src/endpoint-posture.test.ts',
+            },
+          ],
+        },
+        { family: 'endpoint-posture' },
+      ),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'OK ENDPOINT-POSTURE src/endpoint-posture.test.ts GET /api/health',
+        'ERROR ENDPOINT-POSTURE POST /webhooks/audit declared endpoint was not observed.',
+        '',
+      ].join('\n'),
     });
   });
 

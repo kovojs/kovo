@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build:prod": "kovo build ./src/app.tsx",
-    "check": "vp check && pnpm run check:sound-subset && pnpm run check:endpoint-posture && pnpm run build:prod",
+    "check": "vp check && pnpm run check:sound-subset && pnpm run build:prod && pnpm run check:endpoint-posture",
     "check:endpoint-posture": "vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json",
     "check:sound-subset": "node scripts/check-sound-subset.mjs",
     "dev": "vp dev",

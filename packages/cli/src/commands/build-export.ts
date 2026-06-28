@@ -756,7 +756,14 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
   return {
     ...(endpoint.access === undefined ? {} : { access: endpoint.access }),
     appOwnedSafety: endpoint.response.appOwnedSafety,
-    ...(endpoint.auth === undefined ? {} : { auth: endpointCheckAuth(endpoint.auth) }),
+    ...(endpoint.auth === undefined
+      ? {}
+      : {
+          auth: endpointCheckAuth(endpoint.auth),
+          ...(endpoint.auth.kind === 'none'
+            ? { authJustification: endpoint.auth.justification }
+            : {}),
+        }),
     body: endpoint.response.body,
     cache: endpoint.response.cache,
     csrf,
@@ -773,6 +780,7 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
     path: endpoint.path,
     reason: endpoint.reason,
     surface: 'webhook' in endpoint && endpoint.webhook === true ? 'webhook' : 'endpoint',
+    ...endpointWrites(endpoint),
   };
 }
 
@@ -786,6 +794,23 @@ function endpointWebhookName(endpoint: KovoApp['endpoints'][number]): string | u
   if (!('webhook' in endpoint) || endpoint.webhook !== true) return undefined;
   if (!('name' in endpoint) || typeof endpoint.name !== 'string') return undefined;
   return endpoint.name;
+}
+
+function endpointWrites(
+  endpoint: KovoApp['endpoints'][number],
+): Pick<CoreGraph.EndpointExplain, 'writes'> {
+  if (!isWebhookEndpoint(endpoint)) return {};
+  const writes = endpoint.webhookDefinition.writes?.map((domain) => domain.key) ?? [];
+  return writes.length === 0 ? {} : { writes: uniqueSorted(writes) };
+}
+
+function isWebhookEndpoint(
+  endpoint: KovoApp['endpoints'][number],
+): endpoint is KovoApp['endpoints'][number] & {
+  webhook: true;
+  webhookDefinition: { writes?: readonly { key: string }[] };
+} {
+  return 'webhook' in endpoint && endpoint.webhook === true && 'webhookDefinition' in endpoint;
 }
 
 function buildCheckSourceFiles(appModulePath: string): BuildCheckSourceFile[] {
