@@ -1,5 +1,5 @@
 import { form, type FormInput } from '@kovojs/core';
-import { guards, mutation, s, type MutationContext } from '@kovojs/server';
+import { guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
 
 import { appCsrf, type AppRequest } from './auth.js';
@@ -31,7 +31,6 @@ export const addContact = mutation('addContact', {
   errors: { DUPLICATE_EMAIL: duplicateEmailError },
   guard: guards.authed<AppRequest>(),
   input: s.object({
-    id: s.string(),
     name: s.string(),
     email: s.string(),
     company: s.string(),
@@ -39,7 +38,7 @@ export const addContact = mutation('addContact', {
   optimistic: {
     contacts(draft, $input) {
       const row = {
-        id: $input.id,
+        id: `pending-${$input.email}`,
         name: $input.name,
         email: $input.email,
         company: $input.company,
@@ -50,7 +49,7 @@ export const addContact = mutation('addContact', {
     },
   },
   async handler(
-    { id, name, email, company },
+    { name, email, company },
     request: AppRequest,
     context: MutationContext<{ DUPLICATE_EMAIL: typeof duplicateEmailError }>,
   ) {
@@ -59,7 +58,10 @@ export const addContact = mutation('addContact', {
     if (existing) {
       return context.fail('DUPLICATE_EMAIL', { email });
     }
-    await db.insert(contacts).values({ id, name, email, company });
+    const id = crypto.randomUUID();
+    await db
+      .insert(contacts)
+      .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });
     return { id };
   },
 });
