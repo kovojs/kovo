@@ -161,7 +161,10 @@ examples/stackoverflow/src/optimism-derivation.test.ts`, `pnpm run check:vp`, an
     the normal `OptimisticFor` typing path; verification passed `pnpm exec vitest run
 packages/browser/src/optimism-typing.test.ts packages/core/src/index.test.ts`. Remaining gap:
     direct-test query/domain declarations still need a generated live-target/query-key lowering path
-    before their key-first forms can be removed.
+    before their key-first forms can be removed. `packages/browser/src/submit-context-apply.test.ts`
+    now exercises `ctx.submit` with mutation-value form handles; verification passed
+    `pnpm exec vitest run packages/browser/src/submit-context-apply.test.ts
+packages/browser/src/submit-context-failure.test.ts`.
 
 ## Phase 3 - Query Keys
 
@@ -405,4 +408,7 @@ examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/op
   passed.
 - 2026-06-27: Emitted generated live-target renderer query bindings from compiler facts; `pnpm exec
 vitest run packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts`
+  passed.
+- 2026-06-27: Exercised browser `ctx.submit` with mutation-value form handles; `pnpm exec vitest
+run packages/browser/src/submit-context-apply.test.ts packages/browser/src/submit-context-failure.test.ts`
   passed.

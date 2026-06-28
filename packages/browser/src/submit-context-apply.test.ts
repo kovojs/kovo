@@ -24,7 +24,7 @@ declare module '@kovojs/core' {
 // failure-parsing behavior lives in the sibling submit-context-failure.test.ts.
 describe('submit context apply', () => {
   it('submits typed forms through a ctx.submit-style helper', async () => {
-    const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
+    const addToCart = form(addToCartMutation);
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
@@ -92,9 +92,7 @@ describe('submit context apply', () => {
   });
 
   it('proves form field and navigation path renames fail under type checking', () => {
-    const addToCartAfterFieldRename = form<'cart/add', { sku: string; quantity: number }>(
-      'cart/add',
-    );
+    const addToCartAfterFieldRename = form(addToCartAfterFieldRenameMutation);
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const ctx = createSubmitContext({
@@ -157,3 +155,21 @@ describe('submit context apply', () => {
     expect(assertLegacySearchFieldRejected).toBeTypeOf('function');
   });
 });
+
+const addToCartMutation = {
+  input: {
+    parse(input: unknown): { productId: string; quantity: number } {
+      return input as { productId: string; quantity: number };
+    },
+  },
+  key: 'cart/add',
+} as const;
+
+const addToCartAfterFieldRenameMutation = {
+  input: {
+    parse(input: unknown): { quantity: number; sku: string } {
+      return input as { quantity: number; sku: string };
+    },
+  },
+  key: 'cart/add',
+} as const;
