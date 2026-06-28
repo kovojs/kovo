@@ -299,6 +299,99 @@ export default createApp({
     }
   });
 
+  it('passes check preflight for the framework storage download endpoint', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-storage-download-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import {
+  createApp,
+  createMemoryStorage,
+  createStorageDownloadEndpoint,
+} from '@kovojs/server';
+
+const storage = createMemoryStorage();
+const download = createStorageDownloadEndpoint({
+  secret: '0123456789abcdef0123456789abcdef',
+  storage,
+});
+
+export default createApp({ endpoints: [download] });
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('KV423');
+      expect(errorOutput).not.toContain('KV436');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('serializes webhook build facts with webhook surface and verifier auth', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-webhook-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, hmacSignature, s, webhook } from '@kovojs/server';
+
+const paymentWebhook = webhook('payment', {
+  handler() {
+    return { ok: true };
+  },
+  input: s.object({ id: s.string() }),
+  path: '/webhooks/payment',
+  verify: hmacSignature({
+    encoding: 'hex',
+    header: 'x-signature',
+    payload: (request) => request.payload,
+    scheme: 'hmac-sha256:hex',
+    secret: 'whsec_test',
+  }),
+});
+
+export default createApp({ endpoints: [paymentWebhook] });
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('KV423');
+      expect(errorOutput).not.toContain('KV436');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('excludes adjacent test fixtures from the production build graph preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-test-source-filter-'));
     const appPath = join(root, 'src/app.mjs');

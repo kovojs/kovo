@@ -47,10 +47,7 @@ export {
   type RegisteredQueryDefinition,
 } from '../query.js';
 export type {
-  WebhookFailureStatus,
   WebhookReplayReservation,
   WebhookReplayStore,
-  WebhookResponseStatus,
-  WebhookSuccessStatus,
   WebhookWireResponse,
 } from '../webhook.js';

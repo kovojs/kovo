@@ -1,9 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import {
-  renderServerRenderable,
-  type InternalServerRenderable,
-} from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
@@ -102,7 +98,21 @@ function escapeHtml(value: unknown): string {
 }
 
 async function renderTableChildren(value: unknown): Promise<string> {
-  return renderServerRenderable(value as InternalServerRenderable);
+  if (Array.isArray(value)) {
+    const rendered = await Promise.all(value.map((item) => renderTableChildren(item)));
+    return rendered.join('');
+  }
+  if (isPromiseLike(value)) return renderTableChildren(await value);
+  return escapeHtml(value);
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
 
 function escapeAttribute(value: string): string {

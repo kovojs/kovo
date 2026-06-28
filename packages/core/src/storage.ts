@@ -48,18 +48,18 @@ export interface StorageCapability {
   stream(key: string): Promise<StorageStreamResult | undefined>;
 }
 
-/** @internal Options for the filesystem-backed storage adapter: the root directory objects are stored under. */
+/** Options for the filesystem-backed storage adapter: the root directory objects are stored under. */
 export interface FileSystemStorageOptions {
   root: string;
 }
 
-/** @internal Options for the in-memory storage adapter: an optional clock used for deterministic modified times. */
+/** Options for the in-memory storage adapter: an optional clock used for deterministic modified times. */
 export interface MemoryStorageOptions {
   now?: () => Date;
 }
 
 /**
- * @internal Input to an S3-compatible put-object call: target bucket and key, the body, and optional
+ * Input to an S3-compatible put-object call: target bucket and key, the body, and optional
  * content type, caller-supplied etag, and metadata.
  *
  * `etag` is the caller-provided etag from `StoragePutOptions`. SPEC §12/§13 cross-backend parity
@@ -76,19 +76,19 @@ export interface S3CompatiblePutObjectInput {
   metadata?: Readonly<Record<string, string>>;
 }
 
-/** @internal Input to an S3-compatible get-object call: the target bucket and key. */
+/** Input to an S3-compatible get-object call: the target bucket and key. */
 export interface S3CompatibleGetObjectInput {
   bucket: string;
   key: string;
 }
 
-/** @internal Input to an S3-compatible head-object call: the target bucket and key. */
+/** Input to an S3-compatible head-object call: the target bucket and key. */
 export interface S3CompatibleHeadObjectInput {
   bucket: string;
   key: string;
 }
 
-/** @internal Object metadata returned by an S3-compatible client: content length, content type, etag, modified time, and custom metadata. */
+/** Object metadata returned by an S3-compatible client: content length, content type, etag, modified time, and custom metadata. */
 export interface S3CompatibleObjectMetadata {
   contentLength?: number;
   contentType?: string;
@@ -97,24 +97,24 @@ export interface S3CompatibleObjectMetadata {
   metadata?: Readonly<Record<string, string>>;
 }
 
-/** @internal Output of an S3-compatible put-object call: the object metadata plus an optional size. */
+/** Output of an S3-compatible put-object call: the object metadata plus an optional size. */
 export interface S3CompatiblePutObjectOutput extends S3CompatibleObjectMetadata {
   size?: number;
 }
 
-/** @internal Output of an S3-compatible get-object call: the object metadata plus the object body. */
+/** Output of an S3-compatible get-object call: the object metadata plus the object body. */
 export interface S3CompatibleGetObjectOutput extends S3CompatibleObjectMetadata {
   body: StorageBody;
 }
 
-/** @internal The minimal S3-compatible client an app supplies: get, head, and put object operations. */
+/** The minimal S3-compatible client an app supplies: get, head, and put object operations. */
 export interface S3CompatibleObjectClient {
   getObject(input: S3CompatibleGetObjectInput): Promise<S3CompatibleGetObjectOutput | undefined>;
   headObject(input: S3CompatibleHeadObjectInput): Promise<S3CompatibleObjectMetadata | undefined>;
   putObject(input: S3CompatiblePutObjectInput): Promise<S3CompatiblePutObjectOutput>;
 }
 
-/** @internal Options for the S3-compatible storage adapter: the bucket, the underlying object client, and an optional key prefix. */
+/** Options for the S3-compatible storage adapter: the bucket, the underlying object client, and an optional key prefix. */
 export interface S3CompatibleStorageOptions {
   bucket: string;
   client: S3CompatibleObjectClient;
@@ -138,9 +138,9 @@ const textEncoder = new TextEncoder();
 const sidecarSuffix = '.kovo-storage.json';
 
 /**
- * @internal Create an in-memory object store implementing `StorageCapability`.
+ * Create an in-memory object store implementing `StorageCapability`.
  * Useful for tests and local development where uploads should not touch disk or
- * a bucket. Repo-internal adapter; apps wire storage through `@kovojs/server`.
+ * a bucket. Apps can pass the returned capability to upload and download sinks.
  *
  * @param options - Optional `now` clock for deterministic `lastModified` values.
  * @returns A `StorageCapability` backed by a `Map`.
@@ -189,9 +189,9 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
 }
 
 /**
- * @internal Create an object store backed by a directory on the local
+ * Create an object store backed by a directory on the local
  * filesystem. Object metadata is kept in sidecar JSON files alongside each
- * blob. Repo-internal adapter; apps wire storage through `@kovojs/server`.
+ * blob. Apps can pass the returned capability to upload and download sinks.
  *
  * @param options - The `root` directory under which objects are stored.
  * @returns A `StorageCapability` backed by the filesystem.
@@ -258,9 +258,8 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
 }
 
 /**
- * @internal Adapt any S3-compatible object client (AWS S3, R2, MinIO, …) to the
+ * Adapt any S3-compatible object client (AWS S3, R2, MinIO, …) to the
  * `StorageCapability` interface, so the same upload code works across backends.
- * Repo-internal adapter; apps wire storage through `@kovojs/server`.
  *
  * @param options - The bucket and an `S3CompatibleObjectClient` implementation.
  * @returns A `StorageCapability` backed by the given client and bucket.

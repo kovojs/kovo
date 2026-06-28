@@ -94,11 +94,11 @@ describe('core authoring APIs', () => {
     expect('fragmentTarget' in coreRoot).toBe(false);
   });
 
-  it('keeps the typed-event declaration family and storage adapters off the root surface', () => {
+  it('keeps typed-event declarations internal while storage adapters are public app wiring', () => {
     expect('event' in coreRoot).toBe(false);
-    expect('createMemoryStorage' in coreRoot).toBe(false);
-    expect('createFileSystemStorage' in coreRoot).toBe(false);
-    expect('createS3CompatibleStorage' in coreRoot).toBe(false);
+    expect('createMemoryStorage' in coreRoot).toBe(true);
+    expect('createFileSystemStorage' in coreRoot).toBe(true);
+    expect('createS3CompatibleStorage' in coreRoot).toBe(true);
     expect('normalizeStorageKey' in coreRoot).toBe(false);
     expect('storageBodyToBytes' in coreRoot).toBe(false);
   });

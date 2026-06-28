@@ -40,7 +40,8 @@ block shipping correct code.
 
 ### A. Capability / file-download surface (built but unbuildable)
 
-- [ ] **A1 — The framework's own `createStorageDownloadEndpoint` cannot pass `kovo build` (KV423 + KV436).** (HIGH, framework; auth-C2 = files-C1)
+- [x] **A1 — The framework's own `createStorageDownloadEndpoint` cannot pass `kovo build` (KV423 + KV436).** (HIGH, framework; auth-C2 = files-C1)
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "storage download endpoint|webhook build facts|Drizzle security extractors|fatal optimistic"` proves a mounted storage download endpoint passes build preflight without KV423/KV436.
   - Observed: registering `createStorageDownloadEndpoint({ storage, secret })` in
     `createApp({ endpoints })` makes `build:prod` exit 1 with
     `ERROR KV423 ENDPOINT /_kovo/storage … missing=appOwnedSafety` and
@@ -64,7 +65,8 @@ block shipping correct code.
     capability-token justification, or KV423/KV436 should exempt the framework-owned
     verify-before-read byte sink. Add a build test mounting the endpoint that exits 0.
 
-- [ ] **A2 — No public `StorageCapability` constructor: `createMemoryStorage`/`createFileSystemStorage`/`createS3CompatibleStorage` are `@internal`, reachable only via the `@kovojs/core/internal/storage` deep import.** (MEDIUM, framework; auth-C3 = files-C3)
+- [x] **A2 — No public `StorageCapability` constructor: `createMemoryStorage`/`createFileSystemStorage`/`createS3CompatibleStorage` are `@internal`, reachable only via the `@kovojs/core/internal/storage` deep import.** (MEDIUM, framework; auth-C3 = files-C3)
+  - Evidence: `pnpm exec vitest run packages/core/src/storage.test.ts packages/core/src/index.test.ts packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts` plus `pnpm run check:api-surface` prove storage factories/options are public and server API exports remain surface-compliant.
   - Observed: `import { createMemoryStorage } from '@kovojs/core'` → TS2305; only
     `@kovojs/core/internal/storage` works.
   - Root cause: `packages/core/src/index.ts:34-42` re-exports only `type
@@ -121,7 +123,8 @@ type=file>` posts without multipart enctype → 422, no visible message; builds 
 
 ### B. Webhooks & endpoints (the build gate rejects correct webhooks)
 
-- [ ] **B1 — Every `webhook()` fails `kovo build`/`check`: the surface is misclassified as a plain endpoint → KV423 (missing appOwnedSafety) + KV436 (missing access).** (HIGH, framework; endpoints-C1)
+- [x] **B1 — Every `webhook()` fails `kovo build`/`check`: the surface is misclassified as a plain endpoint → KV423 (missing appOwnedSafety) + KV436 (missing access).** (HIGH, framework; endpoints-C1)
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "storage download endpoint|webhook build facts|Drizzle security extractors|fatal optimistic"` proves signature-verified webhooks serialize as webhook/verifier facts and pass build preflight without KV423/KV436.
   - Observed: a textbook public `webhook()` + `hmacSignature()` → `build:prod` exit 1
     with `ERROR KV423 ENDPOINT /webhooks/payment … missing=appOwnedSafety` and
     `ERROR KV436 ENDPOINT /webhooks/payment … auth=hmac-sha256:hex` (labeled ENDPOINT,
@@ -169,7 +172,8 @@ required.` Removing `recordChange`/`transaction` does NOT clear it; only removin
     the string-key `domain(key)` form as a plain invalidation-domain identifier (not
     a write-action object). Add a fixture: `domain('x')` used by a webhook `recordChange`.
 
-- [ ] **B3 — A writable webhook MANDATES `idempotency()` + a `replayStore`, but no usable store ships and the `WebhookReplayStore` types are `@internal`/unexported (and the mutation store is type-incompatible).** (MEDIUM, framework; endpoints-C3)
+- [x] **B3 — A writable webhook MANDATES `idempotency()` + a `replayStore`, but no usable store ships and the `WebhookReplayStore` types are `@internal`/unexported (and the mutation store is type-incompatible).** (MEDIUM, framework; endpoints-C3)
+  - Evidence: `pnpm exec vitest run packages/core/src/storage.test.ts packages/core/src/index.test.ts packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts` proves `createMemoryWebhookReplayStore` and webhook replay types satisfy the writable webhook posture.
   - Observed: a tx-exposing webhook throws at declaration without `idempotency()` +
     `replayStore`, but there's no `createMemoryWebhookReplayStore`, the store
     interfaces are unexported (TS2305), and `createMemoryMutationReplayStore` is not
@@ -203,7 +207,8 @@ required.` Removing `recordChange`/`transaction` does NOT clear it; only removin
   - Acceptance: have the starter set `createApp({ csrf: appCsrf })` and/or emit a dev
     warning when a default-CSRF endpoint is registered but `app.csrf` is undefined.
 
-- [ ] **B5 — Webhook verifier helpers (`hmacSignature`/`standardWebhooks`/`customVerifier`) are exported only from `@kovojs/core`, not re-exported from `@kovojs/server` alongside `webhook()`.** (LOW, framework; endpoints-C6)
+- [x] **B5 — Webhook verifier helpers (`hmacSignature`/`standardWebhooks`/`customVerifier`) are exported only from `@kovojs/core`, not re-exported from `@kovojs/server` alongside `webhook()`.** (LOW, framework; endpoints-C6)
+  - Evidence: `pnpm exec vitest run packages/core/src/storage.test.ts packages/core/src/index.test.ts packages/server/src/webhook.test.ts packages/server/src/api/app.test.ts` plus `pnpm run check:api-surface` prove verifier helpers/types are exported from `@kovojs/server` without widening undocumented API.
   - Observed: authoring a verified webhook splits imports across two packages; the
     helpers don't appear in `@kovojs/server` autocomplete.
   - Root cause: `packages/server/src/index.ts` re-exports `webhook` (:339) but not the
