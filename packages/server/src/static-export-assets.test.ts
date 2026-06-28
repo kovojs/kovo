@@ -220,6 +220,68 @@ describe('server static export', () => {
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/index.html']);
   });
 
+  it('copies document-referenced public assets from a configured public asset root', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    const publicRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-public-'));
+    try {
+      await writeFile(path.join(publicRoot, 'mark.svg'), '<svg viewBox="0 0 1 1"></svg>', 'utf8');
+      await writeFile(path.join(publicRoot, 'note.txt'), 'public note\n', 'utf8');
+      const app = createApp({
+        routes: [
+          route('/', {
+            page: () =>
+              trustedHtml('<main><img src="/mark.svg" alt=""><a href="/note.txt">Note</a></main>'),
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, { outDir, publicAssetRoot: publicRoot });
+
+      expect(result.assets).toEqual([
+        { headers: {}, path: '/mark.svg', source: path.join(publicRoot, 'mark.svg'), status: 200 },
+        { headers: {}, path: '/note.txt', source: path.join(publicRoot, 'note.txt'), status: 200 },
+      ]);
+      await expect(readFile(path.join(outDir, 'mark.svg'), 'utf8')).resolves.toBe(
+        '<svg viewBox="0 0 1 1"></svg>',
+      );
+      await expect(readFile(path.join(outDir, 'note.txt'), 'utf8')).resolves.toBe('public note\n');
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(publicRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects missing document-referenced public assets before writing output', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
+    const publicRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-public-'));
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page: () => trustedHtml('<main><img src="/missing.svg" alt=""></main>'),
+          }),
+        ],
+      });
+
+      await expect(
+        exportStaticApp(app, { outDir, publicAssetRoot: publicRoot }),
+      ).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          {
+            code: 'KV229',
+            message: expect.stringContaining("referenced public asset '/missing.svg'"),
+            routePath: '/missing.svg',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(publicRoot, { force: true, recursive: true });
+    }
+  });
+
   it('replays app-wide stylesheets into static route documents', async () => {
     const app = createApp({
       routes: [

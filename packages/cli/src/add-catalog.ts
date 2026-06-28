@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 export interface VendoredUiComponent {
   fileName: `${string}.tsx`;
   packageVersion: string;
+  requiredPackageDependencies: readonly string[];
   source: string;
   sourceHash: string;
 }
@@ -31,7 +32,7 @@ export const vendoredUiComponents = Object.freeze(
       {
         fileName: `${name}.tsx`,
         packageVersion: uiPackageManifest.version ?? '0.0.0',
-        source: readVendoredSource(name, sourcePath),
+        ...readVendoredSource(name, sourcePath),
         sourceHash: verifyVendoredSourceHash(name, sourcePath),
       },
     ]),
@@ -107,7 +108,10 @@ function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [strin
     .sort(([left], [right]) => left.localeCompare(right));
 }
 
-function readVendoredSource(name: string, sourcePath: string): string {
+function readVendoredSource(
+  name: string,
+  sourcePath: string,
+): Pick<VendoredUiComponent, 'requiredPackageDependencies' | 'source'> {
   verifyVendoredSourceHash(name, sourcePath);
   const source = vendoredUiComponentSource(readFileSync(sourcePath, 'utf8'));
   if (importsUiPackage(source)) {
@@ -126,7 +130,10 @@ function readVendoredSource(name: string, sourcePath: string): string {
   ) {
     throw new Error(`vendored @kovojs/ui source must be TSX, not lowered IR: ${sourcePath}`);
   }
-  return source.endsWith('\n') ? source : `${source}\n`;
+  return {
+    requiredPackageDependencies: requiredKovoPackageDependencies(source),
+    source: source.endsWith('\n') ? source : `${source}\n`,
+  };
 }
 
 function verifyVendoredSourceHash(name: string, sourcePath: string): string {
@@ -145,6 +152,20 @@ function sourceHash(source: string): string {
   return `sha256-${createHash('sha256')
     .update(source.endsWith('\n') ? source : `${source}\n`)
     .digest('base64url')}`;
+}
+
+function requiredKovoPackageDependencies(source: string): readonly string[] {
+  const packages = new Set<string>();
+  const sourceWithoutComments = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const importSpecifier =
+    /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)['"](@kovojs\/[^/'"]+)(?:\/[^'"]*)?['"]/g;
+  for (const match of sourceWithoutComments.matchAll(importSpecifier)) {
+    const packageName = match[1];
+    if (packageName) packages.add(packageName);
+  }
+  return [...packages].sort();
 }
 
 export function vendoredUiComponentSource(source: string): string {

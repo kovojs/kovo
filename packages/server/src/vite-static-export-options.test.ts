@@ -73,6 +73,7 @@ describe('server app shell Vite static export options boundary', () => {
         onNonExportable: 'skip',
         origin: 'https://static.example',
         outDir,
+        publicAssetRoot: distDir,
       });
 
       expect(
@@ -94,6 +95,7 @@ describe('server app shell Vite static export options boundary', () => {
           },
           robots,
         ],
+        publicAssetRoot: distDir,
       });
     } finally {
       await Promise.all([
@@ -161,6 +163,7 @@ describe('server app shell Vite static export options boundary', () => {
         assets: plan.assets,
         origin: 'https://cart.example',
         outDir,
+        publicAssetRoot: distDir,
       });
       expect(plan.options).not.toHaveProperty('distDir');
     } finally {

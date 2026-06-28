@@ -238,6 +238,7 @@ export function addUsage(): string {
 export function runAddCommand(options: AddComponentOptions): CliCommandResult {
   const lines = [addOutputVersion];
   mkdirSync(options.outDir, { recursive: true });
+  const requiredPackageDependencies = new Set<string>();
 
   for (const component of options.components) {
     const entry = vendoredUiComponents[component];
@@ -248,6 +249,9 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
       };
     }
     const target = resolve(options.outDir, entry.fileName);
+    for (const packageName of entry.requiredPackageDependencies) {
+      requiredPackageDependencies.add(packageName);
+    }
 
     // SPEC.md §5.2 requires vendored UI to land as TSX app source, not lowered IR.
     if (existsSync(target)) {
@@ -271,10 +275,74 @@ export function runAddCommand(options: AddComponentOptions): CliCommandResult {
     );
   }
 
+  const missingDependencies = missingAddPackageDependencies(
+    [...requiredPackageDependencies].sort(),
+    options.outDir,
+  );
+  if (missingDependencies.length > 0) {
+    lines.push(
+      `DEPENDENCIES status=missing packages=${missingDependencies.join(',')} install=${JSON.stringify(addDependencyInstallCommand(missingDependencies, options.outDir))}`,
+    );
+  }
+
   lines.push(
     `SUMMARY total=${options.components.length} outDir=${JSON.stringify(resolve(options.outDir))}`,
   );
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
+
+function missingAddPackageDependencies(
+  packageNames: readonly string[],
+  outDir: string,
+): readonly string[] {
+  if (packageNames.length === 0) return [];
+  const packageJsonPath = findNearestPackageJson(resolve(outDir));
+  if (!packageJsonPath) return packageNames;
+  const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown;
+  if (!isRecord(parsed)) return packageNames;
+  return packageNames.filter((packageName) => !packageJsonDeclaresPackage(parsed, packageName));
+}
+
+function findNearestPackageJson(startDir: string): string | undefined {
+  let current = startDir;
+  while (true) {
+    const candidate = join(current, 'package.json');
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+function packageJsonDeclaresPackage(
+  manifest: Record<string, unknown>,
+  packageName: string,
+): boolean {
+  return (
+    packageBagDeclaresPackage(manifest.dependencies, packageName) ||
+    packageBagDeclaresPackage(manifest.devDependencies, packageName) ||
+    packageBagDeclaresPackage(manifest.peerDependencies, packageName) ||
+    packageBagDeclaresPackage(manifest.optionalDependencies, packageName)
+  );
+}
+
+function packageBagDeclaresPackage(value: unknown, packageName: string): boolean {
+  return isRecord(value) && typeof value[packageName] === 'string';
+}
+
+function addDependencyInstallCommand(packageNames: readonly string[], outDir: string): string {
+  const packageJsonPath = findNearestPackageJson(resolve(outDir));
+  const packageManager = packageJsonPath ? packageManagerName(packageJsonPath) : 'pnpm';
+  return `${packageManager} add ${packageNames.join(' ')}`;
+}
+
+function packageManagerName(packageJsonPath: string): 'bun' | 'npm' | 'pnpm' | 'yarn' {
+  const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown;
+  if (isRecord(parsed) && typeof parsed.packageManager === 'string') {
+    const [name] = parsed.packageManager.split('@');
+    if (name === 'bun' || name === 'npm' || name === 'pnpm' || name === 'yarn') return name;
+  }
+  return 'pnpm';
 }
 
 export function parseCompileArgs(args: readonly string[]): CompileArgParseResult {

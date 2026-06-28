@@ -138,6 +138,7 @@ export function kovoAppShellViteBuildWriteStaticExportOptions(
       ...(assets === undefined ? {} : { assets }),
       distDir,
     }),
+    publicAssetRoot: distDir,
   };
 }
 
@@ -161,6 +162,7 @@ export function kovoAppShellViteBuildDryRunStaticExportOptions(
       ...(assets === undefined ? {} : { assets }),
       distDir,
     }),
+    publicAssetRoot: distDir,
   };
 }
 
@@ -188,6 +190,7 @@ export function kovoAppShellViteBuildOutputStaticExportPlan(
       // SPEC §9.5: plugin-time build output exports use the same manifest-backed
       // asset plan that the observable Vite build output reports.
       assets: staticExportAssets,
+      publicAssetRoot: distDir,
     },
   };
 }

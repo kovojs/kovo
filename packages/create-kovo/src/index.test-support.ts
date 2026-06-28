@@ -40,6 +40,7 @@ export function linkStarterBuildDependencies(root: string): void {
     'better-sqlite3',
     'drizzle-orm',
     'kovo',
+    'typescript',
     'vite',
     'vitest',
     'vite-plus',
