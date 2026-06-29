@@ -59,8 +59,9 @@ export function componentLiveTargetRenderer<
 >(
   options: ComponentLiveTargetRendererOptions<Definition, Request, State>,
 ): LiveTargetRenderer<Request> {
-  const queryBindings =
-    options.queries ?? componentLiveTargetQueryBindings<Request>(options.component);
+  const queryBindings = normalizeLiveTargetQueryBindings(
+    options.queries ?? componentLiveTargetQueryBindings<Request>(options.component),
+  );
 
   const renderer: LiveTargetRenderer<Request> & {
     queryBindings: readonly ComponentLiveTargetQueryBinding<Request>[];
@@ -103,6 +104,15 @@ export function componentLiveTargetRenderer<
   };
 
   return renderer;
+}
+
+function normalizeLiveTargetQueryBindings<Request>(
+  bindings: readonly ComponentLiveTargetQueryBinding<Request>[],
+): ComponentLiveTargetQueryBinding<Request>[] {
+  return bindings.map((binding) => ({
+    ...binding,
+    query: queryWithGeneratedReads(binding.query),
+  }));
 }
 
 function componentLiveTargetErrorBoundary<

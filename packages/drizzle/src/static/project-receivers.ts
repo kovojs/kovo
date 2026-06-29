@@ -893,8 +893,8 @@ function relationalReadWithObjectTableExpressions(
     if (!Node.isPropertyAssignment(property)) continue;
     const relation = propertyNameText(property.getNameNode(), true);
     if (!relation) continue;
-    const table = relationTargetTableNames.get(relation);
-    if (table) tables.push(table);
+    const table = relationTargetTableNames.get(relation) ?? relation;
+    tables.push(table);
 
     const initializer = property.getInitializer();
     const nested = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;

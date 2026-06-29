@@ -874,6 +874,62 @@ export const ProductList = component({
     );
   });
 
+  it('passes external query-shape facts through aliases in every component in a module', async () => {
+    const compileComponentModule = vi.fn(() => ({
+      files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+    }));
+    const queryShapeFacts = [
+      {
+        query: 'queries/dashboard/cart-query',
+        shape: { count: 'number' as const },
+        source: 'src/queries/dashboard.ts:3',
+      },
+      {
+        query: 'queries/dashboard/meta-query',
+        shape: { title: 'string' as const },
+        source: 'src/queries/dashboard.ts:4',
+      },
+    ];
+    const plugin = createKovoVitePlugin(compileComponentModule, { queryShapeFacts });
+
+    await plugin.transform(
+      `
+import { component } from '@kovojs/core';
+import { cartQuery, metaQuery } from '../queries/dashboard';
+
+export const RegionA = component({
+  queries: { cart: cartQuery },
+  render: () => <span data-bind="cart.count">1</span>,
+});
+
+export const RegionB = component({
+  queries: { meta: metaQuery },
+  render: () => <span data-bind="meta.title">Ready</span>,
+});
+`,
+      'src/components/dashboard.tsx',
+    );
+
+    expect(compileComponentModule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryShapeFacts: expect.arrayContaining([
+          queryShapeFacts[0],
+          queryShapeFacts[1],
+          {
+            query: 'cart',
+            shape: { count: 'number' },
+            source: 'src/queries/dashboard.ts:3',
+          },
+          {
+            query: 'meta',
+            shape: { title: 'string' },
+            source: 'src/queries/dashboard.ts:4',
+          },
+        ]),
+      }),
+    );
+  });
+
   it('caches repeated transforms by source hash and compile context', async () => {
     const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
       dependencyFootprint: {},

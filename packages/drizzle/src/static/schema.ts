@@ -184,21 +184,24 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
 
   for (const file of sourceFiles) {
     const namespaceTableNames = projectNamespaceTableNamesByLocal(file, tableNamesBySymbol);
+    const localTableNames = projectRelationalTableNamesByProperty(file, tableNamesBySymbol);
     for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      if (relationCallName(call) !== 'relations') continue;
-      const relationObject = relationDefinitionObject(call);
-      if (!relationObject) continue;
+      const relationApi = relationCallName(call);
+      if (!isRelationApiCallName(relationApi)) continue;
 
-      for (const property of relationObject.getProperties()) {
-        if (!Node.isPropertyAssignment(property)) continue;
-        const relation = propertyNameText(property.getNameNode(), true);
-        const target = relationTargetTableName(
-          property.getInitializer(),
-          tableNamesBySymbol,
-          namespaceTableNames,
-        );
-        if (!relation || !target) continue;
-        append(relation, target);
+      for (const relationObject of relationDefinitionObjects(call, relationApi)) {
+        for (const property of relationObject.getProperties()) {
+          if (!Node.isPropertyAssignment(property)) continue;
+          const relation = propertyNameText(property.getNameNode(), true);
+          const target = relationTargetTableName(
+            property.getInitializer(),
+            tableNamesBySymbol,
+            namespaceTableNames,
+            localTableNames,
+          );
+          if (!relation || !target) continue;
+          append(relation, target);
+        }
       }
     }
   }
@@ -1402,25 +1405,27 @@ function appendRelationColumnShapesForFile(
   columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>,
 ): void {
   const namespaceTableNames = projectNamespaceTableNamesByLocal(sourceFile, tableNamesBySymbol);
+  const localTableNames = projectRelationalTableNamesByProperty(sourceFile, tableNamesBySymbol);
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (relationCallName(call) !== 'relations') continue;
+    const relationApi = relationCallName(call);
+    if (!isRelationApiCallName(relationApi)) continue;
 
-    const relationObject = relationDefinitionObject(call);
-    if (!relationObject) continue;
+    for (const relationObject of relationDefinitionObjects(call, relationApi)) {
+      for (const property of relationObject.getProperties()) {
+        if (!Node.isPropertyAssignment(property)) continue;
 
-    for (const property of relationObject.getProperties()) {
-      if (!Node.isPropertyAssignment(property)) continue;
+        const relation = propertyNameText(property.getNameNode());
+        const target = relationTargetTableName(
+          property.getInitializer(),
+          tableNamesBySymbol,
+          namespaceTableNames,
+          localTableNames,
+        );
+        const tableShapes = target ? columnShapesByTable.get(target) : undefined;
+        if (!relation || !tableShapes) continue;
 
-      const relation = propertyNameText(property.getNameNode());
-      const target = relationTargetTableName(
-        property.getInitializer(),
-        tableNamesBySymbol,
-        namespaceTableNames,
-      );
-      const tableShapes = target ? columnShapesByTable.get(target) : undefined;
-      if (!relation || !tableShapes) continue;
-
-      appendColumnShapesForTablePath(shapes, relation, tableShapes);
+        appendColumnShapesForTablePath(shapes, relation, tableShapes);
+      }
     }
   }
 }
@@ -1428,6 +1433,27 @@ function appendRelationColumnShapesForFile(
 function relationCallName(call: CallExpression): string | undefined {
   const expression = call.getExpression();
   return Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+}
+
+function isRelationApiCallName(name: string | undefined): boolean {
+  return name === 'relations' || name === 'defineRelations';
+}
+
+function relationDefinitionObjects(
+  call: CallExpression,
+  relationApi: string | undefined,
+): ObjectLiteralExpression[] {
+  const object = relationDefinitionObject(call);
+  if (!object) return [];
+  if (relationApi !== 'defineRelations') return [object];
+
+  const nested = object.getProperties().flatMap((property) => {
+    if (!Node.isPropertyAssignment(property)) return [];
+    const initializer = property.getInitializer();
+    const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+    return value && Node.isObjectLiteralExpression(value) ? [value] : [];
+  });
+  return nested.length > 0 ? nested : [object];
 }
 
 function relationDefinitionObject(call: CallExpression): ObjectLiteralExpression | undefined {
@@ -1455,12 +1481,41 @@ function relationTargetTableName(
   initializer: Node | undefined,
   tableNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames,
+  localTableNames: ReadonlyMap<string, string>,
 ): string | undefined {
   const call = initializer && Node.isCallExpression(initializer) ? initializer : undefined;
   const target = call?.getArguments()[0];
-  return target
+  const targetTable = target
     ? projectTableNameForNode(target, tableNamesBySymbol, namespaceTableNames)
     : undefined;
+  if (targetTable) return targetTable;
+
+  const helperTarget = call ? relationHelperTargetName(call.getExpression()) : undefined;
+  return helperTarget ? localTableNames.get(helperTarget) : undefined;
+}
+
+function relationHelperTargetName(expression: Node): string | undefined {
+  if (Node.isPropertyAccessExpression(expression)) {
+    const parent = expression.getExpression();
+    if (Node.isPropertyAccessExpression(parent) || Node.isElementAccessExpression(parent)) {
+      return expression.getName();
+    }
+  }
+
+  if (Node.isElementAccessExpression(expression)) {
+    const parent = expression.getExpression();
+    const argument = expression.getArgumentExpression();
+    const target =
+      argument && Node.isStringLiteral(argument) ? argument.getLiteralText() : undefined;
+    if (
+      target &&
+      (Node.isPropertyAccessExpression(parent) || Node.isElementAccessExpression(parent))
+    ) {
+      return target;
+    }
+  }
+
+  return undefined;
 }
 
 /** @internal */ export function projectTableNameForColumnShapeAccess(

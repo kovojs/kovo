@@ -22,7 +22,7 @@ import {
   readPersistentCompileCacheEntryForInput,
   writePersistentCompileCacheEntry,
 } from './persistent-compile-cache.js';
-import { componentOptionObjectEntries, parseComponentModule } from './scan/parse.js';
+import { allComponentOptionObjectEntries, parseComponentModule } from './scan/parse.js';
 import { queryExpressionFromBinding } from './scan/query-binding.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
@@ -689,7 +689,7 @@ function componentLocalQueryShapeFacts(
 
   const factsByQuery = new Map(facts.map((fact) => [fact.query, fact]));
   const model = parseComponentModule(fileName, source);
-  const aliases = componentOptionObjectEntries(model, 'queries')
+  const aliases = allComponentOptionObjectEntries(model, 'queries')
     .map((entry): QueryShapeFact | null => {
       const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
       if (!queryExpression || queryExpression === entry.key) return null;

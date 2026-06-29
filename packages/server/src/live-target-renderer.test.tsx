@@ -88,6 +88,37 @@ describe('generated component live target renderers', () => {
     expect(renderer.queryDefinitions?.[0]?.reads).toEqual([{ key: 'generated-live-product' }]);
   });
 
+  it('folds generated query reads into compiler-emitted live target query bindings', async () => {
+    const productQuery = query('generatedExplicitLiveProduct', {
+      args: s.object({ id: s.string() }),
+      load(input: { id: string }) {
+        return { id: input.id };
+      },
+    });
+    const ProductDetail = component({
+      render: () => <section />,
+    });
+
+    registerGeneratedQueryReadRegistry([
+      { domains: ['generated-explicit-live-product'], query: 'generatedExplicitLiveProduct' },
+    ]);
+    const renderer = componentLiveTargetRenderer({
+      component: ProductDetail,
+      componentId: 'components/generated-explicit-product-detail/product-detail',
+      queries: [
+        {
+          args: (props) => ({ id: props.productId }),
+          name: 'product',
+          query: productQuery,
+        },
+      ],
+    });
+
+    expect(renderer.queryDefinitions?.[0]?.reads).toEqual([
+      { key: 'generated-explicit-live-product' },
+    ]);
+  });
+
   it('throws when a generated query reload fails', async () => {
     const product = domain('product');
     const productQuery = query('product', {

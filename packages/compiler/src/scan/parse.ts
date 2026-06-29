@@ -342,11 +342,28 @@ export function componentOptionObjectEntries(
   ];
 }
 
+export function allComponentOptionObjectEntries(
+  model: ComponentModuleModel,
+  propertyName: string,
+): ObjectLiteralEntry[] {
+  return model.components.flatMap(
+    (component) =>
+      component.options.find((option) => option.key === propertyName)?.objectEntries ?? [],
+  );
+}
+
 export function componentOptionObjectKeys(
   model: ComponentModuleModel,
   propertyName: string,
 ): string[] {
   return componentOptionObjectEntries(model, propertyName).map((entry) => entry.key);
+}
+
+export function allComponentOptionObjectKeys(
+  model: ComponentModuleModel,
+  propertyName: string,
+): string[] {
+  return allComponentOptionObjectEntries(model, propertyName).map((entry) => entry.key);
 }
 
 export function componentRenderInputs(model: ComponentModuleModel): string[] {

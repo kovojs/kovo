@@ -1012,7 +1012,7 @@ export const OrderHistory = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('stamps serializable props on inferred live target roots', () => {
+  it('leaves serializable live target props to the runtime root stamp', () => {
     const result = compileComponentModule({
       fileName: 'product-detail.tsx',
       source: `
@@ -1032,8 +1032,43 @@ export const ProductDetail = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section kovo-c="product-detail" kovo-deps="product" kovo-fragment-target="product-detail" kovo-live-component="product-detail/product-detail" kovo-props={JSON.stringify({ productId })}>',
+      '<section kovo-c="product-detail" kovo-deps="product" kovo-fragment-target="product-detail" kovo-live-component="product-detail/product-detail">',
     );
+    expect(result.files[0]?.source).not.toContain('kovo-props={JSON.stringify({ productId })}');
+    expect(() => assertFixpoint(result)).not.toThrow();
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+  });
+
+  it('does not stamp undeclared render-scope prop identifiers for query-only props', () => {
+    const result = compileComponentModule({
+      fileName: 'browse-contacts.tsx',
+      source: `
+export const BrowseContacts = component({
+  props: {
+    page: Number,
+    pageSize: Number,
+  },
+  queries: {
+    contacts: contactsQuery.args((props) => ({
+      page: props.page,
+      pageSize: props.pageSize,
+    })),
+  },
+  render: ({ contacts }) => (
+    <section>
+      <span>{contacts.length}</span>
+    </section>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain(
+      '<section kovo-c="browse-contacts" kovo-deps="contacts" kovo-fragment-target="browse-contacts" kovo-live-component="browse-contacts/browse-contacts">',
+    );
+    expect(serverSource).not.toContain('JSON.stringify({ page');
+    expect(serverSource).not.toContain('kovo-props=');
     expect(() => assertFixpoint(result)).not.toThrow();
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });

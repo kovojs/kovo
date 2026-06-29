@@ -403,6 +403,52 @@ describe('bugz-4 H2/M5: relational-query with() relations contribute read securi
     ).toEqual([{ domain: 'comment', name: 'feed', scope: 'args' }]);
   });
 
+  it('folds defineRelations with-relation owner tables into the KV414 read set', () => {
+    const project = withPgDatabaseTypes({
+      files: [
+        pgDatabaseTypes(['query: { posts: { findMany(value?: unknown): Promise<unknown[]> } };']),
+        {
+          fileName: 'feed.queries.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const posts = pgTable("posts", { id: text("id").primaryKey() }, kovo({ domain: "post", key: "id" }));',
+            'export const comments = pgTable("comments", { id: text("id").primaryKey(), postId: text("post_id").notNull(), authorId: text("author_id").notNull() }, kovo({ domain: "comment", key: "id", owner: "authorId" }));',
+            'export const allRelations = defineRelations({ posts, comments }, (r) => ({',
+            '  posts: {',
+            '    comments: r.many.comments(),',
+            '  },',
+            '}));',
+            '',
+            'export const feed = query("feed", {',
+            '  output: s.object({ id: s.string() }),',
+            '  async load(input: { postId: string }, db: PgAsyncDatabase<any, any>) {',
+            '    return db.query.posts.findMany({',
+            '      columns: { id: true },',
+            '      with: { comments: { columns: { id: true } } },',
+            '      where: eq(posts.id, input.postId),',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    const facts = extractQueryFactsFromProject(project);
+    expect(facts.map((fact) => fact.reads)).toEqual([['comment', 'post']]);
+
+    const audit = extractOwnerAuditFromProject(project);
+    expect(
+      audit.scopeAudits.map((fact) => ({
+        domain: fact.domain,
+        name: fact.name,
+        scope: fact.scope,
+      })),
+    ).toEqual([{ domain: 'comment', name: 'feed', scope: 'args' }]);
+  });
+
   it('fires KV435 for with-relation extras when reads omits the related secret table', () => {
     const facts = extractQueryFactsFromProject(
       withPgDatabaseTypes({

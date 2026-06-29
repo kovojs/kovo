@@ -873,6 +873,42 @@ export const CartBadge = component({
     ]);
   });
 
+  it('reports KV302 for an out-of-shape binding in the second component of a module', () => {
+    const result = compileComponentModule({
+      fileName: 'dashboard.tsx',
+      queryShapes: {
+        cart: {
+          count: 'number',
+        },
+        meta: {
+          title: 'string',
+        },
+      },
+      source: `
+export const RegionA = component({
+  queries: { cart: cartQuery },
+  render: () => <section data-bind="cart.count">1</section>,
+});
+
+export const RegionB = component({
+  queries: { meta: metaQuery },
+  render: () => <section data-bind="meta.extra">Missing</section>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV302',
+          fileName: 'dashboard.tsx',
+          message: 'data-bind path is not present in the declared query shape. meta.extra',
+          severity: 'error',
+        }),
+      ]),
+    );
+  });
+
   it('ignores data-bind text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -1,4 +1,4 @@
-import { componentOptionObjectKeys, type ComponentModuleModel } from '../scan/parse.js';
+import { allComponentOptionObjectKeys, type ComponentModuleModel } from '../scan/parse.js';
 import type { CompileComponentOptions, QueryShape, QueryShapeFact } from '../types.js';
 import {
   isArrayQueryShape,
@@ -40,7 +40,7 @@ export function knownQueryNames(
 }
 
 export function componentQueryNames(model: ComponentModuleModel): string[] {
-  return componentOptionObjectKeys(model, 'queries');
+  return allComponentOptionObjectKeys(model, 'queries');
 }
 
 export function componentQueryShapes(

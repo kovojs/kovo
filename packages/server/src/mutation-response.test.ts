@@ -24,6 +24,7 @@ import {
 } from './test-fixtures.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 
 const mutationResponseTestBuildToken = 'mutation-response-test-build';
 
@@ -142,6 +143,62 @@ describe('server mutation primitives', () => {
     expect(coveredCartBadge).not.toHaveBeenCalled();
     expect(uncoveredCartSummary).toHaveBeenCalledOnce();
     expect(accountLoad).not.toHaveBeenCalled();
+  });
+
+  it('selects success fragments through generated reads on explicit live target bindings', async () => {
+    const contact = domain('contact');
+    const contactsQuery = query('generatedContacts', {
+      load: () => [{ email: 'ada@example.com' }, { email: 'grace@example.com' }],
+    });
+    const ContactsRegion = component({
+      render: ({ contacts }) =>
+        renderedHtml(
+          `<section kovo-c="contacts-region">${(contacts as { email: string }[]).length} contacts</section>`,
+        ),
+    });
+    const addContact = mutation('contacts/add', {
+      input: s.object({ email: s.string() }),
+      registry: {
+        queries: [contactsQuery],
+        touches: [contact],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    registerGeneratedQueryReadRegistry([{ domains: ['contact'], query: 'generatedContacts' }]);
+
+    await expect(
+      renderMutationEndpointResponse(addContact, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('contacts-region', 'components/contacts/region')}`,
+          'Kovo-Targets': 'contacts-region=generatedContacts',
+        },
+        liveTargetRenderers: [
+          componentLiveTargetRenderer({
+            component: ContactsRegion,
+            componentId: 'components/contacts/region',
+            queries: [
+              {
+                name: 'contacts',
+                query: contactsQuery,
+              },
+            ],
+          }),
+        ],
+        rawInput: { email: 'grace@example.com' },
+        redirectTo: '/contacts',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: [
+        '<kovo-query name="generatedContacts">[{"email":"ada@example.com"},{"email":"grace@example.com"}]</kovo-query>',
+        '<kovo-fragment target="contacts-region"><section kovo-c="contacts-region">2 contacts</section></kovo-fragment>',
+      ].join('\n'),
+      status: 200,
+    });
   });
 
   it('auto-renders affected live target descriptors from generated renderers', async () => {
