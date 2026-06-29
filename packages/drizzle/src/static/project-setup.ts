@@ -44,12 +44,43 @@ import {
   propertyNameText,
   unwrappedFunctionExpression,
 } from '../static.js';
+import type { SourceModuleContext } from './tables.js';
+
+/**
+ * Per-run memo of pure derivations of a single {@link ProjectExtraction}.
+ *
+ * SPEC §11.1: `extractStaticBuildAnalysisFactsFromProject` runs every project-mode pass
+ * against ONE extraction, but several passes (touch-graph, write-scope, query-fact,
+ * owner-audit, …) each independently recomputed the same pure-from-extraction derivations.
+ * A cold-build profile measured `funcExtractions n=3 = 2642ms` (~1.8s redundant) plus
+ * repeated `contextFiles` / `sourceModuleContext` work. This memo computes each derivation
+ * once per extraction and reuses it across passes.
+ *
+ * INVARIANTS:
+ * - Per-run scope ONLY. It lives on the extraction and is dropped in `dispose()`; it MUST
+ *   NOT be promoted to a process-global / module-level cache. A prior process-global memo
+ *   leaked ts-morph `Project`s and OOM'd the suite, so this stays GC'd with the extraction.
+ * - Cached `ExtractedFunction` objects are read-only after construction. Every field
+ *   mutation happens inside `projectFunctionExtractionsByFileName` while it builds the map;
+ *   no later pass mutates them (consumers read via `projectFunctionsForFile`, whose array
+ *   fields are typed `readonly`), so sharing the same objects across passes is safe.
+ */
+interface ProjectExtractionMemo {
+  contextFiles?: SourceFileInput[] | undefined;
+  functionExtractionsByFileName?: Map<string, Map<string, ExtractedFunction>> | undefined;
+  sourceModuleContext?: SourceModuleContext | undefined;
+}
 
 /** @internal */ export interface ProjectExtraction {
   columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>;
   conditionalTableTargetsBySyntheticName: ReadonlyMap<string, readonly string[]>;
   dispose: () => void;
   files: readonly SourceFileInput[];
+  /**
+   * Per-run memo for pure derivations (see {@link ProjectExtractionMemo}). Cleared in
+   * `dispose()`; never a process-global cache.
+   */
+  readonly memo: ProjectExtractionMemo;
   sourceFiles: readonly SourceFile[];
   tableNamesBySymbol: ReadonlyMap<string, string>;
   unmodeledRelationNamesBySymbol: ReadonlyMap<string, string>;
@@ -88,13 +119,22 @@ import {
   );
   const columnShapesByTable = projectColumnShapesByTable(sourceFiles, tableNamesBySymbol);
 
+  // Per-run memo; cleared in dispose() below. Never a process-global cache (SPEC §11.1).
+  const memo: ProjectExtractionMemo = {};
+
   return {
     columnShapesByTable,
     conditionalTableTargetsBySyntheticName,
     dispose: () => {
       for (const sourceFile of sourceFiles) sourceFile.forget();
+      // Drop memoized derivations so the cached ExtractedFunction objects and table facts
+      // are released with the forgotten ts-morph source files instead of outliving them.
+      memo.contextFiles = undefined;
+      memo.functionExtractionsByFileName = undefined;
+      memo.sourceModuleContext = undefined;
     },
     files: options.files,
+    memo,
     sourceFiles,
     tableNamesBySymbol,
     unmodeledRelationNamesBySymbol,
@@ -111,7 +151,12 @@ import {
 /** @internal */ export function projectContextFiles(
   extraction: ProjectExtraction,
 ): SourceFileInput[] {
-  return extraction.files.map((file, index) => {
+  // SPEC §11.1: memoize this pure derivation per extraction so build-facing passes that each
+  // need the per-file column-shape context reuse one computation. Callers iterate read-only.
+  const cached = extraction.memo.contextFiles;
+  if (cached) return cached;
+
+  const contextFiles = extraction.files.map((file, index) => {
     const sourceFile = extraction.sourceFiles[index];
     if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);
 
@@ -125,11 +170,22 @@ import {
       source: file.source,
     };
   });
+
+  extraction.memo.contextFiles = contextFiles;
+  return contextFiles;
 }
 
 /** @internal */ export function projectFunctionExtractionsByFileName(
   extraction: ProjectExtraction,
 ): Map<string, Map<string, ExtractedFunction>> {
+  // SPEC §11.1: the per-function extraction map is pure given the extraction, but the cold
+  // profile flagged it as the dominant redundant pass (`funcExtractions n=3 = 2642ms`).
+  // Memoize per extraction so touch-graph / write-scope / query-fact passes share one build.
+  // The cached ExtractedFunction objects are read-only after this function returns (see
+  // ProjectExtractionMemo) — no consumer mutates them.
+  const cached = extraction.memo.functionExtractionsByFileName;
+  if (cached) return cached;
+
   const extractionsByFile = new Map<string, Map<string, ExtractedFunction>>();
   const relationTargetTableNames = projectRelationTargetTableNamesByProperty(
     extraction.sourceFiles,
@@ -522,5 +578,6 @@ import {
     extractionsByFile.set(file.fileName, extractionsByFunction);
   });
 
+  extraction.memo.functionExtractionsByFileName = extractionsByFile;
   return extractionsByFile;
 }
