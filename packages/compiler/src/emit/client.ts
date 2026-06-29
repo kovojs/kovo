@@ -1,4 +1,5 @@
 import { compilerIrHeader } from '../ir.js';
+import { headlessUiGeneratedHandlerNames } from '../generated/headless-ui-generated-handlers.js';
 import {
   runtimeOutputHelpers,
   templateStampHtmlEscapeExpression,
@@ -104,10 +105,8 @@ function emitClientImportDependencies(imports: readonly ClientImportDependency[]
     imports,
     (entry) => `${entry.moduleSpecifier}\0${entry.importedName}\0${entry.localName}`,
   )) {
-    entriesByModule.set(item.moduleSpecifier, [
-      ...(entriesByModule.get(item.moduleSpecifier) ?? []),
-      item,
-    ]);
+    const moduleSpecifier = generatedHandlerModuleSpecifier(item);
+    entriesByModule.set(moduleSpecifier, [...(entriesByModule.get(moduleSpecifier) ?? []), item]);
   }
 
   return [...entriesByModule]
@@ -124,6 +123,18 @@ function emitClientImportDependencies(imports: readonly ClientImportDependency[]
       return `import { ${specifiers} } from ${JSON.stringify(moduleSpecifier)};\n\n`;
     })
     .join('');
+}
+
+function generatedHandlerModuleSpecifier(item: ClientImportDependency): string {
+  if (
+    item.moduleSpecifier.startsWith('@kovojs/headless-ui/') &&
+    item.moduleSpecifier !== '@kovojs/headless-ui/generated' &&
+    headlessUiGeneratedHandlerNames.has(item.importedName)
+  ) {
+    return '@kovojs/headless-ui/generated';
+  }
+
+  return item.moduleSpecifier;
 }
 
 function emitClientConstantDependencies(constants: readonly ClientConstantDependency[]): string {

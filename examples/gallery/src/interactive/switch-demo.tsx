@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { switchTriggerClick as _switchTriggerClick } from '@kovojs/headless-ui/switch';
+import { switchTriggerClick as _switchTriggerClick } from '../primitive-actions.js';
 import { Switch } from '@kovojs/ui/switch';
 
 export interface GallerySwitchDemoState {

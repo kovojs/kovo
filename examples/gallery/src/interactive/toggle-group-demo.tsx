@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import {
   toggleGroupItemClick as _toggleGroupItemClick,
   toggleGroupKeyDown as _toggleGroupKeyDown,
-} from '@kovojs/headless-ui/toggle-group';
+} from '../primitive-actions.js';
 import { ToggleGroup, ToggleGroupButton, ToggleGroupItem } from '@kovojs/ui/toggle-group';
 
 export interface GalleryToggleGroupDemoState {

@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import {
   tabsKeyDown as _tabsKeyDown,
   tabsTriggerClick as _tabsTriggerClick,
-} from '@kovojs/headless-ui/tabs';
+} from '../primitive-actions.js';
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from '@kovojs/ui/tabs';
 
 export interface GalleryTabsDemoState {

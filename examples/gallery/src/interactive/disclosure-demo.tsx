@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/disclosure';
+import { disclosureTriggerClick as _disclosureTriggerClick } from '../primitive-actions.js';
 import { Disclosure, DisclosureContent, DisclosureTrigger } from '@kovojs/ui/disclosure';
 
 export interface GalleryDisclosureDemoState {

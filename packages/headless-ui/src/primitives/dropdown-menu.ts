@@ -25,6 +25,8 @@ import {
  *
  * const value: DropdownMenuItem = {} as DropdownMenuItem;
  * ```
+ *
+ *
  */
 export interface DropdownMenuItem {
   disabled?: boolean;
@@ -619,6 +621,8 @@ export function dropdownMenuItemHighlighted(options: DropdownMenuItemAttributeOp
  * const detail = {} as Parameters<typeof setDropdownMenuOpen>[3];
  * const result = setDropdownMenuOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setDropdownMenuOpen(
   state: DropdownMenuState,
@@ -652,6 +656,8 @@ export function setDropdownMenuOpen(
  * const options = {} as Parameters<typeof toggleDropdownMenu>[2];
  * const result = toggleDropdownMenu(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleDropdownMenu(
   state: DropdownMenuState,
@@ -676,6 +682,8 @@ export function toggleDropdownMenu(
  * const detail = {} as Parameters<typeof selectDropdownMenuItem>[3];
  * const result = selectDropdownMenuItem(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function selectDropdownMenuItem(
   state: DropdownMenuState,
@@ -733,6 +741,8 @@ export function selectDropdownMenuItem(
  * const options = {} as Parameters<typeof dropdownMenuMove>[2];
  * const result = dropdownMenuMove(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function dropdownMenuMove(
   state: DropdownMenuState,
@@ -772,6 +782,8 @@ export function dropdownMenuMove(
  * const options = {} as Parameters<typeof dropdownMenuTypeahead>[2];
  * const result = dropdownMenuTypeahead(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function dropdownMenuTypeahead(
   state: DropdownMenuState,
@@ -829,6 +841,7 @@ export function dropdownMenuTypeahead(
  * const result = dropdownMenuTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -862,6 +875,7 @@ export function dropdownMenuTriggerClick(
  * const result = dropdownMenuTriggerKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -894,6 +908,7 @@ export function dropdownMenuTriggerKeyDown(
  * const result = dropdownMenuItemClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -927,6 +942,7 @@ export function dropdownMenuItemClick(
  * const result = dropdownMenuItemKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -959,6 +975,7 @@ export function dropdownMenuItemKeyDown(
  * const result = dropdownMenuKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

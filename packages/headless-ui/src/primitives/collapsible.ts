@@ -213,6 +213,8 @@ export function collapsibleContentAttributes(
  * const detail = {} as Parameters<typeof setCollapsibleOpen>[3];
  * const result = setCollapsibleOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setCollapsibleOpen(
   state: CollapsibleState,
@@ -246,6 +248,8 @@ export function setCollapsibleOpen(
  * const options = {} as Parameters<typeof toggleCollapsible>[2];
  * const result = toggleCollapsible(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleCollapsible(
   state: CollapsibleState,
@@ -268,6 +272,7 @@ export function toggleCollapsible(
  * const result = collapsibleTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

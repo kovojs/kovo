@@ -6,7 +6,7 @@ import {
   autocompleteOptionClick as _autocompleteOptionClick,
   autocompleteSuggestions as _autocompleteSuggestions,
   type AutocompleteItem,
-} from '@kovojs/headless-ui/autocomplete';
+} from '../primitive-actions.js';
 import {
   Autocomplete,
   AutocompleteInput,

@@ -272,6 +272,7 @@ export type AvatarImageEvent = Event;
  * const result = avatarImageLoad(input, state);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * Flips the avatar to `loaded` when its `<img>` fires the native `load` event.
@@ -301,6 +302,7 @@ export function avatarImageLoad(
  * const result = avatarImageError(input, state);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * Flips the avatar to `error` when its `<img>` fires the native `error` event, so

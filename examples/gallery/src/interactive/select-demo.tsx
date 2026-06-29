@@ -6,7 +6,7 @@ import {
   selectMove as _selectMove,
   selectTriggerClick as _selectTriggerClick,
   type SelectItem as GallerySelectItem,
-} from '@kovojs/headless-ui/select';
+} from '../primitive-actions.js';
 import {
   Select,
   SelectContent,

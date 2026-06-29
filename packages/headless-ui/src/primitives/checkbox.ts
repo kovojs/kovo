@@ -217,6 +217,8 @@ export function applyCheckboxIndeterminate(
  * const detail = {} as Parameters<typeof setCheckboxChecked>[3];
  * const result = setCheckboxChecked(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setCheckboxChecked(
   state: CheckboxState,
@@ -250,6 +252,8 @@ export function setCheckboxChecked(
  * const options = {} as Parameters<typeof toggleCheckbox>[2];
  * const result = toggleCheckbox(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleCheckbox(
   state: CheckboxState,
@@ -272,6 +276,7 @@ export function toggleCheckbox(
  * const result = checkboxTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

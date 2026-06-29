@@ -476,7 +476,7 @@ export const TabsDemo = component({
     const clientSource = result.files[1]?.source ?? '';
 
     expect(clientSource).toContain(
-      'import { tabsKeyDown as keyDown, tabsTriggerClick } from "@kovojs/headless-ui/tabs";',
+      'import { tabsKeyDown as keyDown, tabsTriggerClick } from "@kovojs/headless-ui/generated";',
     );
     expect(clientSource).toContain('const result = keyDown(event, {');
     expect(clientSource).toContain('activeValue: ctx.state.activeValue,');

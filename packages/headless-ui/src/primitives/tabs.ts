@@ -309,6 +309,8 @@ export function tabsItemSelected(options: TabsTriggerAttributeOptions): boolean 
  * const input = {} as Parameters<typeof tabsRovingIndex>[0];
  * const result = tabsRovingIndex(input);
  * ```
+ *
+ * @internal
  */
 export function tabsRovingIndex(state: TabsState): number {
   const items = state.items ?? [];
@@ -461,6 +463,8 @@ export function tabsPanelAttributes(options: TabsPanelAttributeOptions): TabsPri
  * const detail = {} as Parameters<typeof setTabsValue>[3];
  * const result = setTabsValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setTabsValue(
   state: TabsState,
@@ -493,6 +497,8 @@ export function setTabsValue(
  * const state = {} as Parameters<typeof tabsMoveFocus>[1];
  * const result = tabsMoveFocus(input, state);
  * ```
+ *
+ * @internal
  */
 export function tabsMoveFocus(state: TabsState, intent: NavigationIntent): TabsMoveResult {
   const items = state.items ?? [];
@@ -526,6 +532,7 @@ export function tabsMoveFocus(state: TabsState, intent: NavigationIntent): TabsM
  * const result = tabsTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -559,6 +566,7 @@ export function tabsTriggerClick(
  * const result = tabsKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

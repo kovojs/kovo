@@ -434,6 +434,8 @@ export function accordionContentAttributes(
  * const detail = {} as Parameters<typeof setAccordionValue>[3];
  * const result = setAccordionValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setAccordionValue(
   state: AccordionState,
@@ -474,6 +476,8 @@ export function setAccordionValue(
  * const detail = {} as Parameters<typeof toggleAccordionItem>[3];
  * const result = toggleAccordionItem(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function toggleAccordionItem(
   state: AccordionState,
@@ -500,6 +504,8 @@ export function toggleAccordionItem(
  * const input = {} as Parameters<typeof accordionRovingIndex>[0];
  * const result = accordionRovingIndex(input);
  * ```
+ *
+ * @internal
  */
 export function accordionRovingIndex(state: AccordionState): number {
   const items = state.items ?? [];
@@ -534,6 +540,8 @@ export function accordionRovingIndex(state: AccordionState): number {
  * const state = {} as Parameters<typeof accordionMoveFocus>[1];
  * const result = accordionMoveFocus(input, state);
  * ```
+ *
+ * @internal
  */
 export function accordionMoveFocus(
   state: AccordionState,
@@ -570,6 +578,7 @@ export function accordionMoveFocus(
  * const result = accordionTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -611,6 +620,7 @@ export function accordionTriggerClick(
  * const result = accordionKeyDown(input, state);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

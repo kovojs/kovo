@@ -5,7 +5,7 @@ import {
   numberFieldIncrementClick as _numberFieldIncrementClick,
   numberFieldInput as _numberFieldInput,
   numberFieldKeyDown as _numberFieldKeyDown,
-} from '@kovojs/headless-ui/number-field';
+} from '../primitive-actions.js';
 import {
   NumberField,
   NumberFieldControl,

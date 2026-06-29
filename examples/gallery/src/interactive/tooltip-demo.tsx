@@ -6,7 +6,7 @@ import {
   tooltipTriggerFocus as _tooltipTriggerFocus,
   tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter,
   tooltipTriggerPointerLeave as _tooltipTriggerPointerLeave,
-} from '@kovojs/headless-ui/tooltip';
+} from '../primitive-actions.js';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@kovojs/ui/tooltip';
 
 export interface GalleryTooltipDemoState {

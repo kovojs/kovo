@@ -2006,8 +2006,8 @@
           "./tooltip",
           "./types"
         ],
-        "generated": [],
-        "internal": ["./internal"]
+        "generated": ["./generated"],
+        "internal": ["./internal", "./internal/primitive"]
       },
       "apiRef": {
         "order": 5.5,

@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import {
   accordionKeyDown as _accordionKeyDown,
   accordionTriggerClick as _accordionTriggerClick,
-} from '@kovojs/headless-ui/accordion';
+} from '../primitive-actions.js';
 import {
   Accordion,
   AccordionContent,

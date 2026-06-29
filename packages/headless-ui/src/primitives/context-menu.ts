@@ -25,6 +25,8 @@ import {
  *
  * const value: ContextMenuPoint = {} as ContextMenuPoint;
  * ```
+ *
+ *
  */
 export interface ContextMenuPoint {
   x: number;
@@ -663,6 +665,8 @@ export function contextMenuItemHighlighted(options: ContextMenuItemAttributeOpti
  * const extra = {} as Parameters<typeof setContextMenuOpen>[4];
  * const result = setContextMenuOpen(input, state, options, detail, extra);
  * ```
+ *
+ * @internal
  */
 export function setContextMenuOpen(
   state: ContextMenuState,
@@ -712,6 +716,8 @@ export function setContextMenuOpen(
  * const detail = {} as Parameters<typeof toggleContextMenu>[3];
  * const result = toggleContextMenu(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function toggleContextMenu(
   state: ContextMenuState,
@@ -737,6 +743,8 @@ export function toggleContextMenu(
  * const detail = {} as Parameters<typeof selectContextMenuItem>[3];
  * const result = selectContextMenuItem(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function selectContextMenuItem(
   state: ContextMenuState,
@@ -802,6 +810,8 @@ export function selectContextMenuItem(
  * const options = {} as Parameters<typeof contextMenuMove>[2];
  * const result = contextMenuMove(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function contextMenuMove(
   state: ContextMenuState,
@@ -841,6 +851,8 @@ export function contextMenuMove(
  * const options = {} as Parameters<typeof contextMenuTypeahead>[2];
  * const result = contextMenuTypeahead(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function contextMenuTypeahead(
   state: ContextMenuState,
@@ -898,6 +910,7 @@ export function contextMenuTypeahead(
  * const result = contextMenuTriggerContextMenu(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -941,6 +954,7 @@ export function contextMenuTriggerContextMenu(
  * const result = contextMenuTriggerKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -975,6 +989,7 @@ export function contextMenuTriggerKeyDown(
  * const result = contextMenuItemClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1008,6 +1023,7 @@ export function contextMenuItemClick(
  * const result = contextMenuItemKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1040,6 +1056,7 @@ export function contextMenuItemKeyDown(
  * const result = contextMenuKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

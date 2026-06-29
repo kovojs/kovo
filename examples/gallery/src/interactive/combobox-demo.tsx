@@ -6,7 +6,7 @@ import {
   comboboxKeyDown as _comboboxKeyDown,
   comboboxOptionClick as _comboboxOptionClick,
   type ComboboxItem,
-} from '@kovojs/headless-ui/combobox';
+} from '../primitive-actions.js';
 import {
   Combobox,
   ComboboxInput,

@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/toggle';
+import { toggleTriggerClick as _toggleTriggerClick } from '../primitive-actions.js';
 import { Toggle } from '@kovojs/ui/toggle';
 
 export interface GalleryToggleDemoState {

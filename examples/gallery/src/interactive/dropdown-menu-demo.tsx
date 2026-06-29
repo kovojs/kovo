@@ -10,7 +10,7 @@ import {
   dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead as _dropdownMenuTypeahead,
   type DropdownMenuItem as GalleryDropdownMenuItem,
-} from '@kovojs/headless-ui/dropdown-menu';
+} from '../primitive-actions.js';
 import {
   DropdownMenu,
   DropdownMenuContent,

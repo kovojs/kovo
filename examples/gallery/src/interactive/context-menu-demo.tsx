@@ -11,7 +11,7 @@ import {
   contextMenuTypeahead as _contextMenuTypeahead,
   type ContextMenuItem as GalleryContextMenuItem,
   type ContextMenuPoint,
-} from '@kovojs/headless-ui/context-menu';
+} from '../primitive-actions.js';
 import {
   ContextMenu,
   ContextMenuContent,

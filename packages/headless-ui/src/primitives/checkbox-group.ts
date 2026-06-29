@@ -281,6 +281,8 @@ export function checkboxGroupItemChecked(options: CheckboxGroupItemAttributeOpti
  * const input = {} as Parameters<typeof checkboxGroupRovingIndex>[0];
  * const result = checkboxGroupRovingIndex(input);
  * ```
+ *
+ * @internal
  */
 export function checkboxGroupRovingIndex(state: CheckboxGroupState): number {
   const items = state.items ?? [];
@@ -434,6 +436,8 @@ export function checkboxGroupLabelAttributes(
  * const detail = {} as Parameters<typeof setCheckboxGroupValue>[3];
  * const result = setCheckboxGroupValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setCheckboxGroupValue(
   state: CheckboxGroupState,
@@ -478,6 +482,8 @@ export function setCheckboxGroupValue(
  * const options = {} as Parameters<typeof toggleCheckboxGroupItem>[2];
  * const result = toggleCheckboxGroupItem(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleCheckboxGroupItem(
   state: CheckboxGroupItemAttributeOptions,
@@ -504,6 +510,8 @@ export function toggleCheckboxGroupItem(
  * const state = {} as Parameters<typeof checkboxGroupMoveFocus>[1];
  * const result = checkboxGroupMoveFocus(input, state);
  * ```
+ *
+ * @internal
  */
 export function checkboxGroupMoveFocus(
   state: CheckboxGroupState,
@@ -540,6 +548,7 @@ export function checkboxGroupMoveFocus(
  * const result = checkboxGroupItemClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -575,6 +584,7 @@ export function checkboxGroupItemClick(
  * const result = checkboxGroupKeyDown(input, state);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

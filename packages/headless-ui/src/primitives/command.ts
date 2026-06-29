@@ -877,6 +877,8 @@ export function commandFilteredItems(state: CommandState): readonly CommandItem[
  * const detail = {} as Parameters<typeof setCommandOpen>[3];
  * const result = setCommandOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setCommandOpen(
   state: CommandState,
@@ -911,6 +913,8 @@ export function setCommandOpen(
  * const detail = {} as Parameters<typeof setCommandInputValue>[3];
  * const result = setCommandInputValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setCommandInputValue(
   state: CommandState,
@@ -946,6 +950,8 @@ export function setCommandInputValue(
  * const detail = {} as Parameters<typeof setCommandValue>[3];
  * const result = setCommandValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setCommandValue(
   state: CommandState,
@@ -979,6 +985,8 @@ export function setCommandValue(
  * const options = {} as Parameters<typeof toggleCommand>[2];
  * const result = toggleCommand(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleCommand(
   state: CommandState,
@@ -1003,6 +1011,8 @@ export function toggleCommand(
  * const detail = {} as Parameters<typeof selectCommandItem>[3];
  * const result = selectCommandItem(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function selectCommandItem(
   state: CommandState,
@@ -1053,6 +1063,8 @@ export function selectCommandItem(
  * const options = {} as Parameters<typeof commandMove>[2];
  * const result = commandMove(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function commandMove(
   state: CommandState,
@@ -1091,6 +1103,7 @@ export function commandMove(
  * const result = commandTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1124,6 +1137,7 @@ export function commandTriggerClick(
  * const result = commandCloseClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1157,6 +1171,7 @@ export function commandCloseClick(
  * const result = commandCancel(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1190,6 +1205,7 @@ export function commandCancel(
  * const result = commandBeforeToggle(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1224,6 +1240,7 @@ export function commandBeforeToggle(
  * const result = commandInput(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1262,6 +1279,7 @@ export function commandInput(
  * const result = commandItemClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1295,6 +1313,7 @@ export function commandItemClick(
  * const result = commandKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

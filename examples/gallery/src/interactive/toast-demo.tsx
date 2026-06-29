@@ -7,7 +7,7 @@ import {
   toastCloseClick as _toastCloseClick,
   toastEscapeKeyDown as _toastEscapeKeyDown,
   toastViewportKeyDown as _toastViewportKeyDown,
-} from '@kovojs/headless-ui/toast';
+} from '../primitive-actions.js';
 import {
   Toast,
   ToastAction,

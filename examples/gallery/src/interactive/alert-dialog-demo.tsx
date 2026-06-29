@@ -5,7 +5,7 @@ import {
   alertDialogCancel as _alertDialogCancel,
   alertDialogCancelClick as _alertDialogCancelClick,
   alertDialogTriggerClick as _alertDialogTriggerClick,
-} from '@kovojs/headless-ui/alert-dialog';
+} from '../primitive-actions.js';
 import {
   AlertDialog,
   AlertDialogAction,

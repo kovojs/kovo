@@ -6,7 +6,7 @@ import {
   sliderThumbDrag as _sliderThumbDrag,
   sliderThumbDragStart as _sliderThumbDragStart,
   sliderTrackPointerDown as _sliderTrackPointerDown,
-} from '@kovojs/headless-ui/slider';
+} from '../primitive-actions.js';
 import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from '@kovojs/ui/slider';
 
 export interface GallerySliderDemoState {

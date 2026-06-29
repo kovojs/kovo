@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import {
   checkboxTriggerClick as _checkboxTriggerClick,
   type CheckboxCheckedState,
-} from '@kovojs/headless-ui/checkbox';
+} from '../primitive-actions.js';
 import { Checkbox } from '@kovojs/ui/checkbox';
 
 export interface GalleryCheckboxDemoState {

@@ -4,7 +4,7 @@ import {
   dialogCancel as _dialogCancel,
   dialogCloseClick as _dialogCloseClick,
   dialogTriggerClick as _dialogTriggerClick,
-} from '@kovojs/headless-ui/dialog';
+} from '../primitive-actions.js';
 import {
   DrawerClose,
   DrawerContent,

@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/headless-ui/checkbox';
-import { checkboxGroupItemClick as _checkboxGroupItemClick } from '@kovojs/headless-ui/checkbox-group';
+import { checkboxTriggerClick as _checkboxTriggerClick } from '../primitive-actions.js';
+import { checkboxGroupItemClick as _checkboxGroupItemClick } from '../primitive-actions.js';
 import { Checkbox } from '@kovojs/ui/checkbox';
 import {
   CheckboxGroup,

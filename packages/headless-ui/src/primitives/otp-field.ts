@@ -423,6 +423,8 @@ export function otpFieldInputAttributes(
  * const detail = {} as Parameters<typeof setOtpFieldValue>[3];
  * const result = setOtpFieldValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setOtpFieldValue(
   state: OtpFieldState,
@@ -461,6 +463,8 @@ export function setOtpFieldValue(
  * const extra = {} as Parameters<typeof setOtpFieldSlotValue>[4];
  * const result = setOtpFieldSlotValue(input, state, options, detail, extra);
  * ```
+ *
+ * @internal
  */
 export function setOtpFieldSlotValue(
   state: OtpFieldState,
@@ -490,6 +494,8 @@ export function setOtpFieldSlotValue(
  * const options = {} as Parameters<typeof otpFieldMoveFocus>[2];
  * const result = otpFieldMoveFocus(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function otpFieldMoveFocus(
   state: OtpFieldState,
@@ -538,6 +544,7 @@ export function otpFieldValueFromString(value: string, length?: number): string 
  * const result = otpFieldInput(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -575,6 +582,7 @@ export function otpFieldInput(
  * const result = otpFieldKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -630,6 +638,7 @@ export function otpFieldKeyDown(
  * const result = otpFieldPaste(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

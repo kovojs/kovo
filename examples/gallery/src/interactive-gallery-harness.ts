@@ -3,80 +3,10 @@ import { resolve } from 'node:path';
 import vm from 'node:vm';
 
 import { compileComponentModule } from '../../../packages/compiler/src/compile.ts';
-import * as accordionPrimitives from '@kovojs/headless-ui/accordion';
-import * as alertDialogPrimitives from '@kovojs/headless-ui/alert-dialog';
-import * as autocompletePrimitives from '@kovojs/headless-ui/autocomplete';
-import * as avatarPrimitives from '@kovojs/headless-ui/avatar';
-import * as checkboxPrimitives from '@kovojs/headless-ui/checkbox';
-import * as checkboxGroupPrimitives from '@kovojs/headless-ui/checkbox-group';
-import * as collapsiblePrimitives from '@kovojs/headless-ui/collapsible';
-import * as comboboxPrimitives from '@kovojs/headless-ui/combobox';
-import * as commandPrimitives from '@kovojs/headless-ui/command';
-import * as contextMenuPrimitives from '@kovojs/headless-ui/context-menu';
-import * as dialogPrimitives from '@kovojs/headless-ui/dialog';
-import * as disclosurePrimitives from '@kovojs/headless-ui/disclosure';
-import * as dropdownMenuPrimitives from '@kovojs/headless-ui/dropdown-menu';
-import * as fieldPrimitives from '@kovojs/headless-ui/field';
-import * as hoverCardPrimitives from '@kovojs/headless-ui/hover-card';
-import * as menubarPrimitives from '@kovojs/headless-ui/menubar';
-import * as meterPrimitives from '@kovojs/headless-ui/meter';
-import * as navigationMenuPrimitives from '@kovojs/headless-ui/navigation-menu';
-import * as numberFieldPrimitives from '@kovojs/headless-ui/number-field';
-import * as otpFieldPrimitives from '@kovojs/headless-ui/otp-field';
-import * as popoverPrimitives from '@kovojs/headless-ui/popover';
-import * as progressPrimitives from '@kovojs/headless-ui/progress';
-import * as radioGroupPrimitives from '@kovojs/headless-ui/radio-group';
-import * as scrollAreaPrimitives from '@kovojs/headless-ui/scroll-area';
-import * as selectPrimitives from '@kovojs/headless-ui/select';
-import * as separatorPrimitives from '@kovojs/headless-ui/separator';
-import * as sliderPrimitives from '@kovojs/headless-ui/slider';
-import * as switchPrimitives from '@kovojs/headless-ui/switch';
-import * as tabsPrimitives from '@kovojs/headless-ui/tabs';
-import * as toastPrimitives from '@kovojs/headless-ui/toast';
-import * as togglePrimitives from '@kovojs/headless-ui/toggle';
-import * as toggleGroupPrimitives from '@kovojs/headless-ui/toggle-group';
-import * as toolbarPrimitives from '@kovojs/headless-ui/toolbar';
-import * as tooltipPrimitives from '@kovojs/headless-ui/tooltip';
+import * as primitiveActions from './primitive-actions.js';
 
 export const galleryRoot = resolve(import.meta.dirname, '..');
 const compiledInteractiveDemos = new Map<string, CompiledInteractiveDemo>();
-const primitiveActions = {
-  ...accordionPrimitives,
-  ...alertDialogPrimitives,
-  ...autocompletePrimitives,
-  ...avatarPrimitives,
-  ...checkboxPrimitives,
-  ...checkboxGroupPrimitives,
-  ...collapsiblePrimitives,
-  ...comboboxPrimitives,
-  ...commandPrimitives,
-  ...contextMenuPrimitives,
-  ...dialogPrimitives,
-  ...disclosurePrimitives,
-  ...dropdownMenuPrimitives,
-  ...fieldPrimitives,
-  ...hoverCardPrimitives,
-  ...menubarPrimitives,
-  ...meterPrimitives,
-  ...navigationMenuPrimitives,
-  ...numberFieldPrimitives,
-  ...otpFieldPrimitives,
-  ...popoverPrimitives,
-  ...progressPrimitives,
-  ...radioGroupPrimitives,
-  ...scrollAreaPrimitives,
-  ...selectPrimitives,
-  ...separatorPrimitives,
-  ...sliderPrimitives,
-  ...switchPrimitives,
-  ...tabsPrimitives,
-  ...toastPrimitives,
-  ...togglePrimitives,
-  ...toggleGroupPrimitives,
-  ...toolbarPrimitives,
-  ...tooltipPrimitives,
-};
-
 export type ClientExports = Record<
   string,
   (
@@ -182,6 +112,7 @@ export function evaluateClientModule(
     .replace(/import \{[\s\S]*?\} from ["']@kovojs\/browser(?:\/generated)?["'];\n\n?/g, '')
     .replace(/import \{[\s\S]*?\} from ["']@kovojs\/headless-ui\/[^"']+["'];\n\n?/g, '')
     .replace(/import \{[\s\S]*?\} from ["']@kovojs\/ui\/[^"']+["'];\n\n?/g, '')
+    .replace(/import \{[\s\S]*?\} from ["'](?:\.\.\/)?primitive-actions(?:\.js)?["'];\n\n?/g, '')
     .replaceAll('export const ', 'exports.');
   const exports: ClientExports = {};
   vm.runInNewContext(source, {

@@ -10,7 +10,7 @@ import {
   navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter,
   navigationMenuTypeahead as _navigationMenuTypeahead,
   type NavigationMenuItem as GalleryNavigationMenuItem,
-} from '@kovojs/headless-ui/navigation-menu';
+} from '../primitive-actions.js';
 import {
   NavigationMenu,
   NavigationMenuContent,

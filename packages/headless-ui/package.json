@@ -10,194 +10,204 @@
   ],
   "type": "module",
   "exports": {
-    "./accordion": "./src/primitives/accordion.ts",
-    "./alert-dialog": "./src/primitives/alert-dialog.ts",
-    "./autocomplete": "./src/primitives/autocomplete.ts",
-    "./avatar": "./src/primitives/avatar.ts",
-    "./checkbox": "./src/primitives/checkbox.ts",
-    "./checkbox-group": "./src/primitives/checkbox-group.ts",
-    "./collapsible": "./src/primitives/collapsible.ts",
-    "./combobox": "./src/primitives/combobox.ts",
-    "./command": "./src/primitives/command.ts",
-    "./context-menu": "./src/primitives/context-menu.ts",
-    "./dialog": "./src/primitives/dialog.ts",
-    "./disclosure": "./src/primitives/disclosure.ts",
-    "./dropdown-menu": "./src/primitives/dropdown-menu.ts",
-    "./field": "./src/primitives/field.ts",
-    "./hover-card": "./src/primitives/hover-card.ts",
+    "./accordion": "./src/public/accordion.ts",
+    "./alert-dialog": "./src/public/alert-dialog.ts",
+    "./autocomplete": "./src/public/autocomplete.ts",
+    "./avatar": "./src/public/avatar.ts",
+    "./checkbox": "./src/public/checkbox.ts",
+    "./checkbox-group": "./src/public/checkbox-group.ts",
+    "./collapsible": "./src/public/collapsible.ts",
+    "./combobox": "./src/public/combobox.ts",
+    "./command": "./src/public/command.ts",
+    "./context-menu": "./src/public/context-menu.ts",
+    "./dialog": "./src/public/dialog.ts",
+    "./disclosure": "./src/public/disclosure.ts",
+    "./dropdown-menu": "./src/public/dropdown-menu.ts",
+    "./field": "./src/public/field.ts",
+    "./hover-card": "./src/public/hover-card.ts",
     "./internal": "./src/internal.ts",
-    "./menubar": "./src/primitives/menubar.ts",
-    "./meter": "./src/primitives/meter.ts",
-    "./navigation-menu": "./src/primitives/navigation-menu.ts",
-    "./number-field": "./src/primitives/number-field.ts",
-    "./otp-field": "./src/primitives/otp-field.ts",
-    "./popover": "./src/primitives/popover.ts",
-    "./progress": "./src/primitives/progress.ts",
-    "./radio-group": "./src/primitives/radio-group.ts",
-    "./scroll-area": "./src/primitives/scroll-area.ts",
-    "./select": "./src/primitives/select.ts",
-    "./separator": "./src/primitives/separator.ts",
-    "./slider": "./src/primitives/slider.ts",
-    "./switch": "./src/primitives/switch.ts",
-    "./tabs": "./src/primitives/tabs.ts",
-    "./toast": "./src/primitives/toast.ts",
-    "./toggle": "./src/primitives/toggle.ts",
-    "./toggle-group": "./src/primitives/toggle-group.ts",
-    "./toolbar": "./src/primitives/toolbar.ts",
-    "./tooltip": "./src/primitives/tooltip.ts",
-    "./types": "./src/types.ts"
+    "./menubar": "./src/public/menubar.ts",
+    "./meter": "./src/public/meter.ts",
+    "./navigation-menu": "./src/public/navigation-menu.ts",
+    "./number-field": "./src/public/number-field.ts",
+    "./otp-field": "./src/public/otp-field.ts",
+    "./popover": "./src/public/popover.ts",
+    "./progress": "./src/public/progress.ts",
+    "./radio-group": "./src/public/radio-group.ts",
+    "./scroll-area": "./src/public/scroll-area.ts",
+    "./select": "./src/public/select.ts",
+    "./separator": "./src/public/separator.ts",
+    "./slider": "./src/public/slider.ts",
+    "./switch": "./src/public/switch.ts",
+    "./tabs": "./src/public/tabs.ts",
+    "./toast": "./src/public/toast.ts",
+    "./toggle": "./src/public/toggle.ts",
+    "./toggle-group": "./src/public/toggle-group.ts",
+    "./toolbar": "./src/public/toolbar.ts",
+    "./tooltip": "./src/public/tooltip.ts",
+    "./types": "./src/types.ts",
+    "./generated": "./src/generated.ts",
+    "./internal/primitive": "./src/primitive-internal.ts"
   },
   "publishConfig": {
     "exports": {
       "./accordion": {
-        "types": "./dist/primitives/accordion.d.mts",
-        "default": "./dist/primitives/accordion.mjs"
+        "types": "./dist/public/accordion.d.mts",
+        "default": "./dist/public/accordion.mjs"
       },
       "./alert-dialog": {
-        "types": "./dist/primitives/alert-dialog.d.mts",
-        "default": "./dist/primitives/alert-dialog.mjs"
+        "types": "./dist/public/alert-dialog.d.mts",
+        "default": "./dist/public/alert-dialog.mjs"
       },
       "./autocomplete": {
-        "types": "./dist/primitives/autocomplete.d.mts",
-        "default": "./dist/primitives/autocomplete.mjs"
+        "types": "./dist/public/autocomplete.d.mts",
+        "default": "./dist/public/autocomplete.mjs"
       },
       "./avatar": {
-        "types": "./dist/primitives/avatar.d.mts",
-        "default": "./dist/primitives/avatar.mjs"
+        "types": "./dist/public/avatar.d.mts",
+        "default": "./dist/public/avatar.mjs"
       },
       "./checkbox": {
-        "types": "./dist/primitives/checkbox.d.mts",
-        "default": "./dist/primitives/checkbox.mjs"
+        "types": "./dist/public/checkbox.d.mts",
+        "default": "./dist/public/checkbox.mjs"
       },
       "./checkbox-group": {
-        "types": "./dist/primitives/checkbox-group.d.mts",
-        "default": "./dist/primitives/checkbox-group.mjs"
+        "types": "./dist/public/checkbox-group.d.mts",
+        "default": "./dist/public/checkbox-group.mjs"
       },
       "./collapsible": {
-        "types": "./dist/primitives/collapsible.d.mts",
-        "default": "./dist/primitives/collapsible.mjs"
+        "types": "./dist/public/collapsible.d.mts",
+        "default": "./dist/public/collapsible.mjs"
       },
       "./combobox": {
-        "types": "./dist/primitives/combobox.d.mts",
-        "default": "./dist/primitives/combobox.mjs"
+        "types": "./dist/public/combobox.d.mts",
+        "default": "./dist/public/combobox.mjs"
       },
       "./command": {
-        "types": "./dist/primitives/command.d.mts",
-        "default": "./dist/primitives/command.mjs"
+        "types": "./dist/public/command.d.mts",
+        "default": "./dist/public/command.mjs"
       },
       "./context-menu": {
-        "types": "./dist/primitives/context-menu.d.mts",
-        "default": "./dist/primitives/context-menu.mjs"
+        "types": "./dist/public/context-menu.d.mts",
+        "default": "./dist/public/context-menu.mjs"
       },
       "./dialog": {
-        "types": "./dist/primitives/dialog.d.mts",
-        "default": "./dist/primitives/dialog.mjs"
+        "types": "./dist/public/dialog.d.mts",
+        "default": "./dist/public/dialog.mjs"
       },
       "./disclosure": {
-        "types": "./dist/primitives/disclosure.d.mts",
-        "default": "./dist/primitives/disclosure.mjs"
+        "types": "./dist/public/disclosure.d.mts",
+        "default": "./dist/public/disclosure.mjs"
       },
       "./dropdown-menu": {
-        "types": "./dist/primitives/dropdown-menu.d.mts",
-        "default": "./dist/primitives/dropdown-menu.mjs"
+        "types": "./dist/public/dropdown-menu.d.mts",
+        "default": "./dist/public/dropdown-menu.mjs"
       },
       "./field": {
-        "types": "./dist/primitives/field.d.mts",
-        "default": "./dist/primitives/field.mjs"
+        "types": "./dist/public/field.d.mts",
+        "default": "./dist/public/field.mjs"
       },
       "./hover-card": {
-        "types": "./dist/primitives/hover-card.d.mts",
-        "default": "./dist/primitives/hover-card.mjs"
+        "types": "./dist/public/hover-card.d.mts",
+        "default": "./dist/public/hover-card.mjs"
       },
       "./internal": {
         "types": "./dist/internal.d.mts",
         "default": "./dist/internal.mjs"
       },
       "./menubar": {
-        "types": "./dist/primitives/menubar.d.mts",
-        "default": "./dist/primitives/menubar.mjs"
+        "types": "./dist/public/menubar.d.mts",
+        "default": "./dist/public/menubar.mjs"
       },
       "./meter": {
-        "types": "./dist/primitives/meter.d.mts",
-        "default": "./dist/primitives/meter.mjs"
+        "types": "./dist/public/meter.d.mts",
+        "default": "./dist/public/meter.mjs"
       },
       "./navigation-menu": {
-        "types": "./dist/primitives/navigation-menu.d.mts",
-        "default": "./dist/primitives/navigation-menu.mjs"
+        "types": "./dist/public/navigation-menu.d.mts",
+        "default": "./dist/public/navigation-menu.mjs"
       },
       "./number-field": {
-        "types": "./dist/primitives/number-field.d.mts",
-        "default": "./dist/primitives/number-field.mjs"
+        "types": "./dist/public/number-field.d.mts",
+        "default": "./dist/public/number-field.mjs"
       },
       "./otp-field": {
-        "types": "./dist/primitives/otp-field.d.mts",
-        "default": "./dist/primitives/otp-field.mjs"
+        "types": "./dist/public/otp-field.d.mts",
+        "default": "./dist/public/otp-field.mjs"
       },
       "./popover": {
-        "types": "./dist/primitives/popover.d.mts",
-        "default": "./dist/primitives/popover.mjs"
+        "types": "./dist/public/popover.d.mts",
+        "default": "./dist/public/popover.mjs"
       },
       "./progress": {
-        "types": "./dist/primitives/progress.d.mts",
-        "default": "./dist/primitives/progress.mjs"
+        "types": "./dist/public/progress.d.mts",
+        "default": "./dist/public/progress.mjs"
       },
       "./radio-group": {
-        "types": "./dist/primitives/radio-group.d.mts",
-        "default": "./dist/primitives/radio-group.mjs"
+        "types": "./dist/public/radio-group.d.mts",
+        "default": "./dist/public/radio-group.mjs"
       },
       "./scroll-area": {
-        "types": "./dist/primitives/scroll-area.d.mts",
-        "default": "./dist/primitives/scroll-area.mjs"
+        "types": "./dist/public/scroll-area.d.mts",
+        "default": "./dist/public/scroll-area.mjs"
       },
       "./select": {
-        "types": "./dist/primitives/select.d.mts",
-        "default": "./dist/primitives/select.mjs"
+        "types": "./dist/public/select.d.mts",
+        "default": "./dist/public/select.mjs"
       },
       "./separator": {
-        "types": "./dist/primitives/separator.d.mts",
-        "default": "./dist/primitives/separator.mjs"
+        "types": "./dist/public/separator.d.mts",
+        "default": "./dist/public/separator.mjs"
       },
       "./slider": {
-        "types": "./dist/primitives/slider.d.mts",
-        "default": "./dist/primitives/slider.mjs"
+        "types": "./dist/public/slider.d.mts",
+        "default": "./dist/public/slider.mjs"
       },
       "./switch": {
-        "types": "./dist/primitives/switch.d.mts",
-        "default": "./dist/primitives/switch.mjs"
+        "types": "./dist/public/switch.d.mts",
+        "default": "./dist/public/switch.mjs"
       },
       "./tabs": {
-        "types": "./dist/primitives/tabs.d.mts",
-        "default": "./dist/primitives/tabs.mjs"
+        "types": "./dist/public/tabs.d.mts",
+        "default": "./dist/public/tabs.mjs"
       },
       "./toast": {
-        "types": "./dist/primitives/toast.d.mts",
-        "default": "./dist/primitives/toast.mjs"
+        "types": "./dist/public/toast.d.mts",
+        "default": "./dist/public/toast.mjs"
       },
       "./toggle": {
-        "types": "./dist/primitives/toggle.d.mts",
-        "default": "./dist/primitives/toggle.mjs"
+        "types": "./dist/public/toggle.d.mts",
+        "default": "./dist/public/toggle.mjs"
       },
       "./toggle-group": {
-        "types": "./dist/primitives/toggle-group.d.mts",
-        "default": "./dist/primitives/toggle-group.mjs"
+        "types": "./dist/public/toggle-group.d.mts",
+        "default": "./dist/public/toggle-group.mjs"
       },
       "./toolbar": {
-        "types": "./dist/primitives/toolbar.d.mts",
-        "default": "./dist/primitives/toolbar.mjs"
+        "types": "./dist/public/toolbar.d.mts",
+        "default": "./dist/public/toolbar.mjs"
       },
       "./tooltip": {
-        "types": "./dist/primitives/tooltip.d.mts",
-        "default": "./dist/primitives/tooltip.mjs"
+        "types": "./dist/public/tooltip.d.mts",
+        "default": "./dist/public/tooltip.mjs"
       },
       "./types": {
         "types": "./dist/types.d.mts",
         "default": "./dist/types.mjs"
+      },
+      "./generated": {
+        "types": "./dist/generated.d.mts",
+        "default": "./dist/generated.mjs"
+      },
+      "./internal/primitive": {
+        "types": "./dist/primitive-internal.d.mts",
+        "default": "./dist/primitive-internal.mjs"
       }
     }
   },
   "scripts": {
     "lint:primitives": "rm -rf .lint-primitives && tsc --ignoreConfig --module NodeNext --moduleResolution NodeNext --target ES2024 --types node --skipLibCheck --strict --outDir .lint-primitives --rootDir src src/tooling/lint-primitives.ts && node .lint-primitives/tooling/lint-primitives.js; status=$?; rm -rf .lint-primitives; exit $status",
-    "build:dist": "vp pack src/internal.ts src/types.ts src/primitives/accordion.ts src/primitives/alert-dialog.ts src/primitives/autocomplete.ts src/primitives/avatar.ts src/primitives/checkbox-group.ts src/primitives/checkbox.ts src/primitives/collapsible.ts src/primitives/combobox.ts src/primitives/command.ts src/primitives/context-menu.ts src/primitives/dialog.ts src/primitives/disclosure.ts src/primitives/dropdown-menu.ts src/primitives/field.ts src/primitives/hover-card.ts src/primitives/menubar.ts src/primitives/meter.ts src/primitives/navigation-menu.ts src/primitives/number-field.ts src/primitives/otp-field.ts src/primitives/popover.ts src/primitives/progress.ts src/primitives/radio-group.ts src/primitives/scroll-area.ts src/primitives/select.ts src/primitives/separator.ts src/primitives/slider.ts src/primitives/switch.ts src/primitives/tabs.ts src/primitives/toast.ts src/primitives/toggle-group.ts src/primitives/toggle.ts src/primitives/toolbar.ts src/primitives/tooltip.ts --dts",
+    "build:dist": "vp pack src/generated.ts src/internal.ts src/primitive-internal.ts src/public/accordion.ts src/public/alert-dialog.ts src/public/autocomplete.ts src/public/avatar.ts src/public/checkbox-group.ts src/public/checkbox.ts src/public/collapsible.ts src/public/combobox.ts src/public/command.ts src/public/context-menu.ts src/public/dialog.ts src/public/disclosure.ts src/public/dropdown-menu.ts src/public/field.ts src/public/hover-card.ts src/public/menubar.ts src/public/meter.ts src/public/navigation-menu.ts src/public/number-field.ts src/public/otp-field.ts src/public/popover.ts src/public/progress.ts src/public/radio-group.ts src/public/scroll-area.ts src/public/select.ts src/public/separator.ts src/public/slider.ts src/public/switch.ts src/public/tabs.ts src/public/toast.ts src/public/toggle-group.ts src/public/toggle.ts src/public/toolbar.ts src/public/tooltip.ts src/types.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

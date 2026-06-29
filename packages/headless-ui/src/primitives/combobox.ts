@@ -24,6 +24,8 @@ import {
  *
  * const value: ComboboxItem = {} as ComboboxItem;
  * ```
+ *
+ *
  */
 export interface ComboboxItem {
   disabled?: boolean;
@@ -654,6 +656,8 @@ export function comboboxValueAttributes(
  * const detail = {} as Parameters<typeof setComboboxValue>[3];
  * const result = setComboboxValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setComboboxValue(
   state: ComboboxState,
@@ -688,6 +692,8 @@ export function setComboboxValue(
  * const detail = {} as Parameters<typeof setComboboxOpen>[3];
  * const result = setComboboxOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setComboboxOpen(
   state: ComboboxState,
@@ -721,6 +727,8 @@ export function setComboboxOpen(
  * const options = {} as Parameters<typeof selectComboboxOption>[2];
  * const result = selectComboboxOption(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function selectComboboxOption(
   state: ComboboxState,
@@ -764,6 +772,8 @@ export function selectComboboxOption(
  * const options = {} as Parameters<typeof comboboxTypeahead>[2];
  * const result = comboboxTypeahead(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function comboboxTypeahead(
   state: ComboboxState,
@@ -816,6 +826,8 @@ export function comboboxTypeahead(
  * const options = {} as Parameters<typeof comboboxMove>[2];
  * const result = comboboxMove(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function comboboxMove(
   state: ComboboxState,
@@ -859,6 +871,7 @@ export function comboboxMove(
  * const result = comboboxInput(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -897,6 +910,7 @@ export function comboboxInput(
  * const result = comboboxOptionClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -930,6 +944,7 @@ export function comboboxOptionClick(
  * const result = comboboxKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

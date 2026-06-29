@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { popoverBeforeToggle as _popoverBeforeToggle } from '@kovojs/headless-ui/popover';
+import { popoverBeforeToggle as _popoverBeforeToggle } from '../primitive-actions.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@kovojs/ui/popover';
 
 export interface GalleryPopoverDemoState {

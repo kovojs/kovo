@@ -9,7 +9,7 @@ import {
   menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick,
   menubarTypeahead as _menubarTypeahead,
   type MenubarItem as GalleryMenubarItem,
-} from '@kovojs/headless-ui/menubar';
+} from '../primitive-actions.js';
 import { Menubar, MenubarItem, MenubarSubmenu } from '@kovojs/ui/menubar';
 
 export interface GalleryMenubarDemoState {

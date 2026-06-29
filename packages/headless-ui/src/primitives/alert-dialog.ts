@@ -413,6 +413,8 @@ export function alertDialogActionAttributes(
  * const detail = {} as Parameters<typeof setAlertDialogOpen>[3];
  * const result = setAlertDialogOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setAlertDialogOpen(
   state: AlertDialogState,
@@ -446,6 +448,8 @@ export function setAlertDialogOpen(
  * const options = {} as Parameters<typeof toggleAlertDialog>[2];
  * const result = toggleAlertDialog(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleAlertDialog(
   state: AlertDialogState,
@@ -468,6 +472,7 @@ export function toggleAlertDialog(
  * const result = alertDialogTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -502,6 +507,7 @@ export function alertDialogTriggerClick(
  * const result = alertDialogCancelClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -536,6 +542,7 @@ export function alertDialogCancelClick(
  * const result = alertDialogActionClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -570,6 +577,7 @@ export function alertDialogActionClick(
  * const result = alertDialogCancel(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -603,6 +611,7 @@ export function alertDialogCancel(
  * const result = alertDialogBeforeToggle(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

@@ -345,6 +345,8 @@ export function numberFieldDecrementAttributes(
  * const detail = {} as Parameters<typeof setNumberFieldValue>[3];
  * const result = setNumberFieldValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setNumberFieldValue(
   state: NumberFieldState,
@@ -380,6 +382,8 @@ export function setNumberFieldValue(
  * const state = {} as Parameters<typeof incrementNumberFieldValue>[1];
  * const result = incrementNumberFieldValue(input, state);
  * ```
+ *
+ * @internal
  */
 export function incrementNumberFieldValue(
   state: NumberFieldState,
@@ -401,6 +405,8 @@ export function incrementNumberFieldValue(
  * const state = {} as Parameters<typeof decrementNumberFieldValue>[1];
  * const result = decrementNumberFieldValue(input, state);
  * ```
+ *
+ * @internal
  */
 export function decrementNumberFieldValue(
   state: NumberFieldState,
@@ -443,6 +449,7 @@ export function numberFieldValueFromString(value: string): NumberFieldValue {
  * const result = numberFieldInput(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -485,6 +492,7 @@ export function numberFieldInput(
  * const result = numberFieldIncrementClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -518,6 +526,7 @@ export function numberFieldIncrementClick(
  * const result = numberFieldDecrementClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -551,6 +560,7 @@ export function numberFieldDecrementClick(
  * const result = numberFieldKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

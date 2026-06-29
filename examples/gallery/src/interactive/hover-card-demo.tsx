@@ -8,7 +8,7 @@ import {
   hoverCardTriggerFocus as _hoverCardTriggerFocus,
   hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
   hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
-} from '@kovojs/headless-ui/hover-card';
+} from '../primitive-actions.js';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@kovojs/ui/hover-card';
 
 export interface GalleryHoverCardDemoState {

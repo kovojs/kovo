@@ -166,6 +166,8 @@ export function switchRootAttributes(state: SwitchState): SwitchPrimitiveAttribu
  * const detail = {} as Parameters<typeof setSwitchChecked>[3];
  * const result = setSwitchChecked(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setSwitchChecked(
   state: SwitchState,
@@ -199,6 +201,8 @@ export function setSwitchChecked(
  * const options = {} as Parameters<typeof toggleSwitch>[2];
  * const result = toggleSwitch(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleSwitch(
   state: SwitchState,
@@ -221,6 +225,7 @@ export function toggleSwitch(
  * const result = switchTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

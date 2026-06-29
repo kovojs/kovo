@@ -20,6 +20,9 @@ import {
  *
  * const value: ToolbarOrientation = {} as ToolbarOrientation;
  * ```
+ *
+ *
+ *
  */
 export type ToolbarOrientation = 'horizontal' | 'vertical';
 
@@ -288,6 +291,8 @@ export function toolbarButtonAttributes(
  * const state = {} as Parameters<typeof toolbarMoveFocus>[1];
  * const result = toolbarMoveFocus(input, state);
  * ```
+ *
+ * @internal
  */
 export function toolbarMoveFocus(state: ToolbarState, intent: NavigationIntent): ToolbarMoveResult {
   const items = state.items ?? [];
@@ -320,6 +325,7 @@ export function toolbarMoveFocus(state: ToolbarState, intent: NavigationIntent):
  * const result = toolbarKeyDown(input, state);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

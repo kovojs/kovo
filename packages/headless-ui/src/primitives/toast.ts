@@ -681,6 +681,8 @@ export function toastCloseAttributes(options: ToastState): ToastPrimitiveAttribu
  * const detail = {} as Parameters<typeof setToastOpen>[3];
  * const result = setToastOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setToastOpen(
   state: ToastState,
@@ -717,6 +719,8 @@ export function setToastOpen(
  * const options = {} as Parameters<typeof dismissToast>[2];
  * const result = dismissToast(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function dismissToast(
   state: ToastState,
@@ -739,6 +743,7 @@ export function dismissToast(
  * const result = toastCloseClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -772,6 +777,7 @@ export function toastCloseClick(
  * const result = toastActionClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -815,6 +821,7 @@ export function toastActionClick(
  * const result = toastEscapeKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -850,6 +857,7 @@ export function toastEscapeKeyDown(
  * const result = toastAnimationEnd(input, state, options, detail);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -883,6 +891,7 @@ export function toastAnimationEnd(
  * const result = toastViewportKeyDown(input);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

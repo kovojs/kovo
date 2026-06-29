@@ -4,7 +4,7 @@ import {
   otpFieldInput as _otpFieldInput,
   otpFieldKeyDown as _otpFieldKeyDown,
   otpFieldPaste as _otpFieldPaste,
-} from '@kovojs/headless-ui/otp-field';
+} from '../primitive-actions.js';
 import { OtpField, OtpFieldGroup, OtpFieldHiddenInput, OtpFieldInput } from '@kovojs/ui/otp-field';
 
 export interface GalleryOtpFieldDemoState {

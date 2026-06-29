@@ -258,6 +258,8 @@ export function hoverCardContentAttributes(
  * const detail = {} as Parameters<typeof setHoverCardOpen>[3];
  * const result = setHoverCardOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setHoverCardOpen(
   state: HoverCardState,
@@ -290,6 +292,7 @@ export function setHoverCardOpen(
  * const result = hoverCardTriggerPointerEnter(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -318,6 +321,7 @@ export function hoverCardTriggerPointerEnter(
  * const result = hoverCardTriggerPointerLeave(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -346,6 +350,7 @@ export function hoverCardTriggerPointerLeave(
  * const result = hoverCardTriggerFocus(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -374,6 +379,7 @@ export function hoverCardTriggerFocus(
  * const result = hoverCardTriggerBlur(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -402,6 +408,7 @@ export function hoverCardTriggerBlur(
  * const result = hoverCardContentPointerEnter(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -430,6 +437,7 @@ export function hoverCardContentPointerEnter(
  * const result = hoverCardContentPointerLeave(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -458,6 +466,7 @@ export function hoverCardContentPointerLeave(
  * const result = hoverCardContentFocus(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -486,6 +495,7 @@ export function hoverCardContentFocus(
  * const result = hoverCardContentBlur(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -514,6 +524,7 @@ export function hoverCardContentBlur(
  * const result = hoverCardEscapeKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

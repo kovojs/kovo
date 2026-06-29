@@ -318,6 +318,8 @@ export function dialogCloseAttributes(options: DialogAttributeOptions): DialogPr
  * const detail = {} as Parameters<typeof setDialogOpen>[3];
  * const result = setDialogOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setDialogOpen(
   state: DialogState,
@@ -351,6 +353,8 @@ export function setDialogOpen(
  * const options = {} as Parameters<typeof toggleDialog>[2];
  * const result = toggleDialog(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleDialog(
   state: DialogState,
@@ -373,6 +377,7 @@ export function toggleDialog(
  * const result = dialogTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -407,6 +412,7 @@ export function dialogTriggerClick(
  * const result = dialogCloseClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -441,6 +447,7 @@ export function dialogCloseClick(
  * const result = dialogCancel(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -474,6 +481,7 @@ export function dialogCancel(
  * const result = dialogBeforeToggle(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

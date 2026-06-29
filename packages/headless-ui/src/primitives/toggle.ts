@@ -154,6 +154,8 @@ export function toggleRootAttributes(state: ToggleState): TogglePrimitiveAttribu
  * const detail = {} as Parameters<typeof setTogglePressed>[3];
  * const result = setTogglePressed(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setTogglePressed(
   state: ToggleState,
@@ -187,6 +189,8 @@ export function setTogglePressed(
  * const options = {} as Parameters<typeof togglePressed>[2];
  * const result = togglePressed(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function togglePressed(
   state: ToggleState,
@@ -209,6 +213,7 @@ export function togglePressed(
  * const result = toggleTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

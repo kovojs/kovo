@@ -24,6 +24,8 @@ import {
  *
  * const value: ToggleGroupType = {} as ToggleGroupType;
  * ```
+ *
+ *
  */
 export type ToggleGroupType = 'multiple' | 'single';
 
@@ -276,6 +278,8 @@ export function toggleGroupItemPressed(options: ToggleGroupItemAttributeOptions)
  * const input = {} as Parameters<typeof toggleGroupRovingIndex>[0];
  * const result = toggleGroupRovingIndex(input);
  * ```
+ *
+ * @internal
  */
 export function toggleGroupRovingIndex(state: ToggleGroupState): number {
   const items = state.items ?? [];
@@ -398,6 +402,8 @@ export function toggleGroupButtonAttributes(
  * const detail = {} as Parameters<typeof setToggleGroupValue>[3];
  * const result = setToggleGroupValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setToggleGroupValue(
   state: ToggleGroupState,
@@ -442,6 +448,8 @@ export function setToggleGroupValue(
  * const options = {} as Parameters<typeof toggleGroupItemValue>[2];
  * const result = toggleGroupItemValue(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleGroupItemValue(
   state: ToggleGroupItemAttributeOptions,
@@ -468,6 +476,8 @@ export function toggleGroupItemValue(
  * const state = {} as Parameters<typeof toggleGroupMoveFocus>[1];
  * const result = toggleGroupMoveFocus(input, state);
  * ```
+ *
+ * @internal
  */
 export function toggleGroupMoveFocus(
   state: ToggleGroupState,
@@ -504,6 +514,7 @@ export function toggleGroupMoveFocus(
  * const result = toggleGroupItemClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -536,6 +547,7 @@ export function toggleGroupItemClick(
  * const result = toggleGroupKeyDown(input, state);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

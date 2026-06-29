@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import {
   radioGroupItemClick as _radioGroupItemClick,
   radioGroupKeyDown as _radioGroupKeyDown,
-} from '@kovojs/headless-ui/radio-group';
+} from '../primitive-actions.js';
 import {
   RadioGroup,
   RadioGroupItem,

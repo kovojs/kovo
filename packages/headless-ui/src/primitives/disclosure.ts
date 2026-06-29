@@ -213,6 +213,8 @@ export function disclosureContentAttributes(
  * const detail = {} as Parameters<typeof setDisclosureOpen>[3];
  * const result = setDisclosureOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setDisclosureOpen(
   state: DisclosureState,
@@ -246,6 +248,8 @@ export function setDisclosureOpen(
  * const options = {} as Parameters<typeof toggleDisclosure>[2];
  * const result = toggleDisclosure(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function toggleDisclosure(
   state: DisclosureState,
@@ -268,6 +272,7 @@ export function toggleDisclosure(
  * const result = disclosureTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

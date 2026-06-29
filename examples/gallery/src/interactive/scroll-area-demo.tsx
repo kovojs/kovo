@@ -7,7 +7,7 @@ import {
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
   scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
-} from '@kovojs/headless-ui/scroll-area';
+} from '../primitive-actions.js';
 import {
   ScrollArea,
   ScrollAreaCorner,

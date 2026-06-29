@@ -8,7 +8,7 @@ import {
   commandKeyDown as _commandKeyDown,
   commandTriggerClick as _commandTriggerClick,
   type CommandItem as GalleryCommandItem,
-} from '@kovojs/headless-ui/command';
+} from '../primitive-actions.js';
 import {
   Command,
   CommandClose,

@@ -238,6 +238,8 @@ export function tooltipContentAttributes(
  * const detail = {} as Parameters<typeof setTooltipOpen>[3];
  * const result = setTooltipOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setTooltipOpen(
   state: TooltipState,
@@ -270,6 +272,7 @@ export function setTooltipOpen(
  * const result = tooltipTriggerPointerEnter(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -298,6 +301,7 @@ export function tooltipTriggerPointerEnter(
  * const result = tooltipTriggerPointerLeave(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -326,6 +330,7 @@ export function tooltipTriggerPointerLeave(
  * const result = tooltipTriggerFocus(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -354,6 +359,7 @@ export function tooltipTriggerFocus(
  * const result = tooltipTriggerBlur(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -382,6 +388,7 @@ export function tooltipTriggerBlur(
  * const result = tooltipEscapeKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

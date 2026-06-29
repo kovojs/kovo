@@ -24,6 +24,8 @@ import {
  *
  * const value: AutocompleteItem = {} as AutocompleteItem;
  * ```
+ *
+ *
  */
 export interface AutocompleteItem {
   disabled?: boolean;
@@ -717,6 +719,8 @@ export function autocompleteValueAttributes(
  * const detail = {} as Parameters<typeof setAutocompleteInputValue>[3];
  * const result = setAutocompleteInputValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setAutocompleteInputValue(
   state: AutocompleteState,
@@ -755,6 +759,8 @@ export function setAutocompleteInputValue(
  * const detail = {} as Parameters<typeof setAutocompleteValue>[3];
  * const result = setAutocompleteValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setAutocompleteValue(
   state: AutocompleteState,
@@ -789,6 +795,8 @@ export function setAutocompleteValue(
  * const detail = {} as Parameters<typeof setAutocompleteOpen>[3];
  * const result = setAutocompleteOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setAutocompleteOpen(
   state: AutocompleteState,
@@ -822,6 +830,8 @@ export function setAutocompleteOpen(
  * const options = {} as Parameters<typeof selectAutocompleteOption>[2];
  * const result = selectAutocompleteOption(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function selectAutocompleteOption(
   state: AutocompleteState,
@@ -890,6 +900,8 @@ export function selectAutocompleteOption(
  * const options = {} as Parameters<typeof autocompleteTypeahead>[2];
  * const result = autocompleteTypeahead(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function autocompleteTypeahead(
   state: AutocompleteState,
@@ -942,6 +954,8 @@ export function autocompleteTypeahead(
  * const options = {} as Parameters<typeof autocompleteMove>[2];
  * const result = autocompleteMove(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function autocompleteMove(
   state: AutocompleteState,
@@ -982,6 +996,7 @@ export function autocompleteMove(
  * const result = autocompleteInput(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1020,6 +1035,7 @@ export function autocompleteInput(
  * const result = autocompleteOptionClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1053,6 +1069,7 @@ export function autocompleteOptionClick(
  * const result = autocompleteKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

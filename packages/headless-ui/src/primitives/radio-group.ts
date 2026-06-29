@@ -278,6 +278,8 @@ export function radioGroupItemChecked(options: RadioGroupItemAttributeOptions): 
  * const input = {} as Parameters<typeof radioGroupRovingIndex>[0];
  * const result = radioGroupRovingIndex(input);
  * ```
+ *
+ * @internal
  */
 export function radioGroupRovingIndex(state: RadioGroupState): number {
   const items = state.items ?? [];
@@ -424,6 +426,8 @@ export function radioGroupLabelAttributes(
  * const detail = {} as Parameters<typeof setRadioGroupValue>[3];
  * const result = setRadioGroupValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setRadioGroupValue(
   state: RadioGroupState,
@@ -492,6 +496,7 @@ export function radioGroupMoveValue(
  * const result = radioGroupItemClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -525,6 +530,7 @@ export function radioGroupItemClick(
  * const result = radioGroupKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

@@ -29,6 +29,8 @@ import {
  *
  * const value: NavigationMenuItem = {} as NavigationMenuItem;
  * ```
+ *
+ *
  */
 export interface NavigationMenuItem {
   disabled?: boolean;
@@ -774,6 +776,8 @@ export function navigationMenuItemOpen(options: NavigationMenuItemAttributeOptio
  * const detail = {} as Parameters<typeof setNavigationMenuOpenValue>[3];
  * const result = setNavigationMenuOpenValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setNavigationMenuOpenValue(
   state: NavigationMenuState,
@@ -812,6 +816,8 @@ export function setNavigationMenuOpenValue(
  * const detail = {} as Parameters<typeof toggleNavigationMenuOpenValue>[3];
  * const result = toggleNavigationMenuOpenValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function toggleNavigationMenuOpenValue(
   state: NavigationMenuState,
@@ -842,6 +848,8 @@ export function toggleNavigationMenuOpenValue(
  * const detail = {} as Parameters<typeof selectNavigationMenuLink>[3];
  * const result = selectNavigationMenuLink(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function selectNavigationMenuLink(
   state: NavigationMenuState,
@@ -889,6 +897,8 @@ export function selectNavigationMenuLink(
  * const options = {} as Parameters<typeof navigationMenuMove>[2];
  * const result = navigationMenuMove(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function navigationMenuMove(
   state: NavigationMenuState,
@@ -932,6 +942,8 @@ export function navigationMenuMove(
  * const options = {} as Parameters<typeof navigationMenuTypeahead>[2];
  * const result = navigationMenuTypeahead(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function navigationMenuTypeahead(
   state: NavigationMenuState,
@@ -986,6 +998,7 @@ export function navigationMenuTypeahead(
  * const result = navigationMenuTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1019,6 +1032,7 @@ export function navigationMenuTriggerClick(
  * const result = navigationMenuTriggerPointerEnter(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1048,6 +1062,7 @@ export function navigationMenuTriggerPointerEnter(
  * const result = navigationMenuTriggerFocus(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1077,6 +1092,7 @@ export function navigationMenuTriggerFocus(
  * const result = navigationMenuLinkClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -1110,6 +1126,7 @@ export function navigationMenuLinkClick(
  * const result = navigationMenuKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

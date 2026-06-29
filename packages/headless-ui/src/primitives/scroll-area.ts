@@ -679,6 +679,7 @@ export function scrollAreaThumbGeometry(
  * const result = scrollAreaViewportScroll(input, state);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -778,6 +779,7 @@ export interface ScrollAreaScrollToResult {
  * const result = scrollAreaScrollTo(input, state);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * Imperatively scrolls the viewport to the top/bottom in response to a control
@@ -823,6 +825,7 @@ export function scrollAreaScrollTo(
  * const result = scrollAreaTrackPointerDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -877,6 +880,7 @@ export function scrollAreaTrackPointerDown(
  * const result = scrollAreaThumbDragStart(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -924,6 +928,7 @@ export function scrollAreaThumbDragStart(
  * const result = scrollAreaThumbDrag(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

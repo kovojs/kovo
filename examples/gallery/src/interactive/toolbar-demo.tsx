@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { toolbarKeyDown as _toolbarKeyDown } from '@kovojs/headless-ui/toolbar';
+import { toolbarKeyDown as _toolbarKeyDown } from '../primitive-actions.js';
 import { Bold } from '@kovojs/icons/bold';
 import { Italic } from '@kovojs/icons/italic';
 import { Link } from '@kovojs/icons/link';

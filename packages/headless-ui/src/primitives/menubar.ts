@@ -28,6 +28,8 @@ import {
  *
  * const value: MenubarItem = {} as MenubarItem;
  * ```
+ *
+ *
  */
 export interface MenubarItem {
   disabled?: boolean;
@@ -622,6 +624,8 @@ export function menubarItemOpen(options: MenubarItemAttributeOptions): boolean {
  * const detail = {} as Parameters<typeof setMenubarOpenValue>[3];
  * const result = setMenubarOpenValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setMenubarOpenValue(
   state: MenubarState,
@@ -656,6 +660,8 @@ export function setMenubarOpenValue(
  * const detail = {} as Parameters<typeof toggleMenubarOpenValue>[3];
  * const result = toggleMenubarOpenValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function toggleMenubarOpenValue(
   state: MenubarState,
@@ -681,6 +687,8 @@ export function toggleMenubarOpenValue(
  * const detail = {} as Parameters<typeof selectMenubarItem>[3];
  * const result = selectMenubarItem(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function selectMenubarItem(
   state: MenubarState,
@@ -738,6 +746,8 @@ export function selectMenubarItem(
  * const options = {} as Parameters<typeof menubarMove>[2];
  * const result = menubarMove(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function menubarMove(
   state: MenubarState,
@@ -783,6 +793,8 @@ export function menubarMove(
  * const options = {} as Parameters<typeof menubarTypeahead>[2];
  * const result = menubarTypeahead(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function menubarTypeahead(
   state: MenubarState,
@@ -840,6 +852,7 @@ export function menubarTypeahead(
  * const result = menubarSubmenuTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -873,6 +886,7 @@ export function menubarSubmenuTriggerClick(
  * const result = menubarItemPointerEnter(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -902,6 +916,7 @@ export function menubarItemPointerEnter(
  * const result = menubarItemClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -935,6 +950,7 @@ export function menubarItemClick(
  * const result = menubarItemKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -967,6 +983,7 @@ export function menubarItemKeyDown(
  * const result = menubarKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

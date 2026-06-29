@@ -258,6 +258,8 @@ export function popoverContentAttributes(
  * const detail = {} as Parameters<typeof setPopoverOpen>[3];
  * const result = setPopoverOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setPopoverOpen(
   state: PopoverState,
@@ -291,6 +293,8 @@ export function setPopoverOpen(
  * const options = {} as Parameters<typeof togglePopover>[2];
  * const result = togglePopover(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function togglePopover(
   state: PopoverState,
@@ -313,6 +317,7 @@ export function togglePopover(
  * const result = popoverTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -346,6 +351,7 @@ export function popoverTriggerClick(
  * const result = popoverBeforeToggle(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -380,6 +386,7 @@ export function popoverBeforeToggle(
  * const result = popoverEscapeKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

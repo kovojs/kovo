@@ -581,6 +581,8 @@ export function sliderValueFromString(value: string, state: SliderState = {}): n
  * const detail = {} as Parameters<typeof setSliderValue>[3];
  * const result = setSliderValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setSliderValue(
   state: SliderState,
@@ -616,6 +618,7 @@ export function setSliderValue(
  * const result = sliderInput(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -665,6 +668,7 @@ export function sliderInput(
  * const result = sliderKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -723,6 +727,7 @@ export function sliderKeyDown(
  * const result = sliderTrackPointerDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -754,6 +759,7 @@ export function sliderTrackPointerDown(
  * const result = sliderThumbDragStart(input, state);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -789,6 +795,7 @@ export function sliderThumbDragStart(
  * const result = sliderThumbDrag(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must

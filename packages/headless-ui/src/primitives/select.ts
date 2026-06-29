@@ -24,6 +24,8 @@ import {
  *
  * const value: SelectItem = {} as SelectItem;
  * ```
+ *
+ *
  */
 export interface SelectItem {
   disabled?: boolean;
@@ -453,6 +455,7 @@ export function selectItemSelected(options: SelectItemAttributeOptions): boolean
  * const input = {} as Parameters<typeof selectValueText>[0];
  * const result = selectValueText(input);
  * ```
+ *
  */
 export function selectValueText(state: SelectState): string {
   const selected = state.items?.find((item) => item.value === state.value);
@@ -649,6 +652,8 @@ export function selectValueAttributes(
  * const detail = {} as Parameters<typeof setSelectValue>[3];
  * const result = setSelectValue(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setSelectValue(
   state: SelectState,
@@ -683,6 +688,8 @@ export function setSelectValue(
  * const detail = {} as Parameters<typeof setSelectOpen>[3];
  * const result = setSelectOpen(input, state, options, detail);
  * ```
+ *
+ * @internal
  */
 export function setSelectOpen(
   state: SelectState,
@@ -716,6 +723,8 @@ export function setSelectOpen(
  * const options = {} as Parameters<typeof selectOption>[2];
  * const result = selectOption(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function selectOption(
   state: SelectState,
@@ -762,6 +771,8 @@ export function selectOption(
  * const options = {} as Parameters<typeof selectMove>[2];
  * const result = selectMove(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function selectMove(
   state: SelectState,
@@ -806,6 +817,8 @@ export function selectMove(
  * const options = {} as Parameters<typeof selectTypeahead>[2];
  * const result = selectTypeahead(input, state, options);
  * ```
+ *
+ * @internal
  */
 export function selectTypeahead(
   state: SelectState,
@@ -857,6 +870,7 @@ export function selectTypeahead(
  * const result = selectTriggerChange(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -891,6 +905,7 @@ export function selectTriggerChange(
  * const result = selectTriggerClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -921,6 +936,7 @@ export function selectTriggerClick(
  * const result = selectItemClick(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
@@ -954,6 +970,7 @@ export function selectItemClick(
  * const result = selectKeyDown(input, state, options);
  * ```
  *
+ * @generated
  * @kovoPrimitiveHandler
  *
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
