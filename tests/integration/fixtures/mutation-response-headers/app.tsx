@@ -14,7 +14,12 @@ export const touchHeaders = mutation('mutation-response-headers/touch', {
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
     await request.db.exec('insert into header_events default values');
-    context.setCookie?.('header_seen', 'yes', { httpOnly: true, path: '/', sameSite: 'strict' });
+    context.setCookie?.('header_seen', 'yes', {
+      httpOnly: true,
+      path: '/',
+      sameSite: 'strict',
+      secure: true,
+    });
     return {};
   },
 });
