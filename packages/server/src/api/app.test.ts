@@ -457,6 +457,7 @@ describe('server app-shell public API barrels', () => {
       // SPEC.md §6.6 / plans/most-secure-web-framework.md OPP-04: app authors
       // satisfy confidential-at-rest write gates with this authenticated-encryption sink.
       encryptAtRest: confidentialAtRestApi.encryptAtRest,
+      createElement: publicApi.createElement,
       kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       toNodeHandler: nodeSourceApi.toNodeHandler,

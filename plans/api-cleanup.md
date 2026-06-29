@@ -241,7 +241,8 @@ verifier IR, so do NOT; gate-tightening; 9D browser option-graph + headless mach
 
 - [ ] **`style`: brand `CompiledStyle` opaque** (`engine.ts:22-63`); keep the structural `__rules`/`AtomicRule` shape on `@kovojs/style/internal` for the compiler only. Source-compatible for app authors.
 - [ ] **`style`: drop the `identity`-options public overloads** of `create`/`defineVars`/`createTheme`/`keyframes` (`engine.ts:75`); `StyleIdentityOptions` becomes impl-only.
-- [ ] **`server/vite`: narrow `kovo()`'s return** to an opaque `{ readonly name: 'kovo' }` token (`vite.ts:38,116`); keep the hook interface (`KovoViteResolvedConfig`/`KovoViteHotUpdateContext`) internal.
+- [x] **`server/vite`: narrow `kovo()`'s return** to an opaque `{ readonly name: 'kovo' }` token (`vite.ts:38,116`); keep the hook interface (`KovoViteResolvedConfig`/`KovoViteHotUpdateContext`) internal.
+  - Evidence 2026-06-29: `pnpm --filter @kovojs/server exec vitest --run src/vite.test.ts src/api/app.test.ts --reporter=dot`, `pnpm run check`, and `pnpm run check:api-surface` passed; `node scripts/api-surface-gate.mjs --write` ratcheted recursive-publicness from 1751 to 1743.
 - [ ] **`better-auth`: split `BetterAuthCredentialMutationOptions`** (`internal.ts:1100`) — export the narrow public `{csrf,defaultRedirectTo,guard,key}` from `index.ts`; keep `registry`(`MutationRegistry`)/`transaction` on an `@internal` extension the impl uses.
 - [x] **`drizzle`: re-export `KovoFanAnnotation`** from `runtime.ts` (one line; `drizzle-surface.ts:12`).
 - [ ] **`test/harness`: make the options nameable** (`harness.ts:44-49`) — promote `core` `TouchGraph` to the public `index.ts` (already a clean `export` at `core/src/graph.ts:42`); re-export `DbVerificationConfig` + `HarnessMutationOptions` from `./harness`. (Types stay public — this is a fix, not a removal.)
