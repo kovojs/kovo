@@ -2262,12 +2262,8 @@ export async function runExportCommand(options: KovoExportOptions): Promise<CliC
       diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
       ...(options.origin === undefined ? {} : { origin: options.origin }),
       outDir: options.outDir,
-      ...(manifestPlan.publicAssetRoot === undefined
-        ? {}
-        : {
-            publicAssetBase: options.assetBase,
-            publicAssetRoot: manifestPlan.publicAssetRoot,
-          }),
+      ...(options.assetBase === undefined ? {} : { publicAssetBase: options.assetBase }),
+      publicAssetRoot: manifestPlan.publicAssetRoot ?? staticExportDefaultPublicAssetRoot(options),
     });
 
     return kovoExportResult(result, options);
@@ -2374,6 +2370,10 @@ async function staticExportManifestPlan(options: KovoExportOptions): Promise<Exp
     publicAssetRoot: distDir,
     ...(stylesheetHref === undefined ? {} : { stylesheetHref }),
   };
+}
+
+function staticExportDefaultPublicAssetRoot(options: KovoExportOptions): string {
+  return resolve(options.root ?? dirname(resolve(options.appModulePath)));
 }
 
 interface ExportManifestChunk {

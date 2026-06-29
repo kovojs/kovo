@@ -41,6 +41,16 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
       continue;
     }
 
+    if (route.access?.kind === 'public' && appRouteMayEmitAnonymousCsrfCookie(app)) {
+      diagnostics.push(
+        staticExportDiagnostic(
+          route.path,
+          `KV229 static export cannot export publicAccess route '${route.path}' because this app has default-on per-form CSRF for browser mutations. Rendering a mutation form can mint the anonymous CSRF Set-Cookie required by SPEC §9.1, but SPEC §9.5 static files have no response-specific cookie channel. Serve this route dynamically, split the form out of the exported surface, or make the targeted non-browser mutation explicitly csrf:false with a justification.`,
+        ),
+      );
+      continue;
+    }
+
     if (routeHasParams(route.path)) {
       const planned = staticExportParamRouteTargets(route, targetPaths);
       diagnostics.push(...planned.diagnostics);
@@ -55,6 +65,12 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
   }
 
   return { diagnostics, targets };
+}
+
+function appRouteMayEmitAnonymousCsrfCookie(app: KovoApp): boolean {
+  // SPEC §9.1 anonymous CSRF mints a framework-owned Set-Cookie when a server-rendered mutation
+  // form has no session binding. SPEC §9.5 static export must reject that cookie channel up front.
+  return app.csrf !== undefined && app.mutations.some((mutation) => mutation.csrf !== false);
 }
 
 function staticExportParamRouteTargets(

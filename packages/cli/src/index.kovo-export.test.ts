@@ -364,6 +364,80 @@ describe('kovo export', () => {
     }
   });
 
+  it('copies referenced public assets without requiring a Vite manifest', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      symlinkServerPackage(root);
+      mkdirSync(join(root, 'assets'), { recursive: true });
+      writeFileSync(join(root, 'assets', 'styles.css'), 'body{color:rebeccapurple}', 'utf8');
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route:
+            "{ path: '/', stylesheets: ['/assets/styles.css'], page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
+        }),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('ASSET /assets/styles.css status=200 bytes=');
+      expect(output).toContain('SUMMARY html=1 clientModules=1 assets=1 diagnostics=0');
+      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
+        '<link rel="stylesheet" href="/assets/styles.css"',
+      );
+      expect(readFileSync(join(outDir, 'assets', 'styles.css'), 'utf8')).toBe(
+        'body{color:rebeccapurple}',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails loudly when bare export cannot resolve a referenced public asset', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      symlinkServerPackage(root);
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route:
+            "{ path: '/', stylesheets: ['/assets/styles.css'], page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
+        }),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('kovo-export/v1\nERROR KV229 route=/assets/styles.css');
+      expect(output).toContain(
+        "cannot copy referenced public asset '/assets/styles.css' because source",
+      );
+      expect(output).toContain('SPEC §9.5 exports referenced static assets with route documents');
+      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('rejects Vite manifest assets that escape --dist with dot segments', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
     const appPath = join(root, 'app.mjs');

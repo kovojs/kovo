@@ -113,7 +113,7 @@ async function documentPublicAssetInputs(options: {
 
   for (const hrefPath of [...referencedPaths].sort()) {
     if (existingPaths.has(hrefPath) || documentPaths.has(hrefPath)) continue;
-    if (hrefPath.startsWith('/c/') || hrefPath.startsWith('/assets/')) continue;
+    if (hrefPath.startsWith('/c/')) continue;
 
     const source = staticExportPublicAssetSource(root, base, hrefPath);
     if ((await readableFileExists(source)) === false) {

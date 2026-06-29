@@ -109,6 +109,59 @@ describe('server static export route plan', () => {
     });
   });
 
+  it('rejects explicitly public routes when checked mutation forms can mint anonymous CSRF cookies', () => {
+    expect(
+      staticExportRoutePlan(
+        createApp({
+          csrf: {
+            secret: 'static-export-route-plan-csrf-secret-0123456789',
+            sessionId: () => undefined,
+          },
+          mutations: [{ key: 'auth/sign-in' }],
+          routes: [
+            route('/login', {
+              access: publicAccess('static login shell'),
+              page: () => trustedHtml('<main>Login</main>'),
+            }),
+          ],
+        }),
+      ),
+    ).toEqual({
+      diagnostics: [
+        {
+          code: 'KV229',
+          message:
+            "KV229 static export cannot export publicAccess route '/login' because this app has default-on per-form CSRF for browser mutations. Rendering a mutation form can mint the anonymous CSRF Set-Cookie required by SPEC §9.1, but SPEC §9.5 static files have no response-specific cookie channel. Serve this route dynamically, split the form out of the exported surface, or make the targeted non-browser mutation explicitly csrf:false with a justification.",
+          routePath: '/login',
+        },
+      ],
+      targets: [],
+    });
+  });
+
+  it('does not reject explicitly public routes when every mutation is csrf false', () => {
+    expect(
+      staticExportRoutePlan(
+        createApp({
+          csrf: {
+            secret: 'static-export-route-plan-csrf-secret-0123456789',
+            sessionId: () => undefined,
+          },
+          mutations: [{ csrf: false, key: 'status/ping' }],
+          routes: [
+            route('/status', {
+              access: publicAccess('static status shell'),
+              page: () => trustedHtml('<main>Status</main>'),
+            }),
+          ],
+        }),
+      ),
+    ).toEqual({
+      diagnostics: [],
+      targets: [{ path: '/status', routePath: '/status' }],
+    });
+  });
+
   it('rejects duplicate concrete export targets before synthetic replay', () => {
     expect(
       staticExportRoutePlan(
