@@ -90,8 +90,10 @@ describe('create-kovo starter (metadata)', () => {
 
       for (const file of TEMPLATE_FILES) {
         const source = readFileSync(join(root, file), 'utf8');
-        expect(source).not.toContain('{{');
-        expect(source).not.toContain('}}');
+        // No unrendered mustache placeholders — match the exact token shape `renderTemplate`
+        // substitutes (`{{identifier}}`, no spaces/dots). GitHub Actions `${{ runner.os }}`
+        // expressions (spaces + dots) are intentional workflow syntax, not mustache tokens.
+        expect(source).not.toMatch(/\{\{[a-zA-Z0-9_]+\}\}/);
       }
 
       const project = createKovoProject({ name: 'My App' });
