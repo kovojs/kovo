@@ -175,15 +175,21 @@ export default defineConfig({
           { auto: true },
           { pattern: 'tests/integration/**', base: 'workspace' },
           // The integration suite is the SOLE exerciser of the runtime DB verifier
-          // (packages/test/src/{verifier,verifier-*,sql-observer,pglite}.ts) and the
-          // harness. Input must be the whole test-package src, not just integration/**,
-          // or a verifier refactor that disables KV402/407/411 enforcement cache-hits
-          // green (plans/bugs-and-testing.md C-lane "B0"; testing-audit §5.7).
+          // (packages/test/src/{verifier,verifier-*,sql-observer,pglite}.ts), its
+          // harness, and the cross-package app surfaces covered by testing-audit §5.7.
+          // Keep the whole test-package src plus every app-facing package in the cache
+          // key so verifier/runtime/package refactors cannot cache-hit green.
           { pattern: 'packages/test/src/**', base: 'workspace' },
           { pattern: 'packages/core/src/**', base: 'workspace' },
           { pattern: 'packages/server/src/**', base: 'workspace' },
           { pattern: 'packages/compiler/src/**', base: 'workspace' },
           { pattern: 'packages/browser/src/**', base: 'workspace' },
+          { pattern: 'packages/drizzle/src/**', base: 'workspace' },
+          { pattern: 'packages/style/src/**', base: 'workspace' },
+          { pattern: 'packages/ui/src/**', base: 'workspace' },
+          { pattern: 'packages/headless-ui/src/**', base: 'workspace' },
+          { pattern: 'packages/better-auth/src/**', base: 'workspace' },
+          { pattern: 'packages/cli/src/**', base: 'workspace' },
         ],
       },
       'conformance-drizzle': {

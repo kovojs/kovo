@@ -1,12 +1,14 @@
-// B0 meta-test: guards the vite.config.ts `integration` task input glob so that
-// a refactor of packages/test/src/* cannot silently cache-hit the integration
-// gate green (plans/bugs-and-testing.md C-lane "B0"; testing-audit §5.7).
+// B0 meta-test: guards the vite.config.ts `integration` task input globs so that
+// a refactor of the verifier, harness, or app-facing packages cannot silently
+// cache-hit the integration gate green (plans/bugs-and-testing.md C-lane "B0";
+// testing-audit §5.7).
 //
-// The integration task must list `packages/test/src/**` as a cache-key input
-// because it is the SOLE exerciser of the runtime DB verifier
-// (packages/test/src/{verifier,verifier-*,sql-observer,pglite}.ts) and the
-// harness. If that glob is removed, a verifier refactor that disables KV402/
-// KV407/KV411 enforcement could cache-hit green without re-running any specs.
+// The integration task must list `packages/test/src/**` plus the app-facing
+// packages as cache-key inputs because integration is the SOLE exerciser of the
+// runtime DB verifier (packages/test/src/{verifier,verifier-*,sql-observer,
+// pglite}.ts), the harness, and the cross-package package stack. If these globs
+// are removed, verifier or package refactors could cache-hit green without
+// re-running any specs.
 
 import { describe, expect, it } from 'vitest';
 
@@ -28,18 +30,30 @@ import * as url from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = path.join(REPO_ROOT, 'vite.config.ts');
+const REQUIRED_INTEGRATION_INPUTS = [
+  'packages/test/src/**',
+  'packages/core/src/**',
+  'packages/server/src/**',
+  'packages/compiler/src/**',
+  'packages/browser/src/**',
+  'packages/drizzle/src/**',
+  'packages/style/src/**',
+  'packages/ui/src/**',
+  'packages/headless-ui/src/**',
+  'packages/better-auth/src/**',
+  'packages/cli/src/**',
+] as const;
 
 describe('vite.config.ts integration task (B0 cache-key guard)', () => {
-  it('includes packages/test/src/** in the integration task input', () => {
+  it('includes verifier and app package src globs in the integration task input', () => {
     const source = fs.readFileSync(CONFIG_PATH, 'utf8');
 
-    // Verify the integration task block contains the test-package src glob.
-    // This is the guard for plans/bugs-and-testing.md B0: if someone removes
-    // this pattern, the integration cache won't re-run when the verifier changes.
-    expect(source).toContain("{ pattern: 'packages/test/src/**', base: 'workspace' }");
+    for (const pattern of REQUIRED_INTEGRATION_INPUTS) {
+      expect(source).toContain(`{ pattern: '${pattern}', base: 'workspace' }`);
+    }
   });
 
-  it('places the packages/test/src/** glob inside the integration task block', () => {
+  it('places the verifier and app package src globs inside the integration task block', () => {
     const source = fs.readFileSync(CONFIG_PATH, 'utf8');
 
     // Find the integration task block and verify the glob is inside it, not
@@ -58,6 +72,8 @@ describe('vite.config.ts integration task (B0 cache-key guard)', () => {
         ? source.slice(integrationBlockStart, nextTaskStart)
         : source.slice(integrationBlockStart);
 
-    expect(integrationBlock).toContain("{ pattern: 'packages/test/src/**', base: 'workspace' }");
+    for (const pattern of REQUIRED_INTEGRATION_INPUTS) {
+      expect(integrationBlock).toContain(`{ pattern: '${pattern}', base: 'workspace' }`);
+    }
   });
 });

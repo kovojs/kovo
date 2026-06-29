@@ -183,8 +183,10 @@ Ranked by leverage (impact × breadth-unblocked ÷ cost). Each item is an action
 
 ### P0 — Security & highest-leverage, low-cost
 
-- [ ] **XSS / output-escaping fixtures** (§4). Bind / stamp / `kovo-text`-stream user-controlled strings containing HTML metacharacters, `</kovo-fragment>`, and `javascript:` hrefs; assert `&lt;`-encoded output. Include a `streaming-chat` escaping assertion for the LLM-output path. _No prod-build harness required._
-- [ ] **Integration cache-input fix** (§5.7) — add `packages/test/src/**` (+ app packages) to the `integration` task `input` globs in `vite.config.ts`; add the meta-test. One-line correctness fix protecting the verifier the suite is the sole exerciser of.
+- [x] **XSS / output-escaping fixtures** (§4). Bind / stamp / `kovo-text`-stream user-controlled strings containing HTML metacharacters, `</kovo-fragment>`, and `javascript:` hrefs; assert `&lt;`-encoded output. Include a `streaming-chat` escaping assertion for the LLM-output path. _No prod-build harness required._
+  - Evidence: `tests/integration/specs/xss-escaping.spec.ts` covers server text/attr render, JSON island, mutation wire, client bindings, and `javascript:` href neutralization; `tests/integration/specs/streaming-chat.spec.ts` covers escaped model output in `<kovo-text>`. `pnpm exec playwright test --config tests/integration/playwright.config.ts tests/integration/specs/xss-escaping.spec.ts tests/integration/specs/streaming-chat.spec.ts` passes.
+- [x] **Integration cache-input fix** (§5.7) — add `packages/test/src/**` (+ app packages) to the `integration` task `input` globs in `vite.config.ts`; add the meta-test. One-line correctness fix protecting the verifier the suite is the sole exerciser of.
+  - Evidence: `vite.config.ts` integration task includes `packages/test/src/**` plus the app-facing package globs (`core`, `server`, `compiler`, `browser`, `drizzle`, `style`, `ui`, `headless-ui`, `better-auth`, `cli`), and `pnpm exec vitest run tests/config.meta.test.ts --reporter=dot` passes.
 - [ ] **Cookie hardening + lifecycle** (§4) — extend `mutation-response-headers` to assert the serialized `Set-Cookie` carries `HttpOnly`/`SameSite`/`Secure`, assert framework-vs-handler header precedence, and add a login→authed-request→logout round-trip (builds on the existing `name=value` assertion).
 
 ### P1 — Structural keystones (unblock whole columns)
@@ -207,12 +209,15 @@ Ranked by leverage (impact × breadth-unblocked ÷ cost). Each item is an action
 ### P3 — Breadth & robustness
 
 - [ ] Cross-engine `testMatch` tier (firefox/webkit) for morph-focus / view-transition / popover / bfcache / dialog.
-- [ ] Flake gate (fail/annotate on retried-but-passed) + scheduled `--repeat-each=3` over race-prone specs.
-- [ ] Optimistic `queue:` FIFO + multi-transform rebase ordering; concurrent-distinct-write lost-update test.
+- [x] Flake gate (fail/annotate on retried-but-passed) + scheduled `--repeat-each=3` over race-prone specs.
+  - Evidence: `tests/integration/flaky-reporter.ts`, `tests/flaky-reporter.meta.test.ts`, `.github/workflows/ci.yml`, and `.github/workflows/race-repeat.yml` define the fail-on-flake gate and scheduled `@race-prone --repeat-each=3` run; `pnpm exec vitest run tests/flaky-reporter.meta.test.ts --reporter=dot` passes.
+- [x] Optimistic `queue:` FIFO + multi-transform rebase ordering; concurrent-distinct-write lost-update test.
+  - Evidence: `pnpm exec vitest run packages/browser/src/mutation-optimistic-queue.test.ts --reporter=dot` passes for queue FIFO; `pnpm exec playwright test --config tests/integration/playwright.config.ts tests/integration/specs/optimistic-rebase.spec.ts tests/integration/specs/concurrent-distinct-writes.spec.ts` passes for rebase ordering and concurrent distinct writes.
 - [ ] `isomorphic: true` island render-equivalence fixture.
 - [ ] Time/clock freshness (`clocks` input, relative-time binding; KV312/KV315).
 - [ ] KV234 cross-package prefix conflict; `kovo explain --endpoints` driven from the _extracted_ graph.
-- [ ] Type-system negative tests (`@ts-expect-error` for wrong fields / bad bindings / invalid typed links).
+- [x] Type-system negative tests (`@ts-expect-error` for wrong fields / bad bindings / invalid typed links).
+  - Evidence: `pnpm exec vitest run packages/core/src/index.test.ts packages/browser/src/submit-context-apply.test.ts packages/server/src/query-endpoint.test.ts --reporter=dot` passes, covering invalid fields, invalid typed links, and rejected live/unknown query inputs.
 - [ ] Scale fixture (300+ row keyed list, deep composition); deploy-skew 422; HEAD empty-body; page-render read verification.
 - [ ] `@kovojs/devtool` stamp-contract smoke test; module-scope reset; clear `globalThis` CSS manifest on close.
 - [ ] **When `<kovo-live>`/SSE ships:** subscribe-then-revoke-mid-stream guard-re-check test lands _with_ the feature (§4).
