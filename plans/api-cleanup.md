@@ -162,7 +162,7 @@ Mark `- [x]` only when this session verifies the cited proving command for the e
 
 ## Phase 8 — Reference truth
 
-- [ ] **Drive `api-ref` from the `publicPackages` manifest (all public packages, not the hand-picked 5); exclude `@internal`; add a STABILITY page** — keep the "undocumented exports flagged, never omitted" principle (`api-ref.mjs:11`), but apply it across the full public surface with `@internal` excluded.
+- [x] **Drive `api-ref` from the `publicPackages` manifest (all public packages, not the hand-picked 5); exclude `@internal`; add a STABILITY page** — keep the "undocumented exports flagged, never omitted" principle (`api-ref.mjs:11`), but apply it across the full public surface with `@internal` excluded.
   - Done = every public package has a generated reference page; `@internal` symbols are excluded (not listed as `*Undocumented.*`); a STABILITY page links the policy.
   - Prove: `node --test site/scripts/api-ref.test.mjs && pnpm run check:build`
   - Evidence (partial, 2026-06-17): `public-packages.json` now classifies `@kovojs/style` as a public
@@ -183,8 +183,8 @@ site/scripts/api-ref.test.mjs packages/server/src/component-render.test.tsx`,
     export (`site-export/v1`, `html=92`, `diagnostics=0`), `pnpm --filter @kovojs/site run
 check:links` passes (`pages=93`, `internal=13492`, `external=190`), `pnpm --filter @kovojs/site
 test` passes (9 files, 44 tests), and `pnpm --filter @kovojs/site exec tsc --noEmit --pretty
-false` passes. The remaining proof gap for closing Phase 8 is the broader root `check:build`
-    command named above.
+false` passes.
+  - Evidence 2026-06-29: `pnpm exec vitest --run scripts/public-packages.test.mjs site/scripts/api-ref.test.mjs --reporter=dot` passed with `api-ref/v1 packages=11 exports=2115 documented=2115`; `pnpm run check:build`, `pnpm run check:api-surface`, and `git diff --check` passed on local `main`.
 
 ---
 
