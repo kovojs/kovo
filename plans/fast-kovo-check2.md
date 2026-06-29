@@ -20,6 +20,51 @@ diagnostics, `kovo mcp` still serves, and the drizzle suite stays 614/614.
   dev CLI; published `@kovojs/cli` already ships a `.mjs` bin that never respawns, so real
   users pay zero. Left open as a dev-ergonomics item.
 
+## Spike-round wins (2026-06-29)
+
+A follow-up spike round (`fast-check-spikes`) measured four additional ideas; three were
+adopted and implemented here. The headline #1 hypothesis (skip vite dep pre-optimization)
+was **dropped** — there is no ~14s vite dep-optimize; the cold cost is a **duplicated drizzle
+analysis**, which the spike surfaced instead. "Consolidate 3 vite servers" was also **dropped**
+(the commerce build runs exactly one `createServer`; premise false).
+
+- [x] **A. Dedup the duplicated build-time drizzle analysis.** The `@kovojs/server` vite plugin
+      re-ran the whole-project drizzle data-plane analysis (to build the runtime registry +
+      query-shape facts) when the CLI spun up a throwaway dev server _just to load app source for
+      graph derivation_ — the SAME ts-morph analysis the CLI runs authoritatively in
+      `runKovoBuildCheckPreflight`. Gated `collectDataPlaneAnalysis` behind `KOVO_BUILD_GRAPH_DERIVATION`
+      (set by the CLI only around the graph/css load span; cleared for the production build passes so
+      their fail-closed gate still fires). `packages/server/src/vite.ts` + `packages/cli/src/commands/build-export.ts`.
+  - Verified: instrumentation shows the redundant 14-file analysis no longer runs (only the CLI's
+    authoritative pass); **cold `kovo build` on commerce ~19s → ~10.6s (~44%)**; byte-identical KV
+    diagnostics; the starter production-build-graph-gate test passes (passing app still emits a
+    correct runtime registry, rebuilt by the flag-cleared build passes).
+
+- [x] **B. Make the build caches portable (CI cache restore).** Relativized cache keys so a
+      restored cache hits across checkout roots: static-analysis cache file paths + analyzer
+      fingerprint (`build-export.ts`), and `fileName`/`root`/`packagePrefixDiscoveryRoot` in
+      `compile-cache.ts` (`compilerBuildId` is version-based, so re-keying can't mis-hit old entries).
+      Added an `actions/cache` step for `.kovo/cache` to the scaffolded starter CI.
+  - Verified: cross-path restore test — build in worktree A, restore `.kovo` into worktree B at a
+    **different absolute path**, rebuild → **cache HIT** (static 1→1, compiler 3→3, zero new
+    entries; previously a full miss). compile-cache tests 7/7; diagnostics identical.
+
+- [x] **C. Run the scaffolded `check` pipeline concurrently.** Shipped a cross-platform
+      `scripts/check-parallel.mjs` in the starter; `check` runs `vp check` ‖ `check:sound-subset` ‖
+      (`build:prod` → `check:endpoint-posture`) — the last two share `.kovo/cache` so they stay a
+      sequential lane (the compiler manifest is read-modify-write, not atomic).
+  - Verified: warm pipeline **~7.7s → ~6.1s (~20%** in-env; floored by the serial build lane);
+    fail-closed proven (injected type error AND sound-subset violation both exit non-zero);
+    create-kovo tests 21/21.
+
+- [ ] **B-followup. Persistent compiler-cache value blobs** still contain one absolute path (in a
+      stored result value, not the key — cross-path HIT confirmed unaffected). Cosmetic; not
+      portability-blocking. Left as a minor follow-up.
+
+Note: every failing test seen during integration (5 cli build-CSS + 1 ui keyframes + 4 server
+route-jsx/live-target query tests) is **pre-existing on the base** (confirmed on a clean
+`314f46981` worktree), not introduced by this round.
+
 ## TL;DR — why it's slow now
 
 It is **no longer** the drizzle security analysis (warm it is a content-hash cache hit,

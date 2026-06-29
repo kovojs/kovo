@@ -99,6 +99,7 @@ const templateFiles: readonly TemplateFile[] = [
   '.github/workflows/ci.yml',
   { path: 'README.md', sqlitePath: 'README.sqlite.md' },
   'scripts/check-sound-subset.mjs',
+  'scripts/check-parallel.mjs',
   { path: 'src/schema.ts', sqlitePath: 'src/schema.sqlite.ts' },
   { path: 'src/db.ts', sqlitePath: 'src/db.sqlite.ts' },
   { path: 'src/auth.ts', sqlitePath: 'src/auth.sqlite.ts' },

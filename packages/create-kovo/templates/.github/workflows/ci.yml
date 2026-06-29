@@ -14,6 +14,16 @@ jobs:
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
           node-version: 22.15.0
+      # Restore Kovo's content-addressed build cache (static security analysis, compiler output,
+      # tsc build-info). Keys are content-hashed and project-relative, so a restore turns a cold
+      # `kovo build` (tens of seconds) into a warm one (seconds). Per-file invalidation lives inside
+      # the cache, so the broad restore-key is safe.
+      - uses: actions/cache@v4
+        with:
+          path: .kovo/cache
+          key: kovo-cache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            kovo-cache-${{ runner.os }}-
       - run: vp install
       - run: vp check
       - run: vp test

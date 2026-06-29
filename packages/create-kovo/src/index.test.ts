@@ -35,6 +35,7 @@ const TEMPLATE_FILES = [
   '.github/workflows/ci.yml',
   'README.md',
   'scripts/check-sound-subset.mjs',
+  'scripts/check-parallel.mjs',
   'src/schema.ts',
   'src/db.ts',
   'src/auth.ts',
@@ -89,8 +90,10 @@ describe('create-kovo starter (metadata)', () => {
 
       for (const file of TEMPLATE_FILES) {
         const source = readFileSync(join(root, file), 'utf8');
-        expect(source).not.toContain('{{');
-        expect(source).not.toContain('}}');
+        // No unrendered mustache placeholders — match the exact token shape `renderTemplate`
+        // substitutes (`{{identifier}}`, no spaces/dots). GitHub Actions `${{ runner.os }}`
+        // expressions (spaces + dots) are intentional workflow syntax, not mustache tokens.
+        expect(source).not.toMatch(/\{\{[a-zA-Z0-9_]+\}\}/);
       }
 
       const project = createKovoProject({ name: 'My App' });
@@ -176,8 +179,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
-        check:
-          'vp check && pnpm run check:sound-subset && pnpm run build:prod && pnpm run check:endpoint-posture',
+        check: 'node scripts/check-parallel.mjs',
         'check:endpoint-posture':
           'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
         'check:sound-subset': 'node scripts/check-sound-subset.mjs',
