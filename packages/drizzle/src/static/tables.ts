@@ -193,6 +193,12 @@ interface ExportStarAlias {
 ): SourceModuleContext {
   // SPEC §10-§11: project-mode table facts come from resolved ts-morph symbols, not rewritten
   // source text that is reparsed through source-mode table extraction.
+  // SPEC §11.1: memoize this pure derivation per extraction so build-facing passes
+  // (touch-graph / write-scope / query-fact / owner-audit) reuse one table-fact build. The
+  // returned context exposes only ReadonlyMap/ReadonlySet, so sharing it across passes is safe.
+  const cached = extraction.memo.sourceModuleContext;
+  if (cached) return cached;
+
   const tablesBySyntheticName = projectTablesBySyntheticName(extraction);
   const declaredRelationTablesByExpression = projectDeclaredRelationTablesByExpression(extraction);
   const derivedRelationTablesByExpression = projectDerivedRelationTablesByExpression(
@@ -214,11 +220,13 @@ interface ExportStarAlias {
     tablesByFileName.set(file.fileName, tables);
   });
 
-  return {
+  const sourceContext: SourceModuleContext = {
     fileNames: new Set(extraction.files.map((file) => file.fileName)),
     filesByName: new Map(extraction.files.map((file) => [file.fileName, file])),
     tablesByFileName,
   };
+  extraction.memo.sourceModuleContext = sourceContext;
+  return sourceContext;
 }
 
 /** @internal */ export function projectTablesBySyntheticName(
