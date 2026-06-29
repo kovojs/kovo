@@ -89,10 +89,42 @@ function variableDeclarationIsExported(
   );
 }
 
-/** @internal */ export function withParsedSourceFile<T>(
-  file: SourceFileInput,
-  visit: (sourceFile: SourceFile) => T,
-): T {
+/**
+ * Per-run cache of syntactic {@link SourceFile}s keyed by `${fileName}\0${source}`
+ * (SPEC §11.1). Populated only while a {@link runWithSourceFileParseCache} scope is
+ * active, and the OUTERMOST scope owns teardown (`forget()` + drop the Map) on exit.
+ * It is deliberately NOT process-global: a global cache (or a no-op dispose) leaks
+ * ts-morph Projects and OOM'd the drizzle suite in a prior prototype.
+ */
+let activeParseCache: Map<string, SourceFile> | undefined;
+
+/**
+ * Run `fn` with a per-run {@link withParsedSourceFile} parse cache active so repeated
+ * syntactic parses of the same `(fileName, source)` within one static-analysis run reuse
+ * one AST instead of re-creating a ts-morph Project per call (SPEC §11.1; this is a
+ * syntactic-only, read-only traversal so sharing the AST is safe). Reentrant-safe: if a
+ * cache is already active, this just runs `fn()` against it so the outermost scope owns
+ * the cache lifetime and a nested entry point never double-creates/tears-down. The
+ * outermost scope `forget()`s every cached SourceFile in `finally`, then clears the
+ * module-level reference so the Map and its Projects become GC-eligible (no leak).
+ *
+ * @internal
+ */
+export function runWithSourceFileParseCache<T>(fn: () => T): T {
+  // Reentrant: an outer scope already owns a cache and its teardown; reuse it.
+  if (activeParseCache) return fn();
+
+  const cache = new Map<string, SourceFile>();
+  activeParseCache = cache;
+  try {
+    return fn();
+  } finally {
+    for (const sourceFile of cache.values()) sourceFile.forget();
+    activeParseCache = undefined;
+  }
+}
+
+function createSyntacticSourceFile(file: SourceFileInput): SourceFile {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -107,8 +139,27 @@ function variableDeclarationIsExported(
   // `overwrite: true` so an absolute `fileName` that already exists on disk (e.g. the
   // build-time data-plane gate passes resolved app paths, SPEC §11.4) does not throw the
   // ts-morph "source file already exists" error. Mirrors project-setup.ts createSourceFile.
-  const sourceFile = project.createSourceFile(file.fileName, file.source, { overwrite: true });
+  return project.createSourceFile(file.fileName, file.source, { overwrite: true });
+}
 
+/** @internal */ export function withParsedSourceFile<T>(
+  file: SourceFileInput,
+  visit: (sourceFile: SourceFile) => T,
+): T {
+  const cache = activeParseCache;
+  if (cache) {
+    // Within a run scope the scope owns teardown, so never `forget()` here.
+    const key = `${file.fileName}\0${file.source}`;
+    const cached = cache.get(key);
+    if (cached) return visit(cached);
+
+    const sourceFile = createSyntacticSourceFile(file);
+    cache.set(key, sourceFile);
+    return visit(sourceFile);
+  }
+
+  // No active run scope: behave exactly as before — create + forget per call.
+  const sourceFile = createSyntacticSourceFile(file);
   try {
     return visit(sourceFile);
   } finally {
