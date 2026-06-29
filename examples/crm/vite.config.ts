@@ -34,7 +34,9 @@ export const crmViteConfig = defineConfig({
       appEntries: ['src/app-shell.ts', 'src/interactive-app.tsx'],
       sourceRoot: 'src',
     }),
-    exampleKovoCompilerPlugin({ include: ['src/components', 'src/mutations.ts'] }),
+    exampleKovoCompilerPlugin({
+      include: ['src/components', 'src/mutations.ts', 'src/queries.ts'],
+    }),
     ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app-shell.ts' })]),
   ],
   // PGlite (WASM) makes the build/dev paths slow; give the tests room.

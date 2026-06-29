@@ -45,6 +45,7 @@ export const soViteConfig = defineConfig({
         'src/components/question-detail.tsx',
         'src/components/question-list.tsx',
         'src/mutations.ts',
+        'src/queries.ts',
       ],
     }),
     ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app-shell.ts' })]),
