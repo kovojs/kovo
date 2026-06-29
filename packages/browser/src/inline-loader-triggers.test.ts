@@ -84,6 +84,8 @@ describe('inline loader execution triggers', () => {
           'pointerover',
           'pointerout',
           'popstate',
+          'visibilitychange',
+          'pageshow',
         ]);
         await vi.waitFor(() => expect(handlers.start).toHaveBeenCalledTimes(1));
         expect(handlers.warm).not.toHaveBeenCalled();

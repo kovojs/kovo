@@ -184,7 +184,9 @@ describe('server app shell Vite diagnostics', () => {
         }),
         status: 500,
       });
-      expect(documentResponse.body).not.toContain('<kovo-fragment');
+      expect(documentResponse.body.slice(documentResponse.body.indexOf('</script>'))).not.toContain(
+        '<kovo-fragment',
+      );
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

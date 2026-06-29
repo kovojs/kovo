@@ -79,7 +79,7 @@ describe('server app shell dispatch table', () => {
     });
   });
 
-  it('dispatches routes after endpoints and records page method allowance', () => {
+  it('dispatches method-allowed endpoints before routes and lets endpoint method mismatches fall through to routes', () => {
     const routeEndpoint = endpoint('/products/p1', {
       handler: () => new Response('endpoint'),
       method: 'POST',
@@ -96,10 +96,10 @@ describe('server app shell dispatch table', () => {
         routes: [product],
       }),
     ).toMatchObject({
-      allowedMethods: ['POST'],
-      endpoint: routeEndpoint,
-      kind: 'endpoint',
-      methodAllowed: false,
+      allowedMethods: ['GET', 'HEAD'],
+      kind: 'route',
+      methodAllowed: true,
+      route: product,
     });
 
     expect(

@@ -152,6 +152,9 @@ export function matchShellDispatch<
 >(input: ShellDispatchInput<Route, Endpoint>): ShellDispatchMatch<Route, Endpoint> {
   const normalization = normalizePathname(input.pathname);
   const method = input.method?.toUpperCase();
+  let endpointMethodMismatch:
+    | Extract<ShellDispatchMatch<Route, Endpoint>, { kind: 'endpoint' }>
+    | undefined;
 
   for (const entry of shellDispatchMatchingTable) {
     if (entry.kind === 'reserved') {
@@ -172,18 +175,25 @@ export function matchShellDispatch<
       );
       if (!endpoint) continue;
       const allowedMethods = endpointAllowedMethods(endpoint);
-
-      return {
+      const methodAllowed =
+        method === undefined ||
+        allowedMethods.some((candidate) => candidate.toUpperCase() === method);
+      const match = {
         allowedMethods,
         endpoint,
         entry,
         kind: 'endpoint',
-        methodAllowed:
-          method === undefined ||
-          allowedMethods.some((candidate) => candidate.toUpperCase() === method),
+        methodAllowed,
         normalization,
         pathname: normalization.pathname,
-      };
+      } satisfies Extract<ShellDispatchMatch<Route, Endpoint>, { kind: 'endpoint' }>;
+
+      if (!methodAllowed) {
+        endpointMethodMismatch ??= match;
+        continue;
+      }
+
+      return match;
     }
 
     if (entry.kind === 'route') {
@@ -202,6 +212,8 @@ export function matchShellDispatch<
       };
     }
   }
+
+  if (endpointMethodMismatch) return endpointMethodMismatch;
 
   return {
     entry: notFoundShellDispatchEntry,

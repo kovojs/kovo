@@ -29,7 +29,7 @@ describe('Defer JSX primitive', () => {
     );
 
     expect(placeholder).toBe(
-      '<kovo-defer target="reviews:p1" state="pending" data-kovo-region-priority="after-paint"><section aria-busy>Loading &lt;reviews&gt;</section></kovo-defer>',
+      '<kovo-defer target="reviews:p1" state="pending" data-kovo-region-priority="after-paint"><section aria-busy="true">Loading &lt;reviews&gt;</section></kovo-defer>',
     );
     expect(await collector.chunks()).toEqual([
       {
