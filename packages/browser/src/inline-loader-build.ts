@@ -476,7 +476,7 @@ function installInlineKovoLoader(im) {
   const ft = (target) => ftd(doc, target);
   const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
   const kb = (root = doc) =>
-    root.querySelector('meta[name="kovo-build"]')?.getAttribute('content') || '';
+    root.querySelector?.('meta[name="kovo-build"]')?.getAttribute('content') || '';
   const bh = (res) => res.headers?.get('Kovo-Build') ?? '';
   const qwk = (name, key) => {
     if (!name) return '';

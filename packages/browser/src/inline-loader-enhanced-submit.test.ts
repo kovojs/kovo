@@ -1,10 +1,36 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js';
 import { submitEnhancedMutation } from './mutation-submit.js';
 import { inlineSourceInstallCases, InlineParityRoot } from './inline-loader-test-utils.js';
 
+class InertBroadcastChannel {
+  onmessage: ((event: { data: unknown }) => void) | null = null;
+
+  constructor(readonly name: string) {}
+
+  close(): void {}
+
+  postMessage(_value: unknown): void {}
+}
+
 describe('inline loader enhanced submit source', () => {
+  const globalRecord = globalThis as unknown as Record<string, unknown>;
+  let originalBroadcastChannel: unknown;
+
+  beforeEach(() => {
+    originalBroadcastChannel = globalRecord.BroadcastChannel;
+    globalRecord.BroadcastChannel = InertBroadcastChannel;
+  });
+
+  afterEach(() => {
+    if (originalBroadcastChannel === undefined) {
+      delete globalRecord.BroadcastChannel;
+    } else {
+      globalRecord.BroadcastChannel = originalBroadcastChannel;
+    }
+  });
+
   it.each(inlineSourceInstallCases)(
     'navigates after successful inline enhanced auth redirects through %s',
     async (_name, installSource) => {

@@ -768,7 +768,12 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
   const fact = await executeInlineEnhancedFormLoaderFixture(
     `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`,
   );
-  assert.deepEqual(fact.listenerEvents, [...delegatedLifecycleEvents, 'popstate']);
+  assert.deepEqual(fact.listenerEvents, [
+    ...delegatedLifecycleEvents,
+    'popstate',
+    'visibilitychange',
+    'pageshow',
+  ]);
   assert.equal(fact.listenerOptions.click?.capture, true);
   assert.equal(fact.fetchCalls.length, 1);
   assert.deepEqual(fact.fetchCalls[0], {
