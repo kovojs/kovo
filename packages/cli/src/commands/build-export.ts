@@ -444,26 +444,45 @@ function runTypeScriptBuildPreflight(appModulePath: string): void {
   const tsconfigPath = findBuildTsconfig(appModulePath);
   if (tsconfigPath === undefined) return;
 
+  const projectDir = dirname(tsconfigPath);
   let tscBin: string;
   try {
-    tscBin = createRequire(`${dirname(tsconfigPath)}/package.json`).resolve('typescript/bin/tsc');
+    tscBin = createRequire(`${projectDir}/package.json`).resolve('typescript/bin/tsc');
   } catch (error) {
     throw new Error(
-      `kovo build TypeScript preflight could not resolve typescript from ${dirname(
-        tsconfigPath,
-      )}. Install typescript or remove ${tsconfigPath}.\n${
+      `kovo build TypeScript preflight could not resolve typescript from ${projectDir}. Install typescript or remove ${tsconfigPath}.\n${
         error instanceof Error ? error.message : String(error)
       }`,
     );
   }
 
+  // Incremental preflight: persist a `.tsbuildinfo` under the gitignored `.kovo/cache` so a
+  // warm rebuild only re-checks changed files (plans/fast-kovo-check2.md #2). `--noEmit` is
+  // kept, so only the build-info is written, never JS; tsc still invalidates by file content,
+  // so type errors continue to surface on the affected files.
+  const buildInfoDir = join(projectDir, '.kovo', 'cache');
+  const buildInfoFile = join(buildInfoDir, 'tsc-preflight.tsbuildinfo');
+  mkdirSync(buildInfoDir, { recursive: true });
+
   try {
-    execFileSync(process.execPath, [tscBin, '--noEmit', '--project', tsconfigPath], {
-      cwd: dirname(tsconfigPath),
-      encoding: 'utf8',
-      env: process.env,
-      stdio: 'pipe',
-    });
+    execFileSync(
+      process.execPath,
+      [
+        tscBin,
+        '--noEmit',
+        '--incremental',
+        '--tsBuildInfoFile',
+        buildInfoFile,
+        '--project',
+        tsconfigPath,
+      ],
+      {
+        cwd: projectDir,
+        encoding: 'utf8',
+        env: process.env,
+        stdio: 'pipe',
+      },
+    );
   } catch (error) {
     throw new Error(`kovo build TypeScript preflight failed:\n${execFileErrorOutput(error)}`);
   }

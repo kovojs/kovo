@@ -39,6 +39,27 @@ registerHooks({
 
 const { mainAsync } = await import('./index.js');
 
-void mainAsync().then((exitCode) => {
+// `kovo mcp` is a long-lived stdio server: its `mainAsync` resolves as soon as the
+// transport is wired up, while the process must stay alive to serve requests. Every
+// other `kovo` command is one-shot — once `mainAsync` resolves the command result is
+// fully written, so exit promptly instead of waiting out a multi-second event-loop
+// drain on handles the run can't reach (a loaded app module's top-level resources such
+// as a PGlite client, plus vite-plus build servers). See plans/fast-kovo-check2.md #1:
+// this collapsed a ~14.3s warm `kovo build` to ~3.6s with byte-identical diagnostics.
+const isLongLivedCommand = process.argv[2] === 'mcp';
+
+/** Flush a writable so a forced `process.exit` cannot truncate buffered output. */
+function flushStream(stream: NodeJS.WriteStream): Promise<void> {
+  return new Promise((resolve) => {
+    // The callback for an empty write fires once the stream's internal buffer has
+    // drained to the underlying fd, so prior synchronous writes are guaranteed out.
+    stream.write('', () => resolve());
+  });
+}
+
+void mainAsync().then(async (exitCode) => {
   process.exitCode = exitCode;
+  if (isLongLivedCommand) return;
+  await Promise.all([flushStream(process.stdout), flushStream(process.stderr)]);
+  process.exit(exitCode);
 });
