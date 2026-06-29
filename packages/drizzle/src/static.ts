@@ -993,6 +993,11 @@ interface StaticQueryDeclaration {
   query: string;
 }
 
+interface StaticMutationDeclaration {
+  bodyArgument: Node | undefined;
+  key: string;
+}
+
 /**
  * @internal Resolve a `query(...)` declaration to its public registry key and body object argument.
  *
@@ -1026,7 +1031,38 @@ export function staticQueryDeclarationFromCall(
   return null;
 }
 
+/**
+ * @internal Resolve a `mutation(...)` declaration to its public registry key and body object argument.
+ *
+ * SPEC.md §4.1/§10.3: exported object-form mutation declarations (`export const save = mutation({ ... })`)
+ * are source-derived from module path + export binding, matching compiler/runtime lowering.
+ * String-keyed declarations keep their explicit external vocabulary.
+ */
+export function staticMutationDeclarationFromCall(
+  declaration: VariableDeclaration,
+  mutationCall: CallExpression,
+): StaticMutationDeclaration | null {
+  if (!isKovoServerCalleeExpression(mutationCall.getExpression(), 'mutation')) return null;
+
+  const [firstArgument, secondArgument] = mutationCall.getArguments();
+  if (
+    firstArgument &&
+    (Node.isStringLiteral(firstArgument) || Node.isNoSubstitutionTemplateLiteral(firstArgument))
+  ) {
+    return { bodyArgument: secondArgument, key: firstArgument.getLiteralText() };
+  }
+  if (firstArgument && Node.isObjectLiteralExpression(firstArgument)) {
+    const key = sourceDerivedRegistryKey(declaration);
+    return key ? { bodyArgument: firstArgument, key } : null;
+  }
+  return null;
+}
+
 function sourceDerivedQueryKey(declaration: VariableDeclaration): string | undefined {
+  return sourceDerivedRegistryKey(declaration);
+}
+
+function sourceDerivedRegistryKey(declaration: VariableDeclaration): string | undefined {
   const name = declaration.getNameNode();
   if (!Node.isIdentifier(name) || !isExportedVariableDeclaration(declaration)) return undefined;
 

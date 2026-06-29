@@ -3,6 +3,10 @@ import {
   queryNameFromPath,
   queryPathUsesKnownQuery,
 } from '../analyze/query-shapes.js';
+import {
+  reactiveExpressionForJsxExpression,
+  reactivePropertyAccessesForJsxExpression,
+} from '../analyze/reactive-aliases.js';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
@@ -1195,7 +1199,7 @@ function lowerInlineTextBindings(
       );
       continue;
     }
-    const derive = inlineTextDerive(element, expression, componentName);
+    const derive = inlineTextDerive(element, expression, model, componentName);
     if (derive) {
       boundElementStarts.add(element.element.start);
       derive.expressionNode.replacement = `{escapeText(${derive.expression})}`;
@@ -1494,14 +1498,19 @@ function inlineTextBinding(
 function inlineTextDerive(
   element: JsxIrElement,
   expression: JsxIrExpression | null,
+  model: ComponentModuleModel,
   componentName: string,
 ): InlineStateTextDerive | null {
   if (element.selfClosing || hasBindingAttribute(element) || !expression) return null;
   if (expression.expression.solePropertyAccessPath) return null;
-  if (!isStateOnlyExpression(expression.expression.propertyAccesses)) return null;
+  if (
+    !isStateOnlyExpression(reactivePropertyAccessesForJsxExpression(expression.expression, model))
+  ) {
+    return null;
+  }
   return {
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
-    expression: expression.expression.expression,
+    expression: reactiveExpressionForJsxExpression(expression.expression, model),
     expressionNode: expression,
     wrapper: element,
   };
@@ -1548,7 +1557,11 @@ function inlineMixedTextDerive(
   model: ComponentModuleModel,
   componentName: string,
 ): InlineStateTextDerive | null {
-  if (!isStateOnlyExpression(expression.expression.propertyAccesses)) return null;
+  if (
+    !isStateOnlyExpression(reactivePropertyAccessesForJsxExpression(expression.expression, model))
+  ) {
+    return null;
+  }
   if (isJsxAttributeExpression(expression.expression, model)) return null;
   const element = innermostContainingElement(expression.expression, model);
   if (!element) return null;
@@ -1556,7 +1569,7 @@ function inlineMixedTextDerive(
   if (element.childNonWhitespaceCount === 1) return null;
   return {
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
-    expression: expression.expression.expression,
+    expression: reactiveExpressionForJsxExpression(expression.expression, model),
     expressionNode: expression,
   };
 }

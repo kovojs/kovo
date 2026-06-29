@@ -796,6 +796,38 @@ export const CartBadge = component({
     );
   });
 
+  it('reports KV311 for query expressions hidden behind render-local const aliases', () => {
+    const result = compileComponentModule({
+      fileName: 'query-alias.tsx',
+      source: `
+export const QueryAlias = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: () => {
+    const label = cart.count + 1;
+    return <query-alias><p>{label}</p></query-alias>;
+  },
+});
+`,
+    });
+
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'QueryAlias',
+        query: 'cart.count',
+        status: 'UNHANDLED',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV311',
+        fileName: 'query-alias.tsx',
+        message:
+          'Query/state-dependent DOM position has no update status. QueryAlias cart.count expression',
+      }),
+    );
+  });
+
   it('classifies fragment-target query expressions as fragment-covered without KV311', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',

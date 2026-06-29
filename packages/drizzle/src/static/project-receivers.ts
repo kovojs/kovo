@@ -65,6 +65,7 @@ import {
   staticAccessExpression,
   staticAccessName,
   staticExpressionPath,
+  staticMutationDeclarationFromCall,
   unwrappedFunctionExpression,
   unwrappedStaticExpressionNode,
   writeCallChainReceiver,
@@ -177,40 +178,65 @@ import {
 ): { body: Node; fn: Node; key: string; name: string }[] {
   const callbacks: { body: Node; fn: Node; key: string; name: string }[] = [];
 
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const call = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(call)) continue;
+    const mutation = staticMutationDeclarationFromCall(declaration, call);
+    if (!mutation || !Node.isObjectLiteralExpression(mutation.bodyArgument)) continue;
+    appendMutationHandlerCallbacks(callbacks, mutation.bodyArgument, mutation.key);
+  }
+
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)) continue;
     if (!isKovoServerCalleeExpression(call.getExpression(), 'mutation')) continue;
     const [keyArg, configArg] = call.getArguments();
-    if (!Node.isStringLiteral(keyArg) || !Node.isObjectLiteralExpression(configArg)) continue;
-
-    const mutationKey = keyArg.getLiteralText();
-    for (const property of configArg.getProperties()) {
-      if (Node.isMethodDeclaration(property)) {
-        if (propertyNameText(property.getNameNode()) !== 'handler') continue;
-        callbacks.push({
-          body: functionBody(property),
-          fn: property,
-          key: mutationKey,
-          name: mutationKey,
-        });
-        continue;
-      }
-
-      if (!Node.isPropertyAssignment(property)) continue;
-      if (propertyNameText(property.getNameNode()) !== 'handler') continue;
-      const initializer = property.getInitializer();
-      if (!initializer) continue;
-      const expression = unwrappedStaticExpressionNode(initializer);
-      if (!Node.isArrowFunction(expression) && !Node.isFunctionExpression(expression)) continue;
-      callbacks.push({
-        body: functionBody(expression),
-        fn: expression,
-        key: mutationKey,
-        name: mutationKey,
-      });
+    if (
+      !(
+        (Node.isStringLiteral(keyArg) || Node.isNoSubstitutionTemplateLiteral(keyArg)) &&
+        Node.isObjectLiteralExpression(configArg)
+      )
+    ) {
+      continue;
     }
+
+    appendMutationHandlerCallbacks(callbacks, configArg, keyArg.getLiteralText());
   }
 
   return callbacks;
+}
+
+function appendMutationHandlerCallbacks(
+  callbacks: { body: Node; fn: Node; key: string; name: string }[],
+  configArg: ObjectLiteralExpression,
+  mutationKey: string,
+): void {
+  for (const property of configArg.getProperties()) {
+    if (Node.isMethodDeclaration(property)) {
+      if (propertyNameText(property.getNameNode()) !== 'handler') continue;
+      callbacks.push({
+        body: functionBody(property),
+        fn: property,
+        key: mutationKey,
+        name: mutationKey,
+      });
+      continue;
+    }
+
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== 'handler') continue;
+    const initializer = property.getInitializer();
+    if (!initializer) continue;
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isArrowFunction(expression) && !Node.isFunctionExpression(expression)) continue;
+    callbacks.push({
+      body: functionBody(expression),
+      fn: expression,
+      key: mutationKey,
+      name: mutationKey,
+    });
+  }
 }
 
 /** @internal */ export function projectClassStaticMemberCallbacks(

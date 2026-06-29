@@ -283,6 +283,51 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('A1: audits exported object-form mutation handlers under their source-derived key', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'src/mutations/widgets.ts',
+            source: [
+              'import { mutation, s } from "@kovojs/server";',
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'interface AppRequest { db: PgAsyncDatabase<any, any> }',
+              'export const widgets = pgTable("widgets", { id: text("id").primaryKey(), ownerId: text("owner_id").notNull() }, kovo({ domain: "widget", key: (t) => t.id, owner: (t) => t.ownerId }));',
+              '',
+              'export const deleteWidget = mutation({',
+              '  input: s.object({ id: s.string() }),',
+              '  async handler({ id }: { id: string }, request: AppRequest) {',
+              '    await request.db.delete(widgets).where(eq(widgets.id, id));',
+              '    return { ok: true };',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({
+        domain: a.domain,
+        kind: a.kind,
+        name: a.name,
+        scope: a.scope,
+      })),
+    ).toEqual([
+      {
+        domain: 'widget',
+        kind: 'write',
+        name: 'mutations/widgets/delete-widget',
+        scope: 'args',
+      },
+    ]);
+  });
+
   // A1 negative: a write keyed by `req.session.*` is session-scoped (safe), not KV414.
   it('A1: keeps a session-anchored owner-table mutation scope:session (no KV414)', () => {
     const audit = extractOwnerAuditFromProject(

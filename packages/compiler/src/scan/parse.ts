@@ -990,7 +990,7 @@ function parameterName(name: ts.BindingName): string | undefined {
   return undefined;
 }
 
-function propertyAccessPathModels(
+export function propertyAccessPathModels(
   sourceFile: ts.SourceFile,
   root: ts.Node,
 ): PropertyAccessPathModel[] {

@@ -4,6 +4,7 @@
 // SPEC.md §5.x query-update facts. Behavior-neutral: emitted bytes unchanged.
 import { queryNameFromPath, queryPathUsesKnownQuery } from './query-shapes.js';
 import { isStatePath } from './query-internal.js';
+import { reactivePropertyAccessesForJsxExpression } from './reactive-aliases.js';
 import {
   callExpressions,
   jsxElements,
@@ -59,9 +60,11 @@ export function jsxQueryExpressionPaths(
   return jsxExpressions(model)
     .filter((expression) => !isJsxEventAttributeExpression(expression, model))
     .flatMap((expression) => {
-      const queryPaths = [...new Set(expression.propertyAccesses.map((path) => path.path))].filter(
-        (path) => queryPathUsesKnownQuery(path, knownQueries),
-      );
+      const queryPaths = [
+        ...new Set(
+          reactivePropertyAccessesForJsxExpression(expression, model).map((path) => path.path),
+        ),
+      ].filter((path) => queryPathUsesKnownQuery(path, knownQueries));
       return queryPaths.map((path) => ({
         end: expression.end,
         path,
@@ -74,9 +77,11 @@ export function jsxStateExpressionPaths(model: ComponentModuleModel): QueryPathE
   return jsxExpressions(model)
     .filter((expression) => !isJsxEventAttributeExpression(expression, model))
     .flatMap((expression) => {
-      const statePaths = [...new Set(expression.propertyAccesses.map((path) => path.path))].filter(
-        isStatePath,
-      );
+      const statePaths = [
+        ...new Set(
+          reactivePropertyAccessesForJsxExpression(expression, model).map((path) => path.path),
+        ),
+      ].filter(isStatePath);
       return statePaths.map((path) => ({
         end: expression.end,
         path,

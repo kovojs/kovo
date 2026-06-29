@@ -369,6 +369,34 @@ export const MixedState = component({
     ]);
   });
 
+  it('lowers render-local const aliases of state expressions to client derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-alias.tsx',
+      source: `
+export const StateAlias = component({
+  state: () => ({ query: 'ready' }),
+  render: (_queries, state) => {
+    const upper = state.query.toUpperCase();
+    return (
+      <state-alias>
+        <p>{upper}</p>
+      </state-alias>
+    );
+  },
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('data-bind="/c/__v/');
+    expect(serverSource).toContain('#StateAlias$p_text_derive');
+    expect(clientSource).toContain(
+      'export const StateAlias$p_text_derive = derive(["state"], (state) => (state.query.toUpperCase()));',
+    );
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
   it('classifies renderOnce state reads without emitting a runtime state plan', () => {
     const result = compileComponentModule({
       fileName: 'state-once.tsx',
