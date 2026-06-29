@@ -5,7 +5,7 @@ import {
   observeSqlEngineSideEffects,
   observeSqlStatementArgument,
   sqlStatementText,
-  tableCounts,
+  tableObservationSnapshots,
 } from './sql-observer.js';
 
 /** @internal Verification config: which tables map to which domains/keys (SPEC.md §11). */
@@ -130,7 +130,7 @@ export function observableSqlMethod(
     const sql = sqlStatementText(statement);
     // Snapshot before-counts fully (so the count queries are dispatched and
     // executed before the mutating call), then run the statement and compare.
-    const before = tableCounts(target, Object.keys(config.domainByTable));
+    const before = tableObservationSnapshots(target, Object.keys(config.domainByTable));
     return Promise.resolve(before).then((counts) => {
       if (counts.size === 0) return value.call(target, statement, ...args);
 

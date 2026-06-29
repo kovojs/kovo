@@ -20,6 +20,59 @@ import {
 } from './interactive-gallery-harness.js';
 
 describe('compiled interactive gallery demos', () => {
+  it('keeps the accessibility conformance state matrix manifest-backed', () => {
+    const packageJson = JSON.parse(readFileSync(resolve(galleryRoot, 'package.json'), 'utf8')) as {
+      kovo?: { interactiveGallery?: { compiledDemos?: unknown } };
+    };
+    const manifestDemos = new Set(
+      Array.isArray(packageJson.kovo?.interactiveGallery?.compiledDemos)
+        ? packageJson.kovo.interactiveGallery.compiledDemos.map(String)
+        : [],
+    );
+    const compiledDemos = new Set(interactiveDemoNames());
+    const claimedStateDemos = [
+      // rules/accessibility-conformance.md: open/expanded states.
+      'accordion-demo',
+      'alert-dialog-demo',
+      'collapsible-demo',
+      'command-demo',
+      'context-menu-demo',
+      'dialog-demo',
+      'disclosure-demo',
+      'drawer-demo',
+      'dropdown-menu-demo',
+      'hover-card-demo',
+      'menubar-demo',
+      'navigation-menu-demo',
+      'popover-demo',
+      'sheet-demo',
+      'tooltip-demo',
+      // rules/accessibility-conformance.md: checked/pressed/selected states.
+      'checkbox-demo',
+      'checkbox-group-demo',
+      'radio-group-demo',
+      'switch-demo',
+      'tabs-demo',
+      'toggle-demo',
+      'toggle-group-demo',
+      'toolbar-demo',
+      // rules/accessibility-conformance.md: value and validation states.
+      'field-demo',
+      'meter-demo',
+      'number-field-demo',
+      'otp-field-demo',
+      'progress-demo',
+      'slider-demo',
+    ] as const;
+
+    for (const demo of claimedStateDemos) {
+      expect(manifestDemos.has(demo), `${demo} is declared in examples/gallery/package.json`).toBe(
+        true,
+      );
+      expect(compiledDemos.has(demo), `${demo} has a compiled interactive artifact`).toBe(true);
+    }
+  });
+
   it('compiles app-authored interactive demos into emitted artifacts on demand', () => {
     for (const demo of interactiveDemoNames()) {
       const compiled = readCompiledDemo(`${demo}.tsx`);

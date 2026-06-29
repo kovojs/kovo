@@ -18,13 +18,13 @@ from this pass is filed in `plans/bugz-12.md`.
 
 ### A. Production Build Parity
 
-- [ ] **Production build transforms lowered component TSX to a classic
+- [x] **Production build transforms lowered component TSX to a classic
       `createElement` import from `@kovojs/server`.** (high, framework
       dev-tooling; found by `live-optimistic-cache`)
   - Observed behavior: a query-backed component app passed `vp check`, tests,
     and dev smoke, but `pnpm run build:prod` failed during `kovo build` with
     `[MISSING_EXPORT] "createElement" is not exported by
-    "../../kovo/packages/server/src/index.ts"` at `src/components/contacts.tsx`.
+"../../kovo/packages/server/src/index.ts"` at `src/components/contacts.tsx`.
   - Root cause: `packages/compiler/src/lower/structural-jsx.ts:205-221` inserts
     `escapeText` helper imports at the offset from
     `packages/compiler/src/lower/structural-jsx.ts:1975-1977`, which accounts
@@ -45,20 +45,25 @@ from this pass is filed in `plans/bugz-12.md`.
     `rm -rf .kovo/cache && pnpm run build:prod` exited 1 with the
     `createElement` missing export. The independent verifier also inspected the
     compiler cache and confirmed the lowered source displaced `@jsxRuntime
-    automatic` after an import.
+automatic` after an import.
   - Acceptance: compiler helper import insertion preserves all leading JSX
     pragmas before imports, and `live-optimistic-cache` `pnpm run build:prod`
     succeeds after clearing `.kovo/cache`; focused compiler coverage proves
     files with both `@jsxImportSource` and `@jsxRuntime automatic` remain on the
     automatic JSX runtime.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/structural-jsx-ir.test.ts --reporter=dot`
+    passed on 2026-06-29; `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts
+packages/cli/src/index.kovo-build.test.ts -t "classic createElement|bundles imported TSX route components" --reporter=dot`
+    passed on 2026-06-29; `/Users/mini/kovo-dogfood-20260629-exhaustive/live-optimistic-cache`
+    `rm -rf .kovo/cache dist && pnpm run build:prod` passed on 2026-06-29.
 
 ### B. Error Shell Contract
 
-- [ ] **Route guard 403 responses ignore JSX/string `errorShells.forbidden`
+- [x] **Route guard 403 responses ignore JSX/string `errorShells.forbidden`
       renderers.** (med, framework runtime contract; found by
       `auth-access-shells`)
   - Observed behavior: the app configured `createApp({ errorShells: {
-    forbidden } })`, where the forbidden shell renders `Access denied`, and
+forbidden } })`, where the forbidden shell renders `Access denied`, and
     `/admin` used `guards.all(appAuthed, guards.role('admin'))`. A signed-in
     non-admin request returned status 403, but the body was the framework
     fallback `<h1>Forbidden</h1><p>Forbidden</p>`.
@@ -83,6 +88,9 @@ from this pass is filed in `plans/bugz-12.md`.
     or full route response objects; route guard 403 denials render the app's
     forbidden shell with the normal document security/header floor. Add focused
     coverage for the JSX/string shell shape.
+  - Evidence: `pnpm exec vitest run packages/server/src/app-document.test.ts --reporter=dot`
+    passed on 2026-06-29; it proves route guard 403 denials render a configured
+    plain forbidden shell body through the normal document path.
 
 ## Refuted / Covered Tracks
 
@@ -116,5 +124,5 @@ run check`, `pnpm run test`, `pnpm run build:prod`, `kovo add button badge
 checkbox`, and a dev DOM smoke passed.
 - Root monorepo repair after parallel link-local installs: `pnpm install`
   passed, and `pnpm --filter @kovojs/style exec node -e
-  "console.log(require.resolve('@material/material-color-utilities'))"` resolved
+"console.log(require.resolve('@material/material-color-utilities'))"` resolved
   the style package's transitive dependency.
