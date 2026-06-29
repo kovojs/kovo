@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { relative } from 'node:path';
 
 import { canonicalJson } from './canonical-json.js';
 import { compilerBuildId } from './cache-identity.js';
@@ -90,6 +91,27 @@ export class CompileCache<Result> {
 }
 
 /** @internal Stable cache key. When a dependency footprint is present, unrelated facts are omitted. */
+/**
+ * Project-relative, OS-independent cache path. plans/fast-kovo-check2.md #B: absolute `fileName`/
+ * `root` leaked the checkout/install root into the persistent compile cache key, so a CI cache
+ * restored into a different checkout root missed entirely. Relativize paths that live inside the
+ * current project root (cwd) to make the key content-addressed and portable across roots/machines.
+ * Paths outside cwd (or already relative) are returned unchanged — this keeps existing relative-path
+ * inputs byte-identical and avoids turning an out-of-tree absolute path into an ambiguous `../` chain.
+ * The compiler's own version (compilerBuildId) is in every key, so this re-keying can never mis-hit a
+ * pre-existing absolute-keyed entry.
+ */
+function portableCachePath(value: string | undefined | null): string | null {
+  if (value === undefined || value === null) return null;
+  const rel = relative(process.cwd(), value).split(/[\\/]/).join('/');
+  // `''` means the path IS the project root (the common case for `root`/`packagePrefixDiscoveryRoot`,
+  // which equals cwd) — map it to a stable `.` so the key is portable, not the absolute cwd. Paths
+  // outside the project root (`../…`) stay absolute (rare; avoids ambiguous traversal in the key).
+  if (rel === '') return '.';
+  if (rel.startsWith('../')) return value;
+  return rel;
+}
+
 export function compileCacheKey(input: CompileCacheKeyInput): string {
   const compileContext = input.dependencyFootprint ?? {
     ...(input.packageComponentPrefixes === undefined
@@ -103,15 +125,29 @@ export function compileCacheKey(input: CompileCacheKeyInput): string {
     ...(input.registryFacts === undefined ? {} : { registryFacts: input.registryFacts }),
   };
 
+  // plans/fast-kovo-check2.md #B: the dependency footprint carries `packagePrefixDiscoveryRoot`
+  // as an absolute path — relativize it FOR THE KEY ONLY (not the footprint object, which downstream
+  // narrowing still uses verbatim) so the persisted compile cache is portable across checkout roots.
+  const portableCompileContext =
+    typeof (compileContext as { packagePrefixDiscoveryRoot?: unknown }).packagePrefixDiscoveryRoot ===
+    'string'
+      ? {
+          ...compileContext,
+          packagePrefixDiscoveryRoot: portableCachePath(
+            (compileContext as { packagePrefixDiscoveryRoot?: string }).packagePrefixDiscoveryRoot,
+          ),
+        }
+      : compileContext;
+
   return canonicalJson({
-    compileContext,
+    compileContext: portableCompileContext,
     compilerBuildId: compilerBuildId(),
-    fileName: input.fileName,
+    fileName: portableCachePath(input.fileName),
     // SPEC §5.2.1: the key must be a total function of all compile-affecting options.
     // productionRenderPlanGate flips the KV435 confidentiality gate and the KV416 token-
     // monotonicity gate, so two compiles differing only in this option must produce different keys.
     productionRenderPlanGate: input.productionRenderPlanGate ?? null,
-    root: input.root ?? null,
+    root: portableCachePath(input.root),
     sourceHash: stableHash(input.source),
     sourceProvenance: input.sourceProvenance ?? null,
   });
@@ -208,8 +244,8 @@ export function narrowCompileCacheKeyInput(
 function compileCacheSourceKey(input: CompileCacheKeyInput): string {
   return canonicalJson({
     compilerBuildId: compilerBuildId(),
-    fileName: input.fileName,
-    root: input.root ?? null,
+    fileName: portableCachePath(input.fileName),
+    root: portableCachePath(input.root),
     sourceHash: stableHash(input.source),
     sourceProvenance: input.sourceProvenance ?? null,
   });

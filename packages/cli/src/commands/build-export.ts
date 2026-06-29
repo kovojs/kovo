@@ -362,13 +362,22 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
     const resolvedAppModulePath = resolve(options.appModulePath);
     runTypeScriptBuildPreflight(resolvedAppModulePath);
+    // plans/fast-kovo-check2.md (#A dedup): the module/css loads below spin up throwaway vite dev
+    // servers purely to evaluate app source so we can derive the build graph and collect CSS. The
+    // app's `@kovojs/server` vite plugin would otherwise re-run the whole-project drizzle data-plane
+    // analysis in each — the SAME analysis runKovoBuildCheckPreflight runs authoritatively just
+    // below — costing ~9s of duplicate ts-morph work cold. Flag the entire (concurrent) load span so
+    // the plugin skips it; the production client/server build passes run with the flag cleared, so
+    // their fail-closed gate still fires.
     const [{ cloudflare, node, vercel }, { writeKovoNeutralBuild }, appModule, buildStylesheetCss] =
-      await Promise.all([
-        import('@kovojs/server/build'),
-        import('@kovojs/server/internal/build'),
-        loadBuildAppModule(resolvedAppModulePath, process.cwd()),
-        kovoBuildStylesheetCss(resolvedAppModulePath),
-      ]);
+      await withGraphDerivationFlag(() =>
+        Promise.all([
+          import('@kovojs/server/build'),
+          import('@kovojs/server/internal/build'),
+          loadBuildAppModule(resolvedAppModulePath, process.cwd()),
+          kovoBuildStylesheetCss(resolvedAppModulePath),
+        ]),
+      );
     const app = appFromModule(appModule, options.appModulePath);
     const checkGraph = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
       cache: options.cache,
@@ -692,19 +701,32 @@ async function staticDrizzleBuildFacts(
   return result;
 }
 
-const STATIC_DRIZZLE_BUILD_FACTS_CACHE_VERSION = '2026-06-28.fast-check.v1';
+const STATIC_DRIZZLE_BUILD_FACTS_CACHE_VERSION = '2026-06-29.fast-check.v2-portable';
+
+/**
+ * Project-relative, OS-independent cache path for a source file. plans/fast-kovo-check2.md #B:
+ * keying on absolute paths made the cache non-portable (a CI cache restored into a different
+ * checkout root missed entirely). Relative-to-cwd + forward slashes makes the key content-
+ * addressed and portable across checkout roots and machines, while the source hash below keeps
+ * different content distinct.
+ */
+function portableCacheFilePath(fileName: string): string {
+  const relativePath = relative(process.cwd(), fileName).split(/[\\/]/).join('/');
+  return relativePath === '' ? fileName : relativePath;
+}
 
 function staticDrizzleBuildFactsCacheKey(files: readonly BuildCheckSourceFile[]): string {
   const hash = createHash('sha256');
   hash.update(`${STATIC_DRIZZLE_BUILD_FACTS_CACHE_VERSION}\0`);
   hash.update(staticDrizzleAnalyzerFingerprint());
-  for (const file of [...files].sort((left, right) =>
-    left.fileName.localeCompare(right.fileName),
-  )) {
+  const entries = files
+    .map((file) => ({ path: portableCacheFilePath(file.fileName), source: file.source }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+  for (const entry of entries) {
     hash.update('\0file\0');
-    hash.update(file.fileName);
+    hash.update(entry.path);
     hash.update('\0');
-    hash.update(createHash('sha256').update(file.source).digest('hex'));
+    hash.update(createHash('sha256').update(entry.source).digest('hex'));
   }
   return hash.digest('hex');
 }
@@ -713,7 +735,10 @@ function staticDrizzleAnalyzerFingerprint(): string {
   const resolved = resolveDrizzleStaticAnalyzerPath();
   const packageRoot = resolved ? nearestPackageRoot(dirname(resolved)) : undefined;
   const hash = createHash('sha256');
-  hash.update(resolved ?? 'unresolved');
+  // plans/fast-kovo-check2.md #B: hash whether the analyzer resolved, NOT its absolute path. The
+  // analyzer's package.json + src contents are folded in below, so the absolute path added only
+  // non-portability (it leaked the checkout/install root into the key, breaking CI cache restore).
+  hash.update(resolved ? 'resolved' : 'unresolved');
   if (packageRoot) {
     hash.update('\0pkg\0');
     hash.update(readFileIfExists(join(packageRoot, 'package.json')));
@@ -1413,6 +1438,24 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
     return { config, path: configPath };
   } finally {
     await server.close();
+  }
+}
+
+/**
+ * Run `fn` with `KOVO_BUILD_GRAPH_DERIVATION=1` set, then restore the prior value. The
+ * `@kovojs/server` vite plugin reads this flag to skip its redundant whole-project drizzle
+ * data-plane analysis while the CLI is only loading app source to derive the build graph
+ * (the CLI runs that analysis authoritatively in `runKovoBuildCheckPreflight`).
+ * plans/fast-kovo-check2.md #A.
+ */
+async function withGraphDerivationFlag<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = process.env.KOVO_BUILD_GRAPH_DERIVATION;
+  process.env.KOVO_BUILD_GRAPH_DERIVATION = '1';
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env.KOVO_BUILD_GRAPH_DERIVATION;
+    else process.env.KOVO_BUILD_GRAPH_DERIVATION = previous;
   }
 }
 
