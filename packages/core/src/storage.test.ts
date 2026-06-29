@@ -8,6 +8,7 @@ import {
   createFileSystemStorage,
   createMemoryStorage,
   createS3CompatibleStorage,
+  type S3CompatibleDeleteObjectInput,
   type S3CompatibleGetObjectInput,
   type S3CompatibleGetObjectOutput,
   type S3CompatibleHeadObjectInput,
@@ -92,6 +93,26 @@ function storageConformance(name: string, createHarness: () => Promise<StorageHa
         await expect(harness.storage.stat('missing.txt')).resolves.toBeUndefined();
         await expect(harness.storage.get('missing.txt')).resolves.toBeUndefined();
         await expect(harness.storage.stream('missing.txt')).resolves.toBeUndefined();
+        await expect(harness.storage.delete('missing.txt')).resolves.toBeUndefined();
+      } finally {
+        await harness.cleanup?.();
+      }
+    });
+
+    it('deletes stored objects and metadata by key', async () => {
+      const harness = await createHarness();
+      try {
+        await harness.storage.put('receipts/delete-me.txt', 'remove me', {
+          contentType: 'text/plain',
+          metadata: { lifecycle: 'delete' },
+        });
+        await expect(harness.storage.get('receipts/delete-me.txt')).resolves.toBeDefined();
+
+        await harness.storage.delete('receipts/delete-me.txt');
+
+        await expect(harness.storage.stat('receipts/delete-me.txt')).resolves.toBeUndefined();
+        await expect(harness.storage.get('receipts/delete-me.txt')).resolves.toBeUndefined();
+        await expect(harness.storage.stream('receipts/delete-me.txt')).resolves.toBeUndefined();
       } finally {
         await harness.cleanup?.();
       }
@@ -303,6 +324,11 @@ class MockS3Client implements S3CompatibleObjectClient {
   readonly calls: string[] = [];
   private readonly objects = new Map<string, MockS3Object>();
 
+  async deleteObject(input: S3CompatibleDeleteObjectInput): Promise<void> {
+    this.calls.push(`delete ${input.bucket}/${input.key}`);
+    this.objects.delete(`${input.bucket}/${input.key}`);
+  }
+
   async getObject(
     input: S3CompatibleGetObjectInput,
   ): Promise<S3CompatibleGetObjectOutput | undefined> {
@@ -351,6 +377,10 @@ class MockS3Client implements S3CompatibleObjectClient {
  */
 class ContentLengthBlindS3Client implements S3CompatibleObjectClient {
   private readonly objects = new Map<string, MockS3Object>();
+
+  async deleteObject(input: S3CompatibleDeleteObjectInput): Promise<void> {
+    this.objects.delete(`${input.bucket}/${input.key}`);
+  }
 
   async getObject(
     input: S3CompatibleGetObjectInput,

@@ -120,8 +120,9 @@ export function preDispatchLoadShedResponse(
   request: Request,
   surface: LoadShedSurface,
   buildToken?: string,
+  maxBodyBytes: number | false = app.requestLimits.maxBodyBytes,
 ): Response | undefined {
-  const bodyFailure = requestBodySizeFailure(app.requestLimits, request, surface, buildToken);
+  const bodyFailure = requestBodySizeFailure(maxBodyBytes, request, surface, buildToken);
   if (bodyFailure) return bodyFailure;
 
   const rateLimited = rateLimitFailure(app, request, surface, Date.now());
@@ -179,14 +180,14 @@ function normalizeRate(
 }
 
 function requestBodySizeFailure(
-  limits: ResolvedAppRequestLimitOptions,
+  maxBodyBytes: ResolvedAppRequestLimitOptions['maxBodyBytes'],
   request: Request,
   surface: LoadShedSurface,
   buildToken?: string,
 ): Response | undefined {
-  if (limits.maxBodyBytes === false) return undefined;
+  if (maxBodyBytes === false) return undefined;
   const size = requestContentLength(request);
-  if (size === undefined || size <= limits.maxBodyBytes) return undefined;
+  if (size === undefined || size <= maxBodyBytes) return undefined;
 
   return appSystemResponse('Payload Too Large', {
     buildToken,

@@ -913,6 +913,47 @@ describe('server createApp request shell', () => {
     expect(queryLoad).not.toHaveBeenCalled();
   });
 
+  it('lets s.file().maxBytes raise the effective mutation body cap and return typed 422', async () => {
+    const mutationHandler = vi.fn(() => ({ ok: true }));
+    const upload = mutation('upload/avatar', {
+      csrf: false,
+      handler: mutationHandler,
+      input: s.object({
+        avatar: s.file().maxBytes(8),
+      }),
+    });
+    const handler = createRequestHandler(
+      createApp({
+        mutations: [upload],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: 1,
+          mutations: { global: false, perIp: false },
+          perIp: false,
+          queries: { global: false, perIp: false },
+        },
+      }),
+    );
+    const request = (body: string) => {
+      const form = new FormData();
+      form.set('avatar', new File([body], 'avatar.txt', { type: 'text/plain' }));
+      return new Request('https://example.test/_m/upload/avatar', {
+        body: form,
+        method: 'POST',
+      });
+    };
+
+    const accepted = await handler(request('12345'));
+    expect(accepted.status).toBe(303);
+    expect(mutationHandler).toHaveBeenCalledTimes(1);
+
+    const rejected = await handler(request('123456789'));
+
+    expect(rejected.status).toBe(422);
+    await expect(rejected.text()).resolves.toContain('Expected file &lt;= 8 bytes');
+    expect(mutationHandler).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects oversized streamed endpoint bodies before dispatch', async () => {
     let sideEffects = 0;
     const endpointHandler = vi.fn(async (request: Request) => {

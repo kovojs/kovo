@@ -28,12 +28,35 @@ interface AsyncSchema<T> extends Schema<T> {
 
 type SchemaMetadata =
   | { kind: 'array'; item: Schema<unknown> }
-  | { kind: 'file' }
+  | { kind: 'file'; maxBytes?: number }
   | { kind: 'object'; shape: Readonly<Record<string, Schema<unknown>>> }
   | { kind: 'record'; value: Schema<unknown> }
-  | { kind: 'stored-file' };
+  | { kind: 'stored-file'; maxBytes?: number };
 
 const schemaMetadata = new WeakMap<Schema<unknown>, SchemaMetadata>();
+
+/** @internal Return the declared upload bytes needed by file schemas nested in this schema. */
+export function schemaMaxUploadBytes(schema: Schema<unknown>): number | undefined {
+  const metadata = schemaMetadata.get(schema);
+  if (metadata === undefined) return undefined;
+
+  if (metadata.kind === 'file' || metadata.kind === 'stored-file') return metadata.maxBytes;
+  if (metadata.kind === 'array') return schemaMaxUploadBytes(metadata.item);
+  if (metadata.kind === 'record') return schemaMaxUploadBytes(metadata.value);
+  if (metadata.kind === 'object') {
+    let total = 0;
+    let found = false;
+    for (const child of Object.values(metadata.shape)) {
+      const childMaxBytes = schemaMaxUploadBytes(child);
+      if (childMaxBytes === undefined) continue;
+      total += childMaxBytes;
+      found = true;
+    }
+    return found ? total : undefined;
+  }
+
+  return undefined;
+}
 
 /**
  * A single field-level validation failure: a human `message` and the `path` of record
@@ -692,7 +715,10 @@ class FileSchemaImpl implements FileSchema {
   constructor(options: FileSchemaOptions = {}) {
     this.#maxBytes = options.maxBytes;
     this.#accept = options.accept;
-    schemaMetadata.set(this, { kind: 'file' });
+    schemaMetadata.set(this, {
+      kind: 'file',
+      ...(this.#maxBytes === undefined ? {} : { maxBytes: this.#maxBytes }),
+    });
   }
 
   maxBytes(value: number): FileSchema {
@@ -725,7 +751,10 @@ class StoredFileSchemaImpl implements StoredFileSchema {
   constructor(fileOptions: FileSchemaOptions, storageOptions: StoredFileSchemaOptions) {
     this.#fileOptions = fileOptions;
     this.#storageOptions = storageOptions;
-    schemaMetadata.set(this, { kind: 'stored-file' });
+    schemaMetadata.set(this, {
+      kind: 'stored-file',
+      ...(fileOptions.maxBytes === undefined ? {} : { maxBytes: fileOptions.maxBytes }),
+    });
   }
 
   parse(_input: unknown): StoredFileUpload {

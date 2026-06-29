@@ -34,6 +34,7 @@ export type {
 export type {
   FileSystemStorageOptions,
   MemoryStorageOptions,
+  S3CompatibleDeleteObjectInput,
   S3CompatibleGetObjectInput,
   S3CompatibleGetObjectOutput,
   S3CompatibleHeadObjectInput,

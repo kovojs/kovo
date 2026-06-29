@@ -1,7 +1,7 @@
 import { blockingAppDiagnostics } from './app-diagnostics.js';
 import { reportServerError } from './diagnostics.js';
 import { renderDiagnosticDocument } from './document-diagnostics.js';
-import { matchShellDispatch } from './shell.js';
+import { matchShellDispatch, type ShellDispatchMatch } from './shell.js';
 import { redirectLocationHeader, routeResponseToWebResponse } from './response.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { kovoSecurityReportResponse } from './reporting.js';
@@ -16,6 +16,9 @@ import {
 } from './app-load-shed.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
+import { schemaMaxUploadBytes, type Schema } from './schema.js';
+
+const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 
 export async function handleAppRequest(app: KovoApp, request: Request): Promise<Response> {
   const appDiagnostics = blockingAppDiagnostics(app);
@@ -43,7 +46,8 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     });
   }
 
-  const loadShed = preDispatchLoadShedResponse(app, request, surface, buildToken);
+  const maxBodyBytes = requestBodyLimitForMatch(app, match);
+  const loadShed = preDispatchLoadShedResponse(app, request, surface, buildToken, maxBodyBytes);
   if (loadShed) return loadShed;
 
   if (url.pathname === KOVO_CSP_REPORT_ENDPOINT) {
@@ -54,9 +58,9 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   try {
     const dispatchRequest =
       match.kind === 'endpoint'
-        ? await requestWithVerifiedBodyLimit(request, app.requestLimits.maxBodyBytes)
+        ? await requestWithVerifiedBodyLimit(request, maxBodyBytes)
         : request;
-    limitedRequest = requestWithBodyLimit(dispatchRequest, app.requestLimits.maxBodyBytes);
+    limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
     return await dispatchMatchedAppRequest({ app, match, request: limitedRequest, url });
   } catch (error) {
     if (error instanceof RequestBodyLimitExceededError) {
@@ -77,6 +81,26 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       request,
     );
   }
+}
+
+function requestBodyLimitForMatch(
+  app: KovoApp,
+  match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>,
+): number | false {
+  const baseLimit = app.requestLimits.maxBodyBytes;
+  if (baseLimit === false || match.kind !== 'mutation') return baseLimit;
+
+  const mutation = app.mutations.find(
+    (candidate) => candidate.key === decodeURIComponent(match.key),
+  );
+  if (mutation === undefined) return baseLimit;
+  const uploadBytes = schemaMaxUploadBytes(mutation.input as Schema<unknown>);
+  if (uploadBytes === undefined) return baseLimit;
+
+  // SPEC §6.3/§9.1: a declared file limit is the field-level validation contract. Keep the global
+  // pre-dispatch floor, but raise it enough for multipart envelope bytes so the schema can return
+  // the typed 422 field error instead of a misleading bare 413 for ordinary bounded uploads.
+  return Math.max(baseLimit, uploadBytes + FILE_MUTATION_BODY_OVERHEAD_BYTES);
 }
 
 function loadShedSurface(kind: string): LoadShedSurface {

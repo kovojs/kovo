@@ -42,6 +42,7 @@ export interface StorageStreamResult extends StorageObjectInfo {
 
 /** The object-storage interface an app uses to read, write, stat, and stream objects by key. */
 export interface StorageCapability {
+  delete(key: string): Promise<void>;
   get(key: string): Promise<StorageGetResult | undefined>;
   put(key: string, body: StorageBody, options?: StoragePutOptions): Promise<StoragePutResult>;
   stat(key: string): Promise<StorageObjectInfo | undefined>;
@@ -88,6 +89,12 @@ export interface S3CompatibleHeadObjectInput {
   key: string;
 }
 
+/** Input to an S3-compatible delete-object call: the target bucket and key. */
+export interface S3CompatibleDeleteObjectInput {
+  bucket: string;
+  key: string;
+}
+
 /** Object metadata returned by an S3-compatible client: content length, content type, etag, modified time, and custom metadata. */
 export interface S3CompatibleObjectMetadata {
   contentLength?: number;
@@ -109,6 +116,7 @@ export interface S3CompatibleGetObjectOutput extends S3CompatibleObjectMetadata 
 
 /** The minimal S3-compatible client an app supplies: get, head, and put object operations. */
 export interface S3CompatibleObjectClient {
+  deleteObject(input: S3CompatibleDeleteObjectInput): Promise<void>;
   getObject(input: S3CompatibleGetObjectInput): Promise<S3CompatibleGetObjectOutput | undefined>;
   headObject(input: S3CompatibleHeadObjectInput): Promise<S3CompatibleObjectMetadata | undefined>;
   putObject(input: S3CompatiblePutObjectInput): Promise<S3CompatiblePutObjectOutput>;
@@ -150,6 +158,9 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
   const now = options.now ?? (() => new Date());
 
   return {
+    async delete(key) {
+      objects.delete(normalizeStorageKey(key));
+    },
     async get(key) {
       const normalizedKey = normalizeStorageKey(key);
       const object = objects.get(normalizedKey);
@@ -201,6 +212,17 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
   const writeLocks = new Map<string, Promise<void>>();
 
   return {
+    async delete(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      const { rm } = await import('node:fs/promises');
+      const filePath = await storageFilePath(root, normalizedKey);
+      await withFileSystemWriteLock(writeLocks, filePath, async () => {
+        await Promise.all([
+          rm(filePath, { force: true }),
+          rm(metadataFilePath(filePath), { force: true }),
+        ]);
+      });
+    },
     async get(key) {
       const normalizedKey = normalizeStorageKey(key);
       const { readFile } = await import('node:fs/promises');
@@ -268,6 +290,13 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
   const prefix = options.prefix === undefined ? undefined : normalizeStoragePrefix(options.prefix);
 
   return {
+    async delete(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      await options.client.deleteObject({
+        bucket: options.bucket,
+        key: s3ObjectKey(prefix, normalizedKey),
+      });
+    },
     async get(key) {
       const normalizedKey = normalizeStorageKey(key);
       const output = await options.client.getObject({
