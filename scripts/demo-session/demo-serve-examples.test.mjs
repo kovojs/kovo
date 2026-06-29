@@ -9,12 +9,14 @@ afterEach(async () => {
   for (const served of servedServers.splice(0)) {
     await served.close();
   }
+  delete process.env.KOVO_LIVE_TARGET_SECRET;
   delete process.env.KOVO_CRM_CSRF_SECRET;
   delete process.env.KOVO_STACKOVERFLOW_CSRF_SECRET;
 });
 
 describe('hosted demo serve examples', () => {
   it('boots CRM and StackOverflow through the multitenant Vite demo path', async () => {
+    process.env.KOVO_LIVE_TARGET_SECRET = 'demo-serve-test-live-target-secret';
     process.env.KOVO_CRM_CSRF_SECRET = 'demo-serve-test-crm-csrf-secret';
     process.env.KOVO_STACKOVERFLOW_CSRF_SECRET = 'demo-serve-test-stackoverflow-csrf-secret';
 

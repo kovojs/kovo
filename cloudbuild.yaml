@@ -75,6 +75,7 @@ steps:
           -e EXAMPLE=stackoverflow \
           -e PORT=8080 \
           -e HOST=0.0.0.0 \
+          -e KOVO_LIVE_TARGET_SECRET=cloud-build-smoke-live-target-secret \
           -e KOVO_STACKOVERFLOW_CSRF_SECRET=cloud-build-smoke-stackoverflow-csrf-secret \
           "$$IMAGE")
         trap 'docker logs "$$CID" || true; docker rm -f "$$CID" >/dev/null 2>&1 || true' EXIT
@@ -152,11 +153,11 @@ steps:
             AFFINITY_FLAGS=(--no-session-affinity)
           fi
           if [[ "$$EX" == "commerce" ]]; then
-            SECRET_FLAGS=(--set-secrets "KOVO_COMMERCE_CSRF_SECRET=${_COMMERCE_CSRF_SECRET_NAME}:latest,KOVO_COMMERCE_AUTH_CSRF_SECRET=${_COMMERCE_AUTH_CSRF_SECRET_NAME}:latest,COMMERCE_WEBHOOK_SECRET=${_COMMERCE_WEBHOOK_SECRET_NAME}:latest")
+            SECRET_FLAGS=(--set-secrets "KOVO_COMMERCE_CSRF_SECRET=${_COMMERCE_CSRF_SECRET_NAME}:latest,KOVO_COMMERCE_AUTH_CSRF_SECRET=${_COMMERCE_AUTH_CSRF_SECRET_NAME}:latest,COMMERCE_WEBHOOK_SECRET=${_COMMERCE_WEBHOOK_SECRET_NAME}:latest,KOVO_LIVE_TARGET_SECRET=${_COMMERCE_CSRF_SECRET_NAME}:latest")
           elif [[ "$$EX" == "crm" ]]; then
-            SECRET_FLAGS=(--set-secrets "KOVO_CRM_CSRF_SECRET=${_CRM_CSRF_SECRET_NAME}:latest")
+            SECRET_FLAGS=(--set-secrets "KOVO_CRM_CSRF_SECRET=${_CRM_CSRF_SECRET_NAME}:latest,KOVO_LIVE_TARGET_SECRET=${_CRM_CSRF_SECRET_NAME}:latest")
           elif [[ "$$EX" == "stackoverflow" ]]; then
-            SECRET_FLAGS=(--set-secrets "KOVO_STACKOVERFLOW_CSRF_SECRET=${_STACKOVERFLOW_CSRF_SECRET_NAME}:latest")
+            SECRET_FLAGS=(--set-secrets "KOVO_STACKOVERFLOW_CSRF_SECRET=${_STACKOVERFLOW_CSRF_SECRET_NAME}:latest,KOVO_LIVE_TARGET_SECRET=${_STACKOVERFLOW_CSRF_SECRET_NAME}:latest")
           fi
           gcloud run deploy kovo-$$EX \
             --project ${_PROJECT_ID} \

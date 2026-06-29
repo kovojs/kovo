@@ -42,9 +42,13 @@ RUN pnpm install --frozen-lockfile \
 # Build each example's client assets (CSS and manifests -> dist/assets/*). The
 # per-session demo serve streams SSR from source but serves built /assets/* from
 # dist, so the apps render fully styled.
-RUN pnpm -C examples/commerce run build:demo \
-  && pnpm -C examples/crm run build \
-  && pnpm -C examples/stackoverflow run build
+RUN cd examples/commerce \
+  && NODE_OPTIONS=--max-old-space-size=4096 ../../node_modules/.bin/vp build \
+  && cd ../crm \
+  && NODE_OPTIONS=--max-old-space-size=4096 ../../node_modules/.bin/vp build \
+  && cd ../stackoverflow \
+  && NODE_OPTIONS=--max-old-space-size=4096 ../../node_modules/.bin/vp build \
+  && NODE_OPTIONS=--max-old-space-size=4096 node scripts/materialize-demo-css.mjs
 
 RUN chown -R node:node /app
 
@@ -54,8 +58,9 @@ ENV PORT=8080
 ENV NODE_ENV=production
 # Default target; override per service: --set-env-vars EXAMPLE=crm|stackoverflow
 ENV EXAMPLE=commerce
-# Production demo services must set per-example CSRF secrets instead of relying
-# on source-level EXAMPLE_ONLY fallbacks.
+# Production demo services must set per-example CSRF secrets and
+# KOVO_LIVE_TARGET_SECRET instead of relying on source-level EXAMPLE_ONLY/dev
+# fallbacks.
 # Memory guardrails for the per-session PGlite instances (override per service).
 ENV KOVO_DEMO_MAX_SESSIONS=40
 ENV KOVO_DEMO_WARM_SESSIONS=10
