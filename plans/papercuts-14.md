@@ -54,7 +54,7 @@ from this pass is filed in `plans/bugz-12.md`.
 
 ### B. Error Shell Contract
 
-- [ ] **Route guard 403 responses ignore JSX/string `errorShells.forbidden`
+- [x] **Route guard 403 responses ignore JSX/string `errorShells.forbidden`
       renderers.** (med, framework runtime contract; found by
       `auth-access-shells`)
   - Observed behavior: the app configured `createApp({ errorShells: {
@@ -83,6 +83,9 @@ from this pass is filed in `plans/bugz-12.md`.
     or full route response objects; route guard 403 denials render the app's
     forbidden shell with the normal document security/header floor. Add focused
     coverage for the JSX/string shell shape.
+  - Evidence: `pnpm exec vitest run packages/server/src/app-document.test.ts --reporter=dot`
+    passed on 2026-06-29; it proves route guard 403 denials render a configured
+    plain forbidden shell body through the normal document path.
 
 ## Refuted / Covered Tracks
 
