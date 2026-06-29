@@ -54,6 +54,13 @@ import {
 const requireFromCli = createRequire(import.meta.url);
 const cliPackageManifest = readCliPackageManifest();
 
+function drizzleStaticSqlSafetyErrorExit(
+  sqlSafetyErrors: readonly SqlSafetyDiagnosticLike[],
+): { exitCode: 1 } | undefined {
+  if (sqlSafetyErrors.length > 0) return { exitCode: 1 };
+  return undefined;
+}
+
 function readCliPackageManifest(): { version?: string } {
   const candidates = [
     // Source/tests: packages/cli/src/commands/compile.ts.
@@ -1671,14 +1678,15 @@ async function runCompileDrizzleStaticCommand(
   // and append the KV422 finding lines to the output. (`kovo check` independently re-gates these
   // via the KV422 finding family once the facts ride into the graph JSON — see graph-output.ts.)
   const sqlSafetyErrors = sqlSafetyDiagnosticErrors(output.sqlSafetyDiagnostics);
-  if (sqlSafetyErrors.length > 0 && artifact.exitCode === 0) {
-    const findingLines = sqlSafetyErrors.map(
-      (diagnostic) => `ERROR ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
-    );
+  const sqlSafetyErrorOutput = sqlSafetyErrors
+    .map((diagnostic) => `ERROR ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`)
+    .join('\n');
+  const sqlSafetyExit = drizzleStaticSqlSafetyErrorExit(sqlSafetyErrors);
+  if (sqlSafetyExit && artifact.exitCode === 0) {
     return {
       ...artifact,
-      exitCode: 1,
-      output: `${(artifact.output ?? '').replace(/\n+$/, '')}\n${findingLines.join('\n')}\n`,
+      ...sqlSafetyExit,
+      output: `${(artifact.output ?? '').replace(/\n+$/, '')}\n${sqlSafetyErrorOutput}\n`,
     };
   }
 
