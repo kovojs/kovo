@@ -255,6 +255,28 @@ export const Cart$click = handler((event, ctx) => ctx.value + event.delta);
     ).toBe(5);
   });
 
+  it('executes generated client modules after bundling rewrites generated helper imports', () => {
+    const exports = executeGeneratedClientModule(
+      `
+import { handler } from './generated-helpers.mjs';
+export const Cart$click = handler((_event, ctx) => ctx.value);
+`,
+      {
+        runtime: {
+          handler(callback: (event: unknown, ctx: { value: number }) => number) {
+            return (event: unknown, ctx: { value: number }) => callback(event, ctx);
+          },
+        },
+      },
+    );
+
+    expect(
+      (exports.Cart$click as (event: unknown, ctx: { value: number }) => number)(undefined, {
+        value: 7,
+      }),
+    ).toBe(7);
+  });
+
   it('executes generated client artifacts by kind', () => {
     const exports = executeGeneratedClientArtifact(
       [

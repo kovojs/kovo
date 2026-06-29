@@ -627,16 +627,50 @@ export function generatedHandlerReferenceSummaryFact(
   };
 }
 
-const rewriteGeneratedRuntimeImports = (source: string): string =>
+const rewriteGeneratedRuntimeImports = (
+  source: string,
+  options: { allowBundledGeneratedImports?: boolean } = {},
+): string =>
   source.replace(
-    /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/browser(?:\/generated)?['"];\n?/g,
-    (_match, names: string) => {
-      const bindings = names
+    /import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];\n?/g,
+    (_match, names: string, importPath: string) => {
+      if (
+        importPath !== '@kovojs/browser' &&
+        importPath !== '@kovojs/browser/generated' &&
+        options.allowBundledGeneratedImports !== true
+      ) {
+        return _match;
+      }
+      const importNames = names
         .split(',')
         .map((name) => name.trim())
-        .filter(Boolean)
-        .join(', ');
-      return `const { ${bindings} } = runtime;\n`;
+        .filter(Boolean);
+      const runtimeBindings = importNames.filter((name) => {
+        const imported = (/\s+as\s+/.test(name) ? name.split(/\s+as\s+/)[0] : name)?.trim();
+        return (
+          imported === 'applyCompiledQueryUpdatePlan' ||
+          imported === 'applyDeferredStreamResponseToRuntime' ||
+          imported === 'createQueryStore' ||
+          imported === 'derive' ||
+          imported === 'DomMorphTarget' ||
+          imported === 'handler' ||
+          imported === 'installKovoLoader' ||
+          imported === 'kovoEscapeHtml'
+        );
+      });
+      if (runtimeBindings.length === 0) return _match;
+      const runtimeBindingSet = new Set(runtimeBindings);
+      const nonRuntimeBindings = importNames.filter((name) => !runtimeBindingSet.has(name));
+      const runtimeImport = `const { ${runtimeBindings
+        .map((name) => {
+          const alias = /\s+as\s+/.test(name) ? name.split(/\s+as\s+/) : undefined;
+          return alias ? `${alias[0]?.trim()}: ${alias[1]?.trim()}` : name;
+        })
+        .join(', ')} } = runtime;\n`;
+      if (nonRuntimeBindings.length === 0) return runtimeImport;
+      return `${runtimeImport}import { ${nonRuntimeBindings.join(', ')} } from ${JSON.stringify(
+        importPath,
+      )};\n`;
     },
   );
 
@@ -660,7 +694,7 @@ export function executeGeneratedClientModule(
 ): Record<string, unknown> {
   const exports: Record<string, unknown> = {};
   const moduleSource = rewriteGeneratedNamedImportsToGlobals(
-    rewriteGeneratedRuntimeImports(source),
+    rewriteGeneratedRuntimeImports(source, { allowBundledGeneratedImports: true }),
   ).replace(/export const ([A-Za-z_$][\w$]*)/g, 'const $1 = exports.$1');
 
   runInNewContext(moduleSource, {
