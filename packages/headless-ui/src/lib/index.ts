@@ -40,6 +40,9 @@ export type { PrimitiveChangeDetail, PrimitiveChangeDetailInput } from './change
 export { scheduleDeferred } from './deferred-scheduler.js';
 export type { DeferredCallback, DeferredScheduler } from './deferred-scheduler.js';
 
+export { runDialogInvokerCommand } from './dialog-invoker.js';
+export type { DialogInvokerCommand, DialogInvokerEvent } from './dialog-invoker.js';
+
 export { moveCollectionIndex, navigationIntentFromKey } from './keyboard-navigation.js';
 export type {
   CollectionOrientation,

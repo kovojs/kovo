@@ -1,3 +1,4 @@
+/** Cancelable change event detail shared by headless primitives with author-provided change hooks. */
 export interface PrimitiveChangeDetail<Reason extends string, Value = unknown> {
   readonly defaultPrevented: boolean;
   readonly reason: Reason;
@@ -5,6 +6,7 @@ export interface PrimitiveChangeDetail<Reason extends string, Value = unknown> {
   preventDefault(): void;
 }
 
+/** Input used to create a {@link PrimitiveChangeDetail}. */
 export interface PrimitiveChangeDetailInput<Reason extends string, Value> {
   reason: Reason;
   value: Value;

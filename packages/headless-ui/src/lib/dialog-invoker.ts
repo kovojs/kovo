@@ -1,3 +1,4 @@
+/** Native dialog invoker command value a trigger or close handler can dispatch. */
 export type DialogInvokerCommand = 'close' | 'request-close' | 'show-modal';
 
 interface DialogInvokerElement {
@@ -17,6 +18,7 @@ interface DialogCommandTarget {
   showModal?: () => void;
 }
 
+/** Minimal event shape accepted by dialog invoker-backed trigger and close handlers. */
 export interface DialogInvokerEvent {
   currentTarget?: unknown;
   defaultPrevented?: boolean;

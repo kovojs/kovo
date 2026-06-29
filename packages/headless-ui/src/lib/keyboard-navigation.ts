@@ -1,17 +1,23 @@
+/** Orientation model used by roving-focus and keyboard navigation helpers. */
 export type CollectionOrientation = 'both' | 'horizontal' | 'vertical';
+/** Text direction used to interpret horizontal arrow-key navigation. */
 export type TextDirection = 'ltr' | 'rtl';
 
+/** Logical navigation intent derived from keyboard input. */
 export type NavigationIntent = 'first' | 'last' | 'next' | 'previous';
 
+/** Options for deriving a logical navigation intent from a keyboard event key. */
 export interface NavigationKeyOptions {
   dir?: TextDirection;
   orientation?: CollectionOrientation;
 }
 
+/** Collection item metadata used by roving-focus movement helpers. */
 export interface NavigationItem {
   disabled?: boolean;
 }
 
+/** Options for moving within a roving-focus collection. */
 export interface MoveOptions {
   currentIndex: number;
   items: readonly NavigationItem[];

@@ -201,8 +201,10 @@ export interface OtpFieldMoveResult {
 export type OtpFieldPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
-type OtpFieldInputTarget = { value: string } | null;
-type OtpFieldRestorableTarget = { value?: string } | null;
+/** Event target shape read by `otpFieldInput`. */
+export type OtpFieldInputTarget = { value: string } | null;
+/** Event target shape whose value can be restored by keyboard/paste handlers. */
+export type OtpFieldRestorableTarget = { value?: string } | null;
 
 /**
  * Event shape consumed by the Otp Field primitive.

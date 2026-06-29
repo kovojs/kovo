@@ -1,13 +1,16 @@
+/** Buffered typeahead search state shared by collection primitives. */
 export interface TypeaheadState {
   readonly buffer: string;
   readonly updatedAt: number;
 }
 
+/** Item metadata used by typeahead matching helpers. */
 export interface TypeaheadItem {
   disabled?: boolean;
   textValue: string;
 }
 
+/** Options for finding the next item that matches a typeahead search buffer. */
 export interface TypeaheadMatchOptions {
   currentIndex?: number;
   items: readonly TypeaheadItem[];

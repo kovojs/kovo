@@ -1,3 +1,4 @@
+/** Standard `data-state` token values emitted by headless primitive attribute helpers. */
 export type PrimitiveStateToken =
   | 'active'
   | 'checked'
@@ -13,6 +14,7 @@ export type PrimitiveStateToken =
   | 'unchecked'
   | 'visible';
 
+/** Data attributes emitted by headless primitive attribute helpers. */
 export type PrimitiveDataAttributes = Readonly<Record<`data-${string}`, string>>;
 
 export function dataState(state: PrimitiveStateToken): PrimitiveDataAttributes {
