@@ -1,11 +1,9 @@
 export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
 export { compilerBuildId, type CompilerBuildIdInput } from './cache-identity.js';
-export {
-  CompileCache,
-  compileCacheKey,
-  compileComponentCacheKeyInput,
-  type CompileCacheKeyInput,
-} from './compile-cache.js';
+export { CompileCache, compileComponentCacheKeyInput } from './compile-cache.js';
+export type { CompileCacheKeyInput } from './compile-cache.js';
+/** @internal */
+export { compileCacheKey } from './compile-cache.js';
 export {
   persistentCompileCacheDir,
   readPersistentCompileCacheEntry,

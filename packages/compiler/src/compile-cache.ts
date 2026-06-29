@@ -90,7 +90,6 @@ export class CompileCache<Result> {
   }
 }
 
-/** @internal Stable cache key. When a dependency footprint is present, unrelated facts are omitted. */
 /**
  * Project-relative, OS-independent cache path. plans/fast-kovo-check2.md #B: absolute `fileName`/
  * `root` leaked the checkout/install root into the persistent compile cache key, so a CI cache
@@ -112,6 +111,7 @@ function portableCachePath(value: string | undefined | null): string | null {
   return rel;
 }
 
+/** @internal Stable compiler cache key. */
 export function compileCacheKey(input: CompileCacheKeyInput): string {
   const compileContext = input.dependencyFootprint ?? {
     ...(input.packageComponentPrefixes === undefined
