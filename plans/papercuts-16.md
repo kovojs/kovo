@@ -22,7 +22,9 @@ data/optimistic mutation flows.
 
 ### A. Stateful island authoring is blocked at the public type and shape gates
 
-- [ ] **A1 — `component({ state })` rejects ordinary JSON state in a generated app, and the `satisfies JsonValue` workaround hides state keys from KV302.** (high, framework; found by `t2-islands-live`)
+- [x] **A1 — `component({ state })` rejects ordinary JSON state in a generated app, and the `satisfies JsonValue` workaround hides state keys from KV302.** (high, framework; found by `t2-islands-live`)
+  - Fixed: `component()` now has separate stateful/stateless overloads so authored JSON state is inferred before the recursive `Serializable<State>` guard runs; state-return parsing unwraps parenthesized, `satisfies`, and assertion wrappers before collecting top-level keys.
+  - Evidence: `pnpm exec vitest run packages/core/src/component-state-types.test.ts packages/core/src/index.test.ts packages/compiler/src/state-bindings.test.ts --reporter=dot` proves inline, `satisfies JsonValue`, interface, and alias state forms compile while non-JSON state still fails, and wrapped state return objects validate `state.open`.
   - Observed behavior: `state: () => ({ open: false })` fails `tsc`/`vp check` with `TS2322: Type '() => { open: boolean; }' is not assignable to type 'never'`. Changing it to `state: () => ({ open: false }) satisfies JsonValue` still fails typecheck and also makes `build:prod` emit `KV302 ... state.open` when a state binding is present.
   - Root cause: `packages/core/src/index.ts:187-198` intersects inferred definitions with the recursive `Serializable<State>` conditional and collapses normal JSON state to `never` in app typechecking. Separately, `packages/compiler/src/scan/parse.ts:2185-2195` only records direct object-literal arrow bodies; a `SatisfiesExpression` is missed, so `packages/compiler/src/validate/bindings.ts:188-200` sees no `state.open` key.
   - Why it matters: SPEC §4.1/§4.8 present JSON island state as the normal L1 authoring path. The current public surface blocks a basic boolean state island before runtime.
@@ -31,7 +33,9 @@ data/optimistic mutation flows.
 
 ### B. Upload authoring misses a standard file input hint
 
-- [ ] **B1 — JSX `HtmlAttributes` lacks the native `accept` attribute, so typed Kovo TSX rejects `<input type="file" accept="...">`.** (low, framework; found by `t3-file-upload`)
+- [x] **B1 — JSX `HtmlAttributes` lacks the native `accept` attribute, so typed Kovo TSX rejects `<input type="file" accept="...">`.** (low, framework; found by `t3-file-upload`)
+  - Fixed: Kovo JSX `HtmlAttributes` includes `accept?: AttributeValue` for native file inputs.
+  - Evidence: `pnpm exec vitest run packages/server/src/jsx-runtime-types.test.ts --reporter=dot` proves `<input type="file" accept="application/pdf" name="receipt" />` type-checks.
   - Observed behavior: an upload form using `s.file().accept(['application/pdf']).store(...)` passes once rendered without the client hint, but adding the standard browser hint `<input type="file" accept="application/pdf" ...>` fails `tsc` with `Property 'accept' does not exist on type 'HtmlAttributes'`.
   - Root cause: `packages/server/src/jsx-runtime.ts:810-850` enumerates intrinsic `HtmlAttributes` and includes `acceptCharset`, but not `accept`; the server schema's file allowlist exists separately at `packages/server/src/schema.ts:323-342`.
   - Why it matters: server sniffing remains the security boundary, but app authors cannot provide the normal file-picker UX hint in strict Kovo TSX.
@@ -40,7 +44,9 @@ data/optimistic mutation flows.
 
 ### C. A fixed Drizzle output-schema binding path regressed
 
-- [ ] **C1 — `build:prod` again rejects direct bindings to Drizzle query `output` computed fields, reopening super-5 A1.** (high, framework; found by `t5-data-optimistic`)
+- [x] **C1 — `build:prod` again rejects direct bindings to Drizzle query `output` computed fields, reopening super-5 A1.** (high, framework; found by `t5-data-optimistic`)
+  - Fixed: the data-plane regression is covered with a compiler-derived object-form Drizzle query fixture whose `output` computed fields are bound directly in JSX.
+  - Evidence: `pnpm exec vitest run packages/server/src/vite-data-plane-gate.test.ts --reporter=dot` proves direct `{stats.total}`/`{stats.lead}`/`{stats.active}`/`{stats.archived}` bindings no longer emit KV302.
   - Observed behavior: a stats query declares `output: s.object({ active, archived, lead, statusById, total })`, but direct JSX bindings such as `{stats.total}` fail `build:prod` with KV302 for `stats.total`, `stats.lead`, `stats.active`, and `stats.archived`. Laundering through render-local constants makes the app build.
   - Root cause: KV302 comes from `packages/compiler/src/validate/bindings.ts:50-57` after the query shape lacks the declared output fields. This is the same user-visible failure class as `plans/papercuts-super-5.md` A1, which was marked fixed, so this is a regression or missed expression shape.
   - Why it matters: dashboard/summary query outputs are a normal Drizzle read shape. The workaround pushes authors toward render-local constants, the stale-coverage pattern previous ledgers tried to remove.
@@ -57,6 +63,10 @@ data/optimistic mutation flows.
 
 ## Latest Verification
 
+- `pnpm exec vitest run packages/core/src/component-state-types.test.ts packages/core/src/index.test.ts packages/compiler/src/state-bindings.test.ts packages/server/src/jsx-runtime-types.test.ts packages/server/src/vite-data-plane-gate.test.ts --reporter=dot`: 5 files / 54 tests passed for A1, B1, and C1.
+- `pnpm run check:vp`: passed.
+- `pnpm run check:api-surface`: passed with no new public API attention.
+- `git diff --check`: passed.
 - `rg -n "^- \[ \]" plans/bugz-15.md plans/papercuts-super-6.md plans/papercuts-*.md plans/bugz-*.md plans/papercut-super-*.md`: no open prior dogfood checklist items.
 - `t1-style-form`: `pnpm run check`, `pnpm run test`, `pnpm exec tsc --noEmit`, plus dev CSP/hash smoke all passed.
 - `t2-islands-live`: `pnpm exec tsc --noEmit` and `pnpm run build:prod` reproduce A1.

@@ -576,7 +576,9 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
       ),
     ).resolves.toEqual(expect.objectContaining({ map: null }));
 
-    const componentReport = captured.find((report) => report.fileName.endsWith('contact-stats.tsx'));
+    const componentReport = captured.find((report) =>
+      report.fileName.endsWith('contact-stats.tsx'),
+    );
     expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
       false,
     );

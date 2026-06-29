@@ -2189,7 +2189,10 @@ function arrowReturnObjectSource(
 ): StateReturnObjectModel | null {
   if (!ts.isArrowFunction(expression)) return null;
 
-  const body = unwrapStateReturnExpression(expression.body);
+  const returned = renderReturnExpression(expression.body);
+  if (!returned) return null;
+
+  const body = unwrapStateReturnExpression(returned);
   if (!ts.isObjectLiteralExpression(body)) return null;
 
   const start = body.getStart(sourceFile);
