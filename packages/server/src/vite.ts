@@ -798,15 +798,16 @@ const dataPlaneAnalysisCache = new Map<string, Promise<DataPlaneAnalysis>>();
 async function collectDataPlaneAnalysis(root: string, app: string): Promise<DataPlaneAnalysis> {
   // plans/fast-kovo-check2.md (#A dedup): while the `kovo` CLI is only loading app source through a
   // throwaway dev server to derive the build graph (KOVO_BUILD_GRAPH_DERIVATION=1), skip the
-  // whole-project data-plane analysis. It exists to build the runtime registry + query-shape facts
-  // the RUNNING app needs (consumed by the load/transform hooks), none of which graph derivation
-  // reads — and the CLI runs the authoritative security analysis itself in runKovoBuildCheckPreflight.
-  // The production client/server build passes run with the flag cleared, so they rebuild the registry
-  // and re-run the fail-closed gate. This removes a duplicate ~10s ts-morph pass per build.
+  // whole-project Drizzle data-plane analysis. The CLI runs the authoritative security analysis
+  // itself in runKovoBuildCheckPreflight, but graph derivation still transforms authored components
+  // and therefore still needs declared `output:` query-shape facts for §6.2/§10.2 binding
+  // validation. Keep the expensive static pass skipped while retaining the cheap source scan.
   if (process.env.KOVO_BUILD_GRAPH_DERIVATION === '1') {
+    const sourceDir = dirname(appEntryFileName(app, root));
+    const files = dataPlaneSourceFiles(sourceDir, root);
     return {
-      files: [],
-      outputQueryShapeFacts: [],
+      files,
+      outputQueryShapeFacts: await outputSchemaQueryShapeFacts(files),
       staticFacts: { queries: [], sqlSafetyDiagnostics: [], toctouFacts: [], touchGraph: {} },
     };
   }
