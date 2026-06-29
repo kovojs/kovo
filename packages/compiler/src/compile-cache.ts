@@ -129,8 +129,8 @@ export function compileCacheKey(input: CompileCacheKeyInput): string {
   // as an absolute path — relativize it FOR THE KEY ONLY (not the footprint object, which downstream
   // narrowing still uses verbatim) so the persisted compile cache is portable across checkout roots.
   const portableCompileContext =
-    typeof (compileContext as { packagePrefixDiscoveryRoot?: unknown }).packagePrefixDiscoveryRoot ===
-    'string'
+    typeof (compileContext as { packagePrefixDiscoveryRoot?: unknown })
+      .packagePrefixDiscoveryRoot === 'string'
       ? {
           ...compileContext,
           packagePrefixDiscoveryRoot: portableCachePath(
