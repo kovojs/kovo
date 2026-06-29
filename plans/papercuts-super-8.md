@@ -82,12 +82,13 @@ enhanced-mutation success body is **still** empty end-to-end despite being close
   - Repro evidence: `t5-streaming` — `/stream` with one 3 s region; `curl -w 'TTFB=%{time_starttransfer}'` ≈ 3 s; response is a single buffered body. Source: `deferred-region.ts:111-113`, `route.ts:1166`, `deferred-stream.ts:120-127`.
   - Acceptance: `<Defer>` streams the shell first and flushes each region as it resolves (chunked transfer), so TTFB is the shell's, not the slowest region's. Prove with a streaming test asserting the shell bytes arrive before the slow region.
 
-- [ ] **D2 — One throwing `<Defer>` region takes down the entire page with HTTP 500 — no per-region error isolation.** (high, framework; found by `t5-streaming`)
+- [x] **D2 — One throwing `<Defer>` region takes down the entire page with HTTP 500 — no per-region error isolation.** (high, framework; found by `t5-streaming`)
   - Observed behavior: making one `<Defer>` region's loader throw returns `500` for the **whole page**; removing the throw restores `200`. The other (healthy) regions never render.
   - Root cause: `packages/server/src/deferred-region.ts:111` `chunks()` = `Promise.all(chunks)` (fail-fast on any rejection); `:151-164` `collector.add` stores `Promise.resolve(renderRegion()).then(...)`, so a throwing `render()` yields a rejecting chunk promise that rejects the whole `Promise.all` → `route.ts:1164-1183` returns the route 500.
   - Why it matters: SPEC §8 frames `<Defer>` as a resilience/isolation primitive for expensive or independent subtrees; a single region's loader failure nuking the entire response is the opposite of isolation and makes `<Defer>` strictly riskier than inlining.
   - Repro evidence: `t5-streaming` — one throwing `<Defer render>` → whole page `500`. Source: `deferred-region.ts:111,151-164`, `route.ts:1164-1183`.
   - Acceptance: a throwing `<Defer>` region degrades to a per-region error (boundary/fallback) while the rest of the page renders. SPEC §8/§9.2.
+  - Fix evidence: `pnpm exec vitest run packages/server/src/deferred-region.test.ts packages/server/src/app-document.test.ts --reporter=dot` proves a throwing deferred region emits a per-region `state="error"` fallback chunk and the route document still returns `200` with the surrounding shell.
 
 - [ ] **D3 — A hung / never-resolving `<Defer>` region hangs the whole request indefinitely — no per-region timeout, and the shell is never delivered.** (med, framework; found by `t5-streaming`)
   - Observed behavior: a `<Defer>` region whose loader never resolves (`await new Promise(()=>{})`) pins the request forever — `curl --max-time 8 /stream` → exit 28 (timeout), the server never responds; with D1's buffering even the shell never flushes.
@@ -95,6 +96,7 @@ enhanced-mutation success body is **still** empty end-to-end despite being close
   - Why it matters: one slow/hung upstream behind a single `<Defer>` region pins a server connection/worker with no framework-level deadline — a trivial availability footgun (and with D1, it also blocks the shell).
   - Repro evidence: `t5-streaming` — one never-settling `<Defer render>` → `curl --max-time 8` exit 28, no response. Source: `deferred-region.ts:112`, `route.ts:1166`, `deferred-stream.ts:120-134`.
   - Acceptance: a per-region deadline (timeout → region error/fallback) bounds a hung region without pinning the whole request; combined with D1, the shell still flushes. SPEC §9.5.
+  - Partial fix evidence: `pnpm exec vitest run packages/server/src/deferred-region.test.ts packages/server/src/app-document.test.ts --reporter=dot` proves per-region `timeoutMs` and the default timeout bound hung regions with a `state="error"` fallback chunk. Left open because D1's shell-first streaming work is still required before the shell can flush before the timeout.
 
 ## Refuted / Not Carried Forward
 
@@ -106,4 +108,5 @@ enhanced-mutation success body is **still** empty end-to-end despite being close
 - **bugz-17 B1 (self-verified):** `publicAccess` + `cacheControl:'public'` session-reading query → anon and authed `/_q/` both `cache-control: public, max-age=300`, no `Vary`, authed body leaks `userId`; `build:prod` clean.
 - **bugz-17 B2 (self-verified):** clean prod rebuild → add-contact success body still empty, DOM stale (bugz-16 regression).
 - **B1, C1, C2, D1–D3:** independently reproduced by the track verifiers and source-confirmed (`templates/vite.config.ts:20-21`, `build-export.ts:2339,2257-2271`, `static-export-route-plan.ts:23-55`, `deferred-region.ts:111-164`, `route.ts:1166`, `deferred-stream.ts:120-134`).
+- **D2 fixed / D3 partially bounded:** `pnpm exec vitest run packages/server/src/deferred-region.test.ts packages/server/src/app-document.test.ts --reporter=dot` verifies throwing and hung deferred regions degrade to per-region error fallback chunks without a route 500 or indefinite request hang; D1 remains open for true shell-first streaming.
 - Baseline: fresh default scaffold passes `pnpm run check`. Monorepo repaired; transitive deps resolve. Throwaway apps under `/Users/mini/kovo-dogfood-pg8-20260629/` (+ `-pg8-base`) safe to delete.

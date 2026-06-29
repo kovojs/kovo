@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { trustedHtml } from '@kovojs/browser';
 
@@ -8,6 +8,10 @@ import { runWithJsxRequestContext } from './jsx-context.js';
 import { jsx } from './jsx-runtime.js';
 
 const html = async (value: unknown): Promise<string> => renderHtmlValue(await value);
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('Defer JSX primitive', () => {
   it('renders a real kovo-defer placeholder and streams rendered JSX chunks in route context', async () => {
@@ -114,6 +118,71 @@ describe('Defer JSX primitive', () => {
     );
 
     expect((await collector.chunks())[0]?.fragments[0]?.html).toBe('<strong>Ready</strong>');
+  });
+
+  it('isolates a throwing deferred region as an error chunk', async () => {
+    const collector = createDeferredRegionChunkCollector();
+
+    await expect(
+      html(
+        runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+          Defer({
+            fallback: jsx('section', { children: 'Loading reviews' }),
+            priority: 'after-paint',
+            render: () => {
+              throw new Error('review backend unavailable');
+            },
+            target: 'reviews',
+          }),
+        ),
+      ),
+    ).resolves.toContain('state="pending"');
+
+    await expect(collector.chunks()).resolves.toEqual([
+      {
+        fragments: [
+          {
+            html: '<kovo-defer target="reviews" state="error" data-kovo-region-priority="after-paint"><section>Loading reviews</section></kovo-defer>',
+            priority: 'normal',
+            target: 'reviews',
+          },
+        ],
+        priority: 'normal',
+      },
+    ]);
+  });
+
+  it('bounds a hung deferred region with a per-region timeout', async () => {
+    vi.useFakeTimers();
+    const collector = createDeferredRegionChunkCollector();
+
+    await html(
+      runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+        Defer({
+          fallback: 'Still loading',
+          priority: 'visible',
+          render: () => new Promise<never>(() => {}),
+          target: 'slow-rail',
+          timeoutMs: 5,
+        }),
+      ),
+    );
+
+    const chunks = collector.chunks();
+    await vi.advanceTimersByTimeAsync(5);
+
+    await expect(chunks).resolves.toEqual([
+      {
+        fragments: [
+          {
+            html: '<kovo-defer target="slow-rail" state="error" data-kovo-region-priority="visible">Still loading</kovo-defer>',
+            priority: 'visible',
+            target: 'slow-rail',
+          },
+        ],
+        priority: 'visible',
+      },
+    ]);
   });
 
   it('renders critical and out-of-context regions immediately without chunks', async () => {

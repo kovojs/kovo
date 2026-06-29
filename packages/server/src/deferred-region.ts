@@ -41,6 +41,8 @@ export interface DeferProps {
   render: () => ServerRenderable;
   /** Stylesheets required by the deferred region when it is inserted. */
   stylesheets?: readonly (string | StylesheetAsset)[];
+  /** Per-region render deadline before the fallback is marked failed. */
+  timeoutMs?: number;
 }
 
 /** @internal Options for {@link defer}, the string-composition route-region lowering helper. */
@@ -55,6 +57,8 @@ export interface DeferredRegionOptions {
   render: () => Promise<string> | string;
   /** Stylesheets required by the deferred region when it is inserted. */
   stylesheets?: readonly (string | StylesheetAsset)[];
+  /** Per-region render deadline before the fallback is marked failed. */
+  timeoutMs?: number;
 }
 
 /**
@@ -74,6 +78,7 @@ export function Defer(props: DeferProps): ServerRenderable {
     target: props.target,
     ...(props.priority === undefined ? {} : { priority: props.priority }),
     ...(props.stylesheets === undefined ? {} : { stylesheets: props.stylesheets }),
+    ...(props.timeoutMs === undefined ? {} : { timeoutMs: props.timeoutMs }),
   });
 }
 
@@ -92,6 +97,7 @@ export function defer(options: DeferredRegionOptions): MaybePromise<string> {
       target: options.target,
       ...(options.priority === undefined ? {} : { priority: options.priority }),
       ...(options.stylesheets === undefined ? {} : { stylesheets: options.stylesheets }),
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     }),
   );
 }
@@ -131,7 +137,10 @@ interface LowerDeferredRegionOptions<Input> {
   renderRegion: (value: Input) => MaybePromise<string>;
   stylesheets?: readonly (string | StylesheetAsset)[];
   target: string;
+  timeoutMs?: number;
 }
+
+const DEFAULT_DEFER_TIMEOUT_MS = 30_000;
 
 function lowerDeferredRegion<Input>(
   options: LowerDeferredRegionOptions<Input>,
@@ -149,18 +158,27 @@ function lowerDeferredRegion<Input>(
   const collector = currentJsxFrameworkContext()?.deferredRegions;
   if (!collector) return renderNow();
 
+  const streamPriority = deferredStreamPriority(priority);
+  const regionChunk = Promise.resolve()
+    .then(renderRegion)
+    .then(
+      (html) => ({
+        fragments: [
+          {
+            html,
+            priority: streamPriority,
+            ...(options.stylesheets === undefined ? {} : { stylesheets: options.stylesheets }),
+            target: options.target,
+          },
+        ],
+        priority: streamPriority,
+      }),
+      () => renderDeferredErrorChunk(options, priority, streamPriority),
+    );
   collector.add(
-    Promise.resolve(renderRegion()).then((html) => ({
-      fragments: [
-        {
-          html,
-          priority: deferredStreamPriority(priority),
-          ...(options.stylesheets === undefined ? {} : { stylesheets: options.stylesheets }),
-          target: options.target,
-        },
-      ],
-      priority: deferredStreamPriority(priority),
-    })),
+    withDeferredRegionTimeout(regionChunk, normalizeDeferredTimeoutMs(options.timeoutMs), () =>
+      renderDeferredErrorChunk(options, priority, streamPriority),
+    ),
   );
 
   return rendered(
@@ -168,6 +186,59 @@ function lowerDeferredRegion<Input>(
       placeholder(options.target, priority, fallback),
     ),
   );
+}
+
+async function renderDeferredErrorChunk<Input>(
+  options: LowerDeferredRegionOptions<Input>,
+  priority: Exclude<RegionPriority, 'critical'>,
+  streamPriority: DeferredPriority,
+): Promise<DeferredStreamChunk> {
+  let fallback = '';
+  try {
+    fallback = await options.renderFallback(options.fallback);
+  } catch {
+    fallback = '';
+  }
+  return {
+    fragments: [
+      {
+        html: placeholder(options.target, priority, fallback, 'error'),
+        priority: streamPriority,
+        target: options.target,
+      },
+    ],
+    priority: streamPriority,
+  };
+}
+
+function withDeferredRegionTimeout(
+  chunk: Promise<DeferredStreamChunk>,
+  timeoutMs: number,
+  onTimeout: () => Promise<DeferredStreamChunk>,
+): Promise<DeferredStreamChunk> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      void onTimeout().then(resolve, reject);
+    }, timeoutMs);
+    chunk.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function normalizeDeferredTimeoutMs(value: number | undefined): number {
+  if (value === undefined) return DEFAULT_DEFER_TIMEOUT_MS;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError('Defer timeoutMs must be a non-negative finite number');
+  }
+  return value;
 }
 
 function renderDeferredRegionRenderable(value: ServerRenderable | undefined): MaybePromise<string> {
@@ -182,8 +253,9 @@ function placeholder(
   target: string,
   priority: Exclude<RegionPriority, 'critical'>,
   fallback: string,
+  state = 'pending',
 ): string {
-  return `<kovo-defer target="${escapeAttribute(target)}" state="pending" data-kovo-region-priority="${escapeAttribute(priority)}">${fallback}</kovo-defer>`;
+  return `<kovo-defer target="${escapeAttribute(target)}" state="${escapeAttribute(state)}" data-kovo-region-priority="${escapeAttribute(priority)}">${fallback}</kovo-defer>`;
 }
 
 function rendered(value: MaybePromise<string>): MaybePromise<RenderedHtml> {

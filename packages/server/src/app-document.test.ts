@@ -539,6 +539,85 @@ describe('server app document boundary', () => {
     expect(body).toContain('<aside class="product-rail">Rail ready</aside>');
   });
 
+  it('keeps the route document alive when one deferred region throws', async () => {
+    const productRoute = route('/products/:id', {
+      async page({ params }) {
+        return renderedHtml(
+          `<main><h1>Product ${params.id}</h1>` +
+            (await defer({
+              fallback: '<section aria-busy="true">Loading reviews</section>',
+              priority: 'after-paint',
+              render: () => {
+                throw new Error('review service unavailable');
+              },
+              target: `reviews:${params.id}`,
+            })) +
+            '</main>',
+        );
+      },
+    });
+    const request = new Request('https://shop.example.test/products/p1');
+    const app = createApp({ routes: [productRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: { id: 'p1' },
+      request,
+      route: productRoute,
+      url: new URL(request.url),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain('<h1>Product p1</h1>');
+    expect(response.body).toContain(
+      '<kovo-fragment target="reviews:p1" priority="normal"><kovo-defer target="reviews:p1" state="error"',
+    );
+    expect(response.body).toContain('<section aria-busy="true">Loading reviews</section>');
+    expect(response.body).not.toContain('review service unavailable');
+  });
+
+  it('bounds a hung deferred route region with a per-region timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const productRoute = route('/products/:id', {
+        async page({ params }) {
+          return renderedHtml(
+            `<main><h1>Product ${params.id}</h1>` +
+              (await defer({
+                fallback: '<aside aria-busy="true">Loading rail</aside>',
+                priority: 'visible',
+                render: () => new Promise<never>(() => {}),
+                target: `rail:${params.id}`,
+                timeoutMs: 5,
+              })) +
+              '</main>',
+          );
+        },
+      });
+      const request = new Request('https://shop.example.test/products/p1');
+      const app = createApp({ routes: [productRoute] });
+
+      const response = renderAppRouteDocumentResponse({
+        app,
+        params: { id: 'p1' },
+        request,
+        route: productRoute,
+        url: new URL(request.url),
+      });
+      await vi.advanceTimersByTimeAsync(5);
+
+      await expect(response).resolves.toMatchObject({ status: 200 });
+      const body = (await response).body as string;
+      expect(body).toContain('<h1>Product p1</h1>');
+      expect(body).toContain(
+        '<kovo-fragment target="rail:p1" priority="visible"><kovo-defer target="rail:p1" state="error"',
+      );
+      expect(body).toContain('<aside aria-busy="true">Loading rail</aside>');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('renders critical regions immediately without a deferred stream', async () => {
     const productRoute = route('/products/:id', {
       async page({ params }) {
