@@ -327,6 +327,28 @@ describe('server app matched dispatch boundary', () => {
     expect(handlerCalls).toBe(1);
   });
 
+  it('returns 405 Allow for a method mismatch on an existing endpoint path', async () => {
+    let handlerCalls = 0;
+    const status = endpoint('/status', {
+      handler() {
+        handlerCalls += 1;
+        return new Response('ok');
+      },
+      method: 'GET',
+      reason: 'endpoint method mismatch dispatch test',
+      response: rawTextResponse,
+    });
+    const app = createApp({ endpoints: [status] });
+    const request = new Request('https://shop.example.test/status', { method: 'POST' });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('GET');
+    await expect(response.text()).resolves.toBe('Method Not Allowed');
+    expect(handlerCalls).toBe(0);
+  });
+
   it('owns SPEC §9.5 page method rejection after route matching', async () => {
     const product = route('/products/:id', {});
     const app = createApp({ routes: [product] });

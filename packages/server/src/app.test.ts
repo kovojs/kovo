@@ -44,6 +44,12 @@ const rawTextResponse = {
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
 
+const rawJsonResponse = {
+  appOwnedSafety: true,
+  body: 'json',
+  cache: 'no-store',
+} satisfies EndpointResponsePosture;
+
 function expectReservedSystemResponsePosture(response: Response, buildToken: string): void {
   expect(response.headers.get('cache-control')).toBe('private, no-store');
   expect(response.headers.get('vary')).toBe('Cookie');
@@ -775,7 +781,8 @@ describe('server createApp request shell', () => {
 
     expect(response.status).toBe(500);
     const body = await response.text();
-    expect(body).toContain('<h1>Server Error</h1>');
+    expect(body).toBe('Server Error');
+    expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
     expect(body).not.toContain('private endpoint detail');
     expect(body).not.toContain('private 500 shell detail');
     expect(onError).toHaveBeenCalledWith(endpointError, {
@@ -783,12 +790,7 @@ describe('server createApp request shell', () => {
       request,
       url: '/status',
     });
-    expect(onError).toHaveBeenCalledWith(shellError, {
-      operation: 'error-shell',
-      request,
-      status: 500,
-      url: '/status',
-    });
+    expect(onError).not.toHaveBeenCalledWith(shellError, expect.anything());
   });
 
   // SPEC §9.5: the request shell owns the pre-dispatch body-size gate because
@@ -1387,7 +1389,7 @@ describe('server createApp request shell', () => {
     await expect(response.text()).resolves.toBe('endpoint');
   });
 
-  it('reports app catch-all exceptions without leaking endpoint internals', async () => {
+  it('reports endpoint exceptions without leaking internals or rendering the route shell', async () => {
     const thrown = new Error('private endpoint detail');
     const onError = vi.fn();
     const statusEndpoint = endpoint('/status', {
@@ -1405,12 +1407,41 @@ describe('server createApp request shell', () => {
 
     expect(response.status).toBe(500);
     const body = await response.text();
-    expect(body).toContain('<h1>Server Error</h1>');
+    expect(body).toBe('Server Error');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
     expect(body).not.toContain('private endpoint detail');
     expect(onError).toHaveBeenCalledWith(thrown, {
       operation: 'app-request',
       request,
       url: '/status?check=true',
+    });
+  });
+
+  it('reports thrown JSON endpoint exceptions as stable JSON 500 responses', async () => {
+    const thrown = new Error('private JSON endpoint detail');
+    const onError = vi.fn();
+    const statusEndpoint = endpoint('/status.json', {
+      handler() {
+        throw thrown;
+      },
+      method: 'GET',
+      reason: 'failing JSON endpoint error reporting',
+      response: rawJsonResponse,
+    });
+    const handler = createRequestHandler(createApp({ endpoints: [statusEndpoint], onError }));
+    const request = new Request('https://example.test/status.json?check=true');
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('content-type')).toBe('application/json');
+    await expect(response.json()).resolves.toEqual({ code: 'SERVER_ERROR', payload: {} });
+    expect(onError).toHaveBeenCalledWith(thrown, {
+      operation: 'app-request',
+      request,
+      url: '/status.json?check=true',
     });
   });
 

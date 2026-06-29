@@ -6,6 +6,11 @@ import { redirectLocationHeader, routeResponseToWebResponse } from './response.j
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { kovoSecurityReportResponse } from './reporting.js';
 import type { KovoApp } from './app-types.js';
+import type {
+  EndpointCachePosture,
+  EndpointResponseBodyPosture,
+  EndpointResponsePosture,
+} from './endpoint.js';
 import { appSystemResponse } from './app-system-response.js';
 import {
   preDispatchLoadShedResponse,
@@ -76,6 +81,9 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       request: limitedRequest,
       url: appRequestUrl(url),
     });
+    if (match.kind === 'endpoint') {
+      return endpointServerErrorResponse(match.endpoint.response);
+    }
     return routeResponseToWebResponse(
       await renderAppErrorDocumentResponse(app, request, 500),
       request,
@@ -111,4 +119,28 @@ function loadShedSurface(kind: string): LoadShedSurface {
 
 function systemResponseBuildToken(app: KovoApp, surface: LoadShedSurface): string | undefined {
   return surface === 'mutation' || surface === 'query' ? app.clientModules.buildToken() : undefined;
+}
+
+function endpointServerErrorResponse(posture: EndpointResponsePosture): Response {
+  const headers = endpointErrorHeaders(posture.cache);
+  const body = posture.body;
+  if (endpointBodyIncludes(body, 'json')) {
+    return Response.json({ code: 'SERVER_ERROR', payload: {} }, { headers, status: 500 });
+  }
+  return new Response('Server Error', {
+    headers: { ...headers, 'Content-Type': 'text/plain; charset=utf-8' },
+    status: 500,
+  });
+}
+
+function endpointErrorHeaders(cache: EndpointCachePosture): Record<string, string> {
+  if (cache === 'no-store') return { 'Cache-Control': 'no-store' };
+  if (cache === 'private') return { 'Cache-Control': 'private, no-store', Vary: 'Cookie' };
+  if (cache === 'public') return { 'Cache-Control': 'public' };
+  if (cache === 'revalidated') return { 'Cache-Control': 'no-cache' };
+  return {};
+}
+
+function endpointBodyIncludes(body: EndpointResponseBodyPosture, expected: 'json'): boolean {
+  return Array.isArray(body) ? body.includes(expected) : body === expected;
 }

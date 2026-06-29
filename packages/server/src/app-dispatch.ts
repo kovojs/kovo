@@ -80,6 +80,10 @@ export async function dispatchMatchedAppRequest({
   }
 
   if (match.kind === 'endpoint') {
+    if (!match.methodAllowed) {
+      return methodNotAllowedWebResponse(request, match.allowedMethods);
+    }
+
     const endpointRequest =
       app.db === undefined ? request : await resolveLifecycleRequest(request, { db: app.db });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
