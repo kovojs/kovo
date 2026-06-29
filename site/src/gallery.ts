@@ -135,7 +135,11 @@ async function ensureGalleryInteractiveServerArtifacts(): Promise<() => void> {
     const { renderSource } = (await import(
       `data:text/javascript;base64,${Buffer.from(serverFile.source).toString('base64')}`
     )) as { renderSource: () => string };
-    writeFileSync(path.join(generatedDir, fileName), renderSource(), 'utf8');
+    writeFileSync(
+      path.join(generatedDir, fileName),
+      normalizeMovedGalleryInteractiveArtifact(renderSource()),
+      'utf8',
+    );
   }
 
   return () => {
@@ -148,6 +152,7 @@ async function ensureGalleryInteractiveServerArtifacts(): Promise<() => void> {
 
 interface SupportRegistration {
   headlessUiModuleHrefs: ReadonlyMap<string, string>;
+  primitiveActionsHref: string;
   runtimeHref: string;
 }
 
@@ -174,22 +179,15 @@ function registerGalleryInteractiveSupportClientModules(
   moduleHrefs.set(runtimePath, runtimeHref);
 
   const modules: Array<{ pathName: string; source: string }> = [];
+  for (const sourcePath of ['generated.ts', 'primitive-internal.ts']) {
+    modules.push(headlessUiClientModuleSource(sourcePath));
+  }
   for (const directory of ['lib', 'primitives']) {
     const dirPath = path.join(headlessUiSourceRoot, directory);
     for (const entry of sortedDirectoryEntries(dirPath)) {
       if (!entry.endsWith('.ts') || entry.endsWith('.test.ts')) continue;
 
-      const pathName = `/c/packages/headless-ui/src/${directory}/${entry.replace(/\.ts$/, '.js')}`;
-      const source = readFileSync(path.join(dirPath, entry), 'utf8');
-      const transpiled = ts.transpileModule(source, {
-        compilerOptions: {
-          importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
-          module: ts.ModuleKind.ES2022,
-          target: ts.ScriptTarget.ES2022,
-        },
-        fileName: entry,
-      }).outputText;
-      modules.push({ pathName, source: transpiled });
+      modules.push(headlessUiClientModuleSource(`${directory}/${entry}`));
     }
   }
 
@@ -206,7 +204,51 @@ function registerGalleryInteractiveSupportClientModules(
     moduleHrefs.set(module.pathName, href);
   }
 
-  return { headlessUiModuleHrefs: moduleHrefs, runtimeHref };
+  const primitiveActionsHref = registerPrimitiveActionsClientModule(clientModules, moduleHrefs);
+
+  return { headlessUiModuleHrefs: moduleHrefs, primitiveActionsHref, runtimeHref };
+}
+
+function headlessUiClientModuleSource(sourcePath: string): { pathName: string; source: string } {
+  const pathName = `/c/packages/headless-ui/src/${sourcePath.replace(/\.ts$/, '.js')}`;
+  const source = readFileSync(path.join(headlessUiSourceRoot, sourcePath), 'utf8');
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: sourcePath,
+  }).outputText;
+  return { pathName, source: transpiled };
+}
+
+function registerPrimitiveActionsClientModule(
+  clientModules: GalleryDeps['clientModules'],
+  headlessUiModuleHrefs: ReadonlyMap<string, string>,
+): string {
+  const pathName = '/c/examples/gallery/src/primitive-actions.js';
+  const rawSource = readFileSync(
+    path.join(repoRoot, 'examples/gallery/src/primitive-actions.ts'),
+    'utf8',
+  );
+  const source = rewriteGalleryPrimitiveActionsImports(
+    ts.transpileModule(rawSource, {
+      compilerOptions: {
+        importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+        module: ts.ModuleKind.ES2022,
+        target: ts.ScriptTarget.ES2022,
+      },
+      fileName: 'primitive-actions.ts',
+    }).outputText,
+    headlessUiModuleHrefs,
+  );
+
+  return clientModules.put({
+    path: pathName,
+    source,
+    version: contentHash(source).slice(0, 8),
+  });
 }
 
 /** Register the compiled interactive-gallery client modules with the same path +
@@ -287,10 +329,18 @@ function compileGalleryInteractiveClientModule(demoName: string, fileName: strin
   return clientSource;
 }
 
+function normalizeMovedGalleryInteractiveArtifact(source: string): string {
+  return source.replaceAll('../primitive-actions.js', '../../primitive-actions.js');
+}
+
 function rewriteGalleryClientImports(source: string, support: SupportRegistration): string {
   return source
     .replaceAll("from '@kovojs/browser/generated';", `from '${support.runtimeHref}';`)
     .replaceAll("from '@kovojs/browser';", `from '${support.runtimeHref}';`)
+    .replace(
+      /from (["'])(?:\.\.\/primitive-actions|\.\.\/\.\.\/primitive-actions)\.js\1;/g,
+      `from '${support.primitiveActionsHref}';`,
+    )
     .replace(
       /from (["'])@kovojs\/(?:headless-ui|ui)\/([a-z0-9-]+)\1;/g,
       (_match, _quote: string, family: string) => {
@@ -305,6 +355,42 @@ function rewriteGalleryClientImports(source: string, support: SupportRegistratio
         return `from '${href}';`;
       },
     );
+}
+
+function rewriteGalleryPrimitiveActionsImports(
+  source: string,
+  headlessUiModuleHrefs: ReadonlyMap<string, string>,
+): string {
+  return source
+    .replaceAll(
+      "from '@kovojs/headless-ui/generated';",
+      `from '${headlessUiClientModuleHref(headlessUiModuleHrefs, 'generated')}';`,
+    )
+    .replaceAll(
+      "from '@kovojs/headless-ui/internal/primitive';",
+      `from '${headlessUiClientModuleHref(headlessUiModuleHrefs, 'primitive-internal')}';`,
+    )
+    .replace(
+      /from (["'])@kovojs\/headless-ui\/([a-z0-9-]+)\1;/g,
+      (_match, _quote: string, family: string) => {
+        return `from '${headlessUiClientModuleHref(headlessUiModuleHrefs, `primitives/${family}`)}';`;
+      },
+    );
+}
+
+function headlessUiClientModuleHref(
+  headlessUiModuleHrefs: ReadonlyMap<string, string>,
+  sourcePathWithoutExtension: string,
+): string {
+  const href = headlessUiModuleHrefs.get(
+    `/c/packages/headless-ui/src/${sourcePathWithoutExtension}.js`,
+  );
+  if (href === undefined) {
+    throw new Error(
+      `site app shell: missing gallery headless UI client module for ${sourcePathWithoutExtension}.`,
+    );
+  }
+  return href;
 }
 
 function galleryInteractiveClientModuleVersion(source: string): string {
