@@ -70,17 +70,6 @@ export type AuthoredOptimisticEntry<Input = unknown, Value = unknown> =
   | OptimisticEntry<Input, Value>
   | KeyedOptimisticEntry<Input, Value>;
 
-type MutationKey<Definition> = Definition extends Form<infer Key, any, any> ? Key : never;
-
-type InvalidatedQueryNames<Definition> =
-  MutationKey<Definition> extends keyof InvalidationSets
-    ? Extract<InvalidationSets[MutationKey<Definition>], Extract<keyof QueryRegistry, string>>
-    : never;
-
-type InvalidatedQueryValues<Definition> = {
-  [QueryName in InvalidatedQueryNames<Definition>]: QueryRegistry[QueryName];
-};
-
 /**
  * The exhaustiveness-checked optimistic plan for a mutation form. Keyed by the
  * queries the mutation invalidates, each entry is either a pure
@@ -103,7 +92,13 @@ type InvalidatedQueryValues<Definition> = {
  */
 export type OptimisticFor<
   Definition extends Form<string, any, any>,
-  QueryValues extends Record<string, unknown> = InvalidatedQueryValues<Definition>,
+  QueryValues extends Record<string, unknown> = {
+    [QueryName in Definition extends Form<infer Key, any, any>
+      ? Key extends keyof InvalidationSets
+        ? Extract<InvalidationSets[Key], Extract<keyof QueryRegistry, string>>
+        : never
+      : never]: QueryRegistry[QueryName];
+  },
 > = Omit<OptimisticPlan<FormInput<Definition>>, 'transforms'> & {
   transforms: {
     [QueryName in keyof QueryValues]: OptimisticEntry<

@@ -266,7 +266,8 @@ verifier IR, so do NOT; gate-tightening; 9D browser option-graph + headless mach
 
 ### 9D — Narrowing passes (type redesign; larger)
 
-- [ ] **`browser/client` option graph 72 → ~8.** Retype `KovoLoaderOptions.root` as `Document | Element`; move `CompiledQuery*`/`Morph*`/wire-parser shapes to `@kovojs/browser/generated`; delete the `dom-like.ts` `*Like` duck-types. (`loader.ts:38`, `dom-like.ts`.)
+- [x] **`browser/client` option graph current leaks closed.** Keep the app-facing client value surface small, make the leaf types named by `KovoLoaderOptions`/`KovoLoader` public on `./client`, and keep generated query/clock ABI types on `./generated` as well.
+  - Evidence 2026-06-29: the current recursive-publicness baseline has zero `@kovojs/browser./client` entries after adding missing leaf type re-exports and inlining root `OptimisticFor` helper aliases; `pnpm --filter @kovojs/browser exec vitest --run --reporter=dot`, `pnpm run check:api-surface`, `pnpm run check`, and `git diff --check` passed.
 - [ ] **`headless-ui` machinery types: DOCUMENT/narrow, do NOT internalize.** Per-primitive `tsc`-assisted pass — document the `*State`/`*ChangeResult`/`*PrimitiveAttributes`/… types forced by kept `*Attributes`/handler signatures; narrow the open `Record<string, boolean|string>` tail of `*PrimitiveAttributes` to known keys; demote only the genuinely-unreferenced ones. (Overturned-from-remove; ~430 upper bound on review scope.)
 - [x] **`test/html-fragment`: move the kovo-wire-shape extractor family** (`kovoFragmentFacts`/`kovoQueryFacts`/`documentQueryScriptBehaviorFact`/`htmlMainMarkerFact` + their `*Fact` types) to `@kovojs/test/internal/*`; keep the generic `html*` element/form/key extractors public.
 

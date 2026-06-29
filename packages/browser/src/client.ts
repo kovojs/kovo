@@ -15,6 +15,7 @@ export type { BrowserKovoRoot, CreateBrowserKovoRootOptions } from './browser-ro
 export type { BrowserEnhancedMutationOptions, KovoLoader, KovoLoaderOptions } from './loader.js';
 export type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 export type { QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
+export type { ClockUpdateContext, ClockUpdatePlan, ClockUpdateSpec } from './clock-tick-bus.js';
 
 // --- DOM-shape supporting types named by the loader option surface ---
 export type {
@@ -44,6 +45,7 @@ export type {
 
 // --- Root/lifecycle/observer types named by the loader option surface ---
 export type { FragmentTargetRoot } from './fragment-targets.js';
+export type { IslandSignalScope } from './handler-context.js';
 export type { ImportHandlerModule } from './handlers.js';
 export type {
   LoaderLifecycleTarget,
@@ -82,6 +84,7 @@ export type {
   CompiledQueryDerive,
   CompiledQueryStamp,
   CompiledQueryTemplateStamp,
+  CompiledQueryUpdateContext,
   CompiledQueryUpdatePlan,
   CompiledQueryUpdatePlans,
   QueryBindingElement,
