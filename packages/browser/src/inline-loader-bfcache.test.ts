@@ -7,8 +7,10 @@ import { inlineSourceInstallCases, type InlineSourceInstall } from './inline-loa
 // session-dependent document — one carrying the per-principal kovo-session fingerprint meta that
 // document-core stamps only for guarded/session-dependent docs — MUST revalidate with a full server
 // reload (location.reload) rather than presenting the prior principal's restored DOM. Anonymous
-// documents carry no such meta and register no handler. This drives every generated/extracted
-// installer variant so the regenerated inline-loader.ts artifact stays in parity.
+// documents carry no such meta, so they do not register the reload defense. This drives every
+// generated/extracted installer variant so the regenerated inline-loader.ts artifact stays in
+// parity. Anonymous documents may still register query-refresh liveness listeners; the bfcache
+// reload defense stays gated on the kovo-session meta.
 
 type Listener = (event: unknown) => void | Promise<void>;
 
@@ -88,10 +90,11 @@ describe.each(inlineSourceInstallCases)(
       });
     });
 
-    it('registers no pageshow handler for an anonymous document (no kovo-session meta)', () => {
+    it('does not reload a persisted bfcache restore of an anonymous document', () => {
       withInstalledInlineLoader({ sessionDependent: false, install }, ({ pageShow, reload }) => {
-        // SPEC §780: anonymous/exportable documents stay fully bfcache-eligible.
-        expect(pageShow).toBeUndefined();
+        // SPEC §780: anonymous/exportable documents do not install the session reload defense.
+        pageShow?.({ persisted: true, type: 'pageshow' });
+        pageShow?.({ persisted: false, type: 'pageshow' });
         expect(reload).not.toHaveBeenCalled();
       });
     });
