@@ -1,4 +1,5 @@
 export { createApp, createRequestHandler } from './app.js';
+export { createElement } from './jsx-runtime.js';
 // SPEC §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot env/secret
 // validation at the createApp chokepoint. `CreateAppBootError` is the typed boot
 // refusal a deploy/test catches; `committedSecretWaiver` is the audited escape for

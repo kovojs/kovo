@@ -218,6 +218,29 @@ export function jsxDEV(
   return jsx(type, props, key);
 }
 
+/**
+ * Classic JSX factory compatibility for build-tool transforms that lower Kovo-authored TSX to
+ * `createElement(...)` instead of the automatic JSX runtime. Prefer `@kovojs/server/jsx-runtime`
+ * for authored TSX configuration; this function delegates to the same server renderer.
+ */
+export function createElement(
+  type: unknown,
+  props: Record<string, unknown> | null,
+  ...children: unknown[]
+): unknown {
+  const normalizedProps: JsxProps = { ...(props ?? {}) };
+  if (children.length === 1) {
+    normalizedProps.children = children[0] as JsxChild;
+  } else if (children.length > 1) {
+    normalizedProps.children = children as JsxChild[];
+  }
+  return jsx(
+    type as JsxComponent | KovoJsxComponent | string,
+    normalizedProps,
+    normalizedProps.key,
+  );
+}
+
 function renderFunctionComponentResult(value: unknown): MaybePromise<RenderedHtml | object> {
   if (isPromiseLike(value)) return value.then(renderFunctionComponentResult);
   if (isStructuredDocumentValue(value)) return value;

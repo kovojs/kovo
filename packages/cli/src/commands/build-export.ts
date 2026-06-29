@@ -1717,10 +1717,18 @@ async function bundleKovoServerHandler(
     stylesheetAssets?: KovoBuildStylesheetAssets;
   },
 ): Promise<string> {
-  const [{ lowerStandaloneSourceDerivedRegistryDeclarations }, { build }] = await Promise.all([
+  const [
+    { kovoVitePlugin },
+    { lowerStandaloneSourceDerivedRegistryDeclarations },
+    { build },
+  ] = await Promise.all([
+    import('@kovojs/compiler'),
     import('@kovojs/compiler/internal'),
     import('vite-plus'),
   ]);
+  const kovoPlugin = kovoVitePlugin({
+    include: [kovoBuildAppSourceFilter(appModulePath, process.cwd())],
+  });
   const stylesheetAssets = options.stylesheetAssets ?? emptyKovoBuildStylesheetAssets();
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-build-'));
   const entryPath = join(tempDir, 'entry.mjs');
@@ -1748,12 +1756,23 @@ async function bundleKovoServerHandler(
         target: 'node22',
       },
       configFile: false,
+      esbuild: {
+        jsx: 'automatic',
+        jsxImportSource: '@kovojs/server',
+      },
       logLevel: 'silent',
+      oxc: {
+        jsx: {
+          importSource: '@kovojs/server',
+          runtime: 'automatic',
+        },
+      },
       plugins: [
         sourceDerivedRegistryVitePlugin(
           process.cwd(),
           lowerStandaloneSourceDerivedRegistryDeclarations,
         ),
+        kovoPlugin,
         bundledUndiciRuntimeVitePlugin(),
       ],
       resolve: {
@@ -1777,6 +1796,20 @@ async function bundleKovoServerHandler(
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+}
+
+function kovoBuildAppSourceFilter(
+  appModulePath: string,
+  root: string,
+): (fileName: string) => boolean {
+  const appDir = slashPath(relative(root, dirname(appModulePath))).replace(/\/+$/, '');
+  const rootPrefix = `${slashPath(root).replace(/^\/+/, '').replace(/\/+$/, '')}/`;
+  return (fileName) => {
+    const normalized = slashPath(fileName).replace(/^\/+/, '');
+    if (normalized.startsWith(rootPrefix)) return false;
+    if (appDir === '' || appDir === '.') return !normalized.startsWith('..');
+    return normalized === appDir || normalized.startsWith(`${appDir}/`);
+  };
 }
 
 const bundledUndiciRuntimeModuleId = '\0kovo-bundled-undici-runtime';

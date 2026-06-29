@@ -18,7 +18,7 @@ from this pass is filed in `plans/bugz-12.md`.
 
 ### A. Production Build Parity
 
-- [ ] **Production build transforms lowered component TSX to a classic
+- [x] **Production build transforms lowered component TSX to a classic
       `createElement` import from `@kovojs/server`.** (high, framework
       dev-tooling; found by `live-optimistic-cache`)
   - Observed behavior: a query-backed component app passed `vp check`, tests,
@@ -51,6 +51,11 @@ from this pass is filed in `plans/bugz-12.md`.
     succeeds after clearing `.kovo/cache`; focused compiler coverage proves
     files with both `@jsxImportSource` and `@jsxRuntime automatic` remain on the
     automatic JSX runtime.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/structural-jsx-ir.test.ts --reporter=dot`
+    passed on 2026-06-29; `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts
+    packages/cli/src/index.kovo-build.test.ts -t "classic createElement|bundles imported TSX route components" --reporter=dot`
+    passed on 2026-06-29; `/Users/mini/kovo-dogfood-20260629-exhaustive/live-optimistic-cache`
+    `rm -rf .kovo/cache dist && pnpm run build:prod` passed on 2026-06-29.
 
 ### B. Error Shell Contract
 

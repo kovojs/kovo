@@ -182,6 +182,78 @@ describe('kovo build', () => {
     }
   });
 
+  it('bundles imported TSX route components with the Kovo automatic JSX runtime', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-tsx-route-component-'));
+    const appPath = join(root, 'app.ts');
+    const componentPath = join(root, 'src/contact-card.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, publicAccess, route } from '@kovojs/server';
+
+import { ContactCard } from './src/contact-card.js';
+
+export default createApp({
+  routes: [
+    route('/contacts', {
+      access: publicAccess('tsx route component fixture'),
+      page: () => ContactCard({ name: 'Ada' }),
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        componentPath,
+        `
+/** @jsxImportSource @kovojs/server */
+/** @jsxRuntime automatic */
+export function ContactCard(props: { name: string }) {
+  return <main><strong>{props.name}</strong></main>;
+}
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+
+      try {
+        const response = await fetch(`${origin}/contacts`);
+        const body = await response.text();
+        expect(response.status, body).toBe(200);
+        expect(body).toContain('<main><strong>Ada</strong></main>');
+      } finally {
+        await close(server);
+      }
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('fails before artifact emission when the app TypeScript project has type errors', async () => {
     const root = mkdtempSync(join(repoRoot, 'tmp-kovo-build-ts-preflight-'));
     const appDir = join(root, 'src');
