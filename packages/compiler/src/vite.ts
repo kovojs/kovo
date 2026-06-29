@@ -689,19 +689,32 @@ function componentLocalQueryShapeFacts(
 
   const factsByQuery = new Map(facts.map((fact) => [fact.query, fact]));
   const model = parseComponentModule(fileName, source);
-  const aliases = allComponentOptionObjectEntries(model, 'queries')
-    .map((entry): QueryShapeFact | null => {
-      const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
-      if (!queryExpression || queryExpression === entry.key) return null;
-      const sourceFact =
-        factsByQuery.get(queryExpression) ??
-        factsByQuery.get(importedQueryDerivedKey(model, fileName, queryExpression) ?? '');
-      if (!sourceFact) return null;
-      return { ...sourceFact, query: entry.key };
-    })
-    .filter((fact): fact is QueryShapeFact => fact !== null);
+  const aliases = uniqueQueryShapeFacts(
+    allComponentOptionObjectEntries(model, 'queries')
+      .map((entry): QueryShapeFact | null => {
+        const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
+        if (!queryExpression || queryExpression === entry.key) return null;
+        if (factsByQuery.has(entry.key)) return null;
+        const sourceFact =
+          factsByQuery.get(queryExpression) ??
+          factsByQuery.get(importedQueryDerivedKey(model, fileName, queryExpression) ?? '');
+        if (!sourceFact) return null;
+        return { ...sourceFact, query: entry.key };
+      })
+      .filter((fact): fact is QueryShapeFact => fact !== null),
+  );
 
   return aliases.length === 0 ? facts : [...facts, ...aliases];
+}
+
+function uniqueQueryShapeFacts(facts: readonly QueryShapeFact[]): QueryShapeFact[] {
+  const seen = new Set<string>();
+  return facts.filter((fact) => {
+    const key = `${fact.query}\0${fact.source}\0${JSON.stringify(fact.shape)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function importedQueryDerivedKey(

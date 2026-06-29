@@ -874,6 +874,53 @@ export const ProductList = component({
     );
   });
 
+  it('deduplicates component-local query-shape aliases repeated across components', async () => {
+    const compileComponentModule = vi.fn(() => ({
+      files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+    }));
+    const queryShapeFacts = [
+      {
+        query: 'queries/product-grid-query',
+        shape: { name: 'string' as const },
+        source: 'src/queries.ts:63',
+      },
+    ];
+    const plugin = createKovoVitePlugin(compileComponentModule, { queryShapeFacts });
+
+    await plugin.transform(
+      `
+import { component } from '@kovojs/core';
+import { productGridQuery } from '../queries';
+
+export const ProductGrid = component({
+  queries: { productGrid: productGridQuery },
+  render: () => <span data-bind="productGrid.name">Coffee</span>,
+});
+
+export const FeaturedProductGrid = component({
+  queries: { productGrid: productGridQuery },
+  render: () => <strong data-bind="productGrid.name">Coffee</strong>,
+});
+`,
+      'src/components/product-grid.tsx',
+    );
+
+    const passedFacts = compileComponentModule.mock.calls[0]?.[0]?.queryShapeFacts ?? [];
+    expect(compileComponentModule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryShapeFacts: expect.arrayContaining([
+          queryShapeFacts[0],
+          {
+            query: 'productGrid',
+            shape: { name: 'string' },
+            source: 'src/queries.ts:63',
+          },
+        ]),
+      }),
+    );
+    expect(passedFacts.filter((fact) => fact.query === 'productGrid')).toHaveLength(1);
+  });
+
   it('passes external query-shape facts through aliases in every component in a module', async () => {
     const compileComponentModule = vi.fn(() => ({
       files: [{ kind: 'server', source: 'export function renderSource() {}' }],
