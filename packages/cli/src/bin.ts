@@ -46,20 +46,21 @@ const { mainAsync } = await import('./index.js');
 // drain on handles the run can't reach (a loaded app module's top-level resources such
 // as a PGlite client, plus vite-plus build servers). See plans/fast-kovo-check2.md #1:
 // this collapsed a ~14.3s warm `kovo build` to ~3.6s with byte-identical diagnostics.
+// NOTE: this file is also copied verbatim to a `.mjs` and run as plain JavaScript by the
+// "does not respawn for a compiled JavaScript bin entrypoint" test, so it must stay free of
+// TypeScript-only syntax (no type annotations / type arguments). Lean on contextual typing.
 const isLongLivedCommand = process.argv[2] === 'mcp';
-
-/** Flush a writable so a forced `process.exit` cannot truncate buffered output. */
-function flushStream(stream: NodeJS.WriteStream): Promise<void> {
-  return new Promise((resolve) => {
-    // The callback for an empty write fires once the stream's internal buffer has
-    // drained to the underlying fd, so prior synchronous writes are guaranteed out.
-    stream.write('', () => resolve());
-  });
-}
 
 void mainAsync().then(async (exitCode) => {
   process.exitCode = exitCode;
   if (isLongLivedCommand) return;
-  await Promise.all([flushStream(process.stdout), flushStream(process.stderr)]);
+  // Flush stdout/stderr (an empty write's callback fires after the buffer drains to the fd)
+  // so the forced exit cannot truncate output, then exit promptly instead of waiting out the
+  // post-result event-loop drain on handles the run can't reach.
+  await Promise.all(
+    [process.stdout, process.stderr].map(
+      (stream) => new Promise((resolve) => stream.write('', () => resolve(undefined))),
+    ),
+  );
   process.exit(exitCode);
 });
