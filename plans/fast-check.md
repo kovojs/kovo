@@ -1,6 +1,6 @@
 # Plan: Make `kovo check` / `kovo build` fast
 
-Status: **in progress / shared project, fast path, and analyzer-surface trims implemented; cache and pipeline work open**
+Status: **in progress / shared project, fast path, analyzer-surface trims, cache, pipeline reuse, and CLI dist-startup fix implemented; worker-thread syntactic parallelism open**
 Owner: perf
 Last verified: 2026-06-28
 
@@ -85,18 +85,34 @@ app's check time; all must preserve SPEC.md §11.1 soundness.
     still succeeds; `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts --testNamePattern "skips project-mode Drizzle analysis|loads TypeScript app modules|fails before artifact emission when the derived kovo check graph"`
     passed.
 
-- [ ] **3. Content-addressed incremental cache for the analysis.** Impact: **high**
+- [x] **3. Content-addressed incremental cache for the analysis.** Impact: **high**
       (repeat runs / dev / CI with warm cache) · Effort: medium-high · Risk: medium (cache
       invalidation must be sound — it gates security). Persist analysis facts keyed on the
       content hashes of the input files; unchanged files reuse cached facts. Most edits touch
       a handful of files; today every run re-analyzes everything from scratch.
+  - Evidence (2026-06-28): `packages/cli/src/commands/build-export.ts` persists Drizzle
+    static build facts under `.kovo/cache/static-build-analysis`, keyed by analyzed source
+    content plus a Drizzle analyzer source/package fingerprint, and `--no-cache` bypasses
+    the cache; `packages/server/src/vite.ts` persists the same aggregate fact family for the
+    Vite data-plane gate. `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts
+--testNamePattern "reuses cached Drizzle static analysis|skips project-mode Drizzle
+analysis|runs Drizzle security extractors"` passed. `examples/commerce` cold
+    `pnpm exec kovo build ./src/app.tsx --preset node` preserved the expected KV414/KV407
+    diagnostics at 32.42s real/32.81s user; the warm-cache rerun preserved the same
+    diagnostics at 14.19s real/8.05s user.
 
-- [ ] **4. De-duplicate analysis across the composite `check` pipeline.** Impact: **high**
+- [x] **4. De-duplicate analysis across the composite `check` pipeline.** Impact: **high**
       (the "minutes" multiplier) · Effort: medium · Risk: low. `build:prod`, `vp test` (kovo
       vite plugin), and `check:endpoint-posture` each re-derive overlapping facts. Produce the
       graph/facts once (or via the cache in #3) and have the later steps consume the artifact
       instead of recomputing. Consider whether `build:prod` is even required in `check` or can
       be a graph-only analysis run.
+  - Evidence (2026-06-28): `packages/server/src/vite.ts` now runs the aggregate
+    `extractStaticBuildAnalysisFactsFromProject` once per Vite source snapshot, memoizes it
+    in-process for query-shape facts, build diagnostics, and runtime registry loading, and
+    persists it for warm `vp check`/`vp test` runs; `packages/cli/src/commands/build-export.ts`
+    uses the same aggregate fact family for `kovo build`. `pnpm exec vitest run
+packages/server/src/vite-data-plane-gate.test.ts` passed.
 
 - [x] **5. Narrow the type-checker's input surface.** Impact: medium-high · Effort:
       low-medium · Risk: low-medium. `skipLibCheck` is already on. Add `types: []` (stop
@@ -121,18 +137,29 @@ app's check time; all must preserve SPEC.md §11.1 soundness.
     passed, and `examples/commerce` `pnpm exec kovo build ./src/app.tsx --preset node --out dist-fast-check-measure`
     still emitted the expected KV414/KV407 diagnostics while timing at 36.53s real/38.30s user.
 
-- [ ] **7. Lazy-load pglite and eliminate the stray `spawnSync`.** Impact: low-medium ·
+- [x] **7. Lazy-load pglite and eliminate the stray `spawnSync`.** Impact: low-medium ·
       Effort: low · Risk: low. `@electric-sql/pglite` (WASM Postgres) loads during static
       analysis and `spawnSync` is 4.2% of self time. Confirm what spawns and whether pglite is
       needed for the analysis path at all; lazy-import or drop it from the hot path.
+  - Evidence (2026-06-28): `rg "from ['\"]@electric-sql/pglite|import\\(['\"]@electric-sql/pglite|PGlite|spawnSync" packages -g '*.ts' -g '*.tsx'`
+    found PGlite only in starter/test harness code and app templates, not the CLI static
+    analyzer path; the actionable `spawnSync` hot-path source was `packages/cli/src/bin.ts`.
+    That bin now respawns only when the current entrypoint is source `.ts`, and the compiled
+    `.mjs` regression is covered by `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts
+--testNamePattern "compiled JavaScript bin|script path contains spaces"`.
 
-- [ ] **8. CLI startup: avoid re-transforming the whole import graph each invocation.**
+- [x] **8. CLI startup: avoid re-transforming the whole import graph each invocation.**
       Impact: low-medium (fixed per-invocation cost; matters most for the many small
       `kovo check`/`add`/`explain` calls) · Effort: low. `packages/cli/src/bin.ts` re-spawns
       node with `--experimental-transform-types` and transforms the entire CLI+compiler+server
       TS graph on every run (~0.4–0.7s). Confirm published create-kovo apps run compiled
       `dist/` (the package ships `dist` via `prepack`); for workspace/dev, point the bin at
       `dist` or cache transform output.
+  - Evidence (2026-06-28): `packages/cli/src/bin.ts` gates the transform-types respawn on
+    `currentBinPath.endsWith('.ts')`, so published `publishConfig.bin` `./dist/bin.mjs`
+    starts without a second Node process while workspace source execution still gets the
+    required TS transform. `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts
+--testNamePattern "compiled JavaScript bin|script path contains spaces"` passed.
 
 - [ ] **9. Parallelize independent per-file syntactic analysis across worker threads.**
       Impact: medium (large apps) · Effort: high · Risk: medium. Build is single-threaded
