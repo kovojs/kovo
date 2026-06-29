@@ -793,7 +793,9 @@ export function kovoCheck(
     }
 
     for (const warning of optimisticCoverageWarnings(
+      graph.components ?? [],
       graph.mutations ?? [],
+      graph.pages ?? [],
       graph.queries ?? [],
       graph.optimistic ?? [],
       graph.touchGraph ?? {},
@@ -2188,20 +2190,36 @@ function compareOptimisticCoverage(
 }
 
 function optimisticCoverageWarnings(
+  components: readonly CoreGraph.ComponentExplain[],
   mutations: readonly CoreGraph.MutationExplain[],
+  pages: readonly CoreGraph.PageExplain[],
   queries: readonly CoreGraph.QueryReadSet[],
   coverages: readonly CoreGraph.OptimisticCoverage[],
   touchGraph: CoreGraph.TouchGraph,
 ): string[] {
+  const clientQueries = optimisticClientQueryConsumers(components, pages);
+  const hasClientConsumerFacts = components.length > 0 || pages.length > 0;
   const covered = new Map(
-    coverages.map((coverage) => [`${coverage.mutation}\0${coverage.query}`, coverage.status]),
+    coverages
+      .filter(
+        (coverage) =>
+          coverage.status !== 'UNHANDLED' &&
+          !optimisticTransformIsDead(coverage, clientQueries, hasClientConsumerFacts),
+      )
+      .map((coverage) => [`${coverage.mutation}\0${coverage.query}`, coverage.status]),
   );
   const warnings: string[] = [];
+  const warned = new Set<string>();
 
   for (const coverage of coverages) {
-    if (coverage.status !== 'UNHANDLED') continue;
+    if (
+      coverage.status !== 'UNHANDLED' &&
+      !optimisticTransformIsDead(coverage, clientQueries, hasClientConsumerFacts)
+    ) {
+      continue;
+    }
 
-    warnings.push(optimisticCoverageWarning(coverage.mutation, coverage.query));
+    pushOptimisticCoverageWarning(warnings, warned, coverage.mutation, coverage.query);
   }
 
   for (const mutation of mutations) {
@@ -2219,11 +2237,45 @@ function optimisticCoverageWarnings(
       if (!query.domains.some((domain) => domains.has(domain))) continue;
       if (covered.has(`${mutation.key}\0${query.query}`)) continue;
 
-      warnings.push(optimisticCoverageWarning(mutation.key, query.query));
+      pushOptimisticCoverageWarning(warnings, warned, mutation.key, query.query);
     }
   }
 
   return warnings;
+}
+
+function pushOptimisticCoverageWarning(
+  warnings: string[],
+  warned: Set<string>,
+  mutation: string,
+  query: string,
+): void {
+  const key = `${mutation}\0${query}`;
+  if (warned.has(key)) return;
+  warnings.push(optimisticCoverageWarning(mutation, query));
+  warned.add(key);
+}
+
+function optimisticClientQueryConsumers(
+  components: readonly CoreGraph.ComponentExplain[],
+  pages: readonly CoreGraph.PageExplain[],
+): ReadonlySet<string> {
+  return new Set([
+    ...components.flatMap((component) => component.queries ?? []),
+    ...pages.flatMap((page) => page.queries ?? []),
+  ]);
+}
+
+function optimisticTransformIsDead(
+  coverage: CoreGraph.OptimisticCoverage,
+  clientQueries: ReadonlySet<string>,
+  hasClientConsumerFacts: boolean,
+): boolean {
+  return (
+    hasClientConsumerFacts &&
+    coverage.status === 'hand-written' &&
+    !clientQueries.has(coverage.query)
+  );
 }
 
 function optimisticCoverageWarning(mutation: string, query: string): string {

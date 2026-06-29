@@ -52,6 +52,7 @@ export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 export interface KovoCheckInput {
   access?: readonly AccessExplainFact[];
   capabilities?: readonly CapabilityExplain[];
+  components?: readonly ComponentExplain[];
   cookieDowngrades?: readonly CookieDowngradeExplain[];
   derivedMutations?: readonly DerivedMutationDomainSet[];
   derivedQueries?: readonly QueryReadSet[];

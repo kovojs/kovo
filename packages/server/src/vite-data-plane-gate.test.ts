@@ -201,6 +201,37 @@ const VALID_SHAPE_COMPONENT = [
   '});',
 ].join('\n');
 
+const DRIZZLE_OUTPUT_MERGE_QUERY_SOURCE = [
+  'import { query, s } from "@kovojs/server";',
+  'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+  '',
+  'export const contacts = pgTable("contacts", {',
+  '  id: text("id").primaryKey(),',
+  '}, kovo({ domain: "contact", key: "id" }));',
+  '',
+  'export const contactsQuery = query("contacts", {',
+  '  output: s.object({ id: s.string(), total: s.number() }),',
+  '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+  '    return db.select({ id: contacts.id }).from(contacts);',
+  '  },',
+  '});',
+].join('\n');
+
+const DRIZZLE_OUTPUT_MERGE_COMPONENT = [
+  'import { component } from "@kovojs/server";',
+  'import { contactsQuery } from "../contacts";',
+  '',
+  'export const ContactsSummary = component({',
+  '  queries: { contacts: contactsQuery },',
+  '  render: () => (',
+  '    <section>',
+  '      <span data-bind="contacts.id">Contact</span>',
+  '      <span data-bind="contacts.total">Total</span>',
+  '    </section>',
+  '  ),',
+  '});',
+].join('\n');
+
 const NON_DRIZZLE_OUTPUT_QUERY_SOURCE = [
   'import { query, s } from "@kovojs/server";',
   '',
@@ -446,6 +477,33 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     const componentReport = captured.find((report) => report.fileName.endsWith('product-card.tsx'));
     expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV227')).toBe(
       false,
+    );
+    expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
+      false,
+    );
+  });
+
+  it('merges declared output fields into Drizzle query-shape facts for binding validation', async () => {
+    const root = await fixture({
+      'src/components/contacts-summary.tsx': DRIZZLE_OUTPUT_MERGE_COMPONENT,
+      'src/contacts.ts': DRIZZLE_OUTPUT_MERGE_QUERY_SOURCE,
+      'src/drizzle-types.d.ts': DRIZZLE_RUNTIME_REGISTRY_TYPES,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(
+        DRIZZLE_OUTPUT_MERGE_COMPONENT,
+        join(root, 'src/components/contacts-summary.tsx'),
+      ),
+    ).resolves.toEqual(expect.objectContaining({ map: null }));
+
+    const componentReport = captured.find((report) =>
+      report.fileName.endsWith('contacts-summary.tsx'),
     );
     expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
       false,

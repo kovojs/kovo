@@ -134,12 +134,10 @@ export type QueryInstanceKey<Input> = ((input: Input) => string | undefined) | s
 
 /** A query input schema that also binds component props to query args in app-authored TSX. */
 export type QueryArgsSchema<Input> = Schema<Input> & {
-  <Props extends Record<string, unknown> = any>(
-    mapper: (props: Props) => Input,
-  ): QueryArgsBinding<Input, Props>;
+  <Props extends object = any>(mapper: (props: Props) => Input): QueryArgsBinding<Input, Props>;
 };
 
-export interface QueryArgsBinding<Input, Props extends Record<string, unknown>> {
+export interface QueryArgsBinding<Input, Props extends object> {
   args: (props: Props) => Input;
   query: QueryDefinition<string, unknown, Input, unknown>;
   schema: Schema<Input>;
@@ -773,7 +771,7 @@ function queryArgsSchema<Input>(
   schema: Schema<Input>,
   queryDefinition: QueryDefinition<string, unknown, Input, unknown>,
 ): QueryArgsSchema<Input> {
-  const bind = (<Props extends Record<string, unknown> = any>(
+  const bind = (<Props extends object = any>(
     mapper: (props: Props) => Input,
   ): QueryArgsBinding<Input, Props> => ({
     args: mapper,

@@ -797,7 +797,7 @@ describe('kovo check', () => {
         mutations: [{ guards: ['authed'], key: 'cart/add', writes: ['cart'] }],
         optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'hand-written' }],
         pages: [
-          { guards: ['authed'], route: '/cart' },
+          { guards: ['authed'], queries: ['cart'], route: '/cart' },
           { guards: [], queries: ['adminOrders'], route: '/admin' },
         ],
         queries: [
@@ -935,6 +935,28 @@ describe('kovo check', () => {
       exitCode: 0,
       output:
         'kovo-check/v1\nWARN INVALIDATE cart/add -> product Manual invalidate escape hatch requires review.\n',
+    });
+  });
+
+  it('does not count hand-written optimistic transforms that have no client query consumer', () => {
+    expect(
+      kovoCheck({
+        components: [],
+        mutations: [
+          {
+            guards: ['authed'],
+            key: 'contacts/add',
+            writes: ['contact'],
+          },
+        ],
+        optimistic: [{ mutation: 'contacts/add', query: 'contacts', status: 'hand-written' }],
+        pages: [{ queries: [], route: '/' }],
+        queries: [{ domains: ['contact'], query: 'contacts' }],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'kovo-check/v1\nWARN KV310 contacts/add -> contacts Invalidated query lacks optimistic transform.\n',
     });
   });
 

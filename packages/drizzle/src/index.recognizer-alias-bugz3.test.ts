@@ -535,7 +535,7 @@ describe('bugz-4 H2/M5: relational-query with() relations contribute read securi
       }),
     );
 
-    expect(facts.map((fact) => fact.shape)).toEqual([{ id: 'string', notes: { id: 'string' } }]);
+    expect(facts.map((fact) => fact.shape)).toEqual([{ id: 'string', notes: [{ id: 'string' }] }]);
     const kv406 = diagnosticsForQueryFacts(facts).filter(
       (diagnostic) => diagnostic.code === 'KV406',
     );

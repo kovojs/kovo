@@ -13,10 +13,14 @@ describe('server schemas', () => {
   it('keeps chained schema constraints immutable', () => {
     const baseNumber = s.number();
     const positiveInteger = baseNumber.int().min(1);
+    const cappedInteger = positiveInteger.max(3);
 
     expect(baseNumber.parse(0.5)).toBe(0.5);
     expect(() => positiveInteger.parse(0.5)).toThrow('Expected integer');
     expect(() => positiveInteger.parse(0)).toThrow('Expected number >= 1');
+    expect(cappedInteger.parse('3')).toBe(3);
+    expect(() => cappedInteger.parse(4)).toThrow('Expected number <= 3');
+    expect(() => cappedInteger.parse(0)).toThrow('Expected number >= 1');
 
     const file = {
       arrayBuffer: async () => new ArrayBuffer(0),

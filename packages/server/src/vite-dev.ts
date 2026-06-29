@@ -1187,13 +1187,12 @@ function appWithDevDiagnostics(
   app: KovoApp,
   diagnostics: KovoAppShellDevDiagnosticLedger | undefined,
 ): KovoApp {
-  if (!diagnostics) return app;
-
   return {
     ...app,
     onError(error, context) {
       const requestDiagnostic = endpointPostureRequestDiagnostic(error, context);
-      if (requestDiagnostic) recordRequestDiagnostic(diagnostics, requestDiagnostic);
+      if (requestDiagnostic && diagnostics) recordRequestDiagnostic(diagnostics, requestDiagnostic);
+      if (!requestDiagnostic) reportDevServerError(error, context);
 
       const result = app.onError?.(error, context);
       if (result && typeof result === 'object' && 'then' in result) {
@@ -1201,6 +1200,18 @@ function appWithDevDiagnostics(
       }
     },
   };
+}
+
+function reportDevServerError(error: unknown, context: ServerErrorDiagnosticContext): void {
+  const details = [
+    `[kovo dev] ${context.operation} failed`,
+    context.routePath ? `route=${context.routePath}` : undefined,
+    context.mutationKey ? `mutation=${context.mutationKey}` : undefined,
+    context.queryKey ? `query=${context.queryKey}` : undefined,
+    context.url ? `url=${context.url}` : undefined,
+    context.status ? `status=${context.status}` : undefined,
+  ].filter((detail): detail is string => detail !== undefined);
+  console.error(details.join(' '), error);
 }
 
 function endpointPostureRequestDiagnostic(

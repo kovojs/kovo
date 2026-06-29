@@ -188,6 +188,66 @@ describe('server app shell Vite dev seam', () => {
     }
   });
 
+  it('logs server-side route render exceptions in dev without app onError', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const app = createApp({
+      routes: [
+        route('/throws', {
+          page() {
+            throw new Error('render exploded');
+          },
+        }),
+      ],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({
+      moduleId: '/src/app-shell.ts',
+    });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule() {
+        return { default: app };
+      },
+    });
+
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const response = await fetch(`${origin}/throws`);
+      await response.text();
+
+      expect(response.status).toBe(500);
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[kovo dev] route-page failed route=/throws'),
+        expect.any(Error),
+      );
+    } finally {
+      errorSpy.mockRestore();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('wires compiler module diagnostics into app-shell dev middleware', async () => {
     const integration = createKovoAppShellViteDevIntegration({
       appExportName: 'shopApp',

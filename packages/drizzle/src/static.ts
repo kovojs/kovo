@@ -1759,6 +1759,7 @@ function extractTouchGraphFromPreparedFiles(
     extraction.sourceFiles,
     extraction.tableNamesBySymbol,
   );
+  const relationCardinalities = projectRelationCardinalitiesByProperty(extraction.sourceFiles);
   return extractQueryFactsFromPreparedFiles(
     extraction.files,
     (file) => {
@@ -1779,6 +1780,7 @@ function extractTouchGraphFromPreparedFiles(
           sourceFile,
           extraction.tableNamesBySymbol,
         ),
+        relationCardinalities,
         relationTargetTableNames,
         unmodeledRelationNamesBySymbol: extraction.unmodeledRelationNamesBySymbol,
         tableNamesBySymbol: extraction.tableNamesBySymbol,
@@ -2523,6 +2525,7 @@ interface ProjectQueryDefinitionOptions {
   columnShapes?: Readonly<Record<string, QueryShape>>;
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
   namespaceTableNames: ProjectNamespaceTableNames;
+  relationCardinalities: ReadonlyMap<string, 'many' | 'one'>;
   relationTargetTableNames: ReadonlyMap<string, string>;
   relationalTableNames: ReadonlyMap<string, string>;
   tableNamesBySymbol: ReadonlyMap<string, string>;
@@ -2544,6 +2547,7 @@ function extractProjectQueryDefinitions(
       : {}),
     readTableIdentifier: resolveTableIdentifier,
     receiverMode: 'project',
+    relationalRelationCardinality: (name) => options.relationCardinalities.get(name),
     relationalRelationTableName: (name) => options.relationTargetTableNames.get(name),
     relationalTableName: (name) => options.relationalTableNames.get(name),
   });
@@ -2554,6 +2558,7 @@ interface QueryDefinitionOptions {
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
   readTableIdentifier?: (node: Node) => string | undefined;
   receiverMode?: 'project' | 'source';
+  relationalRelationCardinality?: (name: string) => 'many' | 'one' | undefined;
   relationalRelationTableName?: (name: string) => string | undefined;
   relationalTableName?: (name: string) => string | undefined;
 }
@@ -2634,6 +2639,7 @@ function extractQueryDefinitionsFromSourceFile(
         receiverReferences,
         options.columnShapes,
         options.relationalRelationTableName,
+        options.relationalRelationCardinality,
       );
     const outputShape = queryOutputShape(bodyObject);
     const shape =
@@ -3390,6 +3396,7 @@ import {
   projectDrizzleCoreIdentifierExportName,
   projectForeignKeyForColumn,
   projectForeignKeysForTable,
+  projectRelationCardinalitiesByProperty,
   projectRelationTargetTableNamesByProperty,
   projectRelationalTableNamesByProperty,
   projectTableNameForColumnShapeAccess,

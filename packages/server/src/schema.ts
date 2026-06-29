@@ -388,6 +388,7 @@ export interface StringSchema extends Schema<string> {
 export interface NumberSchema extends Schema<number> {
   default(value: number): NumberSchema;
   int(): NumberSchema;
+  max(value: number): NumberSchema;
   min(value: number): NumberSchema;
   optional(): Schema<number | undefined>;
 }
@@ -465,17 +466,20 @@ class DateSchemaImpl implements DateSchema {
 interface NumberSchemaOptions {
   defaultValue?: number;
   integer?: boolean;
+  maximum?: number;
   minimum?: number;
 }
 
 class NumberSchemaImpl implements NumberSchema {
   readonly #defaultValue: number | undefined;
   readonly #integer: boolean;
+  readonly #maximum: number | undefined;
   readonly #minimum: number | undefined;
 
   constructor(options: NumberSchemaOptions = {}) {
     this.#defaultValue = options.defaultValue;
     this.#integer = options.integer ?? false;
+    this.#maximum = options.maximum;
     this.#minimum = options.minimum;
   }
 
@@ -483,6 +487,7 @@ class NumberSchemaImpl implements NumberSchema {
     return new NumberSchemaImpl({
       defaultValue: value,
       integer: this.#integer,
+      ...(this.#maximum === undefined ? {} : { maximum: this.#maximum }),
       ...(this.#minimum === undefined ? {} : { minimum: this.#minimum }),
     });
   }
@@ -491,6 +496,16 @@ class NumberSchemaImpl implements NumberSchema {
     return new NumberSchemaImpl({
       ...(this.#defaultValue === undefined ? {} : { defaultValue: this.#defaultValue }),
       integer: true,
+      ...(this.#maximum === undefined ? {} : { maximum: this.#maximum }),
+      ...(this.#minimum === undefined ? {} : { minimum: this.#minimum }),
+    });
+  }
+
+  max(value: number): NumberSchema {
+    return new NumberSchemaImpl({
+      ...(this.#defaultValue === undefined ? {} : { defaultValue: this.#defaultValue }),
+      integer: this.#integer,
+      maximum: value,
       ...(this.#minimum === undefined ? {} : { minimum: this.#minimum }),
     });
   }
@@ -499,6 +514,7 @@ class NumberSchemaImpl implements NumberSchema {
     return new NumberSchemaImpl({
       ...(this.#defaultValue === undefined ? {} : { defaultValue: this.#defaultValue }),
       integer: this.#integer,
+      ...(this.#maximum === undefined ? {} : { maximum: this.#maximum }),
       minimum: value,
     });
   }
@@ -516,6 +532,9 @@ class NumberSchemaImpl implements NumberSchema {
     if (this.#integer && !Number.isInteger(number)) throw validationError('Expected integer');
     if (this.#minimum !== undefined && number < this.#minimum) {
       throw validationError(`Expected number >= ${this.#minimum}`);
+    }
+    if (this.#maximum !== undefined && number > this.#maximum) {
+      throw validationError(`Expected number <= ${this.#maximum}`);
     }
 
     return number;

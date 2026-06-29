@@ -734,11 +734,63 @@ async function collectCompilerQueryShapeFacts(
   if (analysis.files.length === 0) return [];
 
   const drizzleFacts = compilerQueryShapeFacts(analysis.staticFacts.queries);
+  const outputFactsByQuery = new Map(
+    analysis.outputQueryShapeFacts.map((fact) => [fact.query, fact]),
+  );
   const drizzleQueries = new Set(drizzleFacts.map((fact) => fact.query));
-  const outputFacts = analysis.outputQueryShapeFacts.filter(
+  const mergedDrizzleFacts = drizzleFacts.map((fact) =>
+    mergeCompilerQueryShapeFact(fact, outputFactsByQuery.get(fact.query)),
+  );
+  const outputOnlyFacts = analysis.outputQueryShapeFacts.filter(
     (fact) => !drizzleQueries.has(fact.query),
   );
-  return compilerQueryShapeFacts([...drizzleFacts, ...outputFacts]);
+  return [...mergedDrizzleFacts, ...outputOnlyFacts].sort(
+    (left, right) =>
+      left.query.localeCompare(right.query) || left.source.localeCompare(right.source),
+  );
+}
+
+function mergeCompilerQueryShapeFact(
+  staticFact: CompilerQueryShapeFact,
+  outputFact: CompilerQueryShapeFact | undefined,
+): CompilerQueryShapeFact {
+  if (!outputFact) return staticFact;
+  const shape = mergeCompilerQueryShapes(staticFact.shape, outputFact.shape);
+  return {
+    ...staticFact,
+    shape,
+    source: `${staticFact.source}; output ${outputFact.source}`,
+  };
+}
+
+function mergeCompilerQueryShapes(
+  staticShape: CompilerQueryShape,
+  outputShape: CompilerQueryShape,
+): CompilerQueryShape {
+  if (Array.isArray(staticShape) && Array.isArray(outputShape)) {
+    const staticItem = staticShape[0];
+    const outputItem = outputShape[0];
+    return staticItem && outputItem
+      ? [mergeCompilerQueryShapes(staticItem, outputItem)]
+      : staticShape;
+  }
+
+  if (isPlainCompilerShapeObject(staticShape) && isPlainCompilerShapeObject(outputShape)) {
+    const merged: Record<string, CompilerQueryShape> = { ...outputShape };
+    for (const [key, value] of Object.entries(staticShape)) {
+      const outputValue = outputShape[key];
+      merged[key] = outputValue ? mergeCompilerQueryShapes(value, outputValue) : value;
+    }
+    return merged;
+  }
+
+  return staticShape;
+}
+
+function isPlainCompilerShapeObject(
+  shape: CompilerQueryShape,
+): shape is Record<string, CompilerQueryShape> {
+  return typeof shape === 'object' && shape !== null && !Array.isArray(shape) && !('kind' in shape);
 }
 
 const dataPlaneAnalysisCache = new Map<string, Promise<DataPlaneAnalysis>>();

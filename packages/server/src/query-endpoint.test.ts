@@ -332,6 +332,10 @@ describe('query endpoints', () => {
   });
 
   it('keeps parameterized query args parseable while supporting component prop bindings', () => {
+    interface ProductProps {
+      productId: string;
+    }
+
     const productQuery = query('product', {
       args: s.object({ id: s.string() }),
       load(input: { id: string }) {
@@ -340,7 +344,7 @@ describe('query endpoints', () => {
       reads: [domain('product')],
     });
 
-    const bound = productQuery.args((props: { productId: string }) => ({
+    const bound = productQuery.args((props: ProductProps) => ({
       id: props.productId,
     }));
 

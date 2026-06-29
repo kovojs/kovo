@@ -987,7 +987,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.queries.ts',
           source: `
-          import { avg, count, sum } from 'drizzle-orm';
+          import { avg, avgDistinct, count, countDistinct, max, min, sum, sumDistinct } from 'drizzle-orm';
 
           export const cartItems = pgTable("cart_items", {
             cartId: text("cart_id").notNull(),
@@ -1042,7 +1042,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.queries.ts',
           source: `
-          import { avg, count, sum } from 'drizzle-orm';
+          import { avg, avgDistinct, count, countDistinct, max, min, sum, sumDistinct } from 'drizzle-orm';
 
           export const cartItems = pgTable("cart_items", {
             cartId: text("cart_id").notNull(),
@@ -1050,13 +1050,27 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "cart", key: "cartId" }));
 
           export const cartStats = query("cart/stats", {
-            output: s.object({ total: s.number(), quantity: s.number(), average: s.number() }),
+            output: s.object({
+              average: s.number(),
+              averageDistinct: s.number(),
+              maxQuantity: s.number(),
+              minQuantity: s.number(),
+              quantity: s.number(),
+              quantityDistinct: s.number(),
+              total: s.number(),
+              totalDistinct: s.number(),
+            }),
             reads: [cartItems],
             async load(input, db: PgAsyncDatabase<any, any>) {
               return db.select({
-                total: count(),
-                quantity: sum(cartItems.qty),
                 average: avg(cartItems.qty),
+                averageDistinct: avgDistinct(cartItems.qty),
+                maxQuantity: max(cartItems.qty),
+                minQuantity: min(cartItems.qty),
+                quantity: sum(cartItems.qty),
+                quantityDistinct: sumDistinct(cartItems.qty),
+                total: count(),
+                totalDistinct: countDistinct(cartItems.qty),
               }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
             },
           });
@@ -2321,6 +2335,65 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           id: 'string',
         },
         site: 'post.queries.ts:14',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('derives array shapes for defineRelations many projections', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'post.queries.ts',
+          source: `
+          export const posts = pgTable("posts", {
+            id: text("id").primaryKey(),
+          }, kovo({ domain: "post", key: "id" }));
+          export const comments = pgTable("comments", {
+            body: text("body").notNull(),
+            id: text("id").primaryKey(),
+            postId: text("post_id").notNull(),
+          }, kovo({ domain: "comment", key: "id" }));
+          export const postRelations = defineRelations({ posts, comments }, (r) => ({
+            posts: {
+              comments: r.many.comments(),
+            },
+          }));
+
+          export const postsQuery = query("posts", {
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.query.posts.findMany({
+                columns: { id: true },
+                with: {
+                  comments: {
+                    columns: {
+                      body: true,
+                      id: true,
+                    },
+                  },
+                },
+              });
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'posts',
+        reads: ['comment', 'post'],
+        shape: {
+          comments: [
+            {
+              body: 'string',
+              id: 'string',
+            },
+          ],
+          id: 'string',
+        },
+        site: 'post.queries.ts:16',
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);

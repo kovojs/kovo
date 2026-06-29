@@ -119,6 +119,7 @@ import {
   receiverReferences: QueryReceiverReferences,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
   relationTargetTableName: (relation: string) => string | undefined = () => undefined,
+  relationCardinality: (relation: string) => RelationCardinality | undefined = () => undefined,
 ): QueryShapeSelection | null {
   const call = relationalQueryCallFromQueryBody(body, receiverReferences);
   if (!call) return null;
@@ -138,6 +139,7 @@ import {
     projection,
     columnShapes,
     relationTargetTableName,
+    relationCardinality,
   );
 
   return {
@@ -158,6 +160,8 @@ interface RelationalProjection {
   relations: Readonly<Record<string, RelationalProjection | null>>;
 }
 
+type RelationCardinality = 'many' | 'one';
+
 function appendRelationalProjectionShape(
   shape: Record<string, QueryShape>,
   unresolvedPaths: string[],
@@ -166,6 +170,7 @@ function appendRelationalProjectionShape(
   projection: RelationalProjection,
   columnShapes: Readonly<Record<string, QueryShape>>,
   relationTargetTableName: (relation: string) => string | undefined,
+  relationCardinality: (relation: string) => RelationCardinality | undefined,
 ): void {
   for (const column of projection.columns) {
     const columnShape = columnShapes[`${table}.${column}`];
@@ -197,8 +202,9 @@ function appendRelationalProjectionShape(
       relationProjection,
       columnShapes,
       relationTargetTableName,
+      relationCardinality,
     );
-    shape[relation] = relationShape;
+    shape[relation] = relationCardinality(relation) === 'many' ? [relationShape] : relationShape;
     unresolvedPaths.push(...relationUnresolvedPaths.map((path) => `${relation}.${path}`));
     opaquePaths.push(...relationOpaquePaths.map((path) => `${relation}.${path}`));
   }
@@ -2206,7 +2212,16 @@ function drizzleAggregateImports(sourceFile: ts.SourceFile): {
 }
 
 function isAggregateHelperName(name: string): boolean {
-  return name === 'avg' || name === 'count' || name === 'sum';
+  return (
+    name === 'avg' ||
+    name === 'avgDistinct' ||
+    name === 'count' ||
+    name === 'countDistinct' ||
+    name === 'max' ||
+    name === 'min' ||
+    name === 'sum' ||
+    name === 'sumDistinct'
+  );
 }
 
 /** @internal */ export function typedSqlProjectionShape(

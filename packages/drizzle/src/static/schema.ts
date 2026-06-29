@@ -210,6 +210,45 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
   return names;
 }
 
+/** @internal */ export type ProjectRelationCardinality = 'many' | 'one';
+
+/** @internal */ export function projectRelationCardinalitiesByProperty(
+  sourceFile: SourceFile | readonly SourceFile[],
+): ReadonlyMap<string, ProjectRelationCardinality> {
+  const cardinalities = new Map<string, ProjectRelationCardinality>();
+  const ambiguous = new Set<string>();
+  const sourceFiles = Array.isArray(sourceFile) ? sourceFile : [sourceFile];
+
+  const append = (name: string, cardinality: ProjectRelationCardinality) => {
+    const existing = cardinalities.get(name);
+    if (existing && existing !== cardinality) {
+      ambiguous.add(name);
+      return;
+    }
+    cardinalities.set(name, cardinality);
+  };
+
+  for (const file of sourceFiles) {
+    for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const relationApi = relationCallName(call);
+      if (!isRelationApiCallName(relationApi)) continue;
+
+      for (const relationObject of relationDefinitionObjects(call, relationApi)) {
+        for (const property of relationObject.getProperties()) {
+          if (!Node.isPropertyAssignment(property)) continue;
+          const relation = propertyNameText(property.getNameNode(), true);
+          const cardinality = relationInitializerCardinality(property.getInitializer());
+          if (!relation || !cardinality) continue;
+          append(relation, cardinality);
+        }
+      }
+    }
+  }
+
+  for (const text of ambiguous) cardinalities.delete(text);
+  return cardinalities;
+}
+
 /** @internal */ export function isDrizzleWriteCall(call: CallExpression): boolean {
   const expression = call.getExpression();
   const name = staticAccessName(expression);
@@ -1492,6 +1531,27 @@ function relationTargetTableName(
 
   const helperTarget = call ? relationHelperTargetName(call.getExpression()) : undefined;
   return helperTarget ? localTableNames.get(helperTarget) : undefined;
+}
+
+function relationInitializerCardinality(
+  initializer: Node | undefined,
+): ProjectRelationCardinality | undefined {
+  const call = initializer && Node.isCallExpression(initializer) ? initializer : undefined;
+  return call ? relationHelperCardinality(call.getExpression()) : undefined;
+}
+
+function relationHelperCardinality(expression: Node): ProjectRelationCardinality | undefined {
+  const direct = Node.isIdentifier(expression)
+    ? expression.getText()
+    : staticAccessName(expression);
+  if (direct === 'many' || direct === 'one') return direct;
+
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    const parentName = staticAccessName(expression.getExpression());
+    if (parentName === 'many' || parentName === 'one') return parentName;
+  }
+
+  return undefined;
 }
 
 function relationHelperTargetName(expression: Node): string | undefined {
