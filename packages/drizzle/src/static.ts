@@ -757,12 +757,15 @@ type SqlTextSafety = 'literal' | 'safe' | 'tainted' | 'unknown';
 export function analyzeSqlSafetyFromProject(
   options: TouchGraphProjectOptions,
 ): TouchGraphDiagnostic[] {
-  const extraction = createProjectExtraction(options);
-  try {
-    return analyzeSqlSafetyFromProjectExtraction(extraction);
-  } finally {
-    extraction.dispose();
-  }
+  // SPEC §11.1: share one syntactic parse cache across this run's withParsedSourceFile calls.
+  return runWithSourceFileParseCache(() => {
+    const extraction = createProjectExtraction(options);
+    try {
+      return analyzeSqlSafetyFromProjectExtraction(extraction);
+    } finally {
+      extraction.dispose();
+    }
+  });
 }
 
 /** @internal */ export function analyzeSqlSafetyFromProjectExtraction(
@@ -1670,12 +1673,15 @@ function extractTouchGraphFromPreparedFiles(
 /** @internal */ export function extractTouchGraphFromProject(
   options: TouchGraphProjectOptions,
 ): TouchGraph {
-  const extraction = createProjectExtraction(options);
-  try {
-    return extractTouchGraphFromProjectExtraction(extraction);
-  } finally {
-    extraction.dispose();
-  }
+  // SPEC §11.1: share one syntactic parse cache across this run's withParsedSourceFile calls.
+  return runWithSourceFileParseCache(() => {
+    const extraction = createProjectExtraction(options);
+    try {
+      return extractTouchGraphFromProjectExtraction(extraction);
+    } finally {
+      extraction.dispose();
+    }
+  });
 }
 
 /** @internal */ export function extractTouchGraphFromProjectExtraction(
@@ -1696,12 +1702,15 @@ function extractTouchGraphFromPreparedFiles(
 /** @internal */ export function extractQueryFactsFromProject(
   options: TouchGraphProjectOptions,
 ): QueryFact[] {
-  const extraction = createProjectExtraction(options);
-  try {
-    return extractQueryFactsFromProjectExtraction(extraction);
-  } finally {
-    extraction.dispose();
-  }
+  // SPEC §11.1: share one syntactic parse cache across this run's withParsedSourceFile calls.
+  return runWithSourceFileParseCache(() => {
+    const extraction = createProjectExtraction(options);
+    try {
+      return extractQueryFactsFromProjectExtraction(extraction);
+    } finally {
+      extraction.dispose();
+    }
+  });
 }
 
 /** @internal */ export function extractQueryFactsFromProjectExtraction(
@@ -1758,12 +1767,15 @@ function extractTouchGraphFromPreparedFiles(
   ownerDomains: OwnerDomainFact[];
   scopeAudits: ScopeAuditFact[];
 } {
-  const extraction = createProjectExtraction(options);
-  try {
-    return extractOwnerAuditFromProjectExtraction(extraction);
-  } finally {
-    extraction.dispose();
-  }
+  // SPEC §11.1: share one syntactic parse cache across this run's withParsedSourceFile calls.
+  return runWithSourceFileParseCache(() => {
+    const extraction = createProjectExtraction(options);
+    try {
+      return extractOwnerAuditFromProjectExtraction(extraction);
+    } finally {
+      extraction.dispose();
+    }
+  });
 }
 
 /** @internal */ export function extractOwnerAuditFromProjectExtraction(
@@ -1798,12 +1810,15 @@ function extractTouchGraphFromPreparedFiles(
 /** @internal */ export function extractWriteScopeFactsFromProject(
   options: TouchGraphProjectOptions,
 ): WriteScopeFact[] {
-  const extraction = createProjectExtraction(options);
-  try {
-    return extractWriteScopeFactsFromProjectExtraction(extraction);
-  } finally {
-    extraction.dispose();
-  }
+  // SPEC §11.1: share one syntactic parse cache across this run's withParsedSourceFile calls.
+  return runWithSourceFileParseCache(() => {
+    const extraction = createProjectExtraction(options);
+    try {
+      return extractWriteScopeFactsFromProjectExtraction(extraction);
+    } finally {
+      extraction.dispose();
+    }
+  });
 }
 
 /** @internal */ export function extractWriteScopeFactsFromProjectExtraction(
@@ -1873,12 +1888,15 @@ function writeScopeFactsForFunction(
 }
 
 function ownerDomainsFromProject(options: TouchGraphProjectOptions): OwnerDomainFact[] {
-  const extraction = createProjectExtraction(options);
-  try {
-    return ownerDomainsFromProjectExtraction(extraction);
-  } finally {
-    extraction.dispose();
-  }
+  // SPEC §11.1: share one syntactic parse cache across this run's withParsedSourceFile calls.
+  return runWithSourceFileParseCache(() => {
+    const extraction = createProjectExtraction(options);
+    try {
+      return ownerDomainsFromProjectExtraction(extraction);
+    } finally {
+      extraction.dispose();
+    }
+  });
 }
 
 function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): OwnerDomainFact[] {
@@ -1896,31 +1914,34 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
 /** @internal */ export function extractMaterializedViewRefreshFactsFromProject(
   options: TouchGraphProjectOptions,
 ): MaterializedViewRefreshFact[] {
-  const extraction = createProjectExtraction(options);
-  try {
-    const sourceContext = projectSourceModuleContext(extraction);
-    const contextFiles = projectContextFiles(extraction);
-    const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
-    const facts: MaterializedViewRefreshFact[] = [];
+  // SPEC §11.1: share one syntactic parse cache across this run's withParsedSourceFile calls.
+  return runWithSourceFileParseCache(() => {
+    const extraction = createProjectExtraction(options);
+    try {
+      const sourceContext = projectSourceModuleContext(extraction);
+      const contextFiles = projectContextFiles(extraction);
+      const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
+      const facts: MaterializedViewRefreshFact[] = [];
 
-    for (const file of contextFiles) {
-      const fileTables = tablesForFile(file, sourceContext);
-      for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
-        if (fn.summaryOnly) continue;
-        facts.push(...materializedViewRefreshFactsForFunction(fn, file, fileTables));
+      for (const file of contextFiles) {
+        const fileTables = tablesForFile(file, sourceContext);
+        for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
+          if (fn.summaryOnly) continue;
+          facts.push(...materializedViewRefreshFactsForFunction(fn, file, fileTables));
+        }
       }
-    }
 
-    return facts.sort(
-      (left, right) =>
-        left.mutation.localeCompare(right.mutation) ||
-        left.view.localeCompare(right.view) ||
-        left.domain.localeCompare(right.domain) ||
-        left.site.localeCompare(right.site),
-    );
-  } finally {
-    extraction.dispose();
-  }
+      return facts.sort(
+        (left, right) =>
+          left.mutation.localeCompare(right.mutation) ||
+          left.view.localeCompare(right.view) ||
+          left.domain.localeCompare(right.domain) ||
+          left.site.localeCompare(right.site),
+      );
+    } finally {
+      extraction.dispose();
+    }
+  });
 }
 
 /** @internal */ export interface StaticBuildAnalysisFacts {
@@ -1945,27 +1966,35 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
 /** @internal */ export function extractStaticBuildAnalysisFactsFromProject(
   options: TouchGraphProjectOptions,
 ): StaticBuildAnalysisFacts {
-  const extraction = createProjectExtraction(options);
-  try {
-    const writeScopeFacts = extractWriteScopeFactsFromProjectExtraction(extraction);
-    const queries = extractQueryFactsFromProjectExtraction(extraction);
-    const ownerAudit = extractOwnerAuditFromProjectExtraction(extraction, queries, writeScopeFacts);
-    return {
-      massAssignmentFacts: extractMassAssignmentFromProjectExtraction(extraction),
-      ownerDomains: ownerAudit.ownerDomains,
-      queries,
-      queryWriteReachability: extractQueryWriteReachabilityFromProjectExtraction(extraction),
-      scopeAudits: ownerAudit.scopeAudits,
-      sqlSafetyDiagnostics: [
-        ...analyzeSqlSafetyFromProjectExtraction(extraction),
-        ...diagnosticsForQueryFacts(queries),
-      ],
-      toctouFacts: extractToctouFromProjectExtraction(extraction),
-      touchGraph: extractTouchGraphFromProjectExtraction(extraction),
-    };
-  } finally {
-    extraction.dispose();
-  }
+  // SPEC §11.1: share one syntactic parse cache across every project-mode pass in this
+  // build-facing run so the same ~14/7 app files are parsed once, not re-parsed per pass.
+  return runWithSourceFileParseCache(() => {
+    const extraction = createProjectExtraction(options);
+    try {
+      const writeScopeFacts = extractWriteScopeFactsFromProjectExtraction(extraction);
+      const queries = extractQueryFactsFromProjectExtraction(extraction);
+      const ownerAudit = extractOwnerAuditFromProjectExtraction(
+        extraction,
+        queries,
+        writeScopeFacts,
+      );
+      return {
+        massAssignmentFacts: extractMassAssignmentFromProjectExtraction(extraction),
+        ownerDomains: ownerAudit.ownerDomains,
+        queries,
+        queryWriteReachability: extractQueryWriteReachabilityFromProjectExtraction(extraction),
+        scopeAudits: ownerAudit.scopeAudits,
+        sqlSafetyDiagnostics: [
+          ...analyzeSqlSafetyFromProjectExtraction(extraction),
+          ...diagnosticsForQueryFacts(queries),
+        ],
+        toctouFacts: extractToctouFromProjectExtraction(extraction),
+        touchGraph: extractTouchGraphFromProjectExtraction(extraction),
+      };
+    } finally {
+      extraction.dispose();
+    }
+  });
 }
 
 // SPEC.md §11.1 (v1 scope): query-fact extraction requires project-mode ts-morph type
@@ -3060,6 +3089,7 @@ function fanAnnotationsFromObject(object: Node): KovoFanAnnotation[] {
 import {
   extractUnresolvedConditionalIdentifiers,
   projectSourceModuleContext,
+  runWithSourceFileParseCache,
   tablesForFile,
   withParsedSourceFile,
   type SourceModuleContext,

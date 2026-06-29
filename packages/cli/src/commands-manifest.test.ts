@@ -83,7 +83,7 @@ describe('commands manifest', () => {
     expect(AUDIT_USAGE).toBe('usage: kovo audit [--fail-on-findings] [graph.json]');
     expect(ADD_USAGE).toBe('usage: kovo add <component...> [--out <dir>]');
     expect(BUILD_USAGE).toBe(
-      'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--no-cache]',
+      'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache]',
     );
     expect(COMPILE_USAGE[0]).toBe(
       'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--no-cache] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>]',

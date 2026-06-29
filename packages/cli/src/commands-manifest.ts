@@ -52,7 +52,7 @@ export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
 
 /** @internal Usage line emitted for `kovo build` (see `buildUsage`). */
 export const BUILD_USAGE =
-  'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--no-cache]';
+  'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache]';
 
 /** @internal Usage forms emitted for `kovo compile` (see `compileUsage`). */
 export const COMPILE_USAGE = [
@@ -226,8 +226,13 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
         description:
           'Preset override. Current emitter: node; vercel/cloudflare fail loudly until their emitters land.',
       },
+      {
+        flag: '--check',
+        description:
+          'Validate only: run the TypeScript and kovo-check preflights and the compiler transform (all build diagnostics), then stop before emitting deployable output.',
+      },
     ],
-    examples: ['kovo build ./src/app-shell.ts --out dist'],
+    examples: ['kovo build ./src/app-shell.ts --out dist', 'kovo build ./src/app.tsx --check'],
   },
   {
     name: 'compile',

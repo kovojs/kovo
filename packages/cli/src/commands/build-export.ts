@@ -67,6 +67,7 @@ type ExportStaticApp = (typeof import('@kovojs/server'))['exportStaticApp'];
 interface KovoBuildOptions {
   appModulePath: string;
   cache: boolean;
+  check: boolean;
   outDir: string;
   preset?: KovoBuildPresetName;
 }
@@ -92,6 +93,7 @@ interface SelectedKovoBuildPreset {
 export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
   let appModulePath: string | undefined;
   let cache = true;
+  let check = false;
   let outDir = 'dist';
   let preset: KovoBuildPresetName | undefined;
 
@@ -104,6 +106,10 @@ export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
     }
     if (arg === '--no-cache') {
       cache = false;
+      continue;
+    }
+    if (arg === '--check') {
+      check = true;
       continue;
     }
 
@@ -166,6 +172,7 @@ export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
     options: {
       appModulePath,
       cache,
+      check,
       outDir,
       ...(preset === undefined ? {} : { preset }),
     },
@@ -424,6 +431,22 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       throw new KovoBuildPresetDiagnosticError(blockingDiagnostics);
     }
 
+    if (options.check) {
+      // plans/fast-kovo-check2.md #6: validate-only. Every diagnostic-producing phase has
+      // already run by this point — the tsc preflight, the kovo-check security gate
+      // (which throws fail-closed on KV407/KV414/etc.), the client/server compiler transform
+      // that raises KV235, and the preset inspection above. `--check` skips ONLY the
+      // deployable `preset.emit`, so it is a strict subset of a full build and cannot pass
+      // where a full build would fail.
+      return kovoBuildCheckResult({
+        appModulePath: resolvedAppModulePath,
+        neutralOutDir: neutralBuild.outDir,
+        preset: selectedPreset.name,
+        presetDiagnostics,
+        presetLogs,
+      });
+    }
+
     await preset.emit(neutralBuild, presetContext);
 
     return kovoBuildResult({
@@ -444,26 +467,45 @@ function runTypeScriptBuildPreflight(appModulePath: string): void {
   const tsconfigPath = findBuildTsconfig(appModulePath);
   if (tsconfigPath === undefined) return;
 
+  const projectDir = dirname(tsconfigPath);
   let tscBin: string;
   try {
-    tscBin = createRequire(`${dirname(tsconfigPath)}/package.json`).resolve('typescript/bin/tsc');
+    tscBin = createRequire(`${projectDir}/package.json`).resolve('typescript/bin/tsc');
   } catch (error) {
     throw new Error(
-      `kovo build TypeScript preflight could not resolve typescript from ${dirname(
-        tsconfigPath,
-      )}. Install typescript or remove ${tsconfigPath}.\n${
+      `kovo build TypeScript preflight could not resolve typescript from ${projectDir}. Install typescript or remove ${tsconfigPath}.\n${
         error instanceof Error ? error.message : String(error)
       }`,
     );
   }
 
+  // Incremental preflight: persist a `.tsbuildinfo` under the gitignored `.kovo/cache` so a
+  // warm rebuild only re-checks changed files (plans/fast-kovo-check2.md #2). `--noEmit` is
+  // kept, so only the build-info is written, never JS; tsc still invalidates by file content,
+  // so type errors continue to surface on the affected files.
+  const buildInfoDir = join(projectDir, '.kovo', 'cache');
+  const buildInfoFile = join(buildInfoDir, 'tsc-preflight.tsbuildinfo');
+  mkdirSync(buildInfoDir, { recursive: true });
+
   try {
-    execFileSync(process.execPath, [tscBin, '--noEmit', '--project', tsconfigPath], {
-      cwd: dirname(tsconfigPath),
-      encoding: 'utf8',
-      env: process.env,
-      stdio: 'pipe',
-    });
+    execFileSync(
+      process.execPath,
+      [
+        tscBin,
+        '--noEmit',
+        '--incremental',
+        '--tsBuildInfoFile',
+        buildInfoFile,
+        '--project',
+        tsconfigPath,
+      ],
+      {
+        cwd: projectDir,
+        encoding: 'utf8',
+        env: process.env,
+        stdio: 'pipe',
+      },
+    );
   } catch (error) {
     throw new Error(`kovo build TypeScript preflight failed:\n${execFileErrorOutput(error)}`);
   }
@@ -2194,6 +2236,25 @@ function kovoBuildResult(options: {
     ...options.presetDiagnostics.map(presetDiagnosticOutputLine),
     ...options.presetLogs.map((message) => `PRESET ${stableText(message)}`),
     `SUMMARY preset=${options.preset} outDir=${JSON.stringify(options.outDir)} serverOutDir=${JSON.stringify(options.serverOutDir)}`,
+  ];
+
+  return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
+
+function kovoBuildCheckResult(options: {
+  appModulePath: string;
+  neutralOutDir: string;
+  preset: KovoBuildPresetName;
+  presetDiagnostics: readonly PresetDiagnostic[];
+  presetLogs: readonly string[];
+}): KovoCheckResult {
+  const lines = [
+    buildOutputVersion,
+    `APP module=${JSON.stringify(options.appModulePath)}`,
+    `NEUTRAL outDir=${JSON.stringify(options.neutralOutDir)}`,
+    ...options.presetDiagnostics.map(presetDiagnosticOutputLine),
+    ...options.presetLogs.map((message) => `PRESET ${stableText(message)}`),
+    `CHECK ok preset=${options.preset} (validate-only; deployable output not emitted)`,
   ];
 
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
