@@ -30,7 +30,7 @@ prod, both gates green).
 - Apps: five fresh `create-kovo` **default postgres** scaffolds + a baseline app, link-local
   to the monorepo, under `/Users/mini/kovo-dogfood-pg6-20260629/` (+ `/Users/mini/kovo-dogfood-pg6-base`).
   Gates per app: `pnpm run check`, `tsc --noEmit`, `vp test`, `build:prod`, plus dev/prod HTTP
-  + Playwright drives.
+  and Playwright drives.
 - Out of scope: published-npm behavior; the non-default `--sqlite` template; the roadmap L4
   Live transport (`live:true`/`<kovo-live>` are unimplemented **by design** per SPEC §9.3, not
   a defect); areas covered by super-1…5 + bugz-13/14 (db.ts DDL, `s.*` write primitives,

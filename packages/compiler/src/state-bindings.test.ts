@@ -187,6 +187,36 @@ export const BadProfileCard = component({
     ]);
   });
 
+  it('validates state bindings through wrapped state return object literals', () => {
+    const result = compileComponentModule({
+      fileName: 'satisfies-state.tsx',
+      source: `
+import { type JsonValue } from '@kovojs/core';
+
+export const SatisfiesState = component({
+  state: () => ({ open: false }) satisfies JsonValue,
+  render: (_queries, state) => (
+    <satisfies-state>
+      <output data-bind="state.open">{state.open}</output>
+    </satisfies-state>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'SatisfiesState',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'state.open',
+        source: 'state',
+        status: 'plan',
+      },
+    ]);
+  });
+
   it('lowers state-only attribute expressions to versioned derive bindings', () => {
     const result = compileComponentModule({
       fileName: 'disclosure-demo.tsx',

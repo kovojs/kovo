@@ -232,6 +232,53 @@ const DRIZZLE_OUTPUT_MERGE_COMPONENT = [
   '});',
 ].join('\n');
 
+const DRIZZLE_DERIVED_OUTPUT_QUERY_SOURCE = [
+  'import { query, s } from "@kovojs/server";',
+  'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+  '',
+  'export const contacts = pgTable("contacts", {',
+  '  id: text("id").primaryKey(),',
+  '  status: text("status").notNull(),',
+  '}, kovo({ domain: "contact", key: "id" }));',
+  '',
+  'export const contactStatsQuery = query({',
+  '  output: s.object({',
+  '    active: s.number(),',
+  '    archived: s.number(),',
+  '    lead: s.number(),',
+  '    statusById: s.array(s.object({ id: s.string(), status: s.string() })),',
+  '    total: s.number(),',
+  '  }),',
+  '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+  '    const rows = await db.select({ id: contacts.id, status: contacts.status }).from(contacts);',
+  '    return {',
+  '      active: rows.filter((row) => row.status === "active").length,',
+  '      archived: rows.filter((row) => row.status === "archived").length,',
+  '      lead: rows.filter((row) => row.status === "lead").length,',
+  '      statusById: rows,',
+  '      total: rows.length,',
+  '    };',
+  '  },',
+  '});',
+].join('\n');
+
+const DRIZZLE_DERIVED_OUTPUT_COMPONENT = [
+  'import { component } from "@kovojs/server";',
+  'import { contactStatsQuery } from "../contact-stats";',
+  '',
+  'export const ContactStats = component({',
+  '  queries: { stats: contactStatsQuery },',
+  '  render: ({ stats }) => (',
+  '    <section>',
+  '      <span>{stats.total}</span>',
+  '      <span>{stats.lead}</span>',
+  '      <span>{stats.active}</span>',
+  '      <span>{stats.archived}</span>',
+  '    </section>',
+  '  ),',
+  '});',
+].join('\n');
+
 const NON_DRIZZLE_OUTPUT_QUERY_SOURCE = [
   'import { query, s } from "@kovojs/server";',
   '',
@@ -504,6 +551,33 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
 
     const componentReport = captured.find((report) =>
       report.fileName.endsWith('contacts-summary.tsx'),
+    );
+    expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
+      false,
+    );
+  });
+
+  it('keeps compiler-derived Drizzle output fields bindable in direct JSX expressions', async () => {
+    const root = await fixture({
+      'src/components/contact-stats.tsx': DRIZZLE_DERIVED_OUTPUT_COMPONENT,
+      'src/contact-stats.ts': DRIZZLE_DERIVED_OUTPUT_QUERY_SOURCE,
+      'src/drizzle-types.d.ts': DRIZZLE_RUNTIME_REGISTRY_TYPES,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(
+        DRIZZLE_DERIVED_OUTPUT_COMPONENT,
+        join(root, 'src/components/contact-stats.tsx'),
+      ),
+    ).resolves.toEqual(expect.objectContaining({ map: null }));
+
+    const componentReport = captured.find((report) =>
+      report.fileName.endsWith('contact-stats.tsx'),
     );
     expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
       false,

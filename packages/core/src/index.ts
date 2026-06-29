@@ -139,7 +139,7 @@ export interface ComponentDefinitionInput {
   /** Static prop metadata used by generated live-target renderers to serialize component props. */
   props?: Record<string, unknown>;
   queries?: unknown;
-  state?: () => unknown;
+  state?: (() => any) | undefined;
   render: (...args: never[]) => ComponentRenderResult;
 }
 
@@ -185,26 +185,48 @@ export type Serializable<T> = T extends JsonValue
  * });
  */
 export function component<
-  const Definition extends Omit<ComponentDefinitionInput, 'mutations' | 'render'> & {
+  const State,
+  const Definition extends Omit<ComponentDefinitionInput, 'mutations' | 'render' | 'state'> & {
+    state: () => State;
     mutations?: ComponentMutationDefinitions;
     render: (...args: any[]) => ComponentRenderResult;
   },
 >(
   definition: Definition &
-    (Definition extends { state: () => infer State }
-      ? State extends Serializable<State>
-        ? { state: () => State }
-        : { state: () => never }
-      : { state?: undefined }) & {
+    (State extends Serializable<State> ? { state: () => State } : { state: () => never }) & {
       render: (
         queries: any,
         state: any,
         slots: ComponentRenderSlots<ComponentDefinitionMutations<Definition>>,
       ) => ComponentRenderResult;
     },
-): Component<Definition> {
-  assertKnownComponentDefinitionKeys(definition);
-  const descriptor = (() => undefined) as Component<Definition>;
+): Component<Definition>;
+export function component<
+  const Definition extends Omit<ComponentDefinitionInput, 'mutations' | 'render' | 'state'> & {
+    mutations?: ComponentMutationDefinitions;
+    render: (...args: any[]) => ComponentRenderResult;
+    state?: undefined;
+  },
+>(
+  definition: Definition & {
+    render: (
+      queries: any,
+      state: any,
+      slots: ComponentRenderSlots<ComponentDefinitionMutations<Definition>>,
+    ) => ComponentRenderResult;
+  },
+): Component<Definition>;
+export function component(
+  definition: ComponentDefinitionInput & {
+    render: (
+      queries: any,
+      state: any,
+      slots: ComponentRenderSlots<ComponentMutationDefinitions>,
+    ) => ComponentRenderResult;
+  },
+): Component<any> {
+  assertKnownComponentDefinitionKeys(definition as unknown as Record<PropertyKey, unknown>);
+  const descriptor = (() => undefined) as Component<any>;
   Object.defineProperty(descriptor, 'name', {
     configurable: true,
     enumerable: true,

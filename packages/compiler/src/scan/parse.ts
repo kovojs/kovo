@@ -2189,9 +2189,10 @@ function arrowReturnObjectSource(
 ): StateReturnObjectModel | null {
   if (!ts.isArrowFunction(expression)) return null;
 
-  const body = ts.isParenthesizedExpression(expression.body)
-    ? expression.body.expression
-    : expression.body;
+  const returned = renderReturnExpression(expression.body);
+  if (!returned) return null;
+
+  const body = unwrapStateReturnExpression(returned);
   if (!ts.isObjectLiteralExpression(body)) return null;
 
   const start = body.getStart(sourceFile);
@@ -2202,6 +2203,27 @@ function arrowReturnObjectSource(
     ...stateReturnStaticValue(body),
     start,
   };
+}
+
+function unwrapStateReturnExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    while (ts.isParenthesizedExpression(current)) {
+      current = current.expression;
+      changed = true;
+    }
+    if (
+      ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current) ||
+      ts.isTypeAssertionExpression(current)
+    ) {
+      current = current.expression;
+      changed = true;
+    }
+  }
+  return current;
 }
 
 function stateReturnStaticValue(
