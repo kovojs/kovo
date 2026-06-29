@@ -19,7 +19,7 @@
     "check:imports": "node scripts/import-boundary.mjs",
     "check:pack-security": "node scripts/check-pack-security.mjs",
     "check:publish": "node scripts/egress-floor.mjs --policy publish -- node scripts/build-publish.mjs",
-    "check:sink-policy": "node scripts/check-sink-policy-gate.mjs",
+    "check:sink-policy": "node scripts/check-sink-policy-gate-ci.mjs",
     "check:supply-chain": "node scripts/supply-chain-gates.mjs",
     "check:kovo": "vp run kovo-check",
     "check:no-committed-generated": "node scripts/no-committed-generated.mjs",
