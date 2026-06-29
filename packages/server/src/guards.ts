@@ -177,6 +177,14 @@ export interface SessionRequestLike {
   } | null;
 }
 
+/** A request shape accepted by `guards.role()`: roles must be present on an authenticated user. */
+export interface RoleSessionRequestLike extends SessionRequestLike {
+  session?: {
+    id?: string;
+    user?: (SessionUserLike & { roles: readonly string[] }) | null;
+  } | null;
+}
+
 /**
  * A request carrying the framework-resolved, trustworthy client IP that `guards.rateLimit({ per:
  * 'ip' })` keys on (SPEC §9.5). The request shell attaches `req.clientIp` (via
@@ -484,7 +492,7 @@ export const guards = {
       ],
     );
   },
-  role<Request extends SessionRequestLike>(role: string): Guard<Request> {
+  role<Request extends RoleSessionRequestLike>(role: string): Guard<Request> {
     return stampGuardAudit(
       (request) => {
         if (!request.session?.user) return unauthenticatedGuardFailure();

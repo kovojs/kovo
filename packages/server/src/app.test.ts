@@ -690,6 +690,9 @@ describe('server createApp request shell', () => {
     const handler = createRequestHandler(
       createApp({
         errorShells: {
+          forbidden({ status }) {
+            return `<main>${status}:forbidden</main>`;
+          },
           notFound({ request, status }) {
             const url = new URL(request.url);
             return {

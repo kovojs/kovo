@@ -184,6 +184,21 @@ describe('core authoring APIs', () => {
     expect(assertRemovedFragmentTargetOption).toBeTypeOf('function');
   });
 
+  it('rejects unknown component definition fields and preserves isomorphic', () => {
+    const IsomorphicCounter = component({
+      isomorphic: true,
+      render: () => null,
+    });
+
+    expect(IsomorphicCounter.definition.isomorphic).toBe(true);
+    expect(() =>
+      component({
+        disableServerRefres: true,
+        render: () => null,
+      } as never),
+    ).toThrow('Unknown component() definition field "disableServerRefres"');
+  });
+
   it('rejects non-JsonValue component state at authoring time', () => {
     interface CounterState {
       count: number;

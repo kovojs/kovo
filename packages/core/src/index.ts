@@ -130,6 +130,8 @@ export interface ComponentDefinitionInput {
   fragmentTarget?: never;
   /** Unexpected render-error fallback for full-page and live-target renders (SPEC §9.2). */
   errorBoundary?: ComponentErrorBoundary;
+  /** Force the compiler to keep server and client render output equivalent for this component. */
+  isomorphic?: boolean;
   mutations?: Record<string, unknown>;
   queries?: unknown;
   state?: () => unknown;
@@ -196,6 +198,7 @@ export function component<
       ) => ComponentRenderResult;
     },
 ): Component<Definition> {
+  assertKnownComponentDefinitionKeys(definition);
   const descriptor = (() => undefined) as Component<Definition>;
   Object.defineProperty(descriptor, 'name', {
     configurable: true,
@@ -205,6 +208,28 @@ export function component<
   });
   descriptor.definition = definition;
   return descriptor;
+}
+
+const COMPONENT_DEFINITION_KEYS = new Set([
+  'disableServerRefresh',
+  'errorBoundary',
+  'isomorphic',
+  'mutations',
+  'queries',
+  'render',
+  'state',
+]);
+
+function assertKnownComponentDefinitionKeys(definition: Record<PropertyKey, unknown>): void {
+  for (const key of Reflect.ownKeys(definition)) {
+    if (typeof key !== 'string') continue;
+    if (COMPONENT_DEFINITION_KEYS.has(key)) continue;
+    throw new TypeError(
+      `Unknown component() definition field "${key}". Supported fields are ${[
+        ...COMPONENT_DEFINITION_KEYS,
+      ].join(', ')}.`,
+    );
+  }
 }
 
 /**

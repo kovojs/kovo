@@ -175,7 +175,7 @@ describe('route and query guard responses', () => {
   });
 
   it('maps route and query guard failures to login redirects and 403 shells', async () => {
-    type AppRequest = { session?: { user?: { roles?: readonly string[] } | null } | null };
+    type AppRequest = { session?: { user?: { roles: readonly string[] } | null } | null };
     const authedRoute = route('/account', {
       guard: guards.authed<AppRequest>(),
       onUnauthenticated({ next }) {

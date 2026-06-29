@@ -437,6 +437,10 @@ describe('server guard and session primitives', () => {
   });
 
   it('guards mutations by session user role', async () => {
+    const assertRolesRequired = () => {
+      // @ts-expect-error guards.role() requires session.user.roles to be present in the request type.
+      guards.role<{ session?: { user?: { id: string } | null } | null }>('admin');
+    };
     const guarded = mutation('admin/refund', {
       guard: guards.role('admin'),
       input: s.object({ productId: s.string() }),
@@ -458,6 +462,7 @@ describe('server guard and session primitives', () => {
       ok: true,
       value: 'ok',
     });
+    expect(assertRolesRequired).toBeTypeOf('function');
   });
 
   it('rate-limits mutations by session by default', async () => {
@@ -867,7 +872,7 @@ describe('server guard and session primitives', () => {
   it('keeps authenticated authorization failures on typed enhanced fragments with 403', async () => {
     const guarded = mutation('admin/refund', {
       csrf: false,
-      guard: guards.role<{ session?: { user?: { roles?: readonly string[] } } | null }>('admin'),
+      guard: guards.role<{ session?: { user?: { roles: readonly string[] } } | null }>('admin'),
       input: s.object({ orderId: s.string() }),
       handler() {
         return 'ok';

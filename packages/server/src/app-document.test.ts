@@ -807,12 +807,12 @@ describe('server app document boundary', () => {
       render: (_queries, _state, { children }) =>
         trustedHtml(`<section>${String(children)}</section>`),
     });
-    const AdminLayout = layout<Request & { session?: { user?: { roles?: readonly string[] } } }>({
+    const AdminLayout = layout<Request & { session?: { user?: { roles: readonly string[] } } }>({
       boundaries: {
         unauthorized: ({ status }) =>
           trustedHtml(`<main data-layout-boundary="403">layout:${status}</main>`),
       },
-      guard: guards.role<Request & { session?: { user?: { roles?: readonly string[] } } }>('admin'),
+      guard: guards.role<Request & { session?: { user?: { roles: readonly string[] } } }>('admin'),
       render: (_queries, _state, { children }) =>
         trustedHtml(`<section>${String(children)}</section>`),
     });

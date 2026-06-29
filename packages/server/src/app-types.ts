@@ -75,7 +75,7 @@ export interface AppErrorShellOptions {
 export type ErrorShellRenderer = (context: {
   request: Request;
   status: 403 | 404 | 500;
-}) => RoutePageResponse | Promise<RoutePageResponse>;
+}) => RoutePageResponse | string | Promise<RoutePageResponse | string>;
 
 /** Document-level options applied by `createApp()` when rendering route documents. */
 export interface AppDocumentOptions {

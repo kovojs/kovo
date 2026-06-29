@@ -31,7 +31,7 @@ describe('structured access metadata', () => {
       guards: [
         { name: 'session' },
         {
-          guard: guards.role<{ session?: { user?: { roles?: readonly string[] } } }>('admin'),
+          guard: guards.role<{ session?: { user?: { roles: readonly string[] } } }>('admin'),
           name: 'admin',
         },
       ],
@@ -84,7 +84,7 @@ describe('structured access metadata', () => {
   });
 
   it('does not change route, query, or mutation guard enforcement', async () => {
-    type AppRequest = { session?: { user?: { roles?: readonly string[] } | null } | null };
+    type AppRequest = { session?: { user?: { roles: readonly string[] } | null } | null };
     const access = publicAccess('audit metadata only');
     const guardedRoute = route('/admin', {
       access,

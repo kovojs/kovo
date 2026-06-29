@@ -171,7 +171,7 @@ undefined`) and `appDb` is a module singleton. Two separate node processes each 
 
 ### C. The no-op-field / type-level-security-ergonomics contract is applied unevenly
 
-- [ ] **`component()` silently accepts ANY unknown/misspelled definition key (no TS error, no runtime guard) — the no-op-field defect fixed for `query()` (super-1 D2) but left open on the most-used API.** (med, framework; found by `interaction-ladder-live`)
+- [x] **`component()` silently accepts ANY unknown/misspelled definition key (no TS error, no runtime guard) — the no-op-field defect fixed for `query()` (super-1 D2) but left open on the most-used API.** (med, framework; found by `interaction-ladder-live`)
   - Observed: `component({ stat:…, querys:{}, isomorphi:true, disableServerRefres:true, totallyMadeUp:99,
 render })` passes `tsc --noEmit` with zero errors and has no runtime validation; the parallel
     `query({ live:true })`→TS2353, `query({ guardd })`→TS2561 are correctly rejected. Misspelling a real
@@ -188,8 +188,9 @@ render })` passes `tsc --noEmit` with zero errors and has no runtime validation;
   - Acceptance: add an `assertKnownComponentDefinitionKeys` closed-set runtime guard (and/or a
     closed-shape validating overload) to `component()`, and add `isomorphic` to `ComponentDefinitionInput`
     so the typed surface is complete.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/guards.test.ts packages/server/src/access.test.ts packages/server/src/route-query-guards.test.ts packages/server/src/app-document.test.ts packages/server/src/app.test.ts --reporter=dot` proves unknown `component()` keys throw and `isomorphic` is preserved on the public definition type.
 
-- [ ] **`guards.role()` type-checks against a session schema that declares no `roles`, so an RBAC guard silently always-denies with no compile-time or runtime signal.** (low, framework; found by `auth-access-depth`)
+- [x] **`guards.role()` type-checks against a session schema that declares no `roles`, so an RBAC guard silently always-denies with no compile-time or runtime signal.** (low, framework; found by `auth-access-depth`)
   - Observed: `guards.role<AppRequest>('admin')` compiles cleanly though the starter session
     (`{ id, user:{ id, email, name } }`) has no `roles`; at runtime
     `request.session.user.roles?.includes('admin')` → `undefined` → denies every caller (an authed
@@ -203,8 +204,9 @@ render })` passes `tsc --noEmit` with zero errors and has no runtime validation;
     demand `roles`, so this is an ergonomic gap vs the project's own design values.)
   - Acceptance: constrain `role()`'s `Request` so `session.user.roles` is required (a missing field
     becomes a compile error), and/or a runtime diagnostic that the session schema lacks `roles`.
+  - Fixed evidence (2026-06-29): `pnpm run check:vp` proves the `@ts-expect-error` in `packages/server/src/guards.test.ts` is active for a roles-less request type while existing role-guard runtime tests still pass.
 
-- [ ] **`errorShells.forbidden/notFound/serverError` reject a raw HTML string body though the runtime renders it — the type is narrower than the runtime contract.** (low, framework; found by `auth-access-depth`)
+- [x] **`errorShells.forbidden/notFound/serverError` reject a raw HTML string body though the runtime renders it — the type is narrower than the runtime contract.** (low, framework; found by `auth-access-depth`)
   - Observed: `createApp({ errorShells: { forbidden: () => '<main>denied</main>' } })` → `TS2322: …
 '() => string' is not assignable to 'ErrorShellRenderer' … 'string' is not assignable to
 'RoutePageResponse'`. The JSX form (`() => <main/>`) compiles; the raw-HTML-string form (how the
@@ -220,6 +222,7 @@ render })` passes `tsc --noEmit` with zero errors and has no runtime validation;
     `papercuts-14.md:62` (that fixed the runtime; this is the residual type gap).
   - Acceptance: widen `ErrorShellRenderer`'s return to `RoutePageResult | string | RoutePageResponse`
     to match the runtime.
+  - Fixed evidence (2026-06-29): `pnpm run check:vp` proves `createApp({ errorShells: { forbidden: () => '<main>...' } })` type-checks, and the focused app-shell tests above prove configured error shells still render.
 
 ### D. Client-island (L1) authoring ergonomics
 
