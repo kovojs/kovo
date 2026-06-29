@@ -6,6 +6,9 @@ const initialUrl = location.href;
 const initialDocumentElementAttributes = Array.from(document.documentElement.attributes).map(
   (attribute) => [attribute.name, attribute.value] as const,
 );
+const initialStartViewTransition = (
+  document as Document & { startViewTransition?: (callback: () => void) => unknown }
+).startViewTransition;
 let inlineLoaderInstalled = false;
 let inlineImportModule: (url: string) => Promise<Record<string, unknown>> = async () => ({});
 
@@ -88,6 +91,14 @@ afterEach(() => {
   delete (globalThis as typeof globalThis & { __navDeferredApplied?: number }).__navDeferredApplied;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  if (initialStartViewTransition === undefined) {
+    delete (document as Document & { startViewTransition?: unknown }).startViewTransition;
+  } else {
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      value: initialStartViewTransition,
+    });
+  }
   history.replaceState({}, '', initialUrl);
 });
 
@@ -160,6 +171,57 @@ describe('browser inline loader enhanced navigation', () => {
     } finally {
       removeEventListener('kovo:navigate', navigated);
     }
+  });
+
+  it('runs enhanced navigation DOM commits inside a view transition when available', async () => {
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Products</title>',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<span style="view-transition-name: brand">Kovo</span>',
+      '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">Products</section>',
+      '</main>',
+    ].join('');
+    const startViewTransition = vi.fn((callback: () => void) => {
+      callback();
+      return {};
+    });
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      value: startViewTransition,
+    });
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>Cart</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+          '<a id="to-cart" href="/cart">Cart</a>',
+          '<span style="view-transition-name: brand">Kovo</span>',
+          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/cart', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/cart');
+
+    await vi.waitFor(() => expect(document.title).toBe('Cart'));
+
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[kovo-nav-segment="page:/cart"]')?.textContent).toBe('Cart');
   });
 
   it('executes deferred body scripts from full-document enhanced navigation targets', async () => {
@@ -1869,5 +1931,65 @@ describe('browser inline loader enhanced navigation', () => {
     expect(mutationHeaders['Kovo-Live-Targets']).toContain(
       'layout-shell#layout-shell/layout-shell@tok_layout:{}',
     );
+  });
+
+  it('refreshes server-fragment targets from the current route on visible return', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Cart</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-live-token="tok_cart" kovo-deps="cart">',
+      '<button id="cart-button">Cart stale</button>',
+      '</section>',
+      '</main>',
+    ].join('');
+    const button = document.querySelector('#cart-button') as HTMLButtonElement;
+    button.focus();
+    const fetch = vi.fn(async () => ({
+      headers: {
+        get(name: string) {
+          if (name === 'content-type') return 'text/html';
+          if (name === 'Kovo-Build') return 'build-a';
+          return null;
+        },
+      },
+      ok: true,
+      status: 200,
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>Cart</title>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+          '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-live-token="tok_cart" kovo-deps="cart">',
+          '<button id="cart-button">Cart fresh</button>',
+          '</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+    }));
+    vi.stubGlobal('fetch', fetch);
+
+    installNavigationLoader();
+    dispatchEvent(new Event('visibilitychange'));
+
+    await vi.waitFor(() =>
+      expect(document.querySelector('[kovo-fragment-target="cart-badge"]')?.textContent).toContain(
+        'Cart fresh',
+      ),
+    );
+
+    expect(fetch).toHaveBeenCalledWith(location.href, {
+      cache: 'no-store',
+      headers: {
+        Accept: 'text/vnd.kovo.document+html, text/html',
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': 'cart-badge#cart-badge/cart-badge@tok_cart:{}',
+        'Kovo-Targets': 'cart-badge=cart',
+      },
+      method: 'GET',
+    });
+    expect(document.activeElement?.id).toBe('cart-button');
   });
 });
