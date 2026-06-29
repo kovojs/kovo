@@ -196,14 +196,14 @@ export const ImportOrder = component({
         "diagnostics": [],
         "serverSource": "// @kovojs-ir
       export function renderSource() {
-        return \`import { escapeText } from '@kovojs/server/internal/escape';
+        return \`
+      /** @jsxImportSource @kovojs/server */
+      import { escapeText } from '@kovojs/server/internal/escape';
       import { derive, kovoStyleProperty } from '@kovojs/browser/generated';
 
       export const ImportOrder$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));
       export const ImportOrder$span_style_derive = derive(["state"], (state: any) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
 
-
-      /** @jsxImportSource @kovojs/server */
       export const ImportOrder = component({
         queries: { product: productQuery },
         disableServerRefresh: true,
@@ -222,6 +222,41 @@ export const ImportOrder = component({
       ",
       }
     `);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('keeps helper imports after contiguous leading JSX pragmas', () => {
+    const result = compileComponentModule({
+      fileName: 'jsx-pragmas.tsx',
+      source: `/** @jsxImportSource @kovojs/server */
+/** @jsxRuntime automatic */
+export const JsxPragmas = component({
+  queries: { product: productQuery },
+  render: ({ product }) => (
+    <jsx-pragmas>
+      <img viewTransitionName={product.slug} src="/p1.png" />
+      <strong>{product.name}</strong>
+    </jsx-pragmas>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const importSourceOffset = serverSource.indexOf('/** @jsxImportSource @kovojs/server */');
+    const runtimeOffset = serverSource.indexOf('/** @jsxRuntime automatic */');
+    const escapeImportOffset = serverSource.indexOf(
+      "import { escapeText } from '@kovojs/server/internal/escape';",
+    );
+    const deriveImportOffset = serverSource.indexOf(
+      "import { derive, kovoStyleProperty } from '@kovojs/browser/generated';",
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(importSourceOffset).toBeGreaterThanOrEqual(0);
+    expect(runtimeOffset).toBeGreaterThan(importSourceOffset);
+    expect(escapeImportOffset).toBeGreaterThan(runtimeOffset);
+    expect(deriveImportOffset).toBeGreaterThan(runtimeOffset);
+    expect(serverSource.slice(importSourceOffset, escapeImportOffset)).not.toContain('import {');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 

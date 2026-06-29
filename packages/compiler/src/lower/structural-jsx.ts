@@ -1973,8 +1973,19 @@ function stateBindingAttributeName(name: string): string {
 }
 
 function derivePrefixInsertionOffset(source: string): number {
-  const jsxImportSource = /^\/\*\* @jsxImportSource [\s\S]*?\*\/\s*/.exec(source);
-  return jsxImportSource?.[0].length ?? 0;
+  const leadingWhitespace = /^\s*/.exec(source)?.[0].length ?? 0;
+  let offset = leadingWhitespace;
+  let matchedJsxPragma = false;
+
+  while (offset < source.length) {
+    const comment = /^\/\*\*?[\s\S]*?\*\/[ \t]*(?:\r?\n)?/.exec(source.slice(offset));
+    if (!comment || !/@jsx(?:ImportSource|Runtime|Frag)?(?:\s|$)/.test(comment[0])) break;
+
+    offset += comment[0].length;
+    matchedJsxPragma = true;
+  }
+
+  return matchedJsxPragma ? offset : 0;
 }
 
 function trimTrailingSemicolon(value: string): string {
