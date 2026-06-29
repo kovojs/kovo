@@ -46,6 +46,7 @@ export interface KovoVitePlugin {
   configResolved?: (config: KovoViteResolvedConfig) => void;
   configureServer?: (server: KovoViteDevServer) => void;
   enforce?: 'pre';
+  getClientModules?: () => readonly KovoViteCompiledClientModule[];
   handleHotUpdate?: (context: KovoViteHotUpdateContext) => Promise<readonly unknown[]>;
   getCssAssetManifest?: (options?: CssAssetManifestOptions) => CssAssetManifest;
   load?: (id: string) => null | Promise<null | string> | string;
@@ -61,6 +62,14 @@ export interface KovoVitePlugin {
         code: string;
         map: null;
       };
+}
+
+/** Compiler-emitted client module ready for production registration (SPEC.md §5.2.1). */
+export interface KovoViteCompiledClientModule {
+  path: string;
+  renderPlanFingerprint?: string;
+  source: string;
+  version?: string;
 }
 
 /** @internal Callback the Vite plugin invokes per non-error compiler diagnostic. */
@@ -198,6 +207,7 @@ interface ViteCompileOptions {
 }
 
 interface ViteCompileResult {
+  clientExports?: readonly string[];
   cssAssets?: readonly ComponentCssAsset[];
   dependencyFootprint?: CompileDependencyFootprint;
   diagnostics?: readonly CompilerDiagnostic[];
@@ -205,7 +215,9 @@ interface ViteCompileResult {
     kind: string;
     source: string;
   }[];
+  handlerExports?: readonly string[];
   hmrImpact?: HmrImpactMetadata | null;
+  renderPlanFingerprint?: string | null;
 }
 
 type MaybePromise<T> = Promise<T> | T;
@@ -223,6 +235,7 @@ export function createKovoVitePlugin(
 ): KovoVitePlugin {
   const compileCache = new CompileCache<ViteCompileResult>();
   const clientModules = new Map<string, string>();
+  const compiledClientModules = new Map<string, KovoViteCompiledClientModule>();
   const cssAssetsByFileName = new Map<string, readonly ComponentCssAsset[]>();
   const hmrImpacts = new Map<string, HmrImpactMetadata>();
   let root = process.cwd();
@@ -256,6 +269,11 @@ export function createKovoVitePlugin(
         manifestOptions,
       );
     },
+    getClientModules() {
+      return [...compiledClientModules.values()].sort((left, right) =>
+        left.path.localeCompare(right.path),
+      );
+    },
     name: 'kovo',
     resolveId(source: string, importer?: string): null | string {
       const resolvedId = resolveViteClientModuleId(source, importer, root);
@@ -277,7 +295,12 @@ export function createKovoVitePlugin(
       // a non-public subpath). The transform is its own fixpoint: an emitted output must never be
       // re-lowered as app source. The registry is process-scoped, so it is shared across plugin
       // instances and cannot be forged from authored source.
-      if (isKovoEmittedServerModuleReentry(componentId, source)) return null;
+      if (
+        isKovoEmittedServerModuleReentry(componentId, source) ||
+        isKovoEmittedServerModuleReentry(fileName, source) ||
+        isKovoGeneratedServerModuleReentry(source)
+      )
+        return null;
       const standaloneRegistrySource = shouldTransformViteAuthoredSource(fileName, source, options)
         ? lowerStandaloneSourceDerivedRegistryDeclarations({ fileName, source })
         : null;
@@ -287,6 +310,12 @@ export function createKovoVitePlugin(
           : { code: standaloneRegistrySource, map: null };
       }
 
+      rememberKovoCompiledComponent(componentId);
+      rememberKovoCompiledComponent(fileName);
+      const forgetComponentCompile = (): void => {
+        forgetKovoCompiledComponent(componentId);
+        forgetKovoCompiledComponent(fileName);
+      };
       const result = compileCachedViteComponentModule(
         compileComponentModule,
         compileCache,
@@ -296,30 +325,48 @@ export function createKovoVitePlugin(
         source,
       );
       if (isPromiseLike(result)) {
-        return result.then((resolvedResult) =>
-          transformViteCompileResult(
-            clientModules,
-            cssAssetsByFileName,
-            hmrImpacts,
-            options,
-            componentId,
-            fileName,
-            source,
-            resolvedResult,
-          ),
+        return result.then(
+          (resolvedResult) => {
+            try {
+              return transformViteCompileResult(
+                clientModules,
+                compiledClientModules,
+                cssAssetsByFileName,
+                hmrImpacts,
+                options,
+                componentId,
+                fileName,
+                source,
+                resolvedResult,
+              );
+            } catch (error) {
+              forgetComponentCompile();
+              throw error;
+            }
+          },
+          (error: unknown) => {
+            forgetComponentCompile();
+            throw error;
+          },
         );
       }
 
-      return transformViteCompileResult(
-        clientModules,
-        cssAssetsByFileName,
-        hmrImpacts,
-        options,
-        componentId,
-        fileName,
-        source,
-        result,
-      );
+      try {
+        return transformViteCompileResult(
+          clientModules,
+          compiledClientModules,
+          cssAssetsByFileName,
+          hmrImpacts,
+          options,
+          componentId,
+          fileName,
+          source,
+          result,
+        );
+      } catch (error) {
+        forgetComponentCompile();
+        throw error;
+      }
     },
     async handleHotUpdate(context) {
       const source = await context.read();
@@ -329,22 +376,36 @@ export function createKovoVitePlugin(
       // be compiled fresh (and any newly-added ABI import re-flagged as KV235), not skipped as a
       // stale emitted-output re-entry.
       forgetKovoCompiledComponent(componentId);
+      forgetKovoCompiledComponent(fileName);
       if (!shouldTransformViteComponentSource(fileName, source, options))
         return context.modules ?? [];
 
       const previous = hmrImpacts.get(fileName) ?? null;
-      const result = await compileCachedViteComponentModule(
-        compileComponentModule,
-        compileCache,
-        options,
-        root,
-        fileName,
-        source,
-      );
+      rememberKovoCompiledComponent(componentId);
+      rememberKovoCompiledComponent(fileName);
+      const forgetComponentCompile = (): void => {
+        forgetKovoCompiledComponent(componentId);
+        forgetKovoCompiledComponent(fileName);
+      };
+      let result: Awaited<ReturnType<typeof compileCachedViteComponentModule>>;
+      try {
+        result = await compileCachedViteComponentModule(
+          compileComponentModule,
+          compileCache,
+          options,
+          root,
+          fileName,
+          source,
+        );
+      } catch (error) {
+        forgetComponentCompile();
+        throw error;
+      }
       const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
       const next = result.hmrImpact ?? null;
 
       if (errorDiagnostics.length > 0) {
+        forgetComponentCompile();
         if (next) hmrImpacts.set(fileName, next);
         sendKovoHmrEvent(context.server, 'kovo:diagnostics', previous, next, {
           impact: 'diagnosticError',
@@ -353,7 +414,14 @@ export function createKovoVitePlugin(
         return [];
       }
 
-      recordViteCompileResult(clientModules, cssAssetsByFileName, hmrImpacts, fileName, result);
+      recordViteCompileResult(
+        clientModules,
+        compiledClientModules,
+        cssAssetsByFileName,
+        hmrImpacts,
+        fileName,
+        result,
+      );
       const classification = classifyViteHmrImpact(previous, next);
       const event = eventForHmrClassification(classification);
       sendKovoHmrEvent(context.server, event, previous, next, classification);
@@ -418,8 +486,14 @@ function isKovoEmittedServerModuleReentry(fileName: string, source: string): boo
   return kovoCompiledComponentIds().has(fileName) && KOVO_ABI_IMPORT_PATTERN.test(source);
 }
 
+function isKovoGeneratedServerModuleReentry(source: string): boolean {
+  if (!KOVO_ABI_IMPORT_PATTERN.test(source)) return false;
+  return source.includes('componentLiveTargetRenderer') || source.includes('__kovoAssignDerived');
+}
+
 function transformViteCompileResult(
   clientModules: Map<string, string>,
+  compiledClientModules: Map<string, KovoViteCompiledClientModule>,
   cssAssetsByFileName: Map<string, readonly ComponentCssAsset[]>,
   hmrImpacts: Map<string, HmrImpactMetadata>,
   options: KovoVitePluginOptions,
@@ -430,11 +504,19 @@ function transformViteCompileResult(
 ): { code: string; map: null } {
   const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
-  recordViteCompileResult(clientModules, cssAssetsByFileName, hmrImpacts, fileName, result);
+  recordViteCompileResult(
+    clientModules,
+    compiledClientModules,
+    cssAssetsByFileName,
+    hmrImpacts,
+    fileName,
+    result,
+  );
 
   // SPEC §5.2 #3: this authored component compiled cleanly, so a later transform of its emitted
   // output (a second Kovo plugin instance) must be recognized as a re-entry and skipped.
   rememberKovoCompiledComponent(componentId);
+  rememberKovoCompiledComponent(fileName);
   return {
     code:
       executableViteServerSource(result.files.find((file) => file.kind === 'server')?.source) ??
@@ -770,11 +852,13 @@ function reportViteDiagnostics(
 
 function recordViteCompileResult(
   clientModules: Map<string, string>,
+  compiledClientModules: Map<string, KovoViteCompiledClientModule>,
   cssAssetsByFileName: Map<string, readonly ComponentCssAsset[]>,
   hmrImpacts: Map<string, HmrImpactMetadata>,
   fileName: string,
   result: ViteCompileResult,
 ): void {
+  let recordedCompiledClientModule = false;
   for (const file of result.files) {
     if (file.kind === 'client') {
       const href =
@@ -786,8 +870,26 @@ function recordViteCompileResult(
       if (target !== undefined) {
         clientModules.set(`${target.path}?v=${target.version}`, file.source);
       }
+
+      if (result.hmrImpact?.clientHref === null || result.hmrImpact?.clientHref === undefined)
+        continue;
+      const url = new URL(href, 'https://kovo.local');
+      const path = target?.path ?? url.pathname;
+      const exportedClientMembers =
+        (result.clientExports?.length ?? 0) + (result.handlerExports?.length ?? 0);
+      if (exportedClientMembers === 0) continue;
+      compiledClientModules.set(fileName, {
+        path,
+        ...(result.renderPlanFingerprint
+          ? { renderPlanFingerprint: result.renderPlanFingerprint }
+          : {}),
+        source: file.source,
+        ...(target?.version === undefined ? {} : { version: target.version }),
+      });
+      recordedCompiledClientModule = true;
     }
   }
+  if (!recordedCompiledClientModule) compiledClientModules.delete(fileName);
 
   if (result.cssAssets && result.cssAssets.length > 0) {
     cssAssetsByFileName.set(fileName, result.cssAssets);

@@ -13,6 +13,7 @@ export { mergePrimitiveAndAuthorAttributes } from './lower/attribute-merge.js';
 export type {
   KovoHmrEventName,
   KovoHmrEventPayload,
+  KovoViteCompiledClientModule,
   KovoViteHotUpdateContext,
   KovoViteModuleFilter,
   KovoVitePlugin,

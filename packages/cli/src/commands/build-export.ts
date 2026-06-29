@@ -24,6 +24,7 @@ import type { lowerStandaloneSourceDerivedRegistryDeclarations } from '@kovojs/c
 import type { KovoApp, StaticExportCompileDiagnostic, StylesheetAsset } from '@kovojs/server';
 import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
+import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
 
 import { BUILD_USAGE, EXPORT_USAGE } from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
@@ -435,15 +436,20 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       clientBuild.assets,
     ]);
     const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets);
-    const serverHandlerSource = await bundleKovoServerHandler(resolvedAppModulePath, {
+    const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
       stylesheetAssets: buildCssAssets,
     });
+    const clientModules = uniqueKovoCompiledClientModules([
+      ...clientBuild.clientModules,
+      ...serverHandlerBuild.clientModules,
+    ]);
     const neutralBuild = await writeKovoNeutralBuild({
       app: buildApp,
       buildStylesheetCss: [...buildStylesheetCss.stylesheetCss, ...clientBuild.stylesheetCss],
+      clientModules,
       manifestFile: clientBuild.manifestFile,
       outDir: join(outDir, '.kovo'),
-      serverHandlerSource,
+      serverHandlerSource: serverHandlerBuild.source,
     });
     writeKovoBuildGraphArtifact(neutralBuild, checkGraph);
     const preset =
@@ -459,7 +465,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       throw new Error(`kovo build preset ${selectedPreset.name} cannot emit build output.`);
     }
 
-    const declaredEnv = inferredKovoBuildDeclaredEnv(serverHandlerSource);
+    const declaredEnv = inferredKovoBuildDeclaredEnv(serverHandlerBuild.source);
     const presetContext: PresetContext = {
       declaredEnv,
       log(message) {
@@ -467,7 +473,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       },
       outDir: presetOutDir,
       readServerHandlerSource() {
-        return serverHandlerSource;
+        return serverHandlerBuild.source;
       },
       readNeutral() {
         return neutralBuild;
@@ -1694,6 +1700,7 @@ function isKovoPreset(value: unknown): value is KovoPreset {
 
 interface KovoClientManifestBuild {
   assets: KovoBuildStylesheetAssets;
+  clientModules: readonly KovoAppShellCompiledClientModule[];
   manifestFile: string;
   stylesheetCss: readonly KovoBuildStylesheetCss[];
 }
@@ -1742,7 +1749,7 @@ async function buildKovoClientManifest(
     import('@kovojs/compiler/package-styles'),
     import('vite-plus'),
   ]);
-  const kovoPlugin = kovoVitePlugin({ cache: options.cache });
+  const viteAssetPlugin = kovoVitePlugin({ cache: options.cache });
   const routeTargets = extractAppRouteCssTargets({
     fileName: appModulePath,
     packagePrefixDiscoveryRoot: dirname(appModulePath),
@@ -1757,31 +1764,131 @@ async function buildKovoClientManifest(
       outDir,
     },
     logLevel: 'silent',
-    plugins: [kovoPlugin],
+    plugins: [viteAssetPlugin],
     root,
   });
 
-  const cssAssetManifest = kovoPlugin.getCssAssetManifest?.(
-    routeTargets.length === 0 ? undefined : { split: { routes: routeTargets } },
-  );
-  if (cssAssetManifest?.chunks)
-    assertKovoBuildCssDelivery(cssAssetManifest, routeTargets, cssRouteDeliveryGate);
+  const componentBuild = await buildKovoComponentClientModules(appModulePath, root, options);
+  const cssAssetManifestOptions =
+    routeTargets.length === 0 ? undefined : { split: { routes: routeTargets } };
+  const cssAssetManifests = [
+    viteAssetPlugin.getCssAssetManifest?.(cssAssetManifestOptions),
+    componentBuild.getCssAssetManifest?.(cssAssetManifestOptions),
+  ].filter((manifest) => manifest !== undefined);
+  for (const cssAssetManifest of cssAssetManifests) {
+    if (cssAssetManifest.chunks)
+      assertKovoBuildCssDelivery(cssAssetManifest, routeTargets, cssRouteDeliveryGate);
+  }
   const appCss = dedupeCss(
-    (cssAssetManifest?.stylesheets ?? []).flatMap((asset) =>
-      asset.criticalCss ? [asset.criticalCss] : [],
+    cssAssetManifests.flatMap((manifest) =>
+      (manifest.stylesheets ?? []).flatMap((asset) =>
+        asset.criticalCss ? [asset.criticalCss] : [],
+      ),
     ),
   );
-  const splitStylesheetAssets = stylesheetAssetsFromCssSplitChunks(cssAssetManifest?.chunks);
-  const monolithAppCss = cssAssetManifest?.chunks ? null : appCss;
+  const splitStylesheetAssets = mergeKovoBuildStylesheetAssets(
+    cssAssetManifests.map((manifest) => stylesheetAssetsFromCssSplitChunks(manifest.chunks)),
+  );
+  const monolithAppCss = cssAssetManifests.some((manifest) => manifest.chunks) ? null : appCss;
 
   return {
     assets: splitStylesheetAssets,
+    clientModules: componentBuild.getClientModules?.() ?? [],
     manifestFile: join(outDir, '.vite/manifest.json'),
     stylesheetCss: [
       ...(monolithAppCss ? [{ css: monolithAppCss, href: '/assets/styles.css' }] : []),
       ...stylesheetCssFromBuildStylesheetAssets(splitStylesheetAssets),
     ],
   };
+}
+
+async function buildKovoComponentClientModules(
+  appModulePath: string,
+  root: string,
+  options: { cache: boolean },
+): Promise<{
+  getClientModules?: () => readonly KovoAppShellCompiledClientModule[];
+  getCssAssetManifest?: ReturnType<
+    typeof import('@kovojs/compiler').kovoVitePlugin
+  >['getCssAssetManifest'];
+}> {
+  const [{ kovoVitePlugin }, { lowerStandaloneSourceDerivedRegistryDeclarations }, { build }] =
+    await Promise.all([
+      import('@kovojs/compiler'),
+      import('@kovojs/compiler/internal'),
+      import('vite-plus'),
+    ]);
+  const kovoPlugin = kovoVitePlugin({
+    cache: options.cache,
+    include: [kovoBuildAppSourceFilter(appModulePath, root)],
+  });
+  const tempDir = mkdtempSync(join(tmpdir(), 'kovo-client-modules-'));
+  const entryPath = join(tempDir, 'entry.ts');
+  const outDir = join(tempDir, 'out');
+
+  try {
+    writeFileSync(
+      entryPath,
+      [
+        '// Compiler scan entry generated by kovo build.',
+        `import ${JSON.stringify(pathToFileURL(appModulePath).href)};`,
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await build({
+      appType: 'custom',
+      build: {
+        emptyOutDir: true,
+        minify: false,
+        outDir,
+        rollupOptions: {
+          // SPEC 6.6 keeps Argon2 as the runtime password sink. The scan build only needs module
+          // reachability so the Kovo compiler sees authored TSX before production emission.
+          external: isKovoServerHandlerExternalDependency,
+          input: entryPath,
+          output: {
+            entryFileNames: 'entry.mjs',
+            format: 'es',
+          },
+        },
+        ssr: true,
+        target: 'node22',
+      },
+      configFile: false,
+      logLevel: 'silent',
+      oxc: {
+        jsx: {
+          importSource: '@kovojs/server',
+          runtime: 'automatic',
+        },
+      },
+      plugins: [
+        sourceDerivedRegistryVitePlugin(root, lowerStandaloneSourceDerivedRegistryDeclarations),
+        kovoPlugin,
+        bundledUndiciRuntimeVitePlugin(),
+      ],
+      resolve: {
+        alias: [
+          { find: /^@kovojs\/server$/, replacement: requireFromCli.resolve('@kovojs/server') },
+          {
+            find: /^@kovojs\/server\/jsx-dev-runtime$/,
+            replacement: requireFromCli.resolve('@kovojs/server/jsx-dev-runtime'),
+          },
+          {
+            find: /^@kovojs\/server\/jsx-runtime$/,
+            replacement: requireFromCli.resolve('@kovojs/server/jsx-runtime'),
+          },
+        ],
+      },
+      root,
+      ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
+    });
+
+    return kovoPlugin;
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
 }
 
 function stylesheetAssetsFromCssSplitChunks(
@@ -1921,7 +2028,10 @@ async function bundleKovoServerHandler(
   options: {
     stylesheetAssets?: KovoBuildStylesheetAssets;
   },
-): Promise<string> {
+): Promise<{
+  clientModules: readonly KovoAppShellCompiledClientModule[];
+  source: string;
+}> {
   const [{ kovoVitePlugin }, { lowerStandaloneSourceDerivedRegistryDeclarations }, { build }] =
     await Promise.all([
       import('@kovojs/compiler'),
@@ -1990,10 +2100,37 @@ async function bundleKovoServerHandler(
       ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
     });
 
-    return await readFile(join(outDir, 'handler.mjs'), 'utf8');
+    const source = await readFile(join(outDir, 'handler.mjs'), 'utf8');
+    assertNoUnloweredKovoClientIslandHooks(source);
+    return {
+      clientModules: kovoPlugin.getClientModules?.() ?? [],
+      source,
+    };
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+}
+
+function assertNoUnloweredKovoClientIslandHooks(source: string): void {
+  if (!/\bcomponent\(\{[\s\S]{0,3000}\bon[A-Z][A-Za-z0-9_]*\s*:/.test(source)) return;
+
+  throw new Error(
+    [
+      'kovo build cannot ship an authored client island that reached the server bundle before Kovo lowering.',
+      'The bundled handler still contains component(...) with JSX-style on* handlers; rerun through a build path where the Kovo compiler sees TSX before JSX lowering.',
+      'This fails closed instead of emitting inert production interactivity (SPEC §5.2 / §7).',
+    ].join(' '),
+  );
+}
+
+function uniqueKovoCompiledClientModules(
+  modules: readonly KovoAppShellCompiledClientModule[],
+): KovoAppShellCompiledClientModule[] {
+  const byPath = new Map<string, KovoAppShellCompiledClientModule>();
+  for (const module of modules) {
+    byPath.set(`${module.path}\0${module.version ?? ''}`, module);
+  }
+  return [...byPath.values()];
 }
 
 function kovoBuildAppSourceFilter(
@@ -2008,6 +2145,8 @@ function kovoBuildAppSourceFilter(
       ? normalized.slice(rootPrefix.length)
       : normalized;
     if (projectRelative.startsWith('..')) return false;
+    if (projectRelative === 'node_modules' || projectRelative.startsWith('node_modules/'))
+      return false;
     if (appDir === '' || appDir === '.') return true;
     return projectRelative === appDir || projectRelative.startsWith(`${appDir}/`);
   };

@@ -74,4 +74,5 @@ export {
   createKovoAppShellBuild,
   type KovoAppShellBuild,
   type KovoAppShellBuildOptions,
+  type KovoAppShellCompiledClientModule,
 } from '../vite-build.js';

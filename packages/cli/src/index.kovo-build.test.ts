@@ -254,6 +254,80 @@ export function ContactCard(props: { name: string }) {
     }
   });
 
+  it('lowers authored client islands during kovo build before deploy-skew retention inspection', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-client-island-'));
+    const appPath = join(root, 'src/app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      mkdirSync(join(root, 'src/components'), { recursive: true });
+      writeFileSync(
+        appPath,
+        [
+          '/** @jsxImportSource @kovojs/server */',
+          "import { createApp, route } from '@kovojs/server';",
+          "import { CounterIsland } from './components/counter-island.js';",
+          '',
+          'export default createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      access: { kind: 'public', reason: 'island build fixture' },",
+          '      page: () => <CounterIsland />,',
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src/components/counter-island.tsx'),
+        [
+          '/** @jsxImportSource @kovojs/server */',
+          "import { component } from '@kovojs/core';",
+          '',
+          'export const CounterIsland = component({',
+          '  render: () => (',
+          '    <button',
+          '      data-testid="counter"',
+          '      type="button"',
+          '      onClick={(event) => {',
+          "        Object(event).currentTarget.dataset.counterClicked = 'true';",
+          '      }}',
+          '    >',
+          '      Count',
+          '    </button>',
+          '  ),',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './src/app.tsx', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(errorOutput).toContain('cannot ship an authored client island');
+      expect(errorOutput).toContain(
+        'fails closed instead of emitting inert production interactivity',
+      );
+      expect(existsSync(join(outDir, '.kovo/server/handler.mjs'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('fails before artifact emission when the app TypeScript project has type errors', async () => {
     const root = mkdtempSync(join(repoRoot, 'tmp-kovo-build-ts-preflight-'));
     const appDir = join(root, 'src');
