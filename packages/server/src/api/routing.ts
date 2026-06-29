@@ -38,6 +38,7 @@ export type {
   EndpointRequest,
   EndpointCachePosture,
   EndpointResponseBody,
+  EndpointResponseBodyPosture,
   EndpointResponsePosture,
 } from '../endpoint.js';
 export { guards, session } from '../guards.js';

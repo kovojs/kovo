@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { FormError } from '@kovojs/core';
+import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
 import { Button } from '@kovojs/ui/button';
 import * as style from '@kovojs/style';
 
@@ -82,15 +82,22 @@ const styles = style.create({
   error: { color: style.tokens.sys.color.error, fontSize: 14 },
 });
 
-export function LoginForm({ next = '/' }: { next?: string } = {}): string {
-  return (
+type LoginFormSlots = ComponentRenderSlots<{ appSignIn: typeof appSignIn }>;
+
+const defaultLoginFormSlots: LoginFormSlots = {
+  forms: { appSignIn: { failure: null } },
+};
+
+export const LoginForm = component({
+  mutations: { appSignIn },
+  render: (_queries, _state, _slots: LoginFormSlots = defaultLoginFormSlots) => (
     <form style={styles.form} mutation={appSignIn}>
       <div style={styles.intro}>
         <p style={styles.eyebrow}>Kovo Starter</p>
         <h1 style={styles.title}>Sign in</h1>
         <p style={styles.helper}>Welcome back to your contact book.</p>
       </div>
-      <input type="hidden" name="next" value={next} />
+      <input type="hidden" name="next" value="/" />
       <label style={styles.label}>
         <span>Email</span>
         <input style={styles.input} name="email" type="email" autocomplete="email" required />
@@ -117,8 +124,8 @@ export function LoginForm({ next = '/' }: { next?: string } = {}): string {
         variant: 'primary',
       })}
     </form>
-  );
-}
+  ),
+});
 
 export function SignOutForm(): string {
   return (

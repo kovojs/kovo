@@ -5,9 +5,11 @@ import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.
 import { dedupeBy } from '../shared.js';
 import {
   callExpressions,
+  componentModelForSourceSpan,
   componentStateReturnObjectModel,
   jsxElements,
   soleJsxExpressionChild,
+  type ComponentModel,
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
@@ -65,7 +67,7 @@ export function validateDataBindings(
   const stateDiagnostics = bindingAttributes
     .filter((binding) => binding.query === 'state')
     .flatMap((binding) => {
-      const result = validateStateBindingPath(binding.path, model);
+      const result = validateStateBindingPath(binding, model);
       if (result.exists) return [];
 
       return [
@@ -185,11 +187,19 @@ function validateListStampInQueryShapes(
   );
 }
 
-function validateStateBindingPath(path: string, model: ComponentModuleModel): PathShapeValidation {
+function validateStateBindingPath(
+  binding: DataBindAttribute,
+  model: ComponentModuleModel,
+): PathShapeValidation {
+  const { path } = binding;
   const [root, firstSegment] = parseBindingPath(path);
   if (root?.name !== 'state') return { exists: true };
 
-  const stateObject = componentStateReturnObjectModel(model);
+  const bindingComponent = componentModelForSourceSpan(model, {
+    start: binding.index,
+    end: binding.index + binding.length,
+  });
+  const stateObject = stateReturnObjectForBindingComponent(model, bindingComponent);
   const allowedRoots = new Set([
     ...(stateObject?.entries.map((entry) => entry.key) ?? []),
     ...exportedStateDeriveNames(model),
@@ -197,6 +207,13 @@ function validateStateBindingPath(path: string, model: ComponentModuleModel): Pa
   if (firstSegment === undefined) return { exists: allowedRoots.size > 0 };
 
   return { exists: allowedRoots.has(firstSegment.name) };
+}
+
+function stateReturnObjectForBindingComponent(
+  model: ComponentModuleModel,
+  component: ComponentModel | null,
+): ReturnType<typeof componentStateReturnObjectModel> {
+  return component?.stateReturnObject ?? componentStateReturnObjectModel(model);
 }
 
 function exportedStateDeriveNames(model: ComponentModuleModel): string[] {

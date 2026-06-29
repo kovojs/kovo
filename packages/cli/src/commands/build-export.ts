@@ -1259,7 +1259,7 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
             ? { authJustification: endpoint.auth.justification }
             : {}),
         }),
-    body: endpoint.response.body,
+    body: endpointResponseBodyPosture(endpoint.response.body),
     cache: endpoint.response.cache,
     csrf,
     ...(csrf === 'exempt' ? { csrfJustification: endpoint.csrf?.justification ?? '' } : {}),
@@ -1277,6 +1277,12 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
     surface: 'webhook' in endpoint && endpoint.webhook === true ? 'webhook' : 'endpoint',
     ...endpointWrites(endpoint),
   };
+}
+
+function endpointResponseBodyPosture(
+  body: KovoApp['endpoints'][number]['response']['body'],
+): string {
+  return typeof body === 'string' ? body : body.join(',');
 }
 
 function endpointCheckAuth(auth: KovoApp['endpoints'][number]['auth']): string {
@@ -1632,10 +1638,21 @@ function sourceDerivedRegistryVitePlugin(
       const fileName = viteSourceFileName(id, root);
       if (!/\.[cm]?[jt]sx?$/.test(fileName)) return null;
       if (source.startsWith('// @kovojs-ui-copy\n')) return null;
+      if (isKovoBuildEmittedCompilerSource(source)) return null;
       const code = lowerRegistryDeclarations({ fileName, source });
       return code === null ? null : { code, map: null };
     },
   };
+}
+
+const KOVO_BUILD_EMITTED_ABI_IMPORT_PATTERN = /@kovojs\/[^"'\s/]+\/(?:internal|generated)\//;
+
+function isKovoBuildEmittedCompilerSource(source: string): boolean {
+  return (
+    KOVO_BUILD_EMITTED_ABI_IMPORT_PATTERN.test(source) ||
+    source.includes('componentLiveTargetRenderer') ||
+    source.includes('registerGeneratedLiveTargetRenderer')
+  );
 }
 
 function viteSourceFileName(id: string, root: string): string {
@@ -1812,12 +1829,10 @@ async function buildKovoComponentClientModules(
     typeof import('@kovojs/compiler').kovoVitePlugin
   >['getCssAssetManifest'];
 }> {
-  const [{ kovoVitePlugin }, { lowerStandaloneSourceDerivedRegistryDeclarations }, { build }] =
-    await Promise.all([
-      import('@kovojs/compiler'),
-      import('@kovojs/compiler/internal'),
-      import('vite-plus'),
-    ]);
+  const [{ kovoVitePlugin }, { build }] = await Promise.all([
+    import('@kovojs/compiler'),
+    import('vite-plus'),
+  ]);
   const kovoPlugin = kovoVitePlugin({
     cache: options.cache,
     include: [kovoBuildAppSourceFilter(appModulePath, root)],
@@ -1863,11 +1878,7 @@ async function buildKovoComponentClientModules(
           runtime: 'automatic',
         },
       },
-      plugins: [
-        sourceDerivedRegistryVitePlugin(root, lowerStandaloneSourceDerivedRegistryDeclarations),
-        kovoPlugin,
-        bundledUndiciRuntimeVitePlugin(),
-      ],
+      plugins: [kovoBuildLoweringVitePlugin(kovoPlugin), bundledUndiciRuntimeVitePlugin()],
       resolve: {
         alias: [
           { find: /^@kovojs\/server$/, replacement: requireFromCli.resolve('@kovojs/server') },
@@ -2032,12 +2043,10 @@ async function bundleKovoServerHandler(
   clientModules: readonly KovoAppShellCompiledClientModule[];
   source: string;
 }> {
-  const [{ kovoVitePlugin }, { lowerStandaloneSourceDerivedRegistryDeclarations }, { build }] =
-    await Promise.all([
-      import('@kovojs/compiler'),
-      import('@kovojs/compiler/internal'),
-      import('vite-plus'),
-    ]);
+  const [{ kovoVitePlugin }, { build }] = await Promise.all([
+    import('@kovojs/compiler'),
+    import('vite-plus'),
+  ]);
   const kovoPlugin = kovoVitePlugin({
     include: [kovoBuildAppSourceFilter(appModulePath, process.cwd())],
   });
@@ -2075,14 +2084,7 @@ async function bundleKovoServerHandler(
           runtime: 'automatic',
         },
       },
-      plugins: [
-        sourceDerivedRegistryVitePlugin(
-          process.cwd(),
-          lowerStandaloneSourceDerivedRegistryDeclarations,
-        ),
-        kovoPlugin,
-        bundledUndiciRuntimeVitePlugin(),
-      ],
+      plugins: [kovoBuildLoweringVitePlugin(kovoPlugin), bundledUndiciRuntimeVitePlugin()],
       resolve: {
         alias: [
           { find: /^@kovojs\/server$/, replacement: requireFromCli.resolve('@kovojs/server') },
@@ -2109,6 +2111,14 @@ async function bundleKovoServerHandler(
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+}
+
+function kovoBuildLoweringVitePlugin<T extends { enforce?: unknown }>(
+  plugin: T,
+): T & {
+  enforce: 'pre';
+} {
+  return Object.assign(plugin, { enforce: 'pre' as const });
 }
 
 function assertNoUnloweredKovoClientIslandHooks(source: string): void {

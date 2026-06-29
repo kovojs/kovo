@@ -417,6 +417,25 @@ export function componentStateReturnObjectKeys(model: ComponentModuleModel): str
   return [...(componentStateReturnObjectModel(model)?.entries.map((entry) => entry.key) ?? [])];
 }
 
+export function componentModelForSourceSpan(
+  model: ComponentModuleModel,
+  span: SourceSpan,
+): ComponentModel | null {
+  const containing = model.components.filter((component) => {
+    const start = component.localNameSpan?.start ?? 0;
+    return span.start >= start && span.end <= component.declarationEnd;
+  });
+
+  return (
+    containing.sort(
+      (left, right) =>
+        left.declarationEnd -
+        (left.localNameSpan?.start ?? 0) -
+        (right.declarationEnd - (right.localNameSpan?.start ?? 0)),
+    )[0] ?? null
+  );
+}
+
 export function componentFragmentTargetNames(model: ComponentModuleModel): string[] {
   return model.components.flatMap((component) => {
     if (!componentHasInferredFragmentTarget(component)) {

@@ -117,6 +117,7 @@ export interface StorageDownloadEndpointInfo {
 }
 
 type StorageDownloadEndpointDeclaration = EndpointDeclaration<string, 'GET', 'prefix'> & {
+  allowedMethods?: readonly ['GET', 'HEAD'];
   [STORAGE_DOWNLOAD_ENDPOINT_INFO]?: StorageDownloadEndpointInfo;
 };
 
@@ -276,7 +277,7 @@ export function deriveDownloadKey(pathname: string, basePath: string): string | 
  *
  * @param options - The `storage` to read from, the signing `secret`, the mount `basePath`, an
  *   optional request-derived `scope`, an optional `replayStore` for one-time tokens, and a clock.
- * @returns A prefix-mounted GET `EndpointDeclaration` (HEAD is handled within the same handler).
+ * @returns A prefix-mounted GET/HEAD `EndpointDeclaration`.
  */
 export function createStorageDownloadEndpoint(
   options: StorageDownloadEndpointOptions,
@@ -365,11 +366,16 @@ export function createStorageDownloadEndpoint(
       'credential), so there is no CSRF surface; non-GET/HEAD methods fail closed.',
     response: {
       appOwnedSafety: true,
-      body: 'bytes',
+      body: ['bytes', 'text'],
       cache: 'private',
       reservedHeaders: ['X-Content-Type-Options'],
     },
     handler,
+  });
+  Object.defineProperty(declaration, 'allowedMethods', {
+    configurable: false,
+    enumerable: false,
+    value: ['GET', 'HEAD'] satisfies readonly ['GET', 'HEAD'],
   });
   Object.defineProperty(declaration, STORAGE_DOWNLOAD_ENDPOINT_INFO, {
     configurable: false,

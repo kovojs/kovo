@@ -401,6 +401,7 @@ export type {
   EndpointRequest,
   EndpointCachePosture,
   EndpointResponseBody,
+  EndpointResponseBodyPosture,
   EndpointResponsePosture,
   ForbiddenContext,
   ForbiddenDenial,

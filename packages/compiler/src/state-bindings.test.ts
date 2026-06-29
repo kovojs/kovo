@@ -187,6 +187,100 @@ export const BadProfileCard = component({
     ]);
   });
 
+  it('validates multi-component state bindings against each declaring component state shape', () => {
+    const twoComponents = compileComponentModule({
+      fileName: 'settings-controls.tsx',
+      source: `
+export const ToggleControl = component({
+  state: () => ({ enabled: false }),
+  render: (_queries, state) => (
+    <toggle-control>
+      <output data-bind="state.enabled">{state.enabled}</output>
+    </toggle-control>
+  ),
+});
+
+export const FilterControl = component({
+  state: () => ({ query: '' }),
+  render: (_queries, state) => (
+    <filter-control>
+      <output data-bind="state.query">{state.query}</output>
+    </filter-control>
+  ),
+});
+`,
+    });
+    const threeComponents = compileComponentModule({
+      fileName: 'dashboard-controls.tsx',
+      source: `
+export const CounterControl = component({
+  state: () => ({ count: 0 }),
+  render: (_queries, state) => (
+    <counter-control>
+      <output data-bind="state.count">{state.count}</output>
+    </counter-control>
+  ),
+});
+
+export const SearchControl = component({
+  state: () => ({ term: '' }),
+  render: (_queries, state) => (
+    <search-control>
+      <output data-bind="state.term">{state.term}</output>
+    </search-control>
+  ),
+});
+
+export const ModeControl = component({
+  state: () => ({ mode: 'list' }),
+  render: (_queries, state) => (
+    <mode-control>
+      <output data-bind="state.mode">{state.mode}</output>
+    </mode-control>
+  ),
+});
+`,
+    });
+
+    expect(twoComponents.diagnostics).toEqual([]);
+    expect(threeComponents.diagnostics).toEqual([]);
+  });
+
+  it('reports KV302 for a missing state key in a later component', () => {
+    const result = compileComponentModule({
+      fileName: 'bad-settings-controls.tsx',
+      source: `
+export const ToggleControl = component({
+  state: () => ({ enabled: false }),
+  render: (_queries, state) => (
+    <toggle-control>
+      <output data-bind="state.enabled">{state.enabled}</output>
+    </toggle-control>
+  ),
+});
+
+export const FilterControl = component({
+  state: () => ({ query: '' }),
+  render: () => (
+    <filter-control>
+      <output data-bind="state.enabled">Missing</output>
+    </filter-control>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV302',
+        fileName: 'bad-settings-controls.tsx',
+        message: 'data-bind path is not present in the declared query shape. state.enabled',
+        severity: 'error',
+        start: { column: 15, line: 15 },
+      },
+    ]);
+  });
+
   it('validates state bindings through wrapped state return object literals', () => {
     const result = compileComponentModule({
       fileName: 'satisfies-state.tsx',

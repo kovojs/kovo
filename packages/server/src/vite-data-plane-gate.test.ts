@@ -584,6 +584,40 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     );
   });
 
+  it('keeps declared Drizzle output fields bindable during build graph derivation', async () => {
+    const root = await fixture({
+      'src/components/contact-stats.tsx': DRIZZLE_DERIVED_OUTPUT_COMPONENT,
+      'src/contact-stats.ts': DRIZZLE_DERIVED_OUTPUT_QUERY_SOURCE,
+      'src/drizzle-types.d.ts': DRIZZLE_RUNTIME_REGISTRY_TYPES,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    const previous = process.env.KOVO_BUILD_GRAPH_DERIVATION;
+    process.env.KOVO_BUILD_GRAPH_DERIVATION = '1';
+
+    try {
+      await plugin.configResolved({ command: 'build', root });
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_BUILD_GRAPH_DERIVATION;
+      else process.env.KOVO_BUILD_GRAPH_DERIVATION = previous;
+    }
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(
+        DRIZZLE_DERIVED_OUTPUT_COMPONENT,
+        join(root, 'src/components/contact-stats.tsx'),
+      ),
+    ).resolves.toEqual(expect.objectContaining({ map: null }));
+
+    const componentReport = captured.find((report) =>
+      report.fileName.endsWith('contact-stats.tsx'),
+    );
+    expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
+      false,
+    );
+  });
+
   it('feeds non-Drizzle query output schemas to compiler binding validation', async () => {
     const root = await fixture({
       'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_VALID_COMPONENT,

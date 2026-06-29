@@ -10,6 +10,14 @@ export type EndpointMount = 'exact' | 'prefix';
 /** Raw response body posture declared for endpoint audit output (SPEC §9.1). */
 export type EndpointResponseBody = 'bytes' | 'html' | 'json' | 'redirect' | 'stream' | 'text';
 
+/**
+ * One or more raw response body classes an endpoint may return, used by endpoint audits and
+ * runtime posture verification (SPEC §9.1).
+ */
+export type EndpointResponseBodyPosture =
+  | EndpointResponseBody
+  | readonly [EndpointResponseBody, ...EndpointResponseBody[]];
+
 /** Raw endpoint cache posture declared for endpoint audit output (SPEC §9.1). */
 export type EndpointCachePosture = 'custom' | 'no-store' | 'private' | 'public' | 'revalidated';
 
@@ -20,7 +28,7 @@ export type EndpointCachePosture = 'custom' | 'no-store' | 'private' | 'public' 
  */
 export interface EndpointResponsePosture {
   appOwnedSafety: boolean;
-  body: EndpointResponseBody;
+  body: EndpointResponseBodyPosture;
   cache: EndpointCachePosture;
   /**
    * Reserved response headers this raw endpoint intentionally writes. Framework protocol,
@@ -316,18 +324,26 @@ function assertEndpointResponsePosture(
   if (definition.response.cache === 'public' && !/\bpublic\b/i.test(cacheControl)) {
     failures.push('declared cache=public but response lacks Cache-Control: public');
   }
+  const bodyPosture = endpointResponseBodyPostures(definition.response.body);
+  if (bodyPosture.includes('redirect') && response.status >= 300 && response.status < 400) {
+    assertEndpointReservedHeaders(definition, response, failures);
+    if (failures.length === 0) return;
+    throw new Error(
+      `Endpoint ${definition.method} ${definition.path} response posture mismatch: ${failures.join(
+        '; ',
+      )}.`,
+    );
+  }
   if (
-    definition.response.body === 'redirect' &&
+    bodyPosture.length === 1 &&
+    bodyPosture[0] === 'redirect' &&
     (response.status < 300 || response.status >= 400)
   ) {
     failures.push('declared body=redirect but response status is not 3xx');
   }
   const contentType = response.headers.get('content-type') ?? '';
-  if (definition.response.body === 'json' && !/\bjson\b/i.test(contentType)) {
-    failures.push('declared body=json but response content type is not JSON');
-  }
-  if (definition.response.body === 'html' && !/\bhtml\b/i.test(contentType)) {
-    failures.push('declared body=html but response content type is not HTML');
+  if (!endpointResponseBodyMatchesContentType(bodyPosture, contentType)) {
+    failures.push(endpointResponseBodyMismatchMessage(definition.response.body));
   }
   assertEndpointReservedHeaders(definition, response, failures);
   if (failures.length === 0) return;
@@ -336,6 +352,36 @@ function assertEndpointResponsePosture(
       '; ',
     )}.`,
   );
+}
+
+function endpointResponseBodyPostures(
+  body: EndpointResponseBodyPosture,
+): readonly EndpointResponseBody[] {
+  return typeof body === 'string' ? [body] : body;
+}
+
+function endpointResponseBodyPostureLabel(body: EndpointResponseBodyPosture): string {
+  return typeof body === 'string' ? body : body.join('|');
+}
+
+function endpointResponseBodyMismatchMessage(body: EndpointResponseBodyPosture): string {
+  if (body === 'json') return 'declared body=json but response content type is not JSON';
+  if (body === 'html') return 'declared body=html but response content type is not HTML';
+  return `declared body=${endpointResponseBodyPostureLabel(
+    body,
+  )} but response content type does not match`;
+}
+
+function endpointResponseBodyMatchesContentType(
+  bodyPosture: readonly EndpointResponseBody[],
+  contentType: string,
+): boolean {
+  const inspected = bodyPosture.filter((body) => body === 'json' || body === 'html');
+  if (inspected.length === 0) return true;
+  if (inspected.includes('json') && /\bjson\b/i.test(contentType)) return true;
+  if (inspected.includes('html') && /\bhtml\b/i.test(contentType)) return true;
+  if (bodyPosture.includes('text') && /\btext\//i.test(contentType)) return true;
+  return false;
 }
 
 function assertEndpointReservedHeaders(

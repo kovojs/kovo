@@ -297,8 +297,7 @@ export function createKovoVitePlugin(
       // instances and cannot be forged from authored source.
       if (
         isKovoEmittedServerModuleReentry(componentId, source) ||
-        isKovoEmittedServerModuleReentry(fileName, source) ||
-        isKovoGeneratedServerModuleReentry(source)
+        isKovoEmittedServerModuleReentry(fileName, source)
       )
         return null;
       const standaloneRegistrySource = shouldTransformViteAuthoredSource(fileName, source, options)
@@ -309,7 +308,6 @@ export function createKovoVitePlugin(
           ? null
           : { code: standaloneRegistrySource, map: null };
       }
-
       rememberKovoCompiledComponent(componentId);
       rememberKovoCompiledComponent(fileName);
       const forgetComponentCompile = (): void => {
@@ -484,11 +482,6 @@ const KOVO_ABI_IMPORT_PATTERN = /@kovojs\/[^"'\s/]+\/(?:internal|generated)\//;
 
 function isKovoEmittedServerModuleReentry(fileName: string, source: string): boolean {
   return kovoCompiledComponentIds().has(fileName) && KOVO_ABI_IMPORT_PATTERN.test(source);
-}
-
-function isKovoGeneratedServerModuleReentry(source: string): boolean {
-  if (!KOVO_ABI_IMPORT_PATTERN.test(source)) return false;
-  return source.includes('componentLiveTargetRenderer') || source.includes('__kovoAssignDerived');
 }
 
 function transformViteCompileResult(

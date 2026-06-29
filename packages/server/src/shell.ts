@@ -11,6 +11,7 @@ import {
  * consumers, not app authors.
  */
 export interface EndpointLike {
+  allowedMethods?: readonly string[];
   method?: string;
   mount: 'exact' | 'prefix';
   path: string;
@@ -112,9 +113,11 @@ export type ShellDispatchMatch<
       pathname: string;
     }
   | {
+      allowedMethods: readonly string[];
       endpoint: Endpoint;
       entry: Extract<ShellDispatchEntry, { kind: 'endpoint' }>;
       kind: 'endpoint';
+      methodAllowed: boolean;
       normalization: PathnameNormalization;
       pathname: string;
     }
@@ -165,16 +168,19 @@ export function matchShellDispatch<
     if (entry.kind === 'endpoint') {
       const endpoint = (input.endpoints ?? []).find(
         (candidate) =>
-          candidate.mount === entry.mount &&
-          endpointMethodMatches(candidate, method) &&
-          endpointPathMatches(candidate, normalization.pathname),
+          candidate.mount === entry.mount && endpointPathMatches(candidate, normalization.pathname),
       );
       if (!endpoint) continue;
+      const allowedMethods = endpointAllowedMethods(endpoint);
 
       return {
+        allowedMethods,
         endpoint,
         entry,
         kind: 'endpoint',
+        methodAllowed:
+          method === undefined ||
+          allowedMethods.some((candidate) => candidate.toUpperCase() === method),
         normalization,
         pathname: normalization.pathname,
       };
@@ -205,12 +211,9 @@ export function matchShellDispatch<
   };
 }
 
-function endpointMethodMatches(endpoint: EndpointLike, method: string | undefined): boolean {
-  return (
-    endpoint.method === undefined ||
-    method === undefined ||
-    endpoint.method.toUpperCase() === method
-  );
+function endpointAllowedMethods(endpoint: EndpointLike): readonly string[] {
+  if (endpoint.allowedMethods !== undefined) return endpoint.allowedMethods;
+  return endpoint.method === undefined ? [] : [endpoint.method.toUpperCase()];
 }
 
 function endpointPathMatches(endpoint: EndpointLike, pathname: string): boolean {

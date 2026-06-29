@@ -219,6 +219,7 @@ export interface ThemeTokens {
 const DEFAULT_VARIANT: ThemeVariant = 'tonal-spot';
 const DEFAULT_SELECTOR = ':root';
 const DEFAULT_DARK_SELECTOR = ':root[data-theme="dark"]';
+const DEFAULT_DARK_MEDIA_SELECTOR = ':root:not([data-theme="light"])';
 const REFERENCE_TONES = [0, 10, 20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 95, 98, 99, 100];
 const REFERENCE_PALETTE_NAMES = [
   'primary',
@@ -646,10 +647,18 @@ function emitThemeCss(input: ThemeValuesInput): string {
     ...shapeDeclarations(input.dark.sys.shape),
     ...customDeclarations(input.dark.custom),
   ];
-  return `${renderBlock(input.selector, rootDeclarations)}\n\n${renderBlock(
-    input.darkSelector,
-    darkDeclarations,
-  )}`;
+  const darkBlocks =
+    input.darkSelector === DEFAULT_DARK_SELECTOR
+      ? [
+          renderMediaBlock(
+            '(prefers-color-scheme: dark)',
+            DEFAULT_DARK_MEDIA_SELECTOR,
+            darkDeclarations,
+          ),
+          renderBlock(input.darkSelector, darkDeclarations),
+        ]
+      : [renderBlock(input.darkSelector, darkDeclarations)];
+  return [renderBlock(input.selector, rootDeclarations), ...darkBlocks].join('\n\n');
 }
 
 function refDeclarations(ref: ThemeReferencePalettes): string[] {
@@ -699,6 +708,17 @@ function componentDeclarations(component: ThemeComponentTokensInput): string[] {
 
 function renderBlock(selector: string, declarations: readonly string[]): string {
   return `${selector} {\n${declarations.map((declaration) => `  ${declaration}`).join('\n')}\n}`;
+}
+
+function renderMediaBlock(
+  query: string,
+  selector: string,
+  declarations: readonly string[],
+): string {
+  return `@media ${query} {\n${renderBlock(selector, declarations)
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n')}\n}`;
 }
 
 function referenceTokenVars(): ThemeReferencePalettes {

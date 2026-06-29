@@ -178,7 +178,8 @@ function isEndpointResponsePosture(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.appOwnedSafety === 'boolean' &&
-    typeof value.body === 'string' &&
+    (typeof value.body === 'string' ||
+      (Array.isArray(value.body) && value.body.every((body) => typeof body === 'string'))) &&
     typeof value.cache === 'string' &&
     (value.reservedHeaders === undefined ||
       (Array.isArray(value.reservedHeaders) &&

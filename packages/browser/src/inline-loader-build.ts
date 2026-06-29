@@ -459,20 +459,21 @@ function installInlineKovoLoader(im) {
   };
   // SPEC.md §9.1: inline fragment apply uses the same escaped target lookup
   // precedence as the modular runtime and Kovo-Targets collection.
-  const ft = (target) => {
+  const ftd = (root, target) => {
     try {
       const selectorTarget = sq(target);
       return (
-        doc.querySelector('[kovo-fragment-target="' + selectorTarget + '"]') ??
-        doc.getElementById(target) ??
-        doc.querySelector('[id="' + selectorTarget + '"]') ??
-        doc.querySelector('[kovo-c="' + selectorTarget + '"]') ??
-        doc.querySelector('kovo-defer[target="' + selectorTarget + '"]')
+        root.querySelector?.('[kovo-fragment-target="' + selectorTarget + '"]') ??
+        root.getElementById?.(target) ??
+        root.querySelector?.('[id="' + selectorTarget + '"]') ??
+        root.querySelector?.('[kovo-c="' + selectorTarget + '"]') ??
+        root.querySelector?.('kovo-defer[target="' + selectorTarget + '"]')
       );
     } catch {
       return;
     }
   };
+  const ft = (target) => ftd(doc, target);
   const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
   const kb = (root = doc) =>
     root.querySelector('meta[name="kovo-build"]')?.getAttribute('content') || '';
@@ -543,6 +544,9 @@ function installInlineKovoLoader(im) {
     }
   };
   const ng = (href) => {
+    if (globalThis.history?.scrollRestoration !== undefined) {
+      globalThis.history.scrollRestoration = 'auto';
+    }
     if (location.assign) location.assign(href);
     else location.href = href;
   };
@@ -624,6 +628,24 @@ function installInlineKovoLoader(im) {
     }
     flush(null);
   };
+  const vt = async (apply) => {
+    const start = doc.startViewTransition;
+    if (typeof start !== 'function') {
+      apply();
+      return;
+    }
+    let ran = false;
+    try {
+      const transition = start.call(doc, () => {
+        ran = true;
+        apply();
+      });
+      await transition?.updateCallbackDone;
+    } catch (error) {
+      if (!ran) apply();
+      else throw error;
+    }
+  };
   const an = async (href, pop = false) => {
     const navId = (ni += 1);
     try {
@@ -646,40 +668,43 @@ function installInlineKovoLoader(im) {
       const nextSegments = ns(nextBody);
       if (!nextSegments.length) throw Error();
       let triggerRoot;
-      if (nextDoc.querySelector(ks) || !currentSegments.length || currentSegments.length !== nextSegments.length) {
-        for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
-        triggerRoot = rbd(nextBody);
-      } else {
-        const same = currentSegments.map(
-          (segment, index) => nk(segment) === nk(nextSegments[index]) && nc(segment) === nc(nextSegments[index]),
-        );
-        if (!same[0]) {
+      await vt(() => {
+        if (nextDoc.querySelector(ks) || !currentSegments.length || currentSegments.length !== nextSegments.length) {
           for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
           triggerRoot = rbd(nextBody);
         } else {
-          const preservedIds = pi(
-            currentSegments.filter((_segment, index) => same[index]),
-            currentSegments.filter((_segment, index) => same[index]).length,
+          const same = currentSegments.map(
+            (segment, index) => nk(segment) === nk(nextSegments[index]) && nc(segment) === nc(nextSegments[index]),
           );
-          const changed = new Set();
-          for (let index = 1; index < currentSegments.length; index += 1) {
-            if (same[index]) continue;
-            if (currentSegments.some((segment, other) => other < index && changed.has(other) && segment.contains?.(currentSegments[index]))) continue;
-            if (dc(preservedIds, nextSegments[index])) throw Error();
-            changed.add(index);
-            for (const el of qa(currentSegments[index], '[kovo-c]')) el.a?.abort();
-            triggerRoot = m(currentSegments[index], nextSegments[index]) || triggerRoot;
+          if (!same[0]) {
+            for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
+            triggerRoot = rbd(nextBody);
+          } else {
+            const preservedIds = pi(
+              currentSegments.filter((_segment, index) => same[index]),
+              currentSegments.filter((_segment, index) => same[index]).length,
+            );
+            const changed = new Set();
+            for (let index = 1; index < currentSegments.length; index += 1) {
+              if (same[index]) continue;
+              if (currentSegments.some((segment, other) => other < index && changed.has(other) && segment.contains?.(currentSegments[index]))) continue;
+              if (dc(preservedIds, nextSegments[index])) throw Error();
+              changed.add(index);
+              for (const el of qa(currentSegments[index], '[kovo-c]')) el.a?.abort();
+              triggerRoot = m(currentSegments[index], nextSegments[index]) || triggerRoot;
+            }
           }
         }
-      }
-
-      ch(nextDoc.head);
-      ps();
-      xd(doc.documentElement, nextDoc.documentElement);
+        ch(nextDoc.head);
+        ps();
+        xd(doc.documentElement, nextDoc.documentElement);
+        const body = doc.body || triggerRoot;
+        if (!body) throw Error();
+        xa(body, nextBody);
+        rscr(body);
+      });
       const body = doc.body || triggerRoot;
       if (!body) throw Error();
-      xa(body, nextBody);
-      rscr(body);
       if (!pop) globalThis.history?.pushState?.({}, '', finalUrl.href);
       const focusTarget = doc.querySelector('main,h1') ?? doc.querySelector('[kovo-nav-segment]');
       focusTarget?.setAttribute?.('tabindex', '-1');
@@ -792,6 +817,64 @@ function installInlineKovoLoader(im) {
           return;
         }
         return res.text().then((text) => ab(text, bh(res)));
+      })
+      .catch(() => {});
+  };
+  const ea = (value) =>
+    String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
+  const fab = (body, build) => {
+    const activeId = doc.activeElement?.id;
+    ab(body, build);
+    if (activeId && (!doc.activeElement || doc.activeElement === doc.body)) {
+      doc.getElementById(activeId)?.focus?.({ preventScroll: true });
+    }
+  };
+  const frf = () => {
+    const live = rlt();
+    if (!live.length) return;
+    fetch(location.href, {
+      cache: 'no-store',
+      headers: {
+        Accept: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)},
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': live.join('; '),
+        'Kovo-Targets': rt().join('; '),
+      },
+      method: 'GET',
+    })
+      .then((res) => {
+        if (res.status >= 400) return;
+        const responseBuild = bh(res);
+        if (kb() && responseBuild && responseBuild !== kb()) {
+          location.reload?.();
+          return;
+        }
+        return res.text().then((text) => {
+          if (text.includes('<kovo-fragment') || text.includes('<kovo-query') || text.includes('<kovo-text')) {
+            fab(text, responseBuild || kb());
+            return;
+          }
+          const nextDoc = new DOMParser().parseFromString(text, 'text/html');
+          const nextBuild = responseBuild || kb(nextDoc);
+          if (kb() && (!nextBuild || nextBuild !== kb())) {
+            location.reload?.();
+            return;
+          }
+          const fragments = [];
+          const seen = new Set();
+          for (const entry of live) {
+            const target = entry.split('#')[0];
+            if (!target || seen.has(target)) continue;
+            seen.add(target);
+            const next = ftd(nextDoc, target);
+            if (next) fragments.push('<kovo-fragment target="' + ea(target) + '">' + next.outerHTML + '</kovo-fragment>');
+          }
+          if (fragments.length) fab(fragments.join(''), nextBuild || kb());
+        });
       })
       .catch(() => {});
   };
@@ -1208,6 +1291,7 @@ function installInlineKovoLoader(im) {
   const vrf = () => {
     rememberQueryScripts();
     for (const query of fqs) qr(query);
+    frf();
   };
   rememberQueryScripts();
   addEventListener('visibilitychange', () => {
