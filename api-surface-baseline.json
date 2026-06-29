@@ -1,6 +1,7 @@
 {
-  "$comment": "api-surface gate ratchet baseline - known untagged/undocumented public exports and recursive publicness debt. Shrinks as plans/api-cleanup.md Phases 4-8 and audit-plan AUD-011 fixes land. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.",
-  "recursivePublicnessViolations": [
+  "$comment": "api-surface gate ratchet baseline. toDocument = known undocumented public exports. toRemove = recursive public signatures that still name internal/generated/non-public helper types. Shrinks as plans/api-cleanup.md and audit-plan AUD-011 fixes land. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.",
+  "toDocument": [],
+  "toRemove": [
     "@kovojs/better-auth#betterAuthSignInEmailMutation -> betterAuthSignInEmailMutation -> MutationDefinition -> MutationOptimisticMap -> KnownMutationOptimisticMap -> MutationDerivableOptimisticQueryNames -> MutationInvalidatedQueryNames (non-public-type-in-public-signature)",
     "@kovojs/better-auth#betterAuthSignInEmailMutation -> betterAuthSignInEmailMutation -> MutationDefinition -> MutationOptimisticMap -> KnownMutationOptimisticMap -> MutationDerivableOptimisticQueryNames (non-public-type-in-public-signature)",
     "@kovojs/better-auth#betterAuthSignInEmailMutation -> betterAuthSignInEmailMutation -> MutationDefinition -> MutationOptimisticMap -> KnownMutationOptimisticMap -> MutationOptimisticEntry (non-public-type-in-public-signature)",
@@ -1738,6 +1739,5 @@
     "@kovojs/ui./toolbar#ToolbarItemProps -> ToolbarItemProps -> ToolbarStateProps -> TextDirection (non-public-type-in-public-signature)",
     "@kovojs/ui./toolbar#ToolbarProps -> ToolbarProps -> ToolbarStateProps -> TextDirection (non-public-type-in-public-signature)",
     "@kovojs/ui./toolbar#ToolbarStateProps -> ToolbarStateProps -> TextDirection (non-public-type-in-public-signature)"
-  ],
-  "violations": []
+  ]
 }

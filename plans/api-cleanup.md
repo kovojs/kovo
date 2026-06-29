@@ -250,8 +250,8 @@ verifier IR, so do NOT; gate-tightening; 9D browser option-graph + headless mach
   - Evidence 2026-06-29: `packages/test/src/harness.ts` exports the public `KovoTest*` option names, `pnpm --filter @kovojs/test exec vitest --run src/harness.test.ts src/mutation-verifier.test.ts src/pglite-harness.test.ts src/sqlite-harness.test.ts --reporter=dot` passed after root `pnpm install` repaired dogfood link-local dependency pollution, and `pnpm run check:api-surface` passed.
 - [x] **`core`: inline `component()`'s generic bound** from the public `ComponentDefinitionInput` (drop the private `ComponentDefinitionShape` from the signature; `index.ts:123,158`).
 - [x] **`server`: replace the 3 `export *`** (`index.ts:57-59`, `api/data|rendering|routing`) with explicit named re-export blocks.
-- [ ] **Tighten the api-surface gate** to fail when a public signature names a non-public type (recursive publicness), so 9B can't regress; split `api-surface-baseline.json` into "to-document" vs "to-remove".
-  - Prove (9B): `pnpm run check` + `pnpm run check:api-surface` + per-package vitest.
+- [x] **Tighten the api-surface gate** to fail when a public signature names a non-public type (recursive publicness), so 9B can't regress; split `api-surface-baseline.json` into "to-document" vs "to-remove".
+  - Evidence 2026-06-29: `api-surface-baseline.json` now has explicit `toDocument`/`toRemove` buckets; `pnpm exec vitest --run scripts/api-surface-gate.test.mjs --reporter=dot`, `pnpm run check:api-surface`, `pnpm run check`, and `git diff --check` passed.
 
 ### 9C — Stability tags + doc reconciliation
 

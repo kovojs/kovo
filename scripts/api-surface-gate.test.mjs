@@ -25,7 +25,7 @@ describe('api-surface gate', () => {
     const current = surfaceReport.undocumentedPublic;
     // No drift in either direction: every current violation is baselined, and the
     // baseline lists nothing already fixed (regenerate with --write after curating).
-    const { added, removed } = compareViolations(baseline.violations, current);
+    const { added, removed } = compareViolations(baseline.toDocument, current);
     expect(added, `new undocumented/untagged public exports: ${added.join(', ')}`).toEqual([]);
     expect(removed, `baseline lists fixed exports — regenerate: ${removed.join(', ')}`).toEqual([]);
   });
@@ -35,10 +35,7 @@ describe('api-surface gate', () => {
       readFileSync(path.join(repoRoot, 'api-surface-baseline.json'), 'utf8'),
     );
     const current = surfaceReport.recursivePublicnessViolations;
-    const { added, removed } = compareViolations(
-      baseline.recursivePublicnessViolations ?? [],
-      current,
-    );
+    const { added, removed } = compareViolations(baseline.toRemove, current);
     expect(added, `new recursive publicness violations: ${added.join(', ')}`).toEqual([]);
     expect(
       removed,
@@ -55,6 +52,16 @@ describe('api-surface gate', () => {
           /(?:AtomicRule|CompiledStyle|StyleIdentityOptions)/.test(violation),
       ),
     ).toEqual([]);
+  });
+
+  it('uses explicit toDocument/toRemove baseline buckets', () => {
+    const baseline = JSON.parse(
+      readFileSync(path.join(repoRoot, 'api-surface-baseline.json'), 'utf8'),
+    );
+    expect(Array.isArray(baseline.toDocument)).toBe(true);
+    expect(Array.isArray(baseline.toRemove)).toBe(true);
+    expect(baseline).not.toHaveProperty('violations');
+    expect(baseline).not.toHaveProperty('recursivePublicnessViolations');
   });
 
   it('does not expose harness verifier internals through public harness options', () => {

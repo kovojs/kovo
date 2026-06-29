@@ -327,6 +327,14 @@ function loadBaseline() {
   return JSON.parse(readFileSync(baselinePath, 'utf8'));
 }
 
+function baselineToDocument(baseline) {
+  return baseline.toDocument ?? baseline.violations ?? [];
+}
+
+function baselineToRemove(baseline) {
+  return baseline.toRemove ?? baseline.recursivePublicnessViolations ?? [];
+}
+
 /** Pure ratchet comparison: which current violations are new vs the baseline, and which baselined ones are now fixed. */
 export function compareViolations(baselineList, currentList) {
   const known = new Set(baselineList);
@@ -348,9 +356,9 @@ export function runGate({ write = false } = {}) {
       `${JSON.stringify(
         {
           $comment:
-            'api-surface gate ratchet baseline - known untagged/undocumented public exports and recursive publicness debt. Shrinks as plans/api-cleanup.md Phases 4-8 and audit-plan AUD-011 fixes land. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.',
-          recursivePublicnessViolations,
-          violations,
+            'api-surface gate ratchet baseline. toDocument = known undocumented public exports. toRemove = recursive public signatures that still name internal/generated/non-public helper types. Shrinks as plans/api-cleanup.md and audit-plan AUD-011 fixes land. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.',
+          toDocument: violations,
+          toRemove: recursivePublicnessViolations,
         },
         null,
         2,
@@ -366,8 +374,9 @@ export function runGate({ write = false } = {}) {
   if (baseline === null) {
     throw new Error('api-surface: no baseline; run `node scripts/api-surface-gate.mjs --write`');
   }
-  const { added, removed } = compareViolations(baseline.violations, violations);
-  const recursiveBaseline = baseline.recursivePublicnessViolations ?? [];
+  const documentBaseline = baselineToDocument(baseline);
+  const recursiveBaseline = baselineToRemove(baseline);
+  const { added, removed } = compareViolations(documentBaseline, violations);
   const { added: addedRecursivePublicness, removed: removedRecursivePublicness } =
     compareViolations(recursiveBaseline, recursivePublicnessViolations);
 
@@ -416,7 +425,7 @@ export function runGate({ write = false } = {}) {
     return { ok: false, violations, boundaryViolations: [], added, removed };
   }
   process.stdout.write(
-    `api-surface/v1 public-exports-needing-attention=${String(violations.length)} (baseline=${String(baseline.violations.length)}, fixed-this-run=${String(removed.length)}), recursive-publicness-needing-attention=${String(recursivePublicnessViolations.length)} (baseline=${String(recursiveBaseline.length)}, fixed-this-run=${String(removedRecursivePublicness.length)})\n`,
+    `api-surface/v1 public-exports-needing-attention=${String(violations.length)} (baseline=${String(documentBaseline.length)}, fixed-this-run=${String(removed.length)}), recursive-publicness-needing-attention=${String(recursivePublicnessViolations.length)} (baseline=${String(recursiveBaseline.length)}, fixed-this-run=${String(removedRecursivePublicness.length)})\n`,
   );
   return {
     ok: true,
