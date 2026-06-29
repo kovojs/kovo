@@ -375,6 +375,78 @@ export default createApp({
     }
   });
 
+  it('reuses cached Drizzle static analysis facts for unchanged build inputs', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-static-cache-'));
+    const appPath = join(root, 'app.mjs');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
+      massAssignmentFacts: [],
+      ownerDomains: [],
+      queries: [],
+      queryWriteReachability: [],
+      scopeAudits: [],
+      sqlSafetyDiagnostics: [],
+      toctouFacts: [],
+      touchGraph: {},
+    }));
+
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      extractStaticBuildAnalysisFactsFromProject,
+    }));
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      symlinkSync(join(repoRoot, 'packages/drizzle'), join(root, 'node_modules/@kovojs/drizzle'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, publicAccess, route } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/cached', {
+      access: publicAccess('cache fixture route'),
+      page: () => '<main>Cached</main>',
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'model.ts'),
+        `
+import { sql } from '@kovojs/drizzle';
+
+export const marker = sql.raw('select 1');
+`,
+        'utf8',
+      );
+
+      await expect(withCwd(root, () => mainAsync(['build', './app.mjs']))).resolves.toBe(0);
+      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
+
+      await expect(withCwd(root, () => mainAsync(['build', './app.mjs']))).resolves.toBe(0);
+      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
+
+      await expect(
+        withCwd(root, () => mainAsync(['build', './app.mjs', '--no-cache'])),
+      ).resolves.toBe(0);
+      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(2);
+      expect(existsSync(join(root, '.kovo/cache/static-build-analysis'))).toBe(true);
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      vi.doUnmock('@kovojs/drizzle/internal/static');
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('counts inline optimistic query entries without registry query duplication', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-inline-optimistic-'));
     const appPath = join(root, 'app.mjs');

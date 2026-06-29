@@ -2057,6 +2057,36 @@ describe('kovo check', () => {
     }
   });
 
+  it('does not respawn for a compiled JavaScript bin entrypoint', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'kovo-cli-dist-bin-'));
+    const entryPath = join(parent, 'bin.mjs');
+
+    try {
+      writeFileSync(entryPath, readFileSync(new URL('./bin.ts', import.meta.url), 'utf8'), 'utf8');
+      writeFileSync(
+        join(parent, 'index.js'),
+        [
+          'export async function mainAsync() {',
+          '  console.log(process.env.KOVO_CLI_TRANSFORM_TYPES ?? "unset");',
+          '  return 0;',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(join(parent, 'package.json'), '{"type":"module"}\n', 'utf8');
+
+      const output = execFileSync(process.execPath, [entryPath], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      expect(output).toBe('unset\n');
+    } finally {
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
   it('reports a stable error for missing check input files', () => {
     let output = '';
     const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {

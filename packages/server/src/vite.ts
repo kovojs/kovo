@@ -1,8 +1,11 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createRequire } from 'node:module';
 import { registerHooks } from 'node:module';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { availableParallelism } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
 
 import type { DiagnosticCode } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
@@ -588,10 +591,33 @@ interface KovoDrizzleStaticModule {
   extractToctouFromProject(options: {
     files: readonly DataPlaneSourceFile[];
   }): readonly ToctouFactLike[];
+  extractStaticBuildAnalysisFactsFromProject?(options: {
+    files: readonly DataPlaneSourceFile[];
+  }): StaticBuildAnalysisFactsLike;
   deriveMutationTouchRegistry(options: {
     mutations: readonly { mutation: string; touchGraphKey: string }[];
     touchGraph: unknown;
   }): Readonly<Record<string, readonly RuntimeMutationTouchSiteLike[]>>;
+}
+
+interface StaticBuildAnalysisFactsLike {
+  queries: readonly unknown[];
+  sqlSafetyDiagnostics: readonly TouchGraphDiagnosticLike[];
+  toctouFacts: readonly ToctouFactLike[];
+  touchGraph: unknown;
+}
+
+interface DataPlaneAnalysis {
+  files: readonly DataPlaneSourceFile[];
+  outputQueryShapeFacts: readonly CompilerQueryShapeFact[];
+  staticFacts: StaticBuildAnalysisFactsLike;
+}
+
+const OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND = 'kovo.output-schema-query-shape';
+
+interface OutputSchemaQueryShapeWorkerData {
+  files: readonly DataPlaneSourceFile[];
+  kind: typeof OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND;
 }
 
 /**
@@ -631,20 +657,17 @@ async function collectDataPlaneErrorDiagnostics(
   root: string,
   app: string,
 ): Promise<DataPlaneDiagnostic[]> {
-  const sourceDir = dirname(appEntryFileName(app, root));
-  const files = dataPlaneSourceFiles(sourceDir, root);
-  if (files.length === 0) return [];
-
-  const drizzle = await importKovoDrizzleStaticModule();
+  const analysis = await collectDataPlaneAnalysis(root, app);
+  if (analysis.files.length === 0) return [];
   const raw: TouchGraphDiagnosticLike[] = [];
 
   // KV422 (SPEC.md §10.2/§11.2): request-derived/unproven data reaching executable SQL text.
-  raw.push(...drizzle.analyzeSqlSafetyFromProject({ files }));
+  raw.push(...analysis.staticFacts.sqlSafetyDiagnostics);
   // KV410/KV411 (SPEC.md §10.1/§11.4): opaque query projection / exempt-table reads.
-  raw.push(...drizzle.diagnosticsForQueryFacts(drizzle.extractQueryFactsFromProject({ files })));
+  // Included in the aggregate `sqlSafetyDiagnostics` above.
   // KV429 (SPEC.md §10.3/§11.1): every single-row unguarded atomic write fact is a blocking
   // lost-update error (matches `kovo check`'s graph emission, which pushes each fact as error).
-  for (const fact of drizzle.extractToctouFromProject({ files })) {
+  for (const fact of analysis.staticFacts.toctouFacts) {
     raw.push({
       code: 'KV429',
       message: `${diagnosticDefinitions.KV429.message} ${fact.name ?? '<anonymous>'} writes ${fact.table}.${fact.column} without a compare-and-set/version guard.`,
@@ -672,13 +695,12 @@ async function collectDataPlaneErrorDiagnostics(
 }
 
 async function collectRuntimeRegistry(root: string, app: string): Promise<RuntimeRegistryFacts> {
-  const sourceDir = dirname(appEntryFileName(app, root));
-  const files = dataPlaneSourceFiles(sourceDir, root);
-  if (files.length === 0) return { mutationTouches: {}, queryReads: [] };
+  const analysis = await collectDataPlaneAnalysis(root, app);
+  if (analysis.files.length === 0) return { mutationTouches: {}, queryReads: [] };
 
   const drizzle = await importKovoDrizzleStaticModule();
-  const queryReads = runtimeQueryReads(drizzle.extractQueryFactsFromProject({ files }));
-  const touchGraph = drizzle.extractTouchGraphFromProject({ files });
+  const queryReads = runtimeQueryReads(analysis.staticFacts.queries);
+  const touchGraph = analysis.staticFacts.touchGraph;
   const touchGraphKeys =
     touchGraph && typeof touchGraph === 'object' && !Array.isArray(touchGraph)
       ? Object.keys(touchGraph)
@@ -701,17 +723,196 @@ async function collectCompilerQueryShapeFacts(
   root: string,
   app: string,
 ): Promise<readonly CompilerQueryShapeFact[]> {
-  const sourceDir = dirname(appEntryFileName(app, root));
-  const files = dataPlaneSourceFiles(sourceDir, root);
-  if (files.length === 0) return [];
+  const analysis = await collectDataPlaneAnalysis(root, app);
+  if (analysis.files.length === 0) return [];
 
-  const drizzle = await importKovoDrizzleStaticModule();
-  const drizzleFacts = compilerQueryShapeFacts(drizzle.extractQueryFactsFromProject({ files }));
+  const drizzleFacts = compilerQueryShapeFacts(analysis.staticFacts.queries);
   const drizzleQueries = new Set(drizzleFacts.map((fact) => fact.query));
-  const outputFacts = outputSchemaQueryShapeFacts(files).filter(
+  const outputFacts = analysis.outputQueryShapeFacts.filter(
     (fact) => !drizzleQueries.has(fact.query),
   );
   return compilerQueryShapeFacts([...drizzleFacts, ...outputFacts]);
+}
+
+const dataPlaneAnalysisCache = new Map<string, Promise<DataPlaneAnalysis>>();
+
+async function collectDataPlaneAnalysis(root: string, app: string): Promise<DataPlaneAnalysis> {
+  const sourceDir = dirname(appEntryFileName(app, root));
+  const files = dataPlaneSourceFiles(sourceDir, root);
+  const key = dataPlaneAnalysisCacheKey(files);
+  const cached = dataPlaneAnalysisCache.get(key);
+  if (cached) return cached;
+  const promise = createDataPlaneAnalysis(root, key, files);
+  dataPlaneAnalysisCache.set(key, promise);
+  return promise;
+}
+
+async function createDataPlaneAnalysis(
+  root: string,
+  cacheKey: string,
+  files: readonly DataPlaneSourceFile[],
+): Promise<DataPlaneAnalysis> {
+  if (files.length === 0) {
+    return {
+      files,
+      outputQueryShapeFacts: [],
+      staticFacts: {
+        queries: [],
+        sqlSafetyDiagnostics: [],
+        toctouFacts: [],
+        touchGraph: {},
+      },
+    };
+  }
+
+  const cached = readCachedDataPlaneStaticFacts(root, cacheKey);
+  if (cached) {
+    return {
+      files,
+      outputQueryShapeFacts: await outputSchemaQueryShapeFacts(files),
+      staticFacts: cached,
+    };
+  }
+
+  const drizzle = await importKovoDrizzleStaticModule();
+  const staticFacts =
+    drizzle.extractStaticBuildAnalysisFactsFromProject?.({ files }) ??
+    fallbackDataPlaneAnalysisFacts(drizzle, files);
+  writeCachedDataPlaneStaticFacts(root, cacheKey, staticFacts);
+  return {
+    files,
+    outputQueryShapeFacts: await outputSchemaQueryShapeFacts(files),
+    staticFacts,
+  };
+}
+
+function fallbackDataPlaneAnalysisFacts(
+  drizzle: KovoDrizzleStaticModule,
+  files: readonly DataPlaneSourceFile[],
+): StaticBuildAnalysisFactsLike {
+  const queries = drizzle.extractQueryFactsFromProject({ files });
+  return {
+    queries,
+    sqlSafetyDiagnostics: [
+      ...drizzle.analyzeSqlSafetyFromProject({ files }),
+      ...drizzle.diagnosticsForQueryFacts(queries),
+    ],
+    toctouFacts: drizzle.extractToctouFromProject({ files }),
+    touchGraph: drizzle.extractTouchGraphFromProject({ files }),
+  };
+}
+
+const DATA_PLANE_ANALYSIS_CACHE_VERSION = '2026-06-28.fast-check.v1';
+
+function dataPlaneAnalysisCacheKey(files: readonly DataPlaneSourceFile[]): string {
+  const hash = createHash('sha256');
+  hash.update(`${DATA_PLANE_ANALYSIS_CACHE_VERSION}\0`);
+  hash.update(dataPlaneAnalyzerFingerprint());
+  for (const file of [...files].sort((left, right) =>
+    left.fileName.localeCompare(right.fileName),
+  )) {
+    hash.update('\0file\0');
+    hash.update(file.fileName);
+    hash.update('\0');
+    hash.update(createHash('sha256').update(file.source).digest('hex'));
+  }
+  return hash.digest('hex');
+}
+
+function readCachedDataPlaneStaticFacts(
+  root: string,
+  key: string,
+): StaticBuildAnalysisFactsLike | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(dataPlaneStaticFactsCachePath(root, key), 'utf8'));
+    return isStaticBuildAnalysisFactsLike(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedDataPlaneStaticFacts(
+  root: string,
+  key: string,
+  facts: StaticBuildAnalysisFactsLike,
+): void {
+  try {
+    const cachePath = dataPlaneStaticFactsCachePath(root, key);
+    mkdirSync(dirname(cachePath), { recursive: true });
+    writeFileSync(cachePath, `${JSON.stringify(facts)}\n`, 'utf8');
+  } catch {
+    // Cache writes are best-effort; the analyzer already ran for this source snapshot.
+  }
+}
+
+function dataPlaneStaticFactsCachePath(root: string, key: string): string {
+  return join(root, '.kovo/cache/static-build-analysis', `vite-${key}.json`);
+}
+
+function isStaticBuildAnalysisFactsLike(value: unknown): value is StaticBuildAnalysisFactsLike {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    Array.isArray(record.queries) &&
+    Array.isArray(record.sqlSafetyDiagnostics) &&
+    Array.isArray(record.toctouFacts) &&
+    typeof record.touchGraph === 'object' &&
+    record.touchGraph !== null &&
+    !Array.isArray(record.touchGraph)
+  );
+}
+
+function dataPlaneAnalyzerFingerprint(): string {
+  const resolved = resolveDataPlaneAnalyzerPath();
+  const packageRoot = resolved ? nearestPackageRoot(dirname(resolved)) : undefined;
+  const hash = createHash('sha256');
+  hash.update(resolved ?? 'unresolved');
+  if (packageRoot) {
+    hash.update('\0pkg\0');
+    hash.update(readFileIfExists(join(packageRoot, 'package.json')));
+    const srcDir = join(packageRoot, 'src');
+    if (existsSync(srcDir)) {
+      for (const file of sourceFilePathsUnder(srcDir)) {
+        hash.update('\0src\0');
+        hash.update(relative(packageRoot, file).split(/[\\/]/).join('/'));
+        hash.update('\0');
+        hash.update(createHash('sha256').update(readFileIfExists(file)).digest('hex'));
+      }
+    }
+  }
+  return hash.digest('hex');
+}
+
+function resolveDataPlaneAnalyzerPath(): string | undefined {
+  try {
+    return createRequire(import.meta.url).resolve('@kovojs/drizzle/internal/static');
+  } catch {
+    return undefined;
+  }
+}
+
+function nearestPackageRoot(startDir: string): string | undefined {
+  for (let current = startDir; ; current = dirname(current)) {
+    if (existsSync(join(current, 'package.json'))) return current;
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+  }
+}
+
+function sourceFilePathsUnder(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) return sourceFilePathsUnder(path);
+    return /\.[cm]?[jt]sx?$/.test(entry.name) ? [path] : [];
+  });
+}
+
+function readFileIfExists(path: string): string {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return '';
+  }
 }
 
 function compilerQueryShapeFacts(
@@ -810,14 +1011,118 @@ function typeScript(): TypeScriptModule {
   return loadedTypeScript;
 }
 
+if (!isMainThread && isOutputSchemaQueryShapeWorkerData(workerData)) {
+  parentPort?.postMessage(outputSchemaQueryShapeFactsSerial(workerData.files));
+}
+
 /**
  * SPEC.md §4.8/§6.2/§10.2: non-Drizzle queries with declared `output` schemas still publish
  * typed query-shape facts so KV302 binding validation checks schema fields, not loader source text.
  */
-function outputSchemaQueryShapeFacts(
+const OUTPUT_SCHEMA_WORKER_MIN_FILES = 8;
+const OUTPUT_SCHEMA_WORKER_MAX_COUNT = 4;
+
+async function outputSchemaQueryShapeFacts(
+  files: readonly DataPlaneSourceFile[],
+): Promise<readonly CompilerQueryShapeFact[]> {
+  if (!isMainThread || files.length < OUTPUT_SCHEMA_WORKER_MIN_FILES) {
+    return outputSchemaQueryShapeFactsSerial(files);
+  }
+
+  const workerCount = Math.min(
+    files.length,
+    OUTPUT_SCHEMA_WORKER_MAX_COUNT,
+    Math.max(1, availableParallelism() - 1),
+  );
+  if (workerCount <= 1) return outputSchemaQueryShapeFactsSerial(files);
+
+  const chunks = Array.from({ length: workerCount }, () => [] as DataPlaneSourceFile[]);
+  for (const [index, file] of files.entries()) {
+    chunks[index % workerCount]!.push(file);
+  }
+
+  const facts = await Promise.all(
+    chunks
+      .filter((chunk) => chunk.length > 0)
+      .map(async (chunk) => {
+        try {
+          return await outputSchemaQueryShapeFactsInWorker(chunk);
+        } catch (error) {
+          if (process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER === '1') throw error;
+          return outputSchemaQueryShapeFactsSerial(chunk);
+        }
+      }),
+  );
+  return facts.flat();
+}
+
+function outputSchemaQueryShapeFactsSerial(
   files: readonly DataPlaneSourceFile[],
 ): readonly CompilerQueryShapeFact[] {
   return files.flatMap((file) => outputSchemaQueryShapeFactsFromSource(file.fileName, file.source));
+}
+
+function outputSchemaQueryShapeFactsInWorker(
+  files: readonly DataPlaneSourceFile[],
+): Promise<readonly CompilerQueryShapeFact[]> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const worker = new Worker(new URL(import.meta.url), {
+      workerData: {
+        files,
+        kind: OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND,
+      } satisfies OutputSchemaQueryShapeWorkerData,
+    });
+    worker.once('message', (message: unknown) => {
+      settled = true;
+      if (isCompilerQueryShapeFactArray(message)) {
+        resolve(message);
+      } else {
+        reject(new Error('Kovo output-schema worker returned malformed query-shape facts.'));
+      }
+    });
+    worker.once('error', (error) => {
+      settled = true;
+      reject(error);
+    });
+    worker.once('exit', (code) => {
+      if (!settled) {
+        reject(new Error(`Kovo output-schema worker exited before returning facts, code ${code}.`));
+      }
+    });
+  });
+}
+
+function isOutputSchemaQueryShapeWorkerData(
+  value: unknown,
+): value is OutputSchemaQueryShapeWorkerData {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.kind === OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND &&
+    Array.isArray(candidate.files) &&
+    candidate.files.every(isOutputSchemaWorkerSourceFile)
+  );
+}
+
+function isOutputSchemaWorkerSourceFile(value: unknown): value is DataPlaneSourceFile {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.fileName === 'string' && typeof candidate.source === 'string';
+}
+
+function isCompilerQueryShapeFactArray(value: unknown): value is readonly CompilerQueryShapeFact[] {
+  return Array.isArray(value) && value.every(isCompilerQueryShapeFact);
+}
+
+function isCompilerQueryShapeFact(value: unknown): value is CompilerQueryShapeFact {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.query === 'string' &&
+    typeof candidate.source === 'string' &&
+    isCompilerQueryShape(candidate.shape)
+  );
 }
 
 function outputSchemaQueryShapeFactsFromSource(

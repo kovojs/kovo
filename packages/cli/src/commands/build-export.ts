@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -361,7 +363,9 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
         kovoBuildStylesheetCss(resolvedAppModulePath),
       ]);
     const app = appFromModule(appModule, options.appModulePath);
-    const checkGraph = await runKovoBuildCheckPreflight(app, resolvedAppModulePath);
+    const checkGraph = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
+      cache: options.cache,
+    });
     const outDir = resolve(options.outDir);
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
@@ -468,8 +472,9 @@ function runTypeScriptBuildPreflight(appModulePath: string): void {
 async function runKovoBuildCheckPreflight(
   app: KovoApp,
   appModulePath: string,
+  options: { cache: boolean },
 ): Promise<CoreGraph.KovoCheckInput> {
-  const graph = await buildCheckGraph(app, appModulePath);
+  const graph = await buildCheckGraph(app, appModulePath, options);
   const result = kovoCheck(graph);
   if (result.exitCode === 0) return graph;
 
@@ -502,12 +507,13 @@ function buildFatalWarningSummaryLine(line: string): string[] {
 async function buildCheckGraph(
   app: KovoApp,
   appModulePath: string,
+  options: { cache: boolean },
 ): Promise<CoreGraph.KovoCheckInput> {
   const [{ accessFactsFromApp }, { deriveAppGraph }] = await Promise.all([
     import('@kovojs/server/internal/execution'),
     import('@kovojs/compiler/graph'),
   ]);
-  const graph = await staticBuildCheckGraph(app, appModulePath);
+  const graph = await staticBuildCheckGraph(app, appModulePath, options);
   const result = deriveAppGraph({
     graph: {
       ...graph,
@@ -535,10 +541,13 @@ async function buildCheckGraph(
 async function staticBuildCheckGraph(
   app: KovoApp,
   appModulePath: string,
+  options: { cache: boolean },
 ): Promise<CoreGraph.KovoCheckInput> {
   const files = buildCheckSourceFiles(appModulePath);
   const drizzleFacts =
-    files.length === 0 ? emptyStaticDrizzleBuildFacts() : await staticDrizzleBuildFacts(files);
+    files.length === 0
+      ? emptyStaticDrizzleBuildFacts()
+      : await staticDrizzleBuildFacts(files, options);
   const queryReadSets = app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries));
   const routeOutcomeFacts = routeFileStreamEndpointFacts(app.routes, files);
 
@@ -600,6 +609,7 @@ function emptyStaticDrizzleBuildFacts(): StaticDrizzleBuildFacts {
 
 async function staticDrizzleBuildFacts(
   files: readonly BuildCheckSourceFile[],
+  options: { cache: boolean },
 ): Promise<StaticDrizzleBuildFacts> {
   const analysisFiles = files.filter(isBuildSecurityAnalysisSourceFile);
   if (
@@ -615,12 +625,18 @@ async function staticDrizzleBuildFacts(
     return { ...emptyStaticDrizzleBuildFacts(), touchGraph: {} };
   }
   const { extractStaticBuildAnalysisFactsFromProject } = drizzle;
+  const cacheKey = staticDrizzleBuildFactsCacheKey(analysisFiles);
+  if (options.cache) {
+    const cached = readStaticDrizzleBuildFactsCache(cacheKey);
+    if (cached) return cached;
+  }
+
   const facts = extractStaticBuildAnalysisFactsFromProject({ files: analysisFiles });
   const queryReadFacts = facts.queries as readonly QueryReadFactLike[];
   const diagnostics = facts.sqlSafetyDiagnostics.flatMap(sqlSafetyDiagnosticFact);
   // SPEC §5.2 requires `kovo build` to preflight the full verifier graph. These
   // static security facts feed KV414/KV438/KV433/KV429 in the production build path.
-  return {
+  const result = {
     massAssignmentFacts: facts.massAssignmentFacts,
     ownerDomains: facts.ownerDomains,
     queries: queryReadFacts,
@@ -630,6 +646,118 @@ async function staticDrizzleBuildFacts(
     toctouFacts: facts.toctouFacts,
     touchGraph: facts.touchGraph,
   };
+  if (options.cache) writeStaticDrizzleBuildFactsCache(cacheKey, result);
+  return result;
+}
+
+const STATIC_DRIZZLE_BUILD_FACTS_CACHE_VERSION = '2026-06-28.fast-check.v1';
+
+function staticDrizzleBuildFactsCacheKey(files: readonly BuildCheckSourceFile[]): string {
+  const hash = createHash('sha256');
+  hash.update(`${STATIC_DRIZZLE_BUILD_FACTS_CACHE_VERSION}\0`);
+  hash.update(staticDrizzleAnalyzerFingerprint());
+  for (const file of [...files].sort((left, right) =>
+    left.fileName.localeCompare(right.fileName),
+  )) {
+    hash.update('\0file\0');
+    hash.update(file.fileName);
+    hash.update('\0');
+    hash.update(createHash('sha256').update(file.source).digest('hex'));
+  }
+  return hash.digest('hex');
+}
+
+function staticDrizzleAnalyzerFingerprint(): string {
+  const resolved = resolveDrizzleStaticAnalyzerPath();
+  const packageRoot = resolved ? nearestPackageRoot(dirname(resolved)) : undefined;
+  const hash = createHash('sha256');
+  hash.update(resolved ?? 'unresolved');
+  if (packageRoot) {
+    hash.update('\0pkg\0');
+    hash.update(readFileIfExists(join(packageRoot, 'package.json')));
+    const srcDir = join(packageRoot, 'src');
+    if (existsSync(srcDir)) {
+      for (const file of sourceFilePathsUnder(srcDir)) {
+        hash.update('\0src\0');
+        hash.update(relative(packageRoot, file).split(/[\\/]/).join('/'));
+        hash.update('\0');
+        hash.update(createHash('sha256').update(readFileIfExists(file)).digest('hex'));
+      }
+    }
+  }
+  return hash.digest('hex');
+}
+
+function resolveDrizzleStaticAnalyzerPath(): string | undefined {
+  try {
+    return requireFromCli.resolve('@kovojs/drizzle/internal/static');
+  } catch {
+    return undefined;
+  }
+}
+
+function nearestPackageRoot(startDir: string): string | undefined {
+  for (let current = startDir; ; current = dirname(current)) {
+    if (existsSync(join(current, 'package.json'))) return current;
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+  }
+}
+
+function sourceFilePathsUnder(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSafe(dir).flatMap((entry) => {
+    const path = join(dir, entry);
+    const stat = statSafe(path);
+    if (!stat) return [];
+    if (stat.isDirectory()) return sourceFilePathsUnder(path);
+    return /\.[cm]?[jt]sx?$/.test(entry) ? [path] : [];
+  });
+}
+
+function readStaticDrizzleBuildFactsCache(key: string): StaticDrizzleBuildFacts | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(staticDrizzleBuildFactsCachePath(key), 'utf8'));
+    return isStaticDrizzleBuildFacts(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeStaticDrizzleBuildFactsCache(key: string, facts: StaticDrizzleBuildFacts): void {
+  try {
+    const cachePath = staticDrizzleBuildFactsCachePath(key);
+    mkdirSync(dirname(cachePath), { recursive: true });
+    writeFileSync(cachePath, `${JSON.stringify(facts)}\n`, 'utf8');
+  } catch {
+    // Cache writes are a performance optimization only; the security proof above already ran.
+  }
+}
+
+function staticDrizzleBuildFactsCachePath(key: string): string {
+  return join(process.cwd(), '.kovo/cache/static-build-analysis', `${key}.json`);
+}
+
+function isStaticDrizzleBuildFacts(value: unknown): value is StaticDrizzleBuildFacts {
+  if (!isRecord(value)) return false;
+  return (
+    Array.isArray(value.massAssignmentFacts) &&
+    Array.isArray(value.ownerDomains) &&
+    Array.isArray(value.queries) &&
+    Array.isArray(value.queryWriteReachability) &&
+    Array.isArray(value.scopeAudits) &&
+    Array.isArray(value.sqlSafetyDiagnostics) &&
+    Array.isArray(value.toctouFacts) &&
+    isRecord(value.touchGraph)
+  );
+}
+
+function readFileIfExists(path: string): string {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return '';
+  }
 }
 
 function isBuildSecurityAnalysisSourceFile(file: BuildCheckSourceFile): boolean {
