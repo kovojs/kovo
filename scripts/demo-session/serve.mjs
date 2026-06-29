@@ -74,7 +74,7 @@ export async function createDemoServeServer({
     configFile,
     logLevel: 'info',
     root,
-    server: { middlewareMode: true },
+    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
   });
 
   try {

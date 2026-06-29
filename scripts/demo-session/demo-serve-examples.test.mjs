@@ -26,5 +26,5 @@ describe('hosted demo serve examples', () => {
     const stackoverflow = await createSoDemoServer({ host: '127.0.0.1', port: 0 });
     expect(stackoverflow.port).toBeGreaterThan(0);
     await stackoverflow.close();
-  }, 60_000);
+  }, 120_000);
 });

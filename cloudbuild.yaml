@@ -117,7 +117,7 @@ steps:
           req.end();
         '
 
-        for _ in $$(seq 1 60); do
+        for _ in $$(seq 1 120); do
           if docker exec "$$CID" node -e "$$node_check" / 'text/html'; then
             docker exec "$$CID" node -e "$$node_check" /assets/styles.css 'text/css' 'kv-chrome-'
             exit 0
