@@ -859,8 +859,13 @@ export declare namespace JSX {
     minLength?: AttributeValue;
     mutation?: { key: string };
     name?: AttributeValue;
+    onBlur?: (event?: unknown) => void;
+    onChange?: (event?: unknown) => void;
     onClick?: (event?: unknown) => void;
+    onFocus?: (event?: unknown) => void;
+    onInput?: (event?: unknown) => void;
     onKeyDown?: (event?: unknown) => void;
+    onSubmit?: (event?: unknown) => void;
     open?: AttributeValue;
     optimum?: AttributeValue;
     pattern?: AttributeValue;

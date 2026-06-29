@@ -226,7 +226,7 @@ render })` passes `tsc --noEmit` with zero errors and has no runtime validation;
 
 ### D. Client-island (L1) authoring ergonomics
 
-- [ ] **`HtmlAttributes` types only `onClick`/`onKeyDown` — `onInput`/`onChange`/`onSubmit`/`onFocus`/`onBlur` are unauthorable, so the SPEC §7 L1 "filter as you type" marquee is a type error.** (med, framework; found by `interaction-ladder-live`)
+- [x] **`HtmlAttributes` types only `onClick`/`onKeyDown` — `onInput`/`onChange`/`onSubmit`/`onFocus`/`onBlur` are unauthorable, so the SPEC §7 L1 "filter as you type" marquee is a type error.** (med, framework; found by `interaction-ladder-live`)
   - Observed: `<input value={state.query} onInput={…}>` → `TS2322 … Property 'onInput' does not exist
 on type 'HtmlAttributes'`. Only `onClick` and `onKeyDown` exist.
   - Root cause: `packages/server/src/jsx-runtime.ts:862-863` declares exactly `onClick?` and `onKeyDown?`
@@ -239,8 +239,9 @@ on type 'HtmlAttributes'`. Only `onClick` and `onKeyDown` exist.
     event-handler family.
   - Acceptance: add `onInput`/`onChange`/`onSubmit`/`onFocus`/`onBlur` (ideally the broader `on*` DOM
     event set, with a typed event param) to `HtmlAttributes`.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/compiler/src/handler-lowering.test.ts packages/server/src/jsx-runtime-types.test.ts --reporter=dot` proves `onInput`/`onChange`/`onSubmit`/`onFocus`/`onBlur` type-check on intrinsic elements.
 
-- [ ] **Island-handler KV201 mis-fires on global coercion built-ins: `Number()`/`String()`/`Boolean()`/`parseInt()` are treated as "unserializable captures" (`Math.*`/string methods pass).** (med, framework; found by `interaction-ladder-live`)
+- [x] **Island-handler KV201 mis-fires on global coercion built-ins: `Number()`/`String()`/`Boolean()`/`parseInt()` are treated as "unserializable captures" (`Math.*`/string methods pass).** (med, framework; found by `interaction-ladder-live`)
   - Observed: `onClick={() => { state.n = Number(state.n)+1 }}` → `ERROR KV201 Closure captures
 unserializable value`; `Math.min(state.n,5)` and `state.q.trim()` compile fine. The KV201 fix-menu
     (move value into state via ctx / data-p-\* params / module constants) cannot resolve a bare global.
@@ -257,6 +258,7 @@ unknown`, reading a typed value from an island input is effectively un-authorabl
   - Acceptance: add the side-effect-free JS global built-ins (`Number`, `String`, `Boolean`, `Array`,
     `JSON`, `Math`, `parseInt`, `parseFloat`, `isNaN`, `isFinite`, …) to the base allowed set; specialize
     the KV201 help when the offending reference is a known global.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/compiler/src/handler-lowering.test.ts packages/server/src/jsx-runtime-types.test.ts --reporter=dot` proves `Number`/`String`/`Boolean`/`Array`/`JSON`/`Set`/`parseInt`/`isNaN`/`isFinite` handler references no longer emit KV201 while browser globals remain blocked; `pnpm run check:vp` passes.
 
 ### E. Hand-DDL template fragility (PGlite, no migration tool)
 

@@ -195,6 +195,37 @@ export const CartBadge = component({
     }
   });
 
+  it('allows pure built-in globals for handler coercion without treating them as captures', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component({
+  state: () => ({ enabled: false, label: '', n: 0, value: '' }),
+  render: () => (
+    <input
+      value={state.value}
+      onInput={() => {
+        const raw = event.target?.value ?? '';
+        state.n = Number(raw) + parseInt(String(raw || '0'), 10);
+        state.label = JSON.stringify(Array.from(new Set([Boolean(raw)])));
+        state.enabled = isFinite(state.n) && !isNaN(state.n);
+      }}
+    />
+  ),
+});
+`,
+    });
+
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
+    expect(clientSource).toContain("ctx.state.n = Number(raw) + parseInt(String(raw || '0'), 10);");
+    expect(clientSource).toContain('JSON.stringify(Array.from(new Set([Boolean(raw)])))');
+    expect(clientSource).toContain(
+      'ctx.state.enabled = isFinite(ctx.state.n) && !isNaN(ctx.state.n);',
+    );
+  });
+
   it('reports KV201 for captured outer locals that are not element params', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

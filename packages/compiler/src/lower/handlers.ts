@@ -317,8 +317,7 @@ export function capturesUnserializableReferences(
   context: CaptureReferenceContext,
 ): boolean {
   const allowed = new Set([
-    'Object',
-    'Promise',
+    ...SAFE_HANDLER_GLOBAL_REFERENCES,
     'clearTimeout',
     'ctx',
     'event',
@@ -333,6 +332,25 @@ export function capturesUnserializableReferences(
 
   return references.some((name) => !allowed.has(name));
 }
+
+const SAFE_HANDLER_GLOBAL_REFERENCES = [
+  'Array',
+  'BigInt',
+  'Boolean',
+  'JSON',
+  'Math',
+  'Number',
+  'Object',
+  'Promise',
+  'Set',
+  'String',
+  'isFinite',
+  'isNaN',
+  'parseFloat',
+  'parseInt',
+] as const;
+
+const SAFE_HANDLER_GLOBAL_REFERENCE_SET = new Set<string>(SAFE_HANDLER_GLOBAL_REFERENCES);
 
 function referenceRootsForElementParam(param: ElementParam): string[] {
   const [root] = param.expression.split('.');
@@ -510,6 +528,7 @@ function serializableMemberExpression(
   localNames: ReadonlySet<string> = new Set(),
 ): boolean {
   const root = /^[A-Za-z_$][\w$]*/.exec(member)?.[0];
+  if (root && SAFE_HANDLER_GLOBAL_REFERENCE_SET.has(root)) return false;
   return (
     (root === undefined || !localNames.has(root)) &&
     !member.startsWith('state.') &&

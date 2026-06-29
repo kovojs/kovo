@@ -52,6 +52,17 @@ const ok = (
     </button>
   </Panel>
 );
+const interactive = (
+  <form
+    onBlur={(event) => void event}
+    onChange={(event) => void event}
+    onFocus={(event) => void event}
+    onInput={(event) => void event}
+    onSubmit={(event) => void event}
+  >
+    <input onInput={(event) => void event} value="filter" />
+  </form>
+);
 
 const raw = <section html={trustedHtml('<em>safe</em>')} />;
 const streaming = (
@@ -73,6 +84,7 @@ const badAttribute = <button hrefx="/bad">Bad</button>;
 const badAria = <span aria-live="maybe" />;
 
 void ok;
+void interactive;
 void raw;
 void streaming;
 void missingRequiredProp;
