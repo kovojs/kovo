@@ -379,8 +379,18 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     // below — costing ~9s of duplicate ts-morph work cold. Flag the entire (concurrent) load span so
     // the plugin skips it; the production client/server build passes run with the flag cleared, so
     // their fail-closed gate still fires.
-    const [{ cloudflare, node, vercel }, { writeKovoNeutralBuild }, appModule, buildStylesheetCss] =
-      await withGraphDerivationFlag(() =>
+    // plans/fast-kovo-check3.md: capture the ENTIRE load + appFromModule + kovo-check span (not just
+    // the check) so the fail-closed join below can surface a tsc type error FIRST — exactly as the old
+    // sequential order did — before re-throwing ANY of these failures (a load error, a not-a-KovoApp
+    // export, or a security-gate failure). The tsc preflight started above runs concurrently with all
+    // of it; deferring these errors past the `await typeScriptPreflight` preserves tsc-error-first.
+    const loadAndCheck = await (async () => {
+      const [
+        { cloudflare, node, vercel },
+        { writeKovoNeutralBuild },
+        appModule,
+        buildStylesheetCss,
+      ] = await withGraphDerivationFlag(() =>
         Promise.all([
           import('@kovojs/server/build'),
           import('@kovojs/server/internal/build'),
@@ -388,25 +398,31 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
           kovoBuildStylesheetCss(resolvedAppModulePath),
         ]),
       );
-    const app = appFromModule(appModule, options.appModulePath);
-    // plans/fast-kovo-check3.md: capture the kovo-check security preflight outcome instead of
-    // throwing inline, so the fail-closed join below can surface a tsc type error FIRST (exactly as
-    // the old sequential order did) before re-throwing any check failure. The tsc preflight started
-    // above keeps running concurrently with this check.
-    const checkPreflight = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
-      cache: options.cache,
-    }).then(
-      (graph) => ({ graph, ok: true as const }),
+      const app = appFromModule(appModule, options.appModulePath);
+      const checkGraph = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
+        cache: options.cache,
+      });
+      return {
+        app,
+        buildStylesheetCss,
+        checkGraph,
+        cloudflare,
+        node,
+        vercel,
+        writeKovoNeutralBuild,
+      };
+    })().then(
+      (value) => ({ ok: true as const, value }),
       (error: unknown) => ({ error, ok: false as const }),
     );
-    // Fail-closed join BEFORE any artifact-emitting step. `await typeScriptPreflight` first so a
-    // type error surfaces the exact tsc preflight error (tsc-error-first ordering), then re-throw
-    // any captured check-preflight failure. Every artifact-emitting step below
-    // (buildKovoClientManifest, writeKovoNeutralBuild, preset.emit, writeKovoBuildGraphArtifact)
-    // stays strictly after this join, so any preflight failure emits ZERO artifacts.
+    // Fail-closed join BEFORE any artifact-emitting step: surface a tsc type error FIRST
+    // (tsc-error-first ordering), then re-throw any captured load/check failure. Every
+    // artifact-emitting step below (buildKovoClientManifest, writeKovoNeutralBuild, preset.emit,
+    // writeKovoBuildGraphArtifact) stays strictly after this join, so any failure emits ZERO artifacts.
     await typeScriptPreflight;
-    if (!checkPreflight.ok) throw checkPreflight.error;
-    const checkGraph = checkPreflight.graph;
+    if (!loadAndCheck.ok) throw loadAndCheck.error;
+    const { app, buildStylesheetCss, checkGraph, cloudflare, node, vercel, writeKovoNeutralBuild } =
+      loadAndCheck.value;
     const outDir = resolve(options.outDir);
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
