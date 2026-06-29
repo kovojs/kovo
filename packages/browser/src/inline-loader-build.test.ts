@@ -53,6 +53,12 @@ describe('inline loader build source', () => {
     );
     expect(inlineKovoLoaderInstallerReadableSource).toContain('\nfunction installInlineKovoLoader');
     expect(inlineKovoLoaderInstallerReadableSource).toContain("join('; ')");
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      "new BroadcastChannel('kovo:mutation-response')",
+    );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      "addEventListener('visibilitychange'",
+    );
     expect(buildInlineKovoLoaderInstallerSource()).toBe(inlineKovoLoaderInstallerSource);
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-live-component')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('kovo-live-cp');
@@ -71,6 +77,8 @@ describe('inline loader build source', () => {
     expect(moduleSource).toContain('kovoDeferredRuntimeModuleSource');
     expect(kovoDeferredRuntimeModuleSource).toContain('installKovoDeferredRuntime');
     expect(kovoDeferredRuntimeModuleSource).toContain(inlineKovoLoaderInstallerSource);
+    expect(kovoDeferredRuntimeModuleSource).toContain('BroadcastChannel');
+    expect(kovoDeferredRuntimeModuleSource).toContain('visibilitychange');
     expect(inlineKovoLoaderBootstrapInstallerSource).toBe(
       buildInlineKovoLoaderStubInstallerSource(),
     );

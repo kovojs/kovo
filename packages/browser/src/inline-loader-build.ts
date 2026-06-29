@@ -477,6 +477,16 @@ function installInlineKovoLoader(im) {
   const kb = (root = doc) =>
     root.querySelector('meta[name="kovo-build"]')?.getAttribute('content') || '';
   const bh = (res) => res.headers?.get('Kovo-Build') ?? '';
+  const qwk = (name, key) => {
+    if (!name) return '';
+    return key == null || key === '' ? name : key.startsWith(name + ':') ? key : name + ':' + key;
+  };
+  const qurl = (wireKey) => {
+    const i = wireKey.indexOf(':');
+    const n = i > 0 ? wireKey.slice(0, i) : wireKey;
+    const k = i > 0 ? wireKey.slice(i + 1) : undefined;
+    return n ? '/_q/' + encodeURIComponent(n) + (k == null ? '' : '?key=' + encodeURIComponent(k)) : '';
+  };
   const ns = (root) => [...root.querySelectorAll('[kovo-nav-segment]')];
   const nk = (el) =>
     [
@@ -765,14 +775,10 @@ function installInlineKovoLoader(im) {
   const qw = (q) => {
     const name = readAttribute(q.attrs, 'name');
     const key = readAttribute(q.attrs, 'key');
-    if (!name) return '';
-    const i = key == null ? name.indexOf(':') : -1;
-    const n = key == null && i > 0 ? name.slice(0, i) : name;
-    const k = key == null && i > 0 ? name.slice(i + 1) : key;
-    return '/_q/' + encodeURIComponent(n) + (k == null ? '' : '?key=' + encodeURIComponent(k));
+    return qurl(qwk(name, key));
   };
   const qr = (q) => {
-    const u = qw(q);
+    const u = typeof q === 'string' ? qurl(q) : qw(q);
     if (!u) return;
     fetch(u, {
       cache: 'no-store',
@@ -789,7 +795,19 @@ function installInlineKovoLoader(im) {
       })
       .catch(() => {});
   };
+  const fqs = new Set();
+  const rememberQueryChunk = (q) => {
+    const w = qwk(readAttribute(q.attrs, 'name'), readAttribute(q.attrs, 'key'));
+    if (w) fqs.add(w);
+  };
+  const rememberQueryScripts = () => {
+    for (const script of qa(doc, 'script[kovo-query]')) {
+      const w = qwk(script.getAttribute?.('kovo-query'), script.getAttribute?.('key'));
+      if (w) fqs.add(w);
+    }
+  };
   const aq = (queries, applyQueries) => {
+    for (const q of queries) rememberQueryChunk(q);
     if (applyQueries) {
       const ok = [];
       for (const q of queries) qd(q) ? qr(q) : ok.push(q);
@@ -926,10 +944,45 @@ function installInlineKovoLoader(im) {
     if (!value) return [];
     try {
       const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.filter(schg) : [];
     } catch {
       return [];
     }
+  };
+  const schg = (value) =>
+    value &&
+    typeof value === 'object' &&
+    typeof value.domain === 'string' &&
+    (value.keys === undefined || Array.isArray(value.keys) && value.keys.every((key) => typeof key === 'string'));
+  const sfp = doc.querySelector?.('meta[name="kovo-session"]')?.getAttribute('content') ?? undefined;
+  let bc;
+  try {
+    bc = typeof BroadcastChannel === 'function' ? new BroadcastChannel('kovo:mutation-response') : undefined;
+  } catch {}
+  const bmsg = (value) =>
+    value &&
+    typeof value === 'object' &&
+    value.type === 'kovo:mutation-response' &&
+    typeof value.body === 'string' &&
+    (value.buildToken === undefined || typeof value.buildToken === 'string') &&
+    Array.isArray(value.changes) &&
+    value.changes.every(schg);
+  if (bc) {
+    bc.onmessage = (event) => {
+      const data = event.data;
+      if (!bmsg(data) || data.principal !== sfp) return;
+      ab(data.body, data.buildToken);
+    };
+  }
+  const pb = (body, changes) => {
+    if (!bc) return;
+    bc.postMessage({
+      body,
+      ...(kb() ? { buildToken: kb() } : {}),
+      changes,
+      ...(sfp === undefined ? {} : { principal: sfp }),
+      type: 'kovo:mutation-response',
+    });
   };
   const badp = (value) => {
     for (let index = 0; index < value.length; index += 1) {
@@ -1013,6 +1066,9 @@ function installInlineKovoLoader(im) {
               return;
             }
             ab(text, bh(response));
+            if ((response.status ?? 200) >= 200 && (response.status ?? 200) < 300 && response.ok !== false) {
+              pb(text, changes);
+            }
           });
       })
       .catch(() => fsb(form));
@@ -1148,6 +1204,18 @@ function installInlineKovoLoader(im) {
   addEventListener('popstate', () => {
     sf(cu);
     void an(location.href, true);
+  });
+  const vrf = () => {
+    rememberQueryScripts();
+    for (const query of fqs) qr(query);
+  };
+  rememberQueryScripts();
+  addEventListener('visibilitychange', () => {
+    if (doc.visibilityState === 'hidden') return;
+    vrf();
+  });
+  addEventListener('pageshow', () => {
+    vrf();
   });
   // SPEC.md §780: second bfcache defense. A bfcache restore (event.persisted) is a history
   // traversal that bypassed the loader, sessionProvider, and route guard, so a persisted
