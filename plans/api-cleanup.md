@@ -280,6 +280,7 @@ verifier IR, so do NOT; gate-tightening; 9D browser option-graph + headless mach
 
 ### 9F — Reference pages (gated on 9A/9B/9D shrinking the surface; finishes Phase 8)
 
-- [ ] **Add an api-ref page for `@kovojs/headless-ui`** (`apiRef` entry in `public-packages.json` + generated page): the kept `*Attributes` builders + value/state types, after 9D documents them.
-- [ ] **Add an api-ref page for `@kovojs/ui`** (library half): the `Component`/`*Props` families, after 9A un-exports the class strings and they are documented.
-  - Prove (9F): `pnpm exec vitest run site/scripts/api-ref.test.mjs` + `pnpm run check:build`.
+- [x] **Add an api-ref page for `@kovojs/headless-ui`** (`apiRef` entry in `public-packages.json` + generated page): the kept `*Attributes` builders + value/state types, after 9D documents them.
+  - Evidence 2026-06-29: `public-packages.json` documents `@kovojs/headless-ui` including `./types`; `pnpm exec vitest --run site/scripts/api-ref.test.mjs --reporter=dot`, `pnpm --filter @kovojs/site run api:ref`, and `pnpm run check:build` passed.
+- [x] **Add an api-ref page for `@kovojs/ui`** (library half): the `Component`/`*Props` families, after 9A un-exports the class strings and they are documented.
+  - Evidence 2026-06-29: `public-packages.json` already carries the `@kovojs/ui` `apiRef` entry and `site/scripts/api-ref.test.mjs` expects `ui.md`; `pnpm exec vitest --run site/scripts/api-ref.test.mjs --reporter=dot`, `pnpm --filter @kovojs/site run api:ref`, and `pnpm run check:build` passed.

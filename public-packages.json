@@ -2003,7 +2003,8 @@
           "./toggle",
           "./toggle-group",
           "./toolbar",
-          "./tooltip"
+          "./tooltip",
+          "./types"
         ],
         "generated": [],
         "internal": ["./internal"]
