@@ -87,6 +87,10 @@ export function parseDiagnosticsForSourceFile(
   });
 }
 
+/**
+ * @internal Parse one authored component module into the compiler's source model. Shared by
+ * compiler phases and build-time graph preflight only; app authors must not depend on this shape.
+ */
 export function parseComponentModule(fileName: string, source: string): ComponentModuleModel {
   const sourceFile = parseSourceFile(fileName, source);
   const calls: CallExpressionModel[] = [];
@@ -342,6 +346,10 @@ export function componentOptionObjectEntries(
   ];
 }
 
+/**
+ * @internal Return object-literal entries for a component option across every component in a module.
+ * Used by graph/build checks that must consider multi-component modules.
+ */
 export function allComponentOptionObjectEntries(
   model: ComponentModuleModel,
   propertyName: string,

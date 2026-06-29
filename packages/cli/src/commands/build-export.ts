@@ -595,10 +595,13 @@ async function staticBuildCheckGraph(
   options: { cache: boolean },
 ): Promise<CoreGraph.KovoCheckInput> {
   const files = buildCheckSourceFiles(appModulePath);
-  const drizzleFacts =
+  const [drizzleFacts, components] =
     files.length === 0
-      ? emptyStaticDrizzleBuildFacts()
-      : await staticDrizzleBuildFacts(files, options);
+      ? [emptyStaticDrizzleBuildFacts(), [] as CoreGraph.ComponentExplain[]]
+      : await Promise.all([
+          staticDrizzleBuildFacts(files, options),
+          componentQueryConsumers(files),
+        ]);
   const queryReadSets = app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries));
   const routeOutcomeFacts = routeFileStreamEndpointFacts(app.routes, files);
 
@@ -616,12 +619,84 @@ async function staticBuildCheckGraph(
       ? {}
       : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
     ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
+    ...(components.length === 0 ? {} : { components }),
     endpoints: [...app.endpoints.map(endpointCheckFact), ...routeOutcomeFacts],
     mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
     optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
     pages: app.routes.map(routeCheckFact),
     queries: queryReadSets,
   };
+}
+
+async function componentQueryConsumers(
+  files: readonly BuildCheckSourceFile[],
+): Promise<CoreGraph.ComponentExplain[]> {
+  const {
+    allComponentOptionObjectEntries,
+    deriveRegistryIdentity,
+    parseComponentModule,
+    queryExpressionFromBinding,
+  } = await import('@kovojs/compiler/internal');
+  const components: CoreGraph.ComponentExplain[] = [];
+
+  for (const file of files) {
+    if (!file.source.includes('component(') || !file.source.includes('queries')) continue;
+
+    const model = parseComponentModule(file.fileName, file.source);
+    const queries = allComponentOptionObjectEntries(model, 'queries').flatMap((entry) => {
+      const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
+      return uniqueSorted(
+        [
+          entry.key,
+          ...(queryExpression
+            ? [
+                queryExpression,
+                derivedImportedQueryKey(
+                  file.fileName,
+                  model.namedImports,
+                  queryExpression,
+                  deriveRegistryIdentity,
+                ),
+              ]
+            : []),
+        ].filter(isString),
+      );
+    });
+    if (queries.length === 0) continue;
+
+    for (const component of model.components) {
+      if (!component.localName) continue;
+      components.push({
+        name: deriveRegistryIdentity(file.fileName, component.localName).key,
+        queries: uniqueSorted(queries),
+      });
+    }
+  }
+
+  return components;
+}
+
+function derivedImportedQueryKey(
+  fileName: string,
+  imports: readonly { importedName: string; localName: string; moduleSpecifier: string }[],
+  queryExpression: string,
+  deriveRegistryIdentity: (fileName: string, exportedBinding: string) => { key: string },
+): string | undefined {
+  const namedImport = imports.find(
+    (entry) => entry.localName === queryExpression && entry.moduleSpecifier.startsWith('.'),
+  );
+  if (!namedImport) return undefined;
+
+  return deriveRegistryIdentity(
+    resolveImportedSourceFileName(fileName, namedImport.moduleSpecifier),
+    namedImport.importedName,
+  ).key;
+}
+
+function resolveImportedSourceFileName(fileName: string, moduleSpecifier: string): string {
+  const normalized = join(dirname(fileName), moduleSpecifier).split(/[\\/]/).join('/');
+  if (/\.[cm]?[jt]sx?$/.test(normalized)) return normalized;
+  return normalized.replace(/\.js$/, '.ts');
 }
 
 interface BuildCheckSourceFile {

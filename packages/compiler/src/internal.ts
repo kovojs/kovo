@@ -89,6 +89,9 @@ export {
   inlineOptimisticPlansFromSource,
   serializeInlineOptimisticPlanIr,
 } from './scan/optimistic-inline.js';
+export { allComponentOptionObjectEntries, parseComponentModule } from './scan/parse.js';
+export { queryExpressionFromBinding } from './scan/query-binding.js';
+export { deriveRegistryIdentity } from './registry-identities.js';
 export {
   createEmptyCompileResult,
   queryShapeFactDiagnostics,

@@ -584,6 +584,108 @@ export default createApp({
     }
   });
 
+  it('counts source-derived component query consumers for hand-written optimistic coverage', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-source-query-consumer-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      mkdirSync(join(root, 'src/components'), { recursive: true });
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, domain, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
+
+const contactDomain = domain('model/contact');
+
+const contactsQuery = query('queries/contacts-query', {
+  access: publicAccess('source-derived consumer fixture'),
+  reads: [contactDomain],
+  load() {
+    return { items: [] };
+  },
+});
+
+const addContact = mutation('mutations/add-contact', {
+  access: publicAccess('source-derived consumer fixture'),
+  csrf: false,
+  csrfJustification: 'non-browser regression fixture',
+  input: s.object({ name: s.string() }),
+  optimistic: { 'queries/contacts-query': (draft) => draft },
+  registry: { touches: [contactDomain] },
+  handler() {
+    return { ok: true };
+  },
+});
+
+export default createApp({
+  mutations: [addContact],
+  queries: [contactsQuery],
+  routes: [
+    route('/contacts', {
+      access: publicAccess('source-derived consumer fixture'),
+      page: () => trustedHtml('<main>Contacts</main>', 'source-derived consumer fixture'),
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src/queries.ts'),
+        `
+import { query } from '@kovojs/server';
+
+export const contactsQuery = query({
+  load() {
+    return { items: [] };
+  },
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src/components/contacts.tsx'),
+        `
+import { component } from '@kovojs/core';
+
+import { contactsQuery } from '../queries.js';
+
+export const ContactsRegion = component({
+  queries: { contacts: contactsQuery },
+  render: ({ contacts }) => <main>{contacts.items.length}</main>,
+});
+`,
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('KV310');
+
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        components?: { queries?: string[] }[];
+      };
+      expect(graph.components?.flatMap((component) => component.queries ?? [])).toContain(
+        'queries/contacts-query',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('derives mutation invalidates from read-set intersections and optimistic keys', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-derived-invalidates-'));
     const appPath = join(root, 'app.mjs');
