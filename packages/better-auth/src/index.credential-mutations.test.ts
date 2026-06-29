@@ -1,5 +1,5 @@
 import { runMutation } from '@kovojs/server/internal/execution';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
@@ -18,6 +18,12 @@ import {
 } from './test-fakes.js';
 
 describe('credential mutation helpers', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
   it('wraps signInEmail as an ordinary mutation and forwards Better Auth cookies', async () => {
     const auth = new FakeCredentialAuth();
     const headers = requestHeaders();
@@ -208,6 +214,7 @@ describe('credential mutation helpers', () => {
   // `Set-Cookie: …; SameSite=None; Partitioned`. The re-emitted cookie MUST keep
   // `; Partitioned` or Chrome refuses/segregates it and login silently fails.
   it('preserves the Partitioned (CHIPS) attribute when forwarding Better Auth cookies', async () => {
+    process.env.NODE_ENV = 'production';
     const auth: BetterAuthSignInEmailLike = {
       api: {
         signInEmail: () =>
@@ -227,14 +234,39 @@ describe('credential mutation helpers', () => {
     expect(result).toMatchObject({
       ok: true,
       responseHeaders: {
-        // round-trips through the typed builder (canonical attribute order), keeping
-        // `; Partitioned` and `SameSite=None` while applying the browser-enforced
-        // `__Host-` prefix once the credential floor makes the attributes eligible.
+        // Round-trips through the forwarded-cookie sink (canonical attribute order), keeping
+        // `; Partitioned` and `SameSite=None` while preserving Better Auth's own cookie name.
+        // bugz-15 B1: Better Auth must be able to read the exact cookie name it writes.
         'Set-Cookie': [
-          '__Host-better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=None; Partitioned',
+          'better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=None; Partitioned',
         ],
       },
       value: { redirectTo: '/home', status: 'signed-in' },
+    });
+  });
+
+  it('keeps Better Auth session cookie names readable under the production Secure floor', async () => {
+    process.env.NODE_ENV = 'production';
+    const auth: BetterAuthSignInEmailLike = {
+      api: {
+        signInEmail: () =>
+          responseWithCookies(['better-auth.session_token=tok-1; Path=/; HttpOnly; SameSite=Lax']),
+      },
+    };
+    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false, defaultRedirectTo: '/' });
+
+    const result = await runMutation(
+      signIn,
+      { email: 'ada@example.com', password: 'correct' },
+      { headers: requestHeaders() },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': ['better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=Lax'],
+      },
+      value: { redirectTo: '/', status: 'signed-in' },
     });
   });
 });

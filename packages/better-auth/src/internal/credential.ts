@@ -33,15 +33,26 @@ export type BetterAuthCredentialFailure = MutationFail<
 // through the current mutation response-header channel.
 export function forwardBetterAuthSetCookie(
   headers: Headers,
-  context: { setCookie?: (name: string, value: string, options?: CookieOptions) => void },
+  context: {
+    setCookie?: (name: string, value: string, options?: CookieOptions) => void;
+    setForwardedCookie?: (rawSetCookie: string) => void;
+  },
 ): void {
   // bug-and-testing-part2 B3: the public Set-Cookie channel is the typed builder only (no raw
   // free-string overload). Better Auth emits standard URL-encoded Set-Cookie strings, so parse each
   // into (name, value, attributes) and re-emit through the typed builder. The value is decoded once
   // (Better Auth URL-encodes it) so the typed builder re-encodes it to the identical wire bytes.
-  const setCookie = context.setCookie;
-  if (!setCookie) return;
   for (const cookie of getBetterAuthSetCookie(headers)) {
+    // bugz-15 B1: Better Auth owns the cookie name it later reads. The internal forwarded-cookie
+    // sink preserves that name while still applying the credential floor; routing through
+    // `setCookie` would treat the upstream cookie as app-authored and may add a `__Host-` prefix
+    // Better Auth does not read.
+    if (context.setForwardedCookie) {
+      context.setForwardedCookie(cookie);
+      continue;
+    }
+    const setCookie = context.setCookie;
+    if (!setCookie) continue;
     const parsed = parseSetCookieHeader(cookie);
     if (parsed) setCookie(parsed.name, parsed.value, parsed.options);
   }
@@ -297,7 +308,10 @@ async function isBetterAuthTwoFactorPendingResponse(
  */
 export async function resolveBetterAuthCredentialSuccess<Status extends string>(
   response: BetterAuthResponseLike,
-  context: { setCookie?: (name: string, value: string, options?: CookieOptions) => void },
+  context: {
+    setCookie?: (name: string, value: string, options?: CookieOptions) => void;
+    setForwardedCookie?: (rawSetCookie: string) => void;
+  },
   success: BetterAuthCredentialMutationValue<Status>,
 ): Promise<BetterAuthCredentialMutationValue<Status> | null> {
   if (!isSuccessStatus(response.status)) return null;

@@ -1,5 +1,5 @@
 import type { Redirect } from '@kovojs/core';
-import { serializeCookie, type CookieOptions } from './cookies.js';
+import { normalizeForwardedSetCookie, serializeCookie, type CookieOptions } from './cookies.js';
 import {
   KOVO_IDEM_FIELD_NAME,
   mutationCsrfOptions,
@@ -211,6 +211,14 @@ export async function runMutation<
     appendResponseHeader(responseHeaders, 'Set-Cookie', cookie);
   }
 
+  function setForwardedCookie(rawSetCookie: string): void {
+    appendResponseHeader(
+      responseHeaders,
+      'Set-Cookie',
+      normalizeForwardedSetCookie(rawSetCookie, 'session'),
+    );
+  }
+
   const context = {
     fail<const Code extends Extract<keyof Errors, string>>(
       code: Code,
@@ -228,6 +236,7 @@ export async function runMutation<
       return record;
     },
     setCookie,
+    setForwardedCookie,
     setSessionRevocationClearSiteData() {
       appendResponseHeader(
         responseHeaders,
@@ -236,6 +245,7 @@ export async function runMutation<
       );
     },
   } satisfies MutationContext<Errors> & {
+    setForwardedCookie: (rawSetCookie: string) => void;
     setSessionRevocationClearSiteData: () => void;
   };
   const runHandler = async (handlerRequest: GuardedRequest): Promise<Value> => {
