@@ -303,6 +303,19 @@ const DRIZZLE_TYPES = [
 
 let roots: string[] = [];
 
+function nonDrizzleOutputFillerQuerySource(index: number): string {
+  return [
+    "import { publicAccess, query, s } from '@kovojs/server';",
+    '',
+    `export const filler${index} = query({`,
+    `  access: publicAccess('worker filler ${index}'),`,
+    "  load: () => ({ value: 'ok' }),",
+    '  output: s.object({ value: s.string() }),',
+    '});',
+    '',
+  ].join('\n');
+}
+
 async function fixture(files: Record<string, string>): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-gate-'));
   roots.push(root);
@@ -461,6 +474,46 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
       false,
     );
+  });
+
+  it('parallelizes non-Drizzle output-schema parsing across worker threads for larger apps', async () => {
+    const previous = process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER;
+    process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER = '1';
+
+    try {
+      const root = await fixture({
+        'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_VALID_COMPONENT,
+        'src/status.ts': NON_DRIZZLE_OUTPUT_QUERY_SOURCE,
+        ...Object.fromEntries(
+          Array.from({ length: 8 }, (_, index) => [
+            `src/filler-${index}.ts`,
+            nonDrizzleOutputFillerQuerySource(index),
+          ]),
+        ),
+      });
+      const captured: CapturedReport[] = [];
+      const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+      await plugin.configResolved({ command: 'serve', root });
+      await configureDevServer(plugin, root, captured);
+
+      await expect(
+        plugin.transform(
+          NON_DRIZZLE_OUTPUT_VALID_COMPONENT,
+          join(root, 'src/components/status-card.tsx'),
+        ),
+      ).resolves.toEqual(expect.objectContaining({ map: null }));
+
+      const componentReport = captured.find((report) =>
+        report.fileName.endsWith('status-card.tsx'),
+      );
+      expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
+        false,
+      );
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER;
+      else process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER = previous;
+    }
   });
 
   it('validates non-Drizzle query output schemas through component-local query aliases', async () => {

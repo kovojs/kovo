@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createRequire } from 'node:module';
 import { registerHooks } from 'node:module';
+import { availableParallelism } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
 
 import type { DiagnosticCode } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
@@ -611,6 +613,13 @@ interface DataPlaneAnalysis {
   staticFacts: StaticBuildAnalysisFactsLike;
 }
 
+const OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND = 'kovo.output-schema-query-shape';
+
+interface OutputSchemaQueryShapeWorkerData {
+  files: readonly DataPlaneSourceFile[];
+  kind: typeof OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND;
+}
+
 /**
  * Load the project-level data-plane analyzers. Mirrors the compiler import: prefer the published
  * `@kovojs/drizzle/internal/static` entry, fall back to the in-repo source so the monorepo build
@@ -760,7 +769,7 @@ async function createDataPlaneAnalysis(
   if (cached) {
     return {
       files,
-      outputQueryShapeFacts: outputSchemaQueryShapeFacts(files),
+      outputQueryShapeFacts: await outputSchemaQueryShapeFacts(files),
       staticFacts: cached,
     };
   }
@@ -772,7 +781,7 @@ async function createDataPlaneAnalysis(
   writeCachedDataPlaneStaticFacts(root, cacheKey, staticFacts);
   return {
     files,
-    outputQueryShapeFacts: outputSchemaQueryShapeFacts(files),
+    outputQueryShapeFacts: await outputSchemaQueryShapeFacts(files),
     staticFacts,
   };
 }
@@ -1002,14 +1011,118 @@ function typeScript(): TypeScriptModule {
   return loadedTypeScript;
 }
 
+if (!isMainThread && isOutputSchemaQueryShapeWorkerData(workerData)) {
+  parentPort?.postMessage(outputSchemaQueryShapeFactsSerial(workerData.files));
+}
+
 /**
  * SPEC.md §4.8/§6.2/§10.2: non-Drizzle queries with declared `output` schemas still publish
  * typed query-shape facts so KV302 binding validation checks schema fields, not loader source text.
  */
-function outputSchemaQueryShapeFacts(
+const OUTPUT_SCHEMA_WORKER_MIN_FILES = 8;
+const OUTPUT_SCHEMA_WORKER_MAX_COUNT = 4;
+
+async function outputSchemaQueryShapeFacts(
+  files: readonly DataPlaneSourceFile[],
+): Promise<readonly CompilerQueryShapeFact[]> {
+  if (!isMainThread || files.length < OUTPUT_SCHEMA_WORKER_MIN_FILES) {
+    return outputSchemaQueryShapeFactsSerial(files);
+  }
+
+  const workerCount = Math.min(
+    files.length,
+    OUTPUT_SCHEMA_WORKER_MAX_COUNT,
+    Math.max(1, availableParallelism() - 1),
+  );
+  if (workerCount <= 1) return outputSchemaQueryShapeFactsSerial(files);
+
+  const chunks = Array.from({ length: workerCount }, () => [] as DataPlaneSourceFile[]);
+  for (const [index, file] of files.entries()) {
+    chunks[index % workerCount]!.push(file);
+  }
+
+  const facts = await Promise.all(
+    chunks
+      .filter((chunk) => chunk.length > 0)
+      .map(async (chunk) => {
+        try {
+          return await outputSchemaQueryShapeFactsInWorker(chunk);
+        } catch (error) {
+          if (process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER === '1') throw error;
+          return outputSchemaQueryShapeFactsSerial(chunk);
+        }
+      }),
+  );
+  return facts.flat();
+}
+
+function outputSchemaQueryShapeFactsSerial(
   files: readonly DataPlaneSourceFile[],
 ): readonly CompilerQueryShapeFact[] {
   return files.flatMap((file) => outputSchemaQueryShapeFactsFromSource(file.fileName, file.source));
+}
+
+function outputSchemaQueryShapeFactsInWorker(
+  files: readonly DataPlaneSourceFile[],
+): Promise<readonly CompilerQueryShapeFact[]> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const worker = new Worker(new URL(import.meta.url), {
+      workerData: {
+        files,
+        kind: OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND,
+      } satisfies OutputSchemaQueryShapeWorkerData,
+    });
+    worker.once('message', (message: unknown) => {
+      settled = true;
+      if (isCompilerQueryShapeFactArray(message)) {
+        resolve(message);
+      } else {
+        reject(new Error('Kovo output-schema worker returned malformed query-shape facts.'));
+      }
+    });
+    worker.once('error', (error) => {
+      settled = true;
+      reject(error);
+    });
+    worker.once('exit', (code) => {
+      if (!settled) {
+        reject(new Error(`Kovo output-schema worker exited before returning facts, code ${code}.`));
+      }
+    });
+  });
+}
+
+function isOutputSchemaQueryShapeWorkerData(
+  value: unknown,
+): value is OutputSchemaQueryShapeWorkerData {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.kind === OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND &&
+    Array.isArray(candidate.files) &&
+    candidate.files.every(isOutputSchemaWorkerSourceFile)
+  );
+}
+
+function isOutputSchemaWorkerSourceFile(value: unknown): value is DataPlaneSourceFile {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.fileName === 'string' && typeof candidate.source === 'string';
+}
+
+function isCompilerQueryShapeFactArray(value: unknown): value is readonly CompilerQueryShapeFact[] {
+  return Array.isArray(value) && value.every(isCompilerQueryShapeFact);
+}
+
+function isCompilerQueryShapeFact(value: unknown): value is CompilerQueryShapeFact {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.query === 'string' &&
+    typeof candidate.source === 'string' &&
+    isCompilerQueryShape(candidate.shape)
+  );
 }
 
 function outputSchemaQueryShapeFactsFromSource(

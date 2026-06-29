@@ -1,6 +1,6 @@
 # Plan: Make `kovo check` / `kovo build` fast
 
-Status: **in progress / shared project, fast path, analyzer-surface trims, cache, pipeline reuse, and CLI dist-startup fix implemented; worker-thread syntactic parallelism open**
+Status: **implemented / shared project, fast path, analyzer-surface trims, cache, pipeline reuse, CLI dist-startup fix, and worker-thread syntactic parallelism verified**
 Owner: perf
 Last verified: 2026-06-28
 
@@ -98,8 +98,8 @@ app's check time; all must preserve SPEC.md §11.1 soundness.
 --testNamePattern "reuses cached Drizzle static analysis|skips project-mode Drizzle
 analysis|runs Drizzle security extractors"` passed. `examples/commerce` cold
     `pnpm exec kovo build ./src/app.tsx --preset node` preserved the expected KV414/KV407
-    diagnostics at 32.42s real/32.81s user; the warm-cache rerun preserved the same
-    diagnostics at 14.19s real/8.05s user.
+    diagnostics at 32.67s real/33.89s user; the warm-cache rerun preserved the same
+    diagnostics at 14.36s real/8.74s user.
 
 - [x] **4. De-duplicate analysis across the composite `check` pipeline.** Impact: **high**
       (the "minutes" multiplier) · Effort: medium · Risk: low. `build:prod`, `vp test` (kovo
@@ -161,10 +161,17 @@ packages/server/src/vite-data-plane-gate.test.ts` passed.
     required TS transform. `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts
 --testNamePattern "compiled JavaScript bin|script path contains spaces"` passed.
 
-- [ ] **9. Parallelize independent per-file syntactic analysis across worker threads.**
+- [x] **9. Parallelize independent per-file syntactic analysis across worker threads.**
       Impact: medium (large apps) · Effort: high · Risk: medium. Build is single-threaded
       (user ≈ real). The shared type-checker (#1) resists parallelism, so this mainly helps
       the syntactic passes and multi-app/monorepo runs; pursue only after #1 lands.
+  - Evidence (2026-06-28): `packages/server/src/vite.ts` runs non-Drizzle output-schema
+    query-shape extraction through a bounded worker-thread pool for larger source sets,
+    with serial fallback when workers cannot load the source/dist module; the parser remains
+    per-file and feeds the same KV302 query-shape facts. `pnpm exec vitest run
+packages/server/src/vite-data-plane-gate.test.ts --testNamePattern "parallelizes
+non-Drizzle output-schema"` passed with `KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER=1`
+    enforcing the worker path.
 
 ## Notes / constraints
 
