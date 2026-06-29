@@ -67,6 +67,7 @@ type ExportStaticApp = (typeof import('@kovojs/server'))['exportStaticApp'];
 interface KovoBuildOptions {
   appModulePath: string;
   cache: boolean;
+  check: boolean;
   outDir: string;
   preset?: KovoBuildPresetName;
 }
@@ -92,6 +93,7 @@ interface SelectedKovoBuildPreset {
 export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
   let appModulePath: string | undefined;
   let cache = true;
+  let check = false;
   let outDir = 'dist';
   let preset: KovoBuildPresetName | undefined;
 
@@ -104,6 +106,10 @@ export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
     }
     if (arg === '--no-cache') {
       cache = false;
+      continue;
+    }
+    if (arg === '--check') {
+      check = true;
       continue;
     }
 
@@ -166,6 +172,7 @@ export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
     options: {
       appModulePath,
       cache,
+      check,
       outDir,
       ...(preset === undefined ? {} : { preset }),
     },
@@ -422,6 +429,22 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     );
     if (blockingDiagnostics.length > 0) {
       throw new KovoBuildPresetDiagnosticError(blockingDiagnostics);
+    }
+
+    if (options.check) {
+      // plans/fast-kovo-check2.md #6: validate-only. Every diagnostic-producing phase has
+      // already run by this point — the tsc preflight, the kovo-check security gate
+      // (which throws fail-closed on KV407/KV414/etc.), the client/server compiler transform
+      // that raises KV235, and the preset inspection above. `--check` skips ONLY the
+      // deployable `preset.emit`, so it is a strict subset of a full build and cannot pass
+      // where a full build would fail.
+      return kovoBuildCheckResult({
+        appModulePath: resolvedAppModulePath,
+        neutralOutDir: neutralBuild.outDir,
+        preset: selectedPreset.name,
+        presetDiagnostics,
+        presetLogs,
+      });
     }
 
     await preset.emit(neutralBuild, presetContext);
@@ -2109,6 +2132,25 @@ function kovoBuildResult(options: {
     ...options.presetDiagnostics.map(presetDiagnosticOutputLine),
     ...options.presetLogs.map((message) => `PRESET ${stableText(message)}`),
     `SUMMARY preset=${options.preset} outDir=${JSON.stringify(options.outDir)} serverOutDir=${JSON.stringify(options.serverOutDir)}`,
+  ];
+
+  return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
+
+function kovoBuildCheckResult(options: {
+  appModulePath: string;
+  neutralOutDir: string;
+  preset: KovoBuildPresetName;
+  presetDiagnostics: readonly PresetDiagnostic[];
+  presetLogs: readonly string[];
+}): KovoCheckResult {
+  const lines = [
+    buildOutputVersion,
+    `APP module=${JSON.stringify(options.appModulePath)}`,
+    `NEUTRAL outDir=${JSON.stringify(options.neutralOutDir)}`,
+    ...options.presetDiagnostics.map(presetDiagnosticOutputLine),
+    ...options.presetLogs.map((message) => `PRESET ${stableText(message)}`),
+    `CHECK ok preset=${options.preset} (validate-only; deployable output not emitted)`,
   ];
 
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
