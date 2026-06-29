@@ -182,8 +182,8 @@ describe('create-kovo starter (metadata)', () => {
           'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
         'check:sound-subset': 'node scripts/check-sound-subset.mjs',
         dev: 'vp dev',
-        serve: 'pnpm run build:prod && node dist/server/server.mjs',
-        start: 'node dist/server/server.mjs',
+        serve: 'pnpm run build:prod && NODE_ENV=production node dist/server/server.mjs',
+        start: 'NODE_ENV=production node dist/server/server.mjs',
         test: 'vp test',
       });
       // Removed fiction/wrapper scripts are gone.
@@ -199,6 +199,9 @@ describe('create-kovo starter (metadata)', () => {
       expect(readme).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
       expect(readme).toContain('peer warning');
       expect(readme).toContain('is expected');
+      expect(readme).toContain('keep that posture in your process');
+      expect(readme).toContain('blocks private-network egress by default');
+      expect(readme).toContain('KOVO_DATA_DIR');
 
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
       expect(viteConfig).toContain("host: process.env.HOST ?? '127.0.0.1'");
@@ -218,6 +221,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('package.json')).not.toContain('"better-sqlite3"');
     expect(packageJson.pnpm).toBeUndefined();
     expect(files.get('src/db.ts')).toContain("import { PGlite } from '@electric-sql/pglite'");
+    expect(files.get('src/db.ts')).toContain('process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR');
+    expect(files.get('src/db.ts')).toContain('CREATE TABLE IF NOT EXISTS contacts');
+    expect(files.get('src/db.ts')).toContain('ON CONFLICT (id) DO NOTHING');
     expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
     expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
   });

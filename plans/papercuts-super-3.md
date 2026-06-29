@@ -105,7 +105,7 @@ JsonSerializable<Awaited<Result>>` and the original `unknown` field is not assig
 
 ### B. The deploy artifact is the other hot spot
 
-- [ ] **The documented non-Docker deploy path (`pnpm run serve`/`start` → `node dist/server/server.mjs`) boots DEV security posture without `NODE_ENV=production`.** (med, template; found by `egress-ssrf-deploy`; sharpens baseline)
+- [x] **The documented non-Docker deploy path (`pnpm run serve`/`start` → `node dist/server/server.mjs`) boots DEV security posture without `NODE_ENV=production`.** (med, template; found by `egress-ssrf-deploy`; sharpens baseline)
   - Observed: booting the README/package.json deploy command without `NODE_ENV=production` logs
     `[kovo egress] … outbound-egress floor in development with local private-network destinations
 permitted`. In that posture: (1) outbound fetch to RFC1918/loopback is PERMITTED (only cloud
@@ -128,8 +128,9 @@ permitted`. In that posture: (1) outbound fetch to RFC1918/loopback is PERMITTED
   - Acceptance: the emitted prod bundle defaults to production posture when `NODE_ENV` is unset (it is
     only ever a `kovo build` artifact; `vp dev` is the dev path) — or the template `serve`/`start`
     scripts and README set `NODE_ENV=production` and the deployment guide names the egress consequence.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/create-kovo/src/index.test.ts packages/server/src/build.test.ts --reporter=dot` proves generated `serve`/`start` set `NODE_ENV=production` and README deployment guidance names private-network egress, secure cookies, weak-secret refusal, and `KOVO_DATA_DIR`.
 
-- [ ] **The generated `dist/server/Dockerfile` builds a NON-BOOTING image: `COPY . .` ships no node_modules/package.json but the handler externalizes `better-auth`/`drizzle-orm`/`@electric-sql/pglite`.** (med, framework; found by `egress-ssrf-deploy`)
+- [x] **The generated `dist/server/Dockerfile` builds a NON-BOOTING image: `COPY . .` ships no node_modules/package.json but the handler externalizes `better-auth`/`drizzle-orm`/`@electric-sql/pglite`.** (med, framework; found by `egress-ssrf-deploy`)
   - Observed: `dist/server` contains only `client/`, `server/handler.mjs`, `server.mjs`, `Dockerfile`
     (no node_modules, no package.json), yet `handler.mjs` opens with bare external imports of
     `better-auth`, `better-auth/adapters/drizzle`, `@electric-sql/pglite`, `drizzle-orm/*`. Running the
@@ -148,8 +149,9 @@ permitted`. In that posture: (1) outbound fetch to RFC1918/loopback is PERMITTED
   - Acceptance: the node preset emits a package.json+lockfile beside the artifact and a `RUN <pm>
 install --prod` step (or bundles externals / ships node_modules), build warns when externalized
     bare specifiers have no shipped install path, and the README "self-contained" claim is corrected.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/server/src/build.test.ts --testNamePattern "installable Dockerfile" --reporter=dot` proves the node preset emits runtime `package.json`, copies optional lockfiles, and writes a Dockerfile with a production dependency install before `CMD ["node", "server.mjs"]`.
 
-- [ ] **The default postgres starter deploys an EPHEMERAL in-memory PGlite DB — every restart/redeploy silently wipes all data, with no persistence seam or warning.** (med, template; found by `egress-ssrf-deploy`)
+- [x] **The default postgres starter deploys an EPHEMERAL in-memory PGlite DB — every restart/redeploy silently wipes all data, with no persistence seam or warning.** (med, template; found by `egress-ssrf-deploy`)
   - Observed: `src/db.ts` `new PGlite()` has no data directory (in-memory; `new PGlite().dataDir ===
 undefined`) and `appDb` is a module singleton. Two separate node processes each show only the 3
     seed rows — no cross-process persistence — so the documented deploy recreates a fresh seeded DB on
@@ -165,6 +167,7 @@ undefined`) and `appDb` is a module singleton. Two separate node processes each 
   - Acceptance: add a persistence seam (`new PGlite(process.env.KOVO_DATA_DIR ?? …)` or a real
     connection string) and/or a Deploying-section warning that the default PGlite is in-memory and
     non-durable; fix the stale `db.ts:5` "per request" comment.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/create-kovo/src/index.test.ts --testNamePattern "default scaffold dialect|lean script set" --reporter=dot` proves default Postgres scaffolds `new PGlite(process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR)`, idempotent DDL/seed, and README deploy guidance for mounted `KOVO_DATA_DIR`.
 
 ### C. The no-op-field / type-level-security-ergonomics contract is applied unevenly
 

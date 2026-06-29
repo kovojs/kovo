@@ -229,6 +229,7 @@ async function emitNodePreset(
   }
   await cp(build.serverDir, path.join(outDir, 'server'), { recursive: true });
   await writeFile(path.join(outDir, 'server.mjs'), nodeServerSource(), 'utf8');
+  await emitNodeRuntimePackage(outDir);
 
   if (options.dockerfile !== false) {
     await writeFile(path.join(outDir, 'Dockerfile'), nodeDockerfileSource(), 'utf8');
@@ -920,8 +921,60 @@ function nodeDockerfileSource(): string {
   return `FROM node:22-alpine
 ENV NODE_ENV=production
 WORKDIR /app
+COPY package.json ./
+COPY package-lock.json* npm-shrinkwrap.json* pnpm-lock.yaml* yarn.lock* ./
+RUN if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then npm ci --omit=dev --ignore-scripts; else npm install --omit=dev --ignore-scripts; fi
 COPY . .
 EXPOSE 3000
 CMD ["node", "server.mjs"]
 `;
+}
+
+async function emitNodeRuntimePackage(outDir: string): Promise<void> {
+  const source = await readPackageJsonForNodeRuntime();
+  const runtimePackage = {
+    dependencies: source.dependencies ?? {},
+    name: `${source.name ?? 'kovo-app'}-server`,
+    private: true,
+    scripts: { start: 'NODE_ENV=production node server.mjs' },
+    type: 'module',
+    ...(source.packageManager === undefined ? {} : { packageManager: source.packageManager }),
+  };
+  await writeFile(
+    path.join(outDir, 'package.json'),
+    `${JSON.stringify(runtimePackage, null, 2)}\n`,
+  );
+  await copyRuntimeLockfile(outDir);
+}
+
+async function readPackageJsonForNodeRuntime(): Promise<{
+  dependencies?: Record<string, string>;
+  name?: string;
+  packageManager?: string;
+}> {
+  try {
+    return JSON.parse(await readFile(path.join(process.cwd(), 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>;
+      name?: string;
+      packageManager?: string;
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function copyRuntimeLockfile(outDir: string): Promise<void> {
+  for (const fileName of [
+    'package-lock.json',
+    'npm-shrinkwrap.json',
+    'pnpm-lock.yaml',
+    'yarn.lock',
+  ]) {
+    try {
+      await copyFile(path.join(process.cwd(), fileName), path.join(outDir, fileName));
+      return;
+    } catch {
+      // Lockfiles are optional for the deploy artifact; package.json still gives Docker an install path.
+    }
+  }
 }

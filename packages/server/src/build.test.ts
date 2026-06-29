@@ -570,7 +570,7 @@ export default async function handler(request) {
     }
   });
 
-  it('emits a minimal Dockerfile for the node preset by default', async () => {
+  it('emits an installable Dockerfile and runtime package for the node preset by default', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-dockerfile-'));
 
     try {
@@ -600,9 +600,21 @@ export default async function handler(request) {
         },
       });
 
-      await expect(readFile(join(nodeOutDir, 'Dockerfile'), 'utf8')).resolves.toContain(
-        'CMD ["node", "server.mjs"]',
-      );
+      const dockerfile = await readFile(join(nodeOutDir, 'Dockerfile'), 'utf8');
+      expect(dockerfile).toContain('COPY package.json ./');
+      expect(dockerfile).toContain('npm install --omit=dev --ignore-scripts');
+      expect(dockerfile).toContain('CMD ["node", "server.mjs"]');
+
+      const runtimePackage = JSON.parse(
+        await readFile(join(nodeOutDir, 'package.json'), 'utf8'),
+      ) as {
+        dependencies?: Record<string, string>;
+        scripts?: Record<string, string>;
+        type?: string;
+      };
+      expect(runtimePackage.type).toBe('module');
+      expect(runtimePackage.scripts?.start).toBe('NODE_ENV=production node server.mjs');
+      expect(runtimePackage.dependencies).toBeDefined();
     } finally {
       await rm(root, { force: true, recursive: true });
     }
