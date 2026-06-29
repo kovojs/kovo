@@ -55,6 +55,45 @@ describe('browser mutation response DOM apply', () => {
     expect(root.querySelector('label')?.textContent).toBe('Updated quantity');
   });
 
+  it('preserves focused buttons during a real DOM fragment morph', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section kovo-c="contacts-region">',
+      '<form kovo-key="add-contact">',
+      '<button kovo-key="submit" type="submit">Add contact</button>',
+      '</form>',
+      '<p>3 contacts</p>',
+      '</section>',
+    ].join('');
+    document.body.append(root);
+    const button = root.querySelector('button');
+
+    if (!button) throw new Error('missing button fixture');
+
+    button.focus();
+
+    const applied = applyMutationResponseBodyToRuntime({
+      body: [
+        '<kovo-fragment target="contacts-region">',
+        '<section kovo-c="contacts-region">',
+        '<form kovo-key="add-contact">',
+        '<button kovo-key="submit" type="submit">Add contact</button>',
+        '</form>',
+        '<p>4 contacts</p>',
+        '</section>',
+        '</kovo-fragment>',
+      ].join(''),
+      morph: keyedDomMorph,
+      root: new DomMorphRoot(root),
+      store: createQueryStore(),
+    });
+
+    expect(applied.appliedFragments).toEqual(['contacts-region']);
+    expect(root.querySelector('button')).toBe(button);
+    expect(document.activeElement).toBe(button);
+    expect(root.querySelector('p')?.textContent).toBe('4 contacts');
+  });
+
   it('preserves client-owned nested island state when a parent fragment morph reuses it', () => {
     const root = document.createElement('main');
     root.innerHTML = [

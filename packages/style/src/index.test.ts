@@ -275,7 +275,17 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(theme.css).toContain('--kovo-theme-ref-palette-primary-40:');
     expect(theme.css).toContain('--kovo-theme-sys-color-primary:');
     expect(theme.css).toContain('--kovo-theme-custom-success-color:');
+    expect(theme.css).toContain('@media (prefers-color-scheme: dark)');
+    expect(theme.css).toContain(':root:not([data-theme="light"])');
     expect(theme.css).toContain(':root[data-theme="dark"]');
+  });
+
+  it('keeps custom dark selectors explicit without adding the default media block', () => {
+    const theme = defineTheme({ darkSelector: '.dark-mode', seed: '#6750A4' });
+
+    expect(theme.css).toContain('.dark-mode');
+    expect(theme.css).not.toContain('@media (prefers-color-scheme: dark)');
+    expect(theme.css).not.toContain(':root:not([data-theme="light"])');
   });
 
   it('exports typed var references for theme tokens used in style.create', () => {

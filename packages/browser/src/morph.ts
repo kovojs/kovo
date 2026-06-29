@@ -411,31 +411,47 @@ function isActiveDomFormControl(element: Element): boolean {
   );
 }
 
-function captureActiveDomState(root: Element) {
+interface ActiveDomState {
+  element: HTMLElement;
+  selectionDirection?: 'backward' | 'forward' | 'none' | null;
+  selectionEnd?: number | null;
+  selectionStart?: number | null;
+  scrollLeft: number;
+  scrollTop: number;
+}
+
+function captureActiveDomState(root: Element): ActiveDomState | null {
   const element = document.activeElement;
 
-  if (
-    !(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) ||
-    !root.contains(element)
-  ) {
+  if (!(element instanceof HTMLElement) || !root.contains(element)) {
     return null;
   }
 
   return {
     element,
-    selectionDirection: element.selectionDirection,
-    selectionEnd: element.selectionEnd,
-    selectionStart: element.selectionStart,
+    ...(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+      ? {
+          selectionDirection: element.selectionDirection,
+          selectionEnd: element.selectionEnd,
+          selectionStart: element.selectionStart,
+        }
+      : {}),
     scrollLeft: element.scrollLeft,
     scrollTop: element.scrollTop,
   };
 }
 
-function restoreActiveDomState(state: ReturnType<typeof captureActiveDomState>): void {
+function restoreActiveDomState(state: ActiveDomState | null): void {
   if (!state || !state.element.isConnected) return;
 
   state.element.focus();
-  if (state.selectionStart !== null && state.selectionEnd !== null) {
+  if (
+    (state.element instanceof HTMLInputElement || state.element instanceof HTMLTextAreaElement) &&
+    state.selectionStart !== undefined &&
+    state.selectionEnd !== undefined &&
+    state.selectionStart !== null &&
+    state.selectionEnd !== null
+  ) {
     state.element.setSelectionRange(
       state.selectionStart,
       state.selectionEnd,

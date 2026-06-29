@@ -275,7 +275,7 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       name === 'key' ||
       name === 'viewTransitionName' ||
       isRawHtmlAttribute(name) ||
-      value === false ||
+      (value === false && !isAriaAttribute(name)) ||
       value === null ||
       value === undefined
     ) {
@@ -332,7 +332,8 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     // executable sinks (`on*`, `srcdoc`, raw CSS/HTML text) are omitted.
     const attributeValue = safeRuntimeAttribute(name, attributeText(name, value));
     if (attributeValue === null) continue;
-    rendered += value === true ? ` ${name}` : ` ${name}="${attributeValue}"`;
+    rendered +=
+      value === true && !isAriaAttribute(name) ? ` ${name}` : ` ${name}="${attributeValue}"`;
   }
 
   if (styleAttrs?.class && !renderedClass)
@@ -591,6 +592,10 @@ function isRawHtmlAttribute(name: string): boolean {
     name === 'rawHtml' ||
     name === 'html'
   );
+}
+
+function isAriaAttribute(name: string): boolean {
+  return name.toLowerCase().startsWith('aria-');
 }
 
 function renderJsxChildren(children: JsxChild): MaybePromise<string> {

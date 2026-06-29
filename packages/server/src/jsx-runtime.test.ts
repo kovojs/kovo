@@ -70,6 +70,30 @@ describe('server jsx runtime', () => {
     ).toBe('<form></form>');
   });
 
+  it('serializes aria booleans as literal enumerated values', () => {
+    expect(
+      html(
+        jsx('button', {
+          'aria-current': false,
+          'aria-expanded': false,
+          'aria-pressed': true,
+          children: 'Filters',
+        }),
+      ),
+    ).toBe(
+      '<button aria-current="false" aria-expanded="false" aria-pressed="true">Filters</button>',
+    );
+    expect(
+      html(
+        jsx('div', {
+          'aria-checked': false,
+          'aria-selected': true,
+          children: '',
+        }),
+      ),
+    ).toBe('<div aria-checked="false" aria-selected="true"></div>');
+  });
+
   it('lowers typed mutation form values for direct server JSX forms', () => {
     // SPEC.md §6.3: server-rendered templates can bind the importable mutation
     // value instead of hard-coding the `/_m/*` endpoint string.
