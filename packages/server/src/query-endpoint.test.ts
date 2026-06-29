@@ -278,7 +278,7 @@ describe('query endpoints', () => {
     });
   });
 
-  it('allows explicit Cache-Control only for public unguarded query reads', async () => {
+  it('keeps declared public Cache-Control private without compiler session-independence proof', async () => {
     const publicQuery = query('publicCatalog', {
       access: publicAccess('public product catalog'),
       load: () => ({ items: ['p1'] }),
@@ -296,13 +296,40 @@ describe('query endpoints', () => {
     await expect(renderQueryEndpointResponse(publicQuery, { request: {} })).resolves.toEqual({
       body: '<kovo-query name="publicCatalog">{"items":["p1"]}</kovo-query>',
       headers: {
-        'Cache-Control': 'public, max-age=60',
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
       },
       status: 200,
     });
     await expect(renderQueryEndpointResponse(guardedQuery, { request: {} })).resolves.toEqual({
       body: '<kovo-query name="privateCatalog">{"items":["p1"]}</kovo-query>',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
+      status: 200,
+    });
+  });
+
+  it('does not emit public cache headers for publicAccess queries that read session', async () => {
+    type AppRequest = { session?: { user?: { id: string } | null } | null };
+    const leakyQuery = query('leakyMine', {
+      access: publicAccess('audit metadata cannot prove session independence'),
+      load(_input, context?: { request: AppRequest }) {
+        return { userId: context?.request.session?.user?.id ?? 'anonymous' };
+      },
+      read: { cacheControl: 'public, max-age=300' },
+      reads: [domain('user')],
+    });
+
+    await expect(
+      renderQueryEndpointResponse(leakyQuery, {
+        request: { session: { user: { id: 'u1' } } },
+      }),
+    ).resolves.toEqual({
+      body: '<kovo-query name="leakyMine">{"userId":"u1"}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',

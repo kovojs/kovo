@@ -687,7 +687,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
     body,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      ...querySuccessCacheHeaders(definition),
+      ...querySuccessCacheHeaders(),
       // SPEC §5.2.1 rule 2(d): stamp the build token so a background refetch into a stale
       // tab can detect deploy skew and avoid merging new-build data into a stale document.
       ...queryBuildHeaders(endpointRequest),
@@ -948,36 +948,16 @@ function queryBuildHeaders<Request>(
   return endpointRequest.buildToken ? { 'Kovo-Build': endpointRequest.buildToken } : {};
 }
 
-function querySuccessCacheHeaders(definition: {
-  access?: AccessDecision;
-  guard?: unknown;
-  read?: QueryReadConfig;
-}): Record<string, string> {
-  const cacheControl = definition.read?.cacheControl;
-  if (
-    cacheControl &&
-    definition.guard === undefined &&
-    definition.access?.kind === 'public' &&
-    safeHeaderValue(cacheControl)
-  ) {
-    return { 'Cache-Control': cacheControl };
-  }
-
-  // SPEC §9.4: guarded or otherwise session-dependent /_q reads stay private and uncacheable.
-  // The public cache-control relaxation is accepted only on explicitly public, unguarded query
-  // declarations; errors and guard failures use the same private posture above.
+function querySuccessCacheHeaders(): Record<string, string> {
+  // SPEC §9.4: guarded, session-dependent, or unproven /_q reads stay private and
+  // uncacheable. `publicAccess()` is author audit metadata, not the compiler proof
+  // that the query has no guard and no `req.session` reads in its key or load.
+  // Until compiler-owned session-independence metadata is wired here, fail closed
+  // and ignore declared public `read.cacheControl` for endpoint responses.
   return {
     'Cache-Control': 'private, no-store',
     Vary: 'Cookie',
   };
-}
-
-function safeHeaderValue(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code === 0 || code === 0x7f || code < 0x20) return false;
-  }
-  return true;
 }
 
 function queryWarningHeaders(
