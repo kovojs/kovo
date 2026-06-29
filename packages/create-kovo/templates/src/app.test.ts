@@ -2,6 +2,7 @@ import { isKovoApp } from '@kovojs/server';
 import { describe, expect, it } from 'vitest';
 
 import app, { requestHandler } from './app.js';
+import { ContactsRegion } from './components/contacts.js';
 import { createAppDb } from './db.js';
 import { contactsQuery } from './queries.js';
 
@@ -32,5 +33,31 @@ describe('starter app', () => {
     await ready;
     const result = await contactsQuery.load(undefined, { db, request: {} });
     expect(result.items.map((contact) => contact.id)).toContain('c1');
+  });
+
+  it('preserves submitted contact fields on duplicate-email failure renders', () => {
+    const html = String(
+      ContactsRegion.definition.render({ contacts: { items: [] } }, undefined, {
+        forms: {
+          addContact: {
+            failure: {
+              code: 'DUPLICATE_EMAIL',
+              payload: { email: 'ada@example.com' },
+            },
+            submitted: {
+              company: 'Dogfood LLC',
+              email: 'ada@example.com',
+              name: 'Ada Clone',
+            },
+          },
+        },
+      }),
+    );
+
+    expect(html).toContain('name="name"');
+    expect(html).toContain('value="Ada Clone"');
+    expect(html).toContain('value="ada@example.com"');
+    expect(html).toContain('value="Dogfood LLC"');
+    expect(html).toContain('ada@example.com is already in the contact book.');
   });
 });

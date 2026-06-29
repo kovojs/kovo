@@ -214,15 +214,23 @@ const defaultContactsRenderSlots: ContactsRenderSlots = {
   forms: { addContact: { failure: null } },
 };
 
+function submittedFieldValue(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
 export const ContactsRegion = component({
   mutations: { addContact },
   queries: { contacts: contactsQuery },
   render: (
     { contacts }: { contacts: ContactListResult },
     _state,
-    _slots: ContactsRenderSlots = defaultContactsRenderSlots,
+    slots: ContactsRenderSlots = defaultContactsRenderSlots,
   ) => {
     const items = contacts.items;
+    const submitted = slots.forms.addContact.submitted ?? {};
+    const submittedName = submittedFieldValue(submitted.name);
+    const submittedEmail = submittedFieldValue(submitted.email);
+    const submittedCompany = submittedFieldValue(submitted.company);
 
     return (
       <div style={styles.stack}>
@@ -246,7 +254,13 @@ export const ContactsRegion = component({
           <div style={styles.formGrid}>
             <label style={styles.field}>
               <span>Name</span>
-              <input name="name" required placeholder="Ada Lovelace" style={styles.input} />
+              <input
+                name="name"
+                required
+                placeholder="Ada Lovelace"
+                style={styles.input}
+                value={submittedName}
+              />
             </label>
             <label style={styles.field}>
               <span>Email</span>
@@ -256,11 +270,17 @@ export const ContactsRegion = component({
                 type="email"
                 placeholder="ada@example.com"
                 style={styles.input}
+                value={submittedEmail}
               />
             </label>
             <label style={styles.field}>
               <span>Company</span>
-              <input name="company" placeholder="Analytical Engines" style={styles.input} />
+              <input
+                name="company"
+                placeholder="Analytical Engines"
+                style={styles.input}
+                value={submittedCompany}
+              />
             </label>
             {Button.definition.render({
               children: 'Add contact',
