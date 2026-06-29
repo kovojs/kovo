@@ -426,11 +426,12 @@ describe('core authoring APIs', () => {
       type Slots = Parameters<typeof AddToCartForm.definition.render>[2];
       const slots = {
         forms: {
-          addToCart: { failure: null },
+          addToCart: { failure: null, submitted: { productId: 'p1', quantity: 2 } },
         },
       } satisfies Slots;
+      const quantity: number | undefined = slots.forms.addToCart.submitted?.quantity;
       // @ts-expect-error missingForm is not declared in component mutations.
-      return slots.forms.missingForm;
+      return slots.forms.missingForm ?? quantity;
     };
 
     expect(AddToCartForm.definition.mutations?.addToCart.key).toBe('cart/add');

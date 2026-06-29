@@ -10,6 +10,7 @@ import {
   mergeCspInlineMetadata,
   renderCspReportingHeaders,
   renderDefaultDocumentCsp,
+  styleAttributeCspInlineMetadata,
   type CspInlineMetadata,
   type DocumentCspConfig,
 } from './csp.js';
@@ -217,7 +218,7 @@ export function renderDocument(options: DocumentAssemblyOptions): DocumentRender
   const html = renderStructuredDocumentShell(context, assembled.document);
 
   return {
-    csp: assembled.csp,
+    csp: mergeCspInlineMetadata(assembled.csp, styleAttributeCspInlineMetadata(html)),
     earlyHints: assembled.earlyHints,
     html,
   };
@@ -247,7 +248,11 @@ export function renderDeferredDocument(
     ...response,
     // G1 (bugs-part3 CSP-1): merge the deferred stream's inline apply/cleanup script
     // hashes into the document CSP so a strict hash-CSP admits deferred hydration.
-    csp: mergeCspInlineMetadata(assembled.csp, response.csp),
+    csp: mergeCspInlineMetadata(
+      assembled.csp,
+      response.csp,
+      styleAttributeCspInlineMetadata(response.body),
+    ),
     headers: mergeDocumentHeaders(response.headers, assembled.earlyHints),
   };
 }
@@ -517,7 +522,16 @@ export function stampGuardFailureDocumentSecurityFloor(
       reportingHeaders === undefined ? undefined : KOVO_CSP_REPORT_GROUP,
     ),
     ...(shouldAttachFrameworkCsp
-      ? { 'Content-Security-Policy': renderDefaultDocumentCsp(emptyCspInlineMetadata()) }
+      ? {
+          'Content-Security-Policy': renderDefaultDocumentCsp(
+            mergeCspInlineMetadata(
+              emptyCspInlineMetadata(),
+              typeof response.body === 'string'
+                ? styleAttributeCspInlineMetadata(response.body)
+                : undefined,
+            ),
+          ),
+        }
       : {}),
     ...reportingHeaders,
     'Cache-Control': 'private, no-store',

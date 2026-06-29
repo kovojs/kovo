@@ -243,7 +243,9 @@ function componentLiveTargetDefaultSlots<Request>(
 
   for (const [name, mutation] of Object.entries(component.definition.mutations)) {
     if (isMutationDefinitionLike(mutation) && mutation.key === context.mutationKey) {
-      slots = componentMutationFailureSlots(name, context.failure, slots);
+      slots = componentMutationFailureSlots(name, context.failure, slots, {
+        submitted: context.input,
+      });
     }
   }
 

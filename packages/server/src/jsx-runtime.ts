@@ -598,9 +598,14 @@ function renderJsxChildren(children: JsxChild): MaybePromise<string> {
   if (Array.isArray(children)) {
     const rendered = children.map((child) => renderJsxChildren(child));
     if (rendered.some(isPromiseLike)) {
-      return Promise.all(rendered).then((parts) => parts.join(''));
+      return Promise.all(rendered.map((part) => Promise.resolve(part))).then((parts) =>
+        parts.join(''),
+      );
     }
-    return rendered.join('');
+    if (rendered.every((part): part is string => typeof part === 'string')) {
+      return rendered.join('');
+    }
+    throw new TypeError('Kovo JSX child renderer produced a non-string synchronous value');
   }
   return renderServerRenderable(children);
 }
@@ -704,7 +709,9 @@ function componentRenderSlots(
 
   for (const [name, mutation] of Object.entries(component.definition.mutations)) {
     if (isMutationDefinitionLike(mutation) && mutation.key === failureContext.mutationKey) {
-      slots = componentMutationFailureSlots(name, failureContext.failure, slots);
+      slots = componentMutationFailureSlots(name, failureContext.failure, slots, {
+        submitted: failureContext.input,
+      });
     }
   }
 

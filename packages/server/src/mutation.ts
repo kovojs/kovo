@@ -876,7 +876,7 @@ export async function renderNoJsMutationResponse<
       status: 422,
     };
     const body = noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(failure)
+      ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
       : renderDefaultFailurePage(failure);
     return {
       body,
@@ -900,7 +900,7 @@ export async function renderNoJsMutationResponse<
   const noJsInputResult = await parseMutationInput(definition.input, noJsRequest.rawInput);
   if (!noJsInputResult.ok) {
     const body = noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(noJsInputResult.failure)
+      ? await noJsRequest.renderFailurePage(noJsInputResult.failure, noJsRequest.rawInput)
       : renderDefaultFailurePage(noJsInputResult.failure);
     return {
       body,
@@ -932,11 +932,14 @@ export async function renderNoJsMutationResponse<
     if (reauthResponse) return reauthResponse;
     const status = mutationGuardFailureStatus(guardFailure);
     const body = noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage({
-          error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
-          ok: false,
-          status,
-        })
+      ? await noJsRequest.renderFailurePage(
+          {
+            error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
+            ok: false,
+            status,
+          },
+          noJsRequest.rawInput,
+        )
       : renderDefaultFailurePage({
           error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
           ok: false,
@@ -990,7 +993,7 @@ export async function renderNoJsMutationResponse<
     if (!result.ok) {
       reservation?.abort?.();
       const body = noJsRequest.renderFailurePage
-        ? await noJsRequest.renderFailurePage(result)
+        ? await noJsRequest.renderFailurePage(result, noJsRequest.rawInput)
         : renderDefaultFailurePage(result);
       return {
         body,
@@ -1039,7 +1042,7 @@ export async function renderNoJsMutationResponse<
 
   if (!result.ok) {
     const body = noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(result)
+      ? await noJsRequest.renderFailurePage(result, noJsRequest.rawInput)
       : renderDefaultFailurePage(result);
 
     return {
@@ -1172,7 +1175,7 @@ async function renderNoJsReplayUnavailablePage<Request, Value>(
   const failure = replayUnavailableFailure();
   return {
     body: noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(failure)
+      ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
       : renderDefaultFailurePage(failure),
     headers: {
       'Content-Type': 'text/html; charset=utf-8',

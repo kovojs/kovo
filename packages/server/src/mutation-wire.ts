@@ -220,7 +220,7 @@ export interface NoJsMutationRequest<
    * create-then-navigate form). Resolved by `mutationRedirectLocation`.
    */
   redirectTo: string | Redirect | ((result: MutationSuccess<Value>) => string | Redirect);
-  renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
+  renderFailurePage?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   /** Replay store for no-JS dedup (A2, SPEC §10.3:1063). Typed as a separate interface to allow 303 responses. */
   replayStore?: NoJsMutationReplayStore;
   request: Request;
@@ -271,7 +271,7 @@ export interface MutationEndpointRequest<
    * {@link Redirect} value (SPEC §6.4), or a function of the result returning either.
    */
   redirectTo: string | Redirect | ((result: MutationSuccess<Value>) => string | Redirect);
-  renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
+  renderFailurePage?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
 }
 
 /**

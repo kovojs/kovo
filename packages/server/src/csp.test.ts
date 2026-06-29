@@ -5,6 +5,8 @@ import {
   renderCspReportingHeaders,
   renderContentSecurityPolicy,
   renderDefaultDocumentCsp,
+  cspSha256,
+  styleAttributeCspInlineMetadata,
 } from './csp.js';
 
 describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
@@ -86,6 +88,21 @@ describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
     expect(policy).toContain(
       "script-src 'self' 'sha256-AB+cd/ef12345678901234567890123456789012345='",
     );
+  });
+
+  it('admits rendered style attributes with unsafe-hashes and exact attribute hashes', () => {
+    const metadata = styleAttributeCspInlineMetadata(
+      '<script>const text = " style=\\"ignored\\"";</script><main style="display:grid;gap:12px"><span style="color:&quot;red&quot;">x</span></main>',
+    );
+    const policy = renderContentSecurityPolicy(metadata);
+
+    expect(metadata.styleAttributes).toEqual([
+      cspSha256('display:grid;gap:12px'),
+      cspSha256('color:"red"'),
+    ]);
+    expect(policy).toContain("style-src 'self' 'unsafe-hashes'");
+    expect(policy).toContain(`'${cspSha256('display:grid;gap:12px')}'`);
+    expect(policy).toContain(`'${cspSha256('color:"red"')}'`);
   });
 
   it('keeps reporting endpoints relative instead of using the request Host origin', () => {

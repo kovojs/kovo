@@ -144,6 +144,52 @@ describe('no-JS mutation responses', () => {
     });
   });
 
+  it('exposes raw no-JS submitted values to component failure rerenders', async () => {
+    const updateProfileForm = form<
+      'profile/update',
+      { company: string; email: string },
+      { code: 'DUPLICATE_EMAIL'; payload: Record<string, never> }
+    >('profile/update');
+    const UpdateProfileForm = component({
+      mutations: { updateProfile: updateProfileForm },
+      render: (_queries, _state, { forms }) =>
+        renderedHtml(
+          '<!doctype html><html><body><form>' +
+            `<input name="email" value="${forms.updateProfile.submitted?.email ?? ''}">` +
+            `<input name="company" value="${forms.updateProfile.submitted?.company ?? ''}">` +
+            (forms.updateProfile.failure?.code === 'DUPLICATE_EMAIL'
+              ? '<output role="alert">Duplicate email</output>'
+              : '') +
+            '</form></body></html>',
+        ),
+    });
+    const updateProfile = mutation('profile/update', {
+      errors: {
+        DUPLICATE_EMAIL: s.object({}),
+      },
+      input: s.object({ company: s.string(), email: s.string().email() }),
+      handler(_input, _request, context) {
+        return context.fail('DUPLICATE_EMAIL', {});
+      },
+    });
+
+    const response = await renderNoJsMutationResponse(updateProfile, {
+      rawInput: { company: 'Acme', email: 'taken@example.com' },
+      redirectTo: '/profile',
+      renderFailurePage: (failure, rawInput) =>
+        renderComponentMutationFailure(UpdateProfileForm, {}, failure, {
+          formName: 'updateProfile',
+          submitted: rawInput,
+        }),
+      request: {},
+    });
+
+    expect(response.body).toBe(
+      '<!doctype html><html><body><form><input name="email" value="taken@example.com"><input name="company" value="Acme"><output role="alert">Duplicate email</output></form></body></html>',
+    );
+    expect(response.status).toBe(422);
+  });
+
   it('renders no-JS schema validation failures with field paths by default', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({

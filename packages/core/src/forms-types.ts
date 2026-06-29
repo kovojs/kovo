@@ -22,8 +22,12 @@ export type FormFailure<Definition> =
   Definition extends Form<string, any, infer Failure> ? Failure | FormValidationFailure : never;
 
 /** Render state for one typed mutation form instance. */
-export interface ComponentMutationFormState<Failure> {
+export interface ComponentMutationFormState<
+  Failure,
+  Input extends Record<string, JsonValue> = Record<string, JsonValue>,
+> {
   failure: Failure | null;
+  submitted?: Partial<Input>;
 }
 
 /** @internal Internal building block of `ComponentRenderSlots`; not app-facing. */
@@ -35,5 +39,7 @@ export type ComponentMutationDefinitions = Record<string, Form<string, any, any>
  * authors compose slots through `ComponentRenderSlots`, never this map directly.
  */
 export type ComponentMutationForms<Mutations extends ComponentMutationDefinitions> = {
-  [Name in keyof Mutations]: ComponentMutationFormState<FormFailure<Mutations[Name]>>;
+  [Name in keyof Mutations]: Mutations[Name] extends Form<string, infer Input, unknown>
+    ? ComponentMutationFormState<FormFailure<Mutations[Name]>, Input>
+    : ComponentMutationFormState<FormFailure<Mutations[Name]>>;
 };

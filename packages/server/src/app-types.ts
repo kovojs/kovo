@@ -324,7 +324,7 @@ export interface AppMutationResponseOptions {
    */
   redirectTo?: string | Redirect | ((result: MutationSuccess<unknown>) => string | Redirect);
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
-  renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
+  renderFailurePage?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
 }
 
 export type AppMutationResponsePolicy = AppMutationResponseOptions | AppMutationResponseResolver;

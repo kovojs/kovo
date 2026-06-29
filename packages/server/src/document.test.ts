@@ -578,6 +578,19 @@ describe('server app shell document assembly', () => {
       expect(wrapped.headers['Reporting-Endpoints']).toBe('kovo-csp="/_kovo/reports/csp"');
     });
 
+    it('hashes rendered style attributes into the enforced document CSP', () => {
+      const wrapped = renderRouteDocumentResponse({
+        body: '<main style="display:grid;gap:12px">Orders</main>',
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 200,
+      });
+      const policy = wrapped.headers['Content-Security-Policy'] as string;
+
+      expect(policy).toContain("style-src 'self'");
+      expect(policy).toContain("'unsafe-hashes'");
+      expect(policy).toContain(`'${cspSha256('display:grid;gap:12px')}'`);
+    });
+
     it('extends script/style/frame/connect/img directives via the third-party allowlist', () => {
       const policy = renderRouteDocumentResponse(htmlResponse(), {
         csp: {

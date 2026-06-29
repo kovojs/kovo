@@ -66,16 +66,26 @@ describe('renderComponent', () => {
   });
 
   it('normalizes schema validation failures into field-scoped component form state', () => {
-    const slots = componentMutationFailureSlots('addToCart', {
-      error: {
-        code: 'VALIDATION',
-        payload: {
-          issues: [{ message: 'Expected number >= 1', path: ['quantity'] }],
+    const submitted = new FormData();
+    submitted.append('quantity', '0');
+    submitted.append('tag', 'sale');
+    submitted.append('tag', 'clearance');
+    submitted.append('Kovo-Idem', 'framework-owned');
+    const slots = componentMutationFailureSlots(
+      'addToCart',
+      {
+        error: {
+          code: 'VALIDATION',
+          payload: {
+            issues: [{ message: 'Expected number >= 1', path: ['quantity'] }],
+          },
         },
+        ok: false,
+        status: 422,
       },
-      ok: false,
-      status: 422,
-    });
+      {},
+      { submitted },
+    );
 
     expect(slots.forms).toEqual({
       addToCart: {
@@ -83,7 +93,43 @@ describe('renderComponent', () => {
           code: 'VALIDATION',
           fieldErrors: { quantity: 'Expected number >= 1' },
         },
+        submitted: {
+          quantity: '0',
+          tag: ['sale', 'clearance'],
+        },
       },
     });
+  });
+
+  it('exposes submitted values to component failure rerenders', () => {
+    const updateProfile = form<
+      'profile/update',
+      { company: string; email: string },
+      { code: 'DUPLICATE_EMAIL'; payload: Record<string, never> }
+    >('profile/update');
+    const ProfileForm = component({
+      mutations: { updateProfile },
+      render: (_queries, _state, { forms }) => (
+        <form>
+          <input name="email" value={forms.updateProfile.submitted?.email ?? ''} />
+          <input name="company" value={forms.updateProfile.submitted?.company ?? ''} />
+          {forms.updateProfile.failure ? <output role="alert">Duplicate</output> : null}
+        </form>
+      ),
+    });
+    const failure: MutationFail<'DUPLICATE_EMAIL', Record<string, never>> = {
+      error: { code: 'DUPLICATE_EMAIL', payload: {} },
+      ok: false,
+      status: 422,
+    };
+
+    expect(
+      renderComponentMutationFailure(ProfileForm, {}, failure, {
+        formName: 'updateProfile',
+        submitted: { company: 'Acme', email: 'a@example.com' },
+      }),
+    ).toBe(
+      '<form><input name="email" value="a@example.com"><input name="company" value="Acme"><output role="alert">Duplicate</output></form>',
+    );
   });
 });

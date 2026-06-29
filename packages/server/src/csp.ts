@@ -8,6 +8,8 @@ export interface CspInlineMetadata {
   scripts: readonly string[];
   /** Stable CSP hashes for generated inline `<style>` bodies in document order. */
   styles: readonly string[];
+  /** Stable CSP hashes for rendered `style="..."` attribute values in document order. */
+  styleAttributes?: readonly string[];
 }
 
 /** Options for assembling a `Content-Security-Policy` header from Kovo document metadata. */
@@ -239,14 +241,36 @@ export function emptyCspInlineMetadata(): CspInlineMetadata {
 export function mergeCspInlineMetadata(
   ...metadata: readonly (CspInlineMetadata | undefined)[]
 ): CspInlineMetadata {
+  const styleAttributes = dedupe(metadata.flatMap((item) => item?.styleAttributes ?? []));
   return {
     scripts: dedupe(metadata.flatMap((item) => item?.scripts ?? [])),
     styles: dedupe(metadata.flatMap((item) => item?.styles ?? [])),
+    ...(styleAttributes.length === 0 ? {} : { styleAttributes }),
   };
 }
 
 export function hasCspInlineMetadata(metadata: CspInlineMetadata): boolean {
-  return metadata.scripts.length > 0 || metadata.styles.length > 0;
+  return (
+    metadata.scripts.length > 0 ||
+    metadata.styles.length > 0 ||
+    (metadata.styleAttributes?.length ?? 0) > 0
+  );
+}
+
+export function styleAttributeCspInlineMetadata(html: string): CspInlineMetadata {
+  const hashes: string[] = [];
+  const pattern = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>`]+))/giu;
+  const scannableHtml = html
+    .replaceAll(/<script\b[^>]*>[\s\S]*?<\/script>/giu, '')
+    .replaceAll(/<style\b[^>]*>[\s\S]*?<\/style>/giu, '');
+  for (const match of scannableHtml.matchAll(pattern)) {
+    const rawValue = match[1] ?? match[2] ?? match[3] ?? '';
+    hashes.push(cspSha256(decodeHtmlAttribute(rawValue)));
+  }
+  const styleAttributes = dedupe(hashes);
+  return styleAttributes.length === 0
+    ? emptyCspInlineMetadata()
+    : { scripts: [], styles: [], styleAttributes };
 }
 
 /**
@@ -276,7 +300,12 @@ export function renderContentSecurityPolicy(
       ...(options.scriptSrc ?? ["'self'"]),
       ...quoteHashes(metadata.scripts),
     ]),
-    directive('style-src', [...(options.styleSrc ?? ["'self'"]), ...quoteHashes(metadata.styles)]),
+    directive('style-src', [
+      ...(options.styleSrc ?? ["'self'"]),
+      ...quoteHashes(metadata.styles),
+      ...((metadata.styleAttributes?.length ?? 0) === 0 ? [] : ["'unsafe-hashes'"]),
+      ...quoteHashes(metadata.styleAttributes ?? []),
+    ]),
     directive('img-src', options.imgSrc),
     directive('connect-src', options.connectSrc),
     directive('frame-src', options.frameSrc),
@@ -312,6 +341,14 @@ export function renderContentSecurityPolicy(
 
 function quoteHashes(hashes: readonly string[]): string[] {
   return hashes.map((hash) => `'${hash}'`);
+}
+
+function decodeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
 }
 
 function directive(name: string, values: readonly string[] | undefined): string | undefined {

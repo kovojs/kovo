@@ -35,6 +35,8 @@ export interface ComponentMutationFailureRenderOptions<
 > extends ComponentRenderOptions<State> {
   /** Component-local key from `mutations: { ... }`, e.g. `addToCart`. */
   formName: string;
+  /** Raw submitted form input used to expose `forms.<mutation>.submitted` on failure rerenders. */
+  submitted?: unknown;
 }
 
 /**
@@ -93,11 +95,11 @@ export function renderComponentMutationFailure<
   failure: MutationFail,
   options: ComponentMutationFailureRenderOptions<State>,
 ): string {
-  const { formName, slots, ...renderOptions } = options;
+  const { formName, slots, submitted, ...renderOptions } = options;
 
   return renderComponent(component, queries, {
     ...renderOptions,
-    slots: componentMutationFailureSlots(formName, failure, slots),
+    slots: componentMutationFailureSlots(formName, failure, slots, { submitted }),
   });
 }
 
@@ -114,8 +116,10 @@ export function componentMutationFailureSlots(
   formName: string,
   failure: MutationFail,
   slots: ComponentRenderSlots = {},
+  options: { submitted?: unknown } = {},
 ): ComponentRenderSlots {
   const forms = isRecord(slots.forms) ? slots.forms : {};
+  const submitted = componentMutationSubmittedValues(options.submitted);
 
   return {
     ...slots,
@@ -123,6 +127,7 @@ export function componentMutationFailureSlots(
       ...forms,
       [formName]: {
         failure: componentMutationFailureValue(failure),
+        ...(submitted === undefined ? {} : { submitted }),
       },
     },
   };
@@ -142,6 +147,68 @@ function componentMutationFailureValue(failure: MutationFail): unknown {
     code: failure.error.code,
     payload: failure.error.payload,
   };
+}
+
+function componentMutationSubmittedValues(
+  rawInput: unknown,
+): Record<string, JsonValue> | undefined {
+  if (rawInput instanceof FormData) {
+    return submittedEntriesToRecord(Array.from(rawInput.entries()));
+  }
+  if (!isRecord(rawInput)) return undefined;
+  return submittedEntriesToRecord(Object.entries(rawInput));
+}
+
+function submittedEntriesToRecord(
+  entries: readonly (readonly [string, unknown])[],
+): Record<string, JsonValue> | undefined {
+  const submitted: Record<string, JsonValue> = {};
+  for (const [name, value] of entries) {
+    if (isFrameworkFormField(name)) continue;
+    const jsonValue = submittedJsonValue(value);
+    if (jsonValue === undefined) continue;
+    const existing = submitted[name];
+    submitted[name] =
+      existing === undefined
+        ? jsonValue
+        : Array.isArray(existing)
+          ? [...existing, jsonValue]
+          : [existing, jsonValue];
+  }
+  return Object.keys(submitted).length === 0 ? undefined : submitted;
+}
+
+function submittedJsonValue(value: unknown): JsonValue | undefined {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const values = value.map(submittedJsonValue);
+    return values.every((item): item is JsonValue => item !== undefined) ? values : undefined;
+  }
+  if (!isRecord(value)) return undefined;
+  if (isFileLike(value)) return undefined;
+  const entries = Object.entries(value)
+    .map(([key, entryValue]) => [key, submittedJsonValue(entryValue)] as const)
+    .filter((entry): entry is readonly [string, JsonValue] => entry[1] !== undefined);
+  return Object.fromEntries(entries);
+}
+
+function isFrameworkFormField(name: string): boolean {
+  return name === 'Kovo-Idem' || name === 'kovo-csrf' || name === 'kovo-form-key';
+}
+
+function isFileLike(value: Record<string, unknown>): boolean {
+  return (
+    typeof value.arrayBuffer === 'function' &&
+    typeof value.name === 'string' &&
+    typeof value.size === 'number'
+  );
 }
 
 function isValidationFailurePayload(value: unknown): value is ValidationFailurePayload {
