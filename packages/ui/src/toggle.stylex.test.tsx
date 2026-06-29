@@ -18,15 +18,12 @@ describe('@kovojs/ui Toggle StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create(
-      {
-        root: {
-          backgroundColor: '#2563eb',
-          minWidth: 120,
-        },
+    const overrides = style.create({
+      root: {
+        backgroundColor: '#2563eb',
+        minWidth: 120,
       },
-      { namespace: 'appToggle', source: 'app-toggle.tsx' },
-    );
+    });
 
     expect(
       Toggle.definition.render({

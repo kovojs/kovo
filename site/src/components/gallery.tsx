@@ -9,153 +9,150 @@ import * as style from '@kovojs/style';
 // layout splices markdown prose. See scripts/build.mjs renderGalleryPage for
 // the reference rendering this ports.
 
-const galleryStyles = style.create(
-  {
-    demo: {
-      background: 'var(--bg)',
-      borderColor: 'var(--edge)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      // Component fixtures can be wider than a phone; scroll inside the frame
-      // rather than stretching the page.
-      overflowX: 'auto',
-      padding: '1.25rem',
-      '[data-gallery-demo-shell] [data-gallery-demo]': {
-        display: 'grid',
-        gap: '1rem',
-      },
-      '[data-gallery-demo-shell] [data-demo-summary]': {
-        color: 'var(--dim)',
-        margin: 0,
-      },
-      '[data-gallery-demo-shell] [data-ui-demo]': {
-        alignItems: 'center',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '0.75rem',
-      },
-      '[data-gallery-demo-shell] [data-gallery-contract]': {
-        borderCollapse: 'collapse',
-        display: 'block',
-        fontSize: '0.82rem',
-        overflowX: 'auto',
-        width: '100%',
-      },
-      '[data-gallery-demo-shell] [data-gallery-contract] th': {
-        color: 'var(--faint)',
-        fontFamily: 'var(--font-mono)',
-        fontSize: '0.64rem',
-        fontWeight: 600,
-        letterSpacing: '0.14em',
-        padding: '0.45rem 1rem 0.45rem 0',
-        textAlign: 'left',
-        textTransform: 'uppercase',
-        whiteSpace: 'nowrap',
-      },
-      '[data-gallery-demo-shell] [data-gallery-contract] td': {
-        borderTopColor: 'var(--edge-soft)',
-        borderTopStyle: 'solid',
-        borderTopWidth: 1,
-        color: 'var(--dim)',
-        padding: '0.45rem 0',
-      },
+const galleryStyles = style.create({
+  demo: {
+    background: 'var(--bg)',
+    borderColor: 'var(--edge)',
+    borderStyle: 'solid',
+    borderWidth: 1,
+    // Component fixtures can be wider than a phone; scroll inside the frame
+    // rather than stretching the page.
+    overflowX: 'auto',
+    padding: '1.25rem',
+    '[data-gallery-demo-shell] [data-gallery-demo]': {
+      display: 'grid',
+      gap: '1rem',
     },
-    detail: {
+    '[data-gallery-demo-shell] [data-demo-summary]': {
+      color: 'var(--dim)',
+      margin: 0,
+    },
+    '[data-gallery-demo-shell] [data-ui-demo]': {
+      alignItems: 'center',
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '0.75rem',
+    },
+    '[data-gallery-demo-shell] [data-gallery-contract]': {
+      borderCollapse: 'collapse',
+      display: 'block',
+      fontSize: '0.82rem',
+      overflowX: 'auto',
+      width: '100%',
+    },
+    '[data-gallery-demo-shell] [data-gallery-contract] th': {
+      color: 'var(--faint)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.64rem',
+      fontWeight: 600,
+      letterSpacing: '0.14em',
+      padding: '0.45rem 1rem 0.45rem 0',
+      textAlign: 'left',
+      textTransform: 'uppercase',
+      whiteSpace: 'nowrap',
+    },
+    '[data-gallery-demo-shell] [data-gallery-contract] td': {
       borderTopColor: 'var(--edge-soft)',
       borderTopStyle: 'solid',
       borderTopWidth: 1,
-      display: 'grid',
-      gap: '1rem',
-      marginTop: '1.4rem',
-      paddingTop: '1.4rem',
-    },
-    detailGrid: {
-      display: 'grid',
-      gap: '1rem',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))',
-    },
-    detailHeading: {
-      fontSize: '1rem',
-      fontWeight: 700,
-      marginBlock: '0 0.45rem',
-    },
-    detailList: {
       color: 'var(--dim)',
-      lineHeight: 1.65,
-      marginBlock: 0,
-      paddingInlineStart: '1.2rem',
-    },
-    detailText: {
-      color: 'var(--dim)',
-      lineHeight: 1.65,
-      margin: 0,
-    },
-    inlineCode: {
-      backgroundColor: 'var(--panel)',
-      borderColor: 'var(--edge-soft)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: 'var(--ink)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.78rem',
-      paddingBlock: '0.08rem',
-      paddingInline: '0.28rem',
-    },
-    head: {
-      marginBottom: '1.6rem',
-    },
-    headEyebrow: {
-      color: 'var(--teal)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.68rem',
-      letterSpacing: '0.22em',
-      marginBottom: '0.9rem',
-      textTransform: 'uppercase',
-    },
-    headBlurb: {
-      color: 'var(--dim)',
-      lineHeight: 1.65,
-      marginTop: '0.8rem',
-    },
-    headTitle: {
-      fontSize: '2.2rem',
-      fontWeight: 750,
-      letterSpacing: '-0.025em',
-      lineHeight: 1.12,
-      margin: 0,
-    },
-    nav: {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: '0.45rem',
-      marginBottom: '1.5rem',
-    },
-    navLink: {
-      borderColor: 'var(--edge)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: 'var(--dim)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.68rem',
-      letterSpacing: '0.08em',
-      padding: '0.36rem 0.55rem',
-      textDecoration: 'none',
-      textTransform: 'uppercase',
-      ':hover': {
-        borderColor: 'var(--faint)',
-        color: 'var(--ink)',
-      },
-    },
-    navLinkCurrent: {
-      borderColor: 'var(--teal)',
-      color: 'var(--teal)',
-    },
-    page: {
-      maxWidth: '54rem',
+      padding: '0.45rem 0',
     },
   },
-  { namespace: 'site-gallery', source: 'site/src/components/gallery.tsx' },
-);
+  detail: {
+    borderTopColor: 'var(--edge-soft)',
+    borderTopStyle: 'solid',
+    borderTopWidth: 1,
+    display: 'grid',
+    gap: '1rem',
+    marginTop: '1.4rem',
+    paddingTop: '1.4rem',
+  },
+  detailGrid: {
+    display: 'grid',
+    gap: '1rem',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))',
+  },
+  detailHeading: {
+    fontSize: '1rem',
+    fontWeight: 700,
+    marginBlock: '0 0.45rem',
+  },
+  detailList: {
+    color: 'var(--dim)',
+    lineHeight: 1.65,
+    marginBlock: 0,
+    paddingInlineStart: '1.2rem',
+  },
+  detailText: {
+    color: 'var(--dim)',
+    lineHeight: 1.65,
+    margin: 0,
+  },
+  inlineCode: {
+    backgroundColor: 'var(--panel)',
+    borderColor: 'var(--edge-soft)',
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: 'var(--ink)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.78rem',
+    paddingBlock: '0.08rem',
+    paddingInline: '0.28rem',
+  },
+  head: {
+    marginBottom: '1.6rem',
+  },
+  headEyebrow: {
+    color: 'var(--teal)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.68rem',
+    letterSpacing: '0.22em',
+    marginBottom: '0.9rem',
+    textTransform: 'uppercase',
+  },
+  headBlurb: {
+    color: 'var(--dim)',
+    lineHeight: 1.65,
+    marginTop: '0.8rem',
+  },
+  headTitle: {
+    fontSize: '2.2rem',
+    fontWeight: 750,
+    letterSpacing: '-0.025em',
+    lineHeight: 1.12,
+    margin: 0,
+  },
+  nav: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.45rem',
+    marginBottom: '1.5rem',
+  },
+  navLink: {
+    borderColor: 'var(--edge)',
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: 'var(--dim)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.68rem',
+    letterSpacing: '0.08em',
+    padding: '0.36rem 0.55rem',
+    textDecoration: 'none',
+    textTransform: 'uppercase',
+    ':hover': {
+      borderColor: 'var(--faint)',
+      color: 'var(--ink)',
+    },
+  },
+  navLinkCurrent: {
+    borderColor: 'var(--teal)',
+    color: 'var(--teal)',
+  },
+  page: {
+    maxWidth: '54rem',
+  },
+});
 
 export interface GalleryRouteView {
   /** Route path under /gallery, e.g. `/components/button`. */

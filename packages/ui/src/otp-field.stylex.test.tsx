@@ -57,24 +57,21 @@ describe('@kovojs/ui OtpField StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        group: {
-          columnGap: 12,
-        },
-        hiddenInput: {
-          width: 2,
-        },
-        input: {
-          borderColor: '#2563eb',
-          color: '#1d4ed8',
-        },
-        root: {
-          rowGap: 12,
-        },
+    const overrides = style.create({
+      group: {
+        columnGap: 12,
       },
-      { namespace: 'appOtpField', source: 'app-otp-field.tsx' },
-    );
+      hiddenInput: {
+        width: 2,
+      },
+      input: {
+        borderColor: '#2563eb',
+        color: '#1d4ed8',
+      },
+      root: {
+        rowGap: 12,
+      },
+    });
 
     expect({
       group: OtpFieldGroup.definition.render({

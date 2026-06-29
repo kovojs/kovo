@@ -30,15 +30,12 @@ describe('@kovojs/ui Meter StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create(
-      {
-        root: {
-          accentColor: '#2563eb',
-          height: 12,
-        },
+    const overrides = style.create({
+      root: {
+        accentColor: '#2563eb',
+        height: 12,
       },
-      { namespace: 'appMeter', source: 'app-meter.tsx' },
-    );
+    });
 
     expect(
       Meter.definition.render({

@@ -30,16 +30,13 @@ describe('@kovojs/ui Alert StyleX styles', () => {
   });
 
   it('accepts author-last StyleX overrides', () => {
-    const overrides = style.create(
-      {
-        root: {
-          backgroundColor: '#312e81',
-          borderColor: '#312e81',
-          color: '#ffffff',
-        },
+    const overrides = style.create({
+      root: {
+        backgroundColor: '#312e81',
+        borderColor: '#312e81',
+        color: '#ffffff',
       },
-      { namespace: 'appAlert', source: 'app-alert.tsx' },
-    );
+    });
 
     expect(
       Alert.definition.render({

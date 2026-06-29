@@ -20,19 +20,13 @@ export interface ProductListRenderContext {
   request?: ShopRequest | undefined;
 }
 
-const productListStyles = style.create(
-  {
-    list: {
-      display: 'grid',
-      gap: 8,
-      paddingInlineStart: 20,
-    },
+const productListStyles = style.create({
+  list: {
+    display: 'grid',
+    gap: 8,
+    paddingInlineStart: 20,
   },
-  {
-    namespace: 'tutorial-product-list',
-    source: 'site/tutorial/steps/05-optimistic/src/components/product-list.tsx',
-  },
-);
+});
 
 export const ProductList = component({
   queries: { products: productsQuery },

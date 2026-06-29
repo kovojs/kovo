@@ -24,28 +24,25 @@ describe('@kovojs/ui Button StyleX prototype', () => {
     expect(html).not.toContain('inline-flex items-center justify-center');
   });
   it('accepts author-last typed style overrides', () => {
-    const overrides = style.create(
-      {
-        root: {
+    const overrides = style.create({
+      root: {
+        backgroundColor: 'tomato',
+        color: 'black',
+        ':hover': {
           backgroundColor: 'tomato',
-          color: 'black',
-          ':hover': {
-            backgroundColor: 'tomato',
-          },
         },
       },
-      { namespace: 'appButton', source: 'app-button.tsx' },
-    );
+    });
     const html = String(
       Button.definition.render({
         children: 'Save',
         style: overrides.root,
       }),
     );
-    expect(html).toContain('kv-app-button-bg-');
-    expect(html).toContain('kv-app-button-fg-');
+    expect(html).toContain('kv-button-stylex-test-bg-');
+    expect(html).toContain('kv-button-stylex-test-fg-');
     expect(html).not.toContain('kv-button-variant-bg-');
-    expect(html).toContain('app-button.tsx#root');
+    expect(html).toContain('button.stylex.test.tsx#root');
   });
   it('exports StyleX style objects instead of variant-helper output', () => {
     expect(buttonStyles.base.root.$$css).toBe(true);

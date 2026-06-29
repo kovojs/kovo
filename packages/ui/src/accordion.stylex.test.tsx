@@ -77,26 +77,23 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        content: {
-          paddingTop: 12,
-        },
-        header: {
-          fontWeight: 700,
-        },
-        item: {
-          borderColor: '#2563eb',
-        },
-        root: {
-          rowGap: 12,
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
-        },
+    const overrides = style.create({
+      content: {
+        paddingTop: 12,
       },
-      { namespace: 'appAccordion', source: 'app-accordion.tsx' },
-    );
+      header: {
+        fontWeight: 700,
+      },
+      item: {
+        borderColor: '#2563eb',
+      },
+      root: {
+        rowGap: 12,
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+      },
+    });
 
     expect(
       Accordion.definition.render({

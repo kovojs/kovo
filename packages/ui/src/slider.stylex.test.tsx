@@ -64,26 +64,23 @@ describe('@kovojs/ui Slider StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        input: {
-          accentColor: '#2563eb',
-        },
-        range: {
-          backgroundColor: '#2563eb',
-        },
-        root: {
-          rowGap: 12,
-        },
-        thumb: {
-          borderColor: '#2563eb',
-        },
-        track: {
-          backgroundColor: '#dbeafe',
-        },
+    const overrides = style.create({
+      input: {
+        accentColor: '#2563eb',
       },
-      { namespace: 'appSlider', source: 'app-slider.tsx' },
-    );
+      range: {
+        backgroundColor: '#2563eb',
+      },
+      root: {
+        rowGap: 12,
+      },
+      thumb: {
+        borderColor: '#2563eb',
+      },
+      track: {
+        backgroundColor: '#dbeafe',
+      },
+    });
 
     expect({
       input: SliderInput.definition.render({ styles: { input: overrides.input }, value: 50 }),

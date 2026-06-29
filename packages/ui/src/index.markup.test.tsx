@@ -43,10 +43,7 @@ import { TooltipContent, TooltipTrigger } from './tooltip.js';
 import { readSource } from './test-source.js';
 describe('@kovojs/ui styled package foundation', () => {
   it('exports pure-markup button, badge, and card TSX components', () => {
-    const buttonOverride = style.create(
-      { root: { letterSpacing: 1 } },
-      { namespace: 'markupButton', source: 'index.markup.test.tsx' },
-    );
+    const buttonOverride = style.create({ root: { letterSpacing: 1 } });
     expect(
       String(
         Button.definition.render({
@@ -103,10 +100,7 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(String(Alert.definition.render({ children: 'Saved.', variant: 'success' }))).toContain(
       'role="status"',
     );
-    const skeletonOverride = style.create(
-      { root: { height: 16, width: 128 } },
-      { namespace: 'markupSkeleton', source: 'index.markup.test.tsx' },
-    );
+    const skeletonOverride = style.create({ root: { height: 16, width: 128 } });
     expect(String(Skeleton.definition.render({ style: skeletonOverride.root }))).toContain(
       'data-style-src="skeleton.tsx#root; index.markup.test.tsx#root"',
     );

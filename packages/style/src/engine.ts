@@ -159,11 +159,7 @@ export function create<const Styles extends Record<string, StyleObject>>(
 ): StyleNamespaces<Styles>;
 export function create<const Styles extends Record<string, StyleObject>>(
   styles: Styles,
-  identity: StyleIdentityOptions,
-): StyleNamespaces<Styles>;
-export function create<const Styles extends Record<string, StyleObject>>(
-  styles: Styles,
-  identity: StyleIdentityOptions = {},
+  identity: { readonly namespace?: string; readonly source?: string } = {},
 ): StyleNamespaces<Styles> {
   assertObjectInput(styles, 'style.create', 'styles');
   return createAtomicStylesInternal(styles, identity).styles;
@@ -366,11 +362,7 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
 ): Vars<Tokens>;
 export function defineVars<const Tokens extends Record<string, CssValue>>(
   tokens: Tokens,
-  identity: StyleIdentityOptions,
-): Vars<Tokens>;
-export function defineVars<const Tokens extends Record<string, CssValue>>(
-  tokens: Tokens,
-  identity: StyleIdentityOptions = {},
+  identity: { readonly namespace?: string; readonly source?: string } = {},
 ): Vars<Tokens> {
   assertObjectInput(tokens, 'style.defineVars', 'tokens');
   const namespace = slug(identity.namespace ?? identity.source ?? 'tokens');
@@ -429,12 +421,7 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
 export function createTheme<Tokens extends Record<string, CssValue>>(
   baseTokens: Vars<Tokens>,
   overrides: Partial<Record<keyof Tokens, CssValue>>,
-  identity: StyleIdentityOptions,
-): Theme;
-export function createTheme<Tokens extends Record<string, CssValue>>(
-  baseTokens: Vars<Tokens>,
-  overrides: Partial<Record<keyof Tokens, CssValue>>,
-  identity: StyleIdentityOptions = {},
+  identity: { readonly namespace?: string; readonly source?: string } = {},
 ): Theme {
   assertObjectInput(baseTokens, 'style.createTheme', 'baseTokens');
   assertObjectInput(overrides, 'style.createTheme', 'overrides');
@@ -502,8 +489,10 @@ export function raw(style: InlineStyle): readonly [null, InlineStyle] {
  * (SPEC.md §13.1); see `createKeyframes` for the engine's structured result.
  */
 export function keyframes(frames: Keyframes): string;
-export function keyframes(frames: Keyframes, identity: StyleIdentityOptions): string;
-export function keyframes(frames: Keyframes, identity: StyleIdentityOptions = {}): string {
+export function keyframes(
+  frames: Keyframes,
+  identity: { readonly namespace?: string; readonly source?: string } = {},
+): string {
   return createKeyframes(frames, identity).name;
 }
 

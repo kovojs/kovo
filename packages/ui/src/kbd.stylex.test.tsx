@@ -13,16 +13,13 @@ describe('@kovojs/ui Kbd StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create(
-      {
-        root: {
-          backgroundColor: '#111827',
-          color: '#ffffff',
-          textTransform: 'uppercase',
-        },
+    const overrides = style.create({
+      root: {
+        backgroundColor: '#111827',
+        color: '#ffffff',
+        textTransform: 'uppercase',
       },
-      { namespace: 'appKbd', source: 'app-kbd.tsx' },
-    );
+    });
 
     expect(Kbd.definition.render({ children: 'K', style: overrides.root })).toMatchSnapshot();
   });

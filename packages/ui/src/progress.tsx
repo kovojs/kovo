@@ -40,13 +40,10 @@ export interface ProgressProps {
 // Indeterminate slide: a partial-width bar sweeps across the track when progress
 // has no known value. The `style.keyframes` name is resolved by the StyleX
 // extractor, which emits the `@keyframes` block into the served CSS (SPEC.md §13.1).
-const indeterminateSlide = style.keyframes(
-  {
-    '0%': { transform: 'translateX(-100%)' },
-    '100%': { transform: 'translateX(250%)' },
-  },
-  { namespace: 'progressIndeterminate', source: 'progress.tsx' },
-);
+const indeterminateSlide = style.keyframes({
+  '0%': { transform: 'translateX(-100%)' },
+  '100%': { transform: 'translateX(250%)' },
+});
 
 /**
  * Style definitions used by the progress components.

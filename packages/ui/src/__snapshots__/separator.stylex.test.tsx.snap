@@ -19,7 +19,7 @@ exports[`@kovojs/ui Separator StyleX styles > exports StyleX style groups 1`] = 
 }
 `;
 
-exports[`@kovojs/ui Separator StyleX styles > matches author-last override output 1`] = `"<div class="kv-separator-flex-1pwdgv kv-separator-orientation-h-1g00uh kv-app-separator-bg-1c68yj kv-app-separator-w-1v3cp9" data-style-src="separator.tsx#root; separator.tsx#horizontal; app-separator.tsx#root" data-orientation="horizontal" role="none"></div>"`;
+exports[`@kovojs/ui Separator StyleX styles > matches author-last override output 1`] = `"<div class="kv-separator-flex-1pwdgv kv-separator-orientation-h-1g00uh kv-separator-stylex-test-bg-1c68yj kv-separator-stylex-test-w-1v3cp9" data-style-src="separator.tsx#root; separator.tsx#horizontal; separator.stylex.test.tsx#root" data-orientation="horizontal" role="none"></div>"`;
 
 exports[`@kovojs/ui Separator StyleX styles > matches default and semantic orientation output 1`] = `
 {

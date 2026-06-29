@@ -58,20 +58,17 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        content: {
-          color: '#1d4ed8',
-        },
-        root: {
-          borderColor: '#1d4ed8',
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
-        },
+    const overrides = style.create({
+      content: {
+        color: '#1d4ed8',
       },
-      { namespace: 'appCollapsible', source: 'app-collapsible.tsx' },
-    );
+      root: {
+        borderColor: '#1d4ed8',
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+      },
+    });
 
     expect(
       Collapsible.definition.render({

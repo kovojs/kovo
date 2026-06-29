@@ -33,38 +33,35 @@ describe('@kovojs/ui Drawer StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        body: {
-          color: '#1d4ed8',
-        },
-        close: {
-          color: '#1d4ed8',
-        },
-        content: {
-          maxHeight: '70vh',
-        },
-        description: {
-          color: '#1e40af',
-        },
-        handle: {
-          backgroundColor: '#1d4ed8',
-        },
-        header: {
-          gap: 8,
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        title: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
-        },
+    const overrides = style.create({
+      body: {
+        color: '#1d4ed8',
       },
-      { namespace: 'appDrawer', source: 'app-drawer.tsx' },
-    );
+      close: {
+        color: '#1d4ed8',
+      },
+      content: {
+        maxHeight: '70vh',
+      },
+      description: {
+        color: '#1e40af',
+      },
+      handle: {
+        backgroundColor: '#1d4ed8',
+      },
+      header: {
+        gap: 8,
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      title: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+      },
+    });
 
     expect(
       Drawer.definition.render({

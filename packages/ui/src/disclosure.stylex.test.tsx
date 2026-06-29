@@ -60,21 +60,18 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        content: {
-          backgroundColor: '#eff6ff',
-        },
-        root: {
-          rowGap: 12,
-        },
-        trigger: {
-          borderColor: '#1d4ed8',
-          color: '#1d4ed8',
-        },
+    const overrides = style.create({
+      content: {
+        backgroundColor: '#eff6ff',
       },
-      { namespace: 'appDisclosure', source: 'app-disclosure.tsx' },
-    );
+      root: {
+        rowGap: 12,
+      },
+      trigger: {
+        borderColor: '#1d4ed8',
+        color: '#1d4ed8',
+      },
+    });
 
     expect(
       Disclosure.definition.render({

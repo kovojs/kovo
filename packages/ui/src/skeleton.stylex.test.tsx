@@ -30,19 +30,16 @@ describe('@kovojs/ui Skeleton StyleX styles', () => {
     expect(pulse.css).toBe(`@keyframes ${pulse.name}{0%, 100%{opacity:1}50%{opacity:0.5}}`);
   });
   it('accepts author-last StyleX size overrides', () => {
-    const overrides = style.create(
-      {
-        root: {
-          height: 16,
-          width: 160,
-        },
+    const overrides = style.create({
+      root: {
+        height: 16,
+        width: 160,
       },
-      { namespace: 'appSkeleton', source: 'app-skeleton.tsx' },
-    );
+    });
     const rendered = String(Skeleton.definition.render({ style: overrides.root }));
-    expect(rendered).toContain('kv-app-skeleton-h-');
-    expect(rendered).toContain('kv-app-skeleton-w-');
-    expect(rendered).toContain('app-skeleton.tsx#root');
+    expect(rendered).toContain('kv-skeleton-stylex-test-h-');
+    expect(rendered).toContain('kv-skeleton-stylex-test-w-');
+    expect(rendered).toContain('skeleton.stylex.test.tsx#root');
   });
   it('exports StyleX style objects instead of class strings', () => {
     expect(skeletonStyles.root.$$css).toBe(true);

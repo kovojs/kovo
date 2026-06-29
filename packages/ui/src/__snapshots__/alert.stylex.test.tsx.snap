@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`@kovojs/ui Alert StyleX styles > accepts author-last StyleX overrides 1`] = `"<div class="kv-alert-align-1h2s0q kv-alert-bd-1datsm kv-alert-bd-1jjjws kv-alert-bd-lc6y2t kv-alert-bd-6yu6j4 kv-alert-bd-17dppo kv-alert-bd-124hy4 kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bd-1ii8hb kv-app-alert-bg-16nrlb kv-app-alert-bd-6vmi2g kv-app-alert-fg-sutien" data-style-src="alert.tsx#root; alert.tsx#warning; app-alert.tsx#root" role="status"><div class="kv-alert-fg-zzbnl3" data-style-src="alert.tsx#description">Custom</div></div>"`;
+exports[`@kovojs/ui Alert StyleX styles > accepts author-last StyleX overrides 1`] = `"<div class="kv-alert-align-1h2s0q kv-alert-bd-1datsm kv-alert-bd-1jjjws kv-alert-bd-lc6y2t kv-alert-bd-6yu6j4 kv-alert-bd-17dppo kv-alert-bd-124hy4 kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bd-1ii8hb kv-alert-stylex-test-bg-16nrlb kv-alert-stylex-test-bd-6vmi2g kv-alert-stylex-test-fg-sutien" data-style-src="alert.tsx#root; alert.tsx#warning; alert.stylex.test.tsx#root" role="status"><div class="kv-alert-fg-zzbnl3" data-style-src="alert.tsx#description">Custom</div></div>"`;
 
 exports[`@kovojs/ui Alert StyleX styles > exports StyleX style groups instead of variant helpers 1`] = `
 {

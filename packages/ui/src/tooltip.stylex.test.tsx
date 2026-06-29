@@ -37,23 +37,20 @@ describe('@kovojs/ui Tooltip StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        content: {
-          maxWidth: 288,
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          color: '#1d4ed8',
-          '[data-state=open]': {
-            color: '#1e3a8a',
-          },
+    const overrides = style.create({
+      content: {
+        maxWidth: 288,
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        color: '#1d4ed8',
+        '[data-state=open]': {
+          color: '#1e3a8a',
         },
       },
-      { namespace: 'appTooltip', source: 'app-tooltip.tsx' },
-    );
+    });
 
     expect(
       Tooltip.definition.render({

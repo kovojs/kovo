@@ -32,35 +32,32 @@ describe('@kovojs/ui Sheet StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        body: {
-          color: '#1d4ed8',
-        },
-        close: {
-          color: '#1d4ed8',
-        },
-        content: {
-          maxWidth: 448,
-        },
-        description: {
-          color: '#1e40af',
-        },
-        header: {
-          gap: 8,
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        title: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
-        },
+    const overrides = style.create({
+      body: {
+        color: '#1d4ed8',
       },
-      { namespace: 'appSheet', source: 'app-sheet.tsx' },
-    );
+      close: {
+        color: '#1d4ed8',
+      },
+      content: {
+        maxWidth: 448,
+      },
+      description: {
+        color: '#1e40af',
+      },
+      header: {
+        gap: 8,
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      title: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+      },
+    });
 
     expect(
       Sheet.definition.render({

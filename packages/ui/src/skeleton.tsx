@@ -18,13 +18,10 @@ export interface SkeletonProps {
 // Pulse the placeholder opacity so loading state reads as "in progress". The
 // `style.keyframes` name is resolved by the StyleX extractor, which emits the
 // matching `@keyframes` block into the served CSS asset (SPEC.md §13.1).
-const pulse = style.keyframes(
-  {
-    '0%, 100%': { opacity: 1 },
-    '50%': { opacity: 0.5 },
-  },
-  { namespace: 'skeletonPulse', source: 'skeleton.tsx' },
-);
+const pulse = style.keyframes({
+  '0%, 100%': { opacity: 1 },
+  '50%': { opacity: 0.5 },
+});
 
 /**
  * Style definitions used by the skeleton components.

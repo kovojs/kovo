@@ -107,21 +107,18 @@ describe('@kovojs/ui Field StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        control: { backgroundColor: '#eff6ff' },
-        description: { color: '#1d4ed8' },
-        error: { color: '#991b1b' },
-        fieldset: { borderColor: '#2563eb' },
-        fieldsetLegend: { color: '#1e40af' },
-        label: { color: '#1d4ed8' },
-        root: { rowGap: 12 },
-        select: { backgroundColor: '#eff6ff' },
-        selectOption: { color: '#1d4ed8' },
-        textarea: { backgroundColor: '#eff6ff' },
-      },
-      { namespace: 'appField', source: 'app-field.tsx' },
-    );
+    const overrides = style.create({
+      control: { backgroundColor: '#eff6ff' },
+      description: { color: '#1d4ed8' },
+      error: { color: '#991b1b' },
+      fieldset: { borderColor: '#2563eb' },
+      fieldsetLegend: { color: '#1e40af' },
+      label: { color: '#1d4ed8' },
+      root: { rowGap: 12 },
+      select: { backgroundColor: '#eff6ff' },
+      selectOption: { color: '#1d4ed8' },
+      textarea: { backgroundColor: '#eff6ff' },
+    });
 
     expect({
       control: FieldControl.definition.render({ styles: { control: overrides.control } }),

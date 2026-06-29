@@ -63,22 +63,19 @@ describe('@kovojs/ui ToggleGroup StyleX slots', () => {
       type: 'multiple' as const,
       value: ['bold'] as const,
     };
-    const overrides = style.create(
-      {
-        button: {
-          backgroundColor: '#dbeafe',
-          color: '#1d4ed8',
-        },
-        item: {
-          minWidth: 120,
-        },
-        root: {
-          backgroundColor: '#111827',
-          color: '#f9fafb',
-        },
+    const overrides = style.create({
+      button: {
+        backgroundColor: '#dbeafe',
+        color: '#1d4ed8',
       },
-      { namespace: 'appToggleGroup', source: 'app-toggle-group.tsx' },
-    );
+      item: {
+        minWidth: 120,
+      },
+      root: {
+        backgroundColor: '#111827',
+        color: '#f9fafb',
+      },
+    });
 
     expect({
       button: ToggleGroupButton.definition.render({

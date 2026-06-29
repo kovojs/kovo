@@ -9,7 +9,7 @@ exports[`@kovojs/ui Card StyleX styles > exports a StyleX style group 1`] = `
 }
 `;
 
-exports[`@kovojs/ui Card StyleX styles > matches author-last override output 1`] = `"<section class="kv-card-bd-1gezg0 kv-card-bd-lc6y2t kv-card-bd-17dppo kv-card-bd-5grtwb kv-card-box-xlni9o kv-app-card-bg-1c68yj kv-app-card-fg-sutien kv-app-card-pad-1nfkkb" data-style-src="card.tsx#root; app-card.tsx#root">&lt;p&gt;Total&lt;/p&gt;</section>"`;
+exports[`@kovojs/ui Card StyleX styles > matches author-last override output 1`] = `"<section class="kv-card-bd-1gezg0 kv-card-bd-lc6y2t kv-card-bd-17dppo kv-card-bd-5grtwb kv-card-box-xlni9o kv-card-stylex-test-bg-1c68yj kv-card-stylex-test-fg-sutien kv-card-stylex-test-pad-1nfkkb" data-style-src="card.tsx#root; card.stylex.test.tsx#root">&lt;p&gt;Total&lt;/p&gt;</section>"`;
 
 exports[`@kovojs/ui Card StyleX styles > matches the rendered StyleX snapshot 1`] = `
 {

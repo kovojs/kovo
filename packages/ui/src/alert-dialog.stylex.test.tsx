@@ -69,26 +69,23 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        action: {
-          backgroundColor: '#991b1b',
-        },
-        cancel: {
-          color: '#1d4ed8',
-        },
-        content: {
-          maxWidth: 560,
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
-        },
+    const overrides = style.create({
+      action: {
+        backgroundColor: '#991b1b',
       },
-      { namespace: 'appAlertDialog', source: 'app-alert-dialog.tsx' },
-    );
+      cancel: {
+        color: '#1d4ed8',
+      },
+      content: {
+        maxWidth: 560,
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+      },
+    });
 
     expect(
       AlertDialog.definition.render({

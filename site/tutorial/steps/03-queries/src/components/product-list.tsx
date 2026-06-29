@@ -11,19 +11,13 @@ import { productsQuery, type ProductsResult } from '../queries.js';
 // section 4.2); kovo-key is the single keyed-identity contract shared by
 // stamps, morph, and optimistic reordering (section 4.8).
 
-const productListStyles = style.create(
-  {
-    list: {
-      display: 'grid',
-      gap: 8,
-      paddingInlineStart: 20,
-    },
+const productListStyles = style.create({
+  list: {
+    display: 'grid',
+    gap: 8,
+    paddingInlineStart: 20,
   },
-  {
-    namespace: 'tutorial-product-list',
-    source: 'site/tutorial/steps/03-queries/src/components/product-list.tsx',
-  },
-);
+});
 
 // snippet:product-list
 export const ProductList = component({

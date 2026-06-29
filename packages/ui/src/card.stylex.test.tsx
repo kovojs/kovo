@@ -17,16 +17,13 @@ describe('@kovojs/ui Card StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create(
-      {
-        root: {
-          backgroundColor: '#111827',
-          color: '#ffffff',
-          padding: 24,
-        },
+    const overrides = style.create({
+      root: {
+        backgroundColor: '#111827',
+        color: '#ffffff',
+        padding: 24,
       },
-      { namespace: 'appCard', source: 'app-card.tsx' },
-    );
+    });
 
     expect(
       Card.definition.render({

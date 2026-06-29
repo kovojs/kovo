@@ -13,124 +13,121 @@ import { clientHrefs } from './client/modules.js';
 // explicit choice afterward.
 const THEME_SCRIPT = `(()=>{try{const t=localStorage.getItem('theme');const d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch{}})()`;
 
-const searchStyles = style.create(
-  {
-    dialog: {
-      background: 'var(--bg)',
+const searchStyles = style.create({
+  dialog: {
+    background: 'var(--bg)',
+    borderColor: 'var(--edge)',
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 24px 60px -12px rgb(0 0 0 / 0.5)',
+    color: 'var(--ink)',
+    margin: '10vh auto 0',
+    maxHeight: '70vh',
+    padding: 0,
+    width: 'min(40rem, 92vw)',
+    '::backdrop': {
+      backdropFilter: 'blur(3px)',
+      background: 'rgb(0 0 0 / 0.55)',
+    },
+  },
+  input: {
+    background: 'transparent',
+    border: 'none',
+    borderBottomColor: 'var(--edge)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+    color: 'var(--ink)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.95rem',
+    outline: 'none',
+    padding: '1rem 1.25rem',
+    width: '100%',
+    '::placeholder': {
+      color: 'var(--faint)',
+    },
+  },
+  results: {
+    listStyle: 'none',
+    margin: 0,
+    maxHeight: '50vh',
+    overflowY: 'auto',
+    padding: '0.5rem',
+    '[data-search-label], [data-search-empty]': {
+      color: 'var(--faint)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.64rem',
+      letterSpacing: '0.12em',
+      padding: '0.55rem 0.75rem 0.35rem',
+      textTransform: 'uppercase',
+    },
+    '[data-search-empty]': {
+      borderBottomColor: 'var(--edge-soft)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      color: 'var(--dim)',
+      marginBottom: '0.25rem',
+      paddingBottom: '0.65rem',
+      textTransform: 'none',
+    },
+    '[data-search-result-link]': {
+      alignItems: 'center',
+      color: 'var(--ink)',
+      display: 'flex',
+      gap: '0.7rem',
+      padding: '0.55rem 0.75rem',
+      textDecoration: 'none',
+    },
+    '[data-search-result-link]:hover': {
+      background: 'var(--panel)',
+    },
+    '[data-active="true"] [data-search-result-link]': {
+      background: 'var(--panel)',
+    },
+    '[data-result-kind]': {
+      background: 'var(--panel)',
       borderColor: 'var(--edge)',
       borderStyle: 'solid',
       borderWidth: 1,
-      boxShadow: '0 24px 60px -12px rgb(0 0 0 / 0.5)',
-      color: 'var(--ink)',
-      margin: '10vh auto 0',
-      maxHeight: '70vh',
-      padding: 0,
-      width: 'min(40rem, 92vw)',
-      '::backdrop': {
-        backdropFilter: 'blur(3px)',
-        background: 'rgb(0 0 0 / 0.55)',
-      },
-    },
-    input: {
-      background: 'transparent',
-      border: 'none',
-      borderBottomColor: 'var(--edge)',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      color: 'var(--ink)',
+      color: 'var(--faint)',
+      flexShrink: 0,
       fontFamily: 'var(--font-mono)',
-      fontSize: '0.95rem',
-      outline: 'none',
-      padding: '1rem 1.25rem',
-      width: '100%',
-      '::placeholder': {
-        color: 'var(--faint)',
-      },
+      fontSize: '0.56rem',
+      letterSpacing: '0.08em',
+      padding: '0.12rem 0.4rem',
+      textAlign: 'center',
+      textTransform: 'uppercase',
+      width: '3.4rem',
     },
-    results: {
-      listStyle: 'none',
-      margin: 0,
-      maxHeight: '50vh',
-      overflowY: 'auto',
-      padding: '0.5rem',
-      '[data-search-label], [data-search-empty]': {
-        color: 'var(--faint)',
-        fontFamily: 'var(--font-mono)',
-        fontSize: '0.64rem',
-        letterSpacing: '0.12em',
-        padding: '0.55rem 0.75rem 0.35rem',
-        textTransform: 'uppercase',
-      },
-      '[data-search-empty]': {
-        borderBottomColor: 'var(--edge-soft)',
-        borderBottomStyle: 'solid',
-        borderBottomWidth: 1,
-        color: 'var(--dim)',
-        marginBottom: '0.25rem',
-        paddingBottom: '0.65rem',
-        textTransform: 'none',
-      },
-      '[data-search-result-link]': {
-        alignItems: 'center',
-        color: 'var(--ink)',
-        display: 'flex',
-        gap: '0.7rem',
-        padding: '0.55rem 0.75rem',
-        textDecoration: 'none',
-      },
-      '[data-search-result-link]:hover': {
-        background: 'var(--panel)',
-      },
-      '[data-active="true"] [data-search-result-link]': {
-        background: 'var(--panel)',
-      },
-      '[data-result-kind]': {
-        background: 'var(--panel)',
-        borderColor: 'var(--edge)',
-        borderStyle: 'solid',
-        borderWidth: 1,
-        color: 'var(--faint)',
-        flexShrink: 0,
-        fontFamily: 'var(--font-mono)',
-        fontSize: '0.56rem',
-        letterSpacing: '0.08em',
-        padding: '0.12rem 0.4rem',
-        textAlign: 'center',
-        textTransform: 'uppercase',
-        width: '3.4rem',
-      },
-      '[data-result-kind="function"]': {
-        color: 'var(--teal)',
-      },
-      '[data-result-kind="api"], [data-result-kind="spec"]': {
-        color: 'var(--purple)',
-      },
-      '[data-result-kind="app"], [data-result-kind="guide"], [data-result-kind="start"]': {
-        color: 'var(--sky)',
-      },
-      '[data-result-body]': {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.1rem',
-        minWidth: 0,
-      },
-      '[data-result-title]': {
-        fontFamily: 'var(--font-mono)',
-        fontSize: '0.84rem',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-      },
-      '[data-result-section]': {
-        color: 'var(--faint)',
-        fontFamily: 'var(--font-mono)',
-        fontSize: '0.62rem',
-        letterSpacing: '0.1em',
-      },
+    '[data-result-kind="function"]': {
+      color: 'var(--teal)',
+    },
+    '[data-result-kind="api"], [data-result-kind="spec"]': {
+      color: 'var(--purple)',
+    },
+    '[data-result-kind="app"], [data-result-kind="guide"], [data-result-kind="start"]': {
+      color: 'var(--sky)',
+    },
+    '[data-result-body]': {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.1rem',
+      minWidth: 0,
+    },
+    '[data-result-title]': {
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.84rem',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    },
+    '[data-result-section]': {
+      color: 'var(--faint)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.62rem',
+      letterSpacing: '0.1em',
     },
   },
-  { namespace: 'site-search-dialog', source: 'site/src/document-template.tsx' },
-);
+});
 
 const searchDialogClass = style.attrs(searchStyles.dialog).class ?? '';
 const searchInputClass = style.attrs(searchStyles.input).class ?? '';

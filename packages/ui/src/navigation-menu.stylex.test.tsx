@@ -88,23 +88,20 @@ describe('@kovojs/ui NavigationMenu StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        content: {
-          backgroundColor: '#111827',
-        },
-        link: {
-          color: '#1d4ed8',
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
-        },
+    const overrides = style.create({
+      content: {
+        backgroundColor: '#111827',
       },
-      { namespace: 'appNavigationMenu', source: 'app-navigation-menu.tsx' },
-    );
+      link: {
+        color: '#1d4ed8',
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+      },
+    });
 
     expect(
       NavigationMenu.definition.render({

@@ -10,140 +10,137 @@ import * as style from '@kovojs/style';
 // (rendered through the shared markdown/Shiki pipeline by the caller); their
 // `html` is spliced in through Kovo's explicit raw-HTML sink.
 
-const exampleSplitStyles = style.create(
-  {
-    bar: {
-      alignItems: 'center',
-      background: 'var(--panel)',
-      borderBottomColor: 'var(--edge)',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      display: 'flex',
-      justifyContent: 'space-between',
-      padding: '0.5rem 0.75rem',
-    },
-    barTitle: {
-      color: 'var(--dim)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.68rem',
-      letterSpacing: '0.08em',
-      textTransform: 'uppercase',
-    },
-    frame: {
-      background: '#fff',
-      border: 0,
-      display: 'block',
-      height: '100%',
-      minHeight: '30rem',
-      width: '100%',
-    },
-    frameEmpty: {
-      alignItems: 'center',
-      background: 'var(--panel)',
-      color: 'var(--dim)',
-      display: 'flex',
-      fontSize: '0.9rem',
-      justifyContent: 'center',
-      padding: '2rem',
-      textAlign: 'center',
-    },
-    head: {
-      marginBottom: '1.6rem',
-    },
-    headEyebrow: {
-      color: 'var(--teal)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.68rem',
-      letterSpacing: '0.22em',
-      marginBottom: '0.9rem',
-      textTransform: 'uppercase',
-    },
-    headBlurb: {
-      color: 'var(--dim)',
-      lineHeight: 1.65,
-      marginTop: '0.8rem',
-      maxWidth: '48rem',
-    },
-    headTitle: {
-      fontSize: '2.2rem',
-      fontWeight: 750,
-      letterSpacing: '-0.025em',
-      lineHeight: 1.12,
-      margin: 0,
-    },
-    guide: {
-      lineHeight: 1.7,
-      marginTop: '2.25rem',
-      maxWidth: '48rem',
-    },
-    openLink: {
-      color: 'var(--teal)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.68rem',
-      textDecoration: 'none',
-      ':hover': {
-        textDecoration: 'underline',
-      },
-    },
-    page: {
-      maxWidth: '72rem',
-    },
-    panel: {
-      display: 'none',
-      maxHeight: '34rem',
-      overflow: 'auto',
-      '[data-example-panel] .code-window': {
-        border: 0,
-        margin: 0,
-      },
-    },
-    shell: {
-      borderColor: 'var(--edge)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      minWidth: 0,
-    },
-    split: {
-      display: 'grid',
-      gap: '1.25rem',
-      gridTemplateColumns: '1fr',
-      '@media (min-width: 64rem)': {
-        gridTemplateColumns: '1fr 1fr',
-      },
-    },
-    tab: {
-      borderBottomColor: 'transparent',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 2,
-      color: 'var(--dim)',
-      cursor: 'pointer',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.68rem',
-      padding: '0.5rem 0.7rem',
-      ':hover': {
-        color: 'var(--ink)',
-      },
-    },
-    tabInput: {
-      height: 0,
-      opacity: 0,
-      pointerEvents: 'none',
-      position: 'absolute',
-      width: 0,
-    },
-    tablist: {
-      background: 'var(--panel)',
-      borderBottomColor: 'var(--edge)',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      display: 'flex',
-      flexWrap: 'wrap',
+const exampleSplitStyles = style.create({
+  bar: {
+    alignItems: 'center',
+    background: 'var(--panel)',
+    borderBottomColor: 'var(--edge)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '0.5rem 0.75rem',
+  },
+  barTitle: {
+    color: 'var(--dim)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.68rem',
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+  },
+  frame: {
+    background: '#fff',
+    border: 0,
+    display: 'block',
+    height: '100%',
+    minHeight: '30rem',
+    width: '100%',
+  },
+  frameEmpty: {
+    alignItems: 'center',
+    background: 'var(--panel)',
+    color: 'var(--dim)',
+    display: 'flex',
+    fontSize: '0.9rem',
+    justifyContent: 'center',
+    padding: '2rem',
+    textAlign: 'center',
+  },
+  head: {
+    marginBottom: '1.6rem',
+  },
+  headEyebrow: {
+    color: 'var(--teal)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.68rem',
+    letterSpacing: '0.22em',
+    marginBottom: '0.9rem',
+    textTransform: 'uppercase',
+  },
+  headBlurb: {
+    color: 'var(--dim)',
+    lineHeight: 1.65,
+    marginTop: '0.8rem',
+    maxWidth: '48rem',
+  },
+  headTitle: {
+    fontSize: '2.2rem',
+    fontWeight: 750,
+    letterSpacing: '-0.025em',
+    lineHeight: 1.12,
+    margin: 0,
+  },
+  guide: {
+    lineHeight: 1.7,
+    marginTop: '2.25rem',
+    maxWidth: '48rem',
+  },
+  openLink: {
+    color: 'var(--teal)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.68rem',
+    textDecoration: 'none',
+    ':hover': {
+      textDecoration: 'underline',
     },
   },
-  { namespace: 'site-example-split', source: 'site/src/components/example-split.tsx' },
-);
+  page: {
+    maxWidth: '72rem',
+  },
+  panel: {
+    display: 'none',
+    maxHeight: '34rem',
+    overflow: 'auto',
+    '[data-example-panel] .code-window': {
+      border: 0,
+      margin: 0,
+    },
+  },
+  shell: {
+    borderColor: 'var(--edge)',
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+  },
+  split: {
+    display: 'grid',
+    gap: '1.25rem',
+    gridTemplateColumns: '1fr',
+    '@media (min-width: 64rem)': {
+      gridTemplateColumns: '1fr 1fr',
+    },
+  },
+  tab: {
+    borderBottomColor: 'transparent',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 2,
+    color: 'var(--dim)',
+    cursor: 'pointer',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.68rem',
+    padding: '0.5rem 0.7rem',
+    ':hover': {
+      color: 'var(--ink)',
+    },
+  },
+  tabInput: {
+    height: 0,
+    opacity: 0,
+    pointerEvents: 'none',
+    position: 'absolute',
+    width: 0,
+  },
+  tablist: {
+    background: 'var(--panel)',
+    borderBottomColor: 'var(--edge)',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+    display: 'flex',
+    flexWrap: 'wrap',
+  },
+});
 
 export interface ExampleSourceFile {
   /** Pre-rendered code-window HTML for this source file. */

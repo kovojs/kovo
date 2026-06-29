@@ -57,25 +57,22 @@ describe('@kovojs/ui RadioGroup StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        item: {
-          columnGap: 12,
-          fontWeight: 600,
-        },
-        label: {
-          color: '#1d4ed8',
-        },
-        radio: {
-          accentColor: '#2563eb',
-          width: 20,
-        },
-        root: {
-          rowGap: 12,
-        },
+    const overrides = style.create({
+      item: {
+        columnGap: 12,
+        fontWeight: 600,
       },
-      { namespace: 'appRadioGroup', source: 'app-radio-group.tsx' },
-    );
+      label: {
+        color: '#1d4ed8',
+      },
+      radio: {
+        accentColor: '#2563eb',
+        width: 20,
+      },
+      root: {
+        rowGap: 12,
+      },
+    });
     const items = [{ value: 'standard' }, { value: 'express' }] as const;
     const state = {
       items,

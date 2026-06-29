@@ -99,38 +99,35 @@ describe('@kovojs/ui Table StyleX slots', () => {
   });
 
   it('matches author-last slot override output', async () => {
-    const overrides = style.create(
-      {
-        body: {
-          backgroundColor: '#eff6ff',
-        },
-        caption: {
-          color: '#1d4ed8',
-        },
-        cell: {
-          color: '#1e3a8a',
-        },
-        head: {
-          backgroundColor: '#dbeafe',
-        },
-        headerCell: {
-          color: '#1e40af',
-        },
-        row: {
+    const overrides = style.create({
+      body: {
+        backgroundColor: '#eff6ff',
+      },
+      caption: {
+        color: '#1d4ed8',
+      },
+      cell: {
+        color: '#1e3a8a',
+      },
+      head: {
+        backgroundColor: '#dbeafe',
+      },
+      headerCell: {
+        color: '#1e40af',
+      },
+      row: {
+        backgroundColor: '#f8fafc',
+        ':hover': {
           backgroundColor: '#f8fafc',
-          ':hover': {
-            backgroundColor: '#f8fafc',
-          },
-        },
-        table: {
-          fontSize: 16,
-        },
-        wrapper: {
-          backgroundColor: '#eff6ff',
         },
       },
-      { namespace: 'appTable', source: 'app-table.tsx' },
-    );
+      table: {
+        fontSize: 16,
+      },
+      wrapper: {
+        backgroundColor: '#eff6ff',
+      },
+    });
 
     expect(
       await render(

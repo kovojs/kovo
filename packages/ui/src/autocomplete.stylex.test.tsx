@@ -68,27 +68,24 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
   });
 
   it('accepts author-last StyleX slot overrides', () => {
-    const overrides = style.create(
-      {
-        input: {
-          backgroundColor: '#dbeafe',
-          color: '#1d4ed8',
-        },
-        list: {
-          backgroundColor: '#111827',
-        },
-        option: {
-          color: '#1d4ed8',
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        value: {
-          color: '#1d4ed8',
-        },
+    const overrides = style.create({
+      input: {
+        backgroundColor: '#dbeafe',
+        color: '#1d4ed8',
       },
-      { namespace: 'appAutocomplete', source: 'app-autocomplete.tsx' },
-    );
+      list: {
+        backgroundColor: '#111827',
+      },
+      option: {
+        color: '#1d4ed8',
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      value: {
+        color: '#1d4ed8',
+      },
+    });
 
     expect({
       input: AutocompleteInput.definition.render({

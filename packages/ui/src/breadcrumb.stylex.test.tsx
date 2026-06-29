@@ -40,29 +40,26 @@ describe('@kovojs/ui Breadcrumb StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        current: {
-          color: '#2563eb',
-        },
-        item: {
-          columnGap: 10,
-        },
-        link: {
-          color: '#2563eb',
-        },
-        list: {
-          columnGap: 10,
-        },
-        root: {
-          fontSize: 16,
-        },
-        separator: {
-          color: '#2563eb',
-        },
+    const overrides = style.create({
+      current: {
+        color: '#2563eb',
       },
-      { namespace: 'appBreadcrumb', source: 'app-breadcrumb.tsx' },
-    );
+      item: {
+        columnGap: 10,
+      },
+      link: {
+        color: '#2563eb',
+      },
+      list: {
+        columnGap: 10,
+      },
+      root: {
+        fontSize: 16,
+      },
+      separator: {
+        color: '#2563eb',
+      },
+    });
 
     expect(
       Breadcrumb.definition.render({

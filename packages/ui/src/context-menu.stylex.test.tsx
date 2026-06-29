@@ -67,26 +67,23 @@ describe('@kovojs/ui ContextMenu StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        content: {
-          backgroundColor: '#111827',
-        },
-        item: {
-          color: '#1d4ed8',
-          '[data-highlighted]': {
-            color: '#1e3a8a',
-          },
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
+    const overrides = style.create({
+      content: {
+        backgroundColor: '#111827',
+      },
+      item: {
+        color: '#1d4ed8',
+        '[data-highlighted]': {
+          color: '#1e3a8a',
         },
       },
-      { namespace: 'appContextMenu', source: 'app-context-menu.tsx' },
-    );
+      root: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+      },
+    });
 
     expect(
       ContextMenu.definition.render({

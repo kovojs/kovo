@@ -52,22 +52,19 @@ describe('@kovojs/ui Toolbar StyleX slots', () => {
       activeValue: 'bold',
       items,
     };
-    const overrides = style.create(
-      {
-        button: {
-          backgroundColor: '#dbeafe',
-          color: '#1d4ed8',
-        },
-        item: {
-          minWidth: 120,
-        },
-        root: {
-          backgroundColor: '#111827',
-          color: '#f9fafb',
-        },
+    const overrides = style.create({
+      button: {
+        backgroundColor: '#dbeafe',
+        color: '#1d4ed8',
       },
-      { namespace: 'appToolbar', source: 'app-toolbar.tsx' },
-    );
+      item: {
+        minWidth: 120,
+      },
+      root: {
+        backgroundColor: '#111827',
+        color: '#f9fafb',
+      },
+    });
 
     expect({
       button: ToolbarButton.definition.render({

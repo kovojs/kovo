@@ -31,23 +31,20 @@ describe('@kovojs/ui Popover StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        content: {
-          width: 320,
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
-          '[data-state=open]': {
-            backgroundColor: '#bfdbfe',
-          },
+    const overrides = style.create({
+      content: {
+        width: 320,
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+        '[data-state=open]': {
+          backgroundColor: '#bfdbfe',
         },
       },
-      { namespace: 'appPopover', source: 'app-popover.tsx' },
-    );
+    });
 
     expect(
       Popover.definition.render({

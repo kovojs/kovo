@@ -66,25 +66,22 @@ describe('@kovojs/ui NumberField StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        button: {
-          backgroundColor: '#dbeafe',
-          color: '#1d4ed8',
-        },
-        control: {
-          borderColor: '#2563eb',
-        },
-        input: {
-          color: '#1e40af',
-          width: 96,
-        },
-        root: {
-          rowGap: 12,
-        },
+    const overrides = style.create({
+      button: {
+        backgroundColor: '#dbeafe',
+        color: '#1d4ed8',
       },
-      { namespace: 'appNumberField', source: 'app-number-field.tsx' },
-    );
+      control: {
+        borderColor: '#2563eb',
+      },
+      input: {
+        color: '#1e40af',
+        width: 96,
+      },
+      root: {
+        rowGap: 12,
+      },
+    });
 
     expect({
       control: NumberFieldControl.definition.render({

@@ -66,27 +66,24 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
   });
 
   it('accepts author-last StyleX slot overrides', () => {
-    const overrides = style.create(
-      {
-        input: {
-          backgroundColor: '#dbeafe',
-          color: '#1d4ed8',
-        },
-        listbox: {
-          backgroundColor: '#111827',
-        },
-        option: {
-          color: '#1d4ed8',
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        value: {
-          color: '#1d4ed8',
-        },
+    const overrides = style.create({
+      input: {
+        backgroundColor: '#dbeafe',
+        color: '#1d4ed8',
       },
-      { namespace: 'appCombobox', source: 'app-combobox.tsx' },
-    );
+      listbox: {
+        backgroundColor: '#111827',
+      },
+      option: {
+        color: '#1d4ed8',
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      value: {
+        color: '#1d4ed8',
+      },
+    });
 
     expect({
       input: ComboboxInput.definition.render({

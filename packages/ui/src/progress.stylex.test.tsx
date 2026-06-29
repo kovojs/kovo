@@ -20,15 +20,12 @@ describe('@kovojs/ui Progress StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create(
-      {
-        root: {
-          accentColor: '#2563eb',
-          height: 12,
-        },
+    const overrides = style.create({
+      root: {
+        accentColor: '#2563eb',
+        height: 12,
       },
-      { namespace: 'appProgress', source: 'app-progress.tsx' },
-    );
+    });
 
     expect(
       Progress.definition.render({

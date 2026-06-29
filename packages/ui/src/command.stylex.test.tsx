@@ -100,38 +100,35 @@ describe('@kovojs/ui Command StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        close: {
-          color: '#1d4ed8',
-        },
-        dialog: {
-          borderColor: '#2563eb',
-        },
-        empty: {
-          color: '#1e40af',
-        },
-        input: {
-          backgroundColor: '#eff6ff',
-        },
-        item: {
-          color: '#1e3a8a',
-        },
-        listbox: {
-          backgroundColor: '#dbeafe',
-        },
-        root: {
-          rowGap: 12,
-        },
-        trigger: {
-          backgroundColor: '#bfdbfe',
-        },
-        value: {
-          color: '#1d4ed8',
-        },
+    const overrides = style.create({
+      close: {
+        color: '#1d4ed8',
       },
-      { namespace: 'appCommand', source: 'app-command.tsx' },
-    );
+      dialog: {
+        borderColor: '#2563eb',
+      },
+      empty: {
+        color: '#1e40af',
+      },
+      input: {
+        backgroundColor: '#eff6ff',
+      },
+      item: {
+        color: '#1e3a8a',
+      },
+      listbox: {
+        backgroundColor: '#dbeafe',
+      },
+      root: {
+        rowGap: 12,
+      },
+      trigger: {
+        backgroundColor: '#bfdbfe',
+      },
+      value: {
+        color: '#1d4ed8',
+      },
+    });
 
     expect(
       Command.definition.render({

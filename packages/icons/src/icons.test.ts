@@ -49,10 +49,7 @@ describe('@kovojs/icons rendering', () => {
     expect(html).toContain('data-testid="icon"');
   });
   it('applies the StyleX style channel and concatenates an extra class', () => {
-    const styles = style.create(
-      { small: { height: 16, width: 16 } },
-      { namespace: 'iconTest', source: 'icons.test.ts' },
-    );
+    const styles = style.create({ small: { height: 16, width: 16 } });
     const html = String(ArrowRight({ style: styles.small, class: 'extra' }));
     expect(html).toMatch(/class="[^"]*\bextra\b[^"]*"/);
   });

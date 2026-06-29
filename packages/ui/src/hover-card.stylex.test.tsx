@@ -40,23 +40,20 @@ describe('@kovojs/ui HoverCard StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        content: {
-          width: 320,
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          color: '#1d4ed8',
-          '[data-state=open]': {
-            color: '#1e3a8a',
-          },
+    const overrides = style.create({
+      content: {
+        width: 320,
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        color: '#1d4ed8',
+        '[data-state=open]': {
+          color: '#1e3a8a',
         },
       },
-      { namespace: 'appHoverCard', source: 'app-hover-card.tsx' },
-    );
+    });
 
     expect(
       HoverCard.definition.render({

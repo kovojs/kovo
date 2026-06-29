@@ -40,15 +40,12 @@ describe('@kovojs/ui Badge StyleX styles', () => {
     ).toContain('kv-badge-variant-bg-');
   });
   it('accepts author-last StyleX overrides', () => {
-    const overrides = style.create(
-      {
-        root: {
-          backgroundColor: '#1d4ed8',
-          color: '#ffffff',
-        },
+    const overrides = style.create({
+      root: {
+        backgroundColor: '#1d4ed8',
+        color: '#ffffff',
       },
-      { namespace: 'appBadge', source: 'app-badge.tsx' },
-    );
+    });
     const rendered = String(
       Badge.definition.render({
         children: 'Custom',
@@ -56,9 +53,9 @@ describe('@kovojs/ui Badge StyleX styles', () => {
         variant: 'success',
       }),
     );
-    expect(rendered).toContain('kv-app-badge-bg-');
-    expect(rendered).toContain('kv-app-badge-fg-');
-    expect(rendered).toContain('app-badge.tsx#root');
+    expect(rendered).toContain('kv-badge-stylex-test-bg-');
+    expect(rendered).toContain('kv-badge-stylex-test-fg-');
+    expect(rendered).toContain('badge.stylex.test.tsx#root');
     expect(rendered).not.toContain('kv-badge-variant-bg-');
   });
   it('exports StyleX style groups instead of variant helpers', () => {

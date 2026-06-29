@@ -4,7 +4,6 @@ export type {
   CssValue,
   Keyframes,
   Style,
-  StyleIdentityOptions,
   StyleInput,
   StyleNamespaces,
   StyleObject,

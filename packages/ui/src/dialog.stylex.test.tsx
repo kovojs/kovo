@@ -53,23 +53,20 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        close: {
-          color: '#1d4ed8',
-        },
-        content: {
-          maxWidth: 640,
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
-        },
+    const overrides = style.create({
+      close: {
+        color: '#1d4ed8',
       },
-      { namespace: 'appDialog', source: 'app-dialog.tsx' },
-    );
+      content: {
+        maxWidth: 640,
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+      },
+    });
 
     expect(
       Dialog.definition.render({

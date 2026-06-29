@@ -239,8 +239,10 @@ verifier IR, so do NOT; gate-tightening; 9D browser option-graph + headless mach
 
 ### 9B — Recursive-publicness fixes (close the latent leaks the gate can't see)
 
-- [ ] **`style`: brand `CompiledStyle` opaque** (`engine.ts:22-63`); keep the structural `__rules`/`AtomicRule` shape on `@kovojs/style/internal` for the compiler only. Source-compatible for app authors.
-- [ ] **`style`: drop the `identity`-options public overloads** of `create`/`defineVars`/`createTheme`/`keyframes` (`engine.ts:75`); `StyleIdentityOptions` becomes impl-only.
+- [x] **`style`: brand `CompiledStyle` opaque** (`engine.ts:22-63`); keep the structural `__rules`/`AtomicRule` shape on `@kovojs/style/internal` for the compiler only. Source-compatible for app authors.
+  - Evidence 2026-06-29: `scripts/api-surface-gate.test.mjs` asserts the public `@kovojs/style` root exposes no `AtomicRule`/`CompiledStyle`/`StyleIdentityOptions` recursive leaks; `pnpm run check:api-surface` passed.
+- [x] **`style`: drop the `identity`-options public overloads** of `create`/`defineVars`/`createTheme`/`keyframes` (`engine.ts:75`); `StyleIdentityOptions` becomes impl-only.
+  - Evidence 2026-06-29: `packages/style/src/index.ts` no longer exports `StyleIdentityOptions`, public overloads reject identity arguments with TS2554 in a temp `tsc --noEmit` probe, and `pnpm --filter @kovojs/style exec vitest --run --reporter=dot`, `pnpm --filter @kovojs/ui exec vitest --run --update src --reporter=dot`, `pnpm --filter @kovojs/icons exec vitest --run src/icons.test.ts --reporter=dot`, `pnpm run check:api-surface`, `pnpm run check`, and `git diff --check` passed.
 - [x] **`server/vite`: narrow `kovo()`'s return** to an opaque `{ readonly name: 'kovo' }` token (`vite.ts:38,116`); keep the hook interface (`KovoViteResolvedConfig`/`KovoViteHotUpdateContext`) internal.
   - Evidence 2026-06-29: `pnpm --filter @kovojs/server exec vitest --run src/vite.test.ts src/api/app.test.ts --reporter=dot`, `pnpm run check`, and `pnpm run check:api-surface` passed; `node scripts/api-surface-gate.mjs --write` ratcheted recursive-publicness from 1751 to 1743.
 - [x] **`better-auth`: split `BetterAuthCredentialMutationOptions`** (`internal.ts:1100`) — export the narrow public `{csrf,defaultRedirectTo,guard,key}` from `index.ts`; keep `registry`(`MutationRegistry`)/`transaction` on an `@internal` extension the impl uses.

@@ -64,26 +64,23 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        corner: {
-          backgroundColor: '#dbeafe',
-        },
-        root: {
-          borderColor: '#2563eb',
-        },
-        scrollbar: {
-          backgroundColor: '#dbeafe',
-        },
-        thumb: {
-          backgroundColor: '#2563eb',
-        },
-        viewport: {
-          maxHeight: 160,
-        },
+    const overrides = style.create({
+      corner: {
+        backgroundColor: '#dbeafe',
       },
-      { namespace: 'appScrollArea', source: 'app-scroll-area.tsx' },
-    );
+      root: {
+        borderColor: '#2563eb',
+      },
+      scrollbar: {
+        backgroundColor: '#dbeafe',
+      },
+      thumb: {
+        backgroundColor: '#2563eb',
+      },
+      viewport: {
+        maxHeight: 160,
+      },
+    });
 
     expect(
       ScrollArea.definition.render({

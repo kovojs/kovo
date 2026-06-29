@@ -28,19 +28,16 @@ describe('@kovojs/ui Checkbox StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        input: {
-          accentColor: '#2563eb',
-          width: 20,
-        },
-        root: {
-          columnGap: 12,
-          fontWeight: 600,
-        },
+    const overrides = style.create({
+      input: {
+        accentColor: '#2563eb',
+        width: 20,
       },
-      { namespace: 'appCheckbox', source: 'app-checkbox.tsx' },
-    );
+      root: {
+        columnGap: 12,
+        fontWeight: 600,
+      },
+    });
 
     expect(
       Checkbox.definition.render({

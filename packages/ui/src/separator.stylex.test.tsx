@@ -20,15 +20,12 @@ describe('@kovojs/ui Separator StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create(
-      {
-        root: {
-          backgroundColor: '#111827',
-          width: 256,
-        },
+    const overrides = style.create({
+      root: {
+        backgroundColor: '#111827',
+        width: 256,
       },
-      { namespace: 'appSeparator', source: 'app-separator.tsx' },
-    );
+    });
 
     expect(Separator.definition.render({ style: overrides.root })).toMatchSnapshot();
   });

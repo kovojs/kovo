@@ -43,21 +43,18 @@ describe('@kovojs/ui Avatar StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        fallback: {
-          backgroundColor: '#dbeafe',
-        },
-        image: {
-          objectFit: 'contain',
-        },
-        root: {
-          height: 48,
-          width: 48,
-        },
+    const overrides = style.create({
+      fallback: {
+        backgroundColor: '#dbeafe',
       },
-      { namespace: 'appAvatar', source: 'app-avatar.tsx' },
-    );
+      image: {
+        objectFit: 'contain',
+      },
+      root: {
+        height: 48,
+        width: 48,
+      },
+    });
 
     expect(
       Avatar.definition.render({

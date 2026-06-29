@@ -94,30 +94,27 @@ describe('@kovojs/ui Select StyleX slots', () => {
     expect(rendered.valueClasses[0]).toContain('kv-select');
   });
   it('accepts author-last StyleX slot overrides', () => {
-    const overrides = style.create(
-      {
-        content: {
-          backgroundColor: '#111827',
-        },
-        hiddenInput: {
-          opacity: 0,
-        },
-        item: {
-          color: '#1d4ed8',
-        },
-        root: {
-          color: '#1d4ed8',
-        },
-        trigger: {
-          backgroundColor: '#dbeafe',
-          color: '#1d4ed8',
-        },
-        value: {
-          color: '#1d4ed8',
-        },
+    const overrides = style.create({
+      content: {
+        backgroundColor: '#111827',
       },
-      { namespace: 'appSelect', source: 'app-select.tsx' },
-    );
+      hiddenInput: {
+        opacity: 0,
+      },
+      item: {
+        color: '#1d4ed8',
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        backgroundColor: '#dbeafe',
+        color: '#1d4ed8',
+      },
+      value: {
+        color: '#1d4ed8',
+      },
+    });
     const rendered = {
       content: String(
         SelectContent.definition.render({
@@ -158,18 +155,24 @@ describe('@kovojs/ui Select StyleX slots', () => {
       ),
     };
     expect(rendered.content).toContain(
-      'data-style-src="select.tsx#content; app-select.tsx#content"',
+      'data-style-src="select.tsx#content; select.stylex.test.tsx#content"',
     );
     expect(rendered.hiddenInput).toContain(
-      'data-style-src="select.tsx#hiddenInput; app-select.tsx#hiddenInput"',
+      'data-style-src="select.tsx#hiddenInput; select.stylex.test.tsx#hiddenInput"',
     );
-    expect(rendered.item).toContain('data-style-src="select.tsx#item; app-select.tsx#item"');
-    expect(rendered.root).toContain('data-style-src="select.tsx#root; app-select.tsx#root"');
+    expect(rendered.item).toContain(
+      'data-style-src="select.tsx#item; select.stylex.test.tsx#item"',
+    );
+    expect(rendered.root).toContain(
+      'data-style-src="select.tsx#root; select.stylex.test.tsx#root"',
+    );
     expect(rendered.trigger).toContain(
-      'data-style-src="select.tsx#trigger; app-select.tsx#trigger"',
+      'data-style-src="select.tsx#trigger; select.stylex.test.tsx#trigger"',
     );
     expect(rendered.trigger).toContain('role="combobox" type="button"');
-    expect(rendered.value).toContain('data-style-src="select.tsx#value; app-select.tsx#value"');
+    expect(rendered.value).toContain(
+      'data-style-src="select.tsx#value; select.stylex.test.tsx#value"',
+    );
   });
   it('exports StyleX slot objects instead of variant helpers', () => {
     expect({

@@ -66,25 +66,22 @@ describe('@kovojs/ui CheckboxGroup StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        control: {
-          accentColor: '#2563eb',
-          width: 20,
-        },
-        item: {
-          columnGap: 12,
-        },
-        label: {
-          color: '#1d4ed8',
-        },
-        root: {
-          color: '#1e40af',
-          rowGap: 12,
-        },
+    const overrides = style.create({
+      control: {
+        accentColor: '#2563eb',
+        width: 20,
       },
-      { namespace: 'appCheckboxGroup', source: 'app-checkbox-group.tsx' },
-    );
+      item: {
+        columnGap: 12,
+      },
+      label: {
+        color: '#1d4ed8',
+      },
+      root: {
+        color: '#1e40af',
+        rowGap: 12,
+      },
+    });
 
     expect({
       control: CheckboxGroupControl.definition.render({

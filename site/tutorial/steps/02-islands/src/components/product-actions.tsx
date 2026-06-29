@@ -17,17 +17,11 @@ export type ProductActionsState = {
   saved: number;
 };
 
-const productActionStyles = style.create(
-  {
-    saveButton: {
-      marginInlineStart: 8,
-    },
+const productActionStyles = style.create({
+  saveButton: {
+    marginInlineStart: 8,
   },
-  {
-    namespace: 'tutorial-product-actions',
-    source: 'site/tutorial/steps/02-islands/src/components/product-actions.tsx',
-  },
-);
+});
 
 // snippet:product-actions
 export const ProductActions = component({

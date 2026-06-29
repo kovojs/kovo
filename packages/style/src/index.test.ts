@@ -207,10 +207,9 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     };
     const result = createKeyframes(frames, { namespace: 'skeletonPulse', source: 'skeleton.tsx' });
 
-    // The structured `name` is byte-identical to the public `keyframes(...)` name.
-    expect(result.name).toBe(
-      keyframes(frames, { namespace: 'skeletonPulse', source: 'skeleton.tsx' }),
-    );
+    // The structured internal name still carries compiler-owned identity. The
+    // app-facing `keyframes(...)` helper uses the default public identity.
+    expect(keyframes(frames)).toMatch(/^kv-keyframes-[a-z0-9]+$/);
     expect(result.name).toMatch(/^kv-skeleton-pulse-[a-z0-9]+$/);
     // The block names each step verbatim and serializes flat declarations.
     expect(result.css).toBe(`@keyframes ${result.name}{0%, 100%{opacity:1}50%{opacity:0.5}}`);
@@ -234,14 +233,12 @@ describe('@kovojs/style phase 1 runtime fork', () => {
   });
 
   it('produces a stable deterministic name from the raw frames object', () => {
-    const a = keyframes({ '0%': { opacity: 0 }, '100%': { opacity: 1 } }, { namespace: 'fade' });
-    const b = keyframes({ '0%': { opacity: 0 }, '100%': { opacity: 1 } }, { namespace: 'fade' });
-    const different = keyframes(
-      { '0%': { opacity: 1 }, '100%': { opacity: 0 } },
-      { namespace: 'fade' },
-    );
+    const a = keyframes({ '0%': { opacity: 0 }, '100%': { opacity: 1 } });
+    const b = keyframes({ '0%': { opacity: 0 }, '100%': { opacity: 1 } });
+    const different = keyframes({ '0%': { opacity: 1 }, '100%': { opacity: 0 } });
     expect(a).toBe(b);
     expect(a).not.toBe(different);
+    expect(a).toMatch(/^kv-keyframes-[a-z0-9]+$/);
   });
 
   it('emits deduped @keyframes blocks outside any layer in emitAtomicCss', () => {

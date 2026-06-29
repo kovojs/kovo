@@ -23,13 +23,10 @@ import { uiTheme } from './theme.js';
 // which emits the `@keyframes` block into the served CSS (SPEC.md §13.1). We never
 // transition `display`; visibility is still toggled via the [data-state=closed]
 // `display:none` rule on the root.
-const toastEnter = style.keyframes(
-  {
-    '0%': { opacity: 0, transform: 'translateY(8px)' },
-    '100%': { opacity: 1, transform: 'translateY(0)' },
-  },
-  { namespace: 'toastEnter', source: 'toast.tsx' },
-);
+const toastEnter = style.keyframes({
+  '0%': { opacity: 0, transform: 'translateY(8px)' },
+  '100%': { opacity: 1, transform: 'translateY(0)' },
+});
 
 /**
  * Style override slots accepted by the toast components.

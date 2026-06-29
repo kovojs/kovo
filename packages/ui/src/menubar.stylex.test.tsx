@@ -73,23 +73,20 @@ describe('@kovojs/ui Menubar StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        item: {
-          color: '#1d4ed8',
-          '[data-state=open]': {
-            color: '#1e3a8a',
-          },
-        },
-        root: {
-          backgroundColor: '#dbeafe',
-        },
-        submenu: {
-          backgroundColor: '#111827',
+    const overrides = style.create({
+      item: {
+        color: '#1d4ed8',
+        '[data-state=open]': {
+          color: '#1e3a8a',
         },
       },
-      { namespace: 'appMenubar', source: 'app-menubar.tsx' },
-    );
+      root: {
+        backgroundColor: '#dbeafe',
+      },
+      submenu: {
+        backgroundColor: '#111827',
+      },
+    });
 
     expect(
       Menubar.definition.render({

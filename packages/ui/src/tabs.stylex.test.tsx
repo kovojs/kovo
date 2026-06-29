@@ -69,26 +69,23 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
     );
   });
   it('accepts per-slot StyleX override objects', () => {
-    const overrides = style.create(
-      {
-        list: {
-          backgroundColor: '#111827',
-        },
-        panel: {
-          color: '#111827',
-        },
-        root: {
+    const overrides = style.create({
+      list: {
+        backgroundColor: '#111827',
+      },
+      panel: {
+        color: '#111827',
+      },
+      root: {
+        color: '#1d4ed8',
+      },
+      trigger: {
+        color: '#1d4ed8',
+        '[data-state=active]': {
           color: '#1d4ed8',
-        },
-        trigger: {
-          color: '#1d4ed8',
-          '[data-state=active]': {
-            color: '#1d4ed8',
-          },
         },
       },
-      { namespace: 'appTabs', source: 'app-tabs.tsx' },
-    );
+    });
     const root = String(
       Tabs.definition.render({
         children: 'tabs body',
@@ -115,15 +112,15 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
         value: 'overview',
       }),
     );
-    expect(root).toContain('kv-app-tabs-fg-');
-    expect(list).toContain('kv-app-tabs-bg-');
-    expect(trigger).toContain('kv-app-tabs-fg-');
-    expect(panel).toContain('kv-app-tabs-fg-');
+    expect(root).toContain('kv-tabs-stylex-test-fg-');
+    expect(list).toContain('kv-tabs-stylex-test-bg-');
+    expect(trigger).toContain('kv-tabs-stylex-test-fg-');
+    expect(panel).toContain('kv-tabs-stylex-test-fg-');
     expect(trigger).not.toContain('kv-tabs-fg-');
-    expect(root).toContain('app-tabs.tsx#root');
-    expect(list).toContain('app-tabs.tsx#list');
-    expect(trigger).toContain('app-tabs.tsx#trigger');
-    expect(panel).toContain('app-tabs.tsx#panel');
+    expect(root).toContain('tabs.stylex.test.tsx#root');
+    expect(list).toContain('tabs.stylex.test.tsx#list');
+    expect(trigger).toContain('tabs.stylex.test.tsx#trigger');
+    expect(panel).toContain('tabs.stylex.test.tsx#panel');
   });
   it('exports StyleX slot objects instead of variant helpers', () => {
     expect(tabsStyles.root.$$css).toBe(true);

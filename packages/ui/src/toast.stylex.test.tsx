@@ -59,29 +59,26 @@ describe('@kovojs/ui Toast StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        action: {
-          backgroundColor: '#dbeafe',
-        },
-        close: {
-          color: '#1d4ed8',
-        },
-        description: {
-          color: '#1e40af',
-        },
-        root: {
-          borderColor: '#2563eb',
-        },
-        title: {
-          color: '#1d4ed8',
-        },
-        viewport: {
-          rowGap: 12,
-        },
+    const overrides = style.create({
+      action: {
+        backgroundColor: '#dbeafe',
       },
-      { namespace: 'appToast', source: 'app-toast.tsx' },
-    );
+      close: {
+        color: '#1d4ed8',
+      },
+      description: {
+        color: '#1e40af',
+      },
+      root: {
+        borderColor: '#2563eb',
+      },
+      title: {
+        color: '#1d4ed8',
+      },
+      viewport: {
+        rowGap: 12,
+      },
+    });
 
     expect(
       ToastViewport.definition.render({

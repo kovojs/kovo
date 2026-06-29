@@ -111,13 +111,10 @@ export interface TabsPanelProps extends TabsStateProps {
 // Fade the active panel in on switch. The `style.keyframes` name is resolved by
 // the StyleX extractor, which emits the `@keyframes` block into the served CSS
 // (SPEC.md §13.1).
-const panelFade = style.keyframes(
-  {
-    '0%': { opacity: 0 },
-    '100%': { opacity: 1 },
-  },
-  { namespace: 'tabsPanelFade', source: 'tabs.tsx' },
-);
+const panelFade = style.keyframes({
+  '0%': { opacity: 0 },
+  '100%': { opacity: 1 },
+});
 
 /**
  * Style definitions used by the tabs components.

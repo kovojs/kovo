@@ -22,19 +22,16 @@ describe('@kovojs/ui Switch StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create(
-      {
-        input: {
-          accentColor: '#2563eb',
-          width: 44,
-        },
-        root: {
-          columnGap: 12,
-          fontWeight: 600,
-        },
+    const overrides = style.create({
+      input: {
+        accentColor: '#2563eb',
+        width: 44,
       },
-      { namespace: 'appSwitch', source: 'app-switch.tsx' },
-    );
+      root: {
+        columnGap: 12,
+        fontWeight: 600,
+      },
+    });
 
     expect(
       Switch.definition.render({
