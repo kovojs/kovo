@@ -1,6 +1,6 @@
 ---
 name: dogfood-and-fix
-description: Exhaustively dogfood Kovo, file or triage bugz/papercuts ledgers, then implement the fixes through verified parallel worktree batches. Use when asked to dogfood and fix, handle remaining dogfood reports, continue after bugz/papercuts reports, implement newly found Kovo issues, parallelize dogfood remediation, push fixes, or monitor CI until the reports no longer expose open issues.
+description: Exhaustively dogfood Kovo, file or triage bugz/papercuts ledgers, then implement the fixes through verified parallel worktree batches. Use when asked to dogfood and fix, handle remaining dogfood reports, continue after bugz/papercuts reports, implement newly found Kovo issues, parallelize dogfood remediation, push fixes, keep going until no new dogfood issues remain, or monitor CI until the reports no longer expose open issues.
 ---
 
 # Dogfood And Fix
@@ -9,7 +9,8 @@ description: Exhaustively dogfood Kovo, file or triage bugz/papercuts ledgers, t
 
 Run the complete Kovo feedback loop: exercise real apps against the local framework, classify
 confirmed failures into `plans/bugz-*.md` or `plans/papercuts-*.md`, implement the fixes, verify
-the exact claims, push coherent batches, and follow CI until the pushed state is known.
+the exact claims, push coherent batches, follow CI until the pushed state is known, then continue
+with the next dogfood or report-closure pass until no confirmed issues remain or the user stops.
 
 This skill composes the repo-local dogfood and implementation disciplines. Use the current
 `SPEC.md`, `AGENTS.md`, `rules/`, active `plans/`, and existing `dogfood` / `implement-plan`
@@ -26,6 +27,10 @@ than only writing them.
   the user explicitly asks for report-only mode.
 - **Resume loop.** If prior batches were pushed, inspect `git status`, recent commits, open plan
   checkboxes, and CI before continuing. Do not redo closed work unless a regression reproduces.
+- **Keep going.** If the user says to keep going until there are no bugs or papercuts, alternate
+  report closure, fresh dogfood, focused verification, and CI repair until the current evidence has
+  no open dogfood-derived items. Respect any explicit deferrals, such as postponing a performance
+  optimization, and record the deferral instead of silently doing that work.
 
 ## Sources Of Truth
 
@@ -73,7 +78,9 @@ Read enough before editing to judge behavior correctly:
 ## Parallel Strategy
 
 Default to a fan-out when reports expose independent ownership boundaries. Keep the main agent on
-the integration lane and delegate closure-oriented slices where sub-agent tools are available.
+the integration lane and delegate closure-oriented slices where sub-agent tools are available. Do
+not wait for the user to ask how to parallelize if the active ledgers already expose disjoint
+compiler, runtime, browser, Drizzle, starter, docs, or verification surfaces.
 
 Main agent owns:
 
@@ -113,6 +120,9 @@ Worker rules:
 - Prefer 3-5 workers for broad independent surfaces. Use higher-reasoning models for compiler,
   runtime, security, Drizzle extraction, and high-conflict integration; use cheaper bounded models
   for straightforward fixtures, docs, and narrow template changes.
+- Integrate one worker branch at a time. Review the diff, run the worker's focused verification in
+  the integration worktree, port only concise plan evidence, then checkpoint before taking the next
+  branch when the integration risk is material.
 - If no sub-agent mechanism is available, still parallelize mentally: group by ownership, avoid
   alternating across conflicting files, and commit verified batches as each coherent surface closes.
 
@@ -136,6 +146,9 @@ Worker rules:
 9. Commit coherent batches. Push after meaningful closure or when CI feedback is needed.
 10. Monitor GitHub Actions for the pushed commit. If CI fails, inspect logs, fix the root cause,
     push again, and continue monitoring.
+11. After named reports close, run at least one fresh dogfood or targeted regression pass that
+    exercises the just-fixed surfaces. If it finds new confirmed issues, create or update the next
+    compact ledger and loop back through implementation.
 
 ## Completion Criteria
 
@@ -144,6 +157,7 @@ Finish only when all of these are true:
 - every named report has no unchecked actionable items;
 - any newly created dogfood ledger either has no confirmed issues or all confirmed issues are fixed
   with current evidence;
+- explicit deferrals are listed as deferred, not silently counted as complete;
 - relevant local gates passed, or each skipped gate has a concrete reason;
 - the branch or local `main` containing the fixes has been pushed when pushing is in scope;
 - CI for the pushed commit has been checked, and any failures attributable to the work are handled
