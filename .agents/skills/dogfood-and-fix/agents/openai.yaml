@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dogfood And Fix"
+  short_description: "Dogfood Kovo, file reports, and fix them"
+  default_prompt: "Use $dogfood-and-fix to dogfood Kovo, file bugz/papercuts ledgers, implement fixes, push, and monitor CI."
