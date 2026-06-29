@@ -1298,8 +1298,8 @@ function installInlineKovoLoader(im) {
     if (doc.visibilityState === 'hidden') return;
     vrf();
   });
-  addEventListener('pageshow', () => {
-    vrf();
+  addEventListener('pageshow', (event) => {
+    if (event.persisted) vrf();
   });
   // SPEC.md §780: second bfcache defense. A bfcache restore (event.persisted) is a history
   // traversal that bypassed the loader, sessionProvider, and route guard, so a persisted

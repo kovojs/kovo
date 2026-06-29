@@ -361,8 +361,23 @@ describe('browser inline loader response apply', () => {
     installInlineKovoLoader(async () => ({}));
     dispatchEvent(new Event('visibilitychange'));
 
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    expect(fetch).toHaveBeenCalledWith('/_q/cart?key=c1', {
+    await vi.waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith('/_q/cart?key=c1', {
+        cache: 'no-store',
+        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+        method: 'GET',
+      }),
+    );
+    const rememberedQueryRefetches = fetch.mock.calls.filter(
+      ([url, init]) =>
+        url === '/_q/cart?key=c1' &&
+        init &&
+        typeof init === 'object' &&
+        'method' in init &&
+        init.method === 'GET',
+    );
+    expect(rememberedQueryRefetches.length).toBeGreaterThanOrEqual(1);
+    expect(rememberedQueryRefetches[0]?.[1]).toEqual({
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',

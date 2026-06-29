@@ -63,7 +63,7 @@ describe('inline loader minified artifact', () => {
     // same escaped precedence as the modular runtime and still guards
     // querySelector so malformed selectors cannot abort the apply pass.
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "const ft=(target)=>{try{const selectorTarget=sq(target);return(doc.querySelector('[kovo-fragment-target=\"'+selectorTarget+'\"]')??doc.getElementById(target)??doc.querySelector('[id=\"'+selectorTarget+'\"]')??doc.querySelector('[kovo-c=\"'+selectorTarget+'\"]')??doc.querySelector('kovo-defer[target=\"'+selectorTarget+'\"]'));}catch{return;}};",
+      "const ftd=(root,target)=>{try{const selectorTarget=sq(target);return(root.querySelector?.('[kovo-fragment-target=\"'+selectorTarget+'\"]')??root.getElementById?.(target)??root.querySelector?.('[id=\"'+selectorTarget+'\"]')??root.querySelector?.('[kovo-c=\"'+selectorTarget+'\"]')??root.querySelector?.('kovo-defer[target=\"'+selectorTarget+'\"]'));}catch{return;}};const ft=(target)=>ftd(doc,target);",
     );
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-param-types')");
     expect(inlineKovoLoaderInstallerSource).toContain('new DOMParser().parseFromString');

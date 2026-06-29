@@ -121,6 +121,12 @@ describe('server build-time deployment API', () => {
             path: '/c/__v/cart-v1/cart.client.js',
             version: 'cart-v1',
           },
+          {
+            file: expect.stringMatching(runtimeClientModuleFile),
+            href: expect.stringMatching(runtimeClientModulePath),
+            path: expect.stringMatching(runtimeClientModulePath),
+            version: expect.stringMatching(/^[a-f0-9]+$/),
+          },
         ],
         routeHints: [
           {
@@ -151,7 +157,15 @@ describe('server build-time deployment API', () => {
         version: 'kovo-neutral-build/v1',
       });
       expect(build).toMatchObject({
-        clientModules: [{ href: '/c/__v/cart-v1/cart.client.js' }],
+        clientModules: [
+          { href: '/c/__v/cart-v1/cart.client.js' },
+          {
+            file: expect.stringMatching(runtimeClientModuleFile),
+            href: expect.stringMatching(runtimeClientModulePath),
+            path: expect.stringMatching(runtimeClientModulePath),
+            version: expect.stringMatching(/^[a-f0-9]+$/),
+          },
+        ],
         outDir,
         routeHints: [{ routePath: '/cart' }],
         serverHandlerPath: join(outDir, 'server/handler.mjs'),
